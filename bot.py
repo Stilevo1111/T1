@@ -9,6 +9,7 @@ from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from items import items, get_all_items, get_item_info, format_item_description
 from bosses import bosses, get_boss_by_name, get_random_boss, format_boss_info
+from database import db
 
 # Load .env file if it exists (for local development)
 load_dotenv()
@@ -26,18 +27,20 @@ if not API_TOKEN:
 bot = telebot.TeleBot(API_TOKEN)
 
 # ---------- ХРАНЕНИЕ ----------
-def load():
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
+users = db.load_all()
 
-def save(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+def save(data=None):
+    """Сохранить всех пользователей"""
+    global users
+    if data is not None:
+        users = data
+    db.save_all(users)
 
-users = load()
+def save_user(user_id):
+    """Сохранить конкретного пользователя"""
+    user_id = str(user_id)
+    if user_id in users:
+        db.save_user(user_id, users[user_id])
 
 def get_user(uid):
     uid = str(uid)
@@ -53,7 +56,7 @@ def get_user(uid):
             "boss_kills": 0,  # количество убитых боссов
             "last_raid": 0    # время последнего рейда
         }
-        save(users)
+        save_user(uid)
     # Добавляем поля для старых пользователей
     if "inventory" not in users[uid]:
         users[uid]["inventory"] = []
@@ -112,7 +115,7 @@ def fissure(msg):
     roll = random.choice([-5, -3, -1, 0, 1, 3, 5, 10])
     u["fissure"] = max(0.1, u["fissure"] + roll)
     u["last_fissure"] = now
-    save(users)
+    save_user(msg.from_user.id)
 
     texts = {
         10: "💀 ЛЕГЕНДА! +10 см!",
@@ -158,7 +161,7 @@ def pvp(msg):
         u["loses"] += 1
         text = "💀 ПОРАЖЕНИЕ! -10 чат-MMR"
 
-    save(users)
+    save_user(msg.from_user.id)
     bot.send_message(msg.chat.id, text)
 
 # ---------- СЛОТЫ ----------
@@ -181,7 +184,7 @@ def slots(msg):
     else:
         text = "💸 Проигрыш"
 
-    save(users)
+    save_user(msg.from_user.id)
     bot.send_message(msg.chat.id, text)
 
 # ---------- ИНВЕНТАРЬ ----------
@@ -271,7 +274,7 @@ def buy_item(msg):
     if "inventory" not in u:
         u["inventory"] = []
     u["inventory"].append(item_name)
-    save(users)
+    save_user(msg.from_user.id)
     
     bot.send_message(msg.chat.id, f"✅ Куплено: {item_name}\n💰 Потрачено: {price} MMR\n💰 Осталось: {u['chat_mmr']} MMR")
 
@@ -391,7 +394,7 @@ def start_raid(msg):
                     u["inventory"] = []
                 u["inventory"].append(dropped_item)
         
-        save(users)
+        save_user(msg.from_user.id)
         
         battle_log += f"\n🎉 ПОБЕДА!\n"
         battle_log += f"💰 +{mmr_reward} MMR\n"
@@ -402,7 +405,7 @@ def start_raid(msg):
     else:
         # Поражение
         u["last_raid"] = now
-        save(users)
+        save_user(msg.from_user.id)
         
         battle_log += f"\n💀 ПОРАЖЕНИЕ!\n"
         battle_log += f"Босс остался с {boss_hp} HP\n"
