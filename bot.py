@@ -7,6 +7,7 @@ from telebot import types
 from dotenv import load_dotenv
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from items import items, get_all_items, get_item_info, format_item_description
 
 # Load .env file if it exists (for local development)
 load_dotenv()
@@ -45,9 +46,16 @@ def get_user(uid):
             "wins": 0,
             "loses": 0,
             "fissure": 10.0,
-            "last_fissure": 0
+            "last_fissure": 0,
+            "inventory": [],  # список названий предметов
+            "equipped": {}    # {"weapon": "Daedalus", "armor": None, ...}
         }
         save(users)
+    # Добавляем поля для старых пользователей
+    if "inventory" not in users[uid]:
+        users[uid]["inventory"] = []
+    if "equipped" not in users[uid]:
+        users[uid]["equipped"] = {}
     return users[uid]
 
 # ---------- КНОПКИ ----------
@@ -55,6 +63,7 @@ def menu():
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add("👤 Профиль", "🌋 FISSURE")
     kb.add("⚔️ PvP", "🎰 Слоты")
+    kb.add("🎒 Инвентарь", "🏪 Магазин")
     return kb
 
 # ---------- START ----------
@@ -165,6 +174,97 @@ def slots(msg):
 
     save(users)
     bot.send_message(msg.chat.id, text)
+
+# ---------- ИНВЕНТАРЬ ----------
+@bot.message_handler(func=lambda m: m.text == "🎒 Инвентарь")
+def inventory(msg):
+    u = get_user(msg.from_user.id)
+    inv = u.get("inventory", [])
+    
+    if not inv:
+        bot.send_message(msg.chat.id, "🎒 Инвентарь пуст\n\nПокупайте предметы в 🏪 Магазине!")
+        return
+    
+    text = "🎒 ИНВЕНТАРЬ\n\n"
+    for item_name in inv:
+        item_data = get_item_info(item_name)
+        if item_data:
+            text += f"▫️ {item_name}\n"
+            for key, value in item_data.items():
+                if key not in ["💰", "🎁"]:
+                    text += f"  {key}: {value}\n"
+            text += "\n"
+    
+    bot.send_message(msg.chat.id, text)
+
+# ---------- МАГАЗИН ----------
+@bot.message_handler(func=lambda m: m.text == "🏪 Магазин")
+def shop(msg):
+    text = "🏪 МАГАЗИН АРТЕФАКТОВ\n\n"
+    text += "Выберите категорию:\n\n"
+    text += "🗡 /weapons - Оружие\n"
+    text += "🛡 /armor - Броня\n"
+    text += "👢 /boots - Ботинки\n"
+    text += "💍 /artifacts - Артефакты\n"
+    text += "🍀 /utility - Утилита\n"
+    bot.send_message(msg.chat.id, text)
+
+@bot.message_handler(commands=["weapons", "armor", "boots", "artifacts", "utility"])
+def show_category(msg):
+    category_map = {
+        "weapons": "🗡 ОРУЖИЕ",
+        "armor": "🛡 БРОНЯ",
+        "boots": "👢 БОТИНКИ",
+        "artifacts": "💍 АРТЕФАКТЫ",
+        "utility": "🍀 УТИЛИТА"
+    }
+    
+    cmd = msg.text[1:]  # убираем /
+    if cmd not in items:
+        return
+    
+    text = f"{category_map.get(cmd, cmd.upper())}\n\n"
+    
+    for item_name, item_data in items[cmd].items():
+        text += f"▫️ **{item_name}**\n"
+        for key, value in item_data.items():
+            if key == "💰":
+                text += f"  💰 {value} MMR\n"
+            elif key != "🎁":
+                text += f"  {key}: {value}\n"
+        text += f"  Купить: /buy_{item_name.replace(' ', '_')}\n\n"
+    
+    bot.send_message(msg.chat.id, text, parse_mode="Markdown")
+
+@bot.message_handler(func=lambda m: m.text.startswith("/buy_"))
+def buy_item(msg):
+    item_name = msg.text[5:].replace("_", " ")
+    item_data = get_item_info(item_name)
+    
+    if not item_data:
+        bot.send_message(msg.chat.id, "❌ Предмет не найден")
+        return
+    
+    u = get_user(msg.from_user.id)
+    price = item_data.get("💰", 0)
+    
+    if u["chat_mmr"] < price:
+        bot.send_message(msg.chat.id, f"❌ Недостаточно MMR\nНужно: {price}\nУ вас: {u['chat_mmr']}")
+        return
+    
+    # Проверяем есть ли уже такой предмет
+    if item_name in u.get("inventory", []):
+        bot.send_message(msg.chat.id, f"❌ У вас уже есть {item_name}")
+        return
+    
+    # Покупаем
+    u["chat_mmr"] -= price
+    if "inventory" not in u:
+        u["inventory"] = []
+    u["inventory"].append(item_name)
+    save(users)
+    
+    bot.send_message(msg.chat.id, f"✅ Куплено: {item_name}\n💰 Потрачено: {price} MMR\n💰 Осталось: {u['chat_mmr']} MMR")
 
 # ---------- HTTP SERVER (для Render) ----------
 class HealthCheckHandler(BaseHTTPRequestHandler):
