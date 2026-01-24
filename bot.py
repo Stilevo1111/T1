@@ -5,6 +5,8 @@ import random
 import telebot
 from telebot import types
 from dotenv import load_dotenv
+from threading import Thread
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Load .env file if it exists (for local development)
 load_dotenv()
@@ -164,7 +166,29 @@ def slots(msg):
     save(users)
     bot.send_message(msg.chat.id, text)
 
+# ---------- HTTP SERVER (для Render) ----------
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'Bot is running')
+    
+    def log_message(self, format, *args):
+        # Отключаем логи HTTP сервера
+        pass
+
+def run_http_server():
+    port = int(os.getenv('PORT', 10000))
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    print(f"HTTP сервер запущен на порту {port}")
+    server.serve_forever()
+
 # ---------- RUN ----------
 if __name__ == "__main__":
+    # Запускаем HTTP сервер в отдельном потоке (для Render)
+    http_thread = Thread(target=run_http_server, daemon=True)
+    http_thread.start()
+    
     print("Бот запущен...")
     bot.infinity_polling()
