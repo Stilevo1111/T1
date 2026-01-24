@@ -1,21 +1,27 @@
+import os
 import json
 import time
 import random
-import asyncio
-from aiogram import Bot, Dispatcher, executor, types
+import telebot
+from telebot import types
+from dotenv import load_dotenv
 
-API_TOKEN = "ВСТАВЬ_СВОЙ_ТОКЕН_СЮДА"
+load_dotenv()
+API_TOKEN = os.getenv("BOT_TOKEN")
 DATA_FILE = "data.json"
 
-bot = Bot(API_TOKEN)
-dp = Dispatcher(bot)
+if not API_TOKEN:
+    print("Ошибка: BOT_TOKEN не найден в файле .env")
+    exit(1)
+
+bot = telebot.TeleBot(API_TOKEN)
 
 # ---------- ХРАНЕНИЕ ----------
 def load():
     try:
-        with open(DATA_FILE, "r") as f:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except:
+    except (FileNotFoundError, json.JSONDecodeError):
         return {}
 
 def save(data):
@@ -44,23 +50,15 @@ def menu():
     kb.add("⚔️ PvP", "🎰 Слоты")
     return kb
 
-# ---------- АВТОУДАЛЕНИЕ ----------
-async def autodel(msg, t=30):
-    await asyncio.sleep(t)
-    try:
-        await msg.delete()
-    except:
-        pass
-
 # ---------- START ----------
-@dp.message_handler(commands=["start"])
-async def start(msg: types.Message):
+@bot.message_handler(commands=["start"])
+def start(msg):
     get_user(msg.from_user.id)
-    await msg.answer("🔥 Бот запущен\nFISSURE — мем, ни на что не влияет 😏", reply_markup=menu())
+    bot.send_message(msg.chat.id, "🔥 Бот запущен\nFISSURE — мем, ни на что не влияет 😏", reply_markup=menu())
 
 # ---------- ПРОФИЛЬ ----------
-@dp.message_handler(lambda m: m.text == "👤 Профиль")
-async def profile(msg):
+@bot.message_handler(func=lambda m: m.text == "👤 Профиль")
+def profile(msg):
     u = get_user(msg.from_user.id)
     text = (
         f"👤 ПРОФИЛЬ\n\n"
@@ -69,18 +67,21 @@ async def profile(msg):
         f"💀 Поражения: {u['loses']}\n"
         f"🍆 FISSURE: {u['fissure']:.1f} см"
     )
-    m = await msg.answer(text)
-    asyncio.create_task(autodel(m))
+    bot.send_message(msg.chat.id, text)
 
 # ---------- FISSURE ----------
-@dp.message_handler(lambda m: m.text == "🌋 FISSURE")
-async def fissure(msg):
+@bot.message_handler(func=lambda m: m.text == "🌋 FISSURE")
+def fissure(msg):
     u = get_user(msg.from_user.id)
     now = time.time()
-    if now - u["last_fissure"] < 86400:
-        h = int((86400 - (now - u["last_fissure"])) / 3600)
-        m = await msg.answer(f"⏳ Через {h} ч.")
-        asyncio.create_task(autodel(m))
+    remaining = 86400 - (now - u["last_fissure"])
+    if remaining > 0:
+        h = int(remaining / 3600)
+        m = int((remaining % 3600) / 60)
+        if h > 0:
+            bot.send_message(msg.chat.id, f"⏳ Через {h} ч. {m} мин.")
+        else:
+            bot.send_message(msg.chat.id, f"⏳ Через {m} мин.")
         return
 
     roll = random.choice([-5, -3, -1, 0, 1, 3, 5, 10])
@@ -98,17 +99,28 @@ async def fissure(msg):
         -3: "📉 -3 см",
         -5: "💔 -5 см..."
     }
-
-    m = await msg.answer(f"{texts[roll]}\n📏 Теперь {u['fissure']:.1f} см")
-    asyncio.create_task(autodel(m))
+    
+    # Дополнительные фразы
+    phrases = {
+        10: ["Растёт… решительно и без совета.", "Увеличилась… без лишних слов."],
+        5: ["Растёт… и ничего не спрашивает.", "Увеличилась… без лишних слов."],
+        3: ["Растёт… и ничего не спрашивает.", "Увеличилась… без лишних слов."],
+        1: ["Растёт… и ничего не спрашивает.", "Увеличилась… без лишних слов."],
+        0: ["Стоит на месте… зато уверенно.", "Ни вверх, ни вниз… просто наблюдает.", "На месте… как старый добрый друг."],
+        -1: ["Сжалась… тихо так, но гордо.", "Сократился… но с достоинством.", "Сжалась… слегка, но метко."],
+        -3: ["Сжалась… тихо так, но гордо.", "Сократился… но с достоинством.", "Сократился… скромно, но заметно."],
+        -5: ["Сжалась… тихо так, но гордо.", "Сократился… но с достоинством.", "Сократился… скромно, но заметно."]
+    }
+    
+    phrase = random.choice(phrases[roll])
+    bot.send_message(msg.chat.id, f"{texts[roll]}\n{phrase}\n📏 Теперь {u['fissure']:.1f} см")
 
 # ---------- PvP ----------
-@dp.message_handler(lambda m: m.text == "⚔️ PvP")
-async def pvp(msg):
+@bot.message_handler(func=lambda m: m.text == "⚔️ PvP")
+def pvp(msg):
     u = get_user(msg.from_user.id)
     if u["chat_mmr"] < 10:
-        m = await msg.answer("❌ Мало чат-MMR")
-        asyncio.create_task(autodel(m))
+        bot.send_message(msg.chat.id, "❌ Мало чат-MMR")
         return
 
     win = random.choice([True, False])
@@ -122,16 +134,14 @@ async def pvp(msg):
         text = "💀 ПОРАЖЕНИЕ! -10 чат-MMR"
 
     save(users)
-    m = await msg.answer(text)
-    asyncio.create_task(autodel(m))
+    bot.send_message(msg.chat.id, text)
 
 # ---------- СЛОТЫ ----------
-@dp.message_handler(lambda m: m.text == "🎰 Слоты")
-async def slots(msg):
+@bot.message_handler(func=lambda m: m.text == "🎰 Слоты")
+def slots(msg):
     u = get_user(msg.from_user.id)
     if u["chat_mmr"] < 10:
-        m = await msg.answer("❌ Нужно минимум 10 чат-MMR")
-        asyncio.create_task(autodel(m))
+        bot.send_message(msg.chat.id, "❌ Нужно минимум 10 чат-MMR")
         return
 
     u["chat_mmr"] -= 10
@@ -147,9 +157,9 @@ async def slots(msg):
         text = "💸 Проигрыш"
 
     save(users)
-    m = await msg.answer(text)
-    asyncio.create_task(autodel(m))
+    bot.send_message(msg.chat.id, text)
 
 # ---------- RUN ----------
 if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True)
+    print("Бот запущен...")
+    bot.infinity_polling()
