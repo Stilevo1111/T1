@@ -1,9 +1,13 @@
 services:
   - type: web
     name: fissure-bot
+    runtime: python
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
+    healthCheckPath: /
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.13.4
+      - key: BOT_TOKEN
+        sync: false
+      - key: PORT
+        value: 10000

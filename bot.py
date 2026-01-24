@@ -192,7 +192,7 @@ def pvp_menu(msg):
         return
     
     # Меню PvP
-    text = "⚔️ ПВП АРНА\n\n"
+    text = "⚔️ PVP АРЕНА\n\n"
     text += f"💰 Ваш баланс: {u['chat_mmr']} MMR\n"
     text += f"⚔️ Бои сегодня: {pvp_today}/3\n\n"
     text += "Выберите оппонента:\n"
@@ -255,16 +255,34 @@ def pvp_bot(msg):
     
     win = random.randint(1, 100) > bot_win_chance
     
+    # Юмористические фразы для победы
+    win_phrases = [
+        "Ты сегодня в ударе! 💪",
+        "Бот плачет в углу! 😂",
+        "Легко как 2 пальца! 👌",
+        "Ты просто машина! 🤖",
+        "Бот просит пощады! 🙏"
+    ]
+    
+    # Юмористические фразы для поражения
+    lose_phrases = [
+        "Бот тебя уделал! 😵",
+        "Позорище! 😳",
+        "Ты сегодня не в форме! 🤡",
+        "Бот смеется над тобой! 🤖",
+        "Попробуй еще, может повезет! 🤞"
+    ]
+    
     if win:
-        reward = random.randint(15, 35)  # 15-35 MMR
+        reward = random.randint(20, 50)  # Увеличил награду
         u["chat_mmr"] += reward
         u["wins"] += 1
-        text = f"🏆 ПОБЕДА над ботом!\n💰 +{reward} MMR"
+        text = f"🏆 ПОБЕДА над ботом!\n{random.choice(win_phrases)}\n💰 +{reward} MMR"
     else:
-        penalty = random.randint(5, 15)  # 5-15 MMR
+        penalty = random.randint(10, 25)  # Увеличил штраф
         u["chat_mmr"] -= penalty
         u["loses"] += 1
-        text = f"💀 ПОРАЖЕНИЕ от бота!\n💰 -{penalty} MMR"
+        text = f"💀 ПОРАЖЕНИЕ от бота!\n{random.choice(lose_phrases)}\n💰 -{penalty} MMR"
     
     text += f"\n📊 Баланс: {u['chat_mmr']} MMR"
     text += f"\n⚔️ Бои сегодня: {u['pvp_today']}/3"
@@ -298,8 +316,15 @@ def pvp_random(msg):
         return
     
     # Поиск случайного противника (в реальной системе здесь был бы поиск по базе)
-    # Для упрощения делаем симуляцию
+    # Для упрощения делаем симуляцию с "виртуальным" противником
     u["pvp_today"] = pvp_today + 1
+    
+    # Генерируем виртуального противника из мира Dota 2
+    opponent_name = random.choice([
+        "🔥 Лесной Тролль", "⚡ Молниеносный Гоблин", "🛡 Каменный Страж", 
+        "🗡 Теневой Разбойник", "🏹 Лучник-Эльф", "🔨 Гном-Механик",
+        "🌪 Волк-Призрак", "🧊 Ледяной Голем", "💀 Скелет-Воин"
+    ])
     
     # Сложность противника
     opponent_level = random.choice(["слабый", "средний", "сильный"])
@@ -313,16 +338,34 @@ def pvp_random(msg):
     
     win = random.randint(1, 100) <= player_win_chance
     
+    # Юмористические фразы для победы над игроком
+    win_player_phrases = [
+        "Ты просто легенда! 🤖",
+        "Противник плачет! 😂",
+        "Ты всех уделал! 💪",
+        "Легко как бутылку открыть! 🍾",
+        "Ты сегодня неудержим! 🚀"
+    ]
+    
+    # Юмористические фразы для поражения от игрока
+    lose_player_phrases = [
+        "Тебя жестко уделали! 😵",
+        "Противник слишком силён! 💀",
+        "Ты сегодня не в форме! 🤡",
+        "Позорище! 😳",
+        "Попробуй тренироваться больше! 🏋️"
+    ]
+    
     if win:
-        reward = random.randint(20, 40)  # 20-40 MMR
+        reward = random.randint(25, 45)  # Увеличил награду за игроков
         u["chat_mmr"] += reward
         u["wins"] += 1
-        text = f"🏆 ПОБЕДА над {opponent_level} противником!\n💰 +{reward} MMR"
+        text = f"🏆 ПОБЕДА над {opponent_level} противником!\n{random.choice(win_player_phrases)}\n💰 +{reward} MMR"
     else:
-        penalty = random.randint(10, 20)  # 10-20 MMR
+        penalty = random.randint(12, 22)  # Увеличил штраф за игроков
         u["chat_mmr"] -= penalty
         u["loses"] += 1
-        text = f"💀 ПОРАЖЕНИЕ от {opponent_level} противника!\n💰 -{penalty} MMR"
+        text = f"💀 ПОРАЖЕНИЕ от {opponent_level} противника!\n{random.choice(lose_player_phrases)}\n💰 -{penalty} MMR"
     
     text += f"\n📊 Баланс: {u['chat_mmr']} MMR"
     text += f"\n⚔️ Бои сегодня: {u['pvp_today']}/3"
@@ -502,21 +545,30 @@ def inventory(msg):
     u = get_user(msg.from_user.id)
     inv = u.get("inventory", [])
     
-    if not inv:
-        bot.send_message(msg.chat.id, "🎒 Инвентарь пуст\n\nПокупайте предметы в 🏪 Магазине!")
-        return
-    
     text = "🎒 ИНВЕНТАРЬ\n\n"
-    for item_name in inv:
-        item_data = get_item_info(item_name)
-        if item_data:
-            text += f"▫️ {item_name}\n"
-            for key, value in item_data.items():
-                if key not in ["💰", "🎁"]:
-                    text += f"  {key}: {value}\n"
-            text += "\n"
     
-    bot.send_message(msg.chat.id, text)
+    # Показываем 6 слотов
+    for i in range(6):
+        if i < len(inv):
+            item_name = inv[i]
+            item_data = get_item_info(item_name)
+            if item_data:
+                text += f"📦 {item_name}\n"
+                for key, value in item_data.items():
+                    if key not in ["💰", "🎁"]:
+                        text += f"  {key}: {value}\n"
+        else:
+            text += f"📦 ПУСТОЙ СЛОТ {i+1}\n"
+        text += "\n"
+    
+    # Кнопки навигации
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add("👤 Профиль", "🌋 FISSURE")
+    kb.add("⚔️ PvP", "🎰 Слоты")
+    kb.add("👹 Рейд", "🏪 Магазин")
+    kb.add("⬅️ Назад в меню")
+    
+    bot.send_message(msg.chat.id, text, reply_markup=kb)
 
 # ---------- МАГАЗИН ----------
 @bot.message_handler(func=lambda m: m.text == "🏪 Магазин")
@@ -555,7 +607,14 @@ def show_category(msg):
                 text += f"  {key}: {value}\n"
         text += f"  Купить: /buy_{item_name.replace(' ', '_')}\n\n"
     
-    bot.send_message(msg.chat.id, text, parse_mode="Markdown")
+    # Кнопки навигации
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add("👤 Профиль", "🌋 FISSURE")
+    kb.add("⚔️ PvP", "🎰 Слоты")
+    kb.add("👹 Рейд", "🎒 Инвентарь")
+    kb.add("⬅️ Назад в меню")
+    
+    bot.send_message(msg.chat.id, text, parse_mode="Markdown", reply_markup=kb)
 
 @bot.message_handler(func=lambda m: m.text.startswith("/buy_"))
 def buy_item(msg):
@@ -606,6 +665,15 @@ def raid_menu(msg):
     
     text = "👹 РЕЙД НА БОССОВ\n\n"
     text += f"🏆 Ваш прогресс: {u.get('boss_kills', 0)} боссов убито\n\n"
+    
+    # Показываем прогресс по боссам
+    total_bosses = len(bosses)
+    current_boss_index = u.get("boss_kills", 0) % total_bosses
+    next_boss_index = (current_boss_index + 1) % total_bosses
+    
+    text += f"📊 Прогресс: {current_boss_index + 1}/{total_bosses}\n"
+    text += f"🎯 Следующий: {bosses[next_boss_index]['name']}\n\n"
+    
     text += f"👹 ТЕКУЩИЙ БОСС:\n"
     text += f"**{current_boss['name']}** (HP: {current_boss['HP']})\n"
     text += f"⚔️ Урон: {current_boss['damage'][0]}-{current_boss['damage'][1]}\n"
