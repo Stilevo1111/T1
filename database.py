@@ -1,27 +1,37 @@
 # database.py
 import os
 import json
-import psycopg2
-from psycopg2.extras import Json
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Импортируем psycopg2 только если нужен
+try:
+    import psycopg2
+    from psycopg2.extras import Json
+    PSYCOPG2_AVAILABLE = True
+except ImportError:
+    PSYCOPG2_AVAILABLE = False
+    # Не выводим сообщение здесь, выведем в Database.__init__
+
 class Database:
     def __init__(self):
-        self.use_postgres = DATABASE_URL is not None
+        self.use_postgres = DATABASE_URL is not None and PSYCOPG2_AVAILABLE
         if self.use_postgres:
             try:
                 self.conn = psycopg2.connect(DATABASE_URL)
                 self.create_table()
-                print("✅ Подключено к PostgreSQL")
+                print("Connected to PostgreSQL")
             except Exception as e:
-                print(f"❌ Ошибка подключения к PostgreSQL: {e}")
-                print("⚠️ Переключаюсь на JSON файл")
+                print(f"PostgreSQL connection error: {e}")
+                print("Switching to JSON file")
                 self.use_postgres = False
         
         if not self.use_postgres:
             self.data_file = "data.json"
-            print("✅ Используется JSON файл для хранения")
+            if not PSYCOPG2_AVAILABLE and DATABASE_URL:
+                print("WARNING: psycopg2 not installed, using JSON file")
+            else:
+                print("Using JSON file for storage")
     
     def create_table(self):
         """Создать таблицу если не существует"""
