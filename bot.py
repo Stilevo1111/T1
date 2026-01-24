@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from items import items, get_all_items, get_item_info, format_item_description
+from bosses import bosses, get_boss_by_name, get_random_boss, format_boss_info
 
 # Load .env file if it exists (for local development)
 load_dotenv()
@@ -48,7 +49,9 @@ def get_user(uid):
             "fissure": 10.0,
             "last_fissure": 0,
             "inventory": [],  # список названий предметов
-            "equipped": {}    # {"weapon": "Daedalus", "armor": None, ...}
+            "equipped": {},   # {"weapon": "Daedalus", "armor": None, ...}
+            "boss_kills": 0,  # количество убитых боссов
+            "last_raid": 0    # время последнего рейда
         }
         save(users)
     # Добавляем поля для старых пользователей
@@ -56,6 +59,10 @@ def get_user(uid):
         users[uid]["inventory"] = []
     if "equipped" not in users[uid]:
         users[uid]["equipped"] = {}
+    if "boss_kills" not in users[uid]:
+        users[uid]["boss_kills"] = 0
+    if "last_raid" not in users[uid]:
+        users[uid]["last_raid"] = 0
     return users[uid]
 
 # ---------- КНОПКИ ----------
@@ -63,7 +70,8 @@ def menu():
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add("👤 Профиль", "🌋 FISSURE")
     kb.add("⚔️ PvP", "🎰 Слоты")
-    kb.add("🎒 Инвентарь", "🏪 Магазин")
+    kb.add("👹 Рейд", "🎒 Инвентарь")
+    kb.add("🏪 Магазин")
     return kb
 
 # ---------- START ----------
@@ -81,6 +89,7 @@ def profile(msg):
         f"💬 Чат-MMR: {u['chat_mmr']}\n"
         f"🏆 Победы: {u['wins']}\n"
         f"💀 Поражения: {u['loses']}\n"
+        f"👹 Боссов убито: {u.get('boss_kills', 0)}\n"
         f"🍆 FISSURE: {u['fissure']:.1f} см"
     )
     bot.send_message(msg.chat.id, text)
@@ -265,6 +274,141 @@ def buy_item(msg):
     save(users)
     
     bot.send_message(msg.chat.id, f"✅ Куплено: {item_name}\n💰 Потрачено: {price} MMR\n💰 Осталось: {u['chat_mmr']} MMR")
+
+# ---------- РЕЙД НА БОССОВ ----------
+@bot.message_handler(func=lambda m: m.text == "👹 Рейд")
+def raid_menu(msg):
+    u = get_user(msg.from_user.id)
+    now = time.time()
+    cooldown = 3600  # 1 час
+    remaining = cooldown - (now - u.get("last_raid", 0))
+    
+    if remaining > 0:
+        m = int(remaining / 60)
+        bot.send_message(msg.chat.id, f"⏳ Следующий рейд через {m} мин.")
+        return
+    
+    text = "👹 РЕЙД НА БОССОВ\n\n"
+    text += "Выберите босса для атаки:\n\n"
+    
+    for i, boss in enumerate(bosses, 1):
+        text += f"{i}. {boss['name']} (HP: {boss['HP']})\n"
+        text += f"   ⚔️ Урон: {boss['damage'][0]}-{boss['damage'][1]}\n"
+        text += f"   💫 {boss['effect']}\n"
+        text += f"   🎁 Лут: {', '.join(boss['loot'][:2])}...\n"
+        text += f"   Атаковать: /raid_{i}\n\n"
+    
+    bot.send_message(msg.chat.id, text)
+
+@bot.message_handler(func=lambda m: m.text.startswith("/raid_"))
+def start_raid(msg):
+    try:
+        boss_index = int(msg.text[6:]) - 1
+        if boss_index < 0 or boss_index >= len(bosses):
+            bot.send_message(msg.chat.id, "❌ Босс не найден")
+            return
+    except:
+        bot.send_message(msg.chat.id, "❌ Неверная команда")
+        return
+    
+    u = get_user(msg.from_user.id)
+    now = time.time()
+    cooldown = 3600  # 1 час
+    remaining = cooldown - (now - u.get("last_raid", 0))
+    
+    if remaining > 0:
+        m = int(remaining / 60)
+        bot.send_message(msg.chat.id, f"⏳ Следующий рейд через {m} мин.")
+        return
+    
+    boss = bosses[boss_index].copy()
+    player_hp = 100 + (u['chat_mmr'] // 10)  # HP зависит от MMR
+    player_damage = 20 + (u['fissure'] * 2)  # урон зависит от FISSURE
+    
+    # Бонусы от предметов
+    inventory = u.get("inventory", [])
+    damage_bonus = 0
+    defense_bonus = 0
+    
+    for item_name in inventory:
+        item_data = get_item_info(item_name)
+        if item_data:
+            damage_bonus += item_data.get("💪", 0)
+            if "🛡" in item_data:
+                defense_bonus += 10
+    
+    player_damage += damage_bonus * 5
+    
+    # Симуляция боя
+    boss_hp = boss["HP"]
+    turns = 0
+    max_turns = 20
+    
+    battle_log = f"⚔️ БОЙ С {boss['name'].upper()}!\n\n"
+    battle_log += f"👤 Ваш HP: {player_hp}\n"
+    battle_log += f"👹 HP босса: {boss_hp}\n"
+    battle_log += f"⚔️ Ваш урон: {int(player_damage)}\n\n"
+    
+    while boss_hp > 0 and player_hp > 0 and turns < max_turns:
+        turns += 1
+        
+        # Удар игрока
+        crit = random.randint(1, 100) <= 15  # 15% шанс крита
+        dmg = int(player_damage * (2 if crit else 1))
+        boss_hp -= dmg
+        battle_log += f"Ход {turns}: Вы наносите {dmg} урона" + (" 💥 КРИТ!" if crit else "") + "\n"
+        
+        if boss_hp <= 0:
+            break
+        
+        # Удар босса
+        boss_dmg = random.randint(boss["damage"][0], boss["damage"][1])
+        boss_dmg = max(1, boss_dmg - defense_bonus)
+        player_hp -= boss_dmg
+        battle_log += f"       {boss['name']} наносит {boss_dmg} урона\n"
+        
+        if player_hp <= 0:
+            break
+    
+    # Результат
+    if boss_hp <= 0:
+        # Победа
+        u["boss_kills"] = u.get("boss_kills", 0) + 1
+        u["last_raid"] = now
+        
+        # Награды
+        mmr_reward = random.randint(50, 150)
+        u["chat_mmr"] += mmr_reward
+        
+        # Шанс дропа предмета
+        drop_chance = 30  # 30%
+        dropped_item = None
+        if random.randint(1, 100) <= drop_chance:
+            available_loot = [item for item in boss["loot"] if item not in u.get("inventory", [])]
+            if available_loot:
+                dropped_item = random.choice(available_loot)
+                if "inventory" not in u:
+                    u["inventory"] = []
+                u["inventory"].append(dropped_item)
+        
+        save(users)
+        
+        battle_log += f"\n🎉 ПОБЕДА!\n"
+        battle_log += f"💰 +{mmr_reward} MMR\n"
+        if dropped_item:
+            battle_log += f"🎁 Получен предмет: {dropped_item}!\n"
+        else:
+            battle_log += f"🎁 Предметы не выпали (шанс 30%)\n"
+    else:
+        # Поражение
+        u["last_raid"] = now
+        save(users)
+        
+        battle_log += f"\n💀 ПОРАЖЕНИЕ!\n"
+        battle_log += f"Босс остался с {boss_hp} HP\n"
+        battle_log += f"Попробуйте снова через 1 час\n"
+    
+    bot.send_message(msg.chat.id, battle_log)
 
 # ---------- HTTP SERVER (для Render) ----------
 class HealthCheckHandler(BaseHTTPRequestHandler):
