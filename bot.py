@@ -6,12 +6,17 @@ import telebot
 from telebot import types
 from dotenv import load_dotenv
 
+# Load .env file if it exists (for local development)
 load_dotenv()
+
+# Get token from environment variables (works both locally and on Render)
 API_TOKEN = os.getenv("BOT_TOKEN")
 DATA_FILE = "data.json"
 
 if not API_TOKEN:
-    print("Ошибка: BOT_TOKEN не найден в файле .env")
+    print("Ошибка: BOT_TOKEN не найден в переменных окружения")
+    print("Для локальной разработки: создайте файл .env с BOT_TOKEN=ваш_токен")
+    print("Для Render: установите BOT_TOKEN в Environment Variables в настройках проекта")
     exit(1)
 
 bot = telebot.TeleBot(API_TOKEN)
