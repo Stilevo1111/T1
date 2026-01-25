@@ -42,6 +42,7 @@ async def init_db(app):
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
+                username TEXT,
                 fissure REAL DEFAULT 10.0,
                 last_fissure DOUBLE PRECISION DEFAULT 0
             )
@@ -49,7 +50,7 @@ async def init_db(app):
     logging.info("DB initialized")
 
 
-async def get_user(uid: int) -> dict:
+async def get_user(uid: int, username: str) -> dict:
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
             "SELECT * FROM users WHERE user_id=$1",
@@ -57,13 +58,22 @@ async def get_user(uid: int) -> dict:
         )
         if not user:
             await conn.execute(
-                "INSERT INTO users (user_id) VALUES ($1)",
+                "INSERT INTO users (user_id, username) VALUES ($1, $2)",
                 str(uid),
+                username,
             )
             user = await conn.fetchrow(
                 "SELECT * FROM users WHERE user_id=$1",
                 str(uid),
             )
+        else:
+            # обновляем имя пользователя, если оно изменилось
+            if user["username"] != username:
+                await conn.execute(
+                    "UPDATE users SET username=$1 WHERE user_id=$2",
+                    username,
+                    str(uid),
+                )
         return dict(user)
 
 
@@ -80,7 +90,7 @@ async def update_user(uid: int, fissure: float, ts: float):
 async def get_top(limit: int = 10):
     async with db_pool.acquire() as conn:
         return await conn.fetch("""
-            SELECT user_id, fissure
+            SELECT username, fissure
             FROM users
             ORDER BY fissure DESC
             LIMIT $1
@@ -127,7 +137,8 @@ async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids:
 # ================= BOT COMMANDS =================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await get_user(update.effective_user.id)
+    username = update.effective_user.username or update.effective_user.full_name
+    await get_user(update.effective_user.id, username)
     msg = await update.message.reply_text(
         "🔥 Бот запущен\n\n"
         "🍆 FISSURE — ролл\n"
@@ -140,7 +151,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    user = await get_user(uid)
+    username = update.effective_user.username or update.effective_user.full_name
+    user = await get_user(uid, username)
     now = time.time()
     remaining = COOLDOWN - (now - user["last_fissure"])
 
@@ -176,7 +188,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         text = ["🏆 ТОП по длине:\n"]
         for i, row in enumerate(rows, 1):
-            text.append(f"{i}. 👤 {row['user_id']} — {row['fissure']:.1f} см")
+            text.append(f"{i}. 👤 {row['username']} — {row['fissure']:.1f} см")
         msg = await update.message.reply_text("\n".join(text))
 
     context.application.create_task(
@@ -185,7 +197,9 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = await get_user(update.effective_user.id)
+    uid = update.effective_user.id
+    username = update.effective_user.username or update.effective_user.full_name
+    user = await get_user(uid, username)
     msg = await update.message.reply_text(
         f"📊 Твоя статистика:\n📏 {user['fissure']:.1f} см"
     )
