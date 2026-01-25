@@ -126,13 +126,15 @@ if __name__ == "__main__":
     # Инициализация БД перед запуском
     loop.run_until_complete(init_db())
 
-    webhook_url = f"{RENDER_URL}/webhook/{API_TOKEN}"
+    url_path = f"webhook/{API_TOKEN}"
+    webhook_url = f"{RENDER_URL}/{url_path}"
     logging.info(f"Webhook установлен: {webhook_url}")
 
     # Запускаем вебхук (set_webhook выполняется внутри run_webhook)
     application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
+        url_path=url_path,
         webhook_url=webhook_url,
         drop_pending_updates=True
     )
