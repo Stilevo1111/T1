@@ -12,7 +12,7 @@ logging.basicConfig(
 )
 
 # === Переменные окружения ===
-API_TOKEN = os.environ.get("BOT_TOKEN")
+API_TOKEN = os.environ.get("BOT_TOKEN", "8035272177:AAHSIBVubVVXxIRhVLx-uBqjBNLAeXBV__M")
 PORT = int(os.environ.get("PORT", 10000))
 RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
 DATABASE_URL = os.environ.get("DATABASE_URL")
