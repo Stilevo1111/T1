@@ -3,7 +3,7 @@ import logging
 import asyncpg
 import random
 import time
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 logging.basicConfig(
@@ -59,9 +59,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = await asyncpg.connect(DATABASE_URL)
     await get_user(conn, update.effective_user.id)
     await conn.close()
+    keyboard = ReplyKeyboardMarkup([
+        ["🌋 FISSURE"]
+    ], resize_keyboard=True)
     await update.message.reply_text(
-        "🔥 Бот запущен\nFISSURE — мем, ни на что не влияет 😏"
+        "🔥 Бот запущен\nНажми кнопку 🌋 FISSURE",
+        reply_markup=keyboard
     )
+    await fissure(update, context)
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = await asyncpg.connect(DATABASE_URL)
