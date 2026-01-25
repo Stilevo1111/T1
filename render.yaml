@@ -7,3 +7,5 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.13.4"
+      - key: WEB_CONCURRENCY
+        value: "1"
