@@ -1143,5 +1143,13 @@ if __name__ == "__main__":
     http_thread.start()
     
     print("Бот запущен...")
-    print("Использую polling режим для Render")
+    print("Удаляю вебхук и использую polling режим для Render")
+    try:
+        # Удаляем вебхук для чистого polling режима
+        bot.remove_webhook()
+        print("✅ Вебхук удален, использую polling режим")
+    except Exception as e:
+        print(f"⚠️ Ошибка при удалении вебхука: {e}")
+        print("Продолжаю в polling режиме")
+    
     bot.infinity_polling()
