@@ -685,6 +685,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================= ENTRY POINT =================
 
 if __name__ == "__main__":
+    WEBHOOK_PATH = f"webhook/{BOT_TOKEN}"
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(init_db).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -702,5 +703,11 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Запускаем бота в режиме polling
-    app.run_polling()
+    # Запускаем бота в режиме webhook для Render
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path=WEBHOOK_PATH,
+        webhook_url=f"{RENDER_URL.rstrip('/')}/{WEBHOOK_PATH}",
+        drop_pending_updates=True,
+    )
