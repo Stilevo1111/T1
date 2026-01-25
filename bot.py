@@ -5,7 +5,7 @@ import logging
 import asyncio
 import asyncpg
 
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, BotCommand
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -163,6 +163,22 @@ async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids:
         except Exception:
             pass
 
+# ================= REGISTER COMMANDS =================
+
+async def set_commands(app):
+    """Регистрируем команды бота в Telegram, чтобы они показывались при вводе '/'."""
+    commands = [
+        BotCommand("start", "Запустить бота"),
+        BotCommand("fissure", "Сделать ролл FISSURE"),
+        BotCommand("top", "Показать топ игроков"),
+        BotCommand("stats", "Показать твою статистику"),
+    ]
+    try:
+        await app.bot.set_my_commands(commands)
+        logging.info("Команды бота успешно зарегистрированы")
+    except Exception as e:
+        logging.error(f"Не удалось зарегистрировать команды: {e}")
+
 # ================= BOT COMMANDS =================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -204,9 +220,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{TEXTS[roll]}\n{phrase}\n📏 Теперь {new_value:.1f} см"
         )
 
-    # Автоудаление ответа
+    # Автоудаление ответа и команды/сообщения пользователя
+    msg_ids_to_delete = [msg.message_id]
+    if update.message.text.startswith('/'):
+        msg_ids_to_delete.append(update.message.message_id)
+    
     context.application.create_task(
-        auto_delete(context, update.effective_chat.id, [msg.message_id])
+        auto_delete(context, update.effective_chat.id, msg_ids_to_delete)
     )
 
 
@@ -220,8 +240,13 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text.append(f"{i}. 👤 {row['username']} — {row['fissure']:.1f} см")
         msg = await update.message.reply_text("\n".join(text))
 
+    # Автоудаление ответа и команды/сообщения пользователя
+    msg_ids_to_delete = [msg.message_id]
+    if update.message.text.startswith('/'):
+        msg_ids_to_delete.append(update.message.message_id)
+    
     context.application.create_task(
-        auto_delete(context, update.effective_chat.id, [msg.message_id])
+        auto_delete(context, update.effective_chat.id, msg_ids_to_delete)
     )
 
 
@@ -233,8 +258,13 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📊 Твоя статистика:\n📏 {user['fissure']:.1f} см"
     )
 
+    # Автоудаление ответа и команды/сообщения пользователя
+    msg_ids_to_delete = [msg.message_id]
+    if update.message.text.startswith('/'):
+        msg_ids_to_delete.append(update.message.message_id)
+    
     context.application.create_task(
-        auto_delete(context, update.effective_chat.id, [msg.message_id])
+        auto_delete(context, update.effective_chat.id, msg_ids_to_delete)
     )
 
 
@@ -244,10 +274,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     if text == "🍆 FISSURE":
         await fissure(update, context)
+        # Автоудаление сообщения с названием кнопки
+        context.application.create_task(
+            auto_delete(context, update.effective_chat.id, [update.message.message_id])
+        )
     elif text == "🏆 TOP":
         await top(update, context)
+        # Автоудаление сообщения с названием кнопки
+        context.application.create_task(
+            auto_delete(context, update.effective_chat.id, [update.message.message_id])
+        )
     elif text == "📊 STATS":
         await stats(update, context)
+        # Автоудаление сообщения с названием кнопки
+        context.application.create_task(
+            auto_delete(context, update.effective_chat.id, [update.message.message_id])
+        )
 
 # ================= ENTRY POINT =================
 
@@ -257,9 +299,12 @@ if __name__ == "__main__":
     app = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
-        .post_init(init_db)
+        .post_init(init_db)  # инициализация БД
         .build()
     )
+
+    # Регистрация команд после init_db
+    app.post_init(set_commands)
 
     # Хендлеры команд
     app.add_handler(CommandHandler("start", start))
