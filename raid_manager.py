@@ -47,10 +47,13 @@ class RaidManager:
     
     def get_default_raid_data(self) -> Dict:
         """Получить стандартные данные рейдов"""
+        boss_names = list(BOSSES.keys())
+        first_boss_name = boss_names[0]
+        boss_data = BOSSES[first_boss_name]
         return {
-            "current_boss": 0,  # Индекс текущего босса
-            "boss_hp": BOSSES[0]["max_hp"],
-            "boss_max_hp": BOSSES[0]["max_hp"],
+            "current_boss": first_boss_name,  # Имя текущего босса
+            "boss_hp": boss_data["health"],
+            "boss_max_hp": boss_data["health"],
             "last_reset": time.time(),
             "leaderboard": {},  # {user_id: damage}
             "killers": []  # Список ID убийц
@@ -58,8 +61,8 @@ class RaidManager:
     
     def get_current_boss_info(self) -> Dict:
         """Получить информацию о текущем боссе"""
-        boss_index = self.raid_data["current_boss"]
-        boss = BOSSES[boss_index].copy()
+        boss_name = self.raid_data["current_boss"]
+        boss = BOSSES[boss_name].copy()
         boss["current_hp"] = self.raid_data["boss_hp"]
         boss["max_hp"] = self.raid_data["boss_max_hp"]
         return boss
@@ -102,13 +105,16 @@ class RaidManager:
         
         if now - last_reset >= BOSS_RESET_TIME:
             # Следующий босс
-            current_boss_index = self.raid_data["current_boss"]
-            next_boss_index = (current_boss_index + 1) % len(BOSSES)
+            current_boss_name = self.raid_data["current_boss"]
+            boss_names = list(BOSSES.keys())
+            current_index = boss_names.index(current_boss_name)
+            next_index = (current_index + 1) % len(boss_names)
+            next_boss_name = boss_names[next_index]
             
             # Обновляем данные
-            self.raid_data["current_boss"] = next_boss_index
-            self.raid_data["boss_hp"] = BOSSES[next_boss_index]["max_hp"]
-            self.raid_data["boss_max_hp"] = BOSSES[next_boss_index]["max_hp"]
+            self.raid_data["current_boss"] = next_boss_name
+            self.raid_data["boss_hp"] = BOSSES[next_boss_name]["health"]
+            self.raid_data["boss_max_hp"] = BOSSES[next_boss_name]["health"]
             self.raid_data["last_reset"] = now
             self.raid_data["leaderboard"] = {}
             self.raid_data["killers"] = []
