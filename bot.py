@@ -39,15 +39,44 @@ async def init_db(app):
     db_pool = await asyncpg.create_pool(DATABASE_URL)
 
     async with db_pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                user_id TEXT PRIMARY KEY,
-                username TEXT,
-                fissure REAL DEFAULT 10.0,
-                last_fissure DOUBLE PRECISION DEFAULT 0
+        # Проверяем, есть ли уже таблица users
+        table_exists = await conn.fetchval("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'users'
             )
         """)
-    logging.info("DB initialized")
+
+        if not table_exists:
+            # Создаем новую таблицу
+            await conn.execute("""
+                CREATE TABLE users (
+                    user_id TEXT PRIMARY KEY,
+                    username TEXT,
+                    fissure REAL DEFAULT 10.0,
+                    last_fissure DOUBLE PRECISION DEFAULT 0
+                )
+            """)
+            logging.info("DB initialized - new table created")
+        else:
+            # Проверяем, есть ли поле username
+            username_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_name = 'users' 
+                    AND column_name = 'username'
+                )
+            """)
+
+            if not username_exists:
+                # Добавляем поле username
+                await conn.execute("ALTER TABLE users ADD COLUMN username TEXT")
+                # Обновляем существующих пользователей, устанавливая username в пустое значение
+                await conn.execute("UPDATE users SET username = '' WHERE username IS NULL")
+                logging.info("DB migration completed - username column added")
+            else:
+                logging.info("DB initialized - existing table with username column")
 
 
 async def get_user(uid: int, username: str) -> dict:
