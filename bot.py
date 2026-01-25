@@ -20,6 +20,13 @@ if not API_TOKEN or not RENDER_URL or not DATABASE_URL:
     raise Exception("BOT_TOKEN, RENDER_EXTERNAL_URL или DATABASE_URL не найдены")
 
 RENDER_URL = RENDER_URL.strip().rstrip('/')
+if RENDER_URL.startswith("https://https://"):
+    RENDER_URL = RENDER_URL.replace("https://https://", "https://", 1)
+elif RENDER_URL.startswith("http://http://"):
+    RENDER_URL = RENDER_URL.replace("http://http://", "http://", 1)
+
+if not RENDER_URL.startswith("http://") and not RENDER_URL.startswith("https://"):
+    RENDER_URL = f"https://{RENDER_URL}"
 
 # --- DB ---
 async def init_db():
@@ -113,15 +120,12 @@ if __name__ == "__main__":
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Инициализация БД перед запуском
-    asyncio.get_event_loop().run_until_complete(init_db())
+    asyncio.run(init_db())
 
-    webhook_url = f"https://{RENDER_URL}/webhook/{API_TOKEN}"
+    webhook_url = f"{RENDER_URL}/webhook/{API_TOKEN}"
     logging.info(f"Webhook установлен: {webhook_url}")
 
-    # Устанавливаем webhook
-    asyncio.get_event_loop().run_until_complete(application.bot.set_webhook(webhook_url))
-
-    # Запускаем вебхук
+    # Запускаем вебхук (set_webhook выполняется внутри run_webhook)
     application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
