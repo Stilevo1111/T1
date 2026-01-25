@@ -69,6 +69,7 @@ async def init_db(app):
                     boss_name TEXT DEFAULT 'Shadow Fiend',
                     boss_max INTEGER DEFAULT 3000,
                     boss_level INTEGER DEFAULT 1,
+                    boss_ability TEXT DEFAULT 'мощные атаки, высокая живучесть',
                     fissure REAL DEFAULT 10.0,
                     last_fissure DOUBLE PRECISION DEFAULT 0
                 )
@@ -264,13 +265,13 @@ POTIONS = {
 
 # Боссы
 BOSSES = [
-    {"name": "Shadow Fiend", "hp": 2600, "dmg": [25, 45], "min_level": 1, "max_level": 10},
-    {"name": "Axe", "hp": 2800, "dmg": [35, 55], "min_level": 5, "max_level": 12},
-    {"name": "Doom", "hp": 2500, "dmg": [30, 45], "min_level": 7, "max_level": 14},
-    {"name": "Zeus", "hp": 3200, "dmg": [20, 50], "min_level": 8, "max_level": 15},
-    {"name": "Invoker", "hp": 2700, "dmg": [20, 40], "min_level": 10, "max_level": 18},
-    {"name": "Roshan", "hp": 3000, "dmg": [25, 40], "min_level": 12, "max_level": 20},
-    {"name": "Roshan Prime", "hp": 4500, "dmg": [50, 80], "min_level": 20, "max_level": 30}
+    {"name": "Shadow Fiend", "hp": 6000, "dmg": [20, 35], "min_level": 1, "max_level": 10, "ability": "ворует EXP", "loot": ["Daedalus", "Aegis of the Immortal"]},
+    {"name": "Axe", "hp": 6500, "dmg": [28, 44], "min_level": 5, "max_level": 12, "ability": "контратакует", "loot": ["Blade Mail", "Abyssal Blade"]},
+    {"name": "Doom", "hp": 7000, "dmg": [24, 36], "min_level": 7, "max_level": 14, "ability": "отключает предметы на 1 удар", "loot": ["Black King Bar", "Assault Cuirass"]},
+    {"name": "Zeus", "hp": 9000, "dmg": [16, 40], "min_level": 8, "max_level": 15, "ability": "каждые 3 хода удар по случайному игроку", "loot": ["Boots of Travel", "Mjolnir"]},
+    {"name": "Invoker", "hp": 7500, "dmg": [16, 32], "min_level": 10, "max_level": 18, "ability": "случайные эффекты", "loot": ["Scythe of Vyse", "Octarine Core"]},
+    {"name": "Roshan", "hp": 8000, "dmg": [20, 32], "min_level": 12, "max_level": 20, "ability": "ярость <30% HP", "loot": ["Divine Rapier", "Heart of Tarrasque"]},
+    {"name": "Roshan Prime", "hp": 12000, "dmg": [40, 64], "min_level": 20, "max_level": 30, "ability": "ярость <30% HP", "loot": ["Divine Rapier", "Eul's Scepter"]}
 ]
 
 # Fissure система
@@ -470,6 +471,7 @@ async def boss(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👹 {user['boss_name']}\n"
         f"HP: {user['boss_hp']}/{user['boss_max']}\n"
         f"Уровень: {user['boss_level']}\n"
+        f"Способности: {user['boss_ability']}\n"
         f"/attack — атаковать"
     )
 
@@ -497,7 +499,7 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     boss_info += f"HP: {user['boss_hp']}/{user['boss_max']}\n"
     boss_info += f"Уровень: {user['boss_level']}\n"
     boss_info += f"Урон: {user['boss_dmg'][0]}-{user['boss_dmg'][1]}\n"
-    boss_info += f"Способности: мощные атаки, высокая живучесть\n\n"
+    boss_info += f"Способности: {user['boss_ability']}\n\n"
     
     # Атака игрока
     dmg, is_crit = calculate_damage(user)
@@ -528,14 +530,40 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if boss_hp <= 0:
         boss_name = user["boss_name"]
         text += f"\n" + random.choice(MEMES["boss_kill"]).format(boss=boss_name)
-        user_gold = user["gold"] + 100
-        user_exp = user["exp"] + 50
+        
+        # Адаптированные награды
+        if boss_name == "Shadow Fiend":
+            gold_reward = random.randint(800, 3200)
+            exp_reward = random.randint(35, 140)
+        elif boss_name == "Axe":
+            gold_reward = random.randint(1000, 4000)
+            exp_reward = random.randint(40, 160)
+        elif boss_name == "Doom":
+            gold_reward = random.randint(1200, 4800)
+            exp_reward = random.randint(45, 180)
+        elif boss_name == "Zeus":
+            gold_reward = random.randint(1500, 6000)
+            exp_reward = random.randint(50, 200)
+        elif boss_name == "Invoker":
+            gold_reward = random.randint(1300, 5200)
+            exp_reward = random.randint(48, 192)
+        elif boss_name == "Roshan":
+            gold_reward = random.randint(1800, 7200)
+            exp_reward = random.randint(55, 220)
+        else:  # Roshan Prime
+            gold_reward = random.randint(2000, 8000)
+            exp_reward = random.randint(60, 240)
+        
+        user_gold = user["gold"] + gold_reward
+        user_exp = user["exp"] + exp_reward
+        
         new_boss = spawn_boss()
         boss_hp = new_boss["hp"]
         boss_name = new_boss["name"]
         boss_max = new_boss["max"]
         boss_level = new_boss["min_level"]
         boss_dmg = 0
+        boss_ability = new_boss["ability"]
         
         # Проверка уровня
         if check_level_up(user):
@@ -552,6 +580,7 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         boss_name = user["boss_name"]
         boss_max = user["boss_max"]
         boss_level = user["boss_level"]
+        boss_ability = user["boss_ability"]
         user_level = user["level"]
         user_hp_max = user["hp_max"]
 
@@ -567,6 +596,7 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         boss_max=boss_max,
         boss_level=boss_level,
         boss_dmg=boss_dmg,
+        boss_ability=boss_ability,
         gold=user_gold
     )
     
@@ -729,60 +759,56 @@ async def fight(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Противник слишком слабый")
         return
 
-    # Боевые действия с подробными логами
-    text = "⚔️ НАЧИНАЕТСЯ БИТВА! ⚔️\n\n"
-    text += f"🔴 {user1['username']} (MMR: {user1['mmr']})\n"
-    text += f"🔵 {user2['username']} (MMR: {user2['mmr']})\n\n"
+    # Информация о противнике
+    text = f"👤 Противник: {user2['username']}\n"
+    text += f"📊 MMR: {user2['mmr']} | Уровень: {user2['level']}\n"
+    text += f"💪 STR: {user2['str']} | 🏃‍♂️ AGI: {user2['agi']} | 🧠 INT: {user2['int']}\n"
+    text += f"❤️ HP: {user2['hp']}/{user2['hp_max']}\n"
+    text += f"🎒 Экипировка: {', '.join([item or 'Пусто' for item in user2['items']]) if user2['items'] else 'Пусто'}\n\n"
+    
+    # Боевые действия с короткими логами
+    text += "⚔️ БОЙ НАЧАЛСЯ!\n\n"
     
     # Раунд 1
     dmg1, is_crit1 = calculate_damage(user1)
     dmg2, is_crit2 = calculate_damage(user2)
     
-    text += f"🔴 {user1['username']} наносит {dmg1} урона!\n"
+    text += f"1. {user1['username']} наносит {dmg1} урона\n"
     if is_crit1:
-        text += "💥 КРИТИЧЕСКИЙ удар!\n"
+        text += "   💥 КРИТ! Я инвестировал в урон\n"
     
     user2_hp = max(0, user2["hp"] - dmg1)
-    text += f"🔵 {user2['username']} осталось {user2_hp}/{user2['hp_max']} HP\n\n"
-    
-    text += f"🔵 {user2['username']} наносит {dmg2} урона!\n"
+    text += f"2. {user2['username']} наносит {dmg2} урона\n"
     if is_crit2:
-        text += "💥 КРИТИЧЕСКИЙ удар!\n"
+        text += "   💥 КРИТ! Я инвестировал в урон\n"
     
     user1_hp = max(0, user1["hp"] - dmg2)
-    text += f"🔴 {user1['username']} осталось {user1_hp}/{user1['hp_max']} HP\n\n"
     
     # Раунд 2
     if user1_hp > 0 and user2_hp > 0:
         dmg1, is_crit1 = calculate_damage(user1)
         dmg2, is_crit2 = calculate_damage(user2)
         
-        text += "🔄 ВТОРОЙ РАУНД!\n\n"
-        text += f"🔴 {user1['username']} наносит {dmg1} урона!\n"
+        text += f"3. {user1['username']} наносит {dmg1} урона\n"
         if is_crit1:
-            text += "💥 КРИТИЧЕСКИЙ удар!\n"
+            text += "   💥 КРИТ! Я инвестировал в урон\n"
         
         user2_hp = max(0, user2_hp - dmg1)
-        text += f"🔵 {user2['username']} осталось {user2_hp}/{user2['hp_max']} HP\n\n"
-        
-        text += f"🔵 {user2['username']} наносит {dmg2} урона!\n"
+        text += f"4. {user2['username']} наносит {dmg2} урона\n"
         if is_crit2:
-            text += "💥 КРИТИЧЕСКИЙ удар!\n"
+            text += "   💥 КРИТ! Я инвестировал в урон\n"
         
         user1_hp = max(0, user1_hp - dmg2)
-        text += f"🔴 {user1['username']} осталось {user1_hp}/{user1['hp_max']} HP\n\n"
     
     # Определение победителя
     if user1_hp > user2_hp:
         winner = user1
         loser = user2
-        text += f"🏆 ПОБЕДИТЕЛЬ: {user1['username']}!\n"
-        text += "🎉 Ты настоящий чемпион!\n"
+        text += f"\n🏆 ПОБЕДИТЕЛЬ: {user1['username']}!\n"
     else:
         winner = user2
         loser = user1
-        text += f"🏆 ПОБЕДИТЕЛЬ: {user2['username']}!\n"
-        text += "🎉 Ты настоящий чемпион!\n"
+        text += f"\n🏆 ПОБЕДИТЕЛЬ: {user2['username']}!\n"
     
     # Передача MMR и опыта
     mmr_change = 20
@@ -796,6 +822,16 @@ async def fight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"\n📊 ИЗМЕНЕНИЯ:\n"
     text += f"🥇 {winner['username']}: +{mmr_change} MMR, +{exp_change} EXP\n"
     text += f"🥈 {loser['username']}: -{mmr_change} MMR, +{exp_change // 2} EXP\n"
+    
+    # Шутка в конце
+    jokes = [
+        "Шутка: Проигравший теперь знает, что ботинки нужно завязывать tighter!",
+        "Шутка: Победитель теперь может хвастаться, что он сильнее, чем его противник!",
+        "Шутка: Проигравший обещал купить себе лучшие предметы и вернуться за реваншем!",
+        "Шутка: Победитель теперь может позволить себе купить новое зелье!",
+        "Шутка: Проигравший сказал, что это была тактическая сдача!"
+    ]
+    text += f"\n{random.choice(jokes)}"
     
     # Обновление данных
     await update_user(update.effective_user.id, hp=user1_hp, mmr=winner_mmr if winner == user1 else loser_mmr, exp=winner_exp if winner == user1 else loser_exp, last_pvp=time.time())
