@@ -75,17 +75,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text == "🌋 FISSURE":
         await fissure(update, context)
 
-async def main():
-    # Создаём приложение
-    application = Application.builder().token(API_TOKEN).build()
+# === Настройка бота ===
+application = Application.builder().token(API_TOKEN).build()
+application.add_handler(CommandHandler("start", start))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Добавляем обработчики
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Запускаем polling
-    print("Бот запущен...")
-    await application.run_polling(drop_pending_updates=True)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+print("Бот запущен...")
+# Запускаем polling **без asyncio.run()**
+application.run_polling(drop_pending_updates=True)
