@@ -455,17 +455,25 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Босс слишком сильный для тебя")
         return
 
+    # Информация о боссе
+    boss_info = f"👹 {user['boss_name']}\n"
+    boss_info += f"HP: {user['boss_hp']}/{user['boss_max']}\n"
+    boss_info += f"Уровень: {user['boss_level']}\n"
+    boss_info += f"Урон: {user['boss_dmg'][0]}-{user['boss_dmg'][1]}\n"
+    boss_info += f"Способности: мощные атаки, высокая живучесть\n\n"
+    
     # Атака игрока
     dmg, is_crit = calculate_damage(user)
     boss_hp = user["boss_hp"] - dmg
     boss_dmg = user["boss_dmg"] + dmg
     
-    text = f"⚔️ {user['username']} нанёс {dmg} урона"
+    text = boss_info + f"⚔️ {user['username']} нанёс {dmg} урона"
     if is_crit:
         text += "\n" + random.choice(MEMES["crit"])
 
     # Атака босса
     boss_attack = random.randint(*user["boss_dmg"])
+    text += f"\n👹 Босс контратакует на {boss_attack} урона"
     
     # Проверка уклонения
     if calculate_dodge(user):
@@ -473,7 +481,7 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_hp = user["hp"]
     else:
         user_hp = user["hp"] - boss_attack
-        text += f"\n👹 Босс ударил на {boss_attack}"
+        text += f"\n💥 Босс попал!"
         
         if user_hp <= 0:
             text += "\n" + random.choice(MEMES["death"])
