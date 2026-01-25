@@ -8,8 +8,23 @@ from dotenv import load_dotenv
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from items import items, get_all_items, get_item_info, format_item_description
+from artifacts import artifacts, get_all_artifacts, get_artifact_info, format_artifact_description
 from bosses import bosses, get_boss_by_name, get_random_boss, format_boss_info
 from database import db
+
+# ---------- НОВАЯ ФУНКЦИЯ ДЛЯ РАБОТЫ С АРТЕФАКТАМИ ----------
+def get_item_info(name):
+    """Get item info by name (supports both old items and new artifacts)"""
+    # Сначала ищем в новой системе артефактов
+    artifact_data = get_artifact_info(name)
+    if artifact_data:
+        return artifact_data
+    
+    # Если не найдено, ищем в старой системе items
+    for category in items.values():
+        if name in category:
+            return category[name]
+    return None
 
 # Load .env file if it exists (for local development)
 load_dotenv()
@@ -75,15 +90,17 @@ def get_user(uid):
             "equipped": {},   # {"weapon": "Daedalus", "armor": None, ...}
             "boss_kills": 0,  # количество убитых боссов
             "last_raid": 0,   # время последнего рейда
-            # Характеристики игрока
+            # Характеристики игрока (начальные значения)
             "stats": {
-                "strength": 10,      # Сила - влияет на урон
-                "agility": 10,       # Ловкость - влияет на крит и уклонение
-                "intelligence": 10,  # Интеллект - влияет на магический урон
-                "crit_chance": 5,    # Шанс крита (%)
-                "evasion": 5,        # Шанс уклонения (%)
+                "strength": 0,       # Сила - влияет на урон
+                "agility": 0,        # Ловкость - влияет на крит и уклонение
+                "intelligence": 0,   # Интеллект - влияет на магический урон
+                "crit_chance": 0,    # Шанс крита (%)
+                "evasion": 0,        # Шанс уклонения (%)
                 "armor": 0           # Броня - уменьшает получаемый урон
-            }
+            },
+            # Никнейм игрока
+            "nickname": f"Игрок_{uid[-4:]}"  # Никнейм по умолчанию
         }
         save_user(uid)
     # Добавляем поля для старых пользователей
@@ -105,6 +122,9 @@ def get_user(uid):
             "evasion": 5,
             "armor": 0
         }
+    # Добавляем никнейм для старых пользователей
+    if "nickname" not in users[uid]:
+        users[uid]["nickname"] = f"Игрок_{uid[-4:]}"
     return users[uid]
 
 # ---------- КНОПКИ ----------
@@ -112,8 +132,8 @@ def menu():
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add("👤 Профиль", "🌋 FISSURE")
     kb.add("⚔️ PvP", "🎰 Слоты")
-    kb.add("👹 Рейд", "🎒 Инвентарь")
-    kb.add("🏪 Магазин")
+    kb.add("👹 Рейды", "🎒 Инвентарь")
+    kb.add("🏪 Магазин", "🏷 Сменить никнейм")
     return kb
 
 # ---------- START ----------
@@ -129,6 +149,7 @@ def profile(msg):
     stats = u.get("stats", {})
     text = (
         f"👤 ПРОФИЛЬ\n\n"
+        f"🏷 Никнейм: {u['nickname']}\n"
         f"💬 Чат-MMR: {u['chat_mmr']}\n"
         f"🏆 Победы: {u['wins']}\n"
         f"💀 Поражения: {u['loses']}\n"
@@ -251,6 +272,11 @@ def check_evasion(evasion_chance):
     return random.randint(1, 100) <= evasion_chance
 
 # ---------- PvP ----------
+
+# Глобальные переменные для хранения поиска игроков и активных боев
+pvp_queue = []  # Очередь поиска игроков
+active_battles = {}  # Активные бои: {battle_id: {player1_id, player2_id, ...}}
+
 @bot.message_handler(func=lambda m: m.text == "⚔️ PvP")
 def pvp_menu(msg):
     u = get_user(msg.from_user.id)
@@ -284,7 +310,7 @@ def pvp_menu(msg):
     text += f"⚔️ Бои сегодня: {pvp_today}/3\n\n"
     text += "Выберите оппонента:\n"
     text += "• /pvp_bot - Бой с ботом\n"
-    text += "• /pvp_random - Случайный игрок\n"
+    text += "• /pvp_find - Поиск реального игрока\n"
     text += "• /pvp_stats - Статистика PvP"
     
     bot.send_message(msg.chat.id, text)
@@ -449,8 +475,8 @@ def pvp_bot(msg):
     save_user(msg.from_user.id)
     bot.send_message(msg.chat.id, battle_log)
 
-@bot.message_handler(func=lambda m: m.text == "/pvp_random")
-def pvp_random(msg):
+@bot.message_handler(func=lambda m: m.text == "/pvp_find")
+def pvp_find(msg):
     u = get_user(msg.from_user.id)
     
     # Проверка MMR
@@ -474,63 +500,291 @@ def pvp_random(msg):
         bot.send_message(msg.chat.id, f"❌ Дневной лимит PvP исчерпан! (3 боя)\n🔄 Сброс через {hours_left} часов")
         return
     
-    # Поиск случайного противника (в реальной системе здесь был бы поиск по базе)
-    # Для упрощения делаем симуляцию с "виртуальным" противником
-    u["pvp_today"] = pvp_today + 1
+    # Проверяем, не находится ли игрок уже в очереди
+    if msg.from_user.id in pvp_queue:
+        bot.send_message(msg.chat.id, "⏳ Вы уже в очереди на поиск соперника!")
+        return
     
-    # Генерируем виртуального противника из мира Dota 2
-    opponent_name = random.choice([
-        "🔥 Лесной Тролль", "⚡ Молниеносный Гоблин", "🛡 Каменный Страж", 
-        "🗡 Теневой Разбойник", "🏹 Лучник-Эльф", "🔨 Гном-Механик",
-        "🌪 Волк-Призрак", "🧊 Ледяной Голем", "💀 Скелет-Воин"
-    ])
+    # Добавляем игрока в очередь
+    pvp_queue.append(msg.from_user.id)
+    bot.send_message(msg.chat.id, "⏳ Поиск соперника...\n(Отмена поиска: /pvp_cancel)")
     
-    # Сложность противника
-    opponent_level = random.choice(["слабый", "средний", "сильный"])
+    # Проверяем, есть ли другой игрок в очереди
+    if len(pvp_queue) >= 2:
+        player1_id = pvp_queue.pop(0)
+        player2_id = pvp_queue.pop(0)
+        
+        # Проверяем, что это не один и тот же игрок
+        if player1_id == player2_id:
+            pvp_queue.append(player1_id)
+            return
+        
+        # Создаем бой
+        start_pvp_battle(player1_id, player2_id)
+
+def start_pvp_battle(player1_id, player2_id):
+    """Создает и запускает PvP бой между двумя реальными игроками"""
+    # Проверяем, что оба игрока еще в игре
+    try:
+        player1 = get_user(player1_id)
+        player2 = get_user(player2_id)
+    except:
+        # Если один из игроков не найден, возвращаем их в очередь
+        if player1_id not in pvp_queue:
+            pvp_queue.append(player1_id)
+        if player2_id not in pvp_queue:
+            pvp_queue.append(player2_id)
+        return
     
-    if opponent_level == "слабый":
-        player_win_chance = 70
-    elif opponent_level == "средний":
-        player_win_chance = 50
+    # Проверяем дневные лимиты
+    now = time.time()
+    today = time.strftime("%Y-%m-%d", time.localtime(now))
+    pvp_today_1 = player1.get("pvp_today", 0)
+    pvp_today_2 = player2.get("pvp_today", 0)
+    
+    # Сброс лимитов если новый день
+    if player1.get("pvp_last_reset", "") != today:
+        player1["pvp_today"] = 0
+        player1["pvp_last_reset"] = today
+        pvp_today_1 = 0
+    
+    if player2.get("pvp_last_reset", "") != today:
+        player2["pvp_today"] = 0
+        player2["pvp_last_reset"] = today
+        pvp_today_2 = 0
+    
+    # Проверяем лимиты
+    if pvp_today_1 >= 3 or pvp_today_2 >= 3:
+        # Возвращаем игроков в очередь
+        if pvp_today_1 < 3 and player1_id not in pvp_queue:
+            pvp_queue.append(player1_id)
+        if pvp_today_2 < 3 and player2_id not in pvp_queue:
+            pvp_queue.append(player2_id)
+        return
+    
+    # Создаем уникальный ID боя
+    battle_id = f"pvp_{player1_id}_{player2_id}_{int(time.time())}"
+    
+    # Сохраняем информацию о бое с настоящими никнеймами
+    active_battles[battle_id] = {
+        "player1_id": player1_id,
+        "player2_id": player2_id,
+        "player1_name": player1["nickname"],
+        "player2_name": player2["nickname"],
+        "start_time": time.time()
+    }
+    
+    # Рассчитываем характеристики игроков
+    player1_stats = calculate_player_stats(player1)
+    player2_stats = calculate_player_stats(player2)
+    
+    # Отправляем сообщения обоим игрокам с никнеймами
+    try:
+        # Сообщение первому игроку
+        battle_msg_1 = f"⚔️ НАЙДЕН СОПЕРНИК!\n\n"
+        battle_msg_1 += f"👤 Вы ({player1['nickname']}): {player1_stats['hp']} HP, {player1_stats['damage']} урон\n"
+        battle_msg_1 += f"👤 Противник ({player2['nickname']}): {player2_stats['hp']} HP, {player2_stats['damage']} урон\n\n"
+        battle_msg_1 += f"Бой начнется через 3 секунды..."
+        bot.send_message(player1_id, battle_msg_1)
+        
+        # Сообщение второму игроку
+        battle_msg_2 = f"⚔️ НАЙДЕН СОПЕРНИК!\n\n"
+        battle_msg_2 += f"👤 Вы ({player2['nickname']}): {player2_stats['hp']} HP, {player2_stats['damage']} урон\n"
+        battle_msg_2 += f"👤 Противник ({player1['nickname']}): {player1_stats['hp']} HP, {player1_stats['damage']} урон\n\n"
+        battle_msg_2 += f"Бой начнется через 3 секунды..."
+        bot.send_message(player2_id, battle_msg_2)
+        
+        # Запускаем бой через 3 секунды
+        Thread(target=run_pvp_battle, args=(battle_id, player1_id, player2_id), daemon=True).start()
+        
+    except Exception as e:
+        # Если не удалось отправить сообщение, возвращаем игроков в очередь
+        print(f"Ошибка при запуске PvP боя: {e}")
+        if player1_id not in pvp_queue:
+            pvp_queue.append(player1_id)
+        if player2_id not in pvp_queue:
+            pvp_queue.append(player2_id)
+        if battle_id in active_battles:
+            del active_battles[battle_id]
+
+def run_pvp_battle(battle_id, player1_id, player2_id):
+    """Запускает симуляцию PvP боя между двумя игроками"""
+    time.sleep(3)  # Даем время на прочтение сообщения
+    
+    try:
+        player1 = get_user(player1_id)
+        player2 = get_user(player2_id)
+    except:
+        return
+    
+    # Рассчитываем характеристики
+    player1_stats = calculate_player_stats(player1)
+    player2_stats = calculate_player_stats(player2)
+    
+    # Начальные параметры
+    p1_hp = player1_stats["hp"]
+    p2_hp = player2_stats["hp"]
+    p1_damage = player1_stats["damage"]
+    p2_damage = player2_stats["damage"]
+    p1_crit = player1_stats["crit_chance"]
+    p2_crit = player2_stats["crit_chance"]
+    p1_evasion = player1_stats["evasion"]
+    p2_evasion = player2_stats["evasion"]
+    p1_defense = player1_stats["armor"]
+    p2_defense = player2_stats["armor"]
+    
+    # Лог боя
+    battle_log = f"⚔️ PvP БОЙ НАЧАЛСЯ!\n\n"
+    battle_log += f"👤 ИГРОК 1: {p1_hp} HP\n"
+    battle_log += f"👤 ИГРОК 2: {p2_hp} HP\n\n"
+    
+    # Отправляем начальный лог обоим игрокам
+    try:
+        bot.send_message(player1_id, battle_log)
+        bot.send_message(player2_id, battle_log)
+    except:
+        return
+    
+    # Симуляция боя
+    turns = 0
+    max_turns = 30
+    winner = None
+    
+    while p1_hp > 0 and p2_hp > 0 and turns < max_turns:
+        turns += 1
+        
+        # Ход игрока 1
+        is_crit = random.randint(1, 100) <= p1_crit
+        dmg = calculate_damage_with_stats(player1_stats, p2_defense, is_crit)
+        p2_hp -= dmg
+        
+        turn_log = f"Ход {turns}: ИГРОК 1 наносит {dmg} урона" + (" 💥 КРИТ!" if is_crit else "") + f" (ИГРОК 2: {max(0, p2_hp)} HP)\n"
+        
+        # Проверяем, закончился ли бой
+        if p2_hp <= 0:
+            winner = player1_id
+            turn_log += f"\n🎉 ПОБЕДА ИГРОКА 1!\n"
+            break
+        
+        # Ход игрока 2
+        is_crit = random.randint(1, 100) <= p2_crit
+        dmg = calculate_damage_with_stats(player2_stats, p1_defense, is_crit)
+        p1_hp -= dmg
+        
+        turn_log += f"       ИГРОК 2 наносит {dmg} урона" + (" 💥 КРИТ!" if is_crit else "") + f" (ИГРОК 1: {max(0, p1_hp)} HP)\n"
+        
+        if p1_hp <= 0:
+            winner = player2_id
+            turn_log += f"\n🎉 ПОБЕДА ИГРОКА 2!\n"
+            break
+        
+        # Отправляем лог хода обоим игрокам
+        try:
+            bot.send_message(player1_id, turn_log)
+            bot.send_message(player2_id, turn_log)
+        except:
+            break
+        
+        time.sleep(1)  # Пауза между ходами
+    
+    # Обработка результатов
+    if winner == player1_id:
+        # Победа игрока 1
+        player1["chat_mmr"] += 40
+        player1["wins"] += 1
+        player2["chat_mmr"] -= 20
+        player2["loses"] += 1
+        
+        result_msg = f"🎉 ПОБЕДА!\n\n💰 +40 MMR\n📊 Баланс: {player1['chat_mmr']} MMR"
+        loser_msg = f"💀 ПОРАЖЕНИЕ!\n\n💰 -20 MMR\n📊 Баланс: {player2['chat_mmr']} MMR"
+        
+    elif winner == player2_id:
+        # Победа игрока 2
+        player2["chat_mmr"] += 40
+        player2["wins"] += 1
+        player1["chat_mmr"] -= 20
+        player1["loses"] += 1
+        
+        result_msg = f"🎉 ПОБЕДА!\n\n💰 +40 MMR\n📊 Баланс: {player2['chat_mmr']} MMR"
+        loser_msg = f"💀 ПОРАЖЕНИЕ!\n\n💰 -20 MMR\n📊 Баланс: {player1['chat_mmr']} MMR"
     else:
-        player_win_chance = 30
+        # Ничья
+        result_msg = f"🤝 НИЧЬЯ!\n\nБой завершился вничью\n📊 Баланс: {player1['chat_mmr']} MMR"
+        loser_msg = f"🤝 НИЧЬЯ!\n\nБой завершился вничью\n📊 Баланс: {player2['chat_mmr']} MMR"
     
-    win = random.randint(1, 100) <= player_win_chance
+    # Увеличиваем счетчик боев для обоих игроков
+    player1["pvp_today"] = player1.get("pvp_today", 0) + 1
+    player2["pvp_today"] = player2.get("pvp_today", 0) + 1
     
-    # Юмористические фразы для победы над игроком
-    win_player_phrases = [
-        "Ты просто легенда! 🤖",
-        "Противник плачет! 😂",
-        "Ты всех уделал! 💪",
-        "Легко как бутылку открыть! 🍾",
-        "Ты сегодня неудержим! 🚀"
-    ]
+    # Сохраняем изменения
+    save_user(player1_id)
+    save_user(player2_id)
     
-    # Юмористические фразы для поражения от игрока
-    lose_player_phrases = [
-        "Тебя жестко уделали! 😵",
-        "Противник слишком силён! 💀",
-        "Ты сегодня не в форме! 🤡",
-        "Позорище! 😳",
-        "Попробуй тренироваться больше! 🏋️"
-    ]
+    # Отправляем результаты
+    try:
+        bot.send_message(player1_id, result_msg)
+        bot.send_message(player2_id, loser_msg)
+    except:
+        pass
     
-    if win:
-        reward = random.randint(25, 45)  # Увеличил награду за игроков
-        u["chat_mmr"] += reward
-        u["wins"] += 1
-        text = f"🏆 ПОБЕДА над {opponent_level} противником!\n{random.choice(win_player_phrases)}\n💰 +{reward} MMR"
+    # Удаляем бой из активных
+    if battle_id in active_battles:
+        del active_battles[battle_id]
+
+@bot.message_handler(func=lambda m: m.text == "/pvp_cancel")
+def pvp_cancel(msg):
+    """Отмена поиска соперника"""
+    if msg.from_user.id in pvp_queue:
+        pvp_queue.remove(msg.from_user.id)
+        bot.send_message(msg.chat.id, "❌ Поиск соперника отменен")
     else:
-        penalty = random.randint(12, 22)  # Увеличил штраф за игроков
-        u["chat_mmr"] -= penalty
-        u["loses"] += 1
-        text = f"💀 ПОРАЖЕНИЕ от {opponent_level} противника!\n{random.choice(lose_player_phrases)}\n💰 -{penalty} MMR"
+        bot.send_message(msg.chat.id, "Вы не находитесь в очереди на поиск соперника")
+
+# ---------- НИКНЕЙМЫ ----------
+
+@bot.message_handler(func=lambda m: m.text == "🏷 Сменить никнейм")
+def change_nickname_menu(msg):
+    u = get_user(msg.from_user.id)
+    text = f"🏷 СМЕНА НИКНЕЙМА\n\n"
+    text += f"Ваш текущий никнейм: **{u['nickname']}**\n\n"
+    text += f"Введите новый никнейм (максимум 20 символов):"
+    bot.send_message(msg.chat.id, text, parse_mode="Markdown")
+
+@bot.message_handler(func=lambda m: m.text.startswith("/setnick_"))
+def set_nickname(msg):
+    """Установка нового никнейма"""
+    new_nickname = msg.text[9:]  # Убираем "/setnick_"
     
-    text += f"\n📊 Баланс: {u['chat_mmr']} MMR"
-    text += f"\n⚔️ Бои сегодня: {u['pvp_today']}/3"
+    if not new_nickname:
+        bot.send_message(msg.chat.id, "❌ Введите никнейм после команды /setnick_")
+        return
     
+    if len(new_nickname) > 20:
+        bot.send_message(msg.chat.id, "❌ Никнейм не может быть длиннее 20 символов")
+        return
+    
+    if len(new_nickname) < 2:
+        bot.send_message(msg.chat.id, "❌ Никнейм должен быть не менее 2 символов")
+        return
+    
+    # Проверяем на недопустимые символы
+    invalid_chars = ["<", ">", "&", "\"", "'"]
+    for char in invalid_chars:
+        if char in new_nickname:
+            bot.send_message(msg.chat.id, f"❌ Никнейм не может содержать символ '{char}'")
+            return
+    
+    u = get_user(msg.from_user.id)
+    old_nickname = u["nickname"]
+    u["nickname"] = new_nickname
     save_user(msg.from_user.id)
-    bot.send_message(msg.chat.id, text)
+    
+    bot.send_message(msg.chat.id, f"✅ Никнейм изменен!\n\n{old_nickname} → {new_nickname}")
+
+@bot.message_handler(func=lambda m: m.text == "/setnick_")
+def set_nickname_empty(msg):
+    """Обработка пустой команды смены никнейма"""
+    bot.send_message(msg.chat.id, "❌ Введите никнейм после команды /setnick_\nПример: /setnick_ НовыйНик")
 
 # ---------- СЛОТЫ ----------
 @bot.message_handler(func=lambda m: m.text == "🎰 Слоты")
@@ -703,21 +957,11 @@ def play_slots(msg):
 def inventory(msg):
     u = get_user(msg.from_user.id)
     inv = u.get("inventory", [])
-    stats = u.get("stats", {})
     
     text = "🎒 ИНВЕНТАРЬ\n\n"
     
-    # Показываем характеристики игрока
-    text += "📊 ВАШИ ХАРАКТЕРИСТИКИ:\n"
-    text += f"💪 Сила: {stats.get('strength', 10)}\n"
-    text += f"🤸 Ловкость: {stats.get('agility', 10)}\n"
-    text += f"🧠 Интеллект: {stats.get('intelligence', 10)}\n"
-    text += f"🎯 Крит: {stats.get('crit_chance', 5)}%\n"
-    text += f"🛡 Уклонение: {stats.get('evasion', 5)}%\n"
-    text += f"🛡 Броня: {stats.get('armor', 0)}\n\n"
-    
-    # Показываем 6 слотов
-    text += "📦 ПРЕДМЕТЫ:\n"
+    # Показываем 6 слотов для артефактов
+    text += "📦 СЛОТЫ ДЛЯ АРТЕФАКТОВ:\n"
     for i in range(6):
         if i < len(inv):
             item_name = inv[i]
@@ -760,19 +1004,35 @@ def show_category(msg):
     }
     
     cmd = msg.text[1:]  # убираем /
-    if cmd not in items:
+    
+    # Сначала проверяем новую систему артефактов
+    if cmd in artifacts:
+        text = f"{category_map.get(cmd, cmd.upper())}\n\n"
+        
+        for item_name, item_data in artifacts[cmd].items():
+            text += f"▫️ **{item_name}**\n"
+            for key, value in item_data.items():
+                if key == "💰":
+                    text += f"  💰 {value} MMR\n"
+                elif key != "🎁":
+                    text += f"  {key}: {value}\n"
+            text += f"  Купить: /buy_{item_name.replace(' ', '_')}\n\n"
+    
+    # Если не найдено в артефактах, проверяем старую систему items
+    elif cmd in items:
+        text = f"{category_map.get(cmd, cmd.upper())}\n\n"
+        
+        for item_name, item_data in items[cmd].items():
+            text += f"▫️ **{item_name}**\n"
+            for key, value in item_data.items():
+                if key == "💰":
+                    text += f"  💰 {value} MMR\n"
+                elif key != "🎁":
+                    text += f"  {key}: {value}\n"
+            text += f"  Купить: /buy_{item_name.replace(' ', '_')}\n\n"
+    
+    else:
         return
-    
-    text = f"{category_map.get(cmd, cmd.upper())}\n\n"
-    
-    for item_name, item_data in items[cmd].items():
-        text += f"▫️ **{item_name}**\n"
-        for key, value in item_data.items():
-            if key == "💰":
-                text += f"  💰 {value} MMR\n"
-            elif key != "🎁":
-                text += f"  {key}: {value}\n"
-        text += f"  Купить: /buy_{item_name.replace(' ', '_')}\n\n"
     
     # Кнопка "Назад" в интерфейсе действий
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -810,8 +1070,9 @@ def buy_item(msg):
     
     bot.send_message(msg.chat.id, f"✅ Куплено: {item_name}\n💰 Потрачено: {price} MMR\n💰 Осталось: {u['chat_mmr']} MMR")
 
-# ---------- РЕЙД НА БОССОВ ----------
-@bot.message_handler(func=lambda m: m.text == "👹 Рейд")
+# ---------- РЕЙДЫ ----------
+
+@bot.message_handler(func=lambda m: m.text == "👹 Рейды")
 def raid_menu(msg):
     u = get_user(msg.from_user.id)
     now = time.time()

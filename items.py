@@ -1,5 +1,7 @@
 """Система предметов для бота Fissure"""
 
+import random
+
 # Словарь предметов с их характеристиками
 items = {
     "weapons": {
@@ -138,55 +140,6 @@ def format_boss_info(boss):
         f"Лут: {', '.join(boss['loot'])}"
     )
 
-def get_boss_by_name(name):
-    """Получить босса по имени"""
-    for boss in bosses:
-        if boss['name'] == name:
-            return boss
-    return None
-
-def get_random_boss():
-    """Получить случайного босса"""
-    return random.choice(bosses)
-
-# Список боссов
-bosses = [
-    {
-        "name": "Голем",
-        "HP": 100,
-        "damage": [10, 15],
-        "effect": "Медленный",
-        "loot": ["Dragon Scale", "Health Potion", "Training Manual"]
-    },
-    {
-        "name": "Дракон",
-        "HP": 150,
-        "damage": [15, 25],
-        "effect": "Огненное дыхание",
-        "loot": ["Mjolnir", "Amulet of Power", "Energy Drink"]
-    },
-    {
-        "name": "Тень",
-        "HP": 80,
-        "damage": [20, 30],
-        "effect": "Невидимость",
-        "loot": ["Shadow Cloak", "Ring of Agility", "Lucky Charm"]
-    },
-    {
-        "name": "Гидра",
-        "HP": 200,
-        "damage": [12, 18],
-        "effect": "Регенерация",
-        "loot": ["Excalibur", "Crown of Intellect", "Winged Boots"]
-    },
-    {
-        "name": "Левиафан",
-        "HP": 250,
-        "damage": [18, 28],
-        "effect": "Затопление",
-        "loot": ["Titanium Plate", "Boots of Speed", "Iron Boots"]
-    }
-]
 
 if __name__ == "__main__":
     print("Items module loaded successfully")
