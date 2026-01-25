@@ -33,7 +33,7 @@ async def init_db():
     conn = await asyncpg.connect(DATABASE_URL)
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            user_id BIGINT PRIMARY KEY,
+            user_id TEXT PRIMARY KEY,
             fissure REAL DEFAULT 10.0,
             last_fissure DOUBLE PRECISION DEFAULT 0
         )
@@ -41,7 +41,7 @@ async def init_db():
     await conn.close()
 
 async def get_user(conn, uid):
-    uid = int(uid)
+    uid = str(uid)
     user = await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", uid)
     if not user:
         await conn.execute("INSERT INTO users (user_id) VALUES ($1)", uid)
@@ -51,7 +51,7 @@ async def get_user(conn, uid):
 async def update_user(conn, uid, fissure, last_fissure):
     await conn.execute(
         "UPDATE users SET fissure=$1, last_fissure=$2 WHERE user_id=$3",
-        fissure, last_fissure, int(uid)
+        fissure, last_fissure, str(uid)
     )
 
 # --- Bot commands ---
