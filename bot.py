@@ -11,7 +11,7 @@ from items import items, get_all_items, get_item_info, format_item_description
 from artifacts import artifacts, get_all_artifacts, get_artifact_info, format_artifact_description
 from bosses import bosses, get_boss_by_name, get_random_boss, format_boss_info
 from database import db
-from raid_system import handle_raid_button, handle_raid_fight
+from raid_system import handle_raid_button, handle_raid_attack
 from raid_manager import raid_manager
 
 # ---------- НОВАЯ ФУНКЦИЯ ДЛЯ РАБОТЫ С АРТЕФАКТАМИ ----------
