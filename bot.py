@@ -191,9 +191,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📊 /STATS — статистика",
         reply_markup=MAIN_KEYBOARD,
     )
-    # Автоудаление стартового сообщения через 30 секунд
+    # Автоудаление стартового сообщения и команды /start через 30 секунд
     context.application.create_task(
-        auto_delete(context, update.effective_chat.id, [msg.message_id])
+        auto_delete(context, update.effective_chat.id, [msg.message_id, update.message.message_id])
     )
 
 
