@@ -1,9 +1,9 @@
 services:
-  - type: web
+  - type: background
     name: fissure-bot
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn bot:app --host 0.0.0.0 --port $PORT
+    startCommand: python bot.py
     envVars:
       - key: PYTHON_VERSION
         value: "3.13.4"
