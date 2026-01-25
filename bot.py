@@ -19,6 +19,9 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if not API_TOKEN or not RENDER_URL or not DATABASE_URL:
     raise Exception("BOT_TOKEN, RENDER_EXTERNAL_URL или DATABASE_URL не найдены")
 
+# Очищаем RENDER_URL от лишних символов
+RENDER_URL = RENDER_URL.strip().rstrip('/')
+
 # === Подключение к PostgreSQL ===
 async def init_db():
     conn = await asyncpg.connect(DATABASE_URL)
