@@ -4,15 +4,8 @@ import random
 import logging
 import asyncio
 import asyncpg
-
-from telegram import Update, ReplyKeyboardMarkup, BotCommand
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
+import telebot
+from telebot import types
 
 # ================= CONFIG =================
 
@@ -148,10 +141,8 @@ PHRASES = {
 
 # ================= KEYBOARD =================
 
-MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [["🍆 FISSURE", "🏆 TOP"], ["📊 STATS"]],
-    resize_keyboard=True,
-)
+MAIN_KEYBOARD = types.ReplyKeyboardMarkup(resize_keyboard=True)
+MAIN_KEYBOARD.add("🍆 FISSURE", "🏆 TOP", "📊 STATS")
 
 # ================= AUTO DELETE =================
 
@@ -163,51 +154,35 @@ async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids:
         except Exception:
             pass
 
-# ================= REGISTER COMMANDS =================
-
-async def set_commands(app):
-    """Регистрируем команды бота в Telegram, чтобы они показывались при вводе '/'."""
-    commands = [
-        BotCommand("start", "Запустить бота"),
-        BotCommand("fissure", "Сделать ролл FISSURE"),
-        BotCommand("top", "Показать топ игроков"),
-        BotCommand("stats", "Показать твою статистику"),
-    ]
-    try:
-        await app.bot.set_my_commands(commands)
-        logging.info("Команды бота успешно зарегистрированы")
-    except Exception as e:
-        logging.error(f"Не удалось зарегистрировать команды: {e}")
-
 # ================= BOT COMMANDS =================
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    username = update.effective_user.username or update.effective_user.full_name
-    await get_user(update.effective_user.id, username)
-    msg = await update.message.reply_text(
+bot = telebot.TeleBot(BOT_TOKEN)
+
+@bot.message_handler(commands=["start"])
+def start(m):
+    username = m.from_user.username or m.from_user.first_name
+    asyncio.run(get_user(m.from_user.id, username))
+    bot.reply_to(m,
         "🔥 Бот запущен\nТвоя Фиссура — мем, ни на что не влияет 😏\n\n"
         "🍆 /FISSURE — ролл\n"
         "🏆 /TOP — рейтинг\n"
         "📊 /STATS — статистика",
-        reply_markup=MAIN_KEYBOARD,
-    )
-    # Автоудаление стартового сообщения и команды /start через 30 секунд
-    context.application.create_task(
-        auto_delete(context, update.effective_chat.id, [msg.message_id, update.message.message_id])
+        reply_markup=MAIN_KEYBOARD
     )
 
+@bot.message_handler(commands=["fissure"])
+def fissure(m):
+    asyncio.run(fissure_async(m))
 
-async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    username = update.effective_user.username or update.effective_user.full_name
+async def fissure_async(m):
+    uid = m.from_user.id
+    username = m.from_user.username or m.from_user.first_name
     user = await get_user(uid, username)
     now = time.time()
     remaining = COOLDOWN - (now - user["last_fissure"])
 
     if remaining > 0:
-        msg = await update.message.reply_text(
-            f"⏳ Через {int(remaining // 3600)} ч. {(int(remaining) % 3600) // 60} мин."
-        )
+        bot.reply_to(m, f"⏳ Через {int(remaining // 3600)} ч. {(int(remaining) % 3600) // 60} мин.")
     else:
         roll = random.choice(ROLLS)
         new_value = max(0.1, user["fissure"] + roll)
@@ -219,110 +194,49 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             random.choice(PHRASES["same"])
         )
 
-        msg = await update.message.reply_text(
-            f"{TEXTS[roll]}\n{phrase}\n📏 Теперь {new_value:.1f} см"
-        )
+        bot.reply_to(m, f"{TEXTS[roll]}\n{phrase}\n📏 Теперь {new_value:.1f} см")
 
-    # Автоудаление ответа и команды/сообщения пользователя
-    msg_ids_to_delete = [msg.message_id]
-    if update.message.text.startswith('/'):
-        msg_ids_to_delete.append(update.message.message_id)
-    
-    context.application.create_task(
-        auto_delete(context, update.effective_chat.id, msg_ids_to_delete)
-    )
+@bot.message_handler(commands=["top"])
+def top(m):
+    asyncio.run(top_async(m))
 
-
-async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def top_async(m):
     rows = await get_top()
     if not rows:
-        msg = await update.message.reply_text("Топ пуст 😢")
+        bot.reply_to(m, "Топ пуст 😢")
     else:
         text = ["🏆 ТОП по длине:\n"]
         for i, row in enumerate(rows, 1):
             text.append(f"{i}. 👤 {row['username']} — {row['fissure']:.1f} см")
-        msg = await update.message.reply_text("\n".join(text))
+        bot.reply_to(m, "\n".join(text))
 
-    # Автоудаление ответа и команды/сообщения пользователя
-    msg_ids_to_delete = [msg.message_id]
-    if update.message.text.startswith('/'):
-        msg_ids_to_delete.append(update.message.message_id)
-    
-    context.application.create_task(
-        auto_delete(context, update.effective_chat.id, msg_ids_to_delete)
-    )
+@bot.message_handler(commands=["stats"])
+def stats(m):
+    asyncio.run(stats_async(m))
 
-
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    username = update.effective_user.username or update.effective_user.full_name
+async def stats_async(m):
+    uid = m.from_user.id
+    username = m.from_user.username or m.from_user.first_name
     user = await get_user(uid, username)
-    msg = await update.message.reply_text(
-        f"📊 Твоя фиссура:\n📏 {user['fissure']:.1f} см"
-    )
-
-    # Автоудаление ответа и команды/сообщения пользователя
-    msg_ids_to_delete = [msg.message_id]
-    if update.message.text.startswith('/'):
-        msg_ids_to_delete.append(update.message.message_id)
-    
-    context.application.create_task(
-        auto_delete(context, update.effective_chat.id, msg_ids_to_delete)
-    )
-
+    bot.reply_to(m, f"📊 Твоя фиссура:\n📏 {user['fissure']:.1f} см")
 
 # ================= BUTTON HANDLER =================
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
+@bot.message_handler(func=lambda message: True)
+def handle_message(m):
+    text = m.text
     if text == "🍆 FISSURE":
-        await fissure(update, context)
-        # Автоудаление сообщения с названием кнопки
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [update.message.message_id])
-        )
+        asyncio.run(fissure_async(m))
     elif text == "🏆 TOP":
-        await top(update, context)
-        # Автоудаление сообщения с названием кнопки
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [update.message.message_id])
-        )
+        asyncio.run(top_async(m))
     elif text == "📊 STATS":
-        await stats(update, context)
-        # Автоудаление сообщения с названием кнопки
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [update.message.message_id])
-        )
+        asyncio.run(stats_async(m))
 
 # ================= ENTRY POINT =================
 
 if __name__ == "__main__":
-    WEBHOOK_PATH = f"webhook/{BOT_TOKEN}"
-
-    app = (
-        ApplicationBuilder()
-        .token(BOT_TOKEN)
-        .post_init(init_db)  # инициализация БД
-        .build()
-    )
-
-    # Регистрация команд после init_db
-    app.post_init(set_commands)
-
-    # Хендлеры команд
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("fissure", fissure))
-    app.add_handler(CommandHandler("top", top))
-    app.add_handler(CommandHandler("stats", stats))
-
-    # Хендлер кнопок
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Запуск webhook
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=WEBHOOK_PATH,
-        webhook_url=f"{RENDER_URL.rstrip('/')}/{WEBHOOK_PATH}",
-        drop_pending_updates=True,
-    )
+    # Инициализация базы данных
+    asyncio.run(init_db(None))
+    
+    # Запуск бота
+    bot.infinity_polling()
