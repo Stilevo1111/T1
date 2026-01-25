@@ -210,14 +210,49 @@ MEMES = {
     ]
 }
 
-# Предметы
+# Предметы (вдохновлены Dota 2)
 ITEMS = {
-    "Sword": {"gold": 200, "dmg": 10},
-    "Boots": {"gold": 150, "agi": 5, "dodge": 5},
-    "Armor": {"gold": 250, "hp": 50},
-    "Daedalus": {"gold": 500, "crit": 15, "dmg": 20},
-    "BKB": {"gold": 400, "hp": 100},
-    "Potion": {"gold": 50, "heal": 50}
+    # Сапоги (5 штук)
+    "Boots of Speed": {"gold": 400, "agi": 10, "description": "Ботинки скорости (+10 ловкости)"},
+    "Phase Boots": {"gold": 1500, "agi": 22, "dmg": 16, "description": "Часовые сапоги (+22 ловкости, +16 урона)"},
+    "Power Treads": {"gold": 1400, "str": 22, "agi": 22, "description": "Сапоги силы (+22 силы, +22 ловкости)"},
+    "Arcane Boots": {"gold": 475, "int": 10, "description": "Чародейские ботинки (+10 интеллекта)"},
+    "Boots of Travel": {"gold": 2400, "agi": 15, "dmg": 10, "description": "Ботинки путешествий (+15 ловкости, +10 урона)"},
+
+    # Броня (5 штук)
+    "Ring of Protection": {"gold": 175, "str": 3, "description": "Кольцо защиты (+3 силы)"},
+    "Vanguard": {"gold": 2250, "str": 10, "hp": 200, "description": "Вангард (+10 силы, +200 HP)"},
+    "Crimson Guard": {"gold": 3500, "str": 15, "hp": 250, "description": "Багряная стража (+15 силы, +250 HP)"},
+    "Hood of Defiance": {"gold": 2175, "int": 10, "hp": 150, "description": "Капюшон неповиновения (+10 интеллекта, +150 HP)"},
+    "Blade Mail": {"gold": 2200, "str": 10, "agi": 10, "description": "Лезвие mail (+10 силы, +10 ловкости)"},
+
+    # Оружие (5 штук)
+    "Quelling Blade": {"gold": 210, "dmg": 7, "description": "Клинок рубки (+7 урона)"},
+    "Sange": {"gold": 1150, "str": 10, "dmg": 10, "description": "Сандже (+10 силы, +10 урона)"},
+    "Yasha": {"gold": 1500, "agi": 16, "crit": 10, "description": "Яша (+16 ловкости, +10% крита)"},
+    "Daedalus": {"gold": 5150, "crit": 25, "dmg": 81, "description": "Дедал (+25% крита, +81 урона)"},
+    "Butterfly": {"gold": 5500, "agi": 30, "dodge": 30, "description": "Бабочка (+30 ловкости, +30% уклонения)"},
+
+    # Защита (5 штук)
+    "Stout Shield": {"gold": 200, "dodge": 10, "description": "Крепкий щит (+10% уклонения)"},
+    "Mekansm": {"gold": 2350, "str": 5, "hp": 150, "description": "Меканзм (+5 силы, +150 HP)"},
+    "Black King Bar": {"gold": 4100, "str": 22, "hp": 300, "description": "Черная королевская барра (+22 силы, +300 HP)"},
+    "Heart of Tarrasque": {"gold": 5500, "str": 45, "hp": 500, "description": "Сердце Тараска (+45 силы, +500 HP)"},
+    "Shiva's Guard": {"gold": 4750, "str": 20, "agi": 20, "description": "Защита Шивы (+20 силы, +20 ловкости)"},
+
+    # Поддержка (5 штук)
+    "Ring of Basilius": {"gold": 450, "str": 5, "int": 5, "description": "Кольцо Базилиуса (+5 силы, +5 интеллекта)"},
+    "Magic Wand": {"gold": 460, "hp": 75, "int": 5, "description": "Волшебная палочка (+75 HP, +5 интеллекта)"},
+    "Aghanim's Scepter": {"gold": 4200, "int": 20, "str": 10, "description": "Скипетр Аганима (+20 интеллекта, +10 силы)"},
+    "Eul's Scepter": {"gold": 2750, "int": 25, "agi": 10, "description": "Скипетр Еуля (+25 интеллекта, +10 ловкости)"},
+    "Gleipnir": {"gold": 5400, "str": 20, "agi": 20, "description": "Глепнир (+20 силы, +20 ловкости)"},
+
+    # Зелья (5 штук)
+    "Healing Salve": {"gold": 100, "heal": 100, "description": "Целебный бальзам (+100 HP)"},
+    "Tome of Knowledge": {"gold": 300, "exp": 100, "description": "Фолиант знаний (+100 опыта)"},
+    "Ring of Regen": {"gold": 325, "hp": 100, "description": "Кольцо регенерации (+100 HP)"},
+    "Ring of Health": {"gold": 850, "hp": 150, "description": "Кольцо здоровья (+150 HP)"},
+    "Perseverance": {"gold": 1650, "int": 10, "hp": 150, "description": "Стойкость (+10 интеллекта, +150 HP)"}
 }
 
 # Зелья
@@ -536,10 +571,32 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
 
 async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = "🛒 Магазин:\n"
+    text = "🛒 Магазин:\n\n"
     for item_name, item_data in ITEMS.items():
-        text += f"{item_name} — {item_data['gold']}g\n"
-    text += "\n/buy ITEM — купить предмет"
+        text += f"🗡️ {item_name}\n"
+        text += f"   💰 {item_data['gold']}g\n"
+        if 'description' in item_data:
+            text += f"   📖 {item_data['description']}\n"
+        if 'dmg' in item_data:
+            text += f"   ⚔️ +{item_data['dmg']} урона\n"
+        if 'str' in item_data:
+            text += f"   💪 +{item_data['str']} силы\n"
+        if 'agi' in item_data:
+            text += f"   🏃‍♂️ +{item_data['agi']} ловкости\n"
+        if 'int' in item_data:
+            text += f"   🧠 +{item_data['int']} интеллекта\n"
+        if 'hp' in item_data:
+            text += f"   ❤️ +{item_data['hp']} HP\n"
+        if 'crit' in item_data:
+            text += f"   🎯 +{item_data['crit']}% крита\n"
+        if 'dodge' in item_data:
+            text += f"   🛡️ +{item_data['dodge']}% уклонения\n"
+        if 'heal' in item_data:
+            text += f"   💚 +{item_data['heal']} HP\n"
+        if 'exp' in item_data:
+            text += f"   📚 +{item_data['exp']} опыта\n"
+        text += "\n"
+    text += "/buy ITEM — купить предмет"
     await update.message.reply_text(text)
 
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -619,7 +676,7 @@ async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Получаем список игроков для PvP (исключая самого пользователя)
     async with db_pool.acquire() as conn:
         rows = await conn.fetch("""
-            SELECT username, mmr, level
+            SELECT username, mmr, level, user_id
             FROM users 
             WHERE user_id != $1 AND mmr >= $2
             ORDER BY mmr DESC
@@ -633,8 +690,8 @@ async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "⚔️ Доступные противники для PvP:\n\n"
     for i, row in enumerate(rows, 1):
         text += f"{i}. 👤 {row['username']} — MMR: {row['mmr']} | Уровень: {row['level']}\n"
+        text += f"   /fight_{row['user_id']} — сразиться\n"
     
-    text += "\nНапиши /fight USER_ID чтобы вызвать на дуэль"
     await update.message.reply_text(text)
 
 async def fight(update: Update, context: ContextTypes.DEFAULT_TYPE):
