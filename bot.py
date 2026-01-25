@@ -2,6 +2,7 @@ import os
 import time
 import random
 import logging
+import asyncio
 import asyncpg
 
 from telegram import Update, ReplyKeyboardMarkup
@@ -25,7 +26,8 @@ PORT = int(os.getenv("PORT", 10000))
 if not all([BOT_TOKEN, DATABASE_URL, RENDER_URL]):
     raise RuntimeError("Не заданы BOT_TOKEN / DATABASE_URL / RENDER_EXTERNAL_URL")
 
-COOLDOWN = 86400  # 24 часа
+COOLDOWN = 86400
+AUTO_DELETE_DELAY = 30  # секунд
 
 # ================= DATABASE =================
 
@@ -44,7 +46,6 @@ async def init_db(app):
                 last_fissure DOUBLE PRECISION DEFAULT 0
             )
         """)
-
     logging.info("DB initialized")
 
 
@@ -101,124 +102,103 @@ TEXTS = {
 }
 
 PHRASES = {
-    "up": [
-        "Растёт… и ничего не спрашивает.",
-        "Увеличилась… без лишних слов.",
-    ],
-    "same": [
-        "Стоит на месте… зато уверенно.",
-        "На месте… как старый добрый друг.",
-    ],
-    "down": [
-        "Сжалась… тихо так, но гордо.",
-        "Сократился… но с достоинством.",
-    ],
+    "up": ["Растёт… и ничего не спрашивает.", "Увеличилась… без лишних слов."],
+    "same": ["Стоит на месте… зато уверенно.", "На месте… как старый добрый друг."],
+    "down": ["Сжалась… тихо так, но гордо.", "Сократился… но с достоинством."],
 }
 
 # ================= KEYBOARD =================
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [
-        ["🍆 FISSURE", "🏆 TOP"],
-        ["📊 STATS"],
-    ],
+    [["🍆 FISSURE", "🏆 TOP"], ["📊 STATS"]],
     resize_keyboard=True,
 )
+
+# ================= AUTO DELETE =================
+
+async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list[int]):
+    await asyncio.sleep(AUTO_DELETE_DELAY)
+    for msg_id in msg_ids:
+        try:
+            await context.bot.delete_message(chat_id, msg_id)
+        except Exception:
+            pass
 
 # ================= BOT COMMANDS =================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message:
-        return
-
     await get_user(update.effective_user.id)
-
-    await update.message.reply_text(
+    msg = await update.message.reply_text(
         "🔥 Бот запущен\n\n"
-        "🍆 FISSURE — ролл (1 раз в сутки)\n"
+        "🍆 FISSURE — ролл\n"
         "🏆 TOP — рейтинг\n"
-        "📊 STATS — твоя статистика",
+        "📊 STATS — статистика",
         reply_markup=MAIN_KEYBOARD,
     )
+    # Не удаляем стартовое сообщение, чтобы кнопки оставались
 
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message:
-        return
-
     uid = update.effective_user.id
     user = await get_user(uid)
-
     now = time.time()
     remaining = COOLDOWN - (now - user["last_fissure"])
 
     if remaining > 0:
-        h = int(remaining // 3600)
-        m = int((remaining % 3600) // 60)
-        await update.message.reply_text(
-            f"⏳ Через {h} ч. {m} мин." if h else f"⏳ Через {m} мин."
+        msg = await update.message.reply_text(
+            f"⏳ Через {int(remaining // 3600)} ч. {(int(remaining) % 3600) // 60} мин."
         )
-        return
-
-    roll = random.choice(ROLLS)
-    new_value = max(0.1, user["fissure"] + roll)
-
-    await update_user(uid, new_value, now)
-
-    if roll > 0:
-        phrase = random.choice(PHRASES["up"])
-    elif roll < 0:
-        phrase = random.choice(PHRASES["down"])
     else:
-        phrase = random.choice(PHRASES["same"])
+        roll = random.choice(ROLLS)
+        new_value = max(0.1, user["fissure"] + roll)
+        await update_user(uid, new_value, now)
 
-    await update.message.reply_text(
-        f"{TEXTS[roll]}\n{phrase}\n📏 Теперь {new_value:.1f} см"
+        phrase = (
+            random.choice(PHRASES["up"]) if roll > 0 else
+            random.choice(PHRASES["down"]) if roll < 0 else
+            random.choice(PHRASES["same"])
+        )
+
+        msg = await update.message.reply_text(
+            f"{TEXTS[roll]}\n{phrase}\n📏 Теперь {new_value:.1f} см"
+        )
+
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
     )
-
-
-async def fissure_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await fissure(update, context)
 
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message:
-        return
-
     rows = await get_top()
-
     if not rows:
-        await update.message.reply_text("Топ пуст 😢")
-        return
+        msg = await update.message.reply_text("Топ пуст 😢")
+    else:
+        text = ["🏆 ТОП по длине:\n"]
+        for i, row in enumerate(rows, 1):
+            text.append(f"{i}. 👤 {row['user_id']} — {row['fissure']:.1f} см")
+        msg = await update.message.reply_text("\n".join(text))
 
-    msg = ["🏆 ТОП по длине:\n"]
-    for i, row in enumerate(rows, 1):
-        msg.append(f"{i}. 👤 {row['user_id']} — {row['fissure']:.1f} см")
-
-    await update.message.reply_text("\n".join(msg))
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message:
-        return
-
     user = await get_user(update.effective_user.id)
-
-    await update.message.reply_text(
-        "📊 Твоя статистика:\n\n"
-        f"📏 Длина: {user['fissure']:.1f} см\n"
-        f"⏱ Последний ролл: "
-        f"{'никогда' if user['last_fissure'] == 0 else 'уже был'}"
+    msg = await update.message.reply_text(
+        f"📊 Твоя статистика:\n📏 {user['fissure']:.1f} см"
     )
+
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
+
 
 # ================= BUTTON HANDLER =================
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message:
-        return
-
     text = update.message.text
-
     if text == "🍆 FISSURE":
         await fissure(update, context)
     elif text == "🏆 TOP":
@@ -229,6 +209,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================= ENTRY POINT =================
 
 if __name__ == "__main__":
+    WEBHOOK_PATH = f"webhook/{BOT_TOKEN}"
+
     app = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
@@ -236,18 +218,20 @@ if __name__ == "__main__":
         .build()
     )
 
+    # Хендлеры команд
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("fissure", fissure_cmd))
+    app.add_handler(CommandHandler("fissure", fissure))
     app.add_handler(CommandHandler("top", top))
     app.add_handler(CommandHandler("stats", stats))
 
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
-    )
+    # Хендлер кнопок
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+    # Запуск webhook
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_url=f"{RENDER_URL.rstrip('/')}/webhook",
+        url_path=WEBHOOK_PATH,
+        webhook_url=f"{RENDER_URL.rstrip('/')}/{WEBHOOK_PATH}",
         drop_pending_updates=True,
     )
