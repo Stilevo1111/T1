@@ -29,6 +29,8 @@ if not all([BOT_TOKEN, DATABASE_URL, RENDER_URL]):
 
 db_pool: asyncpg.Pool | None = None
 
+COOLDOWN = 86400
+AUTO_DELETE_DELAY = 30  # секунд
 
 async def init_db(app):
     global db_pool
@@ -66,13 +68,15 @@ async def init_db(app):
                     boss_hp INTEGER DEFAULT 3000,
                     boss_name TEXT DEFAULT 'Shadow Fiend',
                     boss_max INTEGER DEFAULT 3000,
-                    boss_level INTEGER DEFAULT 1
+                    boss_level INTEGER DEFAULT 1,
+                    fissure REAL DEFAULT 10.0,
+                    last_fissure DOUBLE PRECISION DEFAULT 0
                 )
             """)
             logging.info("DB initialized - new table created")
         else:
             # Проверяем, есть ли все необходимые поля
-            required_fields = ['level', 'hp', 'hp_max', 'str', 'agi', 'int', 'gold', 'mmr', 'exp', 'items', 'boss_dmg', 'last_pvp', 'last_heal', 'boss_hp', 'boss_name', 'boss_max', 'boss_level']
+            required_fields = ['level', 'hp', 'hp_max', 'str', 'agi', 'int', 'gold', 'mmr', 'exp', 'items', 'boss_dmg', 'last_pvp', 'last_heal', 'boss_hp', 'boss_name', 'boss_max', 'boss_level', 'fissure', 'last_fissure']
             missing_fields = []
             
             for field in required_fields:
@@ -92,14 +96,14 @@ async def init_db(app):
                 for field in missing_fields:
                     if field in ['level', 'hp', 'hp_max', 'str', 'agi', 'int', 'gold', 'mmr', 'exp', 'boss_dmg', 'boss_hp', 'boss_max', 'boss_level']:
                         alter_statements.append(f"ADD COLUMN {field} INTEGER DEFAULT {1 if field in ['level', 'boss_level'] else 100 if field in ['hp', 'hp_max', 'boss_hp', 'boss_max'] else 5 if field in ['str', 'agi', 'int'] else 200 if field == 'gold' else 1000 if field == 'mmr' else 0}")
-                    elif field == 'last_pvp':
-                        alter_statements.append(f"ADD COLUMN {field} DOUBLE PRECISION DEFAULT 0")
-                    elif field == 'last_heal':
+                    elif field in ['last_pvp', 'last_heal', 'last_fissure']:
                         alter_statements.append(f"ADD COLUMN {field} DOUBLE PRECISION DEFAULT 0")
                     elif field == 'boss_name':
                         alter_statements.append(f"ADD COLUMN {field} TEXT DEFAULT 'Shadow Fiend'")
                     elif field == 'items':
                         alter_statements.append(f"ADD COLUMN {field} TEXT[] DEFAULT ARRAY[NULL,NULL,NULL,NULL,NULL,NULL]")
+                    elif field == 'fissure':
+                        alter_statements.append(f"ADD COLUMN {field} REAL DEFAULT 10.0")
                 
                 if alter_statements:
                     await conn.execute(f"ALTER TABLE users {', '.join(alter_statements)}")
@@ -132,36 +136,7 @@ async def get_user(uid: int, username: str) -> dict:
                     username,
                     str(uid),
                 )
-        
-        # Преобразуем в словарь и убеждаемся, что все поля присутствуют
-        user_dict = dict(user)
-        
-        # Устанавливаем значения по умолчанию для всех полей, если они отсутствуют
-        defaults = {
-            'level': 1,
-            'hp': 100,
-            'hp_max': 100,
-            'str': 5,
-            'agi': 5,
-            'int': 5,
-            'gold': 200,
-            'mmr': 1000,
-            'exp': 0,
-            'items': [None, None, None, None, None, None],
-            'boss_dmg': 0,
-            'last_pvp': 0.0,
-            'last_heal': 0.0,
-            'boss_hp': 3000,
-            'boss_name': 'Shadow Fiend',
-            'boss_max': 3000,
-            'boss_level': 1
-        }
-        
-        for key, default_value in defaults.items():
-            if key not in user_dict or user_dict[key] is None:
-                user_dict[key] = default_value
-        
-        return user_dict
+        return dict(user)
 
 
 async def update_user(uid: int, **kwargs):
@@ -182,6 +157,24 @@ async def get_top_by_stat(stat: str, limit: int = 10):
             ORDER BY {stat} DESC
             LIMIT $1
         """, limit)
+
+
+async def get_fissure_top(limit: int = 10):
+    async with db_pool.acquire() as conn:
+        return await conn.fetch("""
+            SELECT username, fissure
+            FROM users
+            ORDER BY fissure DESC
+            LIMIT $1
+        """, limit)
+
+
+async def update_fissure(uid: int, fissure: float, ts: float):
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET fissure=$1, last_fissure=$2 WHERE user_id=$3",
+            fissure, ts, str(uid),
+        )
 
 # ================= GAME DATA =================
 
@@ -244,6 +237,24 @@ BOSSES = [
     {"name": "Roshan", "hp": 3000, "dmg": [25, 40], "min_level": 12, "max_level": 20},
     {"name": "Roshan Prime", "hp": 4500, "dmg": [50, 80], "min_level": 20, "max_level": 30}
 ]
+
+# Fissure система
+ROLLS = [-5, -3, -1, 0, 1, 3, 5, 10]
+FISURE_TEXTS = {
+    10: "💀 ЛЕГЕНДА! +10 см!",
+    5: "🎉 +5 см!",
+    3: "🔥 +3 см",
+    1: "🙂 +1 см",
+    0: "🤷 Без изменений",
+    -1: "😅 -1 см",
+    -3: "📉 -3 см",
+    -5: "💔 -5 см...",
+}
+FISURE_PHRASES = {
+    "up": ["Растёт… и ничего не спрашивает.", "Увеличилась… без лишних слов."],
+    "same": ["Стоит на месте… зато уверенно.", "На месте… как старый добрый друг."],
+    "down": ["Сжалась… тихо так, но гордо.", "Сократился… но с достоинством."],
+}
 
 # ================= UTILS =================
 
@@ -318,7 +329,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Уровень: {user['level']}\n"
         f"HP: {user['hp']}/{user['hp_max']}\n"
         f"STR: {user['str']} | AGI: {user['agi']} | INT: {user['int']}\n"
-        f"Gold: {user['gold']} | MMR: {user['mmr']}\n\n"
+        f"Gold: {user['gold']} | MMR: {user['mmr']}\n"
+        f"🍆 Fissure: {user['fissure']:.1f} см\n\n"
         "Команды:\n"
         "/boss — посмотреть босса\n"
         "/attack — атаковать босса\n"
@@ -329,9 +341,65 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/pvp — PvP\n"
         "/fight USER_ID — вызов на дуэль\n"
         "/top — таблица лидеров\n"
+        "/fissure — ролл фиссуры\n"
         "/stats — статистика",
         reply_markup=MAIN_KEYBOARD,
     )
+
+
+async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    username = update.effective_user.username or update.effective_user.full_name
+    user = await get_user(update.effective_user.id, username)
+    now = time.time()
+    remaining = COOLDOWN - (now - user["last_fissure"])
+    if remaining > 0:
+        msg = await update.message.reply_text(
+            f"⏳ Через {int(remaining // 3600)} ч. {(int(remaining) % 3600) // 60} мин."
+        )
+        # Автоудаление ответа
+        context.application.create_task(
+            auto_delete(context, update.effective_chat.id, [msg.message_id])
+        )
+    else:
+        roll = random.choice(ROLLS)
+        new_value = max(0.1, user["fissure"] + roll)
+        await update_fissure(update.effective_user.id, new_value, now)
+        phrase = (
+            random.choice(FISURE_PHRASES["up"]) if roll > 0
+            else random.choice(FISURE_PHRASES["down"]) if roll < 0
+            else random.choice(FISURE_PHRASES["same"])
+        )
+        msg = await update.message.reply_text(
+            f"{FISURE_TEXTS[roll]}\n{phrase}\n📏 Теперь {new_value:.1f} см"
+        )
+        # Автоудаление ответа
+        context.application.create_task(
+            auto_delete(context, update.effective_chat.id, [msg.message_id])
+        )
+
+
+async def fissure_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    rows = await get_fissure_top()
+    if not rows:
+        msg = await update.message.reply_text("Топ пуст 😢")
+    else:
+        text = ["🏆 ТОП по длине фиссуры:\n"]
+        for i, row in enumerate(rows, 1):
+            text.append(f"{i}. 👤 {row['username']} — {row['fissure']:.1f} см")
+        msg = await update.message.reply_text("\n".join(text))
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
+
+
+async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list[int]):
+    await asyncio.sleep(AUTO_DELETE_DELAY)
+    for msg_id in msg_ids:
+        try:
+            await context.bot.delete_message(chat_id, msg_id)
+        except Exception:
+            pass
 
 async def boss(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
@@ -629,6 +697,8 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("pvp", pvp))
     app.add_handler(CommandHandler("fight", fight))
     app.add_handler(CommandHandler("top", top))
+    app.add_handler(CommandHandler("fissure", fissure))
+    app.add_handler(CommandHandler("fissure_top", fissure_top))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
