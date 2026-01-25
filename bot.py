@@ -11,6 +11,8 @@ from items import items, get_all_items, get_item_info, format_item_description
 from artifacts import artifacts, get_all_artifacts, get_artifact_info, format_artifact_description
 from bosses import bosses, get_boss_by_name, get_random_boss, format_boss_info
 from database import db
+from raid_system import handle_raid_button, handle_raid_fight
+from raid_manager import raid_manager
 
 # ---------- НОВАЯ ФУНКЦИЯ ДЛЯ РАБОТЫ С АРТЕФАКТАМИ ----------
 def get_item_info(name):
@@ -90,6 +92,7 @@ def get_user(uid):
             "equipped": {},   # {"weapon": "Daedalus", "armor": None, ...}
             "boss_kills": 0,  # количество убитых боссов
             "last_raid": 0,   # время последнего рейда
+            "last_raid_death": 0,  # время последней смерти в рейде
             # Характеристики игрока (начальные значения)
             "stats": {
                 "strength": 0,       # Сила - влияет на урон
@@ -112,6 +115,8 @@ def get_user(uid):
         users[uid]["boss_kills"] = 0
     if "last_raid" not in users[uid]:
         users[uid]["last_raid"] = 0
+    if "last_raid_death" not in users[uid]:
+        users[uid]["last_raid_death"] = 0
     # Добавляем характеристики для старых пользователей
     if "stats" not in users[uid]:
         users[uid]["stats"] = {
@@ -786,6 +791,20 @@ def set_nickname_empty(msg):
     """Обработка пустой команды смены никнейма"""
     bot.send_message(msg.chat.id, "❌ Введите никнейм после команды /setnick_\nПример: /setnick_ НовыйНик")
 
+# Обработка текстовых сообщений для смены никнейма
+@bot.message_handler(func=lambda m: True)
+def handle_text_messages(msg):
+    """Обработка текстовых сообщений"""
+    # Проверяем, не находится ли пользователь в процессе смены никнейма
+    # Для этого можно использовать временное состояние, но для простоты
+    # просто проверим, что сообщение не является командой
+    if msg.text.startswith('/'):
+        return  # Это команда, пропускаем
+    
+    # Проверяем, не является ли это попыткой установить никнейм
+    # (если пользователь ввел никнейм после команды смены)
+    # Пока оставим как есть, так как система работает через команды
+
 # ---------- СЛОТЫ ----------
 @bot.message_handler(func=lambda m: m.text == "🎰 Слоты")
 def slots_menu(msg):
@@ -1075,154 +1094,24 @@ def buy_item(msg):
 @bot.message_handler(func=lambda m: m.text == "👹 Рейды")
 def raid_menu(msg):
     u = get_user(msg.from_user.id)
-    now = time.time()
-    cooldown = 3600  # 1 час
-    remaining = cooldown - (now - u.get("last_raid", 0))
-    
-    if remaining > 0:
-        m = int(remaining / 60)
-        bot.send_message(msg.chat.id, f"⏳ Следующий рейд через {m} мин.")
-        return
-    
-    # Получаем текущего босса (по количеству убитых)
-    current_boss_index = u.get("boss_kills", 0) % len(bosses)
-    current_boss = bosses[current_boss_index]
-    
-    text = "👹 РЕЙД НА БОССОВ\n\n"
-    text += f"🏆 Ваш прогресс: {u.get('boss_kills', 0)} боссов убито\n\n"
-    
-    # Показываем прогресс по боссам
-    total_bosses = len(bosses)
-    current_boss_index = u.get("boss_kills", 0) % total_bosses
-    next_boss_index = (current_boss_index + 1) % total_bosses
-    
-    text += f"📊 Прогресс: {current_boss_index + 1}/{total_bosses}\n"
-    text += f"🎯 Следующий: {bosses[next_boss_index]['name']}\n\n"
-    
-    text += f"👹 ТЕКУЩИЙ БОСС:\n"
-    text += f"**{current_boss['name']}** (HP: {current_boss['HP']})\n"
-    text += f"⚔️ Урон: {current_boss['damage'][0]}-{current_boss['damage'][1]}\n"
-    text += f"💫 Эффект: {current_boss['effect']}\n"
-    text += f"🎁 Лут: {', '.join(current_boss['loot'])}\n\n"
-    text += f"Атаковать: /raid_fight"
-    
+    text = handle_raid_button(u)
     bot.send_message(msg.chat.id, text, parse_mode="Markdown")
 
 @bot.message_handler(func=lambda m: m.text == "/raid_fight")
 def start_raid(msg):
     u = get_user(msg.from_user.id)
-    now = time.time()
-    cooldown = 3600  # 1 час
-    remaining = cooldown - (now - u.get("last_raid", 0))
+    battle_log, result = handle_raid_fight(u)
     
-    if remaining > 0:
-        m = int(remaining / 60)
-        bot.send_message(msg.chat.id, f"⏳ Следующий рейд через {m} мин.")
-        return
-    
-    # Получаем текущего босса (по количеству убитых)
-    current_boss_index = u.get("boss_kills", 0) % len(bosses)
-    boss = bosses[current_boss_index].copy()
-    
-    # Рассчитываем характеристики игрока с учетом статов
-    player_stats = calculate_player_stats(u)
-    player_hp = player_stats["hp"]
-    player_damage = player_stats["damage"]
-    player_crit = player_stats["crit_chance"]
-    player_evasion = player_stats["evasion"]
-    player_defense = player_stats["armor"]
-    
-    # Симуляция боя
-    boss_hp = boss["HP"]
-    turns = 0
-    max_turns = 20
-    
-    battle_log = f"⚔️ БОЙ С {boss['name'].upper()}!\n\n"
-    battle_log += f"🏆 Ваш прогресс: {u.get('boss_kills', 0)} боссов убито\n\n"
-    battle_log += f"👤 ВАШИ ХАРАКТЕРИСТИКИ:\n"
-    battle_log += f"  ❤️ HP: {player_hp}\n"
-    battle_log += f"  ⚔️ Урон: {int(player_damage)}\n"
-    battle_log += f"  🎯 Крит: {player_crit}%\n"
-    battle_log += f"  🛡 Уклонение: {player_evasion}%\n"
-    battle_log += f"  🛡 Защита: {player_defense}\n\n"
-    battle_log += f"👹 ХАРАКТЕРИСТИКИ БОССА:\n"
-    battle_log += f"  ❤️ HP: {boss_hp}\n"
-    battle_log += f"  ⚔️ Урон: {boss['damage'][0]}-{boss['damage'][1]}\n"
-    battle_log += f"  💫 Эффект: {boss['effect']}\n\n"
-    
-    while boss_hp > 0 and player_hp > 0 and turns < max_turns:
-        turns += 1
-        
-        # Удар игрока
-        # Проверяем крит
-        is_crit = random.randint(1, 100) <= player_crit
-        # Рассчитываем урон
-        dmg = calculate_damage_with_stats(player_stats, 0, is_crit)  # Боссы не имеют защиты в этой системе
-        boss_hp -= dmg
-        battle_log += f"Ход {turns}: Вы наносите {dmg} урона" + (" 💥 КРИТ!" if is_crit else "") + "\n"
-        
-        if boss_hp <= 0:
-            break
-        
-        # Удар босса
-        # Проверяем уклонение игрока
-        if check_evasion(player_evasion):
-            battle_log += f"       {boss['name']} атакует, но вы уклоняетесь! 🤸\n"
-        else:
-            boss_dmg = random.randint(boss["damage"][0], boss["damage"][1])
-            # Учет защиты игрока
-            final_boss_dmg = max(1, boss_dmg - player_defense)
-            player_hp -= final_boss_dmg
-            battle_log += f"       {boss['name']} наносит {final_boss_dmg} урона\n"
-        
-        if player_hp <= 0:
-            break
-    
-    # Результат
-    if boss_hp <= 0:
-        # Победа
-        u["boss_kills"] = u.get("boss_kills", 0) + 1
-        u["last_raid"] = now
-        
-        # Награды
-        mmr_reward = random.randint(50, 150)
-        u["chat_mmr"] += mmr_reward
-        
-        # Шанс дропа предмета
-        drop_chance = 30  # 30%
-        dropped_item = None
-        if random.randint(1, 100) <= drop_chance:
-            available_loot = [item for item in boss["loot"] if item not in u.get("inventory", [])]
-            if available_loot:
-                dropped_item = random.choice(available_loot)
-                if "inventory" not in u:
-                    u["inventory"] = []
-                u["inventory"].append(dropped_item)
-        
-        save_user(msg.from_user.id)
-        
-        battle_log += f"\n🎉 ПОБЕДА!\n"
-        battle_log += f"💰 +{mmr_reward} MMR\n"
-        if dropped_item:
-            battle_log += f"🎁 Получен предмет: {dropped_item}!\n"
-        else:
-            battle_log += f"🎁 Предметы не выпали (шанс 30%)\n"
-        
-        # Показываем следующего босса
-        next_boss_index = u.get("boss_kills", 0) % len(bosses)
-        next_boss = bosses[next_boss_index]
-        battle_log += f"\n👹 Следующий босс: **{next_boss['name']}** (HP: {next_boss['HP']})"
-        
-    else:
-        # Поражение
-        u["last_raid"] = now
-        save_user(msg.from_user.id)
-        
-        battle_log += f"\n💀 ПОРАЖЕНИЕ!\n"
-        battle_log += f"Босс остался с {boss_hp} HP\n"
-        battle_log += f"Попробуйте снова через 1 час\n"
+    # Сохраняем изменения
+    save_user(msg.from_user.id)
     
     bot.send_message(msg.chat.id, battle_log, parse_mode="Markdown")
+
+@bot.message_handler(func=lambda m: m.text == "/raid_leaderboard")
+def show_raid_leaderboard(msg):
+    """Показать таблицу лидеров рейдов"""
+    leaderboard_text = raid_manager.format_leaderboard()
+    bot.send_message(msg.chat.id, leaderboard_text, parse_mode="Markdown")
 
 # ---------- КНОПКА НАЗАД ----------
 @bot.message_handler(func=lambda m: m.text == "⬅️ Назад")

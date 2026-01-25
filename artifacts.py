@@ -1,269 +1,179 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Dota 2 Style Artifacts System (English)
+Система артефактов для Fissure Bot
+Сбалансированная система с 5 артефактами в каждом отделе
 """
 
-# Dota 2 Style Artifacts
+# Система артефактов с 5 предметами в каждом отделе
 artifacts = {
-    "artifacts": {
-        # Armor and Protection
-        "Vanguard": {
-            "🛡": 3,  # Armor
-            "💰": 150,
-            "🎁": "Increases armor"
-        },
-        "Buckler": {
-            "🛡": 2,
-            "💪": 1,  # Strength
-            "💰": 120,
-            "🎁": "Armor and strength"
-        },
-        "Ring of Basilius": {
-            "🛡": 2,
-            "🧠": 1,  # Intelligence
-            "💰": 100,
-            "🎁": "Aura of protection"
-        },
-        "Pipe of Insight": {
-            "🛡": 3,
-            "🧠": 2,
-            "💰": 200,
-            "🎁": "Magic resistance"
-        },
-        "Blade Mail": {
-            "🛡": 2,
+    "weapons": {
+        # Оружие - увеличивает силу и крит
+        "Training Sword": {
             "💪": 1,
-            "💰": 180,
-            "🎁": "Reflects damage"
-        },
-        
-        # Evasion and Agility
-        "Butterfly": {
-            "🤸": 3,  # Agility
-            "💰": 250,
-            "🎁": "Increases evasion"
-        },
-        "Phase Boots": {
-            "🤸": 2,
-            "💰": 120,
-            "🎁": "Phase movement"
-        },
-        "Shadow Blade": {
-            "🤸": 2,
-            "🎯": 1,  # Crit
-            "💰": 160,
-            "🎁": "Blink strike"
-        },
-        "Eul's Scepter": {
-            "🤸": 2,
-            "🧠": 2,
-            "💰": 180,
-            "🎁": "Cyclone magic"
-        },
-        "Sange": {
-            "🤸": 1,
-            "🛡": 1,
-            "💰": 90,
-            "🎁": "Physical damage"
-        },
-        
-        # Strength and Durability
-        "Heart of Tarrasque": {
-            "💪": 3,
-            "💰": 220,
-            "🎁": "Massive strength"
-        },
-        "Vladmir's Offering": {
-            "💪": 2,
-            "🧠": 1,
-            "💰": 140,
-            "🎁": "Lifesteal aura"
-        },
-        "Hood of Defiance": {
-            "💪": 1,
-            "🧠": 2,
-            "💰": 130,
-            "🎁": "Magic resistance"
-        },
-        "Crimson Guard": {
-            "💪": 2,
-            "🛡": 2,
-            "💰": 200,
-            "🎁": "Damage reduction"
-        },
-        "Abyssal Blade": {
-            "💪": 2,
-            "🎯": 1,
-            "💰": 200,
-            "🎁": "Stun attack"
-        },
-        
-        # Intelligence and Magic
-        "Aghanim's Scepter": {
-            "🧠": 3,
-            "💰": 200,
-            "🎁": "Ultimate upgrade"
-        },
-        "Scythe of Vyse": {
-            "🧠": 3,
-            "💰": 240,
-            "🎁": "Hex control"
-        },
-        "Rod of Atos": {
-            "🧠": 2,
-            "💪": 1,
-            "💰": 160,
-            "🎁": "Root enemy"
-        },
-        "Gleipnir": {
-            "🧠": 2,
-            "💰": 180,
-            "🎁": "Chain lightning"
-        },
-        "Mekansm": {
-            "🧠": 1,
-            "💪": 1,
-            "💰": 110,
-            "🎁": "Healing aura"
-        },
-        
-        # Crit and Damage
-        "Monkey King Bar": {
-            "🎯": 3,
-            "💰": 240,
-            "🎁": "True damage crit"
-        },
-        "Daedalus": {
-            "🎯": 3,
-            "💰": 220,
-            "🎁": "Critical damage"
-        },
-        "Buriza": {
-            "🎯": 2,
-            "💰": 180,
-            "🎁": "Armor pierce"
-        },
-        "Mjollnir": {
-            "🎯": 2,
-            "🧠": 1,
-            "💰": 190,
-            "🎁": "Chain lightning"
-        },
-        "Sange-Yasha": {
-            "🎯": 1,
-            "🤸": 1,
-            "💰": 150,
-            "🎁": "Attack speed"
-        },
-        
-        # Universal Items
-        "Black King Bar": {
-            "💪": 2,
-            "🧠": 2,
-            "🛡": 1,
-            "💰": 280,
-            "🎁": "Magic immunity"
-        },
-        "Linken's Sphere": {
-            "🧠": 2,
-            "💪": 1,
-            "🛡": 1,
-            "💰": 220,
-            "🎁": "Spell block"
-        },
-        "Octarine Core": {
-            "💪": 2,
-            "🧠": 2,
-            "💰": 300,
-            "🎁": "Cooldown reduction"
-        },
-        "Euls": {
-            "🧠": 2,
-            "🤸": 1,
-            "💰": 160,
-            "🎁": "Cyclone"
-        },
-        "Manta Style": {
-            "🤸": 2,
-            "💰": 180,
-            "🎁": "Mirror images"
-        },
-        
-        # Utility Items
-        "Town Portal Scroll": {
-            "🧠": 1,
             "💰": 50,
-            "🎁": "Teleportation"
+            "🎁": "Тренировочный меч для новичков"
         },
-        "Observer Wards": {
+        "Sharp Dagger": {
+            "💪": 2,
+            "🎯": 1,
+            "💰": 100,
+            "🎁": "Острый кинжал с небольшим шансом крита"
+        },
+        "Iron Longsword": {
+            "💪": 3,
+            "💰": 150,
+            "🎁": "Железный меч для начинающих бойцов"
+        },
+        "Steel Broadsword": {
+            "💪": 4,
+            "💰": 200,
+            "🎁": "Стальной меч для опытных воинов"
+        },
+        "Master Sword": {
+            "💪": 5,
+            "💰": 300,
+            "🎁": "Мастерский меч легендарного качества"
+        }
+    },
+    "armor": {
+        # Броня - увеличивает броню и уклонение
+        "Leather Armor": {
+            "🛡": 1,
+            "💰": 60,
+            "🎁": "Кожаные доспехи для начальной защиты"
+        },
+        "Chain Mail": {
+            "🛡": 2,
+            "💰": 120,
+            "🎁": "Кольчуга для надежной защиты"
+        },
+        "Plate Armor": {
+            "🛡": 3,
+            "💰": 200,
+            "🎁": "Пластинчатые доспехи рыцаря"
+        },
+        "Tower Shield": {
+            "🛡": 3,
+            "💰": 180,
+            "🎁": "Башенный щит для максимальной защиты"
+        },
+        "Dragon Scale Armor": {
+            "🛡": 4,
+            "💰": 400,
+            "🎁": "Драконьи чешуйчатые доспехи"
+        }
+    },
+    "boots": {
+        # Ботинки - увеличивают ловкость и уклонение
+        "Leather Boots": {
+            "🤸": 1,
+            "💰": 40,
+            "🎁": "Кожаные ботинки для удобства"
+        },
+        "Speed Sandals": {
+            "🤸": 2,
+            "💰": 80,
+            "🎁": "Сандалии скорости"
+        },
+        "Travel Boots": {
+            "🤸": 2,
+            "💰": 100,
+            "🎁": "Путевые ботинки для долгих переходов"
+        },
+        "Agile Boots": {
+            "🤸": 3,
+            "💰": 150,
+            "🎁": "Ботинки ловкости"
+        },
+        "Winged Boots": {
+            "🤸": 4,
+            "💰": 250,
+            "🎁": "Крылатые ботинки для невероятной скорости"
+        }
+    },
+    "artifacts": {
+        # Артефакты - увеличивают интеллект и магические способности
+        "Amulet of Intellect": {
+            "🧠": 2,
+            "💰": 100,
+            "🎁": "Амулет интеллекта для магов"
+        },
+        "Ring of Wisdom": {
+            "🧠": 3,
+            "💰": 150,
+            "🎁": "Кольцо мудрости для заклинателей"
+        },
+        "Tome of Knowledge": {
+            "🧠": 4,
+            "💰": 200,
+            "🎁": "Том знаний для ученых"
+        },
+        "Crystal Orb": {
+            "🧠": 3,
+            "🎯": 2,
+            "💰": 250,
+            "🎁": "Хрустальный шар для предсказаний"
+        },
+        "Staff of Power": {
+            "🧠": 5,
+            "💰": 350,
+            "🎁": "Посох силы для архимагов"
+        }
+    },
+    "utility": {
+        # Утилитарные предметы - разные полезные эффекты
+        "Health Potion": {
+            "💪": 1,
             "🧠": 1,
             "💰": 30,
-            "🎁": "Vision"
+            "🎁": "Зелье здоровья для восстановления сил"
         },
-        "Sentry Wards": {
-            "🧠": 1,
-            "💰": 40,
-            "🎁": "Anti-invis"
+        "Elixir of Speed": {
+            "🤸": 2,
+            "💰": 70,
+            "🎁": "Эликсир скорости для быстрого передвижения"
         },
-        "Dust of Appearance": {
-            "🧠": 1,
-            "💰": 60,
-            "🎁": "Reveal invis"
+        "Ring of Protection": {
+            "🛡": 1,
+            "💰": 90,
+            "🎁": "Кольцо защиты от опасностей"
         },
-        "Smoke of Deceit": {
-            "🧠": 1,
-            "💰": 50,
-            "🎁": "Movement speed"
-        },
-        
-        # High Tier Items
-        "Divine Rapier": {
-            "🎯": 4,
-            "💰": 350,
-            "🎁": "Ultimate damage"
-        },
-        "Aghanim's Shard": {
-            "🧠": 1,
-            "💪": 1,
+        "Boots of Haste": {
             "🤸": 1,
-            "💰": 150,
-            "🎁": "Item upgrade"
+            "💰": 120,
+            "🎁": "Ботинки спешки для быстрых действий"
         },
-        "Orchid Malevolence": {
-            "🧠": 2,
-            "💰": 180,
-            "🎁": "Silence enemy"
-        },
-        "Bloodthorn": {
-            "🧠": 2,
-            "🎯": 1,
-            "💰": 200,
-            "🎁": "True sight"
-        },
-        "Hurricane Pike": {
+        "Amulet of Vitality": {
+            "💪": 2,
             "🧠": 1,
-            "💪": 1,
-            "💰": 170,
-            "🎁": "Push enemy"
+            "💰": 180,
+            "🎁": "Амулет жизненной силы"
         }
     }
 }
 
 def get_all_artifacts():
-    """Get all available artifacts"""
-    return artifacts["artifacts"]
+    """Получить все артефакты"""
+    all_artifacts = {}
+    for category, items in artifacts.items():
+        all_artifacts.update(items)
+    return all_artifacts
 
 def get_artifact_info(name):
-    """Get artifact info by name"""
-    return artifacts["artifacts"].get(name)
+    """Получить информацию об артефакте по имени"""
+    for category in artifacts.values():
+        if name in category:
+            return category[name]
+    return None
 
-def format_artifact_description(name, data):
-    """Format artifact description"""
+def format_artifact_description(name, info):
+    """Форматировать описание артефакта"""
     text = f"**{name}**\n"
-    for key, value in data.items():
+    for key, value in info.items():
         if key == "💰":
             text += f"  💰 {value} MMR\n"
-        elif key == "🎁":
-            text += f"  🎁 {value}\n"
-        else:
+        elif key != "🎁":
             text += f"  {key}: {value}\n"
+    text += f"  {info.get('🎁', '')}"
     return text
