@@ -334,6 +334,7 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Проверка уклонения
     if calculate_dodge(user):
         text += f"\n🛡️ {user['username']} уклонился от атаки!"
+        user_hp = user["hp"]
     else:
         user_hp = user["hp"] - boss_attack
         text += f"\n👹 Босс ударил на {boss_attack}"
@@ -341,8 +342,6 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_hp <= 0:
             text += "\n" + random.choice(MEMES["death"])
             user_hp = 0
-    else:
-        user_hp = user["hp"]
 
     # Проверка смерти босса
     if boss_hp <= 0:
