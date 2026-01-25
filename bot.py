@@ -1,8 +1,8 @@
 import os
 import time
 import random
-import telebot
-from telebot import types
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,7 +12,6 @@ if not API_TOKEN:
     print("BOT_TOKEN не найден в переменных окружения")
     exit(1)
 
-bot = telebot.TeleBot(API_TOKEN)
 users = {}
 
 def get_user(uid):
@@ -21,25 +20,18 @@ def get_user(uid):
         users[uid] = {"fissure": 10.0, "last_fissure": 0}
     return users[uid]
 
-def menu():
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add("🌋 FISSURE")
-    return kb
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    get_user(update.effective_user.id)
+    await update.message.reply_text("🔥 Бот запущен\nFISSURE — мем, ни на что не влияет 😏")
 
-@bot.message_handler(commands=["start"])
-def start(msg):
-    get_user(msg.from_user.id)
-    bot.send_message(msg.chat.id, "🔥 Бот запущен\nFISSURE — мем, ни на что не влияет 😏", reply_markup=menu())
-
-@bot.message_handler(func=lambda m: m.text == "🌋 FISSURE")
-def fissure(msg):
-    u = get_user(msg.from_user.id)
+async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    u = get_user(update.effective_user.id)
     now = time.time()
     remaining = 86400 - (now - u["last_fissure"])
     if remaining > 0:
         h = int(remaining / 3600)
         m = int((remaining % 3600) / 60)
-        bot.send_message(msg.chat.id, f"⏳ Через {h} ч. {m} мин." if h > 0 else f"⏳ Через {m} мин.")
+        await update.message.reply_text(f"⏳ Через {h} ч. {m} мин." if h > 0 else f"⏳ Через {m} мин.")
         return
 
     roll = random.choice([-5, -3, -1, 0, 1, 3, 5, 10])
@@ -69,11 +61,16 @@ def fissure(msg):
     }
     
     phrase = random.choice(phrases[roll])
-    bot.send_message(msg.chat.id, f"{texts[roll]}\n{phrase}\n📏 Теперь {u['fissure']:.1f} см")
+    await update.message.reply_text(f"{texts[roll]}\n{phrase}\n📏 Теперь {u['fissure']:.1f} см")
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "🌋 FISSURE":
+        await fissure(update, context)
 
 if __name__ == "__main__":
-    try:
-        bot.remove_webhook()
-    except:
-        pass
-    bot.infinity_polling()
+    application = Application.builder().token(API_TOKEN).build()
+    
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    application.run_polling()
