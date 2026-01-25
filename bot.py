@@ -3,9 +3,7 @@ import time
 import random
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from dotenv import load_dotenv
-
-load_dotenv()
+# На Render .env не используется, токен берётся из переменных окружения
 API_TOKEN = os.getenv("BOT_TOKEN")
 
 if not API_TOKEN:
