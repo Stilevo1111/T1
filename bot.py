@@ -11,6 +11,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+# === Переменные окружения ===
 API_TOKEN = os.environ.get("BOT_TOKEN")
 PORT = int(os.environ.get("PORT", 10000))
 RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
@@ -19,8 +20,8 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if not API_TOKEN or not RENDER_URL or not DATABASE_URL:
     raise Exception("BOT_TOKEN, RENDER_EXTERNAL_URL или DATABASE_URL не найдены")
 
-# Очищаем RENDER_URL от лишних символов
-RENDER_URL = RENDER_URL.strip().rstrip('/')
+# Убираем лишние пробелы и слеши
+RENDER_URL = RENDER_URL.strip().rstrip("/")
 
 # === Подключение к PostgreSQL ===
 async def init_db():
@@ -112,14 +113,19 @@ async def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    webhook_url = f"https://{RENDER_URL}/webhook/{API_TOKEN}"
-    await application.bot.set_webhook(webhook_url)
-    logging.info(f"Webhook установлен: {webhook_url}")
+    # Путь вебхука
+    webhook_path = f"/webhook/{API_TOKEN}"
+    webhook_url = f"https://{RENDER_URL}{webhook_path}"
+    logging.info(f"Попытка установить вебхук: {webhook_url}")
 
+    # Устанавливаем вебхук
+    await application.bot.set_webhook(webhook_url)
+
+    # Запуск webhook сервера
     await application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_path=f"/webhook/{API_TOKEN}",
+        webhook_path=webhook_path,
         drop_pending_updates=True
     )
 
