@@ -9,3 +9,8 @@ services:
         value: "3.13.4"
       - key: WEB_CONCURRENCY
         value: "1"
+  - type: postgres
+    name: fissure-db
+    databaseName: fissure
+    databaseUser: fissure
+    version: "18"
