@@ -60,10 +60,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await get_user(conn, update.effective_user.id)
     await conn.close()
     keyboard = ReplyKeyboardMarkup([
-        ["🌋 FISSURE"]
+        ["🍆 FISSURE"]
     ], resize_keyboard=True)
     await update.message.reply_text(
-        "🔥 Бот запущен\nНажми кнопку 🌋 FISSURE",
+        "🔥 Бот запущен\nНажми кнопку � FISSURE",
         reply_markup=keyboard
     )
     await fissure(update, context)
@@ -113,7 +113,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"{texts[roll]}\n{phrase}\n📏 Теперь {new_fissure:.1f} см")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.text == "🌋 FISSURE":
+    if update.message.text == "🍆 FISSURE":
         await fissure(update, context)
 
 # --- Запуск без asyncio.run() ---
