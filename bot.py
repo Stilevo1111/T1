@@ -71,9 +71,6 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # Удаляем webhook если он был установлен
-    application.bot.delete_webhook(drop_pending_updates=True)
-    
     # Запуск polling (Render friendly)
     application.run_polling(
         allowed_updates=[],
