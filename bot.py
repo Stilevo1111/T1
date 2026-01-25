@@ -213,46 +213,46 @@ MEMES = {
 # Предметы (вдохновлены Dota 2)
 ITEMS = {
     # Сапоги (5 штук)
-    "Boots of Speed": {"gold": 400, "agi": 10, "description": "Ботинки скорости (+10 ловкости)"},
-    "Phase Boots": {"gold": 1500, "agi": 22, "dmg": 16, "description": "Часовые сапоги (+22 ловкости, +16 урона)"},
-    "Power Treads": {"gold": 1400, "str": 22, "agi": 22, "description": "Сапоги силы (+22 силы, +22 ловкости)"},
-    "Arcane Boots": {"gold": 475, "int": 10, "description": "Чародейские ботинки (+10 интеллекта)"},
-    "Boots of Travel": {"gold": 2400, "agi": 15, "dmg": 10, "description": "Ботинки путешествий (+15 ловкости, +10 урона)"},
+    "Boots of Speed": {"gold": 400, "agi": 10, "description": "Ботинки скорости (+10 ловкости)", "category": "Сапоги"},
+    "Phase Boots": {"gold": 1500, "agi": 22, "dmg": 16, "description": "Часовые сапоги (+22 ловкости, +16 урона)", "category": "Сапоги"},
+    "Power Treads": {"gold": 1400, "str": 22, "agi": 22, "description": "Сапоги силы (+22 силы, +22 ловкости)", "category": "Сапоги"},
+    "Arcane Boots": {"gold": 475, "int": 10, "description": "Чародейские ботинки (+10 интеллекта)", "category": "Сапоги"},
+    "Boots of Travel": {"gold": 2400, "agi": 15, "dmg": 10, "description": "Ботинки путешествий (+15 ловкости, +10 урона)", "category": "Сапоги"},
 
     # Броня (5 штук)
-    "Ring of Protection": {"gold": 175, "str": 3, "description": "Кольцо защиты (+3 силы)"},
-    "Vanguard": {"gold": 2250, "str": 10, "hp": 200, "description": "Вангард (+10 силы, +200 HP)"},
-    "Crimson Guard": {"gold": 3500, "str": 15, "hp": 250, "description": "Багряная стража (+15 силы, +250 HP)"},
-    "Hood of Defiance": {"gold": 2175, "int": 10, "hp": 150, "description": "Капюшон неповиновения (+10 интеллекта, +150 HP)"},
-    "Blade Mail": {"gold": 2200, "str": 10, "agi": 10, "description": "Лезвие mail (+10 силы, +10 ловкости)"},
+    "Ring of Protection": {"gold": 175, "str": 3, "description": "Кольцо защиты (+3 силы)", "category": "Броня"},
+    "Vanguard": {"gold": 2250, "str": 10, "hp": 200, "description": "Вангард (+10 силы, +200 HP)", "category": "Броня"},
+    "Crimson Guard": {"gold": 3500, "str": 15, "hp": 250, "description": "Багряная стража (+15 силы, +250 HP)", "category": "Броня"},
+    "Hood of Defiance": {"gold": 2175, "int": 10, "hp": 150, "description": "Капюшон неповиновения (+10 интеллекта, +150 HP)", "category": "Броня"},
+    "Blade Mail": {"gold": 2200, "str": 10, "agi": 10, "description": "Лезвие mail (+10 силы, +10 ловкости)", "category": "Броня"},
 
     # Оружие (5 штук)
-    "Quelling Blade": {"gold": 210, "dmg": 7, "description": "Клинок рубки (+7 урона)"},
-    "Sange": {"gold": 1150, "str": 10, "dmg": 10, "description": "Сандже (+10 силы, +10 урона)"},
-    "Yasha": {"gold": 1500, "agi": 16, "crit": 10, "description": "Яша (+16 ловкости, +10% крита)"},
-    "Daedalus": {"gold": 5150, "crit": 25, "dmg": 81, "description": "Дедал (+25% крита, +81 урона)"},
-    "Butterfly": {"gold": 5500, "agi": 30, "dodge": 30, "description": "Бабочка (+30 ловкости, +30% уклонения)"},
+    "Quelling Blade": {"gold": 210, "dmg": 7, "description": "Клинок рубки (+7 урона)", "category": "Оружие"},
+    "Sange": {"gold": 1150, "str": 10, "dmg": 10, "description": "Сандже (+10 силы, +10 урона)", "category": "Оружие"},
+    "Yasha": {"gold": 1500, "agi": 16, "crit": 10, "description": "Яша (+16 ловкости, +10% крита)", "category": "Оружие"},
+    "Daedalus": {"gold": 5150, "crit": 25, "dmg": 81, "description": "Дедал (+25% крита, +81 урона)", "category": "Оружие"},
+    "Butterfly": {"gold": 5500, "agi": 30, "dodge": 30, "description": "Бабочка (+30 ловкости, +30% уклонения)", "category": "Оружие"},
 
     # Защита (5 штук)
-    "Stout Shield": {"gold": 200, "dodge": 10, "description": "Крепкий щит (+10% уклонения)"},
-    "Mekansm": {"gold": 2350, "str": 5, "hp": 150, "description": "Меканзм (+5 силы, +150 HP)"},
-    "Black King Bar": {"gold": 4100, "str": 22, "hp": 300, "description": "Черная королевская барра (+22 силы, +300 HP)"},
-    "Heart of Tarrasque": {"gold": 5500, "str": 45, "hp": 500, "description": "Сердце Тараска (+45 силы, +500 HP)"},
-    "Shiva's Guard": {"gold": 4750, "str": 20, "agi": 20, "description": "Защита Шивы (+20 силы, +20 ловкости)"},
+    "Stout Shield": {"gold": 200, "dodge": 10, "description": "Крепкий щит (+10% уклонения)", "category": "Защита"},
+    "Mekansm": {"gold": 2350, "str": 5, "hp": 150, "description": "Меканзм (+5 силы, +150 HP)", "category": "Защита"},
+    "Black King Bar": {"gold": 4100, "str": 22, "hp": 300, "description": "Черная королевская барра (+22 силы, +300 HP)", "category": "Защита"},
+    "Heart of Tarrasque": {"gold": 5500, "str": 45, "hp": 500, "description": "Сердце Тараска (+45 силы, +500 HP)", "category": "Защита"},
+    "Shiva's Guard": {"gold": 4750, "str": 20, "agi": 20, "description": "Защита Шивы (+20 силы, +20 ловкости)", "category": "Защита"},
 
     # Поддержка (5 штук)
-    "Ring of Basilius": {"gold": 450, "str": 5, "int": 5, "description": "Кольцо Базилиуса (+5 силы, +5 интеллекта)"},
-    "Magic Wand": {"gold": 460, "hp": 75, "int": 5, "description": "Волшебная палочка (+75 HP, +5 интеллекта)"},
-    "Aghanim's Scepter": {"gold": 4200, "int": 20, "str": 10, "description": "Скипетр Аганима (+20 интеллекта, +10 силы)"},
-    "Eul's Scepter": {"gold": 2750, "int": 25, "agi": 10, "description": "Скипетр Еуля (+25 интеллекта, +10 ловкости)"},
-    "Gleipnir": {"gold": 5400, "str": 20, "agi": 20, "description": "Глепнир (+20 силы, +20 ловкости)"},
+    "Ring of Basilius": {"gold": 450, "str": 5, "int": 5, "description": "Кольцо Базилиуса (+5 силы, +5 интеллекта)", "category": "Поддержка"},
+    "Magic Wand": {"gold": 460, "hp": 75, "int": 5, "description": "Волшебная палочка (+75 HP, +5 интеллекта)", "category": "Поддержка"},
+    "Aghanim's Scepter": {"gold": 4200, "int": 20, "str": 10, "description": "Скипетр Аганима (+20 интеллекта, +10 силы)", "category": "Поддержка"},
+    "Eul's Scepter": {"gold": 2750, "int": 25, "agi": 10, "description": "Скипетр Еуля (+25 интеллекта, +10 ловкости)", "category": "Поддержка"},
+    "Gleipnir": {"gold": 5400, "str": 20, "agi": 20, "description": "Глепнир (+20 силы, +20 ловкости)", "category": "Поддержка"},
 
     # Зелья (5 штук)
-    "Healing Salve": {"gold": 100, "heal": 100, "description": "Целебный бальзам (+100 HP)"},
-    "Tome of Knowledge": {"gold": 300, "exp": 100, "description": "Фолиант знаний (+100 опыта)"},
-    "Ring of Regen": {"gold": 325, "hp": 100, "description": "Кольцо регенерации (+100 HP)"},
-    "Ring of Health": {"gold": 850, "hp": 150, "description": "Кольцо здоровья (+150 HP)"},
-    "Perseverance": {"gold": 1650, "int": 10, "hp": 150, "description": "Стойкость (+10 интеллекта, +150 HP)"}
+    "Healing Salve": {"gold": 100, "heal": 100, "description": "Целебный бальзам (+100 HP)", "category": "Зелья"},
+    "Tome of Knowledge": {"gold": 300, "exp": 100, "description": "Фолиант знаний (+100 опыта)", "category": "Зелья"},
+    "Ring of Regen": {"gold": 325, "hp": 100, "description": "Кольцо регенерации (+100 HP)", "category": "Зелья"},
+    "Ring of Health": {"gold": 850, "hp": 150, "description": "Кольцо здоровья (+150 HP)", "category": "Зелья"},
+    "Perseverance": {"gold": 1650, "int": 10, "hp": 150, "description": "Стойкость (+10 интеллекта, +150 HP)", "category": "Зелья"}
 }
 
 # Зелья
@@ -349,12 +349,18 @@ def check_level_up(user):
 # ================= KEYBOARD =================
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [["👹 BOSS", "🛒 SHOP"], ["⚔️ PVP", "🏆 TOP"], ["🍆 FISSURE", "📊 STATS"]],
+    [["👹 BOSS", "🛒 SHOP"], ["⚔️ PVP", "🏆 TOP"], ["🍆 FISSURE", "👤 ПРОФИЛЬ"]],
     resize_keyboard=True,
 )
 
 FISSURE_KEYBOARD = ReplyKeyboardMarkup(
     [["🎲 ROLL", "🏆 TOP"], ["📊 STATS", "⬅️ НАЗАД"]],
+    resize_keyboard=True,
+)
+
+# Клавиатура категорий магазина
+SHOP_CATEGORIES_KEYBOARD = ReplyKeyboardMarkup(
+    [["👟 Сапоги", "🛡️ Броня"], ["🗡️ Оружие", "🛡️ Защита"], ["🔮 Поддержка", "🧪 Зелья"], ["⬅️ НАЗАД"]],
     resize_keyboard=True,
 )
 
@@ -421,16 +427,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def fissure_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rows = await get_fissure_top()
     if not rows:
-        msg = await update.message.reply_text("Топ пуст 😢")
+        await update.message.reply_text("Топ пуст 😢")
     else:
         text = ["🏆 ТОП по длине фиссуры:\n"]
         for i, row in enumerate(rows, 1):
             text.append(f"{i}. 👤 {row['username']} — {row['fissure']:.1f} см")
-        msg = await update.message.reply_text("\n".join(text))
-    # Автоудаление ответа
-    context.application.create_task(
-        auto_delete(context, update.effective_chat.id, [msg.message_id])
-    )
+        await update.message.reply_text("\n".join(text))
 
 
 async def fissure_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -571,8 +573,17 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
 
 async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = "🛒 Магазин:\n\n"
-    for item_name, item_data in ITEMS.items():
+    await update.message.reply_text("🛒 Выберите категорию:", reply_markup=SHOP_CATEGORIES_KEYBOARD)
+
+
+async def show_category_items(update: Update, context: ContextTypes.DEFAULT_TYPE, category: str):
+    items_in_category = {name: data for name, data in ITEMS.items() if data.get("category") == category}
+    if not items_in_category:
+        await update.message.reply_text("❌ В этой категории нет предметов")
+        return
+    
+    text = f"🛒 {category}:\n\n"
+    for item_name, item_data in items_in_category.items():
         text += f"🗡️ {item_name}\n"
         text += f"   💰 {item_data['gold']}g\n"
         if 'description' in item_data:
@@ -676,7 +687,7 @@ async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Получаем список игроков для PvP (исключая самого пользователя)
     async with db_pool.acquire() as conn:
         rows = await conn.fetch("""
-            SELECT username, mmr, level, user_id
+            SELECT username, mmr, level, str, agi, int, hp, hp_max, user_id
             FROM users 
             WHERE user_id != $1 AND mmr >= $2
             ORDER BY mmr DESC
@@ -689,8 +700,11 @@ async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     text = "⚔️ Доступные противники для PvP:\n\n"
     for i, row in enumerate(rows, 1):
-        text += f"{i}. 👤 {row['username']} — MMR: {row['mmr']} | Уровень: {row['level']}\n"
-        text += f"   /fight_{row['user_id']} — сразиться\n"
+        text += f"{i}. 👤 {row['username']}\n"
+        text += f"   📊 MMR: {row['mmr']} | Уровень: {row['level']}\n"
+        text += f"   💪 STR: {row['str']} | 🏃‍♂️ AGI: {row['agi']} | 🧠 INT: {row['int']}\n"
+        text += f"   ❤️ HP: {row['hp']}/{row['hp_max']}\n"
+        text += f"   /fight_{row['user_id']} — сразиться\n\n"
     
     await update.message.reply_text(text)
 
@@ -715,30 +729,77 @@ async def fight(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Противник слишком слабый")
         return
 
-    # Боевые действия
-    dmg1, _ = calculate_damage(user1)
-    dmg2, _ = calculate_damage(user2)
+    # Боевые действия с подробными логами
+    text = "⚔️ НАЧИНАЕТСЯ БИТВА! ⚔️\n\n"
+    text += f"🔴 {user1['username']} (MMR: {user1['mmr']})\n"
+    text += f"🔵 {user2['username']} (MMR: {user2['mmr']})\n\n"
+    
+    # Раунд 1
+    dmg1, is_crit1 = calculate_damage(user1)
+    dmg2, is_crit2 = calculate_damage(user2)
+    
+    text += f"🔴 {user1['username']} наносит {dmg1} урона!\n"
+    if is_crit1:
+        text += "💥 КРИТИЧЕСКИЙ удар!\n"
     
     user2_hp = max(0, user2["hp"] - dmg1)
+    text += f"🔵 {user2['username']} осталось {user2_hp}/{user2['hp_max']} HP\n\n"
+    
+    text += f"🔵 {user2['username']} наносит {dmg2} урона!\n"
+    if is_crit2:
+        text += "💥 КРИТИЧЕСКИЙ удар!\n"
+    
     user1_hp = max(0, user1["hp"] - dmg2)
+    text += f"🔴 {user1['username']} осталось {user1_hp}/{user1['hp_max']} HP\n\n"
     
-    text = f"{user1['username']} ➜ {dmg1}\n{user2['username']} ➜ {dmg2}"
+    # Раунд 2
+    if user1_hp > 0 and user2_hp > 0:
+        dmg1, is_crit1 = calculate_damage(user1)
+        dmg2, is_crit2 = calculate_damage(user2)
+        
+        text += "🔄 ВТОРОЙ РАУНД!\n\n"
+        text += f"🔴 {user1['username']} наносит {dmg1} урона!\n"
+        if is_crit1:
+            text += "💥 КРИТИЧЕСКИЙ удар!\n"
+        
+        user2_hp = max(0, user2_hp - dmg1)
+        text += f"🔵 {user2['username']} осталось {user2_hp}/{user2['hp_max']} HP\n\n"
+        
+        text += f"🔵 {user2['username']} наносит {dmg2} урона!\n"
+        if is_crit2:
+            text += "💥 КРИТИЧЕСКИЙ удар!\n"
+        
+        user1_hp = max(0, user1_hp - dmg2)
+        text += f"🔴 {user1['username']} осталось {user1_hp}/{user1['hp_max']} HP\n\n"
     
+    # Определение победителя
     if user1_hp > user2_hp:
-        user1_mmr = user1["mmr"] + 20
-        user1_gold = user1["gold"] + 50
-        user2_mmr = user2["mmr"] - 10
-        user2_gold = max(0, user2["gold"] - 20)
-        text += f"\n🏆 Победил {user1['username']}"
+        winner = user1
+        loser = user2
+        text += f"🏆 ПОБЕДИТЕЛЬ: {user1['username']}!\n"
+        text += "🎉 Ты настоящий чемпион!\n"
     else:
-        user2_mmr = user2["mmr"] + 20
-        user2_gold = user2["gold"] + 50
-        user1_mmr = user1["mmr"] - 10
-        user1_gold = max(0, user1["gold"] - 20)
-        text += f"\n🏆 Победил {user2['username']}"
-
-    await update_user(update.effective_user.id, hp=user1_hp, mmr=user1_mmr, gold=user1_gold, last_pvp=time.time())
-    await update_user(enemy_id, hp=user2_hp, mmr=user2_mmr, gold=user2_gold)
+        winner = user2
+        loser = user1
+        text += f"🏆 ПОБЕДИТЕЛЬ: {user2['username']}!\n"
+        text += "🎉 Ты настоящий чемпион!\n"
+    
+    # Передача MMR и опыта
+    mmr_change = 20
+    exp_change = 50
+    
+    winner_mmr = winner["mmr"] + mmr_change
+    loser_mmr = loser["mmr"] - mmr_change
+    winner_exp = winner["exp"] + exp_change
+    loser_exp = loser["exp"] + exp_change // 2  # Проигравший получает немного опыта
+    
+    text += f"\n📊 ИЗМЕНЕНИЯ:\n"
+    text += f"🥇 {winner['username']}: +{mmr_change} MMR, +{exp_change} EXP\n"
+    text += f"🥈 {loser['username']}: -{mmr_change} MMR, +{exp_change // 2} EXP\n"
+    
+    # Обновление данных
+    await update_user(update.effective_user.id, hp=user1_hp, mmr=winner_mmr if winner == user1 else loser_mmr, exp=winner_exp if winner == user1 else loser_exp, last_pvp=time.time())
+    await update_user(enemy_id, hp=user2_hp, mmr=winner_mmr if winner == user2 else loser_mmr, exp=winner_exp if winner == user2 else loser_exp)
     
     await update.message.reply_text(text)
 
@@ -761,20 +822,21 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(text)
 
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
     user = await get_user(update.effective_user.id, username)
     
     items_str = ", ".join([item or "Пусто" for item in user["items"]]) if user["items"] else "Пусто"
     
-    text = (f"📊 Статистика {user['username']}:\n"
-            f"Уровень: {user['level']}\n"
-            f"HP: {user['hp']}/{user['hp_max']}\n"
-            f"STR: {user['str']} | AGI: {user['agi']} | INT: {user['int']}\n"
-            f"EXP: {user['exp']}\n"
-            f"Gold: {user['gold']} | MMR: {user['mmr']}\n"
-            f"Урон по боссам: {user['boss_dmg']}\n"
-            f"Предметы: {items_str}")
+    text = (f"👤 ПРОФИЛЬ {user['username']}\n\n"
+            f"🎮 Уровень: {user['level']}\n"
+            f"❤️ HP: {user['hp']}/{user['hp_max']}\n"
+            f"💪 STR: {user['str']} | 🏃‍♂️ AGI: {user['agi']} | 🧠 INT: {user['int']}\n"
+            f"📚 EXP: {user['exp']}\n"
+            f"💰 Gold: {user['gold']} | 📊 MMR: {user['mmr']}\n"
+            f"👹 Урон по боссам: {user['boss_dmg']}\n"
+            f"🍆 Fissure: {user['fissure']:.1f} см\n\n"
+            f"🎒 Инвентарь:\n{items_str}")
     
     await update.message.reply_text(text)
 
@@ -802,6 +864,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await fissure_stats(update, context)
     elif text == "⬅️ НАЗАД":
         await update.message.reply_text("⬅️ Вернулись в главное меню", reply_markup=MAIN_KEYBOARD)
+    # Обработка категорий магазина
+    elif text == "👟 Сапоги":
+        await show_category_items(update, context, "Сапоги")
+    elif text == "🛡️ Броня":
+        await show_category_items(update, context, "Броня")
+    elif text == "🗡️ Оружие":
+        await show_category_items(update, context, "Оружие")
+    elif text == "🛡️ Защита":
+        await show_category_items(update, context, "Защита")
+    elif text == "🔮 Поддержка":
+        await show_category_items(update, context, "Поддержка")
+    elif text == "🧪 Зелья":
+        await show_category_items(update, context, "Зелья")
 
 # ================= ENTRY POINT =================
 
