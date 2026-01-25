@@ -71,26 +71,41 @@ async def init_db(app):
             """)
             logging.info("DB initialized - new table created")
         else:
-            # Проверяем, есть ли поля для новой системы
-            new_fields = await conn.fetchval("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.columns 
-                    WHERE table_name = 'users' 
-                    AND column_name = 'level'
-                )
-            """)
-
-            if not new_fields:
-                # Добавляем новые поля для RPG системы
-                await conn.execute("""
-                    ALTER TABLE users ADD COLUMN level INTEGER DEFAULT 1,
-                    ADD COLUMN exp INTEGER DEFAULT 0,
-                    ADD COLUMN last_heal DOUBLE PRECISION DEFAULT 0,
-                    ADD COLUMN boss_level INTEGER DEFAULT 1
-                """)
-                logging.info("DB migration completed - RPG fields added")
+            # Проверяем, есть ли все необходимые поля
+            required_fields = ['level', 'hp', 'hp_max', 'str', 'agi', 'int', 'gold', 'mmr', 'exp', 'items', 'boss_dmg', 'last_pvp', 'last_heal', 'boss_hp', 'boss_name', 'boss_max', 'boss_level']
+            missing_fields = []
+            
+            for field in required_fields:
+                field_exists = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_name = 'users' 
+                        AND column_name = $1
+                    )
+                """, field)
+                if not field_exists:
+                    missing_fields.append(field)
+            
+            if missing_fields:
+                # Добавляем недостающие поля
+                alter_statements = []
+                for field in missing_fields:
+                    if field in ['level', 'hp', 'hp_max', 'str', 'agi', 'int', 'gold', 'mmr', 'exp', 'boss_dmg', 'boss_hp', 'boss_max', 'boss_level']:
+                        alter_statements.append(f"ADD COLUMN {field} INTEGER DEFAULT {1 if field in ['level', 'boss_level'] else 100 if field in ['hp', 'hp_max', 'boss_hp', 'boss_max'] else 5 if field in ['str', 'agi', 'int'] else 200 if field == 'gold' else 1000 if field == 'mmr' else 0}")
+                    elif field == 'last_pvp':
+                        alter_statements.append(f"ADD COLUMN {field} DOUBLE PRECISION DEFAULT 0")
+                    elif field == 'last_heal':
+                        alter_statements.append(f"ADD COLUMN {field} DOUBLE PRECISION DEFAULT 0")
+                    elif field == 'boss_name':
+                        alter_statements.append(f"ADD COLUMN {field} TEXT DEFAULT 'Shadow Fiend'")
+                    elif field == 'items':
+                        alter_statements.append(f"ADD COLUMN {field} TEXT[] DEFAULT ARRAY[NULL,NULL,NULL,NULL,NULL,NULL]")
+                
+                if alter_statements:
+                    await conn.execute(f"ALTER TABLE users {', '.join(alter_statements)}")
+                    logging.info(f"DB migration completed - added missing fields: {', '.join(missing_fields)}")
             else:
-                logging.info("DB initialized - existing table with RPG fields")
+                logging.info("DB initialized - existing table with all required fields")
 
 
 async def get_user(uid: int, username: str) -> dict:
@@ -117,7 +132,36 @@ async def get_user(uid: int, username: str) -> dict:
                     username,
                     str(uid),
                 )
-        return dict(user)
+        
+        # Преобразуем в словарь и убеждаемся, что все поля присутствуют
+        user_dict = dict(user)
+        
+        # Устанавливаем значения по умолчанию для всех полей, если они отсутствуют
+        defaults = {
+            'level': 1,
+            'hp': 100,
+            'hp_max': 100,
+            'str': 5,
+            'agi': 5,
+            'int': 5,
+            'gold': 200,
+            'mmr': 1000,
+            'exp': 0,
+            'items': [None, None, None, None, None, None],
+            'boss_dmg': 0,
+            'last_pvp': 0.0,
+            'last_heal': 0.0,
+            'boss_hp': 3000,
+            'boss_name': 'Shadow Fiend',
+            'boss_max': 3000,
+            'boss_level': 1
+        }
+        
+        for key, default_value in defaults.items():
+            if key not in user_dict or user_dict[key] is None:
+                user_dict[key] = default_value
+        
+        return user_dict
 
 
 async def update_user(uid: int, **kwargs):
