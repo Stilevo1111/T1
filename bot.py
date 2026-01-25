@@ -6,22 +6,24 @@ import asyncpg
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
+# === Логирование ===
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
 # === Переменные окружения ===
-API_TOKEN = os.environ.get("BOT_TOKEN", "8035272177:AAHSIBVubVVXxIRhVLx-uBqjBNLAeXBV__M")
+API_TOKEN = os.environ.get("BOT_TOKEN")
 PORT = int(os.environ.get("PORT", 10000))
 RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
+# Проверяем, что всё задано
 if not API_TOKEN or not RENDER_URL or not DATABASE_URL:
     raise Exception("BOT_TOKEN, RENDER_EXTERNAL_URL или DATABASE_URL не найдены")
 
-# Убираем лишние пробелы и слеши
-RENDER_URL = RENDER_URL.strip().rstrip("/")
+# Очищаем RENDER_URL от лишних символов
+RENDER_URL = RENDER_URL.strip().replace("https://", "").replace("http://", "").rstrip("/")
 
 # === Подключение к PostgreSQL ===
 async def init_db():
@@ -109,23 +111,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # === Запуск бота ===
 async def main():
     await init_db()
+
     application = ApplicationBuilder().token(API_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Путь вебхука
-    webhook_path = f"/webhook/{API_TOKEN}"
-    webhook_url = f"https://{RENDER_URL}{webhook_path}"
-    logging.info(f"Попытка установить вебхук: {webhook_url}")
+    # Формируем webhook URL
+    webhook_url = f"https://{RENDER_URL}/webhook/{API_TOKEN}"
+    logging.info(f"Webhook URL: {webhook_url}")
 
-    # Устанавливаем вебхук
-    await application.bot.set_webhook(webhook_url)
+    # Устанавливаем webhook
+    try:
+        await application.bot.set_webhook(webhook_url)
+        logging.info(f"Webhook установлен: {webhook_url}")
+    except Exception as e:
+        logging.error(f"Ошибка при установке webhook: {e}")
+        return
 
-    # Запуск webhook сервера
+    # Запускаем бот с вебхуком
     await application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_path=webhook_path,
+        webhook_path=f"/webhook/{API_TOKEN}",
         drop_pending_updates=True
     )
 
