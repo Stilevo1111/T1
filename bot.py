@@ -119,8 +119,12 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+    # Явно создаём цикл событий для Python 3.13
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     # Инициализация БД перед запуском
-    asyncio.run(init_db())
+    loop.run_until_complete(init_db())
 
     webhook_url = f"{RENDER_URL}/webhook/{API_TOKEN}"
     logging.info(f"Webhook установлен: {webhook_url}")
