@@ -185,10 +185,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
     await get_user(update.effective_user.id, username)
     msg = await update.message.reply_text(
-        "🔥 Бот запущен\n\n"
-        "🍆 FISSURE — ролл\n"
-        "🏆 TOP — рейтинг\n"
-        "📊 STATS — статистика",
+        "🔥 Бот запущен\nТвоя Фиссура — мем, ни на что не влияет 😏\n\n"
+        "🍆 /FISSURE — ролл\n"
+        "🏆 /TOP — рейтинг\n"
+        "📊 /STATS — статистика",
         reply_markup=MAIN_KEYBOARD,
     )
     # Не удаляем стартовое сообщение, чтобы кнопки оставались
@@ -255,7 +255,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
     user = await get_user(uid, username)
     msg = await update.message.reply_text(
-        f"📊 Твоя статистика:\n📏 {user['fissure']:.1f} см"
+        f"📊 Твоя фиссура:\n📏 {user['fissure']:.1f} см"
     )
 
     # Автоудаление ответа и команды/сообщения пользователя
