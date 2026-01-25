@@ -74,7 +74,16 @@ def get_user(uid):
             "inventory": [],  # список названий предметов
             "equipped": {},   # {"weapon": "Daedalus", "armor": None, ...}
             "boss_kills": 0,  # количество убитых боссов
-            "last_raid": 0    # время последнего рейда
+            "last_raid": 0,   # время последнего рейда
+            # Характеристики игрока
+            "stats": {
+                "strength": 10,      # Сила - влияет на урон
+                "agility": 10,       # Ловкость - влияет на крит и уклонение
+                "intelligence": 10,  # Интеллект - влияет на магический урон
+                "crit_chance": 5,    # Шанс крита (%)
+                "evasion": 5,        # Шанс уклонения (%)
+                "armor": 0           # Броня - уменьшает получаемый урон
+            }
         }
         save_user(uid)
     # Добавляем поля для старых пользователей
@@ -86,6 +95,16 @@ def get_user(uid):
         users[uid]["boss_kills"] = 0
     if "last_raid" not in users[uid]:
         users[uid]["last_raid"] = 0
+    # Добавляем характеристики для старых пользователей
+    if "stats" not in users[uid]:
+        users[uid]["stats"] = {
+            "strength": 10,
+            "agility": 10,
+            "intelligence": 10,
+            "crit_chance": 5,
+            "evasion": 5,
+            "armor": 0
+        }
     return users[uid]
 
 # ---------- КНОПКИ ----------
@@ -107,13 +126,21 @@ def start(msg):
 @bot.message_handler(func=lambda m: m.text == "👤 Профиль")
 def profile(msg):
     u = get_user(msg.from_user.id)
+    stats = u.get("stats", {})
     text = (
         f"👤 ПРОФИЛЬ\n\n"
         f"💬 Чат-MMR: {u['chat_mmr']}\n"
         f"🏆 Победы: {u['wins']}\n"
         f"💀 Поражения: {u['loses']}\n"
         f"👹 Боссов убито: {u.get('boss_kills', 0)}\n"
-        f"🍆 FISSURE: {u['fissure']:.1f} см"
+        f"🍆 FISSURE: {u['fissure']:.1f} см\n\n"
+        f"📊 ХАРАКТЕРИСТИКИ:\n"
+        f"💪 Сила: {stats.get('strength', 10)}\n"
+        f"🤸 Ловкость: {stats.get('agility', 10)}\n"
+        f"🧠 Интеллект: {stats.get('intelligence', 10)}\n"
+        f"🎯 Крит: {stats.get('crit_chance', 5)}%\n"
+        f"🛡 Уклонение: {stats.get('evasion', 5)}%\n"
+        f"🛡 Броня: {stats.get('armor', 0)}"
     )
     bot.send_message(msg.chat.id, text)
 
@@ -162,6 +189,66 @@ def fissure(msg):
     
     phrase = random.choice(phrases[roll])
     bot.send_message(msg.chat.id, f"{texts[roll]}\n{phrase}\n📏 Теперь {u['fissure']:.1f} см")
+
+# ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ БОЕВ ----------
+def calculate_player_stats(u):
+    """Рассчитывает боевые характеристики игрока"""
+    stats = u.get("stats", {})
+    inventory = u.get("inventory", [])
+    
+    # Базовые характеристики
+    strength = stats.get("strength", 10)
+    agility = stats.get("agility", 10)
+    intelligence = stats.get("intelligence", 10)
+    crit_chance = stats.get("crit_chance", 5)
+    evasion = stats.get("evasion", 5)
+    armor = stats.get("armor", 0)
+    
+    # Бонусы от предметов
+    item_damage_bonus = 0
+    item_defense_bonus = 0
+    item_crit_bonus = 0
+    item_evasion_bonus = 0
+    
+    for item_name in inventory:
+        item_data = get_item_info(item_name)
+        if item_data:
+            item_damage_bonus += item_data.get("💪", 0) * 5  # Каждый 💪 дает +5 урона
+            if "🛡" in item_data:
+                item_defense_bonus += 10
+            if "🎯" in item_data:
+                item_crit_bonus += 5  # Каждый 🎯 дает +5% к криту
+            if "🤸" in item_data:
+                item_evasion_bonus += 5  # Каждый 🤸 дает +5% к уклонению
+    
+    # Итоговые характеристики
+    total_damage = 20 + (u['fissure'] * 2) + (strength * 2) + item_damage_bonus
+    total_hp = 100 + (u['chat_mmr'] // 10) + (strength * 5)
+    total_crit = crit_chance + (agility // 2) + item_crit_bonus
+    total_evasion = evasion + (agility // 3) + item_evasion_bonus
+    total_armor = armor + item_defense_bonus + (intelligence // 2)
+    
+    return {
+        "damage": max(1, total_damage),
+        "hp": max(1, total_hp),
+        "crit_chance": min(95, total_crit),  # Максимум 95% крита
+        "evasion": min(50, total_evasion),  # Максимум 50% уклонения
+        "armor": max(0, total_armor)
+    }
+
+def calculate_damage_with_stats(player_stats, target_defense, is_crit=False):
+    """Рассчитывает урон с учетом характеристик"""
+    base_damage = player_stats["damage"]
+    if is_crit:
+        base_damage *= 2
+    
+    # Учет защиты цели
+    final_damage = max(1, base_damage - target_defense)
+    return final_damage
+
+def check_evasion(evasion_chance):
+    """Проверяет уклонение"""
+    return random.randint(1, 100) <= evasion_chance
 
 # ---------- PvP ----------
 @bot.message_handler(func=lambda m: m.text == "⚔️ PvP")
@@ -242,53 +329,125 @@ def pvp_bot(msg):
         bot.send_message(msg.chat.id, f"❌ Дневной лимит PvP исчерпан! (3 боя)\n🔄 Сброс через {hours_left} часов")
         return
     
+    # Генерируем виртуального бота
+    bot_names = [
+        "🔥 Огненный Рыцарь", "⚡ Молниеносный", "🛡 Стальной Страж", 
+        "🗡 Теневой Убийца", "🏹 Лучник Смерти", "🔨 Молот Грома",
+        "🌪 Буревой Волк", "🧊 Ледяной Дракон", "💀 Костяной Король"
+    ]
+    
+    bot_name = random.choice(bot_names)
+    
+    # Характеристики бота зависят от MMR игрока
+    if u["chat_mmr"] < 50:
+        bot_hp = random.randint(80, 120)
+        bot_damage = random.randint(15, 25)
+        bot_defense = random.randint(5, 10)
+        bot_win_chance = 40
+    elif u["chat_mmr"] < 200:
+        bot_hp = random.randint(120, 180)
+        bot_damage = random.randint(20, 35)
+        bot_defense = random.randint(10, 15)
+        bot_win_chance = 55
+    else:
+        bot_hp = random.randint(180, 250)
+        bot_damage = random.randint(30, 50)
+        bot_defense = random.randint(15, 25)
+        bot_win_chance = 70
+    
     # Бой с ботом
     u["pvp_today"] = pvp_today + 1
     
-    # Сложность бота зависит от MMR игрока
-    if u["chat_mmr"] < 50:
-        bot_win_chance = 40  # 40% шанс победы бота против слабых игроков
-    elif u["chat_mmr"] < 200:
-        bot_win_chance = 55  # 55% шанс победы бота против средних игроков
-    else:
-        bot_win_chance = 70  # 70% шанс победы бота против сильных игроков
+    # Рассчитываем характеристики игрока с учетом статов
+    player_stats = calculate_player_stats(u)
+    player_hp = player_stats["hp"]
+    player_damage = player_stats["damage"]
+    player_crit = player_stats["crit_chance"]
+    player_evasion = player_stats["evasion"]
+    player_defense = player_stats["armor"]
     
-    win = random.randint(1, 100) > bot_win_chance
+    # Симуляция боя
+    current_bot_hp = bot_hp
+    current_player_hp = player_hp
+    turns = 0
+    max_turns = 20
     
-    # Юмористические фразы для победы
-    win_phrases = [
-        "Ты сегодня в ударе! 💪",
-        "Бот плачет в углу! 😂",
-        "Легко как 2 пальца! 👌",
-        "Ты просто машина! 🤖",
-        "Бот просит пощады! 🙏"
-    ]
+    battle_log = f"⚔️ БОЙ С {bot_name.upper()}!\n\n"
+    battle_log += f"👤 ВАШИ ХАРАКТЕРИСТИКИ:\n"
+    battle_log += f"  ❤️ HP: {player_hp}\n"
+    battle_log += f"  ⚔️ Урон: {int(player_damage)}\n"
+    battle_log += f"  🎯 Крит: {player_crit}%\n"
+    battle_log += f"  🛡 Уклонение: {player_evasion}%\n"
+    battle_log += f"  🛡 Защита: {player_defense}\n\n"
+    battle_log += f"👹 ХАРАКТЕРИСТИКИ БОТА:\n"
+    battle_log += f"  ❤️ HP: {bot_hp}\n"
+    battle_log += f"  ⚔️ Урон: {bot_damage}\n"
+    battle_log += f"  🛡 Защита: {bot_defense}\n\n"
     
-    # Юмористические фразы для поражения
-    lose_phrases = [
-        "Бот тебя уделал! 😵",
-        "Позорище! 😳",
-        "Ты сегодня не в форме! 🤡",
-        "Бот смеется над тобой! 🤖",
-        "Попробуй еще, может повезет! 🤞"
-    ]
+    while current_bot_hp > 0 and current_player_hp > 0 and turns < max_turns:
+        turns += 1
+        
+        # Удар игрока
+        # Проверяем крит
+        is_crit = random.randint(1, 100) <= player_crit
+        # Рассчитываем урон
+        dmg = calculate_damage_with_stats(player_stats, bot_defense, is_crit)
+        current_bot_hp -= dmg
+        battle_log += f"Ход {turns}: Вы наносите {dmg} урона" + (" 💥 КРИТ!" if is_crit else "") + "\n"
+        
+        if current_bot_hp <= 0:
+            break
+        
+        # Удар бота
+        # Проверяем уклонение игрока
+        if check_evasion(player_evasion):
+            battle_log += f"       {bot_name} атакует, но вы уклоняетесь! 🤸\n"
+        else:
+            bot_dmg = random.randint(bot_damage - 2, bot_damage + 2)
+            # Учет защиты игрока
+            final_bot_dmg = max(1, bot_dmg - player_defense)
+            current_player_hp -= final_bot_dmg
+            battle_log += f"       {bot_name} наносит {final_bot_dmg} урона\n"
+        
+        if current_player_hp <= 0:
+            break
     
-    if win:
-        reward = random.randint(20, 50)  # Увеличил награду
-        u["chat_mmr"] += reward
+    # Результат боя
+    if current_bot_hp <= 0:
+        # Победа
+        u["chat_mmr"] += 30
         u["wins"] += 1
-        text = f"🏆 ПОБЕДА над ботом!\n{random.choice(win_phrases)}\n💰 +{reward} MMR"
+        win_phrases = [
+            "Ты сегодня в ударе! 💪",
+            "Бот плачет в углу! 😂",
+            "Легко как 2 пальца! 👌",
+            "Ты просто машина! 🤖",
+            "Бот просит пощады! 🙏"
+        ]
+        battle_log += f"\n🎉 ПОБЕДА!\n"
+        battle_log += f"{random.choice(win_phrases)}\n"
+        battle_log += f"💰 +30 MMR\n"
+        battle_log += f"📊 Баланс: {u['chat_mmr']} MMR"
     else:
-        penalty = random.randint(10, 25)  # Увеличил штраф
-        u["chat_mmr"] -= penalty
+        # Поражение
+        u["chat_mmr"] -= 15
         u["loses"] += 1
-        text = f"💀 ПОРАЖЕНИЕ от бота!\n{random.choice(lose_phrases)}\n💰 -{penalty} MMR"
+        lose_phrases = [
+            "Бот тебя уделал! 😵",
+            "Позорище! 😳",
+            "Ты сегодня не в форме! 🤡",
+            "Бот смеется над тобой! 🤖",
+            "Попробуй еще, может повезет! 🤞"
+        ]
+        battle_log += f"\n💀 ПОРАЖЕНИЕ!\n"
+        battle_log += f"{random.choice(lose_phrases)}\n"
+        battle_log += f"💰 -15 MMR\n"
+        battle_log += f"📊 Баланс: {u['chat_mmr']} MMR"
     
-    text += f"\n📊 Баланс: {u['chat_mmr']} MMR"
-    text += f"\n⚔️ Бои сегодня: {u['pvp_today']}/3"
+    battle_log += f"\n⚔️ Бои сегодня: {u['pvp_today']}/3"
     
     save_user(msg.from_user.id)
-    bot.send_message(msg.chat.id, text)
+    bot.send_message(msg.chat.id, battle_log)
 
 @bot.message_handler(func=lambda m: m.text == "/pvp_random")
 def pvp_random(msg):
@@ -544,10 +703,21 @@ def play_slots(msg):
 def inventory(msg):
     u = get_user(msg.from_user.id)
     inv = u.get("inventory", [])
+    stats = u.get("stats", {})
     
     text = "🎒 ИНВЕНТАРЬ\n\n"
     
+    # Показываем характеристики игрока
+    text += "📊 ВАШИ ХАРАКТЕРИСТИКИ:\n"
+    text += f"💪 Сила: {stats.get('strength', 10)}\n"
+    text += f"🤸 Ловкость: {stats.get('agility', 10)}\n"
+    text += f"🧠 Интеллект: {stats.get('intelligence', 10)}\n"
+    text += f"🎯 Крит: {stats.get('crit_chance', 5)}%\n"
+    text += f"🛡 Уклонение: {stats.get('evasion', 5)}%\n"
+    text += f"🛡 Броня: {stats.get('armor', 0)}\n\n"
+    
     # Показываем 6 слотов
+    text += "📦 ПРЕДМЕТЫ:\n"
     for i in range(6):
         if i < len(inv):
             item_name = inv[i]
@@ -561,12 +731,9 @@ def inventory(msg):
             text += f"📦 ПУСТОЙ СЛОТ {i+1}\n"
         text += "\n"
     
-    # Кнопки навигации
+    # Кнопка "Назад" в интерфейсе действий
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add("👤 Профиль", "🌋 FISSURE")
-    kb.add("⚔️ PvP", "🎰 Слоты")
-    kb.add("👹 Рейд", "🏪 Магазин")
-    kb.add("⬅️ Назад в меню")
+    kb.add("⬅️ Назад")
     
     bot.send_message(msg.chat.id, text, reply_markup=kb)
 
@@ -607,12 +774,9 @@ def show_category(msg):
                 text += f"  {key}: {value}\n"
         text += f"  Купить: /buy_{item_name.replace(' ', '_')}\n\n"
     
-    # Кнопки навигации
+    # Кнопка "Назад" в интерфейсе действий
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add("👤 Профиль", "🌋 FISSURE")
-    kb.add("⚔️ PvP", "🎰 Слоты")
-    kb.add("👹 Рейд", "🎒 Инвентарь")
-    kb.add("⬅️ Назад в меню")
+    kb.add("⬅️ Назад")
     
     bot.send_message(msg.chat.id, text, parse_mode="Markdown", reply_markup=kb)
 
@@ -699,22 +863,13 @@ def start_raid(msg):
     current_boss_index = u.get("boss_kills", 0) % len(bosses)
     boss = bosses[current_boss_index].copy()
     
-    player_hp = 100 + (u['chat_mmr'] // 10)  # HP зависит от MMR
-    player_damage = 20 + (u['fissure'] * 2)  # урон зависит от FISSURE
-    
-    # Бонусы от предметов
-    inventory = u.get("inventory", [])
-    damage_bonus = 0
-    defense_bonus = 0
-    
-    for item_name in inventory:
-        item_data = get_item_info(item_name)
-        if item_data:
-            damage_bonus += item_data.get("💪", 0)
-            if "🛡" in item_data:
-                defense_bonus += 10
-    
-    player_damage += damage_bonus * 5
+    # Рассчитываем характеристики игрока с учетом статов
+    player_stats = calculate_player_stats(u)
+    player_hp = player_stats["hp"]
+    player_damage = player_stats["damage"]
+    player_crit = player_stats["crit_chance"]
+    player_evasion = player_stats["evasion"]
+    player_defense = player_stats["armor"]
     
     # Симуляция боя
     boss_hp = boss["HP"]
@@ -723,27 +878,41 @@ def start_raid(msg):
     
     battle_log = f"⚔️ БОЙ С {boss['name'].upper()}!\n\n"
     battle_log += f"🏆 Ваш прогресс: {u.get('boss_kills', 0)} боссов убито\n\n"
-    battle_log += f"👤 Ваш HP: {player_hp}\n"
-    battle_log += f"👹 HP босса: {boss_hp}\n"
-    battle_log += f"⚔️ Ваш урон: {int(player_damage)}\n\n"
+    battle_log += f"👤 ВАШИ ХАРАКТЕРИСТИКИ:\n"
+    battle_log += f"  ❤️ HP: {player_hp}\n"
+    battle_log += f"  ⚔️ Урон: {int(player_damage)}\n"
+    battle_log += f"  🎯 Крит: {player_crit}%\n"
+    battle_log += f"  🛡 Уклонение: {player_evasion}%\n"
+    battle_log += f"  🛡 Защита: {player_defense}\n\n"
+    battle_log += f"👹 ХАРАКТЕРИСТИКИ БОССА:\n"
+    battle_log += f"  ❤️ HP: {boss_hp}\n"
+    battle_log += f"  ⚔️ Урон: {boss['damage'][0]}-{boss['damage'][1]}\n"
+    battle_log += f"  💫 Эффект: {boss['effect']}\n\n"
     
     while boss_hp > 0 and player_hp > 0 and turns < max_turns:
         turns += 1
         
         # Удар игрока
-        crit = random.randint(1, 100) <= 15  # 15% шанс крита
-        dmg = int(player_damage * (2 if crit else 1))
+        # Проверяем крит
+        is_crit = random.randint(1, 100) <= player_crit
+        # Рассчитываем урон
+        dmg = calculate_damage_with_stats(player_stats, 0, is_crit)  # Боссы не имеют защиты в этой системе
         boss_hp -= dmg
-        battle_log += f"Ход {turns}: Вы наносите {dmg} урона" + (" 💥 КРИТ!" if crit else "") + "\n"
+        battle_log += f"Ход {turns}: Вы наносите {dmg} урона" + (" 💥 КРИТ!" if is_crit else "") + "\n"
         
         if boss_hp <= 0:
             break
         
         # Удар босса
-        boss_dmg = random.randint(boss["damage"][0], boss["damage"][1])
-        boss_dmg = max(1, boss_dmg - defense_bonus)
-        player_hp -= boss_dmg
-        battle_log += f"       {boss['name']} наносит {boss_dmg} урона\n"
+        # Проверяем уклонение игрока
+        if check_evasion(player_evasion):
+            battle_log += f"       {boss['name']} атакует, но вы уклоняетесь! 🤸\n"
+        else:
+            boss_dmg = random.randint(boss["damage"][0], boss["damage"][1])
+            # Учет защиты игрока
+            final_boss_dmg = max(1, boss_dmg - player_defense)
+            player_hp -= final_boss_dmg
+            battle_log += f"       {boss['name']} наносит {final_boss_dmg} урона\n"
         
         if player_hp <= 0:
             break
@@ -793,6 +962,11 @@ def start_raid(msg):
         battle_log += f"Попробуйте снова через 1 час\n"
     
     bot.send_message(msg.chat.id, battle_log, parse_mode="Markdown")
+
+# ---------- КНОПКА НАЗАД ----------
+@bot.message_handler(func=lambda m: m.text == "⬅️ Назад")
+def go_back(msg):
+    bot.send_message(msg.chat.id, "⬅️ Возвращаемся в главное меню", reply_markup=menu())
 
 # ---------- HTTP SERVER (для Render) ----------
 class HealthCheckHandler(BaseHTTPRequestHandler):
