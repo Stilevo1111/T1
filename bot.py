@@ -459,6 +459,10 @@ async def statsfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await fissure_stats(update, context)
 
 
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("📊 Статистика фиссуры", reply_markup=FISSURE_KEYBOARD)
+
+
 async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list[int]):
     await asyncio.sleep(AUTO_DELETE_DELAY)
     for msg_id in msg_ids:
