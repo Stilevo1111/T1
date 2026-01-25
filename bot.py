@@ -3,6 +3,9 @@ import time
 import random
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from fastapi import FastAPI
+import asyncio
+
 # На Render .env не используется, токен берётся из переменных окружения
 API_TOKEN = os.getenv("BOT_TOKEN")
 
@@ -65,14 +68,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text == "🌋 FISSURE":
         await fissure(update, context)
 
-if __name__ == "__main__":
+# FastAPI для Render Web Service
+app = FastAPI()
+
+@app.on_event("startup")
+async def startup_event():
     application = Application.builder().token(API_TOKEN).build()
-    
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    # Запуск polling (Render friendly)
-    application.run_polling(
-        allowed_updates=[],
-        drop_pending_updates=True,
-    )
+    asyncio.create_task(application.run_polling())
+
+@app.get("/")
+def root():
+    return {"status": "Bot is running"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
