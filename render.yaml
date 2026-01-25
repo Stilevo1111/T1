@@ -1,5 +1,5 @@
 services:
-  - type: web
+  - type: background
     name: fissure-bot
     runtime: python
     buildCommand: pip install -r requirements.txt

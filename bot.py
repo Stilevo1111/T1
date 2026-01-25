@@ -73,4 +73,10 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    application.run_polling(allowed_updates=[], drop_pending_updates=True)
+    # Удаляем webhook если он был установлен
+    import asyncio
+    async def setup_bot():
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        application.run_polling(allowed_updates=[], drop_pending_updates=True)
+    
+    asyncio.run(setup_bot())
