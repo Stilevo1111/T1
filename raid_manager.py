@@ -8,7 +8,17 @@
 import time
 import json
 from typing import Dict, List, Tuple
-from raid_system import BOSSES, BOSS_RESET_TIME
+# Константы перенесены из raid_system.py для избежания циклического импорта
+BOSSES = {
+    "Roshan": {"health": 1000, "damage": 50, "reward": 500},
+    "Ancient Dragon": {"health": 1500, "damage": 75, "reward": 800},
+    "Thunder God": {"health": 2000, "damage": 100, "reward": 1200},
+    "Ice Queen": {"health": 1200, "damage": 60, "reward": 600},
+    "Fire Demon": {"health": 1800, "damage": 90, "reward": 1000},
+    "Shadow Lord": {"health": 2500, "damage": 125, "reward": 1500}
+}
+
+BOSS_RESET_TIME = 3600  # 1 час в секундах
 
 # Файл для хранения данных рейдов
 RAID_DATA_FILE = "raid_data.json"

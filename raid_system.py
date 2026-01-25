@@ -13,7 +13,6 @@ from raid_manager import raid_manager
 # Конфигурация рейдов
 RAID_COOLDOWN = 3600  # 1 час в секундах
 PLAYER_DEATH_COOLDOWN = 7200  # 2 часа оглушение после смерти
-BOSS_RESET_TIME = 3600  # 1 час возрождение босса
 
 # Список боссов с большим HP для совместного убийства
 BOSSES = [
