@@ -132,7 +132,7 @@ async def main():
     await application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_path=f"/webhook/{API_TOKEN}",
+        webhook_url=webhook_url,
         drop_pending_updates=True
     )
 
