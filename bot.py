@@ -1,31 +1,27 @@
 import os
-import time
-import random
 import logging
 import asyncpg
+import random
+import time
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-# === Логирование ===
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
-# === Переменные окружения ===
 API_TOKEN = os.environ.get("BOT_TOKEN")
 PORT = int(os.environ.get("PORT", 10000))
 RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Проверяем, что всё задано
 if not API_TOKEN or not RENDER_URL or not DATABASE_URL:
     raise Exception("BOT_TOKEN, RENDER_EXTERNAL_URL или DATABASE_URL не найдены")
 
-# Очищаем RENDER_URL от лишних символов
-RENDER_URL = RENDER_URL.strip().replace("https://", "").replace("http://", "").rstrip("/")
+RENDER_URL = RENDER_URL.strip().rstrip('/')
 
-# === Подключение к PostgreSQL ===
+# --- DB ---
 async def init_db():
     conn = await asyncpg.connect(DATABASE_URL)
     await conn.execute("""
@@ -51,7 +47,7 @@ async def update_user(conn, uid, fissure, last_fissure):
         fissure, last_fissure, int(uid)
     )
 
-# === Команды бота ===
+# --- Bot commands ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = await asyncpg.connect(DATABASE_URL)
     await get_user(conn, update.effective_user.id)
@@ -95,10 +91,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         5: ["Растёт… и ничего не спрашивает.", "Увеличилась… без лишних слов."],
         3: ["Растёт… и ничего не спрашивает.", "Увеличилась… без лишних слов."],
         1: ["Растёт… и ничего не спрашивает.", "Увеличилась… без лишних слов."],
-        0: ["Стоит на месте… зато уверенно.", "Ни вверх, ни вниз… просто наблюдает.", "На месте… как старый добрый друг."],
-        -1: ["Сжалась… тихо так, но гордо.", "Сократился… но с достоинством.", "Сжалась… слегка, но метко."],
-        -3: ["Сжалась… тихо так, но гордо.", "Сократился… но с достоинством.", "Сократился… скромно, но заметно."],
-        -5: ["Сжалась… тихо так, но гордо.", "Сократился… но с достоинством.", "Сократился… скромно, но заметно."]
+        0: ["Стоит на месте… зато уверенно.", "На месте… как старый добрый друг."],
+        -1: ["Сжалась… тихо так, но гордо.", "Сократился… но с достоинством."],
+        -3: ["Сжалась… тихо так, но гордо.", "Сократился… но заметно."],
+        -5: ["Сжалась… тихо так, но гордо.", "Сократился… скромно, но заметно."]
     }
 
     phrase = random.choice(phrases[roll])
@@ -108,34 +104,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text == "🌋 FISSURE":
         await fissure(update, context)
 
-# === Запуск бота ===
-async def main():
-    await init_db()
+# --- Запуск без asyncio.run() ---
+if __name__ == "__main__":
+    import asyncio
 
     application = ApplicationBuilder().token(API_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Формируем webhook URL
+    # Инициализация БД перед запуском
+    asyncio.get_event_loop().run_until_complete(init_db())
+
     webhook_url = f"https://{RENDER_URL}/webhook/{API_TOKEN}"
-    logging.info(f"Webhook URL: {webhook_url}")
+    logging.info(f"Webhook установлен: {webhook_url}")
 
     # Устанавливаем webhook
-    try:
-        await application.bot.set_webhook(webhook_url)
-        logging.info(f"Webhook установлен: {webhook_url}")
-    except Exception as e:
-        logging.error(f"Ошибка при установке webhook: {e}")
-        return
+    asyncio.get_event_loop().run_until_complete(application.bot.set_webhook(webhook_url))
 
-    # Запускаем бот с вебхуком
-    await application.run_webhook(
+    # Запускаем вебхук
+    application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         webhook_url=webhook_url,
         drop_pending_updates=True
     )
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
