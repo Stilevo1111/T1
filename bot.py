@@ -191,7 +191,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📊 /STATS — статистика",
         reply_markup=MAIN_KEYBOARD,
     )
-    # Не удаляем стартовое сообщение, чтобы кнопки оставались
+    # Автоудаление стартового сообщения через 30 секунд
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
 
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
