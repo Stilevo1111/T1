@@ -371,7 +371,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
     user = await get_user(update.effective_user.id, username)
     
-    await update.message.reply_text(
+    msg = await update.message.reply_text(
         f"🎮 {user['username']}, ты в игре\n"
         f"Уровень: {user['level']}\n"
         f"HP: {user['hp']}/{user['hp_max']}\n"
@@ -391,6 +391,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/fissure — ролл фиссуры\n"
         "/stats — статистика",
         reply_markup=MAIN_KEYBOARD,
+    )
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
     )
 
 
@@ -467,12 +471,16 @@ async def boss(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
     user = await get_user(update.effective_user.id, username)
     
-    await update.message.reply_text(
+    msg = await update.message.reply_text(
         f"👹 {user['boss_name']}\n"
         f"HP: {user['boss_hp']}/{user['boss_max']}\n"
         f"Уровень: {user['boss_level']}\n"
         f"Способности: {user['boss_ability']}\n"
         f"/attack — атаковать"
+    )
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
     )
 
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -600,10 +608,18 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         gold=user_gold
     )
     
-    await update.message.reply_text(text)
+    msg = await update.message.reply_text(text)
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
 
 async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🛒 Выберите категорию:", reply_markup=SHOP_CATEGORIES_KEYBOARD)
+    msg = await update.message.reply_text("🛒 Выберите категорию:", reply_markup=SHOP_CATEGORIES_KEYBOARD)
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
 
 
 async def show_category_items(update: Update, context: ContextTypes.DEFAULT_TYPE, category: str):
@@ -670,7 +686,11 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Покупка предмета
     items[items.index(None)] = item_name
     await update_user(update.effective_user.id, items=items, gold=user["gold"] - cost)
-    await update.message.reply_text(f"✅ Куплен {item_name}")
+    msg = await update.message.reply_text(f"✅ Куплен {item_name}")
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
 
 async def potion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
@@ -696,7 +716,11 @@ async def potion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Покупка зелья
     new_hp = min(user["hp"] + potion_data["heal"], user["hp_max"])
     await update_user(update.effective_user.id, hp=new_hp, gold=user["gold"] - cost)
-    await update.message.reply_text(f"🧪 {potion_type} зелье использовано. HP восстановлено")
+    msg = await update.message.reply_text(f"🧪 {potion_type} зелье использовано. HP восстановлено")
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
 
 async def heal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
@@ -706,9 +730,17 @@ async def heal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new_hp, last_heal = regenerate_hp(user)
     if new_hp != user["hp"]:
         await update_user(update.effective_user.id, hp=new_hp, last_heal=last_heal)
-        await update.message.reply_text(f"💚 HP восстановлено до {new_hp}/{user['hp_max']}")
+        msg = await update.message.reply_text(f"💚 HP восстановлено до {new_hp}/{user['hp_max']}")
+        # Автоудаление ответа
+        context.application.create_task(
+            auto_delete(context, update.effective_chat.id, [msg.message_id])
+        )
     else:
-        await update.message.reply_text("💚 HP уже восстановлено")
+        msg = await update.message.reply_text("💚 HP уже восстановлено")
+        # Автоудаление ответа
+        context.application.create_task(
+            auto_delete(context, update.effective_chat.id, [msg.message_id])
+        )
 
 async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
@@ -736,7 +768,11 @@ async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"   ❤️ HP: {row['hp']}/{row['hp_max']}\n"
         text += f"   /fight_{row['user_id']} — сразиться\n\n"
     
-    await update.message.reply_text(text)
+    msg = await update.message.reply_text(text)
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
 
 async def fight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
@@ -837,7 +873,11 @@ async def fight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update_user(update.effective_user.id, hp=user1_hp, mmr=winner_mmr if winner == user1 else loser_mmr, exp=winner_exp if winner == user1 else loser_exp, last_pvp=time.time())
     await update_user(enemy_id, hp=user2_hp, mmr=winner_mmr if winner == user2 else loser_mmr, exp=winner_exp if winner == user2 else loser_exp)
     
-    await update.message.reply_text(text)
+    msg = await update.message.reply_text(text)
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stat = context.args[0] if context.args else "mmr"
@@ -856,7 +896,11 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for i, row in enumerate(rows, 1):
         text += f"{i}. 👤 {row['username']} — {row[stat]}\n"
     
-    await update.message.reply_text(text)
+    msg = await update.message.reply_text(text)
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
@@ -874,7 +918,11 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🍆 Fissure: {user['fissure']:.1f} см\n\n"
             f"🎒 Инвентарь:\n{items_str}")
     
-    await update.message.reply_text(text)
+    msg = await update.message.reply_text(text)
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
 
 # ================= BUTTON HANDLER =================
 
