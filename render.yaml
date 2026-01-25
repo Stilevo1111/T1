@@ -9,6 +9,8 @@ services:
         value: "3.13.4"
       - key: WEB_CONCURRENCY
         value: "1"
+      - key: PORT
+        value: "10000"
   - type: postgres
     name: fissure-db
     databaseName: fissure
