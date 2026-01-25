@@ -778,6 +778,107 @@ async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE):
         auto_delete(context, update.effective_chat.id, [msg.message_id])
     )
 
+
+async def handle_pvp_fight(update: Update, context: ContextTypes.DEFAULT_TYPE, enemy_id: int):
+    """Обработчик PvP боя по кнопке из списка PvP"""
+    username = update.effective_user.username or update.effective_user.full_name
+    user1 = await get_user(update.effective_user.id, username)
+    
+    user2 = await get_user(enemy_id, f"Player{enemy_id}")
+    
+    if time.time() - user1["last_pvp"] < 600:
+        await update.message.reply_text("⏳ КД PvP")
+        return
+
+    # Проверка MMR
+    if user2["mmr"] < user1["mmr"] * 0.5:
+        await update.message.reply_text("❌ Противник слишком слабый")
+        return
+
+    # Информация о противнике
+    text = f"👤 Противник: {user2['username']}\n"
+    text += f"📊 MMR: {user2['mmr']} | Уровень: {user2['level']}\n"
+    text += f"💪 STR: {user2['str']} | 🏃‍♂️ AGI: {user2['agi']} | 🧠 INT: {user2['int']}\n"
+    text += f"❤️ HP: {user2['hp']}/{user2['hp_max']}\n"
+    text += f"🎒 Экипировка: {', '.join([item or 'Пусто' for item in user2['items']]) if user2['items'] else 'Пусто'}\n\n"
+    
+    # Боевые действия с короткими логами
+    text += "⚔️ БОЙ НАЧАЛСЯ!\n\n"
+    
+    # Раунд 1
+    dmg1, is_crit1 = calculate_damage(user1)
+    dmg2, is_crit2 = calculate_damage(user2)
+    
+    text += f"1. {user1['username']} наносит {dmg1} урона\n"
+    if is_crit1:
+        text += "   💥 КРИТ! Я инвестировал в урон\n"
+    
+    user2_hp = max(0, user2["hp"] - dmg1)
+    text += f"2. {user2['username']} наносит {dmg2} урона\n"
+    if is_crit2:
+        text += "   💥 КРИТ! Я инвестировал в урон\n"
+    
+    user1_hp = max(0, user1["hp"] - dmg2)
+    
+    # Раунд 2
+    if user1_hp > 0 and user2_hp > 0:
+        dmg1, is_crit1 = calculate_damage(user1)
+        dmg2, is_crit2 = calculate_damage(user2)
+        
+        text += f"3. {user1['username']} наносит {dmg1} урона\n"
+        if is_crit1:
+            text += "   💥 КРИТ! Я инвестировал в урон\n"
+        
+        user2_hp = max(0, user2_hp - dmg1)
+        text += f"4. {user2['username']} наносит {dmg2} урона\n"
+        if is_crit2:
+            text += "   💥 КРИТ! Я инвестировал в урон\n"
+        
+        user1_hp = max(0, user1_hp - dmg2)
+    
+    # Определение победителя
+    if user1_hp > user2_hp:
+        winner = user1
+        loser = user2
+        text += f"\n🏆 ПОБЕДИТЕЛЬ: {user1['username']}!\n"
+    else:
+        winner = user2
+        loser = user1
+        text += f"\n🏆 ПОБЕДИТЕЛЬ: {user2['username']}!\n"
+    
+    # Передача MMR и опыта
+    mmr_change = 20
+    exp_change = 50
+    
+    winner_mmr = winner["mmr"] + mmr_change
+    loser_mmr = loser["mmr"] - mmr_change
+    winner_exp = winner["exp"] + exp_change
+    loser_exp = loser["exp"] + exp_change // 2  # Проигравший получает немного опыта
+    
+    text += f"\n📊 ИЗМЕНЕНИЯ:\n"
+    text += f"🥇 {winner['username']}: +{mmr_change} MMR, +{exp_change} EXP\n"
+    text += f"🥈 {loser['username']}: -{mmr_change} MMR, +{exp_change // 2} EXP\n"
+    
+    # Шутка в конце
+    jokes = [
+        "Шутка: Проигравший теперь знает, что ботинки нужно завязывать tighter!",
+        "Шутка: Победитель теперь может хвастаться, что он сильнее, чем его противник!",
+        "Шутка: Проигравший обещал купить себе лучшие предметы и вернуться за реваншем!",
+        "Шутка: Победитель теперь может позволить себе купить новое зелье!",
+        "Шутка: Проигравший сказал, что это была тактическая сдача!"
+    ]
+    text += f"\n{random.choice(jokes)}"
+    
+    # Обновление данных
+    await update_user(update.effective_user.id, hp=user1_hp, mmr=winner_mmr if winner == user1 else loser_mmr, exp=winner_exp if winner == user1 else loser_exp, last_pvp=time.time())
+    await update_user(enemy_id, hp=user2_hp, mmr=winner_mmr if winner == user2 else loser_mmr, exp=winner_exp if winner == user2 else loser_exp)
+    
+    msg = await update.message.reply_text(text)
+    # Автоудаление ответа
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
+
 async def fight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
     user1 = await get_user(update.effective_user.id, username)
@@ -966,6 +1067,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🧪 Зелья":
         await show_category_items(update, context, "Зелья")
 
+
+async def handle_pvp_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопок PvP из списка противников"""
+    text = update.message.text
+    if text.startswith("/fight_"):
+        try:
+            enemy_id = int(text.replace("/fight_", ""))
+            await handle_pvp_fight(update, context, enemy_id)
+        except ValueError:
+            await update.message.reply_text("❌ Неверный ID противника")
+
 # ================= ENTRY POINT =================
 
 if __name__ == "__main__":
@@ -986,6 +1098,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("fissure_top", fissure_top))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^/fight_\d+$'), handle_pvp_buttons))
 
     # Запускаем бота в режиме webhook для Render
     app.run_webhook(
