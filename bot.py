@@ -4,8 +4,14 @@ import random
 import logging
 import asyncio
 import asyncpg
-import telebot
-from telebot import types
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
 
 # ================= CONFIG =================
 
@@ -141,48 +147,35 @@ PHRASES = {
 
 # ================= KEYBOARD =================
 
-MAIN_KEYBOARD = types.ReplyKeyboardMarkup(resize_keyboard=True)
-MAIN_KEYBOARD.add("🍆 FISSURE", "🏆 TOP", "📊 STATS")
-
-# ================= AUTO DELETE =================
-
-async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list[int]):
-    await asyncio.sleep(AUTO_DELETE_DELAY)
-    for msg_id in msg_ids:
-        try:
-            await context.bot.delete_message(chat_id, msg_id)
-        except Exception:
-            pass
+MAIN_KEYBOARD = ReplyKeyboardMarkup(
+    [["🍆 FISSURE", "🏆 TOP"], ["📊 STATS"]],
+    resize_keyboard=True,
+)
 
 # ================= BOT COMMANDS =================
 
-bot = telebot.TeleBot(BOT_TOKEN)
-
-@bot.message_handler(commands=["start"])
-def start(m):
-    username = m.from_user.username or m.from_user.first_name
-    asyncio.run(get_user(m.from_user.id, username))
-    bot.reply_to(m,
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    username = update.effective_user.username or update.effective_user.full_name
+    await get_user(update.effective_user.id, username)
+    await update.message.reply_text(
         "🔥 Бот запущен\nТвоя Фиссура — мем, ни на что не влияет 😏\n\n"
         "🍆 /FISSURE — ролл\n"
         "🏆 /TOP — рейтинг\n"
         "📊 /STATS — статистика",
-        reply_markup=MAIN_KEYBOARD
+        reply_markup=MAIN_KEYBOARD,
     )
 
-@bot.message_handler(commands=["fissure"])
-def fissure(m):
-    asyncio.run(fissure_async(m))
-
-async def fissure_async(m):
-    uid = m.from_user.id
-    username = m.from_user.username or m.from_user.first_name
+async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    username = update.effective_user.username or update.effective_user.full_name
     user = await get_user(uid, username)
     now = time.time()
     remaining = COOLDOWN - (now - user["last_fissure"])
 
     if remaining > 0:
-        bot.reply_to(m, f"⏳ Через {int(remaining // 3600)} ч. {(int(remaining) % 3600) // 60} мин.")
+        await update.message.reply_text(
+            f"⏳ Через {int(remaining // 3600)} ч. {(int(remaining) % 3600) // 60} мин."
+        )
     else:
         roll = random.choice(ROLLS)
         new_value = max(0.1, user["fissure"] + roll)
@@ -194,49 +187,48 @@ async def fissure_async(m):
             random.choice(PHRASES["same"])
         )
 
-        bot.reply_to(m, f"{TEXTS[roll]}\n{phrase}\n📏 Теперь {new_value:.1f} см")
+        await update.message.reply_text(
+            f"{TEXTS[roll]}\n{phrase}\n📏 Теперь {new_value:.1f} см"
+        )
 
-@bot.message_handler(commands=["top"])
-def top(m):
-    asyncio.run(top_async(m))
-
-async def top_async(m):
+async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rows = await get_top()
     if not rows:
-        bot.reply_to(m, "Топ пуст 😢")
+        await update.message.reply_text("Топ пуст 😢")
     else:
         text = ["🏆 ТОП по длине:\n"]
         for i, row in enumerate(rows, 1):
             text.append(f"{i}. 👤 {row['username']} — {row['fissure']:.1f} см")
-        bot.reply_to(m, "\n".join(text))
+        await update.message.reply_text("\n".join(text))
 
-@bot.message_handler(commands=["stats"])
-def stats(m):
-    asyncio.run(stats_async(m))
-
-async def stats_async(m):
-    uid = m.from_user.id
-    username = m.from_user.username or m.from_user.first_name
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    username = update.effective_user.username or update.effective_user.full_name
     user = await get_user(uid, username)
-    bot.reply_to(m, f"📊 Твоя фиссура:\n📏 {user['fissure']:.1f} см")
+    await update.message.reply_text(
+        f"📊 Твоя фиссура:\n📏 {user['fissure']:.1f} см"
+    )
 
 # ================= BUTTON HANDLER =================
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(m):
-    text = m.text
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
     if text == "🍆 FISSURE":
-        asyncio.run(fissure_async(m))
+        await fissure(update, context)
     elif text == "🏆 TOP":
-        asyncio.run(top_async(m))
+        await top(update, context)
     elif text == "📊 STATS":
-        asyncio.run(stats_async(m))
+        await stats(update, context)
 
 # ================= ENTRY POINT =================
 
 if __name__ == "__main__":
-    # Инициализация базы данных
-    asyncio.run(init_db(None))
-    
-    # Запуск бота
-    bot.infinity_polling()
+    app = ApplicationBuilder().token(BOT_TOKEN).post_init(init_db).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("fissure", fissure))
+    app.add_handler(CommandHandler("top", top))
+    app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    app.run_polling()
