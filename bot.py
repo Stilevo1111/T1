@@ -1143,15 +1143,5 @@ if __name__ == "__main__":
     http_thread.start()
     
     print("Бот запущен...")
-    # Используем вебхук для Render
-    try:
-        # Получаем URL из переменной окружения или используем дефолтный
-        webhook_url = os.getenv('WEBHOOK_URL', f'https://fissure-bot.onrender.com/')
-        print(f"Устанавливаю вебхук: {webhook_url}")
-        bot.remove_webhook()  # Сначала удаляем старый вебхук
-        bot.set_webhook(url=webhook_url)
-        print("Вебхук установлен успешно")
-    except Exception as e:
-        print(f"Ошибка при установке вебхука: {e}")
-        print("Использую polling режим")
-        bot.infinity_polling()
+    print("Использую polling режим для Render")
+    bot.infinity_polling()
