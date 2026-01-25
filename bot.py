@@ -1,145 +1,253 @@
 import os
+import time
+import random
 import logging
 import asyncpg
-import random
-import time
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
 )
 
-API_TOKEN = os.environ.get("BOT_TOKEN")
-PORT = int(os.environ.get("PORT", 10000))
-RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
-DATABASE_URL = os.environ.get("DATABASE_URL")
+# ================= CONFIG =================
 
-if not API_TOKEN or not RENDER_URL or not DATABASE_URL:
-    raise Exception("BOT_TOKEN, RENDER_EXTERNAL_URL или DATABASE_URL не найдены")
+logging.basicConfig(level=logging.INFO)
 
-RENDER_URL = RENDER_URL.strip().rstrip('/')
-if RENDER_URL.startswith("https://https://"):
-    RENDER_URL = RENDER_URL.replace("https://https://", "https://", 1)
-elif RENDER_URL.startswith("http://http://"):
-    RENDER_URL = RENDER_URL.replace("http://http://", "http://", 1)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
+RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
+PORT = int(os.getenv("PORT", 10000))
 
-if not RENDER_URL.startswith("http://") and not RENDER_URL.startswith("https://"):
-    RENDER_URL = f"https://{RENDER_URL}"
+if not all([BOT_TOKEN, DATABASE_URL, RENDER_URL]):
+    raise RuntimeError("Не заданы BOT_TOKEN / DATABASE_URL / RENDER_EXTERNAL_URL")
 
-# --- DB ---
-async def init_db():
-    conn = await asyncpg.connect(DATABASE_URL)
-    await conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id TEXT PRIMARY KEY,
-            fissure REAL DEFAULT 10.0,
-            last_fissure DOUBLE PRECISION DEFAULT 0
+COOLDOWN = 86400  # 24 часа
+
+# ================= DATABASE =================
+
+db_pool: asyncpg.Pool | None = None
+
+
+async def init_db(app):
+    global db_pool
+    db_pool = await asyncpg.create_pool(DATABASE_URL)
+
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY,
+                fissure REAL DEFAULT 10.0,
+                last_fissure DOUBLE PRECISION DEFAULT 0
+            )
+        """)
+
+    logging.info("DB initialized")
+
+
+async def get_user(uid: int) -> dict:
+    async with db_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT * FROM users WHERE user_id=$1",
+            str(uid),
         )
-    """)
-    await conn.close()
+        if not user:
+            await conn.execute(
+                "INSERT INTO users (user_id) VALUES ($1)",
+                str(uid),
+            )
+            user = await conn.fetchrow(
+                "SELECT * FROM users WHERE user_id=$1",
+                str(uid),
+            )
+        return dict(user)
 
-async def get_user(conn, uid):
-    uid = str(uid)
-    user = await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", uid)
-    if not user:
-        await conn.execute("INSERT INTO users (user_id) VALUES ($1)", uid)
-        user = await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", uid)
-    return dict(user)
 
-async def update_user(conn, uid, fissure, last_fissure):
-    await conn.execute(
-        "UPDATE users SET fissure=$1, last_fissure=$2 WHERE user_id=$3",
-        fissure, last_fissure, str(uid)
-    )
+async def update_user(uid: int, fissure: float, ts: float):
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET fissure=$1, last_fissure=$2 WHERE user_id=$3",
+            fissure,
+            ts,
+            str(uid),
+        )
 
-# --- Bot commands ---
+
+async def get_top(limit: int = 10):
+    async with db_pool.acquire() as conn:
+        return await conn.fetch("""
+            SELECT user_id, fissure
+            FROM users
+            ORDER BY fissure DESC
+            LIMIT $1
+        """, limit)
+
+# ================= GAME DATA =================
+
+ROLLS = [-5, -3, -1, 0, 1, 3, 5, 10]
+
+TEXTS = {
+    10: "💀 ЛЕГЕНДА! +10 см!",
+    5: "🎉 +5 см!",
+    3: "🔥 +3 см",
+    1: "🙂 +1 см",
+    0: "🤷 Без изменений",
+    -1: "😅 -1 см",
+    -3: "📉 -3 см",
+    -5: "💔 -5 см...",
+}
+
+PHRASES = {
+    "up": [
+        "Растёт… и ничего не спрашивает.",
+        "Увеличилась… без лишних слов.",
+    ],
+    "same": [
+        "Стоит на месте… зато уверенно.",
+        "На месте… как старый добрый друг.",
+    ],
+    "down": [
+        "Сжалась… тихо так, но гордо.",
+        "Сократился… но с достоинством.",
+    ],
+}
+
+# ================= KEYBOARD =================
+
+MAIN_KEYBOARD = ReplyKeyboardMarkup(
+    [
+        ["🍆 FISSURE", "🏆 TOP"],
+        ["📊 STATS"],
+    ],
+    resize_keyboard=True,
+)
+
+# ================= BOT COMMANDS =================
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    conn = await asyncpg.connect(DATABASE_URL)
-    await get_user(conn, update.effective_user.id)
-    await conn.close()
-    keyboard = ReplyKeyboardMarkup([
-        ["🍆 FISSURE"]
-    ], resize_keyboard=True)
-    await update.message.reply_text(
-        "🔥 Бот запущен\nНажми кнопку � FISSURE",
-        reply_markup=keyboard
-    )
-    await fissure(update, context)
-
-async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    conn = await asyncpg.connect(DATABASE_URL)
-    u = await get_user(conn, update.effective_user.id)
-    now = time.time()
-    remaining = 86400 - (now - u["last_fissure"])
-    if remaining > 0:
-        h = int(remaining / 3600)
-        m = int((remaining % 3600) / 60)
-        await update.message.reply_text(
-            f"⏳ Через {h} ч. {m} мин." if h > 0 else f"⏳ Через {m} мин."
-        )
-        await conn.close()
+    if not update.message:
         return
 
-    roll = random.choice([-5, -3, -1, 0, 1, 3, 5, 10])
-    new_fissure = max(0.1, u["fissure"] + roll)
-    await update_user(conn, update.effective_user.id, new_fissure, now)
-    await conn.close()
+    await get_user(update.effective_user.id)
 
-    texts = {
-        10: "💀 ЛЕГЕНДА! +10 см!",
-        5: "🎉 +5 см!",
-        3: "🔥 +3 см",
-        1: "🙂 +1 см",
-        0: "🤷 Без изменений",
-        -1: "😅 -1 см",
-        -3: "📉 -3 см",
-        -5: "💔 -5 см..."
-    }
+    await update.message.reply_text(
+        "🔥 Бот запущен\n\n"
+        "🍆 FISSURE — ролл (1 раз в сутки)\n"
+        "🏆 TOP — рейтинг\n"
+        "📊 STATS — твоя статистика",
+        reply_markup=MAIN_KEYBOARD,
+    )
 
-    phrases = {
-        10: ["Растёт… решительно и без совета.", "Увеличилась… без лишних слов."],
-        5: ["Растёт… и ничего не спрашивает.", "Увеличилась… без лишних слов."],
-        3: ["Растёт… и ничего не спрашивает.", "Увеличилась… без лишних слов."],
-        1: ["Растёт… и ничего не спрашивает.", "Увеличилась… без лишних слов."],
-        0: ["Стоит на месте… зато уверенно.", "На месте… как старый добрый друг."],
-        -1: ["Сжалась… тихо так, но гордо.", "Сократился… но с достоинством."],
-        -3: ["Сжалась… тихо так, но гордо.", "Сократился… но заметно."],
-        -5: ["Сжалась… тихо так, но гордо.", "Сократился… скромно, но заметно."]
-    }
 
-    phrase = random.choice(phrases[roll])
-    await update.message.reply_text(f"{texts[roll]}\n{phrase}\n📏 Теперь {new_fissure:.1f} см")
+async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+
+    uid = update.effective_user.id
+    user = await get_user(uid)
+
+    now = time.time()
+    remaining = COOLDOWN - (now - user["last_fissure"])
+
+    if remaining > 0:
+        h = int(remaining // 3600)
+        m = int((remaining % 3600) // 60)
+        await update.message.reply_text(
+            f"⏳ Через {h} ч. {m} мин." if h else f"⏳ Через {m} мин."
+        )
+        return
+
+    roll = random.choice(ROLLS)
+    new_value = max(0.1, user["fissure"] + roll)
+
+    await update_user(uid, new_value, now)
+
+    if roll > 0:
+        phrase = random.choice(PHRASES["up"])
+    elif roll < 0:
+        phrase = random.choice(PHRASES["down"])
+    else:
+        phrase = random.choice(PHRASES["same"])
+
+    await update.message.reply_text(
+        f"{TEXTS[roll]}\n{phrase}\n📏 Теперь {new_value:.1f} см"
+    )
+
+
+async def fissure_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await fissure(update, context)
+
+
+async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+
+    rows = await get_top()
+
+    if not rows:
+        await update.message.reply_text("Топ пуст 😢")
+        return
+
+    msg = ["🏆 ТОП по длине:\n"]
+    for i, row in enumerate(rows, 1):
+        msg.append(f"{i}. 👤 {row['user_id']} — {row['fissure']:.1f} см")
+
+    await update.message.reply_text("\n".join(msg))
+
+
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+
+    user = await get_user(update.effective_user.id)
+
+    await update.message.reply_text(
+        "📊 Твоя статистика:\n\n"
+        f"📏 Длина: {user['fissure']:.1f} см\n"
+        f"⏱ Последний ролл: "
+        f"{'никогда' if user['last_fissure'] == 0 else 'уже был'}"
+    )
+
+# ================= BUTTON HANDLER =================
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.text == "🍆 FISSURE":
+    if not update.message:
+        return
+
+    text = update.message.text
+
+    if text == "🍆 FISSURE":
         await fissure(update, context)
+    elif text == "🏆 TOP":
+        await top(update, context)
+    elif text == "📊 STATS":
+        await stats(update, context)
 
-# --- Запуск без asyncio.run() ---
+# ================= ENTRY POINT =================
+
 if __name__ == "__main__":
-    import asyncio
+    app = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .post_init(init_db)
+        .build()
+    )
 
-    application = ApplicationBuilder().token(API_TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("fissure", fissure_cmd))
+    app.add_handler(CommandHandler("top", top))
+    app.add_handler(CommandHandler("stats", stats))
 
-    # Явно создаём цикл событий для Python 3.13
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
+    )
 
-    # Инициализация БД перед запуском
-    loop.run_until_complete(init_db())
-
-    url_path = f"webhook/{API_TOKEN}"
-    webhook_url = f"{RENDER_URL}/{url_path}"
-    logging.info(f"Webhook установлен: {webhook_url}")
-
-    # Запускаем вебхук (set_webhook выполняется внутри run_webhook)
-    application.run_webhook(
+    app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        url_path=url_path,
-        webhook_url=webhook_url,
-        drop_pending_updates=True
+        webhook_url=f"{RENDER_URL.rstrip('/')}/webhook",
+        drop_pending_updates=True,
     )
