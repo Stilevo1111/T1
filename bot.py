@@ -314,7 +314,12 @@ def check_level_up(user):
 # ================= KEYBOARD =================
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [["👹 BOSS", "🛒 SHOP"], ["⚔️ PVP", "🏆 TOP"], ["📊 STATS"]],
+    [["👹 BOSS", "🛒 SHOP"], ["⚔️ PVP", "🏆 TOP"], ["🍆 FISSURE", "📊 STATS"]],
+    resize_keyboard=True,
+)
+
+FISSURE_KEYBOARD = ReplyKeyboardMarkup(
+    [["🎲 ROLL", "🏆 TOP"], ["📊 STATS", "⬅️ НАЗАД"]],
     resize_keyboard=True,
 )
 
@@ -391,6 +396,25 @@ async def fissure_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.application.create_task(
         auto_delete(context, update.effective_chat.id, [msg.message_id])
     )
+
+
+async def fissure_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    username = update.effective_user.username or update.effective_user.full_name
+    user = await get_user(update.effective_user.id, username)
+    
+    text = (f"🍆 Статистика фиссуры {user['username']}:\n"
+            f"📏 Длина: {user['fissure']:.1f} см\n"
+            f"⏰ Последний ролл: {time.strftime('%d.%m.%Y %H:%M', time.localtime(user['last_fissure'])) if user['last_fissure'] > 0 else 'Никогда'}")
+    
+    await update.message.reply_text(text)
+
+
+async def topfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await fissure_top(update, context)
+
+
+async def statsfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await fissure_stats(update, context)
 
 
 async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list[int]):
@@ -581,7 +605,29 @@ async def heal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("💚 HP уже восстановлено")
 
 async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⚔️ Напиши /fight USER_ID")
+    username = update.effective_user.username or update.effective_user.full_name
+    user = await get_user(update.effective_user.id, username)
+    
+    # Получаем список игроков для PvP (исключая самого пользователя)
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT username, mmr, level
+            FROM users 
+            WHERE user_id != $1 AND mmr >= $2
+            ORDER BY mmr DESC
+            LIMIT 10
+        """, str(update.effective_user.id), user["mmr"] * 0.5)
+    
+    if not rows:
+        await update.message.reply_text("❌ Нет доступных противников")
+        return
+    
+    text = "⚔️ Доступные противники для PvP:\n\n"
+    for i, row in enumerate(rows, 1):
+        text += f"{i}. 👤 {row['username']} — MMR: {row['mmr']} | Уровень: {row['level']}\n"
+    
+    text += "\nНапиши /fight USER_ID чтобы вызвать на дуэль"
+    await update.message.reply_text(text)
 
 async def fight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
@@ -681,6 +727,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await top(update, context)
     elif text == "📊 STATS":
         await stats(update, context)
+    elif text == "🍆 FISSURE":
+        await update.message.reply_text("🍆 Меню фиссуры", reply_markup=FISSURE_KEYBOARD)
+    elif text == "🎲 ROLL":
+        await fissure(update, context)
+    elif text == "🏆 TOP":
+        await fissure_top(update, context)
+    elif text == "📊 STATS":
+        await fissure_stats(update, context)
+    elif text == "⬅️ НАЗАД":
+        await update.message.reply_text("⬅️ Вернулись в главное меню", reply_markup=MAIN_KEYBOARD)
 
 # ================= ENTRY POINT =================
 
