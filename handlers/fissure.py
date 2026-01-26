@@ -10,7 +10,6 @@ from database import get_user, get_fissure_top, update_fissure
 from game_logic import get_fissure_result, get_meme_message
 from utils.formatters import format_stats_text
 from utils.keyboard import FISSURE_KEYBOARD
-from handlers.fissure_system import fissure_system
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ COOLDOWN = 86400  # 24 часа в секундах
 AUTO_DELETE_DELAY = 30  # секунд
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик команды /fissure"""
+    """Обработчик команды /fissure - рандомная игра"""
     try:
         username = update.effective_user.username or update.effective_user.full_name
         user = await get_user(update.effective_user.id, username)
@@ -83,43 +82,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
     except Exception as e:
         logger.error(f"Ошибка в команде /stats (fissure): {e}")
-        if update and update.message:
-            await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
-
-async def grow_fissure(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик команды /grow_fissure - контроль роста Fissure
-    
-    🔄 ЛОГИКА РАБОТЫ:
-    1. Пользователь вызывает /grow_fissure
-    2. Система проверяет, есть ли активная игра Fissure Growth для пользователя
-    3. Если игра активна - увеличивает рост Fissure на 5 единиц
-    4. Если рост достиг максимума (100) - Fissure взрывается и дает эффект
-    5. Если игра не активна - предлагает начать игру через /fissure
-    
-    📊 ПРОГРЕСС:
-    🌀 Fissure растет... 5/100 → 10/100 → 15/100 ... → 100/100 💥
-    
-    🎁 НАГРАДА:
-    Чем больше рост, тем сильнее эффект:
-    - 0-39: Common эффекты (базовые бонусы)
-    - 40-69: Uncommon эффекты (усиленные бонусы)  
-    - 70-89: Rare эффекты (редкие мощные бонусы)
-    - 90-100: Epic эффекты (легендарные бонусы)
-    """
-    try:
-        user_id = update.effective_user.id
-        result = await fissure_system.grow_fissure(user_id)
-        
-        if result['success']:
-            message = result['message']
-            if 'explosion' in result and result['explosion']:
-                message += "\n\n💥 Fissure взорвалась! Получите мощный эффект!"
-            
-            await update.message.reply_text(message)
-        else:
-            await update.message.reply_text(f"❌ {result['message']}")
-    except Exception as e:
-        logger.error(f"Ошибка в команде /grow_fissure: {e}")
         if update and update.message:
             await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
@@ -222,3 +184,5 @@ def get_fissure_result_with_length(current_length: float) -> tuple[float, str, s
         phrase = "Ничего не изменилось, но ты молодец!"
     
     return new_value, text, phrase
+
+
