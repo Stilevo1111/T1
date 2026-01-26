@@ -126,6 +126,58 @@ async def buy_item_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         logger.error(f"Ошибка в buy_item_callback: {e}")
         await query.edit_message_text("❌ Произошла ошибка. Попробуйте позже.")
 
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик команды /buy для покупки предметов"""
+    try:
+        username = update.effective_user.username or update.effective_user.full_name
+        user = await get_user(update.effective_user.id, username)
+        stats = calculate_character_stats(user)
+        
+        try:
+            item_name = context.args[0] if context.args else None
+        except:
+            await update.message.reply_text("❌ Укажите название предмета")
+            return
+
+        if item_name not in get_items_by_category("Все"):
+            await update.message.reply_text("❌ Нет такого предмета")
+            return
+
+        item_data = get_items_by_category("Все")[item_name]
+        cost = item_data["gold"]
+        
+        if user["gold"] < cost:
+            await update.message.reply_text("💰 Мало золота")
+            return
+
+        # Проверка слотов в инвентаре
+        inventory = await db_manager.get_user_inventory(update.effective_user.id)
+        equipped_items = [item['item_id'] for item in inventory if item.get('equipped', 0)]
+        
+        # Проверяем, есть ли свободные слоты
+        if len(equipped_items) >= 6:
+            await update.message.reply_text("🎒 Слоты заняты")
+            return
+
+        # Покупка предмета через реальную базу данных
+        success = await db_manager.add_item_to_inventory(update.effective_user.id, item_name, 1)
+        if not success:
+            await update.message.reply_text("❌ Ошибка при покупке предмета")
+            return
+
+        # Экипируем предмет автоматически
+        await db_manager.equip_item(update.effective_user.id, item_name)
+        
+        # Снимаем золото
+        await update_user(update.effective_user.id, gold=user["gold"] - cost)
+        msg = await update.message.reply_text(f"✅ Куплен и экипирован {item_name} за {cost}g")
+        context.application.create_task(
+            auto_delete(context, update.effective_chat.id, [msg.message_id])
+        )
+    except Exception as e:
+        logger.error(f"Ошибка в команде /buy: {e}")
+        await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
+
 async def potion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /potion"""
     try:
@@ -247,3 +299,5 @@ async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids:
 def register_shop_callbacks(application):
     """Регистрация обработчиков колбэков для магазина"""
     application.add_handler(CallbackQueryHandler(buy_item_callback, pattern=r"^buy_.*$"))
+
+
