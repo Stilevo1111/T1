@@ -1,22 +1,36 @@
 import os
 import logging
+from typing import Dict, List, Tuple
 
 # ================= CONFIG =================
 
-logging.basicConfig(level=logging.INFO)
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
+# Переменные окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 PORT = int(os.getenv("PORT", 10000))
 
-if not all([BOT_TOKEN, DATABASE_URL, RENDER_URL]):
-    raise RuntimeError("Не заданы BOT_TOKEN / DATABASE_URL / RENDER_EXTERNAL_URL")
+# Проверка обязательных переменных окружения
+required_env_vars = ["BOT_TOKEN", "DATABASE_URL", "RENDER_EXTERNAL_URL"]
+missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+
+if missing_vars:
+    logger.error(f"Не заданы обязательные переменные окружения: {', '.join(missing_vars)}")
+    raise RuntimeError(f"Не заданы обязательные переменные окружения: {', '.join(missing_vars)}")
 
 # ================= CONSTANTS =================
 
-COOLDOWN = 86400
-AUTO_DELETE_DELAY = 30  # секунд
+# Основные константы
+COOLDOWN = 86400  # 24 часа в секундах
+AUTO_DELETE_DELAY = 30  # секунд для автоудаления сообщений
+MAX_MESSAGE_LENGTH = 4096  # Максимальная длина сообщения Telegram
 
 # Fissure система
 ROLLS = [-5, -3, -1, 0, 1, 3, 5, 10]
@@ -37,7 +51,7 @@ FISURE_PHRASES = {
 }
 
 # Мем-комментарии
-MEMES = {
+MEMES: Dict[str, List[str]] = {
     "crit": [
         "💥 КРИТ! Я инвестировал в урон",
         "🔥 Минус лицо",
@@ -79,3 +93,56 @@ BASE_HP_REGEN_PER_INT = 0.5  # Каждый пункт интеллекта да
 # Опыт для уровней
 EXP_PER_LEVEL = 100  # Базовый опыт для следующего уровня
 EXP_MULTIPLIER = 1.2  # Множитель опыта для каждого уровня
+
+# Ограничения и лимиты
+MAX_LEVEL = 30
+MAX_STAT_VALUE = 1000
+MAX_ITEM_SLOTS = 6
+MAX_TALENT_POINTS = 30
+MAX_MMR = 3000
+MIN_FISSURE_LENGTH = 0.1  # Минимальная длина фиссуры в см
+
+# PvP настройки
+PVP_COOLDOWN = 600  # 10 минут в секундах
+MMR_CHANGE = 20  # Изменение MMR за победу/поражение
+EXP_CHANGE = 50  # Опыт за победу
+MIN_MMR_RATIO = 0.5  # Минимальный MMR противника (50% от игрока)
+
+# Босс настройки
+BOSS_REGEN_DELAY = 300  # 5 минут в секундах
+MAX_BOSS_HP = 15000
+MIN_BOSS_HP = 3000
+
+# Валидация конфигурации
+def validate_config() -> bool:
+    """Проверяет корректность конфигурации"""
+    try:
+        # Проверка токена бота
+        if not BOT_TOKEN or len(BOT_TOKEN) < 10:
+            logger.error("Некорректный BOT_TOKEN")
+            return False
+        
+        # Проверка URL базы данных
+        if not DATABASE_URL or "postgresql" not in DATABASE_URL.lower():
+            logger.error("Некорректный DATABASE_URL")
+            return False
+        
+        # Проверка RENDER_URL
+        if not RENDER_URL or not RENDER_URL.startswith("https://"):
+            logger.error("Некорректный RENDER_URL")
+            return False
+        
+        # Проверка порта
+        if not (1000 <= PORT <= 65535):
+            logger.error(f"Некорректный PORT: {PORT}")
+            return False
+        
+        logger.info("Конфигурация валидна")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка валидации конфигурации: {e}")
+        return False
+
+# Инициализация конфигурации
+if not validate_config():
+    raise RuntimeError("Конфигурация не прошла валидацию")
