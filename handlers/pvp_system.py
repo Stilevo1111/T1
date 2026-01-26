@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 from database.real_database import db_manager
 from game_logic.level_system import CharacterStats
+from game_logic import calculate_character_stats
 from utils.formatters import format_pvp_opponents
 
 logger = logging.getLogger(__name__)
@@ -162,9 +163,9 @@ class PvPManager:
         if attacker_id == defender_id:
             return {'success': False, 'message': 'Нельзя драться с самим собой'}
         
-        # Получаем полные характеристики
-        attacker_stats = await CharacterStats.get_full_character_stats(attacker_id)
-        defender_stats = await CharacterStats.get_full_character_stats(defender_id)
+        # Получаем полные характеристики с учетом экипировки
+        attacker_stats = calculate_character_stats(attacker)
+        defender_stats = calculate_character_stats(defender)
         
         # Симуляция боя
         fight_result = await self._simulate_pvp_fight(attacker_id, defender_id, attacker_stats, defender_stats)
@@ -250,30 +251,25 @@ class PvPManager:
         }
     
     def _calculate_pvp_damage(self, attacker_stats: Dict[str, Any], defender_stats: Dict[str, Any]) -> int:
-        """Рассчет урона в PvP"""
-        base_damage = attacker_stats.get('damage', 50)
+        """Рассчет урона в PvP с учетом экипировки"""
+        base_damage = attacker_stats['base_damage']  # Используем базовый урон из calculate_character_stats
         
-        # Модификаторы от характеристик
-        str_bonus = attacker_stats.get('str', 10) * 2
-        agi_bonus = attacker_stats.get('agi', 10) * 1.5
-        int_bonus = attacker_stats.get('int', 10) * 1.2
-        
-        # Критический удар
-        crit_chance = attacker_stats.get('crit', 5)
+        # Критический удар с учетом экипировки
+        crit_chance = attacker_stats['crit_chance']  # Используем шанс крита из calculate_character_stats
         crit_multiplier = 1.0
         if random.random() < crit_chance / 100:
             crit_multiplier = 2.0
         
-        # Уклонение
-        evasion = defender_stats.get('evasion', 0)
+        # Уклонение с учетом экипировки
+        evasion = defender_stats['dodge_chance']  # Используем шанс уклонения из calculate_character_stats
         if random.random() < evasion / 100:
             return 0  # Промах
         
-        # Броня
-        armor = defender_stats.get('armor', 0)
+        # Броня с учетом экипировки
+        armor = defender_stats.get('armor', 0)  # Можно добавить броню из экипировки
         armor_reduction = min(armor * 0.05, 0.7)  # Максимальное снижение на 70%
         
-        total_damage = (base_damage + str_bonus + agi_bonus + int_bonus) * crit_multiplier
+        total_damage = base_damage * crit_multiplier
         final_damage = int(total_damage * (1 - armor_reduction))
         
         return max(final_damage, 1)  # Минимум 1 урон

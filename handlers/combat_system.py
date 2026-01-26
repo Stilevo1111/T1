@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 
 from database.real_database import db_manager
 from game_logic.level_system import CharacterStats
+from game_logic import calculate_character_stats
 
 logger = logging.getLogger(__name__)
 
@@ -116,11 +117,11 @@ class CombatSystem:
         if user_level < boss_data['level']:
             return {'success': False, 'message': f'Требуется уровень {boss_data["level"]}'}
         
-        # Получаем характеристики персонажа
-        user_stats = await CharacterStats.get_full_character_stats(user_id)
+        # Получаем характеристики персонажа с учетом экипировки
+        user_stats = calculate_character_stats(user)
         
         # Симуляция боя
-        fight_result = await self._simulate_boss_fight(user_id, user_stats, boss_data)
+        fight_result = await self._simulate_boss_fight(user_id, user_stats, boss_data, user)
         
         if not fight_result['success']:
             return fight_result
@@ -162,9 +163,9 @@ async def handle_attack_boss(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"Ошибка в handle_attack_boss: {e}")
         await update.message.reply_text("❌ Произошла ошибка")
 
-    async def _simulate_boss_fight(self, user_id: int, user_stats: Dict[str, Any], boss_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Симуляция боя с боссом"""
-        user_hp = user_stats['hp']
+    async def _simulate_boss_fight(self, user_id: int, user_stats: Dict[str, Any], boss_data: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, Any]:
+        """Симуляция боя с боссом с учетом экипировки"""
+        user_hp = user_stats['max_hp']  # Используем максимальное HP из статистики
         boss_hp = boss_data['hp']
         
         round_num = 0
@@ -174,8 +175,8 @@ async def handle_attack_boss(update: Update, context: ContextTypes.DEFAULT_TYPE)
         while user_hp > 0 and boss_hp > 0 and round_num < max_rounds:
             round_num += 1
             
-            # Атака пользователя
-            damage = self._calculate_boss_damage(user_stats, boss_data)
+            # Атака пользователя с учетом экипировки
+            damage = self._calculate_boss_damage_with_gear(user_stats, boss_data, user)
             boss_hp -= damage
             log.append(f"Раунд {round_num}: Вы нанесли {damage} урона боссу")
             
@@ -206,7 +207,7 @@ async def handle_attack_boss(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 'hp': max(1, user_hp),
                 'bosses_killed': user.get('bosses_killed', 0) + 1,
                 'total_damage_dealt': user.get('total_damage_dealt', 0) + (boss_data['hp'] - boss_hp),
-                'total_damage_taken': user.get('total_damage_taken', 0) + (user_stats['hp'] - user_hp)
+                'total_damage_taken': user.get('total_damage_taken', 0) + (user_stats['max_hp'] - user_hp)
             })
             
             # Проверка повышения уровня
@@ -230,7 +231,7 @@ async def handle_attack_boss(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await db_manager.update_user(user_id, {
                 'hp': 1,
                 'bosses_lost': user.get('bosses_lost', 0) + 1,
-                'total_damage_taken': user.get('total_damage_taken', 0) + (user_stats['hp'] - 1)
+                'total_damage_taken': user.get('total_damage_taken', 0) + (user_stats['max_hp'] - 1)
             })
             
             return {
@@ -242,40 +243,36 @@ async def handle_attack_boss(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 'user_hp': 1
             }
     
-    def _calculate_boss_damage(self, user_stats: Dict[str, Any], boss_data: Dict[str, Any]) -> int:
-        """Рассчет урона пользователя по боссу"""
-        base_damage = user_stats.get('damage', 50)
+    def _calculate_boss_damage_with_gear(self, user_stats: Dict[str, Any], boss_data: Dict[str, Any], user: Dict[str, Any]) -> int:
+        """Рассчет урона пользователя по боссу с учетом экипировки"""
+        base_damage = user_stats['base_damage']  # Используем базовый урон из calculate_character_stats
         
-        # Модификаторы от характеристик
-        str_bonus = user_stats.get('str', 10) * 2
-        agi_bonus = user_stats.get('agi', 10) * 1.5
-        int_bonus = user_stats.get('int', 10) * 1.2
-        
-        # Критический удар
-        crit_chance = user_stats.get('crit', 5)
+        # Критический удар с учетом экипировки
+        crit_chance = user_stats['crit_chance']  # Используем шанс крита из calculate_character_stats
         crit_multiplier = 1.0
         if random.random() < crit_chance / 100:
             crit_multiplier = 2.0
+            log.append("🎯 Критический удар!")
         
         # Броня босса
         armor = boss_data['armor']
         armor_reduction = min(armor * 0.03, 0.5)  # Максимальное снижение на 50%
         
-        total_damage = (base_damage + str_bonus + agi_bonus + int_bonus) * crit_multiplier
+        total_damage = base_damage * crit_multiplier
         final_damage = int(total_damage * (1 - armor_reduction))
         
         return max(final_damage, 1)
     
     def _calculate_boss_attack(self, boss_data: Dict[str, Any], user_stats: Dict[str, Any]) -> int:
-        """Рассчет урона босса по пользователю"""
+        """Рассчет урона босса по пользователю с учетом экипировки"""
         base_damage = boss_data['damage']
         
-        # Броня пользователя
-        armor = user_stats.get('armor', 0)
+        # Броня пользователя с учетом экипировки
+        armor = user_stats.get('armor', 0)  # Можно добавить броню из экипировки
         armor_reduction = min(armor * 0.05, 0.7)  # Максимальное снижение на 70%
         
-        # Уклонение
-        evasion = user_stats.get('evasion', 0)
+        # Уклонение с учетом экипировки
+        evasion = user_stats['dodge_chance']  # Используем шанс уклонения из calculate_character_stats
         if random.random() < evasion / 100:
             return 0  # Промах
         
