@@ -255,7 +255,8 @@ def spawn_boss() -> Dict:
         "max": boss["hp"],
         "dmg": boss["dmg"],
         "min_level": boss["min_level"],
-        "max_level": boss["max_level"]
+        "max_level": boss["max_level"],
+        "ability": boss["ability"]
     }
 
 def check_level_restriction(user_level: int, boss_min: int, boss_max: int) -> bool:
