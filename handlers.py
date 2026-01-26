@@ -37,9 +37,8 @@ SHOP_CATEGORIES_KEYBOARD = ReplyKeyboardMarkup(
 
 async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: List[int]):
     """Автоматическое удаление сообщений через заданное время"""
-    await context.bot.delete_message(chat_id, msg_ids[0])
     await asyncio.sleep(AUTO_DELETE_DELAY)
-    for msg_id in msg_ids[1:]:
+    for msg_id in msg_ids:
         try:
             await context.bot.delete_message(chat_id, msg_id)
         except Exception:
