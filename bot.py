@@ -97,7 +97,7 @@ bot.py
 1/26/2026, 6:41:40 AM (Europe/Minsk, UTC+3:00)
 
 # Context Window Usage
-123,558 / 256K tokens used (48%)
+123558 / 256K tokens used (48%)
 
 # Current Mode
 ACT MODE
