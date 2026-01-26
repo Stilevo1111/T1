@@ -83,10 +83,11 @@ def format_stats_text(user: Dict, stats: Dict) -> str:
 
 def format_boss_info(user: Dict) -> str:
     """Форматирует информацию о боссе"""
+    boss_ability = user.get('boss_ability', 'Нет информации')
     return (f"👹 **{user['boss_name']}**\n"
             f"❤️ HP: {user['boss_hp']}/{user['boss_max']}\n"
             f"📊 Уровень: {user['boss_level']}\n"
-            f"⚡ Способности: {user['boss_ability']}\n\n"
+            f"⚡ Способности: {boss_ability}\n\n"
             f"💢 Используйте /attack чтобы атаковать")
 
 # ================= COMMAND HANDLERS =================
