@@ -71,13 +71,14 @@ async def init_db(app):
                     boss_level INTEGER DEFAULT 1,
                     boss_ability TEXT DEFAULT 'мощные атаки, высокая живучесть',
                     fissure REAL DEFAULT 10.0,
-                    last_fissure DOUBLE PRECISION DEFAULT 0
+                    last_fissure DOUBLE PRECISION DEFAULT 0,
+                    bosses_killed INTEGER DEFAULT 0
                 )
             """)
             logging.info("DB initialized - new table created")
         else:
             # Проверяем, есть ли все необходимые поля
-            required_fields = ['level', 'hp', 'hp_max', 'str', 'agi', 'int', 'gold', 'mmr', 'exp', 'items', 'boss_dmg', 'last_pvp', 'last_heal', 'boss_hp', 'boss_name', 'boss_max', 'boss_level', 'fissure', 'last_fissure']
+            required_fields = ['level', 'hp', 'hp_max', 'str', 'agi', 'int', 'gold', 'mmr', 'exp', 'items', 'boss_dmg', 'last_pvp', 'last_heal', 'boss_hp', 'boss_name', 'boss_max', 'boss_level', 'fissure', 'last_fissure', 'bosses_killed']
             missing_fields = []
             
             for field in required_fields:
@@ -95,8 +96,8 @@ async def init_db(app):
                 # Добавляем недостающие поля
                 alter_statements = []
                 for field in missing_fields:
-                    if field in ['level', 'hp', 'hp_max', 'str', 'agi', 'int', 'gold', 'mmr', 'exp', 'boss_dmg', 'boss_hp', 'boss_max', 'boss_level']:
-                        alter_statements.append(f"ADD COLUMN {field} INTEGER DEFAULT {1 if field in ['level', 'boss_level'] else 100 if field in ['hp', 'hp_max', 'boss_hp', 'boss_max'] else 5 if field in ['str', 'agi', 'int'] else 200 if field == 'gold' else 1000 if field == 'mmr' else 0}")
+                    if field in ['level', 'hp', 'hp_max', 'str', 'agi', 'int', 'gold', 'mmr', 'exp', 'boss_dmg', 'boss_hp', 'boss_max', 'boss_level', 'bosses_killed']:
+                        alter_statements.append(f"ADD COLUMN {field} INTEGER DEFAULT {1 if field in ['level', 'boss_level', 'bosses_killed'] else 100 if field in ['hp', 'hp_max', 'boss_hp', 'boss_max'] else 5 if field in ['str', 'agi', 'int'] else 200 if field == 'gold' else 1000 if field == 'mmr' else 0}")
                     elif field in ['last_pvp', 'last_heal', 'last_fissure']:
                         alter_statements.append(f"ADD COLUMN {field} DOUBLE PRECISION DEFAULT 0")
                     elif field == 'boss_name':
@@ -569,6 +570,9 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_gold = user["gold"] + gold_reward
         user_exp = user["exp"] + exp_reward
         
+        # Увеличиваем счетчик убитых боссов
+        bosses_killed = user.get("bosses_killed", 0) + 1
+        
         new_boss = spawn_boss()
         boss_hp = new_boss["hp"]
         boss_name = new_boss["name"]
@@ -589,6 +593,7 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         user_gold = user["gold"]
         user_exp = user["exp"]
+        bosses_killed = user.get("bosses_killed", 0)
         boss_name = user["boss_name"]
         boss_max = user["boss_max"]
         boss_level = user["boss_level"]
@@ -609,7 +614,8 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         boss_level=boss_level,
         boss_dmg=boss_dmg,
         boss_ability=boss_ability,
-        gold=user_gold
+        gold=user_gold,
+        bosses_killed=bosses_killed
     )
     
     msg = await update.message.reply_text(text)
@@ -1005,17 +1011,50 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
     user = await get_user(update.effective_user.id, username)
     
-    items_str = ", ".join([item or "Пусто" for item in user["items"]]) if user["items"] else "Пусто"
+    # Подсчет бонусов от предметов
+    str_bonus = get_item_bonus(user, "str")
+    agi_bonus = get_item_bonus(user, "agi")
+    int_bonus = get_item_bonus(user, "int")
+    hp_bonus = get_item_bonus(user, "hp")
+    dmg_bonus = get_item_bonus(user, "dmg")
+    crit_bonus = get_item_bonus(user, "crit")
+    dodge_bonus = get_item_bonus(user, "dodge")
+    heal_bonus = get_item_bonus(user, "heal")
+    exp_bonus = get_item_bonus(user, "exp")
+    
+    # Форматируем слоты для артефактов
+    slots = user["items"] if user["items"] else [None] * 6
+    artifacts_text = "🎒 СЛОТЫ АРТЕФАКТОВ:\n"
+    for i, item in enumerate(slots, 1):
+        if item:
+            item_data = ITEMS.get(item, {})
+            description = item_data.get("description", "")
+            artifacts_text += f"  {i}. {item} — {description}\n"
+        else:
+            artifacts_text += f"  {i}. ПУСТО\n"
+    
+    # Статистика боссов
+    bosses_killed = user.get("bosses_killed", 0)
+    total_boss_dmg = user["boss_dmg"]
     
     text = (f"👤 ПРОФИЛЬ {user['username']}\n\n"
             f"🎮 Уровень: {user['level']}\n"
-            f"❤️ HP: {user['hp']}/{user['hp_max']}\n"
-            f"💪 STR: {user['str']} | 🏃‍♂️ AGI: {user['agi']} | 🧠 INT: {user['int']}\n"
-            f"📚 EXP: {user['exp']}\n"
-            f"💰 Gold: {user['gold']} | 📊 MMR: {user['mmr']}\n"
-            f"👹 Урон по боссам: {user['boss_dmg']}\n"
+            f"📊 Винрейт: {user['mmr']} MMR\n"
+            f"👹 Убито боссов: {bosses_killed}\n"
+            f"🗡️ Общий урон по боссам: {total_boss_dmg}\n\n"
+            f"❤️ HP: {user['hp']}/{user['hp_max']} (+{hp_bonus})\n"
+            f"💪 STR: {user['str']} (+{str_bonus})\n"
+            f"🏃‍♂️ AGI: {user['agi']} (+{agi_bonus})\n"
+            f"🧠 INT: {user['int']} (+{int_bonus})\n"
+            f"⚔️ Урон: +{dmg_bonus}\n"
+            f"🎯 Крит: +{crit_bonus}%\n"
+            f"🛡️ Уклонение: +{dodge_bonus}%\n\n"
+            f"📚 EXP: {user['exp']} (+{exp_bonus})\n"
+            f"💚 Лечение: +{heal_bonus}\n"
+            f"💰 Gold: {user['gold']}\n"
             f"🍆 Fissure: {user['fissure']:.1f} см\n\n"
-            f"🎒 Инвентарь:\n{items_str}")
+            f"{artifacts_text}\n"
+            f"💡 Подсказка: /buy ITEM — купить предмет, /potion TYPE — купить зелье")
     
     msg = await update.message.reply_text(text)
     # Автоудаление ответа
