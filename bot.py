@@ -460,7 +460,7 @@ async def statsfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📊 Статистика фиссуры", reply_markup=FISSURE_KEYBOARD)
+    await update.message.reply_text("🍆 ДЛИНА ФИСУРЫ", reply_markup=FISSURE_KEYBOARD)
 
 
 async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list[int]):
