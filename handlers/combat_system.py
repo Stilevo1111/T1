@@ -127,7 +127,39 @@ class CombatSystem:
         await self._update_boss_stats(user_id, fight_result)
         
         return fight_result
-    
+
+async def handle_attack_boss(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик атаки на босса"""
+    try:
+        user_id = update.effective_user.id
+        boss_type = context.args[0] if context.args else None
+        
+        if not boss_type:
+            await update.message.reply_text("Укажите тип босса")
+            return
+        
+        result = await combat_system.attack_boss(user_id, boss_type)
+        
+        if result['success']:
+            if result['result'] == 'win':
+                message = f"🎉 Победа над {result['boss_name']}!\n"
+                message += f"📊 Раундов: {result['rounds']}\n"
+                message += f"💰 Получено: {result['exp_gained']} опыта, {result['gold_gained']} золота"
+                
+                if result.get('level_up', {}).get('level_up'):
+                    message += f"\n🔥 Повышение уровня! Теперь вы {result['level_up']['new_level']} уровня"
+            else:
+                message = f"💀 Поражение от {result['boss_name']}\n"
+                message += f"📊 Раундов: {result['rounds']}\n"
+                message += f"❤️ Выжившие HP: {result['user_hp']}"
+            
+            await update.message.reply_text(message)
+        else:
+            await update.message.reply_text(f"❌ {result['message']}")
+    except Exception as e:
+        logger.error(f"Ошибка в handle_attack_boss: {e}")
+        await update.message.reply_text("❌ Произошла ошибка")
+
     async def _simulate_boss_fight(self, user_id: int, user_stats: Dict[str, Any], boss_data: Dict[str, Any]) -> Dict[str, Any]:
         """Симуляция боя с боссом"""
         user_hp = user_stats['hp']
