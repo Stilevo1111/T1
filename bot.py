@@ -356,7 +356,7 @@ MAIN_KEYBOARD = ReplyKeyboardMarkup(
 )
 
 FISSURE_KEYBOARD = ReplyKeyboardMarkup(
-    [["🎲 ROLL", "🏆 TOP"], ["📊 STATS", "⬅️ НАЗАД"]],
+    [["🎲 ROLL"], ["📊 STATS", "⬅️ НАЗАД"]],
     resize_keyboard=True,
 )
 
@@ -465,7 +465,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = await get_user(update.effective_user.id, username)
     
     msg = await update.message.reply_text(
-        f"📊 Твоя статистика:\n📏 {user['fissure']:.1f} см"
+        f"📊 Твоя Фиссура:\n📏 {user['fissure']:.1f} см"
     )
 
     context.application.create_task(
