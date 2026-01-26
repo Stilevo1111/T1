@@ -9,10 +9,10 @@ from handlers.main import start, stats, profile, debug_boss
 from handlers.fissure import fissure, fissure_top, stats as fissure_stats
 from handlers.boss import boss, attack
 from handlers.shop import shop, show_category_items, buy, potion
-from handlers.pvp import pvp, handle_pvp_fight, fight
+from handlers.pvp import pvp, handle_pvp_fight_callback, fight
 from handlers.top import top
 from handlers.talents import talents, learn_talent, stats_distribute, add_stat, level_up_handler, achievements
-from handlers.talents import add_str, add_agi, add_int, learn, level_up, handle_talent_buttons
+from handlers.talents import add_str, add_agi, add_int, learn, level_up, handle_talents_category, handle_talents_stats, handle_talents_main, handle_learn_talent_callback
 from handlers.heal import heal
 
 from utils.validators import validate_talent_id, validate_user_id
@@ -73,7 +73,7 @@ async def handle_pvp_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE)
             try:
                 enemy_id = int(text.replace("/fight_", ""))
                 if validate_user_id(enemy_id):
-                    await handle_pvp_fight(update, context, enemy_id)
+                    await fight(update, context)
                 else:
                     await update.message.reply_text("❌ Неверный ID противника")
             except ValueError:

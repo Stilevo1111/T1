@@ -7,7 +7,7 @@ from .shop import shop, show_category_items, buy, potion
 from .pvp import pvp, handle_pvp_fight_callback, fight
 from .top import top
 from .talents import talents, learn_talent, stats_distribute, add_stat, level_up_handler, achievements
-from .talents import add_str, add_agi, add_int, learn, level_up, handle_talent_buttons
+from .talents import add_str, add_agi, add_int, learn, level_up, handle_talents_category, handle_talents_stats, handle_talents_main, handle_learn_talent_callback
 from .heal import heal
 from .messages import handle_message, handle_pvp_buttons
 
@@ -30,7 +30,7 @@ __all__ = [
     'pvp', 'handle_pvp_fight_callback', 'fight',
     'top',
     'talents', 'learn_talent', 'stats_distribute', 'add_stat', 'level_up_handler', 'achievements',
-    'add_str', 'add_agi', 'add_int', 'learn', 'level_up', 'handle_talent_buttons',
+    'add_str', 'add_agi', 'add_int', 'learn', 'level_up', 'handle_talents_category', 'handle_talents_stats', 'handle_talents_main', 'handle_learn_talent_callback',
     'heal',
     'handle_message', 'handle_pvp_buttons',
     

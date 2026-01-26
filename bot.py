@@ -25,13 +25,13 @@ logger = logging.getLogger(__name__)
 
 # Импортируем обработчики из модулей
 from handlers.main import start, stats, profile, debug_boss
-from handlers.fissure import fissure, fissure_top, stats as fissure_stats, grow_fissure
+from handlers.fissure import fissure, fissure_top, stats as fissure_stats
 from handlers.boss import boss, attack
 from handlers.shop import shop, show_category_items, buy, potion
-from handlers.pvp import pvp, handle_pvp_fight, fight
+from handlers.pvp import pvp, handle_pvp_fight_callback, fight
 from handlers.top import top
 from handlers.talents import talents, learn_talent, stats_distribute, add_stat, level_up_handler, achievements
-from handlers.talents import add_str, add_agi, add_int, learn, level_up, handle_talent_buttons
+from handlers.talents import add_str, add_agi, add_int, learn, level_up, handle_talents_category, handle_talents_stats, handle_talents_main, handle_learn_talent_callback
 from handlers.heal import heal
 from handlers.messages import handle_message, handle_pvp_buttons
 
@@ -70,7 +70,6 @@ def setup_handlers(app: Application) -> None:
         app.add_handler(CommandHandler("fight", fight))
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("grow_fissure", grow_fissure))
         app.add_handler(CommandHandler("fissure_top", fissure_top))
         app.add_handler(CommandHandler("talents", talents))
         app.add_handler(CommandHandler("level", level_up_handler))
@@ -83,8 +82,8 @@ def setup_handlers(app: Application) -> None:
         app.add_handler(CommandHandler("level_up", level_up))
 
         # Callback-обработчики для inline-кнопок
-        app.add_handler(CallbackQueryHandler(handle_talent_buttons, pattern=r'^learn_'))
-        app.add_handler(CallbackQueryHandler(handle_pvp_fight, pattern=r'^fight_'))
+        app.add_handler(CallbackQueryHandler(handle_learn_talent_callback, pattern=r'^learn_'))
+        app.add_handler(CallbackQueryHandler(handle_pvp_fight_callback, pattern=r'^fight_'))
         app.add_handler(CallbackQueryHandler(
             lambda update, context: show_category_items(update, context, update.callback_query.data), 
             pattern=r'^(boots|armor|weapon|defense|support|potions)$'
