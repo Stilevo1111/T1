@@ -15,7 +15,8 @@ from handlers import (
     start, fissure, fissure_top, stats, boss, attack, shop, show_category_items,
     buy, potion, heal, pvp, handle_pvp_fight, fight, top, profile,
     handle_message, handle_pvp_buttons,
-    talents, learn_talent, stats_distribute, add_stat, level_up_handler, achievements
+    talents, learn_talent, stats_distribute, add_stat, level_up_handler, achievements,
+    add_str, add_agi, add_int, learn, level_up
 )
 
 # ================= ENTRY POINT =================
@@ -42,10 +43,12 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("talents", talents))
     app.add_handler(CommandHandler("level", level_up_handler))
     app.add_handler(CommandHandler("achievements", achievements))
-    app.add_handler(CommandHandler("add_str", lambda u, c: add_stat(u, c, "str")))
-    app.add_handler(CommandHandler("add_agi", lambda u, c: add_stat(u, c, "agi")))
-    app.add_handler(CommandHandler("add_int", lambda u, c: add_stat(u, c, "int")))
+    app.add_handler(CommandHandler("add_str", add_str))
+    app.add_handler(CommandHandler("add_agi", add_agi))
+    app.add_handler(CommandHandler("add_int", add_int))
     app.add_handler(CommandHandler("stats_distribute", stats_distribute))
+    app.add_handler(CommandHandler("learn", learn))
+    app.add_handler(CommandHandler("level_up", level_up))
 
     # Обработчик изучения талантов по кнопкам
     async def handle_talent_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -1005,6 +1005,9 @@ async def talents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
     user = await get_user(update.effective_user.id, username)
     
+    # Импортируем TALENTS из game_logic
+    from game_logic import TALENTS
+    
     text = f"🌳 ДЕРЕВО ТАЛАНТОВ - Уровень {user['level']}\n"
     text += f"🎯 Доступно очков талантов: {user.get('talent_points', 0)}\n\n"
     
@@ -1106,6 +1109,39 @@ async def learn_talent(update: Update, context: ContextTypes.DEFAULT_TYPE, talen
         f"📊 {talent['description']}\n"
         f"🎯 Осталось очков: {talent_points - cost}"
     )
+
+
+async def learn(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /learn"""
+    try:
+        talent_id = context.args[0] if context.args else None
+        if not talent_id:
+            await update.message.reply_text("❌ Укажите ID таланта: /learn TALENT_ID")
+            return
+        await learn_talent(update, context, talent_id)
+    except Exception as e:
+        logging.error(f"Ошибка в learn: {e}")
+        await update.message.reply_text("❌ Ошибка при изучении таланта")
+
+
+async def level_up(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /level_up"""
+    await level_up_handler(update, context)
+
+
+async def add_str(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Добавить очки к силе"""
+    await add_stat(update, context, "str")
+
+
+async def add_agi(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Добавить очки к ловкости"""
+    await add_stat(update, context, "agi")
+
+
+async def add_int(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Добавить очки к интеллекту"""
+    await add_stat(update, context, "int")
 
 
 async def stats_distribute(update: Update, context: ContextTypes.DEFAULT_TYPE):
