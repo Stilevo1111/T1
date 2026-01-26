@@ -1080,6 +1080,8 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
+    logging.info(f"Получено сообщение: '{text}'")
+    
     if text == "👹 BOSS":
         await boss(update, context)
     elif text == "🛒 SHOP":
@@ -1096,10 +1098,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🍆 Меню фиссуры", reply_markup=FISSURE_KEYBOARD)
     elif text == "🎲 ROLL":
         await fissure(update, context)
-    elif text == "🏆 TOP":
-        await fissure_top(update, context)
-    elif text == "📊 STATS":
-        await fissure_stats(update, context)
     elif text == "⬅️ НАЗАД":
         await update.message.reply_text("⬅️ Вернулись в главное меню", reply_markup=MAIN_KEYBOARD)
     # Обработка категорий магазина
@@ -1115,6 +1113,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_category_items(update, context, "Поддержка")
     elif text == "🧪 Зелья":
         await show_category_items(update, context, "Зелья")
+    else:
+        logging.warning(f"Неизвестная команда: '{text}'")
+        await update.message.reply_text(f"Неизвестная команда: {text}", reply_markup=MAIN_KEYBOARD)
 
 
 async def handle_pvp_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
