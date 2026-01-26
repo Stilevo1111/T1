@@ -7,6 +7,7 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     filters,
+    CallbackQueryHandler,
 )
 
 from config import BOT_TOKEN, RENDER_URL, PORT
@@ -16,7 +17,8 @@ from handlers import (
     buy, potion, heal, pvp, handle_pvp_fight, fight, top, profile,
     handle_message, handle_pvp_buttons,
     talents, learn_talent, stats_distribute, add_stat, level_up_handler, achievements,
-    add_str, add_agi, add_int, learn, level_up
+    add_str, add_agi, add_int, learn, level_up,
+    handle_talent_buttons
 )
 
 # ================= ENTRY POINT =================
@@ -50,16 +52,22 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("learn", learn))
     app.add_handler(CommandHandler("level_up", level_up))
 
-    # Обработчик изучения талантов по кнопкам
-    async def handle_talent_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Обработчики callback-запросов (для inline-кнопок)
+    app.add_handler(CallbackQueryHandler(handle_talent_buttons, pattern=r'^learn_'))
+    app.add_handler(CallbackQueryHandler(handle_pvp_fight, pattern=r'^fight_'))
+    app.add_handler(CallbackQueryHandler(lambda update, context: show_category_items(update, context, update.callback_query.data), 
+                                         pattern=r'^(boots|armor|weapon|defense|support|potions)$'))
+
+    # Обработчик изучения талантов по тексту (для совместимости)
+    async def handle_talent_buttons_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = update.message.text
         if text.startswith("/learn_"):
             talent_id = text.replace("/learn_", "")
             await learn_talent(update, context, talent_id)
 
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^/learn_[a-z0-9]+$'), handle_talent_buttons))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^/learn_[a-z0-9]+$'), handle_talent_buttons_text))
     
-    # Обработчики категорий магазина
+    # Обработчики категорий магазина (для текстовых сообщений)
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^(👟 Сапоги|🛡️ Броня|🗡️ Оружие|🛡️ Защита|🔮 Поддержка|🧪 Зелья)$'), 
                                    lambda update, context: show_category_items(update, context, update.message.text)))
     

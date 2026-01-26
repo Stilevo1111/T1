@@ -1011,7 +1011,8 @@ async def talents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"🌳 ДЕРЕВО ТАЛАНТОВ - Уровень {user['level']}\n"
     text += f"🎯 Доступно очков талантов: {user.get('talent_points', 0)}\n\n"
     
-    # Показываем доступные ветки
+    # Создаем inline-клавиатуру для талантов
+    keyboard = []
     for branch_name, branch_talents in TALENTS.items():
         branch_title = {
             "warrior": "⚔️ ВЕТКА ВОИНА",
@@ -1048,13 +1049,30 @@ async def talents(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"   💰 Стоимость: {talent_data['cost']} очков\n"
             
             if learned < max_level and can_learn:
-                text += f"   /learn_{talent_data['id']} - изучить\n"
+                # Добавляем кнопку для изучения таланта
+                button = InlineKeyboardButton(
+                    f"{talent_data['name']} ({level_text})",
+                    callback_data=f"learn_{talent_id}"
+                )
+                keyboard.append([button])
             text += "\n"
     
     text += "\n💡 Используйте /learn TALENT_ID для изучения таланта"
     text += "\n/stats_distribute POINTS - распределить очки характеристик"
     
-    await update.message.reply_text(text)
+    # Создаем inline-клавиатуру
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(text, reply_markup=reply_markup)
+
+
+async def handle_talent_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик нажатий на кнопки талантов"""
+    query = update.callback_query
+    await query.answer()
+    
+    talent_id = query.data.replace("learn_", "")
+    await learn_talent(update, context, talent_id)
+    await query.message.delete()  # Удаляем сообщение с кнопками
 
 
 async def learn_talent(update: Update, context: ContextTypes.DEFAULT_TYPE, talent_id: str):
