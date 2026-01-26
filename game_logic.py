@@ -614,7 +614,7 @@ def calculate_damage_with_talents(user: Dict) -> Tuple[float, bool]:
     talents = user.get("talents", {})
     
     # Бонус от талантов воина
-    if talents.get("w2"):  # Бронебойный удар
+    if isinstance(talents, dict) and talents.get("w2"):  # Бронебойный удар
         boss_damage_bonus = talents.get("w2", 0) * 0.05
         base_damage *= (1 + boss_damage_bonus)
     
