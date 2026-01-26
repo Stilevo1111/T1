@@ -177,7 +177,8 @@ async def _add_talent_fields_if_not_exists():
             ('unspent_stats', 'INTEGER', '0'),
             ('talents', 'JSONB', "'{}'::jsonb"),
             ('title', 'VARCHAR(50)', "'Новичок'"),
-            ('total_talent_points', 'INTEGER', '0')
+            ('total_talent_points', 'INTEGER', '0'),
+            ('hp_max', 'INTEGER', '100')  # Добавляем hp_max если нет
         ]
         
         for field_name, field_type, default_value in talent_fields:
@@ -192,3 +193,32 @@ async def _add_talent_fields_if_not_exists():
             if not field_exists:
                 await conn.execute(f"ALTER TABLE users ADD COLUMN {field_name} {field_type} DEFAULT {default_value}")
                 logging.info(f"Added talent field: {field_name}")
+        
+        # Проверяем и добавляем поля для эффектов талантов
+        talent_effect_fields = [
+            ('boss_damage_bonus', 'REAL', '0.0'),
+            ('double_strike_chance', 'REAL', '0.0'),
+            ('berserk_damage', 'REAL', '0.0'),
+            ('dodge_bonus', 'REAL', '0.0'),
+            ('crit_chance_bonus', 'REAL', '0.0'),
+            ('poison_damage', 'REAL', '0.0'),
+            ('vanish_chance', 'REAL', '0.0'),
+            ('firestorm_chance', 'REAL', '0.0'),
+            ('mana_shield', 'REAL', '0.0'),
+            ('resurrection_chance', 'REAL', '0.0'),
+            ('all_damage_bonus', 'REAL', '0.0'),
+            ('phoenix_damage', 'REAL', '0.0')
+        ]
+        
+        for field_name, field_type, default_value in talent_effect_fields:
+            field_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_name = 'users' 
+                    AND column_name = $1
+                )
+            """, field_name)
+            
+            if not field_exists:
+                await conn.execute(f"ALTER TABLE users ADD COLUMN {field_name} {field_type} DEFAULT {default_value}")
+                logging.info(f"Added talent effect field: {field_name}")
