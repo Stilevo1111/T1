@@ -461,7 +461,16 @@ async def statsfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🍆 ДЛИНА ФИСУРЫ", reply_markup=FISSURE_KEYBOARD)
+    username = update.effective_user.username or update.effective_user.full_name
+    user = await get_user(update.effective_user.id, username)
+    
+    msg = await update.message.reply_text(
+        f"📊 Твоя статистика:\n📏 {user['fissure']:.1f} см"
+    )
+
+    context.application.create_task(
+        auto_delete(context, update.effective_chat.id, [msg.message_id])
+    )
 
 
 async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list[int]):
@@ -1074,6 +1083,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await pvp(update, context)
     elif text == "🏆 TOP":
         await top(update, context)
+    elif text == "👤 ПРОФИЛЬ":
+        await profile(update, context)
     elif text == "📊 STATS":
         await stats(update, context)
     elif text == "🍆 FISSURE":
