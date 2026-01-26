@@ -77,4 +77,209 @@ except ImportError as e:
         """Заглушка для get_meme_message"""
         return "Мем недоступен"
 
-__all__ = ['LevelSystem', 'CharacterStats', 'calculate_character_stats', 'get_user_progress', 'get_next_level_exp', 'calculate_boss_strategy', 'get_fissure_result', 'get_meme_message', 'spawn_boss', 'check_level_restriction', 'calculate_damage_with_talents', 'calculate_dodge', 'calculate_boss_reward', 'check_level_up_new', 'get_items_by_category', 'get_item_description', 'get_potion_data', 'calculate_damage', 'get_talent_info', 'can_learn_talent', 'apply_talent_effects', 'get_user_achievements', 'regenerate_hp', 'check_level_up']
+# Определяем TALENTS для использования в handlers/talents.py
+TALENTS = {
+    # Сила (Strength)
+    'str_1': {
+        'name': 'Сила I',
+        'description': '+10 к Силе',
+        'cost': 1,
+        'category': 'strength',
+        'level_req': 1,
+        'max_level': 1,
+        'prerequisites': [],
+        'stats': {'str': 10},
+        'pvp_effect': 'Увеличивает урон в PvP на 10%',
+        'boss_effect': 'Увеличивает урон по боссам на 10%'
+    },
+    'str_2': {
+        'name': 'Сила II',
+        'description': 'Увеличивает урон на 15%',
+        'cost': 2,
+        'category': 'strength',
+        'level_req': 5,
+        'max_level': 1,
+        'prerequisites': ['str_1'],
+        'stats': {'damage_mult': 1.15},
+        'pvp_effect': 'Увеличивает урон в PvP на 15%',
+        'boss_effect': 'Увеличивает урон по боссам на 15%'
+    },
+    'str_3': {
+        'name': 'Сила III',
+        'description': 'Увеличивает броню на 10%',
+        'cost': 3,
+        'category': 'strength',
+        'level_req': 10,
+        'max_level': 1,
+        'prerequisites': ['str_1', 'str_2'],
+        'stats': {'armor_mult': 1.10},
+        'pvp_effect': 'Увеличивает броню в PvP на 10%',
+        'boss_effect': 'Увеличивает броню против боссов на 10%'
+    },
+    'str_4': {
+        'name': 'Сила IV',
+        'description': 'Увеличивает максимальное HP на 15%',
+        'cost': 4,
+        'category': 'strength',
+        'level_req': 15,
+        'max_level': 1,
+        'prerequisites': ['str_1', 'str_2', 'str_3'],
+        'stats': {'hp_mult': 1.15},
+        'pvp_effect': 'Увеличивает HP в PvP на 15%',
+        'boss_effect': 'Увеличивает HP против боссов на 15%'
+    },
+    
+    # Ловкость (Agility)
+    'agi_1': {
+        'name': 'Ловкость I',
+        'description': '+10 к Ловкости',
+        'cost': 1,
+        'category': 'agility',
+        'level_req': 1,
+        'max_level': 1,
+        'prerequisites': [],
+        'stats': {'agi': 10},
+        'pvp_effect': 'Увеличивает критический урон в PvP на 10%',
+        'boss_effect': 'Увеличивает критический урон по боссам на 10%'
+    },
+    'agi_2': {
+        'name': 'Ловкость II',
+        'description': 'Увеличивает критический урон на 15%',
+        'cost': 2,
+        'category': 'agility',
+        'level_req': 5,
+        'max_level': 1,
+        'prerequisites': ['agi_1'],
+        'stats': {'crit_mult': 1.15},
+        'pvp_effect': 'Увеличивает критический урон в PvP на 15%',
+        'boss_effect': 'Увеличивает критический урон по боссам на 15%'
+    },
+    'agi_3': {
+        'name': 'Ловкость III',
+        'description': 'Увеличивает уклонение на 10%',
+        'cost': 3,
+        'category': 'agility',
+        'level_req': 10,
+        'max_level': 1,
+        'prerequisites': ['agi_1', 'agi_2'],
+        'stats': {'evasion_mult': 1.10},
+        'pvp_effect': 'Увеличивает уклонение в PvP на 10%',
+        'boss_effect': 'Увеличивает уклонение против боссов на 10%'
+    },
+    'agi_4': {
+        'name': 'Ловкость IV',
+        'description': 'Увеличивает скорость атаки на 15%',
+        'cost': 4,
+        'category': 'agility',
+        'level_req': 15,
+        'max_level': 1,
+        'prerequisites': ['agi_1', 'agi_2', 'agi_3'],
+        'stats': {'speed_mult': 1.15},
+        'pvp_effect': 'Увеличивает скорость атаки в PvP на 15%',
+        'boss_effect': 'Увеличивает скорость атаки против боссов на 15%'
+    },
+    
+    # Интеллект (Intelligence)
+    'int_1': {
+        'name': 'Интеллект I',
+        'description': '+10 к Интеллекту',
+        'cost': 1,
+        'category': 'intelligence',
+        'level_req': 1,
+        'max_level': 1,
+        'prerequisites': [],
+        'stats': {'int': 10},
+        'pvp_effect': 'Увеличивает магический урон в PvP на 10%',
+        'boss_effect': 'Увеличивает магический урон по боссам на 10%'
+    },
+    'int_2': {
+        'name': 'Интеллект II',
+        'description': 'Увеличивает силу заклинаний на 15%',
+        'cost': 2,
+        'category': 'intelligence',
+        'level_req': 5,
+        'max_level': 1,
+        'prerequisites': ['int_1'],
+        'stats': {'spell_damage_mult': 1.15},
+        'pvp_effect': 'Увеличивает магический урон в PvP на 15%',
+        'boss_effect': 'Увеличивает магический урон по боссам на 15%'
+    },
+    'int_3': {
+        'name': 'Интеллект III',
+        'description': 'Увеличивает максимальную ману на 10%',
+        'cost': 3,
+        'category': 'intelligence',
+        'level_req': 10,
+        'max_level': 1,
+        'prerequisites': ['int_1', 'int_2'],
+        'stats': {'mana_mult': 1.10},
+        'pvp_effect': 'Увеличивает максимальную ману в PvP на 10%',
+        'boss_effect': 'Увеличивает максимальную ману против боссов на 10%'
+    },
+    'int_4': {
+        'name': 'Интеллект IV',
+        'description': 'Увеличивает магическую защиту на 15%',
+        'cost': 4,
+        'category': 'intelligence',
+        'level_req': 15,
+        'max_level': 1,
+        'prerequisites': ['int_1', 'int_2', 'int_3'],
+        'stats': {'magic_resist_mult': 1.15},
+        'pvp_effect': 'Увеличивает магическую защиту в PvP на 15%',
+        'boss_effect': 'Увеличивает магическую защиту против боссов на 15%'
+    },
+    
+    # Гибридные таланты
+    'hybrid_1': {
+        'name': 'Гибрид I',
+        'description': '+5 к каждой характеристике',
+        'cost': 2,
+        'category': 'hybrid',
+        'level_req': 3,
+        'max_level': 1,
+        'prerequisites': [],
+        'stats': {'str': 5, 'agi': 5, 'int': 5},
+        'pvp_effect': 'Увеличивает все характеристики в PvP',
+        'boss_effect': 'Увеличивает все характеристики против боссов'
+    },
+    'hybrid_2': {
+        'name': 'Гибрид II',
+        'description': 'Увеличивает все характеристики на 10%',
+        'cost': 4,
+        'category': 'hybrid',
+        'level_req': 8,
+        'max_level': 1,
+        'prerequisites': ['hybrid_1'],
+        'stats': {'all_stats_mult': 1.10},
+        'pvp_effect': 'Увеличивает все характеристики в PvP на 10%',
+        'boss_effect': 'Увеличивает все характеристики против боссов на 10%'
+    },
+    'hybrid_3': {
+        'name': 'Гибрид III',
+        'description': 'Увеличивает весь урон на 5%',
+        'cost': 5,
+        'category': 'hybrid',
+        'level_req': 12,
+        'max_level': 1,
+        'prerequisites': ['hybrid_1', 'hybrid_2'],
+        'stats': {'all_damage_mult': 1.05},
+        'pvp_effect': 'Увеличивает весь урон в PvP на 5%',
+        'boss_effect': 'Увеличивает весь урон по боссам на 5%'
+    },
+    'hybrid_4': {
+        'name': 'Гибрид IV',
+        'description': 'Увеличивает всю защиту на 5%',
+        'cost': 5,
+        'category': 'hybrid',
+        'level_req': 18,
+        'max_level': 1,
+        'prerequisites': ['hybrid_1', 'hybrid_2', 'hybrid_3'],
+        'stats': {'all_defense_mult': 1.05},
+        'pvp_effect': 'Увеличивает всю защиту в PvP на 5%',
+        'boss_effect': 'Увеличивает всю защиту против боссов на 5%'
+    }
+}
+
+__all__ = ['LevelSystem', 'CharacterStats', 'calculate_character_stats', 'get_user_progress', 'get_next_level_exp', 'calculate_boss_strategy', 'get_fissure_result', 'get_meme_message', 'spawn_boss', 'check_level_restriction', 'calculate_damage_with_talents', 'calculate_dodge', 'calculate_boss_reward', 'check_level_up_new', 'get_items_by_category', 'get_item_description', 'get_potion_data', 'calculate_damage', 'get_talent_info', 'can_learn_talent', 'apply_talent_effects', 'get_user_achievements', 'regenerate_hp', 'check_level_up', 'TALENTS']
+
+

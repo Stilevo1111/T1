@@ -12,6 +12,7 @@ def register_all_handlers(app: Application):
         register_achievement_handlers
     )
     from .pvp import register_pvp_callbacks
+    from .talents import register_talent_callbacks
     
     # Регистрация всех систем
     register_menu_handlers(app)
@@ -23,7 +24,10 @@ def register_all_handlers(app: Application):
     register_fissure_handlers(app)
     register_achievement_handlers(app)
     
-    # Регистрация обработчиков колбэков PvP
+    # Регистрация обработчиков колбэков
     register_pvp_callbacks(app)
+    register_talent_callbacks(app)
 
 __all__ = ['register_all_handlers']
+
+
