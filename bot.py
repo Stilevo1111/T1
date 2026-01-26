@@ -799,7 +799,12 @@ async def handle_pvp_fight(update: Update, context: ContextTypes.DEFAULT_TYPE, e
     username = update.effective_user.username or update.effective_user.full_name
     user1 = await get_user(update.effective_user.id, username)
     
-    user2 = await get_user(enemy_id, f"Player{enemy_id}")
+    # Получаем информацию о противнике из базы данных
+    async with db_pool.acquire() as conn:
+        enemy_data = await conn.fetchrow("SELECT username FROM users WHERE user_id = $1", str(enemy_id))
+        enemy_username = enemy_data["username"] if enemy_data else f"Player{enemy_id}"
+    
+    user2 = await get_user(enemy_id, enemy_username)
     
     if time.time() - user1["last_pvp"] < 600:
         await update.message.reply_text("⏳ КД PvP")
