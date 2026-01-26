@@ -35,6 +35,9 @@ from handlers.talents import add_str, add_agi, add_int, learn, level_up, handle_
 from handlers.heal import heal
 from handlers.messages import handle_message, handle_pvp_buttons
 
+# Импортируем систему регистрации
+from handlers.register_handlers import register_all_handlers
+
 # ================= ENTRY POINT =================
 
 def create_application() -> Application:
@@ -50,6 +53,9 @@ def create_application() -> Application:
 def setup_handlers(app: Application) -> None:
     """Настраивает обработчики команд и сообщений"""
     try:
+        # Регистрация всех систем
+        register_all_handlers(app)
+        
         # Основные команды
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("stats", stats))
@@ -64,6 +70,7 @@ def setup_handlers(app: Application) -> None:
         app.add_handler(CommandHandler("fight", fight))
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("fissure", fissure))
+        app.add_handler(CommandHandler("grow_fissure", grow_fissure))
         app.add_handler(CommandHandler("fissure_top", fissure_top))
         app.add_handler(CommandHandler("talents", talents))
         app.add_handler(CommandHandler("level", level_up_handler))
