@@ -249,7 +249,7 @@ async def boss(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /attack"""
+    """Обработчик команды /attack - улучшенная версия с полным боем за один клик"""
     try:
         username = update.effective_user.username or update.effective_user.full_name
         logging.info(f"=== НАЧАЛО АТАКИ === Пользователь: {username}")
@@ -306,43 +306,68 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Босс слишком сильный для тебя")
             return
 
-        # Рассчитываем урон игрока с учетом талантов
-        dmg, is_crit = calculate_damage_with_talents(user)
+        # Начинаем бой до смерти одного из участников
+        text = f"⚔️ БОЙ НАЧАЛСЯ! {user['username']} против {user['boss_name']}\n\n"
+        text += f"📊 Начальные характеристики:\n"
+        text += f"👤 Игрок: HP {user['hp']}/{stats['max_hp']}, Урон {stats['base_damage']}\n"
+        text += f"👹 Босс: HP {user['boss_hp']}/{user['boss_max']}, Урон {boss_data['damage_range']}\n\n"
         
-        # Применяем урон боссу
-        boss_hp = user["boss_hp"] - dmg
-        total_boss_dmg = user["boss_dmg"] + dmg
+        # Переменные для боя
+        current_user_hp = user["hp"]
+        current_boss_hp = user["boss_hp"]
+        total_boss_dmg = user["boss_dmg"]
+        round_num = 1
+        max_rounds = 20  # Ограничение на количество раундов во избежание бесконечных боев
         
-        # Формируем текст атаки
-        text = format_boss_info(user) + f"\n⚔️ {user['username']} нанёс {dmg} урона"
-        if is_crit:
-            text += "\n" + get_meme_message("crit")
-        
-        # Атака босса
-        boss_min_dmg, boss_max_dmg = boss_data['damage_range']
-        boss_attack = random.randint(boss_min_dmg, boss_max_dmg)
-        text += f"\n👹 Босс контратакует на {boss_attack} урона"
-        
-        # Проверка уклонения
-        if calculate_dodge(user):
-            text += f"\n🛡️ {user['username']} уклонился от атаки!"
-            user_hp = user["hp"]
-        else:
-            user_hp = user["hp"] - boss_attack
-            text += f"\n💥 Босс попал!"
+        # Боевые действия
+        while current_user_hp > 0 and current_boss_hp > 0 and round_num <= max_rounds:
+            text += f"--- РАУНД {round_num} ---\n"
             
-            if user_hp <= 0:
-                text += "\n" + get_meme_message("death")
-                user_hp = 0
-
-        # Проверка смерти босса
-        if boss_hp <= 0:
+            # Атака игрока
+            dmg, is_crit = calculate_damage_with_talents(user)
+            current_boss_hp -= dmg
+            total_boss_dmg += dmg
+            
+            text += f"1. {user['username']} наносит {dmg} урона\n"
+            if is_crit:
+                text += "   💥 КРИТ! Я инвестировал в урон\n"
+            text += f"   👹 HP босса: {max(0, current_boss_hp)}/{user['boss_max']}\n"
+            
+            # Проверка смерти босса
+            if current_boss_hp <= 0:
+                boss_name = user["boss_name"]
+                text += f"\n🎉 {user['username']} ПОБЕДИЛ!\n"
+                text += f"👹 Босс {boss_name} повержен!\n"
+                text += get_meme_message("boss_kill", boss=boss_name)
+                break
+            
+            # Атака босса
+            boss_min_dmg, boss_max_dmg = boss_data['damage_range']
+            boss_attack = random.randint(boss_min_dmg, boss_max_dmg)
+            text += f"2. {user['boss_name']} контратакует на {boss_attack} урона\n"
+            
+            # Проверка уклонения игрока
+            if calculate_dodge(user):
+                text += f"   🛡️ {user['username']} уклонился от атаки!\n"
+            else:
+                current_user_hp -= boss_attack
+                text += f"   💥 Босс попал!\n"
+                text += f"   👤 HP игрока: {max(0, current_user_hp)}/{stats['max_hp']}\n"
+                
+                # Проверка смерти игрока
+                if current_user_hp <= 0:
+                    text += f"\n💀 {user['username']} ПОГИБ!\n"
+                    text += get_meme_message("death")
+                    break
+            
+            round_num += 1
+            text += "\n"
+        
+        # Обработка результатов боя
+        if current_boss_hp <= 0:
+            # Победа игрока
             boss_name = user["boss_name"]
-            text += f"\n" + get_meme_message("boss_kill", boss=boss_name)
-            
-            # Награда за убийство босса
             gold_reward, exp_reward = calculate_boss_reward(boss_name)
-            
             user_gold = user["gold"] + gold_reward
             user_exp = user["exp"] + exp_reward
             bosses_killed = user.get("bosses_killed", 0) + 1
@@ -356,7 +381,7 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_level = bonuses["new_level"]
                 user_hp_max = user.get("hp_max", 100) + bonuses["hp_bonus"]
                 user_hp = user_hp_max
-                text += f"\n🎉 Достигнут уровень {user_level}!"
+                text += f"\n🎉 ДОСТИГНУТ УРОВЕНЬ {user_level}!\n"
                 
                 # Добавляем бонусы за уровень
                 await update_user(
@@ -368,14 +393,16 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     talent_points=user.get("talent_points", 0) + bonuses.get("talent_points", 0)
                 )
                 user = await get_user(update.effective_user.id, username)  # Обновляем данные
+                stats = calculate_character_stats(user)  # Пересчитываем статы
             else:
                 user_level = user["level"]
                 user_hp_max = stats["max_hp"]
+                user_hp = current_user_hp
             
             # Обновляем данные
             await update_user(
                 update.effective_user.id,
-                hp=user_hp_max,
+                hp=user_hp,
                 hp_max=user_hp_max,
                 level=user_level,
                 exp=user_exp,
@@ -389,13 +416,32 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 bosses_killed=bosses_killed
             )
             
-            text += f"\n💰 Получено: {gold_reward} золота, {exp_reward} опыта"
+            text += f"\n💰 Награда: {gold_reward} золота, {exp_reward} опыта"
+            text += f"\n🗡️ Общий урон по боссу: {total_boss_dmg}"
+            text += f"\n👹 Новый босс: {new_boss['name']} (ур. {new_boss['min_level']})"
+            
+        elif current_user_hp <= 0:
+            # Поражение игрока
+            await update_user(
+                update.effective_user.id,
+                hp=0,
+                boss_hp=current_boss_hp,
+                boss_dmg=total_boss_dmg
+            )
+            text += f"\n💔 {user['username']} проиграл боссу {user['boss_name']}"
+            text += f"\n👹 Босс остался с {current_boss_hp}/{user['boss_max']} HP"
+            text += f"\n💡 Совет: купите лучшую экипировку и попробуйте снова!"
         else:
+            # Ограничение раундов достигнуто
+            text += f"\n⏱️ Бой прерван после {max_rounds} раундов (возможно, босс слишком сильный)"
+            text += f"\n👤 HP игрока: {current_user_hp}/{stats['max_hp']}"
+            text += f"\n👹 HP босса: {current_boss_hp}/{user['boss_max']}"
+            
             # Обновляем HP босса
             await update_user(
                 update.effective_user.id,
-                hp=user_hp,
-                boss_hp=boss_hp,
+                hp=current_user_hp,
+                boss_hp=current_boss_hp,
                 boss_dmg=total_boss_dmg
             )
         
