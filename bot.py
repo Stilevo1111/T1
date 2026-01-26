@@ -985,23 +985,17 @@ async def fight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    stat = context.args[0] if context.args else "mmr"
-    limit = 10
-    
-    if stat not in ["mmr", "gold", "boss_dmg"]:
-        await update.message.reply_text("❌ Неверная статистика. Доступно: mmr, gold, boss_dmg")
-        return
-    
-    rows = await get_top_by_stat(stat, limit)
+    # Показываем топ по росту фиссуры
+    rows = await get_fissure_top()
     if not rows:
         await update.message.reply_text("Топ пуст 😢")
         return
     
-    text = f"🏆 ТОП по {stat}:\n"
+    text = ["🏆 ТОП по длине фиссуры:\n"]
     for i, row in enumerate(rows, 1):
-        text += f"{i}. 👤 {row['username']} — {row[stat]}\n"
+        text.append(f"{i}. 👤 {row['username']} — {row['fissure']:.1f} см")
     
-    msg = await update.message.reply_text(text)
+    msg = await update.message.reply_text("\n".join(text))
     # Автоудаление ответа
     context.application.create_task(
         auto_delete(context, update.effective_chat.id, [msg.message_id])
