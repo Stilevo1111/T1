@@ -121,6 +121,9 @@ async def _migrate_existing_table(conn: asyncpg.Connection) -> None:
             if not boss_ability_exists:
                 await conn.execute("ALTER TABLE users ADD COLUMN boss_ability TEXT DEFAULT 'мощные атаки, высокая живучесть'")
                 logger.info("Добавлено поле boss_ability")
+    except Exception as e:
+        logger.error(f"Ошибка миграции таблицы: {e}")
+        raise
 
 async def _add_talent_fields_if_not_exists() -> None:
     """Добавление полей для системы талантов и уровней"""
