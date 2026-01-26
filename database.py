@@ -54,7 +54,7 @@ async def _create_tables_if_not_exists():
             logging.info("DB initialized - new table created")
         else:
             # Проверяем, есть ли все необходимые поля
-            required_fields = ['level', 'hp', 'hp_max', 'str', 'agi', 'int', 'gold', 'mmr', 'exp', 'items', 'boss_dmg', 'last_pvp', 'last_heal', 'boss_hp', 'boss_name', 'boss_max', 'boss_level', 'fissure', 'last_fissure', 'bosses_killed']
+            required_fields = ['level', 'hp', 'hp_max', 'str', 'agi', 'int', 'gold', 'mmr', 'exp', 'items', 'boss_dmg', 'last_pvp', 'last_heal', 'boss_hp', 'boss_name', 'boss_max', 'boss_level', 'boss_ability', 'fissure', 'last_fissure', 'bosses_killed']
             missing_fields = []
             
             for field in required_fields:
@@ -87,7 +87,19 @@ async def _create_tables_if_not_exists():
                     await conn.execute(f"ALTER TABLE users {', '.join(alter_statements)}")
                     logging.info(f"DB migration completed - added missing fields: {', '.join(missing_fields)}")
             else:
-                logging.info("DB initialized - existing table with all required fields")
+                # Проверяем, есть ли поле boss_ability
+                boss_ability_exists = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_name = 'users' 
+                        AND column_name = 'boss_ability'
+                    )
+                """)
+                if not boss_ability_exists:
+                    await conn.execute("ALTER TABLE users ADD COLUMN boss_ability TEXT DEFAULT 'мощные атаки, высокая живучесть'")
+                    logging.info("DB migration completed - added boss_ability field")
+                else:
+                    logging.info("DB initialized - existing table with all required fields")
 
 async def get_user(uid: int, username: str) -> dict:
     """Получение пользователя по ID, создание если не существует"""
