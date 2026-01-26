@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 from database import get_user
 from game_logic import calculate_character_stats, get_user_progress, get_next_level_exp
 from utils.formatters import format_stats_text
-from utils.keyboard import MAIN_KEYBOARD
+from utils.keyboard import MAIN_KEYBOARD, FISSURE_KEYBOARD
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         stats = calculate_character_stats(user)
         
         msg = await update.message.reply_text(
-            f"📊 Твоя Фиссура:\n📏 {user['fissure']:.1f} см"
+            f"📊 Твоя Фиссура:\n📏 {user['fissure']:.1f} см",
+            reply_markup=FISSURE_KEYBOARD
         )
         context.application.create_task(
             auto_delete(context, update.effective_chat.id, [msg.message_id])
