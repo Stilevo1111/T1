@@ -16,7 +16,7 @@ if not all([BOT_TOKEN, DATABASE_URL, RENDER_URL]):
 # ================= CONSTANTS =================
 
 COOLDOWN = 86400
-AUTO_DELETE_DELAY = 30  # секунд
+AUTO_DELETE_DELAY = 300  # секунд (5 минут)
 
 # Fissure система
 ROLLS = [-5, -3, -1, 0, 1, 3, 5, 10]
