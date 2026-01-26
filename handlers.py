@@ -256,69 +256,78 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = await get_user(update.effective_user.id, username)
         logging.info(f"Пользователь получен: {user['username']}, HP: {user['hp']}")
         
+        # Получаем данные о текущем боссе
+        boss_data = {
+            'name': user['boss_name'],
+            'hp': user['boss_hp'],
+            'max_hp': user['boss_max'],
+            'level': user['boss_level'],
+            'damage_range': [5, 15]  # Урон босса по умолчанию
+        }
+        
+        # Если есть способности босса, используем их
+        if user.get('boss_ability'):
+            # Парсим урон из способностей
+            ability = user['boss_ability']
+            if 'урон' in ability.lower():
+                # Извлекаем числа из описания способности
+                import re
+                numbers = re.findall(r'\d+', ability)
+                if numbers:
+                    boss_damage = int(numbers[0])
+                    boss_data['damage_range'] = [boss_damage, boss_damage + 5]
+        
         # Рассчитываем характеристики
         stats = calculate_character_stats(user)
-        logging.info(f"Характеристики рассчитаны: max_hp={stats['max_hp']}")
         
         # Проверяем HP
         if user["hp"] <= 0:
             await update.message.reply_text("💀 Ты мёртв")
             return
-        logging.info(f"HP пользователя: {user['hp']}/{stats['max_hp']}")
 
-        # Проверяем уровень босса
-        logging.info(f"Босс: {user['boss_name']}, HP: {user['boss_hp']}/{user['boss_max']}, уровень: {user['boss_level']}")
+        # Проверяем, жив ли босс
+        if user["boss_hp"] <= 0:
+            # Создаем нового босса
+            new_boss = spawn_boss()
+            await update_user(
+                update.effective_user.id,
+                boss_name=new_boss["name"],
+                boss_hp=new_boss["hp"],
+                boss_max=new_boss["max"],
+                boss_level=new_boss["min_level"],
+                boss_ability=new_boss["ability"]
+            )
+            user = await get_user(update.effective_user.id, username)  # Обновляем данные
         
         # Проверка уровня
         if not check_level_restriction(user["level"], user["boss_level"], user["boss_level"]):
             await update.message.reply_text("❌ Босс слишком сильный для тебя")
             return
-        logging.info("Проверка уровня пройдена")
 
-        # Форматируем информацию о боссе
-        boss_info = format_boss_info(user)
-        logging.info(f"Информация о боссе сформирована: {boss_info[:100]}...")
-        
         # Рассчитываем урон игрока
         dmg, is_crit = calculate_damage(user)
-        logging.info(f"Урон игрока рассчитан: {dmg}, крит: {is_crit}")
         
-        # Рассчитываем HP босса после атаки
+        # Применяем урон боссу
         boss_hp = user["boss_hp"] - dmg
         total_boss_dmg = user["boss_dmg"] + dmg
-        logging.info(f"HP босса после атаки: {boss_hp}/{user['boss_max']}")
         
         # Формируем текст атаки
-        text = boss_info + f"⚔️ {user['username']} нанёс {dmg} урона"
+        text = format_boss_info(user) + f"\n⚔️ {user['username']} нанёс {dmg} урона"
         if is_crit:
             text += "\n" + get_meme_message("crit")
-        logging.info("Текст атаки сформирован")
-
-        # Атака босса
-        # Проверяем тип boss_dmg - может быть числом или диапазоном
-        boss_dmg = user["boss_dmg"]
-        if isinstance(boss_dmg, int):
-            # Если boss_dmg - это число, используем его как максимальный урон
-            boss_attack = random.randint(1, boss_dmg)
-        elif isinstance(boss_dmg, (list, tuple)) and len(boss_dmg) == 2:
-            # Если boss_dmg - это диапазон [min, max], используем как есть
-            boss_attack = random.randint(boss_dmg[0], boss_dmg[1])
-        else:
-            # По умолчанию - случайный урон от 1 до 10
-            boss_attack = random.randint(1, 10)
         
+        # Атака босса
+        boss_min_dmg, boss_max_dmg = boss_data['damage_range']
+        boss_attack = random.randint(boss_min_dmg, boss_max_dmg)
         text += f"\n👹 Босс контратакует на {boss_attack} урона"
-        logging.info(f"Урон босса: {boss_attack}")
         
         # Проверка уклонения
         if calculate_dodge(user):
             text += f"\n🛡️ {user['username']} уклонился от атаки!"
             user_hp = user["hp"]
-            logging.info("Игрок уклонился от атаки")
         else:
             user_hp = user["hp"] - boss_attack
             text += f"\n💥 Босс попал!"
-            logging.info(f"Игрок получил урон: {boss_attack}, HP: {user_hp}/{stats['max_hp']}")
             
             if user_hp <= 0:
                 text += "\n" + get_meme_message("death")
@@ -328,84 +337,62 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if boss_hp <= 0:
             boss_name = user["boss_name"]
             text += f"\n" + get_meme_message("boss_kill", boss=boss_name)
-            logging.info(f"Босс {boss_name} повержен!")
             
-            # Адаптированные награды
+            # Награда за убийство босса
             gold_reward, exp_reward = calculate_boss_reward(boss_name)
-            logging.info(f"Награда: {gold_reward} золота, {exp_reward} опыта")
             
             user_gold = user["gold"] + gold_reward
             user_exp = user["exp"] + exp_reward
-            
-            # Увеличиваем счетчик убитых боссов
             bosses_killed = user.get("bosses_killed", 0) + 1
             
+            # Создаем нового босса
             new_boss = spawn_boss()
-            boss_hp = new_boss["hp"]
-            boss_name = new_boss["name"]
-            boss_max = new_boss["max"]
-            boss_level = new_boss["min_level"]
-            boss_dmg = 0
-            boss_ability = new_boss["ability"]
-            logging.info(f"Новый босс: {boss_name}, HP: {boss_hp}/{boss_max}, уровень: {boss_level}")
             
-            # Проверка уровня
+            # Проверка повышения уровня
             if check_level_up(user):
                 user_level = user["level"] + 1
-                user_hp_max = stats["max_hp"] + 20  # +20 HP за уровень
+                user_hp_max = stats["max_hp"] + 20
                 user_hp = user_hp_max
                 text += f"\n🎉 Достигнут уровень {user_level}!"
-                logging.info(f"Пользователь достиг уровня {user_level}")
             else:
                 user_level = user["level"]
                 user_hp_max = stats["max_hp"]
+            
+            # Обновляем данные
+            await update_user(
+                update.effective_user.id,
+                hp=user_hp_max,
+                hp_max=user_hp_max,
+                level=user_level,
+                exp=user_exp,
+                boss_hp=new_boss["hp"],
+                boss_name=new_boss["name"],
+                boss_max=new_boss["max"],
+                boss_level=new_boss["min_level"],
+                boss_dmg=total_boss_dmg,
+                boss_ability=new_boss["ability"],
+                gold=user_gold,
+                bosses_killed=bosses_killed
+            )
+            
+            text += f"\n💰 Получено: {gold_reward} золота, {exp_reward} опыта"
         else:
-            user_gold = user["gold"]
-            user_exp = user["exp"]
-            bosses_killed = user.get("bosses_killed", 0)
-            boss_name = user["boss_name"]
-            boss_max = user["boss_max"]
-            boss_level = user["boss_level"]
-            boss_ability = user["boss_ability"]
-            user_level = user["level"]
-            user_hp_max = stats["max_hp"]
-
-        # Восстановление HP до 100% и установка кулдауна
-        text += f"\n💚 Вы восстановили HP до 100%\n"
-        text += f"⏳ Босс кулдаун: 1 минута\n"
-        logging.info(f"Финальные данные: HP: {user_hp_max}/{user_hp_max}, уровень: {user_level}, золото: {user_gold}, опыт: {user_exp}")
-
-        # Обновляем данные
-        await update_user(
-            update.effective_user.id,
-            hp=user_hp_max,  # Восстанавливаем HP до максимума
-            hp_max=user_hp_max,
-            level=user_level,
-            exp=user_exp,
-            boss_hp=boss_hp,
-            boss_name=boss_name,
-            boss_max=boss_max,
-            boss_level=boss_level,
-            boss_dmg=total_boss_dmg,  # Сохраняем общее количество урона по боссу
-            boss_ability=boss_ability,
-            gold=user_gold,
-            bosses_killed=bosses_killed
-        )
-        logging.info("Данные пользователя успешно обновлены")
+            # Обновляем HP босса
+            await update_user(
+                update.effective_user.id,
+                hp=user_hp,
+                boss_hp=boss_hp,
+                boss_dmg=total_boss_dmg
+            )
         
         msg = await update.message.reply_text(text)
-        # Автоудаление ответа
         context.application.create_task(
             auto_delete(context, update.effective_chat.id, [msg.message_id])
         )
-        logging.info("Сообщение об атаке успешно отправлено")
         
     except Exception as e:
-        logging.error(f"КРИТИЧЕСКАЯ ОШИБКА в функции attack: {e}", exc_info=True)
-        await update.message.reply_text(
-            "❌ Произошла ошибка при атаке босса. Попробуйте позже.",
-            reply_markup=MAIN_KEYBOARD
-        )
+        logging.error(f"ОШИБКА в attack: {e}", exc_info=True)
+        await update.message.reply_text("❌ Ошибка при атаке")
 
 
 async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -931,3 +918,47 @@ async def handle_pvp_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await handle_pvp_fight(update, context, enemy_id)
         except ValueError:
             await update.message.reply_text("❌ Неверный ID противника")
+
+
+async def boss_auto_attack(context: ContextTypes.DEFAULT_TYPE, user_id: int):
+    """Автоматическая атака босса по таймеру"""
+    try:
+        user = await get_user(user_id, "")
+        if user["boss_hp"] > 0 and user["hp"] > 0:
+            # Босс атакует
+            boss_min_dmg, boss_max_dmg = [5, 15]  # Урон босса
+            boss_attack = random.randint(boss_min_dmg, boss_max_dmg)
+            
+            # Применяем урон игроку
+            new_hp = user["hp"] - boss_attack
+            if new_hp <= 0:
+                new_hp = 0
+                await update_user(user_id, hp=new_hp)
+                await context.bot.send_message(
+                    user_id,
+                    f"👹 Босс атаковал вас на {boss_attack} урона! Вы мертвы!"
+                )
+            else:
+                await update_user(user_id, hp=new_hp)
+                await context.bot.send_message(
+                    user_id,
+                    f"👹 Босс атаковал вас на {boss_attack} урона! Осталось HP: {new_hp}/{user['hp_max']}"
+                )
+    except Exception as e:
+        logging.error(f"Ошибка авто-атаки: {e}")
+
+
+async def debug_boss(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отладочная информация о боссе"""
+    user = await get_user(update.effective_user.id, "")
+    text = f"""
+📊 ДЕБАГ ИНФОРМАЦИЯ:
+👤 Пользователь: {user['username']}
+❤️ HP игрока: {user['hp']}/{user['hp_max']}
+👹 Босс: {user['boss_name']}
+❤️ HP босса: {user['boss_hp']}/{user['boss_max']}
+📊 Уровень босса: {user['boss_level']}
+⚡ Способности: {user.get('boss_ability', 'Нет')}
+🗡️ Общий урон по боссу: {user['boss_dmg']}
+"""
+    await update.message.reply_text(text)
