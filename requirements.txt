@@ -8,8 +8,7 @@ asyncio-throttle==1.0.2
 cachetools==5.3.2
 
 # Для валидации и типизации
-pydantic==2.7.0
-pydantic-core==2.18.1
+pydantic==2.6.4
 typing-extensions==4.11.0
 
 # Для логирования и мониторинга
