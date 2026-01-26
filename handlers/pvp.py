@@ -4,17 +4,18 @@ import logging
 import time
 import random
 from typing import Dict, Any
-from telegram import Update
-from telegram.ext import ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, CallbackQueryHandler
 
 from database import get_user, update_user, get_pvp_opponents
+from database.real_database import db_manager
 from game_logic import calculate_character_stats, calculate_damage, calculate_dodge, get_meme_message
 from utils.formatters import format_pvp_opponents
 
 logger = logging.getLogger(__name__)
 
 async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик команды /pvp"""
+    """Обработчик команды /pvp - показывает список противников с кнопками для вызова на дуэль"""
     try:
         username = update.effective_user.username or update.effective_user.full_name
         user = await get_user(update.effective_user.id, username)
@@ -27,8 +28,38 @@ async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text("❌ Нет доступных противников")
             return
         
-        text = format_pvp_opponents(opponents)
-        msg = await update.message.reply_text(text)
+        # Создаем клавиатуру с кнопками для каждого противника
+        keyboard = []
+        row = []
+        max_buttons_per_row = 2
+        
+        for opponent in opponents:
+            opponent_id = opponent['user_id']
+            opponent_name = opponent['username']
+            opponent_mmr = opponent['mmr']
+            opponent_level = opponent['level']
+            
+            # Создаем кнопку для вызова на дуэль
+            button_text = f"⚔️ {opponent_name} (Lvl {opponent_level})"
+            button = InlineKeyboardButton(button_text, callback_data=f"pvp_fight_{opponent_id}")
+            row.append(button)
+            
+            # Добавляем строку, если набралось достаточно кнопок
+            if len(row) == max_buttons_per_row:
+                keyboard.append(row)
+                row = []
+        
+        # Добавляем оставшиеся кнопки
+        if row:
+            keyboard.append(row)
+        
+        # Добавляем кнопку для обновления списка
+        keyboard.append([InlineKeyboardButton("🔄 Обновить список", callback_data="pvp_refresh")])
+        keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="main_menu")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        text = f"👥 Доступные противники для PvP:\n\n{format_pvp_opponents(opponents)}"
+        msg = await update.message.reply_text(text, reply_markup=reply_markup)
         context.application.create_task(
             auto_delete(context, update.effective_chat.id, [msg.message_id])
         )
@@ -36,9 +67,18 @@ async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Ошибка в команде /pvp: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
-async def handle_pvp_fight(update: Update, context: ContextTypes.DEFAULT_TYPE, enemy_id: int) -> None:
-    """Обработчик PvP боя по кнопке из списка PvP"""
+async def handle_pvp_fight_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик нажатия на кнопку вызова на дуэль"""
     try:
+        query = update.callback_query
+        await query.answer()
+        
+        # Извлекаем ID противника из callback_data
+        callback_data = query.data
+        if not callback_data.startswith("pvp_fight_"):
+            return
+        
+        enemy_id = int(callback_data.replace("pvp_fight_", ""))
         username = update.effective_user.username or update.effective_user.full_name
         user1 = await get_user(update.effective_user.id, username)
         stats1 = calculate_character_stats(user1)
@@ -48,12 +88,12 @@ async def handle_pvp_fight(update: Update, context: ContextTypes.DEFAULT_TYPE, e
         stats2 = calculate_character_stats(user2)
         
         if time.time() - user1["last_pvp"] < 600:
-            await update.message.reply_text("⏳ КД PvP")
+            await query.edit_message_text("⏳ КД PvP")
             return
 
         # Проверка MMR
         if user2["mmr"] < user1["mmr"] * 0.5:
-            await update.message.reply_text("❌ Противник слишком слабый")
+            await query.edit_message_text("❌ Противник слишком слабый")
             return
 
         # Информация о противнике
@@ -138,16 +178,62 @@ async def handle_pvp_fight(update: Update, context: ContextTypes.DEFAULT_TYPE, e
         await update_user(update.effective_user.id, hp=stats1["max_hp"], mmr=winner_mmr if winner == user1 else loser_mmr, exp=winner_exp if winner == user1 else loser_exp, last_pvp=time.time())
         await update_user(enemy_id, hp=stats2["max_hp"], mmr=winner_mmr if winner == user2 else loser_mmr, exp=winner_exp if winner == user2 else loser_exp, last_pvp=time.time())
         
-        msg = await update.message.reply_text(text)
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
+        await query.edit_message_text(text)
     except Exception as e:
-        logger.error(f"Ошибка в handle_pvp_fight: {e}")
-        await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
+        logger.error(f"Ошибка в handle_pvp_fight_callback: {e}")
+        await query.edit_message_text("❌ Произошла ошибка. Попробуйте позже.")
+
+async def handle_pvp_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик обновления списка противников"""
+    try:
+        query = update.callback_query
+        await query.answer()
+        
+        username = update.effective_user.username or update.effective_user.full_name
+        user = await get_user(update.effective_user.id, username)
+        stats = calculate_character_stats(user)
+        
+        # Получаем обновленный список игроков для PvP
+        opponents = await get_pvp_opponents(update.effective_user.id)
+        
+        if not opponents:
+            await query.edit_message_text("❌ Нет доступных противников")
+            return
+        
+        # Создаем обновленную клавиатуру
+        keyboard = []
+        row = []
+        max_buttons_per_row = 2
+        
+        for opponent in opponents:
+            opponent_id = opponent['user_id']
+            opponent_name = opponent['username']
+            opponent_mmr = opponent['mmr']
+            opponent_level = opponent['level']
+            
+            button_text = f"⚔️ {opponent_name} (Lvl {opponent_level})"
+            button = InlineKeyboardButton(button_text, callback_data=f"pvp_fight_{opponent_id}")
+            row.append(button)
+            
+            if len(row) == max_buttons_per_row:
+                keyboard.append(row)
+                row = []
+        
+        if row:
+            keyboard.append(row)
+        
+        keyboard.append([InlineKeyboardButton("🔄 Обновить список", callback_data="pvp_refresh")])
+        keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="main_menu")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        text = f"👥 Доступные противники для PvP:\n\n{format_pvp_opponents(opponents)}"
+        await query.edit_message_text(text, reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"Ошибка в handle_pvp_refresh: {e}")
+        await query.edit_message_text("❌ Произошла ошибка. Попробуйте позже.")
 
 async def fight(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик команды /fight"""
+    """Обработчик команды /fight - для ручного ввода ID противника"""
     try:
         username = update.effective_user.username or update.effective_user.full_name
         user1 = await get_user(update.effective_user.id, username)
@@ -270,3 +356,11 @@ async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids:
             await context.bot.delete_message(chat_id, msg_id)
         except Exception:
             pass
+
+# Регистрация обработчиков колбэков
+def register_pvp_callbacks(application):
+    """Регистрация обработчиков колбэков для PvP"""
+    application.add_handler(CallbackQueryHandler(handle_pvp_fight_callback, pattern=r"^pvp_fight_\d+$"))
+    application.add_handler(CallbackQueryHandler(handle_pvp_refresh, pattern=r"^pvp_refresh$"))
+
+

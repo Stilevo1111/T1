@@ -92,6 +92,14 @@ def get_pvp_menu_keyboard():
             InlineKeyboardButton("🔥 Вызов на дуэль", callback_data="fight")
         ],
         [
+            InlineKeyboardButton("🏆 Мои победы", callback_data="pvp_wins"),
+            InlineKeyboardButton("💀 Мои поражения", callback_data="pvp_losses")
+        ],
+        [
+            InlineKeyboardButton("📊 Статистика", callback_data="pvp_stats"),
+            InlineKeyboardButton("🎯 Лучшие MMR", callback_data="pvp_top_mmr")
+        ],
+        [
             InlineKeyboardButton("⬅️ Назад", callback_data="main_menu")
         ]
     ]

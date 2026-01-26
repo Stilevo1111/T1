@@ -11,6 +11,7 @@ def register_all_handlers(app: Application):
         register_inventory_handlers, register_talent_handlers, register_fissure_handlers,
         register_achievement_handlers
     )
+    from .pvp import register_pvp_callbacks
     
     # Регистрация всех систем
     register_menu_handlers(app)
@@ -21,5 +22,8 @@ def register_all_handlers(app: Application):
     register_talent_handlers(app)
     register_fissure_handlers(app)
     register_achievement_handlers(app)
+    
+    # Регистрация обработчиков колбэков PvP
+    register_pvp_callbacks(app)
 
 __all__ = ['register_all_handlers']
