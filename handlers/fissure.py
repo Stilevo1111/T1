@@ -48,7 +48,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )
     except Exception as e:
         logger.error(f"Ошибка в команде /fissure: {e}")
-        await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
+        if update and update.message:
+            await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
 async def fissure_top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /fissure_top"""
@@ -63,7 +64,8 @@ async def fissure_top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await update.message.reply_text("\n".join(text))
     except Exception as e:
         logger.error(f"Ошибка в команде /fissure_top: {e}")
-        await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
+        if update and update.message:
+            await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /stats для фиссуры"""
@@ -81,7 +83,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
     except Exception as e:
         logger.error(f"Ошибка в команде /stats (fissure): {e}")
-        await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
+        if update and update.message:
+            await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
 async def grow_fissure(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /grow_fissure - контроль роста Fissure"""
@@ -99,7 +102,8 @@ async def grow_fissure(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await update.message.reply_text(f"❌ {result['message']}")
     except Exception as e:
         logger.error(f"Ошибка в команде /grow_fissure: {e}")
-        await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
+        if update and update.message:
+            await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
 async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list) -> None:
     """Автоматическое удаление сообщений через заданное время"""
