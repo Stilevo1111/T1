@@ -250,44 +250,63 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /attack"""
     try:
         username = update.effective_user.username or update.effective_user.full_name
-        user = await get_user(update.effective_user.id, username)
-        stats = calculate_character_stats(user)
-        logging.info(f"=== АТАКА БОССА ===")
-        logging.info(f"Пользователь: {username}, HP: {user['hp']}/{stats['max_hp']}")
-        logging.info(f"Босс: {user['boss_name']}, HP: {user['boss_hp']}/{user['boss_max']}")
+        logging.info(f"=== НАЧАЛО АТАКИ === Пользователь: {username}")
         
-        # Регенерация HP
-        new_hp, last_heal = regenerate_hp(user)
-        if new_hp != user["hp"]:
-            await update_user(update.effective_user.id, hp=new_hp, last_heal=last_heal)
-            user["hp"] = new_hp
-
+        # Получаем пользователя
+        user = await get_user(update.effective_user.id, username)
+        logging.info(f"Пользователь получен: {user['username']}, HP: {user['hp']}")
+        
+        # Рассчитываем характеристики
+        stats = calculate_character_stats(user)
+        logging.info(f"Характеристики рассчитаны: max_hp={stats['max_hp']}")
+        
+        # Проверяем HP
         if user["hp"] <= 0:
             await update.message.reply_text("💀 Ты мёртв")
             return
+        logging.info(f"HP пользователя: {user['hp']}/{stats['max_hp']}")
 
+        # Проверяем уровень босса
+        logging.info(f"Босс: {user['boss_name']}, HP: {user['boss_hp']}/{user['boss_max']}, уровень: {user['boss_level']}")
+        
         # Проверка уровня
         if not check_level_restriction(user["level"], user["boss_level"], user["boss_level"]):
             await update.message.reply_text("❌ Босс слишком сильный для тебя")
             return
+        logging.info("Проверка уровня пройдена")
 
-        # Информация о боссе
+        # Форматируем информацию о боссе
         boss_info = format_boss_info(user)
-        logging.info(f"Информация о боссе: {boss_info}")
+        logging.info(f"Информация о боссе сформирована: {boss_info[:100]}...")
         
-        # Атака игрока
+        # Рассчитываем урон игрока
         dmg, is_crit = calculate_damage(user)
+        logging.info(f"Урон игрока рассчитан: {dmg}, крит: {is_crit}")
+        
+        # Рассчитываем HP босса после атаки
         boss_hp = user["boss_hp"] - dmg
-        boss_dmg = user["boss_dmg"] + dmg
-        logging.info(f"Урон игрока: {dmg}, крит: {is_crit}")
+        total_boss_dmg = user["boss_dmg"] + dmg
         logging.info(f"HP босса после атаки: {boss_hp}/{user['boss_max']}")
         
+        # Формируем текст атаки
         text = boss_info + f"⚔️ {user['username']} нанёс {dmg} урона"
         if is_crit:
             text += "\n" + get_meme_message("crit")
+        logging.info("Текст атаки сформирован")
 
         # Атака босса
-        boss_attack = random.randint(*user["boss_dmg"])
+        # Проверяем тип boss_dmg - может быть числом или диапазоном
+        boss_dmg = user["boss_dmg"]
+        if isinstance(boss_dmg, int):
+            # Если boss_dmg - это число, используем его как максимальный урон
+            boss_attack = random.randint(1, boss_dmg)
+        elif isinstance(boss_dmg, (list, tuple)) and len(boss_dmg) == 2:
+            # Если boss_dmg - это диапазон [min, max], используем как есть
+            boss_attack = random.randint(boss_dmg[0], boss_dmg[1])
+        else:
+            # По умолчанию - случайный урон от 1 до 10
+            boss_attack = random.randint(1, 10)
+        
         text += f"\n👹 Босс контратакует на {boss_attack} урона"
         logging.info(f"Урон босса: {boss_attack}")
         
@@ -367,7 +386,7 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
             boss_name=boss_name,
             boss_max=boss_max,
             boss_level=boss_level,
-            boss_dmg=boss_dmg,
+            boss_dmg=total_boss_dmg,  # Сохраняем общее количество урона по боссу
             boss_ability=boss_ability,
             gold=user_gold,
             bosses_killed=bosses_killed
