@@ -82,6 +82,10 @@ def setup_handlers(app: Application) -> None:
             lambda update, context: show_category_items(update, context, update.callback_query.data), 
             pattern=r'^(boots|armor|weapon|defense|support|potions)$'
         ))
+        
+        # Callback-обработчик для интерактивного меню
+        from handlers.menu import handle_menu_callback
+        app.add_handler(CallbackQueryHandler(handle_menu_callback))
 
         # Текстовые обработчики
         app.add_handler(MessageHandler(

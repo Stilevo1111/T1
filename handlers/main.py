@@ -21,26 +21,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         progress = get_user_progress(user)
         next_level_exp = get_next_level_exp(user["level"])
         
+        # Импортируем меню
+        from handlers.menu import get_main_menu_keyboard
+        
         msg = await update.message.reply_text(
-            f"🎮 {user['username']}, ты в игре\n"
-            f"Уровень: {user['level']} (Опыт: {user['exp']}/{next_level_exp})\n"
-            f"HP: {user['hp']}/{stats['max_hp']}\n"
-            f"STR: {stats['str_total']} | AGI: {stats['agi_total']} | INT: {stats['int_total']}\n"
-            f"Gold: {user['gold']} | MMR: {user['mmr']}\n"
-            f"🍆 Fissure: {user['fissure']:.1f} см\n\n"
-            "Команды:\n"
-            "/boss — посмотреть босса\n"
-            "/attack — атаковать босса\n"
-            "/shop — магазин\n"
-            "/buy ITEM — купить предмет\n"
-            "/potion TYPE — купить зелье\n"
-            "/heal — восстановить HP\n"
-            "/pvp — PvP\n"
-            "/fight USER_ID — вызов на дуэль\n"
-            "/top — таблица лидеров\n"
-            "/fissure — ролл фиссуры\n"
-            "/stats — статистика",
-            reply_markup=MAIN_KEYBOARD,
+            f"🌟 Добро пожаловать в Fissure Bot, {user['username']}!\n\n"
+            f"🎮 *Ваш персонаж:*\n"
+            f"• Уровень: {user['level']}\n"
+            f"• Опыт: {user['exp']}/{next_level_exp}\n"
+            f"• Золото: {user['gold']}\n"
+            f"• Fissure: {user['fissure']:.1f} см\n\n"
+            f"📋 *Выберите действие:*",
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode='Markdown'
         )
         # Автоудаление ответа
         context.application.create_task(
