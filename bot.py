@@ -14,7 +14,8 @@ from database import init_db
 from handlers import (
     start, fissure, fissure_top, stats, boss, attack, shop, show_category_items,
     buy, potion, heal, pvp, handle_pvp_fight, fight, top, profile,
-    handle_message, handle_pvp_buttons
+    handle_message, handle_pvp_buttons,
+    talents, learn_talent, stats_distribute, add_stat, level_up_handler, achievements
 )
 
 # ================= ENTRY POINT =================
@@ -38,6 +39,22 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("fissure_top", fissure_top))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("profile", profile))
+    app.add_handler(CommandHandler("talents", talents))
+    app.add_handler(CommandHandler("level", level_up_handler))
+    app.add_handler(CommandHandler("achievements", achievements))
+    app.add_handler(CommandHandler("add_str", lambda u, c: add_stat(u, c, "str")))
+    app.add_handler(CommandHandler("add_agi", lambda u, c: add_stat(u, c, "agi")))
+    app.add_handler(CommandHandler("add_int", lambda u, c: add_stat(u, c, "int")))
+    app.add_handler(CommandHandler("stats_distribute", stats_distribute))
+
+    # Обработчик изучения талантов по кнопкам
+    async def handle_talent_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        text = update.message.text
+        if text.startswith("/learn_"):
+            talent_id = text.replace("/learn_", "")
+            await learn_talent(update, context, talent_id)
+
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^/learn_[a-z0-9]+$'), handle_talent_buttons))
     
     # Обработчики категорий магазина
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^(👟 Сапоги|🛡️ Броня|🗡️ Оружие|🛡️ Защита|🔮 Поддержка|🧪 Зелья)$'), 
@@ -57,3 +74,27 @@ if __name__ == "__main__":
         webhook_url=f"{RENDER_URL.rstrip('/')}/{WEBHOOK_PATH}",
         drop_pending_updates=True,
     )
+
+</final_file_content>
+
+IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.
+
+ <environment_details>
+# Cursor Visible Files
+bot.py
+
+# Cursor Open Tabs
+config.py
+database.py
+game_logic.py
+handlers.py
+bot.py
+
+# Current Time
+1/26/2026, 6:41:40 AM (Europe/Minsk, UTC+3:00)
+
+# Context Window Usage
+123,558 / 256K tokens used (48%)
+
+# Current Mode
+ACT MODE

@@ -13,7 +13,9 @@ from game_logic import (
     check_level_restriction, regenerate_hp, check_level_up, get_fissure_result,
     get_meme_message, get_items_by_category, get_item_description, get_potion_data,
     calculate_boss_reward, get_user_progress, get_next_level_exp,
-    calculate_pvp_advantage, calculate_boss_strategy
+    calculate_pvp_advantage, calculate_boss_strategy,
+    check_level_up as check_level_up_new, calculate_damage_with_talents,
+    get_talent_info, can_learn_talent, apply_talent_effects, get_user_achievements
 )
 
 # ================= KEYBOARD =================
@@ -304,8 +306,8 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Босс слишком сильный для тебя")
             return
 
-        # Рассчитываем урон игрока
-        dmg, is_crit = calculate_damage(user)
+        # Рассчитываем урон игрока с учетом талантов
+        dmg, is_crit = calculate_damage_with_talents(user)
         
         # Применяем урон боссу
         boss_hp = user["boss_hp"] - dmg
@@ -349,11 +351,23 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
             new_boss = spawn_boss()
             
             # Проверка повышения уровня
-            if check_level_up(user):
-                user_level = user["level"] + 1
-                user_hp_max = stats["max_hp"] + 20
+            can_level_up, bonuses = check_level_up_new(user)
+            if can_level_up:
+                user_level = bonuses["new_level"]
+                user_hp_max = user.get("hp_max", 100) + bonuses["hp_bonus"]
                 user_hp = user_hp_max
                 text += f"\n🎉 Достигнут уровень {user_level}!"
+                
+                # Добавляем бонусы за уровень
+                await update_user(
+                    update.effective_user.id,
+                    level=user_level,
+                    hp=user_hp_max,
+                    hp_max=user_hp_max,
+                    unspent_stats=user.get("unspent_stats", 0) + bonuses["stats_points"],
+                    talent_points=user.get("talent_points", 0) + bonuses.get("talent_points", 0)
+                )
+                user = await get_user(update.effective_user.id, username)  # Обновляем данные
             else:
                 user_level = user["level"]
                 user_hp_max = stats["max_hp"]
@@ -935,4 +949,258 @@ async def debug_boss(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ⚡ Способности: {user.get('boss_ability', 'Нет')}
 🗡️ Общий урон по боссу: {user['boss_dmg']}
 """
+    await update.message.reply_text(text)
+
+
+# ================= ТАЛАНТЫ И УРОВНИ =================
+
+async def talents(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать дерево талантов"""
+    username = update.effective_user.username or update.effective_user.full_name
+    user = await get_user(update.effective_user.id, username)
+    
+    text = f"🌳 ДЕРЕВО ТАЛАНТОВ - Уровень {user['level']}\n"
+    text += f"🎯 Доступно очков талантов: {user.get('talent_points', 0)}\n\n"
+    
+    # Показываем доступные ветки
+    for branch_name, branch_talents in TALENTS.items():
+        branch_title = {
+            "warrior": "⚔️ ВЕТКА ВОИНА",
+            "rogue": "👤 ВЕТКА ПЛУТА", 
+            "mage": "🔮 ВЕТКА МАГА",
+            "hybrid": "🌟 ГИБРИДНЫЕ ТАЛАНТЫ"
+        }.get(branch_name, branch_name.upper())
+        
+        text += f"{branch_title}:\n"
+        
+        for talent_id, talent_data in branch_talents.items():
+            learned = user.get("talents", {}).get(talent_data["id"], 0)
+            max_level = talent_data["max_level"]
+            
+            # Проверяем требования
+            can_learn = True
+            requires_text = ""
+            if talent_data.get("requires"):
+                requires = talent_data["requires"]
+                if requires[0] == "min_level_10" and user["level"] < 10:
+                    can_learn = False
+                    requires_text = " (требуется 10+ ур.)"
+                else:
+                    for req in requires:
+                        if user.get("talents", {}).get(req, 0) < 1:
+                            can_learn = False
+                            requires_text = f" (требуется: {req})"
+            
+            status = "✅" if learned > 0 else "🔓" if can_learn else "🔒"
+            level_text = f"{learned}/{max_level}" if learned > 0 else f"0/{max_level}"
+            
+            text += f"{status} {talent_data['name']} [{level_text}]{requires_text}\n"
+            text += f"   📖 {talent_data['description']}\n"
+            text += f"   💰 Стоимость: {talent_data['cost']} очков\n"
+            
+            if learned < max_level and can_learn:
+                text += f"   /learn_{talent_data['id']} - изучить\n"
+            text += "\n"
+    
+    text += "\n💡 Используйте /learn TALENT_ID для изучения таланта"
+    text += "\n/stats_distribute POINTS - распределить очки характеристик"
+    
+    await update.message.reply_text(text)
+
+
+async def learn_talent(update: Update, context: ContextTypes.DEFAULT_TYPE, talent_id: str):
+    """Изучить талант"""
+    username = update.effective_user.username or update.effective_user.full_name
+    user = await get_user(update.effective_user.id, username)
+    
+    # Проверяем возможность изучения таланта
+    can_learn, message = can_learn_talent(user, talent_id)
+    if not can_learn:
+        await update.message.reply_text(f"❌ {message}")
+        return
+    
+    # Получаем информацию о таланте
+    talent = get_talent_info(talent_id)
+    if not talent:
+        await update.message.reply_text("❌ Такого таланта не существует")
+        return
+    
+    # Проверяем текущий уровень таланта
+    current_level = user.get("talents", {}).get(talent_id, 0)
+    if current_level >= talent["max_level"]:
+        await update.message.reply_text("❌ Талант уже изучен на максимальный уровень")
+        return
+    
+    # Проверяем очки талантов
+    talent_points = user.get("talent_points", 0)
+    cost = talent["cost"]
+    
+    if talent_points < cost:
+        await update.message.reply_text("❌ Недостаточно очков талантов")
+        return
+    
+    # Изучаем талант
+    current_talents = user.get("talents", {})
+    current_talents[talent_id] = current_talents.get(talent_id, 0) + 1
+    
+    # Применяем эффект таланта
+    effect = apply_talent_effects(user, talent_id, current_talents[talent_id])
+    
+    # Обновляем пользователя
+    await update_user(
+        update.effective_user.id,
+        talents=current_talents,
+        talent_points=talent_points - cost,
+        total_talent_points=user.get("total_talent_points", 0) + 1,
+        **effect  # Применяем эффекты таланта
+    )
+    
+    await update.message.reply_text(
+        f"✅ Изучен талант: {talent['name']} (ур. {current_talents[talent_id]})\n"
+        f"📊 {talent['description']}\n"
+        f"🎯 Осталось очков: {talent_points - cost}"
+    )
+
+
+async def stats_distribute(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Распределить очки характеристик"""
+    username = update.effective_user.username or update.effective_user.full_name
+    user = await get_user(update.effective_user.id, username)
+    
+    try:
+        points_to_distribute = int(context.args[0]) if context.args else None
+        if points_to_distribute is None:
+            # Показываем текущее распределение
+            unspent = user.get("unspent_stats", 0)
+            text = f"📊 РАСПРЕДЕЛЕНИЕ ХАРАКТЕРИСТИК\n"
+            text += f"💪 Доступно очков: {unspent}\n"
+            text += f"Текущие характеристики:\n"
+            text += f"  💪 Сила: {user['str']}\n"
+            text += f"  🏃‍♂️ Ловкость: {user['agi']}\n"
+            text += f"  🧠 Интеллект: {user['int']}\n\n"
+            text += "💡 Используйте:\n"
+            text += "/add_str POINTS - добавить к силе\n"
+            text += "/add_agi POINTS - добавить к ловкости\n"
+            text += "/add_int POINTS - добавить к интеллекту\n"
+            await update.message.reply_text(text)
+            return
+        
+        if points_to_distribute > user.get("unspent_stats", 0):
+            await update.message.reply_text("❌ Недостаточно очков характеристик")
+            return
+            
+    except ValueError:
+        await update.message.reply_text("❌ Укажите количество очков числом")
+
+
+async def add_stat(update: Update, context: ContextTypes.DEFAULT_TYPE, stat_type: str):
+    """Добавить очки к характеристике"""
+    username = update.effective_user.username or update.effective_user.full_name
+    user = await get_user(update.effective_user.id, username)
+    
+    try:
+        points = int(context.args[0]) if context.args else 1
+    except ValueError:
+        await update.message.reply_text("❌ Укажите количество очков числом")
+        return
+    
+    if points <= 0:
+        await update.message.reply_text("❌ Укажите положительное число")
+        return
+    
+    if points > user.get("unspent_stats", 0):
+        await update.message.reply_text("❌ Недостаточно очков характеристик")
+        return
+    
+    # Обновляем характеристику
+    current_stat = user[stat_type]
+    new_stat = current_stat + points
+    
+    await update_user(
+        update.effective_user.id,
+        **{stat_type: new_stat},
+        unspent_stats=user.get("unspent_stats", 0) - points
+    )
+    
+    stat_names = {"str": "💪 Силу", "agi": "🏃‍♂️ Ловкость", "int": "🧠 Интеллект"}
+    await update.message.reply_text(
+        f"✅ Добавлено {points} очков к {stat_names[stat_type]}\n"
+        f"📊 Новое значение: {new_stat}\n"
+        f"🎯 Осталось очков: {user.get('unspent_stats', 0) - points}"
+    )
+
+
+async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик повышения уровня"""
+    username = update.effective_user.username or update.effective_user.full_name
+    user = await get_user(update.effective_user.id, username)
+    
+    can_level_up, bonuses = check_level_up_new(user)
+    
+    if not can_level_up:
+        next_level_exp = get_next_level_exp(user["level"])
+        needed_exp = next_level_exp - user["exp"]
+        await update.message.reply_text(
+            f"📊 До следующего уровня нужно: {needed_exp} опыта\n"
+            f"🎯 Текущий опыт: {user['exp']}/{next_level_exp}"
+        )
+        return
+    
+    # Применяем бонусы уровня
+    new_hp_max = user.get("hp_max", 100) + bonuses["hp_bonus"]
+    new_level = bonuses["new_level"]
+    
+    await update_user(
+        update.effective_user.id,
+        level=new_level,
+        hp=new_hp_max,
+        hp_max=new_hp_max,
+        unspent_stats=user.get("unspent_stats", 0) + bonuses["stats_points"],
+        talent_points=user.get("talent_points", 0) + bonuses.get("talent_points", 0)
+    )
+    
+    # Формируем сообщение о повышении
+    text = f"🎉 ПОЗДРАВЛЯЕМ! 🎉\n"
+    text += f"Вы достигли {new_level} уровня!\n\n"
+    text += f"📊 Полученные бонусы:\n"
+    text += f"  ❤️ +{bonuses['hp_bonus']} максимального HP\n"
+    text += f"  🎯 +{bonuses['stats_points']} очков характеристик\n"
+    
+    if bonuses.get("talent_points", 0) > 0:
+        text += f"  🌟 +{bonuses['talent_points']} очков талантов\n"
+    
+    if bonuses.get("title"):
+        await update_user(update.effective_user.id, title=bonuses["title"])
+        text += f"  🏆 Новый титул: {bonuses['title']}\n"
+    
+    text += f"\n💡 Используйте:\n"
+    text += f"/talents - чтобы изучить таланты\n"
+    text += f"/stats_distribute - чтобы распределить характеристики\n"
+    
+    if new_level in [5, 10, 15, 20, 25, 30]:
+        text += f"\n🌟 ДОСТИЖЕНИЕ: Достигнут юбилейный уровень!\n"
+    
+    await update.message.reply_text(text)
+
+
+async def achievements(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Достижения игрока"""
+    username = update.effective_user.username or update.effective_user.full_name
+    user = await get_user(update.effective_user.id, username)
+    
+    text = f"🏆 ДОСТИЖЕНИЯ - {user.get('title', 'Новичок')}\n\n"
+    
+    achievements_list = get_user_achievements(user)
+    
+    if achievements_list:
+        text += "\n".join(achievements_list)
+    else:
+        text += "📭 Достижений пока нет. Играйте активнее!"
+    
+    text += f"\n\n📊 Прогресс:\n"
+    text += f"👹 Убито боссов: {user.get('bosses_killed', 0)}/100\n"
+    text += f"🌟 Изучено талантов: {user.get('total_talent_points', 0)}/30\n"
+    text += f"📏 Длина фиссуры: {user['fissure']:.1f}/100 см\n"
+    text += f"⚔️ MMR рейтинг: {user['mmr']}/2000\n"
+    
     await update.message.reply_text(text)

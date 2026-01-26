@@ -9,6 +9,7 @@ async def init_db(app):
     global db_pool
     db_pool = await asyncpg.create_pool(DATABASE_URL)
     await _create_tables_if_not_exists()
+    await _add_talent_fields_if_not_exists()
 
 async def _create_tables_if_not_exists():
     """Создание таблиц, если они не существуют"""
@@ -165,3 +166,29 @@ async def update_fissure(uid: int, fissure: float, ts: float):
             "UPDATE users SET fissure=$1, last_fissure=$2 WHERE user_id=$3",
             fissure, ts, str(uid),
         )
+
+
+async def _add_talent_fields_if_not_exists():
+    """Добавление полей для системы талантов и уровней"""
+    async with db_pool.acquire() as conn:
+        # Проверяем и добавляем поля для талантов
+        talent_fields = [
+            ('talent_points', 'INTEGER', '0'),
+            ('unspent_stats', 'INTEGER', '0'),
+            ('talents', 'JSONB', "'{}'::jsonb"),
+            ('title', 'VARCHAR(50)', "'Новичок'"),
+            ('total_talent_points', 'INTEGER', '0')
+        ]
+        
+        for field_name, field_type, default_value in talent_fields:
+            field_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_name = 'users' 
+                    AND column_name = $1
+                )
+            """, field_name)
+            
+            if not field_exists:
+                await conn.execute(f"ALTER TABLE users ADD COLUMN {field_name} {field_type} DEFAULT {default_value}")
+                logging.info(f"Added talent field: {field_name}")
