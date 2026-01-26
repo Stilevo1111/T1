@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Импортируем обработчики из модулей
 from handlers.main import start, stats, profile, debug_boss
-from handlers.fissure import fissure, fissure_top, stats as fissure_stats
+from handlers.fissure import fissure, fissure_top, stats as fissure_stats, grow_fissure
 from handlers.boss import boss, attack
 from handlers.shop import shop, show_category_items, buy, potion
 from handlers.pvp import pvp, handle_pvp_fight, fight
