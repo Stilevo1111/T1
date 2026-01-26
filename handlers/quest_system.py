@@ -283,4 +283,10 @@ class QuestManager:
 # Глобальный экземпляр менеджера квестов
 quest_manager = QuestManager()
 
-__all__ = ['QuestManager', 'quest_manager']
+# Функция для регистрации обработчиков квестов
+def register_quest_handlers(application):
+    """Регистрация обработчиков квестовой системы"""
+    # Здесь можно добавить обработчики команд квестов
+    pass
+
+__all__ = ['QuestManager', 'quest_manager', 'register_quest_handlers']

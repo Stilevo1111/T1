@@ -310,4 +310,10 @@ class InventoryManager:
 # Глобальный экземпляр менеджера инвентаря
 inventory_manager = InventoryManager()
 
-__all__ = ['InventoryManager', 'inventory_manager']
+# Функция для регистрации обработчиков инвентаря
+def register_inventory_handlers(application):
+    """Регистрация обработчиков инвентарной системы"""
+    # Здесь можно добавить обработчики команд инвентаря
+    pass
+
+__all__ = ['InventoryManager', 'inventory_manager', 'register_inventory_handlers']

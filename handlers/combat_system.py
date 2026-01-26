@@ -333,4 +333,10 @@ class CombatSystem:
 # Глобальный экземпляр системы боев
 combat_system = CombatSystem()
 
-__all__ = ['CombatSystem', 'combat_system']
+# Функция для регистрации обработчиков боя
+def register_combat_handlers(application):
+    """Регистрация обработчиков боевой системы"""
+    # Здесь можно добавить обработчики команд боя
+    pass
+
+__all__ = ['CombatSystem', 'combat_system', 'register_combat_handlers']

@@ -438,4 +438,10 @@ class AchievementManager:
 # Глобальный экземпляр менеджера достижений
 achievement_manager = AchievementManager()
 
-__all__ = ['AchievementManager', 'achievement_manager']
+# Функция для регистрации обработчиков достижений
+def register_achievement_handlers(application):
+    """Регистрация обработчиков системы достижений"""
+    # Здесь можно добавить обработчики команд достижений
+    pass
+
+__all__ = ['AchievementManager', 'achievement_manager', 'register_achievement_handlers']

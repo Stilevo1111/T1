@@ -377,4 +377,10 @@ class TalentManager:
 # Глобальный экземпляр менеджера талантов
 talent_manager = TalentManager()
 
-__all__ = ['TalentManager', 'talent_manager']
+# Функция для регистрации обработчиков талантов
+def register_talent_handlers(application):
+    """Регистрация обработчиков талантной системы"""
+    # Здесь можно добавить обработчики команд талантов
+    pass
+
+__all__ = ['TalentManager', 'talent_manager', 'register_talent_handlers']

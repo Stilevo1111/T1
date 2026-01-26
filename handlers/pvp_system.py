@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from database.real_database import db_manager
 from game_logic.level_system import CharacterStats
-from utils.formatters import format_pvp_result
+from utils.formatters import format_pvp_opponents
 
 logger = logging.getLogger(__name__)
 
@@ -392,4 +392,10 @@ class PvPManager:
 # Глобальный экземпляр PvP менеджера
 pvp_manager = PvPManager()
 
-__all__ = ['PvPQueue', 'PvPManager', 'pvp_manager']
+# Функция для регистрации PvP обработчиков
+def register_pvp_handlers(application):
+    """Регистрация обработчиков PvP системы"""
+    # Здесь можно добавить обработчики команд PvP
+    pass
+
+__all__ = ['PvPQueue', 'PvPManager', 'pvp_manager', 'register_pvp_handlers']

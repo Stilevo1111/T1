@@ -567,4 +567,10 @@ class FissureSystem:
 # Глобальный экземпляр системы Fissure
 fissure_system = FissureSystem()
 
-__all__ = ['FissureSystem', 'fissure_system']
+# Функция для регистрации обработчиков Fissure
+def register_fissure_handlers(application):
+    """Регистрация обработчиков Fissure системы"""
+    # Здесь можно добавить обработчики команд Fissure
+    pass
+
+__all__ = ['FissureSystem', 'fissure_system', 'register_fissure_handlers']
