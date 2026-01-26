@@ -258,30 +258,6 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = await get_user(update.effective_user.id, username)
         logging.info(f"Пользователь получен: {user['username']}, HP: {user['hp']}")
         
-        # Получаем данные о текущем боссе
-        boss_data = {
-            'name': user['boss_name'],
-            'hp': user['boss_hp'],
-            'max_hp': user['boss_max'],
-            'level': user['boss_level'],
-            'damage_range': [5, 15]  # Урон босса по умолчанию
-        }
-        
-        # Если есть способности босса, используем их
-        if user.get('boss_ability'):
-            # Парсим урон из способностей
-            ability = user['boss_ability']
-            if 'урон' in ability.lower():
-                # Извлекаем числа из описания способности
-                import re
-                numbers = re.findall(r'\d+', ability)
-                if numbers:
-                    boss_damage = int(numbers[0])
-                    boss_data['damage_range'] = [boss_damage, boss_damage + 5]
-        
-        # Рассчитываем характеристики
-        stats = calculate_character_stats(user)
-        
         # Проверяем HP
         if user["hp"] <= 0:
             await update.message.reply_text("💀 Ты мёртв")
@@ -306,11 +282,14 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Босс слишком сильный для тебя")
             return
 
+        # Рассчитываем характеристики
+        stats = calculate_character_stats(user)
+        
         # Начинаем бой до смерти одного из участников
         text = f"⚔️ БОЙ НАЧАЛСЯ! {user['username']} против {user['boss_name']}\n\n"
         text += f"📊 Начальные характеристики:\n"
         text += f"👤 Игрок: HP {user['hp']}/{stats['max_hp']}, Урон {stats['base_damage']}\n"
-        text += f"👹 Босс: HP {user['boss_hp']}/{user['boss_max']}, Урон {boss_data['damage_range']}\n\n"
+        text += f"👹 Босс: HP {user['boss_hp']}/{user['boss_max']}, Урон {user['boss_dmg']}\n\n"
         
         # Переменные для боя
         current_user_hp = user["hp"]
@@ -342,7 +321,18 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 break
             
             # Атака босса
-            boss_min_dmg, boss_max_dmg = boss_data['damage_range']
+            boss_min_dmg = 5
+            boss_max_dmg = 15
+            if user.get('boss_ability'):
+                # Парсим урон из способностей
+                ability = user['boss_ability']
+                if 'урон' in ability.lower():
+                    import re
+                    numbers = re.findall(r'\d+', ability)
+                    if numbers:
+                        boss_min_dmg = int(numbers[0])
+                        boss_max_dmg = boss_min_dmg + 5
+            
             boss_attack = random.randint(boss_min_dmg, boss_max_dmg)
             text += f"2. {user['boss_name']} контратакует на {boss_attack} урона\n"
             
@@ -390,7 +380,16 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     hp=user_hp_max,
                     hp_max=user_hp_max,
                     unspent_stats=user.get("unspent_stats", 0) + bonuses["stats_points"],
-                    talent_points=user.get("talent_points", 0) + bonuses.get("talent_points", 0)
+                    talent_points=user.get("talent_points", 0) + bonuses.get("talent_points", 0),
+                    exp=user_exp,
+                    boss_hp=new_boss["hp"],
+                    boss_name=new_boss["name"],
+                    boss_max=new_boss["max"],
+                    boss_level=new_boss["min_level"],
+                    boss_dmg=total_boss_dmg,
+                    boss_ability=new_boss["ability"],
+                    gold=user_gold,
+                    bosses_killed=bosses_killed
                 )
                 user = await get_user(update.effective_user.id, username)  # Обновляем данные
                 stats = calculate_character_stats(user)  # Пересчитываем статы

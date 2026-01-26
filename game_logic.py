@@ -547,8 +547,38 @@ TALENTS = {
 }
 
 
+def check_level_up_new(user: Dict) -> Tuple[bool, Dict]:
+    """Проверяет повышение уровня и возвращает бонусы (новая система)"""
+    current_level = user["level"]
+    current_exp = user["exp"]
+    
+    # Если уже максимальный уровень
+    if current_level >= 30:
+        return False, {}
+    
+    # Проверяем, достигнут ли следующий уровень
+    next_level_exp = LEVEL_EXPERIENCE.get(current_level + 1)
+    if next_level_exp is None or current_exp < next_level_exp:
+        return False, {}
+    
+    # Выдаем бонусы за уровень
+    level_up_bonus = LEVEL_BONUSES.get(current_level + 1, {"hp": 10, "stats": 1})
+    
+    # Добавляем очки характеристик для распределения
+    stats_points = level_up_bonus.get("stats", 0)
+    talent_points = level_up_bonus.get("talent_points", 0)
+    
+    return True, {
+        "new_level": current_level + 1,
+        "hp_bonus": level_up_bonus.get("hp", 10),
+        "stats_points": stats_points,
+        "talent_points": talent_points,
+        "title": level_up_bonus.get("title")
+    }
+
+
 def check_level_up(user: Dict) -> Tuple[bool, Dict]:
-    """Проверяет повышение уровня и возвращает бонусы"""
+    """Проверяет повышение уровня и возвращает бонусы (старая система для совместимости)"""
     current_level = user["level"]
     current_exp = user["exp"]
     
