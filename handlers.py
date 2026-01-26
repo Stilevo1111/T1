@@ -920,32 +920,6 @@ async def handle_pvp_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.message.reply_text("❌ Неверный ID противника")
 
 
-async def boss_auto_attack(context: ContextTypes.DEFAULT_TYPE, user_id: int):
-    """Автоматическая атака босса по таймеру"""
-    try:
-        user = await get_user(user_id, "")
-        if user["boss_hp"] > 0 and user["hp"] > 0:
-            # Босс атакует
-            boss_min_dmg, boss_max_dmg = [5, 15]  # Урон босса
-            boss_attack = random.randint(boss_min_dmg, boss_max_dmg)
-            
-            # Применяем урон игроку
-            new_hp = user["hp"] - boss_attack
-            if new_hp <= 0:
-                new_hp = 0
-                await update_user(user_id, hp=new_hp)
-                await context.bot.send_message(
-                    user_id,
-                    f"👹 Босс атаковал вас на {boss_attack} урона! Вы мертвы!"
-                )
-            else:
-                await update_user(user_id, hp=new_hp)
-                await context.bot.send_message(
-                    user_id,
-                    f"👹 Босс атаковал вас на {boss_attack} урона! Осталось HP: {new_hp}/{user['hp_max']}"
-                )
-    except Exception as e:
-        logging.error(f"Ошибка авто-атаки: {e}")
 
 
 async def debug_boss(update: Update, context: ContextTypes.DEFAULT_TYPE):
