@@ -482,20 +482,58 @@ async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids:
             pass
 
 async def boss(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    username = update.effective_user.username or update.effective_user.full_name
-    user = await get_user(update.effective_user.id, username)
-    
-    msg = await update.message.reply_text(
-        f"👹 {user['boss_name']}\n"
-        f"HP: {user['boss_hp']}/{user['boss_max']}\n"
-        f"Уровень: {user['boss_level']}\n"
-        f"Способности: {user['boss_ability']}\n"
-        f"/attack — атаковать"
-    )
-    # Автоудаление ответа
-    context.application.create_task(
-        auto_delete(context, update.effective_chat.id, [msg.message_id])
-    )
+    try:
+        user_id = update.effective_user.id
+        username = update.effective_user.username or update.effective_user.full_name
+        
+        logging.info(f"=== ФУНКЦИЯ BOSS ВЫЗВАНА ===")
+        logging.info(f"Для пользователя: {username} (ID: {user_id})")
+        
+        # Получаем данные пользователя
+        user = await get_user(user_id, username)
+        logging.info(f"Данные пользователя получены: boss_name={user.get('boss_name')}")
+        
+        if not user:
+            logging.error("Не удалось получить данные пользователя")
+            await update.message.reply_text("❌ Ошибка загрузки данных")
+            return
+        
+        # Проверяем наличие необходимых полей
+        boss_name = user.get('boss_name', 'Неизвестный босс')
+        boss_hp = user.get('boss_hp', 0)
+        boss_max = user.get('boss_max', 1)
+        boss_level = user.get('boss_level', 1)
+        boss_ability = user.get('boss_ability', 'Нет информации')
+        
+        message_text = (
+            f"👹 **{boss_name}**\n"
+            f"❤️ HP: {boss_hp}/{boss_max}\n"
+            f"📊 Уровень: {boss_level}\n"
+            f"⚡ Способности: {boss_ability}\n\n"
+            f"💢 Используйте /attack чтобы атаковать"
+        )
+        
+        logging.info(f"Отправляю сообщение: {message_text}")
+        
+        msg = await update.message.reply_text(
+            message_text,
+            reply_markup=MAIN_KEYBOARD,
+            parse_mode='Markdown'
+        )
+        
+        # Автоудаление ответа
+        context.application.create_task(
+            auto_delete(context, update.effective_chat.id, [msg.message_id])
+        )
+        
+        logging.info("Сообщение успешно отправлено")
+        
+    except Exception as e:
+        logging.error(f"КРИТИЧЕСКАЯ ОШИБКА в функции boss: {e}", exc_info=True)
+        await update.message.reply_text(
+            "❌ Произошла ошибка при получении информации о боссе. Попробуйте позже.",
+            reply_markup=MAIN_KEYBOARD
+        )
 
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.full_name
@@ -1080,9 +1118,14 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    logging.info(f"Получено сообщение: '{text}'")
+    user_id = update.effective_user.id
+    logging.info(f"=== ОБРАБОТКА СООБЩЕНИЯ ===")
+    logging.info(f"Пользователь: {user_id}")
+    logging.info(f"Текст: '{text}'")
+    logging.info(f"Длина текста: {len(text)}")
     
     if text == "👹 BOSS":
+        logging.info("Сработала обработка кнопки BOSS")
         await boss(update, context)
     elif text == "🛒 SHOP":
         await shop(update, context)
@@ -1115,7 +1158,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_category_items(update, context, "Зелья")
     else:
         logging.warning(f"Неизвестная команда: '{text}'")
-        await update.message.reply_text(f"Неизвестная команда: {text}", reply_markup=MAIN_KEYBOARD)
+        await update.message.reply_text(
+            f"Неизвестная команда. Используйте кнопки меню ниже.",
+            reply_markup=MAIN_KEYBOARD
+        )
 
 
 async def handle_pvp_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1134,6 +1180,7 @@ if __name__ == "__main__":
     WEBHOOK_PATH = f"webhook/{BOT_TOKEN}"
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(init_db).build()
 
+    # Сначала добавляем обработчик команд
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("boss", boss))
     app.add_handler(CommandHandler("attack", attack))
@@ -1147,8 +1194,12 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("fissure", fissure))
     app.add_handler(CommandHandler("fissure_top", fissure_top))
     app.add_handler(CommandHandler("stats", stats))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    # Затем обработчик для PvP кнопок (специфичный)
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^/fight_\d+$'), handle_pvp_buttons))
+    
+    # И только потом общий обработчик текстовых сообщений
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Запускаем бота в режиме webhook для Render
     app.run_webhook(
