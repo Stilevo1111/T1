@@ -1,6 +1,10 @@
 import os
 import logging
 from typing import Dict, List, Tuple
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения из .env файла
+load_dotenv()
 
 # ================= CONFIG =================
 
@@ -121,22 +125,22 @@ def validate_config() -> bool:
         if not BOT_TOKEN or len(BOT_TOKEN) < 10:
             logger.error("Некорректный BOT_TOKEN")
             return False
-        
-        # Проверка URL базы данных
-        if not DATABASE_URL or "postgresql" not in DATABASE_URL.lower():
+
+        # Проверка URL базы данных (разрешаем sqlite для тестирования)
+        if not DATABASE_URL or ("postgresql" not in DATABASE_URL.lower() and "sqlite" not in DATABASE_URL.lower()):
             logger.error("Некорректный DATABASE_URL")
             return False
-        
+
         # Проверка RENDER_URL
         if not RENDER_URL or not RENDER_URL.startswith("https://"):
             logger.error("Некорректный RENDER_URL")
             return False
-        
+
         # Проверка порта
         if not (1000 <= PORT <= 65535):
             logger.error(f"Некорректный PORT: {PORT}")
             return False
-        
+
         logger.info("Конфигурация валидна")
         return True
     except Exception as e:

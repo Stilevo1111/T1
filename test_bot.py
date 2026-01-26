@@ -36,7 +36,10 @@ async def test_bot_components():
         # 3. Тестирование создания пользователя
         logger.info("🔍 Тестирование создания пользователя...")
         try:
-            test_user = await get_user(123456, "TestUser")
+            test_user = get_user(123456, "TestUser")
+            # Handle both sync (SQLite) and async (PostgreSQL) results
+            if hasattr(test_user, '__await__'):
+                test_user = await test_user
             if test_user and 'username' in test_user:
                 logger.info("✅ Пользователь успешно создан/получен")
             else:
@@ -45,7 +48,7 @@ async def test_bot_components():
         except Exception as e:
             logger.error(f"❌ Ошибка создания пользователя: {e}")
             return False
-        
+
         # 4. Тестирование расчета характеристик
         logger.info("🔍 Тестирование расчета характеристик...")
         try:
@@ -59,7 +62,7 @@ async def test_bot_components():
         except Exception as e:
             logger.error(f"❌ Ошибка расчета характеристик: {e}")
             return False
-        
+
         # 5. Тестирование FISSURE системы
         logger.info("🔍 Тестирование FISSURE системы...")
         try:
@@ -72,12 +75,19 @@ async def test_bot_components():
         except Exception as e:
             logger.error(f"❌ Ошибка FISSURE системы: {e}")
             return False
-        
+
         # 6. Тестирование обновления пользователя
         logger.info("🔍 Тестирование обновления пользователя...")
         try:
-            await update_user(123456, gold=500, exp=100)
-            updated_user = await get_user(123456, "TestUser")
+            update_result = update_user(123456, gold=500, exp=100)
+            # Handle both sync (SQLite) and async (PostgreSQL) results
+            if hasattr(update_result, '__await__'):
+                await update_result
+
+            updated_user = get_user(123456, "TestUser")
+            if hasattr(updated_user, '__await__'):
+                updated_user = await updated_user
+
             if updated_user['gold'] == 500 and updated_user['exp'] == 100:
                 logger.info("✅ Обновление пользователя работает корректно")
             else:
