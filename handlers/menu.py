@@ -587,7 +587,7 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "level_up": "handlers.talents.level_up",
             "learn": "handlers.talents.learn",
             "fissure": "handlers.fissure.fissure",
-            "fissure_top": "handlers.top.fissure_top",
+            "fissure_top": "handlers.fissure.fissure_top",
             "achievements": "handlers.top.achievements"
         }
         

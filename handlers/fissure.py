@@ -87,7 +87,25 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
 async def grow_fissure(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик команды /grow_fissure - контроль роста Fissure"""
+    """Обработчик команды /grow_fissure - контроль роста Fissure
+    
+    🔄 ЛОГИКА РАБОТЫ:
+    1. Пользователь вызывает /grow_fissure
+    2. Система проверяет, есть ли активная игра Fissure Growth для пользователя
+    3. Если игра активна - увеличивает рост Fissure на 5 единиц
+    4. Если рост достиг максимума (100) - Fissure взрывается и дает эффект
+    5. Если игра не активна - предлагает начать игру через /fissure
+    
+    📊 ПРОГРЕСС:
+    🌀 Fissure растет... 5/100 → 10/100 → 15/100 ... → 100/100 💥
+    
+    🎁 НАГРАДА:
+    Чем больше рост, тем сильнее эффект:
+    - 0-39: Common эффекты (базовые бонусы)
+    - 40-69: Uncommon эффекты (усиленные бонусы)  
+    - 70-89: Rare эффекты (редкие мощные бонусы)
+    - 90-100: Epic эффекты (легендарные бонусы)
+    """
     try:
         user_id = update.effective_user.id
         result = await fissure_system.grow_fissure(user_id)
