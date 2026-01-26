@@ -592,11 +592,18 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         }
         
         if callback_data in command_handlers:
-            module_path = command_handlers[callback_data]
-            module_name, func_name = module_path.rsplit(".", 1)
-            module = __import__(module_name, fromlist=[func_name])
-            handler_func = getattr(module, func_name)
-            await handler_func(update, context)
+            try:
+                module_path = command_handlers[callback_data]
+                module_name, func_name = module_path.rsplit(".", 1)
+                module = __import__(module_name, fromlist=[func_name])
+                handler_func = getattr(module, func_name)
+                await handler_func(update, context)
+            except Exception as e:
+                logger.error(f"Ошибка при вызове обработчика {callback_data}: {e}")
+                await query.edit_message_text(
+                    text=f"❌ Ошибка при выполнении команды {callback_data}",
+                    reply_markup=get_main_menu_keyboard()
+                )
 
 __all__ = [
     'get_main_menu_keyboard',
