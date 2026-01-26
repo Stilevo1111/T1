@@ -77,27 +77,3 @@ if __name__ == "__main__":
         webhook_url=f"{RENDER_URL.rstrip('/')}/{WEBHOOK_PATH}",
         drop_pending_updates=True,
     )
-
-</final_file_content>
-
-IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.
-
- <environment_details>
-# Cursor Visible Files
-bot.py
-
-# Cursor Open Tabs
-config.py
-database.py
-game_logic.py
-handlers.py
-bot.py
-
-# Current Time
-1/26/2026, 6:41:40 AM (Europe/Minsk, UTC+3:00)
-
-# Context Window Usage
-123558 / 256K tokens used (48%)
-
-# Current Mode
-ACT MODE
