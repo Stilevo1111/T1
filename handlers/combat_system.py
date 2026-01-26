@@ -4,6 +4,8 @@ import logging
 import random
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
+from telegram import Update
+from telegram.ext import ContextTypes
 
 from database.real_database import db_manager
 from game_logic.level_system import CharacterStats
