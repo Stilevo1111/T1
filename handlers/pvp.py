@@ -363,4 +363,8 @@ def register_pvp_callbacks(application):
     application.add_handler(CallbackQueryHandler(handle_pvp_fight_callback, pattern=r"^pvp_fight_\d+$"))
     application.add_handler(CallbackQueryHandler(handle_pvp_refresh, pattern=r"^pvp_refresh$"))
 
+# Экспортируем функции для использования в handlers/__init__.py
+__all__ = ['pvp', 'fight', 'handle_pvp_fight_callback', 'handle_pvp_refresh', 'register_pvp_callbacks']
+
+
 
