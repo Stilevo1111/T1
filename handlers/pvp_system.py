@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 
 from database import get_user, update_user
-from game_logic.level_system import CharacterStats
+from game_logic import CharacterStats
 from game_logic import calculate_character_stats
 
 logger = logging.getLogger(__name__)

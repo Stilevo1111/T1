@@ -1,25 +1,25 @@
 """Game Logic Package"""
 
 # Импортируем основные классы для удобства использования
-from .level_system import LevelSystem, CharacterStats
 
 # Функции для совместимости со старым кодом
 def calculate_character_stats(user_data):
     """Рассчет характеристик персонажа"""
-    return CharacterStats.calculate_base_stats(user_data)
+    # Импортируем из game_logic.py
+    from game_logic import calculate_character_stats as calc_stats
+    return calc_stats(user_data)
 
 def get_user_progress(user):
     """Получение прогресса пользователя"""
-    level, progress = LevelSystem.calculate_level_from_exp(user.get('exp', 0))
-    return {
-        'level': level,
-        'progress': progress,
-        'exp': user.get('exp', 0)
-    }
+    # Импортируем из game_logic.py
+    from game_logic import get_user_progress as get_progress
+    return get_progress(user)
 
 def get_next_level_exp(level):
     """Получение опыта для следующего уровня"""
-    return LevelSystem.get_exp_for_level(level + 1)
+    # Импортируем из game_logic.py
+    from game_logic import get_next_level_exp as get_exp
+    return get_exp(level)
 
 # Импортируем функции из основного модуля game_logic.py для совместимости
 import sys
