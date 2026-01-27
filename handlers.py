@@ -25,10 +25,6 @@ MAIN_KEYBOARD = ReplyKeyboardMarkup(
     resize_keyboard=True,
 )
 
-FISSURE_KEYBOARD = ReplyKeyboardMarkup(
-    [["🎲 ROLL"], ["📊 STATS", "⬅️ НАЗАД"]],
-    resize_keyboard=True,
-)
 
 # Клавиатура категорий магазина
 SHOP_CATEGORIES_KEYBOARD = ReplyKeyboardMarkup(
@@ -940,7 +936,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "📊 STATS":
         await stats(update, context)
     elif text == "🍆 FISSURE":
-        await update.message.reply_text("🍆 Меню фиссуры", reply_markup=FISSURE_KEYBOARD)
+        await update.message.reply_text("🍆 Меню фиссуры")
     elif text == "🎲 ROLL":
         await fissure(update, context)
     elif text == "⬅️ НАЗАД":

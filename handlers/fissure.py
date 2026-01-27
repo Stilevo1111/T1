@@ -2,14 +2,14 @@
 
 import logging
 import time
+import random
 from typing import Dict, Any, Tuple
 from telegram import Update
 from telegram.ext import ContextTypes
 
 from database import get_user, get_fissure_top, update_fissure
-from game_logic import get_fissure_result, get_meme_message
+from game_logic import get_fissure_result, get_meme_message, calculate_character_stats
 from utils.formatters import format_stats_text
-from utils.keyboard import FISSURE_KEYBOARD
 
 logger = logging.getLogger(__name__)
 
@@ -65,21 +65,15 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         username = update.effective_user.username or update.effective_user.full_name
         user = await get_user(update.effective_user.id, username)
-        stats = calculate_character_stats(user)
+        user_stats = calculate_character_stats(user)
         
         msg = await update.message.reply_text(
-            f"📊 Твоя Фиссура:\n📏 {user['fissure']:.1f} см",
-            reply_markup=FISSURE_KEYBOARD
+            f"📊 Твоя Фиссура:\n📏 {user['fissure']:.1f} см"
         )
     except Exception as e:
         logger.error(f"Ошибка в команде /stats (fissure): {e}")
         if update and update.message:
             await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
-
-
-# Импортируем calculate_character_stats для использования в stats
-import random
-from game_logic import calculate_character_stats
 
 def get_fissure_result_with_length(current_length: float) -> Tuple[float, str, str]:
     """Получает результат броска фиссуры с учетом текущей длины"""
