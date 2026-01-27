@@ -417,29 +417,6 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         from handlers.main import stats
         await stats(update, context)
 
-    elif callback_data == "talents_stats":
-        from handlers.talents import talents_stats
-        await talents_stats(update, context)
-
-    elif callback_data == "talents_main":
-        from handlers.talents import talents
-        await talents(update, context)
-
-    elif callback_data == "talents_category_strength":
-        from handlers.talents import talents_str
-        await talents_str(update, context)
-
-    elif callback_data == "talents_category_agility":
-        from handlers.talents import talents_agi
-        await talents_agi(update, context)
-
-    elif callback_data == "talents_category_intelligence":
-        from handlers.talents import talents_int
-        await talents_int(update, context)
-
-    elif callback_data == "talents_category_hybrid":
-        from handlers.talents import talents_hybrid
-        await talents_hybrid(update, context)
 
     elif callback_data == "pvp_refresh":
         from handlers.pvp import handle_pvp_refresh

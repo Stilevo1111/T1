@@ -54,7 +54,7 @@ def register_inventory_handlers(app: Application):
 
 def register_talent_handlers(app: Application):
     """Регистрация обработчиков системы талантов"""
-    from handlers.talent_system import talents, learn_talent, level_up, stats_distribute
+    from handlers.talent_system import talents, learn_talent, level_up
     from handlers.talent_system import add_str, add_agi, add_int, handle_talents_category
     from handlers.talent_system import handle_talents_stats, handle_talents_main, handle_learn_talent_callback
     
@@ -62,7 +62,6 @@ def register_talent_handlers(app: Application):
     app.add_handler(CommandHandler("talents", talents))
     app.add_handler(CommandHandler("learn_talent", learn_talent))
     app.add_handler(CommandHandler("level_up", level_up))
-    app.add_handler(CommandHandler("stats_distribute", stats_distribute))
     app.add_handler(CommandHandler("add_str", add_str))
     app.add_handler(CommandHandler("add_agi", add_agi))
     app.add_handler(CommandHandler("add_int", add_int))

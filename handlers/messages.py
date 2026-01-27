@@ -11,7 +11,7 @@ from handlers.boss import boss, attack
 from handlers.shop import shop, show_category_items, buy, potion
 from handlers.pvp import pvp, handle_pvp_fight_callback, fight
 from handlers.top import top
-from handlers.talents import talents, learn_talent, stats_distribute, add_stat, level_up_handler, achievements
+from handlers.talents import talents, learn_talent, add_stat, level_up_handler, achievements
 from handlers.talents import add_str, add_agi, add_int, learn, level_up, handle_talents_category, handle_talents_stats, handle_talents_main, handle_learn_talent_callback
 from handlers.heal import heal
 

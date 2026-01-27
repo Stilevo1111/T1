@@ -24,13 +24,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Импортируем обработчики из модулей
-from handlers.main import start, stats, profile, debug_boss
+from handlers.main import start, stats, profile
 from handlers.fissure import fissure, fissure_top, stats as fissure_stats
 from handlers.boss import boss, attack
 from handlers.shop import shop, show_category_items, buy, potion
 from handlers.pvp import pvp, handle_pvp_fight_callback, fight
 from handlers.top import top
-from handlers.talents import talents, learn_talent, stats_distribute, add_stat, level_up_handler, achievements
+from handlers.talents import talents, learn_talent, add_stat, level_up_handler, achievements
 from handlers.talents import add_str, add_agi, add_int, learn, level_up, handle_talents_category, handle_talents_stats, handle_talents_main, handle_learn_talent_callback
 from handlers.heal import heal
 from handlers.messages import handle_message, handle_pvp_buttons
@@ -80,7 +80,6 @@ def setup_handlers(app: Application) -> None:
         app.add_handler(CommandHandler("add_str", add_str))
         app.add_handler(CommandHandler("add_agi", add_agi))
         app.add_handler(CommandHandler("add_int", add_int))
-        app.add_handler(CommandHandler("stats_distribute", stats_distribute))
         app.add_handler(CommandHandler("learn", learn))
         app.add_handler(CommandHandler("level_up", level_up))
 
