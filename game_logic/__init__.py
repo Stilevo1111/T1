@@ -56,7 +56,6 @@ try:
         """Заглушка для get_potion_data"""
         return {}
     calculate_damage = game_logic_module.calculate_damage
-    get_talent_info = game_logic_module.get_talent_info
     
     def can_learn_talent(user, talent_id):
         """Заглушка для can_learn_talent"""
@@ -301,6 +300,6 @@ TALENTS = {
     }
 }
 
-__all__ = ['LevelSystem', 'CharacterStats', 'calculate_character_stats', 'get_user_progress', 'get_next_level_exp', 'calculate_boss_strategy', 'get_fissure_result', 'get_meme_message', 'spawn_boss', 'check_level_restriction', 'calculate_damage_with_talents', 'calculate_dodge', 'calculate_boss_reward', 'check_level_up_new', 'get_items_by_category', 'get_item_description', 'get_potion_data', 'calculate_damage', 'get_talent_info', 'can_learn_talent', 'apply_talent_effects', 'get_user_achievements', 'regenerate_hp', 'check_level_up', 'TALENTS']
+__all__ = ['LevelSystem', 'CharacterStats', 'calculate_character_stats', 'get_user_progress', 'get_next_level_exp', 'calculate_boss_strategy', 'get_fissure_result', 'get_meme_message', 'spawn_boss', 'check_level_restriction', 'calculate_damage_with_talents', 'calculate_dodge', 'calculate_boss_reward', 'check_level_up_new', 'get_items_by_category', 'get_item_description', 'get_potion_data', 'calculate_damage', 'can_learn_talent', 'apply_talent_effects', 'get_user_achievements', 'regenerate_hp', 'check_level_up', 'TALENTS']
 
 
