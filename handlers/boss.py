@@ -22,3 +22,16 @@ async def boss(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"👹 Босс появился!\n{boss_data['message']}\n\nСтратегия: {strategy}")
     else:
         await update.message.reply_text(f"❌ Ошибка: {boss_data['message']}")
+
+def register_boss_handlers(application) -> None:
+    """Регистрация обработчиков боссов"""
+    try:
+        # Команда /boss
+        application.add_handler(CommandHandler("boss", boss))
+        
+        logger.info("Обработчики боссов зарегистрированы успешно")
+    except Exception as e:
+        logger.error(f"Ошибка регистрации обработчиков боссов: {e}")
+        raise
+
+__all__ = ['boss', 'register_boss_handlers']

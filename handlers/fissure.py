@@ -1,6 +1,7 @@
 import logging
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
+
 from database import get_user, update_user
 from game_logic import get_fissure_result, get_user_progress
 
@@ -34,3 +35,22 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     progress = get_user_progress(user)
     await update.message.reply_text(f"Статистика трещин:\n{progress}")
+
+def register_fissure_callbacks(application) -> None:
+    """Регистрация callback обработчиков трещин"""
+    # Пока нет callback-обработчиков для трещин, но функция должна существовать
+    # для совместимости с системой регистрации обработчиков
+    pass
+
+def register_fissure_handlers(application) -> None:
+    """Регистрация обработчиков трещин"""
+    # Команда /fissure
+    application.add_handler(CommandHandler("fissure", fissure))
+    
+    # Команда /stats
+    application.add_handler(CommandHandler("stats", stats))
+    
+    # Callback обработчики
+    register_fissure_callbacks(application)
+
+__all__ = ['fissure', 'stats', 'register_fissure_handlers', 'register_fissure_callbacks']

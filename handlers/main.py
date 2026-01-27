@@ -60,4 +60,19 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Ошибка в команде /profile: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
+def register_main_handlers(application) -> None:
+    """Регистрация основных обработчиков"""
+    try:
+        # Команды
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("stats", stats))
+        application.add_handler(CommandHandler("profile", profile))
+        
+        logger.info("Основные обработчики зарегистрированы успешно")
+    except Exception as e:
+        logger.error(f"Ошибка регистрации основных обработчиков: {e}")
+        raise
+
+__all__ = ['start', 'stats', 'profile', 'register_main_handlers']
+
 

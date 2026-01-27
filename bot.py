@@ -23,14 +23,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Импортируем обработчики из модулей
-from handlers.main import start, stats, profile
-from handlers.fissure import fissure, stats as fissure_stats
-from handlers.boss import boss
-from handlers.pvp_system import pvp, handle_pvp_fight_callback, fight
-from handlers.messages import handle_message, handle_pvp_buttons
-
-# Импортируем систему регистрации
+# Импортируем систему регистрации обработчиков
 from handlers.register_handlers import register_all_handlers
 
 # Импортируем меню
@@ -51,61 +44,15 @@ def create_application() -> Application:
 def setup_handlers(app: Application) -> None:
     """Настраивает обработчики команд и сообщений"""
     try:
-        # Регистрация всех систем
+        # Регистрация всех систем через модульную систему
         register_all_handlers(app)
-        
-        # Основные команды
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("profile", profile))
-        app.add_handler(CommandHandler("boss", boss))
-        app.add_handler(CommandHandler("shop", shop))
-        app.add_handler(CommandHandler("buy", buy))
-        app.add_handler(CommandHandler("potion", potion))
-        app.add_handler(CommandHandler("heal", heal))
-        app.add_handler(CommandHandler("pvp", pvp))
-        app.add_handler(CommandHandler("fight", fight))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(CommandHandler("talents", talents))
-        app.add_handler(CommandHandler("level", level_up_handler))
-        app.add_handler(CommandHandler("achievements", achievements))
-        app.add_handler(CommandHandler("add_str", add_str))
-        app.add_handler(CommandHandler("add_agi", add_agi))
-        app.add_handler(CommandHandler("add_int", add_int))
-        app.add_handler(CommandHandler("learn", learn))
-        app.add_handler(CommandHandler("level_up", level_up))
-
-        # Callback-обработчики для inline-кнопок
-        app.add_handler(CallbackQueryHandler(handle_learn_talent_callback, pattern=r'^learn_'))
-        app.add_handler(CallbackQueryHandler(handle_pvp_fight_callback, pattern=r'^fight_'))
-        app.add_handler(CallbackQueryHandler(
-            lambda update, context: show_category_items(update, context, update.callback_query.data), 
-            pattern=r'^(boots|armor|weapon|defense|support|potions)$'
-        ))
         
         # Callback-обработчик для интерактивного меню
         app.add_handler(CallbackQueryHandler(handle_menu_callback))
-
-        # Текстовые обработчики
-        app.add_handler(MessageHandler(
-            filters.TEXT & filters.Regex(r'^/learn_[a-z0-9]+$'), 
-            lambda update, context: learn_talent(update, context, update.message.text.replace("/learn_", ""))
-        ))
-        
-        app.add_handler(MessageHandler(
-            filters.TEXT & filters.Regex(r'^(👟 Сапоги|🛡️ Броня|🗡️ Оружие|🛡️ Защита|🔮 Поддержка|🧪 Зелья)$'), 
-            lambda update, context: show_category_items(update, context, update.message.text)
-        ))
-        
-        app.add_handler(MessageHandler(
-            filters.TEXT & filters.Regex(r'^/fight_\d+$'), 
-            handle_pvp_buttons
-        ))
         
         # Общий обработчик текстовых сообщений
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
+        
         logger.info("Обработчики настроены успешно")
     except Exception as e:
         logger.error(f"Ошибка настройки обработчиков: {e}")

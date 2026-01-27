@@ -62,3 +62,19 @@ async def handle_pvp_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except Exception as e:
         logger.error(f"Ошибка в handle_pvp_buttons: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
+
+def register_message_handlers(application) -> None:
+    """Регистрация обработчиков сообщений"""
+    try:
+        # Обработчик текстовых сообщений
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        
+        # Обработчик кнопок PvP
+        application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^/fight_\d+$'), handle_pvp_buttons))
+        
+        logger.info("Обработчики сообщений зарегистрированы успешно")
+    except Exception as e:
+        logger.error(f"Ошибка регистрации обработчиков сообщений: {e}")
+        raise
+
+__all__ = ['handle_message', 'handle_pvp_buttons', 'register_message_handlers']

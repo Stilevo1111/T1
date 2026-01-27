@@ -1,8 +1,11 @@
 """Модуль для создания интерактивного меню с кнопками"""
 
+import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram import Update
+
+logger = logging.getLogger(__name__)
 
 def get_main_menu_keyboard():
     """Получение клавиатуры основного меню"""
@@ -269,11 +272,6 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     elif callback_data == "stats":
         from handlers.main import stats
         await stats(update, context)
-
-
-    elif callback_data == "pvp_refresh":
-        from handlers.pvp import handle_pvp_refresh
-        await handle_pvp_refresh(update, context)
     
     elif callback_data == "boss_menu":
         await query.edit_message_text(
@@ -312,94 +310,15 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=get_shop_category_keyboard(category)
         )
     
-    
-    # Импортируем боевую систему
-    from handlers.combat_system import (
-        handle_attack_boss, handle_buy_item_menu
-    )
-    
-    # Словарь обработчиков для боевой системы
-    combat_handlers = {
-        "attack": handle_attack_boss,
-        "buy_item_boots_of_speed": handle_buy_item_menu,
-        "buy_item_phase_boots": handle_buy_item_menu,
-        "buy_item_power_treads": handle_buy_item_menu,
-        "buy_item_arcane_boots": handle_buy_item_menu,
-        "buy_item_ring_of_protection": handle_buy_item_menu,
-        "buy_item_vanguard": handle_buy_item_menu,
-        "buy_item_stout_shield": handle_buy_item_menu,
-        "buy_item_blademail": handle_buy_item_menu,
-        "buy_item_quelling_blade": handle_buy_item_menu,
-        "buy_item_daedalus": handle_buy_item_menu,
-        "buy_item_dagon": handle_buy_item_menu,
-        "buy_item_monkey_king_bar": handle_buy_item_menu,
-        "buy_item_ring_of_basilius": handle_buy_item_menu,
-        "buy_item_aghanims_scepter": handle_buy_item_menu,
-        "buy_item_force_staff": handle_buy_item_menu,
-        "buy_item_glimmer_cape": handle_buy_item_menu,
-        "buy_item_healing_salve": handle_buy_item_menu,
-        "buy_item_clarity_potion": handle_buy_item_menu,
-        "buy_item_invisibility_potion": handle_buy_item_menu,
-        "buy_item_speed_potion": handle_buy_item_menu,
-    }
-    
-    # Проверяем и вызываем соответствующий обработчик боевой системы
-    if callback_data in combat_handlers:
-        handler_func = combat_handlers[callback_data]
-        await handler_func(update, context)
-    
-    # Импортируем обработчики для расширенного меню
-    from handlers.menu_handlers import (
-        handle_boss_strongest, handle_boss_weakest, handle_boss_damage, handle_boss_tank,
-        handle_pvp_stats, handle_pvp_top_mmr, handle_top_level, handle_top_mmr,
-        handle_top_exp, handle_top_gold, handle_top_damage, handle_top_wins,
-        handle_top_losses, handle_top_ratio, handle_help_commands, handle_help_gameplay, 
-        handle_help_faq, handle_help_tips
-    )
-    
-    # Словарь обработчиков для расширенного меню
-    extended_handlers = {
-        "boss_strongest": handle_boss_strongest,
-        "boss_weakest": handle_boss_weakest,
-        "boss_damage": handle_boss_damage,
-        "boss_tank": handle_boss_tank,
-        "pvp_stats": handle_pvp_stats,
-        "pvp_top_mmr": handle_pvp_top_mmr,
-        "top_level": handle_top_level,
-        "top_mmr": handle_top_mmr,
-        "top_exp": handle_top_exp,
-        "top_gold": handle_top_gold,
-        "top_damage": handle_top_damage,
-        "top_wins": handle_top_wins,
-        "top_losses": handle_top_losses,
-        "top_ratio": handle_top_ratio,
-        "help_commands": handle_help_commands,
-        "help_gameplay": handle_help_gameplay,
-        "help_faq": handle_help_faq,
-        "help_tips": handle_help_tips
-    }
-    
-    # Проверяем и вызываем соответствующий обработчик
-    if callback_data in extended_handlers:
-        handler_func = extended_handlers[callback_data]
-        await handler_func(update, context)
-    
-    elif callback_data in ["boss", "attack", "pvp", "fight", "buy", "potion", "heal", 
-                          "fissure_roll", "fissure_top_menu", "fissure_stats_menu",
-                          "fissure_top", "achievements"]:
+    # Обработка команд, которые перенаправляются на соответствующие обработчики
+    elif callback_data in ["boss", "pvp", 
+                          "fissure_roll", "fissure_stats_menu"]:
         # Перенаправляем на соответствующие обработчики
         command_handlers = {
             "boss": "handlers.boss.boss",
-            "attack": "handlers.boss.attack", 
             "pvp": "handlers.pvp.pvp",
-            "fight": "handlers.pvp.fight",
-            "buy": "handlers.shop.buy",
-            "potion": "handlers.heal.potion",
-            "heal": "handlers.heal.heal",
             "fissure_roll": "handlers.fissure.fissure",
-            "fissure_top_menu": "handlers.top.top",
-            "fissure_stats_menu": "handlers.fissure.stats",
-            "fissure_top": "handlers.top.top"
+            "fissure_stats_menu": "handlers.fissure.stats"
         }
         
         if callback_data in command_handlers:

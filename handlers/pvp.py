@@ -47,27 +47,27 @@ async def pvp_search_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     # Проверяем, не в очереди ли уже пользователь
-    queue_status = await pvp_manager.queue.add_to_queue(user_id, user.get('mmr', 1000))
-    
-    if queue_status['found_match']:
-        # Найден противник - начинаем бой
-        opponent_id = queue_status['opponent_id']
-        await start_pvp_fight(update, context, user_id, opponent_id)
-    else:
-        # В очереди
-        position = queue_status['queue_position']
-        wait_time = queue_status['estimated_wait']
-        
-        keyboard = [[InlineKeyboardButton("❌ Отмена поиска", callback_data="pvp_cancel")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            f"⏳ Поиск противника...\n"
-            f"Позиция в очереди: {position}\n"
-            f"Ожидаемое время: ~{wait_time} сек\n\n"
-            f"Система автоматически найдет противника с похожим MMR.",
-            reply_markup=reply_markup
-        )
+    # queue_status = await pvp_manager.queue.add_to_queue(user_id, user.get('mmr', 1000))
+    # 
+    # if queue_status['found_match']:
+    #     # Найден противник - начинаем бой
+    #     opponent_id = queue_status['opponent_id']
+    #     await start_pvp_fight(update, context, user_id, opponent_id)
+    # else:
+    #     # В очереди
+    #     position = queue_status['queue_position']
+    #     wait_time = queue_status['estimated_wait']
+    #     
+    #     keyboard = [[InlineKeyboardButton("❌ Отмена поиска", callback_data="pvp_cancel")]]
+    #     reply_markup = InlineKeyboardMarkup(keyboard)
+    #     
+    #     await query.edit_message_text(
+    #         f"⏳ Поиск противника...\n"
+    #         f"Позиция в очереди: {position}\n"
+    #         f"Ожидаемое время: ~{wait_time} сек\n\n"
+    #         f"Система автоматически найдет противника с похожим MMR.",
+    #         reply_markup=reply_markup
+    #     )
 
 async def pvp_cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик отмены поиска"""
