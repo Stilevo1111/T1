@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 
 # Импортируем обработчики из модулей
 from handlers.main import start, stats, profile
-from handlers.fissure import fissure, fissure_top, stats as fissure_stats
-from handlers.boss import boss, attack
+from handlers.fissure import fissure, stats as fissure_stats
+from handlers.boss import boss
 from handlers.shop import shop, show_category_items, buy, potion
 from handlers.pvp import pvp, handle_pvp_fight_callback, fight
 from handlers.top import top
@@ -64,7 +64,6 @@ def setup_handlers(app: Application) -> None:
         app.add_handler(CommandHandler("stats", stats))
         app.add_handler(CommandHandler("profile", profile))
         app.add_handler(CommandHandler("boss", boss))
-        app.add_handler(CommandHandler("attack", attack))
         app.add_handler(CommandHandler("shop", shop))
         app.add_handler(CommandHandler("buy", buy))
         app.add_handler(CommandHandler("potion", potion))
@@ -72,7 +71,6 @@ def setup_handlers(app: Application) -> None:
         app.add_handler(CommandHandler("pvp", pvp))
         app.add_handler(CommandHandler("fight", fight))
         app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("fissure_top", fissure_top))
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("talents", talents))
         app.add_handler(CommandHandler("level", level_up_handler))

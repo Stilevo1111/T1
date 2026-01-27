@@ -6,8 +6,8 @@ from telegram import Update
 from telegram.ext import ContextTypes, filters
 
 from handlers.main import start, stats, profile
-from handlers.fissure import fissure, fissure_top, stats as fissure_stats
-from handlers.boss import boss, attack
+from handlers.fissure import fissure, stats as fissure_stats
+from handlers.boss import boss
 from handlers.shop import shop, show_category_items, buy, potion
 from handlers.pvp import pvp, handle_pvp_fight_callback, fight
 from handlers.top import top
@@ -36,8 +36,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await fissure(update, context)
         elif text == "/boss":
             await boss(update, context)
-        elif text == "/attack":
-            await attack(update, context)
         elif text == "/shop":
             await shop(update, context)
         elif text == "/pvp":
