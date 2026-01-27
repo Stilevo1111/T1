@@ -17,59 +17,16 @@ def get_main_menu_keyboard():
         ],
         [
             InlineKeyboardButton("🛒 Магазин", callback_data="shop_menu"),
-            InlineKeyboardButton("🌟 Таланты", callback_data="talents_menu")
+            InlineKeyboardButton("🏆 Рейтинг", callback_data="top_menu")
         ],
         [
-            InlineKeyboardButton("🏆 Рейтинг", callback_data="top_menu"),
-            InlineKeyboardButton("💥 Фиссура", callback_data="fissure")
-        ],
-        [
-            InlineKeyboardButton("🎁 Ежедневные", callback_data="daily_rewards"),
-            InlineKeyboardButton("🎯 Квесты", callback_data="quests")
-        ],
-        [
+            InlineKeyboardButton("💥 Фиссура", callback_data="fissure"),
             InlineKeyboardButton("❓ Помощь", callback_data="help")
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_daily_menu_keyboard():
-    """Получение клавиатуры ежедневных наград"""
-    keyboard = [
-        [
-            InlineKeyboardButton("🎁 Получить награду", callback_data="daily_claim"),
-            InlineKeyboardButton("📅 Календарь", callback_data="daily_calendar")
-        ],
-        [
-            InlineKeyboardButton("💎 Бонусы", callback_data="daily_bonuses"),
-            InlineKeyboardButton("⏰ Таймер", callback_data="daily_timer")
-        ],
-        [
-            InlineKeyboardButton("⬅️ Назад", callback_data="main_menu")
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
 
-def get_quests_menu_keyboard():
-    """Получение клавиатуры квестов"""
-    keyboard = [
-        [
-            InlineKeyboardButton("📋 Активные", callback_data="quests_active"),
-            InlineKeyboardButton("✅ Завершенные", callback_data="quests_completed")
-        ],
-        [
-            InlineKeyboardButton("🎯 Ежедневные", callback_data="quests_daily"),
-            InlineKeyboardButton("🏆 Недельные", callback_data="quests_weekly")
-        ],
-        [
-            InlineKeyboardButton("💎 Награды", callback_data="quests_rewards"),
-            InlineKeyboardButton("📊 Прогресс", callback_data="quests_progress")
-        ],
-        [
-            InlineKeyboardButton("⬅️ Назад", callback_data="main_menu")
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
 
 def get_boss_menu_keyboard():
     """Получение клавиатуры меню боссов"""
@@ -215,97 +172,7 @@ def get_shop_category_keyboard(category: str):
     
     return InlineKeyboardMarkup(keyboard)
 
-def get_talents_menu_keyboard():
-    """Получение клавиатуры меню талантов"""
-    keyboard = [
-        [
-            InlineKeyboardButton("🌳 Дерево талантов", callback_data="talents"),
-            InlineKeyboardButton("⬆️ Повысить уровень", callback_data="level_up")
-        ],
-        [
-            InlineKeyboardButton("🎓 Изучить талант", callback_data="learn"),
-            InlineKeyboardButton("📊 Распределить очки", callback_data="stats_distribute")
-        ],
-        [
-            InlineKeyboardButton("💪 Сила", callback_data="talents_str"),
-            InlineKeyboardButton("🏃 Ловкость", callback_data="talents_agi")
-        ],
-        [
-            InlineKeyboardButton("🧠 Интеллект", callback_data="talents_int"),
-            InlineKeyboardButton("🔀 Гибрид", callback_data="talents_hybrid")
-        ],
-        [
-            InlineKeyboardButton("⬅️ Назад", callback_data="main_menu")
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
 
-def get_talents_category_keyboard(category: str):
-    """Получение клавиатуры категорий талантов"""
-    if category == "talents_str":
-        keyboard = [
-            [
-                InlineKeyboardButton("💪 +10 к силе", callback_data="learn_talent_str_1"),
-                InlineKeyboardButton("🔥 +15% урона", callback_data="learn_talent_str_2")
-            ],
-            [
-                InlineKeyboardButton("🛡️ +10% брони", callback_data="learn_talent_str_3"),
-                InlineKeyboardButton("❤️ +15% HP", callback_data="learn_talent_str_4")
-            ],
-            [
-                InlineKeyboardButton("⬅️ Назад", callback_data="talents_menu")
-            ]
-        ]
-    elif category == "talents_agi":
-        keyboard = [
-            [
-                InlineKeyboardButton("🏃 +10 к ловкости", callback_data="learn_talent_agi_1"),
-                InlineKeyboardButton("🎯 +15% крита", callback_data="learn_talent_agi_2")
-            ],
-            [
-                InlineKeyboardButton("💨 +10% уклонения", callback_data="learn_talent_agi_3"),
-                InlineKeyboardButton("⚡ +15% скорости", callback_data="learn_talent_agi_4")
-            ],
-            [
-                InlineKeyboardButton("⬅️ Назад", callback_data="talents_menu")
-            ]
-        ]
-    elif category == "talents_int":
-        keyboard = [
-            [
-                InlineKeyboardButton("🧠 +10 к интеллекту", callback_data="learn_talent_int_1"),
-                InlineKeyboardButton("🔮 +15% маг. урона", callback_data="learn_talent_int_2")
-            ],
-            [
-                InlineKeyboardButton("⚡ +10% маны", callback_data="learn_talent_int_3"),
-                InlineKeyboardButton("🛡️ +15% маг. защиты", callback_data="learn_talent_int_4")
-            ],
-            [
-                InlineKeyboardButton("⬅️ Назад", callback_data="talents_menu")
-            ]
-        ]
-    elif category == "talents_hybrid":
-        keyboard = [
-            [
-                InlineKeyboardButton("🌟 Универсальный +5 ко всем", callback_data="learn_talent_hybrid_1"),
-                InlineKeyboardButton("⚡ +10% ко всем характеристикам", callback_data="learn_talent_hybrid_2")
-            ],
-            [
-                InlineKeyboardButton("🎯 +5% ко всем типам урона", callback_data="learn_talent_hybrid_3"),
-                InlineKeyboardButton("🛡️ +5% ко всем типам защиты", callback_data="learn_talent_hybrid_4")
-            ],
-            [
-                InlineKeyboardButton("⬅️ Назад", callback_data="talents_menu")
-            ]
-        ]
-    else:
-        keyboard = [
-            [
-                InlineKeyboardButton("⬅️ Назад", callback_data="talents_menu")
-            ]
-        ]
-    
-    return InlineKeyboardMarkup(keyboard)
 
 def get_top_menu_keyboard():
     """Получение клавиатуры меню рейтингов"""
@@ -426,12 +293,6 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=get_shop_menu_keyboard()
         )
     
-    elif callback_data == "talents_menu":
-        await query.edit_message_text(
-            text="Меню талантов:",
-            reply_markup=get_talents_menu_keyboard()
-        )
-    
     elif callback_data == "top_menu":
         await query.edit_message_text(
             text="Меню рейтингов:",
@@ -444,18 +305,6 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=get_help_keyboard()
         )
     
-    elif callback_data == "daily_rewards":
-        await query.edit_message_text(
-            text="Меню ежедневных наград:",
-            reply_markup=get_daily_menu_keyboard()
-        )
-    
-    elif callback_data == "quests":
-        await query.edit_message_text(
-            text="Меню квестов:",
-            reply_markup=get_quests_menu_keyboard()
-        )
-    
     elif callback_data.startswith("shop_category_"):
         category = callback_data.replace("shop_category_", "")
         await query.edit_message_text(
@@ -463,16 +312,10 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=get_shop_category_keyboard(category)
         )
     
-    elif callback_data.startswith("talents_"):
-        category = callback_data
-        await query.edit_message_text(
-            text=f"Таланты: {category.replace('talents_', '').upper()}",
-            reply_markup=get_talents_category_keyboard(category)
-        )
     
     # Импортируем боевую систему
     from handlers.combat_system import (
-        handle_attack_boss, handle_buy_item_menu, handle_learn_talent_menu, handle_daily_reward
+        handle_attack_boss, handle_buy_item_menu
     )
     
     # Словарь обработчиков для боевой системы
@@ -498,23 +341,6 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         "buy_item_clarity_potion": handle_buy_item_menu,
         "buy_item_invisibility_potion": handle_buy_item_menu,
         "buy_item_speed_potion": handle_buy_item_menu,
-        "learn_talent_str_1": handle_learn_talent_menu,
-        "learn_talent_str_2": handle_learn_talent_menu,
-        "learn_talent_str_3": handle_learn_talent_menu,
-        "learn_talent_str_4": handle_learn_talent_menu,
-        "learn_talent_agi_1": handle_learn_talent_menu,
-        "learn_talent_agi_2": handle_learn_talent_menu,
-        "learn_talent_agi_3": handle_learn_talent_menu,
-        "learn_talent_agi_4": handle_learn_talent_menu,
-        "learn_talent_int_1": handle_learn_talent_menu,
-        "learn_talent_int_2": handle_learn_talent_menu,
-        "learn_talent_int_3": handle_learn_talent_menu,
-        "learn_talent_int_4": handle_learn_talent_menu,
-        "learn_talent_hybrid_1": handle_learn_talent_menu,
-        "learn_talent_hybrid_2": handle_learn_talent_menu,
-        "learn_talent_hybrid_3": handle_learn_talent_menu,
-        "learn_talent_hybrid_4": handle_learn_talent_menu,
-        "daily_claim": handle_daily_reward
     }
     
     # Проверяем и вызываем соответствующий обработчик боевой системы
@@ -527,10 +353,8 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         handle_boss_strongest, handle_boss_weakest, handle_boss_damage, handle_boss_tank,
         handle_pvp_stats, handle_pvp_top_mmr, handle_top_level, handle_top_mmr,
         handle_top_exp, handle_top_gold, handle_top_damage, handle_top_wins,
-        handle_top_losses, handle_top_ratio, handle_daily_claim, handle_daily_calendar,
-        handle_daily_bonuses, handle_daily_timer, handle_quests_active, handle_quests_completed,
-        handle_quests_daily, handle_quests_weekly, handle_quests_rewards, handle_quests_progress,
-        handle_help_commands, handle_help_gameplay, handle_help_faq, handle_help_tips
+        handle_top_losses, handle_top_ratio, handle_help_commands, handle_help_gameplay, 
+        handle_help_faq, handle_help_tips
     )
     
     # Словарь обработчиков для расширенного меню
@@ -549,16 +373,6 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         "top_wins": handle_top_wins,
         "top_losses": handle_top_losses,
         "top_ratio": handle_top_ratio,
-        "daily_claim": handle_daily_claim,
-        "daily_calendar": handle_daily_calendar,
-        "daily_bonuses": handle_daily_bonuses,
-        "daily_timer": handle_daily_timer,
-        "quests_active": handle_quests_active,
-        "quests_completed": handle_quests_completed,
-        "quests_daily": handle_quests_daily,
-        "quests_weekly": handle_quests_weekly,
-        "quests_rewards": handle_quests_rewards,
-        "quests_progress": handle_quests_progress,
         "help_commands": handle_help_commands,
         "help_gameplay": handle_help_gameplay,
         "help_faq": handle_help_faq,
@@ -571,7 +385,7 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await handler_func(update, context)
     
     elif callback_data in ["boss", "attack", "pvp", "fight", "buy", "potion", "heal", 
-                          "talents", "level_up", "learn", "fissure_roll", "fissure_top_menu", "fissure_stats_menu",
+                          "fissure_roll", "fissure_top_menu", "fissure_stats_menu",
                           "fissure_top", "achievements"]:
         # Перенаправляем на соответствующие обработчики
         command_handlers = {
@@ -582,9 +396,6 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "buy": "handlers.shop.buy",
             "potion": "handlers.heal.potion",
             "heal": "handlers.heal.heal",
-            "talents": "handlers.talents.talents",
-            "level_up": "handlers.talents.level_up",
-            "learn": "handlers.talents.learn",
             "fissure_roll": "handlers.fissure.fissure",
             "fissure_top_menu": "handlers.top.top",
             "fissure_stats_menu": "handlers.fissure.stats",
@@ -610,7 +421,6 @@ __all__ = [
     'get_boss_menu_keyboard', 
     'get_pvp_menu_keyboard',
     'get_shop_menu_keyboard',
-    'get_talents_menu_keyboard',
     'get_top_menu_keyboard',
     'get_help_keyboard',
     'handle_menu_callback'
