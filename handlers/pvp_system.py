@@ -5,7 +5,7 @@ import random
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 
-from database.real_database import db_manager
+from database import get_user, update_user
 from game_logic.level_system import CharacterStats
 from game_logic import calculate_character_stats
 from utils.formatters import format_pvp_opponents
@@ -153,8 +153,8 @@ class PvPManager:
     async def start_pvp_fight(self, attacker_id: int, defender_id: int) -> Dict[str, Any]:
         """Начало PvP боя"""
         # Получаем данные пользователей
-        attacker = await db_manager.get_user(attacker_id)
-        defender = await db_manager.get_user(defender_id)
+        attacker = await get_user(attacker_id)
+        defender = await get_user(defender_id)
         
         if not attacker or not defender:
             return {'success': False, 'message': 'Один из игроков не найден'}
@@ -230,8 +230,8 @@ class PvPManager:
             }
         
         # Получаем имена пользователей
-        winner_data = await db_manager.get_user(winner_id)
-        loser_data = await db_manager.get_user(loser_id)
+        winner_data = await get_user(winner_id)
+        loser_data = await get_user(loser_id)
         
         winner_name = winner_data.get('username', f'Игрок {winner_id}')
         loser_name = loser_data.get('username', f'Игрок {loser_id}')
@@ -282,13 +282,13 @@ class PvPManager:
             loser_id = fight_result['loser_id']
             
             # Обновляем победителя
-            await db_manager.update_user(winner_id, {
+            await update_user(winner_id, {
                 'pvp_wins': self.get_pvp_wins(winner_id) + 1,
                 'pvp_last_fight': current_time
             })
             
             # Обновляем проигравшего
-            await db_manager.update_user(loser_id, {
+            await update_user(loser_id, {
                 'pvp_losses': self.get_pvp_losses(loser_id) + 1,
                 'pvp_last_fight': current_time
             })
@@ -298,11 +298,11 @@ class PvPManager:
         
         elif fight_result['result'] == 'draw':
             # Обновляем ничьи для обоих
-            await db_manager.update_user(attacker_id, {
+            await update_user(attacker_id, {
                 'pvp_draws': self.get_pvp_draws(attacker_id) + 1,
                 'pvp_last_fight': current_time
             })
-            await db_manager.update_user(defender_id, {
+            await update_user(defender_id, {
                 'pvp_draws': self.get_pvp_draws(defender_id) + 1,
                 'pvp_last_fight': current_time
             })
@@ -329,19 +329,19 @@ class PvPManager:
                 new_attacker_mmr = attacker_mmr + k_factor * (0 - expected_win_attacker)
                 new_defender_mmr = defender_mmr + k_factor * (1 - expected_win_defender)
             
-            await db_manager.update_user(attacker_id, {'mmr': int(new_attacker_mmr)})
-            await db_manager.update_user(defender_id, {'mmr': int(new_defender_mmr)})
+            await update_user(attacker_id, {'mmr': int(new_attacker_mmr)})
+            await update_user(defender_id, {'mmr': int(new_defender_mmr)})
         
         elif fight_result['result'] == 'draw':
             new_attacker_mmr = attacker_mmr + k_factor * (0.5 - expected_win_attacker)
             new_defender_mmr = defender_mmr + k_factor * (0.5 - expected_win_defender)
             
-            await db_manager.update_user(attacker_id, {'mmr': int(new_attacker_mmr)})
-            await db_manager.update_user(defender_id, {'mmr': int(new_defender_mmr)})
+            await update_user(attacker_id, {'mmr': int(new_attacker_mmr)})
+            await update_user(defender_id, {'mmr': int(new_defender_mmr)})
     
     async def _save_pvp_fight(self, winner_id: int, loser_id: int, fight_result: Dict[str, Any]):
         """Сохранение информации о PvP бое"""
-        with db_manager.get_connection() as conn:
+        with get_connection() as conn:
             try:
                 conn.execute("""
                     INSERT INTO pvp_fights (attacker_id, defender_id, winner_id, rounds, fight_log)
@@ -354,31 +354,31 @@ class PvPManager:
     
     def get_pvp_wins(self, user_id: int) -> int:
         """Получение количества побед (вспомогательная функция)"""
-        with db_manager.get_connection() as conn:
+        with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT pvp_wins FROM users WHERE id = ?", (user_id,))
             result = cursor.fetchone()
             return result[0] if result else 0
-    
+
     def get_pvp_losses(self, user_id: int) -> int:
         """Получение количества поражений (вспомогательная функция)"""
-        with db_manager.get_connection() as conn:
+        with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT pvp_losses FROM users WHERE id = ?", (user_id,))
             result = cursor.fetchone()
             return result[0] if result else 0
-    
+
     def get_pvp_draws(self, user_id: int) -> int:
         """Получение количества ничьих (вспомогательная функция)"""
-        with db_manager.get_connection() as conn:
+        with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT pvp_draws FROM users WHERE id = ?", (user_id,))
             result = cursor.fetchone()
             return result[0] if result else 0
-    
+
     def get_mmr(self, user_id: int) -> int:
         """Получение MMR (вспомогательная функция)"""
-        with db_manager.get_connection() as conn:
+        with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT mmr FROM users WHERE id = ?", (user_id,))
             result = cursor.fetchone()
