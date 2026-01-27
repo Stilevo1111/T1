@@ -1,17 +1,11 @@
-"""Инициализация всех обработчиков"""
+"""Инициализация обработчиков PvP и фиссуры"""
 
-from .main import start, stats, profile
 from .fissure import fissure, stats as fissure_stats
-from .boss import boss
 from .pvp_system import pvp, handle_pvp_fight_callback, fight
-from .messages import handle_message, handle_pvp_buttons
 
 __all__ = [
-    # Основные обработчики
-    'start', 'stats', 'profile',
+    # Обработчики фиссуры
     'fissure', 'fissure_stats',
-    'boss',
-    'shop', 'show_category_items', 'buy', 'potion',
+    # Обработчики PvP
     'pvp', 'handle_pvp_fight_callback', 'fight',
-    'handle_message', 'handle_pvp_buttons',
 ]

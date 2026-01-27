@@ -21,13 +21,6 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 PORT = int(os.getenv("PORT", 10000))
 
-# Проверка обязательных переменных окружения
-required_env_vars = ["BOT_TOKEN", "DATABASE_URL", "RENDER_EXTERNAL_URL"]
-missing_vars = [var for var in required_env_vars if not os.getenv(var)]
-
-if missing_vars:
-    logger.error(f"Не заданы обязательные переменные окружения: {', '.join(missing_vars)}")
-    raise RuntimeError(f"Не заданы обязательные переменные окружения: {', '.join(missing_vars)}")
 
 # ================= CONSTANTS =================
 
@@ -148,5 +141,4 @@ def validate_config() -> bool:
         return False
 
 # Инициализация конфигурации
-if not validate_config():
-    raise RuntimeError("Конфигурация не прошла валидацию")
+validate_config()
