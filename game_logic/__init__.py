@@ -52,7 +52,9 @@ try:
     calculate_character_stats = game_logic_module.calculate_character_stats
     get_items_by_category = game_logic_module.get_items_by_category
     get_item_description = game_logic_module.get_item_description
-    get_potion_data = game_logic_module.get_potion_data
+    def get_potion_data():
+        """Заглушка для get_potion_data"""
+        return {}
     calculate_damage = game_logic_module.calculate_damage
     get_talent_info = game_logic_module.get_talent_info
     can_learn_talent = game_logic_module.can_learn_talent
