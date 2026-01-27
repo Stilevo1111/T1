@@ -383,6 +383,7 @@ def get_user(uid: int, username: str) -> dict:
         return get_user_sqlite(uid, username)
     else:
         # For PostgreSQL, we need to make it async
+        import asyncio
         async def _get_user_async():
             async with db_pool.acquire() as conn:
                 user = await conn.fetchrow(
@@ -408,7 +409,7 @@ def get_user(uid: int, username: str) -> dict:
                             str(uid),
                         )
                 return dict(user)
-        return _get_user_async()
+        return asyncio.run(_get_user_async())
 
 def update_user(uid: int, **kwargs):
     """Обновление данных пользователя"""
@@ -416,6 +417,7 @@ def update_user(uid: int, **kwargs):
         update_user_sqlite(uid, **kwargs)
     else:
         # For PostgreSQL, we need to make it async
+        import asyncio
         async def _update_user_async():
             async with db_pool.acquire() as conn:
                 set_clause = ", ".join([f"{k}=${i+1}" for i, k in enumerate(kwargs.keys())])
@@ -424,7 +426,7 @@ def update_user(uid: int, **kwargs):
                     f"UPDATE users SET {set_clause} WHERE user_id=${len(values)}",
                     *values
                 )
-        return _update_user_async()
+        return asyncio.run(_update_user_async())
 
 def get_top_by_stat(stat: str, limit: int = 10):
     """Получение топа по статистике"""
@@ -432,6 +434,7 @@ def get_top_by_stat(stat: str, limit: int = 10):
         return get_top_by_stat_sqlite(stat, limit)
     else:
         # For PostgreSQL, we need to make it async
+        import asyncio
         async def _get_top_by_stat_async():
             async with db_pool.acquire() as conn:
                 return await conn.fetch(f"""
@@ -440,7 +443,7 @@ def get_top_by_stat(stat: str, limit: int = 10):
                     ORDER BY {stat} DESC
                     LIMIT $1
                 """, limit)
-        return _get_top_by_stat_async()
+        return asyncio.run(_get_top_by_stat_async())
 
 def get_fissure_top(limit: int = 10):
     """Получение топа по длине фиссуры"""
@@ -448,6 +451,7 @@ def get_fissure_top(limit: int = 10):
         return get_fissure_top_sqlite(limit)
     else:
         # For PostgreSQL, we need to make it async
+        import asyncio
         async def _get_fissure_top_async():
             async with db_pool.acquire() as conn:
                 return await conn.fetch("""
@@ -456,7 +460,7 @@ def get_fissure_top(limit: int = 10):
                     ORDER BY fissure DESC
                     LIMIT $1
                 """, limit)
-        return _get_fissure_top_async()
+        return asyncio.run(_get_fissure_top_async())
 
 def update_fissure(uid: int, fissure: float, ts: float):
     """Обновление длины фиссуры пользователя"""
@@ -464,10 +468,11 @@ def update_fissure(uid: int, fissure: float, ts: float):
         update_fissure_sqlite(uid, fissure, ts)
     else:
         # For PostgreSQL, we need to make it async
+        import asyncio
         async def _update_fissure_async():
             async with db_pool.acquire() as conn:
                 await conn.execute(
                     "UPDATE users SET fissure=$1, last_fissure=$2 WHERE user_id=$3",
                     fissure, ts, str(uid),
                 )
-        return _update_fissure_async()
+        return asyncio.run(_update_fissure_async())

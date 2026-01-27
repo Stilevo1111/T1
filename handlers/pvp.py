@@ -358,10 +358,10 @@ async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids:
             pass
 
 # Регистрация обработчиков колбэков
-def register_pvp_callbacks(application):
+def register_pvp_callbacks(app):
     """Регистрация обработчиков колбэков для PvP"""
-    application.add_handler(CallbackQueryHandler(handle_pvp_fight_callback, pattern=r"^pvp_fight_\d+$"))
-    application.add_handler(CallbackQueryHandler(handle_pvp_refresh, pattern=r"^pvp_refresh$"))
+    app.add_handler(CallbackQueryHandler(handle_pvp_fight_callback, pattern=r"^pvp_fight_\d+$"))
+    app.add_handler(CallbackQueryHandler(handle_pvp_refresh, pattern=r"^pvp_refresh$"))
 
 # Экспортируем функции для использования в handlers/__init__.py
 __all__ = ['pvp', 'fight', 'handle_pvp_fight_callback', 'handle_pvp_refresh', 'register_pvp_callbacks']

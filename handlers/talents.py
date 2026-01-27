@@ -523,11 +523,11 @@ async def achievements(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
 # Регистрация обработчиков колбэков
-def register_talent_callbacks(application):
+def register_talent_callbacks(app):
     """Регистрация обработчиков колбэков для талантов"""
-    application.add_handler(CallbackQueryHandler(handle_talents_category, pattern=r"^talents_category_"))
-    application.add_handler(CallbackQueryHandler(handle_talents_stats, pattern=r"^talents_stats$"))
-    application.add_handler(CallbackQueryHandler(handle_talents_main, pattern=r"^talents_main$"))
-    application.add_handler(CallbackQueryHandler(handle_learn_talent_callback, pattern=r"^learn_talent_"))
+    app.add_handler(CallbackQueryHandler(handle_talents_category, pattern=r"^talents_category_"))
+    app.add_handler(CallbackQueryHandler(handle_talents_stats, pattern=r"^talents_stats$"))
+    app.add_handler(CallbackQueryHandler(handle_talents_main, pattern=r"^talents_main$"))
+    app.add_handler(CallbackQueryHandler(handle_learn_talent_callback, pattern=r"^learn_talent_"))
 
 

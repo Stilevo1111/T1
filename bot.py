@@ -38,6 +38,9 @@ from handlers.messages import handle_message, handle_pvp_buttons
 # Импортируем систему регистрации
 from handlers.register_handlers import register_all_handlers
 
+# Импортируем меню
+from handlers.menu import handle_menu_callback
+
 # ================= ENTRY POINT =================
 
 def create_application() -> Application:
@@ -90,7 +93,6 @@ def setup_handlers(app: Application) -> None:
         ))
         
         # Callback-обработчик для интерактивного меню
-        from handlers.menu import handle_menu_callback
         app.add_handler(CallbackQueryHandler(handle_menu_callback))
 
         # Текстовые обработчики

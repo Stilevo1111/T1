@@ -296,8 +296,8 @@ async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids:
             pass
 
 # Регистрация обработчиков колбэков
-def register_shop_callbacks(application):
+def register_shop_callbacks(app):
     """Регистрация обработчиков колбэков для магазина"""
-    application.add_handler(CallbackQueryHandler(buy_item_callback, pattern=r"^buy_.*$"))
+    app.add_handler(CallbackQueryHandler(buy_item_callback, pattern=r"^buy_.*$"))
 
 
