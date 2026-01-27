@@ -3,7 +3,7 @@
 import math
 import logging
 from typing import Dict, Any, Tuple
-from database.real_database import db_manager
+from database import get_user, update_user
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ class LevelSystem:
         new_level, progress = LevelSystem.calculate_level_from_exp(total_exp)
         
         # Получаем текущий уровень
-        user = await db_manager.get_user(user_id)
+        user = await get_user(user_id, "temp")
         if not user:
             return {'level_up': False}
         
@@ -117,7 +117,7 @@ class LevelSystem:
                     total_bonuses[stat] += bonus
             
             # Обновляем пользователя
-            await db_manager.update_user(user_id, {
+            await update_user(user_id, {
                 'level': new_level,
                 'hp': user.get('hp', 1000) + total_bonuses['hp'],
                 'max_hp': user.get('max_hp', 1000) + total_bonuses['max_hp'],
@@ -142,7 +142,7 @@ class LevelSystem:
         
         else:
             # Обновляем только опыт
-            await db_manager.update_user(user_id, {'exp': total_exp})
+            await update_user(user_id, {'exp': total_exp})
             
             return {
                 'level_up': False,
@@ -202,7 +202,8 @@ class CharacterStats:
     @staticmethod
     async def apply_item_bonuses(user_id: int, base_stats: Dict[str, Any]) -> Dict[str, Any]:
         """Применение бонусов от предметов"""
-        inventory = await db_manager.get_user_inventory(user_id)
+        # Заглушка для временного решения - возвращаем базовые статы без бонусов
+        return base_stats
         
         # Бонусы от предметов
         item_bonuses = {
@@ -255,7 +256,8 @@ class CharacterStats:
     @staticmethod
     async def apply_talent_bonuses(user_id: int, base_stats: Dict[str, Any]) -> Dict[str, Any]:
         """Применение бонусов от талантов"""
-        learned_talents = await db_manager.get_learned_talents(user_id)
+        # Заглушка для временного решения - возвращаем базовые статы без бонусов
+        return base_stats
         
         # База данных талантов с их бонусами
         talents_db = {
@@ -351,7 +353,7 @@ class CharacterStats:
     @staticmethod
     async def get_full_character_stats(user_id: int) -> Dict[str, Any]:
         """Получение полной статистики персонажа"""
-        user = await db_manager.get_user(user_id)
+        user = await get_user(user_id, "temp")
         if not user:
             return {}
         
