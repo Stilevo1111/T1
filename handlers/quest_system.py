@@ -5,6 +5,9 @@ import random
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
+from telegram import Update
+from telegram.ext import ContextTypes
+
 from database.real_database import db_manager
 
 logger = logging.getLogger(__name__)
