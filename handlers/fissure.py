@@ -2,7 +2,7 @@
 
 import logging
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -78,6 +78,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 # Импортируем calculate_character_stats для использования в stats
+import random
 from game_logic import calculate_character_stats
 
 def get_fissure_result_with_length(current_length: float) -> Tuple[float, str, str]:
