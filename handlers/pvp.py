@@ -1,7 +1,7 @@
 """PvP обработчики для Telegram бота"""
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 import asyncio
 
