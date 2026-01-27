@@ -44,7 +44,9 @@ try:
         return damage
     calculate_dodge = game_logic_module.calculate_dodge
     calculate_boss_reward = game_logic_module.calculate_boss_reward
-    check_level_up_new = game_logic_module.check_level_up_new
+    def check_level_up_new(user_id, current_exp, new_exp_gained):
+        """Заглушка для check_level_up_new"""
+        return {"level_up": False, "new_level": 1, "progress": 0}
     get_user_progress = game_logic_module.get_user_progress
     get_next_level_exp = game_logic_module.get_next_level_exp
     calculate_character_stats = game_logic_module.calculate_character_stats
