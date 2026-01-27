@@ -1,25 +1,9 @@
 """Модуль для создания клавиатур"""
 
-from telegram import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from typing import List, Optional
 
 # ================= КЛАВИАТУРЫ =================
-
-MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [["👹 BOSS", "🛒 SHOP"], ["⚔️ PVP"], ["🍆 FISSURE", "👤 ПРОФИЛЬ"], ["🎯 ТАЛАНТЫ"]],
-    resize_keyboard=True,
-)
-
-FISSURE_KEYBOARD = ReplyKeyboardMarkup(
-    [["🎲 ROLL"], ["📊 STATS", "⬅️ НАЗАД"]],
-    resize_keyboard=True,
-)
-
-# Клавиатура категорий магазина
-SHOP_CATEGORIES_KEYBOARD = ReplyKeyboardMarkup(
-    [["👟 Сапоги", "🛡️ Броня"], ["🗡️ Оружие", "🛡️ Защита"], ["🔮 Поддержка", "🧪 Зелья"], ["⬅️ НАЗАД"]],
-    resize_keyboard=True,
-)
 
 def create_talent_keyboard(talents_data: dict, user_talents: dict, user_level: int) -> Optional[InlineKeyboardMarkup]:
     """Создает inline-клавиатуру для талантов"""
@@ -54,20 +38,27 @@ def create_talent_keyboard(talents_data: dict, user_talents: dict, user_level: i
         print(f"Ошибка создания клавиатуры талантов: {e}")
         return None
 
-def create_pvp_keyboard(opponents: list) -> Optional[ReplyKeyboardMarkup]:
-    """Создает клавиатуру для PvP противников"""
+def create_pvp_keyboard(opponents: list) -> Optional[InlineKeyboardMarkup]:
+    """Создает inline-клавиатуру для PvP противников"""
     try:
         if not opponents:
             return None
         
         keyboard = []
-        for i, opponent in enumerate(opponents[:10]):  # Ограничиваем 10 противниками
-            row = [f"👤 {opponent['username']} (MMR: {opponent['mmr']})"]
-            keyboard.append(row)
-            keyboard.append([f"/fight_{opponent['user_id']}"])
+        for opponent in opponents:
+            opponent_id = opponent['user_id']
+            opponent_name = opponent['username']
+            opponent_mmr = opponent['mmr']
+            opponent_level = opponent['level']
+            
+            button_text = f"⚔️ {opponent_name} (Lvl {opponent_level}, MMR {opponent_mmr})"
+            button = InlineKeyboardButton(button_text, callback_data=f"pvp_fight_{opponent_id}")
+            keyboard.append([button])
         
-        keyboard.append(["⬅️ НАЗАД"])
-        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        keyboard.append([InlineKeyboardButton("🔄 Обновить список", callback_data="pvp_refresh")])
+        keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="main_menu")])
+        
+        return InlineKeyboardMarkup(keyboard)
     except Exception as e:
         print(f"Ошибка создания клавиатуры PvP: {e}")
         return None

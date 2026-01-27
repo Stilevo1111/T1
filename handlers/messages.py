@@ -16,49 +16,42 @@ from handlers.talents import add_str, add_agi, add_int, learn, level_up, handle_
 from handlers.heal import heal
 
 from utils.validators import validate_talent_id, validate_user_id
-from utils.keyboard import MAIN_KEYBOARD, FISSURE_KEYBOARD
 
 logger = logging.getLogger(__name__)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик текстовых сообщений"""
+    """Обработчик текстовых сообщений - только для системных команд"""
     try:
         text = update.message.text
         user_id = update.effective_user.id
         
-        if text == "👹 BOSS":
-            await boss(update, context)
-        elif text == "🛒 SHOP":
-            await shop(update, context)
-        elif text == "⚔️ PVP":
-            await pvp(update, context)
-        elif text == "👤 ПРОФИЛЬ":
-            await profile(update, context)
-        elif text == "📊 STATS":
+        # Оставляем только системные команды, удаляем текстовый интерфейс
+        if text == "/start":
+            await start(update, context)
+        elif text == "/stats":
             await stats(update, context)
-        elif text == "🍆 FISSURE":
-            await update.message.reply_text("🍆 Меню фиссуры", reply_markup=FISSURE_KEYBOARD)
-        elif text == "🎲 ROLL":
+        elif text == "/profile":
+            await profile(update, context)
+        elif text == "/fissure":
             await fissure(update, context)
-        elif text == "⬅️ НАЗАД":
-            await update.message.reply_text("⬅️ Вернулись в главное меню", reply_markup=MAIN_KEYBOARD)
-        # Обработка категорий магазина
-        elif text == "👟 Сапоги":
-            await show_category_items(update, context, "Сапоги")
-        elif text == "🛡️ Броня":
-            await show_category_items(update, context, "Броня")
-        elif text == "🗡️ Оружие":
-            await show_category_items(update, context, "Оружие")
-        elif text == "🛡️ Защита":
-            await show_category_items(update, context, "Защита")
-        elif text == "🔮 Поддержка":
-            await show_category_items(update, context, "Поддержка")
-        elif text == "🧪 Зелья":
-            await show_category_items(update, context, "Зелья")
+        elif text == "/boss":
+            await boss(update, context)
+        elif text == "/attack":
+            await attack(update, context)
+        elif text == "/shop":
+            await shop(update, context)
+        elif text == "/pvp":
+            await pvp(update, context)
+        elif text == "/top":
+            await top(update, context)
+        elif text == "/talents":
+            await talents(update, context)
+        elif text == "/heal":
+            await heal(update, context)
         else:
             await update.message.reply_text(
-                f"Неизвестная команда. Используйте кнопки меню ниже.",
-                reply_markup=None  # Нужно импортировать MAIN_KEYBOARD
+                "Для управления ботом используйте кнопки меню.\n"
+                "Доступные команды: /start, /profile, /stats, /fissure, /boss, /pvp, /shop, /top, /talents, /heal"
             )
     except Exception as e:
         logger.error(f"Ошибка в handle_message: {e}")
