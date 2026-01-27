@@ -35,10 +35,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             reply_markup=get_main_menu_keyboard(),
             parse_mode='Markdown'
         )
-        # Автоудаление ответа
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
     except Exception as e:
         logger.error(f"Ошибка в команде /start: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
@@ -54,9 +50,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"📊 Твоя Фиссура:\n📏 {user['fissure']:.1f} см",
             reply_markup=FISSURE_KEYBOARD
         )
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
     except Exception as e:
         logger.error(f"Ошибка в команде /stats: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
@@ -70,20 +63,8 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         text = format_stats_text(user, stats)
         msg = await update.message.reply_text(text)
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
     except Exception as e:
         logger.error(f"Ошибка в команде /profile: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
 
-async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list) -> None:
-    """Автоматическое удаление сообщений через заданное время"""
-    import asyncio
-    await asyncio.sleep(30)  # 30 секунд
-    for msg_id in msg_ids:
-        try:
-            await context.bot.delete_message(chat_id, msg_id)
-        except Exception:
-            pass

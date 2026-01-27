@@ -50,9 +50,6 @@ async def boss(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             message_text,
             parse_mode='Markdown'
         )
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
     except Exception as e:
         logger.error(f"КРИТИЧЕСКАЯ ОШИБКА в функции boss: {e}", exc_info=True)
         await update.message.reply_text(
@@ -252,19 +249,7 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )
         
         msg = await update.message.reply_text(text)
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
     except Exception as e:
         logger.error(f"ОШИБКА в attack: {e}", exc_info=True)
         await update.message.reply_text("❌ Ошибка при атаке")
 
-async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list) -> None:
-    """Автоматическое удаление сообщений через заданное время"""
-    import asyncio
-    await asyncio.sleep(30)  # 30 секунд
-    for msg_id in msg_ids:
-        try:
-            await context.bot.delete_message(chat_id, msg_id)
-        except Exception:
-            pass

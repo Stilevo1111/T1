@@ -29,7 +29,6 @@ from handlers.fissure import fissure, fissure_top, stats as fissure_stats
 from handlers.boss import boss, attack
 from handlers.shop import shop, show_category_items, buy, potion
 from handlers.pvp import pvp, handle_pvp_fight_callback, fight
-from handlers.top import top
 from handlers.talents import talents, learn_talent, add_stat, level_up_handler, achievements
 from handlers.talents import add_str, add_agi, add_int, learn, level_up, handle_talents_category, handle_talents_stats, handle_talents_main, handle_learn_talent_callback
 from handlers.heal import heal
@@ -71,7 +70,6 @@ def setup_handlers(app: Application) -> None:
         app.add_handler(CommandHandler("heal", heal))
         app.add_handler(CommandHandler("pvp", pvp))
         app.add_handler(CommandHandler("fight", fight))
-        app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("fissure", fissure))
         app.add_handler(CommandHandler("fissure_top", fissure_top))
         app.add_handler(CommandHandler("talents", talents))

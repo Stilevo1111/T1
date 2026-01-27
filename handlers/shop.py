@@ -16,9 +16,6 @@ async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /shop"""
     try:
         msg = await update.message.reply_text("🛒 Выберите категорию:", reply_markup=SHOP_CATEGORIES_KEYBOARD)
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
     except Exception as e:
         logger.error(f"Ошибка в команде /shop: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
@@ -171,9 +168,6 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Снимаем золото
         await update_user(update.effective_user.id, gold=user["gold"] - cost)
         msg = await update.message.reply_text(f"✅ Куплен и экипирован {item_name} за {cost}g")
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
     except Exception as e:
         logger.error(f"Ошибка в команде /buy: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
@@ -211,9 +205,6 @@ async def potion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Снимаем золото
         await update_user(update.effective_user.id, gold=user["gold"] - cost)
         msg = await update.message.reply_text(f"🧪 Куплено {potion_type} зелье за {cost}g")
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
     except Exception as e:
         logger.error(f"Ошибка в команде /potion: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
@@ -285,15 +276,6 @@ async def inventory(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Ошибка в команде /inventory: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
-async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list) -> None:
-    """Автоматическое удаление сообщений через заданное время"""
-    import asyncio
-    await asyncio.sleep(30)  # 30 секунд
-    for msg_id in msg_ids:
-        try:
-            await context.bot.delete_message(chat_id, msg_id)
-        except Exception:
-            pass
 
 # Регистрация обработчиков колбэков
 def register_shop_callbacks(app):

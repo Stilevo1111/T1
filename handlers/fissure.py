@@ -31,9 +31,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             msg = await update.message.reply_text(
                 f"⏳ Через {hours} ч. {minutes} мин."
             )
-            context.application.create_task(
-                auto_delete(context, update.effective_chat.id, [msg.message_id])
-            )
         else:
             # Получаем текущую длину фиссуры пользователя
             current_length = user["fissure"]
@@ -41,9 +38,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update_fissure(update.effective_user.id, new_value, now)
             msg = await update.message.reply_text(
                 f"{text}\n{phrase}\n📏 Теперь {new_value:.1f} см"
-            )
-            context.application.create_task(
-                auto_delete(context, update.effective_chat.id, [msg.message_id])
             )
     except Exception as e:
         logger.error(f"Ошибка в команде /fissure: {e}")
@@ -77,23 +71,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"📊 Твоя Фиссура:\n📏 {user['fissure']:.1f} см",
             reply_markup=FISSURE_KEYBOARD
         )
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
     except Exception as e:
         logger.error(f"Ошибка в команде /stats (fissure): {e}")
         if update and update.message:
             await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
-async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list) -> None:
-    """Автоматическое удаление сообщений через заданное время"""
-    import asyncio
-    await asyncio.sleep(AUTO_DELETE_DELAY)
-    for msg_id in msg_ids:
-        try:
-            await context.bot.delete_message(chat_id, msg_id)
-        except Exception:
-            pass
 
 # Импортируем calculate_character_stats для использования в stats
 from game_logic import calculate_character_stats

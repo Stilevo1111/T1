@@ -60,9 +60,6 @@ async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup = InlineKeyboardMarkup(keyboard)
         text = f"👥 Доступные противники для PvP:\n\n{format_pvp_opponents(opponents)}"
         msg = await update.message.reply_text(text, reply_markup=reply_markup)
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
     except Exception as e:
         logger.error(f"Ошибка в команде /pvp: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
@@ -340,22 +337,10 @@ async def fight(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update_user(enemy_id, hp=stats2["max_hp"], mmr=winner_mmr if winner == user2 else loser_mmr, exp=winner_exp if winner == user2 else loser_exp, last_pvp=time.time())
         
         msg = await update.message.reply_text(text)
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
     except Exception as e:
         logger.error(f"Ошибка в команде /fight: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
-async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list) -> None:
-    """Автоматическое удаление сообщений через заданное время"""
-    import asyncio
-    await asyncio.sleep(30)  # 30 секунд
-    for msg_id in msg_ids:
-        try:
-            await context.bot.delete_message(chat_id, msg_id)
-        except Exception:
-            pass
 
 # Регистрация обработчиков колбэков
 def register_pvp_callbacks(app):
