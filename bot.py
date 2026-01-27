@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 from handlers.main import start, stats, profile
 from handlers.fissure import fissure, stats as fissure_stats
 from handlers.boss import boss
-from handlers.shop import shop, show_category_items, buy, potion
+from handlers import shop, show_category_items, buy, potion
 from handlers.pvp import pvp, handle_pvp_fight_callback, fight
 from handlers.top import top
 from handlers.talents import talents, learn_talent, add_stat, level_up_handler, achievements
