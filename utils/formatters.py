@@ -9,9 +9,16 @@ def format_stats_text(user: Dict, stats: Dict) -> str:
         progress = get_user_progress(user)
         next_level_exp = get_next_level_exp(user["level"])
         
+        # Рассчитываем винрейт
+        wins = user.get('pvp_wins', 0)
+        losses = user.get('pvp_losses', 0)
+        total_matches = wins + losses
+        winrate = (wins / total_matches * 100) if total_matches > 0 else 0
+        
         text = (f"👤 ПРОФИЛЬ {user['username']}\n\n"
                 f"🎮 Уровень: {user['level']} (Опыт: {user['exp']}/{next_level_exp})\n"
-                f"📊 Винрейт: {user['mmr']} MMR\n"
+                f"📊 Винрейт: {user['mmr']} MMR ({winrate:.1f}%)\n"
+                f"⚔️ PvP: {wins} побед | {losses} поражений\n"
                 f"👹 Убито боссов: {user.get('bosses_killed', 0)}\n"
                 f"🗡️ Общий урон по боссам: {user['boss_dmg']}\n\n"
                 f"❤️ HP: {user['hp']}/{stats['max_hp']}\n"

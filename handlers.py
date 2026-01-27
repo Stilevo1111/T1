@@ -21,7 +21,7 @@ from game_logic import (
 # ================= KEYBOARD =================
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [["👹 BOSS", "🛒 SHOP"], ["⚔️ PVP", "🏆 TOP"], ["🍆 FISSURE", "👤 ПРОФИЛЬ"]],
+    [["👹 BOSS", "🛒 SHOP"], ["⚔️ PVP"], ["🍆 FISSURE", "👤 ПРОФИЛЬ"]],
     resize_keyboard=True,
 )
 
@@ -935,8 +935,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await shop(update, context)
     elif text == "⚔️ PVP":
         await pvp(update, context)
-    elif text == "🏆 TOP":
-        await top(update, context)
     elif text == "👤 ПРОФИЛЬ":
         await profile(update, context)
     elif text == "📊 STATS":

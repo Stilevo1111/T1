@@ -26,12 +26,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         msg = await update.message.reply_text(
             f"🌟 Добро пожаловать в Fissure Bot, {user['username']}!\n\n"
-            f"🎮 *Ваш персонаж:*\n"
-            f"• Уровень: {user['level']}\n"
-            f"• Опыт: {user['exp']}/{next_level_exp}\n"
-            f"• Золото: {user['gold']}\n"
-            f"• Fissure: {user['fissure']:.1f} см\n\n"
-            f"📋 *Выберите действие:*",
+            f"📋 Выберите действие:",
             reply_markup=get_main_menu_keyboard(),
             parse_mode='Markdown'
         )

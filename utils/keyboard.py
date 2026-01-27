@@ -6,7 +6,7 @@ from typing import List, Optional
 # ================= КЛАВИАТУРЫ =================
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [["👹 BOSS", "🛒 SHOP"], ["⚔️ PVP", "🏆 TOP"], ["🍆 FISSURE", "👤 ПРОФИЛЬ"], ["🎯 ТАЛАНТЫ"]],
+    [["👹 BOSS", "🛒 SHOP"], ["⚔️ PVP"], ["🍆 FISSURE", "👤 ПРОФИЛЬ"], ["🎯 ТАЛАНТЫ"]],
     resize_keyboard=True,
 )
 

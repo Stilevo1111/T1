@@ -187,7 +187,7 @@ async def update_fissure(uid: int, fissure: float, ts: float) -> None:
         raise
 
 async def get_pvp_opponents(user_id: int, min_mmr_ratio: float = 0.5, limit: int = 10) -> List[Dict[str, Any]]:
-    """Получение списка PvP противников"""
+    """Получение списка PvP противников - всех игроков из базы данных"""
     try:
         if not validate_user_id(user_id):
             raise ValueError("Некорректный ID пользователя")
@@ -197,22 +197,14 @@ async def get_pvp_opponents(user_id: int, min_mmr_ratio: float = 0.5, limit: int
             raise RuntimeError("Пул соединений не инициализирован")
         
         async with pool.acquire() as conn:
-            # Получаем MMR пользователя для расчета диапазона
-            user_data = await conn.fetchrow("SELECT mmr FROM users WHERE user_id = $1", str(user_id))
-            if not user_data:
-                return []
-            
-            user_mmr = user_data['mmr']
-            min_mmr = user_mmr * min_mmr_ratio
-            max_mmr = user_mmr * 2.0  # Максимальный MMR противника
-            
+            # Получаем всех игроков из базы данных, исключая самого пользователя
             opponents = await conn.fetch("""
                 SELECT username, mmr, level, str, agi, int, hp, hp_max, user_id
                 FROM users 
-                WHERE user_id != $1 AND mmr >= $2 AND mmr <= $3
+                WHERE user_id != $1
                 ORDER BY mmr DESC
-                LIMIT $4
-            """, str(user_id), min_mmr, max_mmr, limit)
+                LIMIT $2
+            """, str(user_id), limit)
             
             logger.info(f"Найдено {len(opponents)} противников для пользователя {user_id}")
             return opponents

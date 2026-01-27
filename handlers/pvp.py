@@ -30,8 +30,6 @@ async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         # Создаем клавиатуру с кнопками для каждого противника
         keyboard = []
-        row = []
-        max_buttons_per_row = 2
         
         for opponent in opponents:
             opponent_id = opponent['user_id']
@@ -40,18 +38,9 @@ async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             opponent_level = opponent['level']
             
             # Создаем кнопку для вызова на дуэль
-            button_text = f"⚔️ {opponent_name} (Lvl {opponent_level})"
+            button_text = f"⚔️ {opponent_name} (Lvl {opponent_level}, MMR {opponent_mmr})"
             button = InlineKeyboardButton(button_text, callback_data=f"pvp_fight_{opponent_id}")
-            row.append(button)
-            
-            # Добавляем строку, если набралось достаточно кнопок
-            if len(row) == max_buttons_per_row:
-                keyboard.append(row)
-                row = []
-        
-        # Добавляем оставшиеся кнопки
-        if row:
-            keyboard.append(row)
+            keyboard.append([button])
         
         # Добавляем кнопку для обновления списка
         keyboard.append([InlineKeyboardButton("🔄 Обновить список", callback_data="pvp_refresh")])
@@ -153,9 +142,15 @@ async def handle_pvp_fight_callback(update: Update, context: ContextTypes.DEFAUL
         winner_exp = winner["exp"] + exp_change
         loser_exp = loser["exp"] + exp_change // 2  # Проигравший получает немного опыта
         
+        # Обновляем счетчики побед и поражений
+        winner_wins = winner.get("pvp_wins", 0) + 1
+        loser_losses = loser.get("pvp_losses", 0) + 1
+        
         text += f"\n📊 ИЗМЕНЕНИЯ:\n"
         text += f"🥇 {winner['username']}: +{mmr_change} MMR, +{exp_change} EXP\n"
+        text += f"   ⚔️ Победа! Счет: {winner_wins} побед | {winner.get('pvp_losses', 0)} поражений\n"
         text += f"🥈 {loser['username']}: -{mmr_change} MMR, +{exp_change // 2} EXP\n"
+        text += f"   💀 Поражение! Счет: {loser.get('pvp_wins', 0)} побед | {loser_losses} поражений\n"
         
         # Восстановление HP до 100% и установка кулдауна
         text += f"\n💚 Оба игрока восстановили HP до 100%\n"
@@ -199,8 +194,6 @@ async def handle_pvp_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         # Создаем обновленную клавиатуру
         keyboard = []
-        row = []
-        max_buttons_per_row = 2
         
         for opponent in opponents:
             opponent_id = opponent['user_id']
@@ -208,16 +201,9 @@ async def handle_pvp_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE)
             opponent_mmr = opponent['mmr']
             opponent_level = opponent['level']
             
-            button_text = f"⚔️ {opponent_name} (Lvl {opponent_level})"
+            button_text = f"⚔️ {opponent_name} (Lvl {opponent_level}, MMR {opponent_mmr})"
             button = InlineKeyboardButton(button_text, callback_data=f"pvp_fight_{opponent_id}")
-            row.append(button)
-            
-            if len(row) == max_buttons_per_row:
-                keyboard.append(row)
-                row = []
-        
-        if row:
-            keyboard.append(row)
+            keyboard.append([button])
         
         keyboard.append([InlineKeyboardButton("🔄 Обновить список", callback_data="pvp_refresh")])
         keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="main_menu")])
