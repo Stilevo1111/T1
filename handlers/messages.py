@@ -16,6 +16,7 @@ from handlers.talents import add_str, add_agi, add_int, learn, level_up, handle_
 from handlers.heal import heal
 
 from utils.validators import validate_talent_id, validate_user_id
+from utils.keyboard import MAIN_KEYBOARD, FISSURE_KEYBOARD
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +39,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         elif text == "📊 STATS":
             await stats(update, context)
         elif text == "🍆 FISSURE":
-            await update.message.reply_text("🍆 Меню фиссуры", reply_markup=None)  # Нужно импортировать FISSURE_KEYBOARD
+            await update.message.reply_text("🍆 Меню фиссуры", reply_markup=FISSURE_KEYBOARD)
         elif text == "🎲 ROLL":
             await fissure(update, context)
         elif text == "⬅️ НАЗАД":
-            await update.message.reply_text("⬅️ Вернулись в главное меню", reply_markup=None)  # Нужно импортировать MAIN_KEYBOARD
+            await update.message.reply_text("⬅️ Вернулись в главное меню", reply_markup=MAIN_KEYBOARD)
         # Обработка категорий магазина
         elif text == "👟 Сапоги":
             await show_category_items(update, context, "Сапоги")
