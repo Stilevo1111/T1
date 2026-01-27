@@ -57,11 +57,26 @@ try:
         return {}
     calculate_damage = game_logic_module.calculate_damage
     get_talent_info = game_logic_module.get_talent_info
-    can_learn_talent = game_logic_module.can_learn_talent
-    apply_talent_effects = game_logic_module.apply_talent_effects
-    get_user_achievements = game_logic_module.get_user_achievements
-    regenerate_hp = game_logic_module.regenerate_hp
-    check_level_up = game_logic_module.check_level_up
+    
+    def can_learn_talent(user, talent_id):
+        """Заглушка для can_learn_talent"""
+        return True
+    
+    def apply_talent_effects(user, damage):
+        """Заглушка для apply_talent_effects"""
+        return damage
+    
+    def get_user_achievements(user_id):
+        """Заглушка для get_user_achievements"""
+        return []
+    
+    def regenerate_hp(user, amount):
+        """Заглушка для regenerate_hp"""
+        return user
+    
+    def check_level_up(user):
+        """Заглушка для check_level_up"""
+        return False
 
 except ImportError as e:
     print(f"Ошибка при импорте из game_logic.py: {e}")
