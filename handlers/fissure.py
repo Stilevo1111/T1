@@ -80,5 +80,24 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # Импортируем calculate_character_stats для использования в stats
 from game_logic import calculate_character_stats
 
+def get_fissure_result_with_length(current_length: float) -> Tuple[float, str, str]:
+    """Получает результат броска фиссуры с учетом текущей длины"""
+    # Генерируем случайное изменение длины
+    change = random.uniform(-5.0, 10.0)  # Изменение от -5 до +10 см
+    new_length = max(0.1, current_length + change)  # Минимальная длина 0.1 см
+    
+    # Определяем текст результата
+    if change > 0:
+        text = f"📈 +{change:.1f} см!"
+        phrase = random.choice(["Ты стал сильнее!", "Продолжай в том же духе!", "Великолепно!"])
+    elif change < 0:
+        text = f"📉 {change:.1f} см..."
+        phrase = random.choice(["Не расстраивайся!", "Будет лучше в следующий раз!", "Повезет в другой раз!"])
+    else:
+        text = "➡️ Без изменений"
+        phrase = random.choice(["Стабильность — признак мастерства!", "Остаемся на месте!", "Ничего не изменилось"])
+    
+    return new_length, text, phrase
+
 
 
