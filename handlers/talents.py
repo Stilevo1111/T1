@@ -379,39 +379,6 @@ async def add_int(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Добавить очки к интеллекту"""
     await add_stat(update, context, "int")
 
-async def stats_distribute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Распределить очки характеристик"""
-    try:
-        username = update.effective_user.username or update.effective_user.full_name
-        user = await get_user(update.effective_user.id, username)
-        
-        try:
-            points_to_distribute = int(context.args[0]) if context.args else None
-            if points_to_distribute is None:
-                # Показываем текущее распределение
-                unspent = user.get("unspent_stats", 0)
-                text = f"📊 РАСПРЕДЕЛЕНИЕ ХАРАКТЕРИСТИК\n"
-                text += f"💪 Доступно очков: {unspent}\n"
-                text += f"Текущие характеристики:\n"
-                text += f"  💪 Сила: {user['str']}\n"
-                text += f"  🏃‍♂️ Ловкость: {user['agi']}\n"
-                text += f"  🧠 Интеллект: {user['int']}\n\n"
-                text += "💡 Используйте:\n"
-                text += "/add_str POINTS - добавить к силе\n"
-                text += "/add_agi POINTS - добавить к ловкости\n"
-                text += "/add_int POINTS - добавить к интеллекту\n"
-                await update.message.reply_text(text)
-                return
-            
-            if points_to_distribute > user.get("unspent_stats", 0):
-                await update.message.reply_text("❌ Недостаточно очков характеристик")
-                return
-                
-        except ValueError:
-            await update.message.reply_text("❌ Укажите количество очков числом")
-    except Exception as e:
-        logger.error(f"Ошибка в stats_distribute: {e}")
-        await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
 async def add_stat(update: Update, context: ContextTypes.DEFAULT_TYPE, stat_type: str) -> None:
     """Добавить очки к характеристике"""

@@ -77,24 +77,6 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Ошибка в команде /profile: {e}")
         await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
-async def debug_boss(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Отладочная информация о боссе"""
-    try:
-        user = await get_user(update.effective_user.id, "")
-        text = f"""
-📊 ДЕБАГ ИНФОРМАЦИЯ:
-👤 Пользователь: {user['username']}
-❤️ HP игрока: {user['hp']}/{user['hp_max']}
-👹 Босс: {user['boss_name']}
-❤️ HP босса: {user['boss_hp']}/{user['boss_max']}
-📊 Уровень босса: {user['boss_level']}
-⚡ Способности: {user.get('boss_ability', 'Нет')}
-🗡️ Общий урон по боссу: {user['boss_dmg']}
-"""
-        await update.message.reply_text(text)
-    except Exception as e:
-        logger.error(f"Ошибка в debug_boss: {e}")
-        await update.message.reply_text("❌ Произошла ошибка.")
 
 async def auto_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_ids: list) -> None:
     """Автоматическое удаление сообщений через заданное время"""

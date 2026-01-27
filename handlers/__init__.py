@@ -1,6 +1,6 @@
 """Инициализация всех обработчиков"""
 
-from .main import start, stats, profile, debug_boss
+from .main import start, stats, profile
 from .fissure import fissure, fissure_top, stats as fissure_stats
 from .boss import boss, attack
 from .shop import shop, show_category_items, buy, potion
@@ -24,7 +24,7 @@ from .fissure_menu import register_fissure_menu_handlers
 
 __all__ = [
     # Основные обработчики
-    'start', 'stats', 'profile', 'debug_boss',
+    'start', 'stats', 'profile',
     'fissure', 'fissure_top', 'fissure_stats',
     'boss', 'attack',
     'shop', 'show_category_items', 'buy', 'potion',

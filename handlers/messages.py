@@ -5,7 +5,7 @@ from typing import Dict, Any
 from telegram import Update
 from telegram.ext import ContextTypes, filters
 
-from handlers.main import start, stats, profile, debug_boss
+from handlers.main import start, stats, profile
 from handlers.fissure import fissure, fissure_top, stats as fissure_stats
 from handlers.boss import boss, attack
 from handlers.shop import shop, show_category_items, buy, potion

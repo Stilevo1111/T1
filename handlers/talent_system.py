@@ -476,57 +476,6 @@ async def level_up(update, context):
         logger.error(f"Ошибка при отображении информации о повышении уровня: {e}")
         await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
 
-async def stats_distribute(update, context):
-    """Обработчик команды /stats_distribute - распределяет очки характеристик"""
-    user_id = update.effective_user.id
-    
-    if not context.args or len(context.args) != 2:
-        await update.message.reply_text("Используйте: /stats_distribute <характеристика> <количество>")
-        await update.message.reply_text("Характеристики: str, agi, int")
-        return
-    
-    stat = context.args[0].lower()
-    try:
-        amount = int(context.args[1])
-    except ValueError:
-        await update.message.reply_text("Количество должно быть числом.")
-        return
-    
-    if stat not in ['str', 'agi', 'int']:
-        await update.message.reply_text("Неверная характеристика. Используйте: str, agi, int")
-        return
-    
-    try:
-        user = await db_manager.get_user(user_id)
-        if not user:
-            await update.message.reply_text("Пользователь не найден.")
-            return
-        
-        available_points = user.get('stat_points', 0)
-        
-        if amount <= 0:
-            await update.message.reply_text("Количество должно быть положительным числом.")
-            return
-        
-        if amount > available_points:
-            await update.message.reply_text(f"Недостаточно очков характеристик. Доступно: {available_points}")
-            return
-        
-        # Обновляем характеристики
-        current_stat = user.get(stat, 10)
-        new_stat = current_stat + amount
-        new_points = available_points - amount
-        
-        await db_manager.update_user(user_id, {
-            stat: new_stat,
-            'stat_points': new_points
-        })
-        
-        await update.message.reply_text(f"✅ Вы распределили {amount} очков в {stat}. Новое значение: {new_stat}")
-        
-    except Exception as e:
-        logger.error(f"Ошибка при распределении характеристик: {e}")
-        await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
 
 async def add_str(update, context):
     """Обработчик команды /add_str - добавляет 1 очко в силу"""
