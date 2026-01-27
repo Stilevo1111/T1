@@ -26,8 +26,6 @@ logger = logging.getLogger(__name__)
 # Импортируем систему регистрации обработчиков
 from handlers.register_handlers import register_all_handlers
 
-# Импортируем меню
-from handlers.menu import handle_menu_callback
 # Импортируем обработчики сообщений
 from handlers.messages import handle_message
 
@@ -49,8 +47,6 @@ def setup_handlers(app: Application) -> None:
         # Регистрация всех систем через модульную систему
         register_all_handlers(app)
         
-        # Callback-обработчик для интерактивного меню
-        app.add_handler(CallbackQueryHandler(handle_menu_callback))
         
         # Общий обработчик текстовых сообщений
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

@@ -19,19 +19,11 @@ SEARCHING_OPPONENT = 1
 IN_FIGHT = 2
 
 async def pvp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик команды /pvp - показывает меню PvP"""
-    keyboard = [
-        [InlineKeyboardButton("🔎 Поиск противника", callback_data="pvp_search")],
-        [InlineKeyboardButton("📊 Моя статистика", callback_data="pvp_stats")],
-        [InlineKeyboardButton("🏆 Таблица лидеров", callback_data="pvp_leaderboard")],
-        [InlineKeyboardButton("❌ Отмена поиска", callback_data="pvp_cancel")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
+    """Обработчик команды /pvp"""
     await update.message.reply_text(
-        "⚔️ Добро пожаловать в PvP арену!\n\n"
-        "Выберите действие:",
-        reply_markup=reply_markup
+        "⚔️ PvP арена\n\n"
+        "Используйте:\n"
+        "/fight USER_ID - вызов на дуэль"
     )
 
 async def pvp_search_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

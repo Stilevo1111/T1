@@ -19,7 +19,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         text = update.message.text
         user_id = update.effective_user.id
         
-        # Оставляем только системные команды, удаляем текстовый интерфейс
+        # Оставляем только системные команды
         if text == "/start":
             await start(update, context)
         elif text == "/stats":
@@ -42,8 +42,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text("Лечение в разработке")
         else:
             await update.message.reply_text(
-                "Для управления ботом используйте кнопки меню.\n"
-                "Доступные команды: /start, /profile, /stats, /fissure, /boss, /pvp, /shop, /top, /talents, /heal"
+                "Используйте команды:\n"
+                "/start, /profile, /stats, /fissure, /boss, /pvp, /shop, /top, /talents, /heal"
             )
     except Exception as e:
         logger.error(f"Ошибка в handle_message: {e}")

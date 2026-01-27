@@ -20,13 +20,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         progress = get_user_progress(user)
         next_level_exp = get_next_level_exp(user["level"])
         
-        # Импортируем меню
-        from handlers.menu import get_main_menu_keyboard
-        
         msg = await update.message.reply_text(
             f"🌟 Добро пожаловать в Fissure Bot, {user['username']}!\n\n"
-            f"📋 Выберите действие:",
-            reply_markup=get_main_menu_keyboard(),
+            f"🎮 Используйте команды:\n"
+            f"/profile - профиль\n"
+            f"/boss - босс\n"
+            f"/attack - атаковать\n"
+            f"/fissure - фиссура\n"
+            f"/shop - магазин\n"
+            f"/pvp - PvP",
             parse_mode='Markdown'
         )
     except Exception as e:
