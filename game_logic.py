@@ -48,12 +48,6 @@ ITEMS = {
     "Perseverance": {"gold": 1650, "int": 10, "hp": 150, "description": "Стойкость (+10 интеллекта, +150 HP)", "category": "Зелья"}
 }
 
-# Зелья
-POTIONS = {
-    "Minor": {"gold": 50, "heal": 20},
-    "Major": {"gold": 120, "heal": 50},
-    "Ultimate": {"gold": 300, "heal": 100}
-}
 
 # Боссы
 BOSSES = [
@@ -263,15 +257,6 @@ def check_level_restriction(user_level: int, boss_min: int, boss_max: int) -> bo
     """Проверяет, соответствует ли уровень пользователя требованиям босса"""
     return boss_min <= user_level <= boss_max
 
-def regenerate_hp(user: Dict) -> Tuple[int, float]:
-    """Регенерирует HP персонажа"""
-    current_time = time.time()
-    if current_time - user["last_heal"] >= 60:  # Каждую минуту
-        stats = calculate_character_stats(user)
-        regen_amount = int(stats["max_hp"] * (stats["hp_regen"] / 100))
-        new_hp = min(user["hp"] + regen_amount, stats["max_hp"])
-        return new_hp, current_time
-    return user["hp"], user["last_heal"]
 
 def check_level_up(user: Dict) -> bool:
     """Проверяет, нужно ли повысить уровень персонажа"""
@@ -314,9 +299,6 @@ def get_items_by_category(category: str) -> Dict[str, Dict]:
         return ITEMS
     return {name: data for name, data in ITEMS.items() if data.get("category") == category}
 
-def get_potion_data(potion_type: str) -> Optional[Dict]:
-    """Получает данные о зелье"""
-    return POTIONS.get(potion_type)
 
 def calculate_boss_reward(boss_name: str) -> Tuple[int, int]:
     """Рассчитывает награду за убийство босса"""

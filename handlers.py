@@ -75,7 +75,7 @@ def format_stats_text(user: Dict, stats: Dict) -> str:
             artifacts_text += f"  {i}. ПУСТО\n"
     
     text += artifacts_text + "\n"
-    text += "💡 Подсказка: /buy ITEM — купить предмет, /potion TYPE — купить зелье"
+    text += "💡 Подсказка: /buy ITEM — купить предмет"
     return text
 
 def format_boss_info(user: Dict) -> str:
@@ -110,8 +110,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/attack — атаковать босса\n"
         "/shop — магазин\n"
         "/buy ITEM — купить предмет\n"
-        "/potion TYPE — купить зелье\n"
-        "/heal — восстановить HP\n"
         "/pvp — PvP\n"
         "/fight USER_ID — вызов на дуэль\n"
         "/top — таблица лидеров\n"
@@ -531,60 +529,6 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def potion(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /potion"""
-    username = update.effective_user.username or update.effective_user.full_name
-    user = await get_user(update.effective_user.id, username)
-    stats = calculate_character_stats(user)
-    
-    try:
-        potion_type = context.args[0] if context.args else None
-    except:
-        await update.message.reply_text("❌ Укажите тип зелья (Minor/Major/Ultimate)")
-        return
-
-    potion_data = get_potion_data(potion_type)
-    if not potion_data:
-        await update.message.reply_text("❌ Нет такого зелья")
-        return
-
-    cost = potion_data["gold"]
-    
-    if user["gold"] < cost:
-        await update.message.reply_text("💰 Мало золота")
-        return
-
-    # Покупка зелья
-    new_hp = min(user["hp"] + potion_data["heal"], stats["max_hp"])
-    await update_user(update.effective_user.id, hp=new_hp, gold=user["gold"] - cost)
-    msg = await update.message.reply_text(f"🧪 {potion_type} зелье использовано. HP восстановлено")
-    # Автоудаление ответа
-    context.application.create_task(
-        auto_delete(context, update.effective_chat.id, [msg.message_id])
-    )
-
-
-async def heal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /heal"""
-    username = update.effective_user.username or update.effective_user.full_name
-    user = await get_user(update.effective_user.id, username)
-    stats = calculate_character_stats(user)
-    
-    # Регенерация HP
-    new_hp, last_heal = regenerate_hp(user)
-    if new_hp != user["hp"]:
-        await update_user(update.effective_user.id, hp=new_hp, last_heal=last_heal)
-        msg = await update.message.reply_text(f"💚 HP восстановлено до {new_hp}/{stats['max_hp']}")
-        # Автоудаление ответа
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
-    else:
-        msg = await update.message.reply_text("💚 HP уже восстановлено")
-        # Автоудаление ответа
-        context.application.create_task(
-            auto_delete(context, update.effective_chat.id, [msg.message_id])
-        )
 
 
 async def pvp(update: Update, context: ContextTypes.DEFAULT_TYPE):
