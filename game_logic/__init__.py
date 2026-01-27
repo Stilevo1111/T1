@@ -39,7 +39,9 @@ try:
     get_meme_message = game_logic_module.get_meme_message
     spawn_boss = game_logic_module.spawn_boss
     check_level_restriction = game_logic_module.check_level_restriction
-    calculate_damage_with_talents = game_logic_module.calculate_damage_with_talents
+    def calculate_damage_with_talents(user, damage):
+        """Заглушка для calculate_damage_with_talents"""
+        return damage
     calculate_dodge = game_logic_module.calculate_dodge
     calculate_boss_reward = game_logic_module.calculate_boss_reward
     check_level_up_new = game_logic_module.check_level_up_new
