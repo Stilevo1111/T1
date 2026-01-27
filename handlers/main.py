@@ -3,7 +3,7 @@
 import logging
 from typing import Dict, Any
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, CommandHandler
 
 from database import get_user
 from game_logic import calculate_character_stats, get_user_progress, get_next_level_exp
