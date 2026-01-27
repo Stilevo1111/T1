@@ -14,7 +14,7 @@ from telegram.ext import (
 )
 
 from config import BOT_TOKEN, RENDER_URL, PORT
-    from database import init_db
+from database import init_db
 
 # Настройка логирования
 logging.basicConfig(
