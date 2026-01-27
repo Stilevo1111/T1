@@ -328,4 +328,14 @@ def get_user_progress(user: Dict) -> Dict[str, float]:
         "level": user["level"]
     }
 
+def get_talent_info(user: Dict) -> Dict[str, any]:
+    """Получает информацию о талантах пользователя"""
+    # Временная заглушка - в будущем можно добавить систему талантов
+    return {
+        "available_points": 0,
+        "unlocked_talents": [],
+        "talent_tree": {},
+        "message": "Система талантов пока не реализована"
+    }
+
 
