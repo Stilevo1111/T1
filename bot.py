@@ -26,8 +26,6 @@ logger = logging.getLogger(__name__)
 # Импортируем систему регистрации обработчиков
 from handlers.register_handlers import register_all_handlers
 
-# Импортируем обработчики сообщений
-from handlers.messages import handle_message
 
 # ================= ENTRY POINT =================
 
@@ -46,10 +44,6 @@ def setup_handlers(app: Application) -> None:
     try:
         # Регистрация всех систем через модульную систему
         register_all_handlers(app)
-        
-        
-        # Общий обработчик текстовых сообщений
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         
         logger.info("Обработчики настроены успешно")
     except Exception as e:
