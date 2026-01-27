@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from database import get_user, update_user
 from game_logic.level_system import CharacterStats
 from game_logic import calculate_character_stats
-from utils.formatters import format_pvp_opponents
 
 logger = logging.getLogger(__name__)
 
@@ -393,4 +392,19 @@ def register_pvp_handlers(application):
     # Здесь можно добавить обработчики команд PvP
     pass
 
-__all__ = ['PvPQueue', 'PvPManager', 'pvp_manager', 'register_pvp_handlers']
+# Функция PvP (заглушка)
+async def pvp(update, context):
+    """Обработчик команды /pvp"""
+    await update.message.reply_text("PvP система в разработке")
+
+# Функция обработки PvP боя (заглушка)
+async def handle_pvp_fight_callback(update, context):
+    """Обработчик callback для PvP боя"""
+    await update.callback_query.answer("PvP бой в разработке")
+
+# Функция боя (заглушка)
+async def fight(update, context):
+    """Обработчик команды /fight"""
+    await update.message.reply_text("Бой в разработке")
+
+__all__ = ['PvPQueue', 'PvPManager', 'pvp_manager', 'register_pvp_handlers', 'pvp', 'handle_pvp_fight_callback', 'fight']

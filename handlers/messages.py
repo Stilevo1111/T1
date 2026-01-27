@@ -8,14 +8,8 @@ from telegram.ext import ContextTypes, filters
 from handlers.main import start, stats, profile
 from handlers.fissure import fissure, stats as fissure_stats
 from handlers.boss import boss
-from handlers import shop, show_category_items, buy, potion
-from handlers.pvp import pvp, handle_pvp_fight_callback, fight
-from handlers.top import top
-from handlers.talents import talents, learn_talent, add_stat, level_up_handler, achievements
-from handlers.talents import add_str, add_agi, add_int, learn, level_up, handle_talents_category, handle_talents_stats, handle_talents_main, handle_learn_talent_callback
-from handlers.heal import heal
+from handlers.pvp_system import pvp, handle_pvp_fight_callback, fight
 
-from utils.validators import validate_talent_id, validate_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -37,15 +31,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         elif text == "/boss":
             await boss(update, context)
         elif text == "/shop":
-            await shop(update, context)
+            await update.message.reply_text("Магазин в разработке")
         elif text == "/pvp":
             await pvp(update, context)
         elif text == "/top":
-            await top(update, context)
+            await update.message.reply_text("Топ игроков в разработке")
         elif text == "/talents":
-            await talents(update, context)
+            await update.message.reply_text("Таланты в разработке")
         elif text == "/heal":
-            await heal(update, context)
+            await update.message.reply_text("Лечение в разработке")
         else:
             await update.message.reply_text(
                 "Для управления ботом используйте кнопки меню.\n"
@@ -62,10 +56,7 @@ async def handle_pvp_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if text.startswith("/fight_"):
             try:
                 enemy_id = int(text.replace("/fight_", ""))
-                if validate_user_id(enemy_id):
-                    await fight(update, context)
-                else:
-                    await update.message.reply_text("❌ Неверный ID противника")
+                await fight(update, context)
             except ValueError:
                 await update.message.reply_text("❌ Неверный ID противника")
     except Exception as e:

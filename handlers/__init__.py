@@ -5,7 +5,6 @@ from .fissure import fissure, stats as fissure_stats
 from .boss import boss
 from .pvp_system import pvp, handle_pvp_fight_callback, fight
 from .messages import handle_message, handle_pvp_buttons
-from . import shop, show_category_items, buy, potion
 
 __all__ = [
     # Основные обработчики
