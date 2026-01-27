@@ -162,27 +162,6 @@ async def handle_pvp_top_mmr(update: Update, context: ContextTypes.DEFAULT_TYPE)
         parse_mode='Markdown'
     )
 
-async def handle_top_level(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик топа по уровню"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Фиктивные данные для примера
-    top_levels = [
-        "👑 Level 50 - Player1",
-        "🏆 Level 45 - Player2", 
-        "⚔️ Level 42 - Player3",
-        "🗡️ Level 38 - Player4",
-        "🛡️ Level 35 - Player5"
-    ]
-    
-    text = "👑 *Топ игроков по уровню:*\n\n" + "\n".join(f"{i+1}. {player}" for i, player in enumerate(top_levels))
-    
-    await query.edit_message_text(
-        text=text,
-        reply_markup=get_top_menu_keyboard(),
-        parse_mode='Markdown'
-    )
 
 async def handle_top_mmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик топа по MMR"""
@@ -206,138 +185,6 @@ async def handle_top_mmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-async def handle_top_exp(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик топа по опыту"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Фиктивные данные для примера
-    top_exp = [
-        "💎 Exp 50000 - Player1",
-        "🏆 Exp 45000 - Player2", 
-        "⚔️ Exp 40000 - Player3",
-        "🗡️ Exp 35000 - Player4",
-        "🛡️ Exp 30000 - Player5"
-    ]
-    
-    text = "💎 *Топ игроков по опыту:*\n\n" + "\n".join(f"{i+1}. {player}" for i, player in enumerate(top_exp))
-    
-    await query.edit_message_text(
-        text=text,
-        reply_markup=get_top_menu_keyboard(),
-        parse_mode='Markdown'
-    )
-
-async def handle_top_gold(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик топа по золоту"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Фиктивные данные для примера
-    top_gold = [
-        "💰 Gold 100000 - Player1",
-        "🏆 Gold 80000 - Player2", 
-        "⚔️ Gold 60000 - Player3",
-        "🗡️ Gold 50000 - Player4",
-        "🛡️ Gold 40000 - Player5"
-    ]
-    
-    text = "💰 *Топ игроков по золоту:*\n\n" + "\n".join(f"{i+1}. {player}" for i, player in enumerate(top_gold))
-    
-    await query.edit_message_text(
-        text=text,
-        reply_markup=get_top_menu_keyboard(),
-        parse_mode='Markdown'
-    )
-
-async def handle_top_damage(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик топа по урону"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Фиктивные данные для примера
-    top_damage = [
-        "🗡️ Damage 1500 - Player1",
-        "🏆 Damage 1200 - Player2", 
-        "⚔️ Damage 1000 - Player3",
-        "🗡️ Damage 800 - Player4",
-        "🛡️ Damage 600 - Player5"
-    ]
-    
-    text = "🗡️ *Топ игроков по урону:*\n\n" + "\n".join(f"{i+1}. {player}" for i, player in enumerate(top_damage))
-    
-    await query.edit_message_text(
-        text=text,
-        reply_markup=get_top_menu_keyboard(),
-        parse_mode='Markdown'
-    )
-
-async def handle_top_wins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик топа по победам"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Фиктивные данные для примера
-    top_wins = [
-        "🔥 Wins 100 - Player1",
-        "🏆 Wins 85 - Player2", 
-        "⚔️ Wins 75 - Player3",
-        "🗡️ Wins 65 - Player4",
-        "🛡️ Wins 55 - Player5"
-    ]
-    
-    text = "🔥 *Топ игроков по победам:*\n\n" + "\n".join(f"{i+1}. {player}" for i, player in enumerate(top_wins))
-    
-    await query.edit_message_text(
-        text=text,
-        reply_markup=get_top_menu_keyboard(),
-        parse_mode='Markdown'
-    )
-
-async def handle_top_losses(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик топа по поражениям"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Фиктивные данные для примера
-    top_losses = [
-        "💀 Losses 50 - Player1",
-        "🏆 Losses 45 - Player2", 
-        "⚔️ Losses 40 - Player3",
-        "🗡️ Losses 35 - Player4",
-        "🛡️ Losses 30 - Player5"
-    ]
-    
-    text = "💀 *Топ игроков по поражениям:*\n\n" + "\n".join(f"{i+1}. {player}" for i, player in enumerate(top_losses))
-    text += "\n\n💡 *Совет:* Поражения - путь к росту!"
-    
-    await query.edit_message_text(
-        text=text,
-        reply_markup=get_top_menu_keyboard(),
-        parse_mode='Markdown'
-    )
-
-async def handle_top_ratio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик топа по соотношению"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Фиктивные данные для примера
-    top_ratio = [
-        "📊 Ratio 5.0:1 - Player1 (100/20)",
-        "🏆 Ratio 4.5:1 - Player2 (90/20)", 
-        "⚔️ Ratio 4.0:1 - Player3 (80/20)",
-        "🗡️ Ratio 3.5:1 - Player4 (70/20)",
-        "🛡️ Ratio 3.0:1 - Player5 (60/20)"
-    ]
-    
-    text = "📊 *Топ игроков по соотношению побед/поражений:*\n\n" + "\n".join(f"{i+1}. {player}" for i, player in enumerate(top_ratio))
-    
-    await query.edit_message_text(
-        text=text,
-        reply_markup=get_top_menu_keyboard(),
-        parse_mode='Markdown'
-    )
 
 async def handle_daily_claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик получения ежедневной награды"""
@@ -755,9 +602,8 @@ async def handle_help_tips(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 __all__ = [
     'handle_boss_strongest', 'handle_boss_weakest', 'handle_boss_damage', 'handle_boss_tank',
-    'handle_pvp_stats', 'handle_pvp_top_mmr', 'handle_top_level', 'handle_top_mmr',
-    'handle_top_exp', 'handle_top_gold', 'handle_top_damage', 'handle_top_wins',
-    'handle_top_losses', 'handle_top_ratio', 'handle_daily_claim', 'handle_daily_calendar',
+    'handle_pvp_stats', 'handle_pvp_top_mmr', 'handle_top_mmr',
+    'handle_daily_claim', 'handle_daily_calendar',
     'handle_daily_bonuses', 'handle_daily_timer', 'handle_quests_active', 'handle_quests_completed',
     'handle_quests_daily', 'handle_quests_weekly', 'handle_quests_rewards', 'handle_quests_progress',
     'handle_help_commands', 'handle_help_gameplay', 'handle_help_faq', 'handle_help_tips'
@@ -776,14 +622,7 @@ def register_menu_handlers(app):
     app.add_handler(CallbackQueryHandler(handle_pvp_stats, pattern='^pvp_stats$'))
     app.add_handler(CallbackQueryHandler(handle_pvp_top_mmr, pattern='^pvp_top_mmr$'))
     
-    app.add_handler(CallbackQueryHandler(handle_top_level, pattern='^top_level$'))
     app.add_handler(CallbackQueryHandler(handle_top_mmr, pattern='^top_mmr$'))
-    app.add_handler(CallbackQueryHandler(handle_top_exp, pattern='^top_exp$'))
-    app.add_handler(CallbackQueryHandler(handle_top_gold, pattern='^top_gold$'))
-    app.add_handler(CallbackQueryHandler(handle_top_damage, pattern='^top_damage$'))
-    app.add_handler(CallbackQueryHandler(handle_top_wins, pattern='^top_wins$'))
-    app.add_handler(CallbackQueryHandler(handle_top_losses, pattern='^top_losses$'))
-    app.add_handler(CallbackQueryHandler(handle_top_ratio, pattern='^top_ratio$'))
     
     app.add_handler(CallbackQueryHandler(handle_daily_claim, pattern='^daily_claim$'))
     app.add_handler(CallbackQueryHandler(handle_daily_calendar, pattern='^daily_calendar$'))

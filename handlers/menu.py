@@ -20,7 +20,7 @@ def get_main_menu_keyboard():
             InlineKeyboardButton("🌟 Таланты", callback_data="talents_menu")
         ],
         [
-            InlineKeyboardButton("🏆 Рейтинги", callback_data="top_menu"),
+            InlineKeyboardButton("🏆 Рейтинг", callback_data="top_menu"),
             InlineKeyboardButton("💥 Фиссура", callback_data="fissure")
         ],
         [
@@ -311,24 +311,10 @@ def get_top_menu_keyboard():
     """Получение клавиатуры меню рейтингов"""
     keyboard = [
         [
-            InlineKeyboardButton("👑 По уровню", callback_data="top_level"),
-            InlineKeyboardButton("⚔️ По MMR", callback_data="top_mmr")
+            InlineKeyboardButton("⚔️ Рейтинг MMR", callback_data="top_mmr")
         ],
         [
-            InlineKeyboardButton("💎 По опыту", callback_data="top_exp"),
-            InlineKeyboardButton("💰 По золоту", callback_data="top_gold")
-        ],
-        [
-            InlineKeyboardButton("🗡️ По урону", callback_data="top_damage"),
-            InlineKeyboardButton("📏 По фиссуре", callback_data="fissure_top")
-        ],
-        [
-            InlineKeyboardButton("🏆 Достижения", callback_data="achievements"),
-            InlineKeyboardButton("🔥 По победам", callback_data="top_wins")
-        ],
-        [
-            InlineKeyboardButton("💀 По поражениям", callback_data="top_losses"),
-            InlineKeyboardButton("📊 По соотношению", callback_data="top_ratio")
+            InlineKeyboardButton("📏 Рейтинг Фиссур", callback_data="fissure_top")
         ],
         [
             InlineKeyboardButton("⬅️ Назад", callback_data="main_menu")
