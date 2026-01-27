@@ -608,8 +608,8 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await handler_func(update, context)
     
     elif callback_data in ["boss", "attack", "pvp", "fight", "buy", "potion", "heal", 
-                          "talents", "level_up", "learn", "fissure", "fissure_top", 
-                          "achievements"]:
+                          "talents", "level_up", "learn", "fissure_roll", "fissure_top_menu", "fissure_stats_menu",
+                          "fissure_top", "achievements"]:
         # Перенаправляем на соответствующие обработчики
         command_handlers = {
             "boss": "handlers.boss.boss",
@@ -622,7 +622,9 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "talents": "handlers.talents.talents",
             "level_up": "handlers.talents.level_up",
             "learn": "handlers.talents.learn",
-            "fissure": "handlers.fissure.fissure",
+            "fissure_roll": "handlers.fissure.fissure",
+            "fissure_top_menu": "handlers.fissure.fissure_top",
+            "fissure_stats_menu": "handlers.fissure.stats",
             "fissure_top": "handlers.fissure.fissure_top",
             "achievements": "handlers.top.achievements"
         }

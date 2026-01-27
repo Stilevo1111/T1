@@ -18,8 +18,9 @@ from .pvp_system import register_pvp_handlers
 from .quest_system import register_quest_handlers
 from .inventory_system import register_inventory_handlers
 from .talent_system import register_talent_handlers
-from .fissure_system import register_fissure_handlers
+from .system_registrars import register_fissure_handlers
 from .achievement_system import register_achievement_handlers
+from .fissure_menu import register_fissure_menu_handlers
 
 __all__ = [
     # Основные обработчики
@@ -42,5 +43,6 @@ __all__ = [
     'register_inventory_handlers',
     'register_talent_handlers',
     'register_fissure_handlers',
-    'register_achievement_handlers'
+    'register_achievement_handlers',
+    'register_fissure_menu_handlers'
 ]

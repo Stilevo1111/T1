@@ -310,10 +310,133 @@ class InventoryManager:
 # Глобальный экземпляр менеджера инвентаря
 inventory_manager = InventoryManager()
 
+async def inventory(update, context):
+    """Обработчик команды /inventory - показывает инвентарь игрока"""
+    user_id = update.effective_user.id
+    
+    try:
+        # Получаем инвентарь пользователя
+        inventory = await inventory_manager.get_inventory(user_id)
+        
+        if not inventory:
+            message = "Ваш инвентарь пуст. Попробуйте посетить магазин или выполнить задания, чтобы получить предметы."
+        else:
+            # Формируем сообщение с инвентарем
+            equipped_items = []
+            equipment_items = []
+            consumable_items = []
+            
+            for item in inventory:
+                item_text = f"• {item['item_id']} (x{item['quantity']})"
+                if item['is_equipped']:
+                    equipped_items.append(item_text)
+                elif item['slot'] == 'consumable':
+                    consumable_items.append(item_text)
+                else:
+                    equipment_items.append(item_text)
+            
+            message_parts = ["📦 *Ваш инвентарь*:"]
+            
+            if equipped_items:
+                message_parts.append("\n*Экипировано:*")
+                message_parts.extend(equipped_items)
+            
+            if equipment_items:
+                message_parts.append("\n*Снаряжение:*")
+                message_parts.extend(equipment_items)
+            
+            if consumable_items:
+                message_parts.append("\n*Расходники:*")
+                message_parts.extend(consumable_items)
+            
+            message = "\n".join(message_parts)
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Ошибка при отображении инвентаря: {e}")
+        await update.message.reply_text("Произошла ошибка при получении инвентаря. Попробуйте позже.")
+
+async def equip_item(update, context):
+    """Обработчик команды /equip - экипирует предмет"""
+    user_id = update.effective_user.id
+    
+    if not context.args:
+        await update.message.reply_text("Используйте: /equip <название_предмета>")
+        return
+    
+    item_id = context.args[0].lower()
+    
+    try:
+        success = await inventory_manager.equip_item(user_id, item_id)
+        
+        if success:
+            await update.message.reply_text(f"✅ Предмет '{item_id}' успешно экипирован!")
+        else:
+            await update.message.reply_text(f"❌ Не удалось экипировать предмет '{item_id}'. Проверьте, есть ли он в инвентаре.")
+            
+    except Exception as e:
+        logger.error(f"Ошибка при экипировке предмета: {e}")
+        await update.message.reply_text("Произошла ошибка при экипировке предмета. Попробуйте позже.")
+
+async def unequip_item(update, context):
+    """Обработчик команды /unequip - снимает предмет"""
+    user_id = update.effective_user.id
+    
+    if not context.args:
+        await update.message.reply_text("Используйте: /unequip <название_предмета>")
+        return
+    
+    item_id = context.args[0].lower()
+    
+    try:
+        success = await inventory_manager.unequip_item(user_id, item_id)
+        
+        if success:
+            await update.message.reply_text(f"✅ Предмет '{item_id}' снят с экипировки!")
+        else:
+            await update.message.reply_text(f"❌ Не удалось снять предмет '{item_id}'.")
+            
+    except Exception as e:
+        logger.error(f"Ошибка при снятии предмета: {e}")
+        await update.message.reply_text("Произошла ошибка при снятии предмета. Попробуйте позже.")
+
+async def use_item(update, context):
+    """Обработчик команды /use - использует расходный предмет"""
+    user_id = update.effective_user.id
+    
+    if not context.args:
+        await update.message.reply_text("Используйте: /use <название_предмета>")
+        return
+    
+    item_id = context.args[0].lower()
+    
+    try:
+        result = await inventory_manager.use_consumable(user_id, item_id)
+        
+        if result['success']:
+            effect = result['effect']
+            if effect['type'] == 'heal':
+                await update.message.reply_text(f"💚 Вы использовали {item_id} и восстановили {effect['amount']} HP! (Текущее HP: {effect['new_hp']})")
+            elif effect['type'] == 'mana':
+                await update.message.reply_text(f"💙 Вы использовали {item_id} и восстановили {effect['amount']} маны! (Текущая мана: {effect['new_mana']})")
+            elif effect['type'] == 'invisibility':
+                await update.message.reply_text(f"👻 Вы использовали {item_id} и стали невидимым на {effect['duration']} секунд!")
+            elif effect['type'] == 'speed_boost':
+                await update.message.reply_text(f"⚡ Вы использовали {item_id} и получили +{effect['amount']} к скорости на {effect['duration']} секунд!")
+            else:
+                await update.message.reply_text(f"✨ Вы использовали {item_id}!")
+        else:
+            await update.message.reply_text(f"❌ {result['message']}")
+            
+    except Exception as e:
+        logger.error(f"Ошибка при использовании предмета: {e}")
+        await update.message.reply_text("Произошла ошибка при использовании предмета. Попробуйте позже.")
+
 # Функция для регистрации обработчиков инвентаря
 def register_inventory_handlers(application):
     """Регистрация обработчиков инвентарной системы"""
     # Здесь можно добавить обработчики команд инвентаря
     pass
 
-__all__ = ['InventoryManager', 'inventory_manager', 'register_inventory_handlers']
+__all__ = ['InventoryManager', 'inventory_manager', 'inventory', 'equip_item', 'unequip_item', 'use_item', 'register_inventory_handlers']

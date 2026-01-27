@@ -75,17 +75,12 @@ def register_talent_handlers(app: Application):
 
 def register_fissure_handlers(app: Application):
     """Регистрация обработчиков системы Fissure"""
-    from handlers.fissure_system import fissure, fissure_top, stats as fissure_stats
-    from handlers.fissure_system import handle_fissure_growth, handle_fissure_finish
+    from handlers.fissure import fissure, fissure_top, stats as fissure_stats
     
     # Основные команды Fissure
     app.add_handler(CommandHandler("fissure", fissure))
     app.add_handler(CommandHandler("fissure_top", fissure_top))
-    app.add_handler(CommandHandler("fissure_stats", fissure_stats))
-    
-    # Callback-обработчики для Fissure
-    app.add_handler(CallbackQueryHandler(handle_fissure_growth, pattern=r"^fissure_growth_"))
-    app.add_handler(CallbackQueryHandler(handle_fissure_finish, pattern=r"^fissure_finish$"))
+    app.add_handler(CommandHandler("stats", fissure_stats))
 
 def register_achievement_handlers(app: Application):
     """Регистрация обработчиков системы достижений"""

@@ -377,10 +377,372 @@ class TalentManager:
 # Глобальный экземпляр менеджера талантов
 talent_manager = TalentManager()
 
+async def talents(update, context):
+    """Обработчик команды /talents - показывает доступные таланты"""
+    user_id = update.effective_user.id
+    
+    try:
+        # Получаем доступные таланты
+        available_talents = await talent_manager.get_available_talents(user_id)
+        user_talents = await talent_manager.get_user_talents(user_id)
+        progress = await talent_manager.get_talent_progress(user_id)
+        
+        if not available_talents and not any(user_talents.values()):
+            message = "Пока нет доступных талантов. Повышайте уровень, чтобы открыть новые таланты!"
+        else:
+            message_parts = ["🔮 *Таланты*"]
+            
+            # Прогресс
+            message_parts.append(f"\n📊 *Прогресс:* {progress['progress']}% ({progress['learned_talents']}/{progress['total_talents']})")
+            
+            # Изученные таланты
+            learned_count = 0
+            for category, talents in user_talents.items():
+                if talents:
+                    learned_count += len(talents)
+                    message_parts.append(f"\n*{category.capitalize()} таланты:*")
+                    for talent in talents:
+                        message_parts.append(f"• {talent['name']} (Lvl {talent['level']})")
+            
+            if learned_count == 0:
+                message_parts.append("\n*Изученные таланты:* Нет")
+            
+            # Доступные для изучения
+            if available_talents:
+                message_parts.append("\n*Доступные для изучения:*")
+                for talent in available_talents:
+                    message_parts.append(f"• {talent['name']} - {talent['description']} (Цена: {talent['cost']} золота)")
+            
+            message = "\n".join(message_parts)
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Ошибка при отображении талантов: {e}")
+        await update.message.reply_text("Произошла ошибка при получении талантов. Попробуйте позже.")
+
+async def learn_talent(update, context):
+    """Обработчик команды /learn_talent - изучает талант"""
+    user_id = update.effective_user.id
+    
+    if not context.args:
+        await update.message.reply_text("Используйте: /learn_talent <название_таланта>")
+        return
+    
+    talent_id = context.args[0].lower()
+    
+    try:
+        result = await talent_manager.learn_talent(user_id, talent_id)
+        
+        if result['success']:
+            await update.message.reply_text(f"✅ Вы изучили талант '{result['talent_name']}' за {result['cost']} золота!")
+        else:
+            await update.message.reply_text(f"❌ {result['message']}")
+            
+    except Exception as e:
+        logger.error(f"Ошибка при изучении таланта: {e}")
+        await update.message.reply_text("Произошла ошибка при изучении таланта. Попробуйте позже.")
+
+async def level_up(update, context):
+    """Обработчик команды /level_up - показывает информацию о повышении уровня"""
+    user_id = update.effective_user.id
+    
+    try:
+        user = await db_manager.get_user(user_id)
+        if not user:
+            await update.message.reply_text("Пользователь не найден.")
+            return
+        
+        level = user.get('level', 1)
+        exp = user.get('exp', 0)
+        exp_needed = user.get('exp_needed', 100)
+        
+        message = f"""
+📈 *Повышение уровня*
+
+Текущий уровень: {level}
+Опыт: {exp}/{exp_needed}
+
+При повышении уровня вы получаете:
+• +10 к максимальному HP
+• +5 к максимальной мане
+• +1 к силе, ловкости и интеллекту
+• 1 очко для распределения характеристик
+"""
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Ошибка при отображении информации о повышении уровня: {e}")
+        await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
+
+async def stats_distribute(update, context):
+    """Обработчик команды /stats_distribute - распределяет очки характеристик"""
+    user_id = update.effective_user.id
+    
+    if not context.args or len(context.args) != 2:
+        await update.message.reply_text("Используйте: /stats_distribute <характеристика> <количество>")
+        await update.message.reply_text("Характеристики: str, agi, int")
+        return
+    
+    stat = context.args[0].lower()
+    try:
+        amount = int(context.args[1])
+    except ValueError:
+        await update.message.reply_text("Количество должно быть числом.")
+        return
+    
+    if stat not in ['str', 'agi', 'int']:
+        await update.message.reply_text("Неверная характеристика. Используйте: str, agi, int")
+        return
+    
+    try:
+        user = await db_manager.get_user(user_id)
+        if not user:
+            await update.message.reply_text("Пользователь не найден.")
+            return
+        
+        available_points = user.get('stat_points', 0)
+        
+        if amount <= 0:
+            await update.message.reply_text("Количество должно быть положительным числом.")
+            return
+        
+        if amount > available_points:
+            await update.message.reply_text(f"Недостаточно очков характеристик. Доступно: {available_points}")
+            return
+        
+        # Обновляем характеристики
+        current_stat = user.get(stat, 10)
+        new_stat = current_stat + amount
+        new_points = available_points - amount
+        
+        await db_manager.update_user(user_id, {
+            stat: new_stat,
+            'stat_points': new_points
+        })
+        
+        await update.message.reply_text(f"✅ Вы распределили {amount} очков в {stat}. Новое значение: {new_stat}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при распределении характеристик: {e}")
+        await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
+
+async def add_str(update, context):
+    """Обработчик команды /add_str - добавляет 1 очко в силу"""
+    user_id = update.effective_user.id
+    
+    try:
+        user = await db_manager.get_user(user_id)
+        if not user:
+            await update.message.reply_text("Пользователь не найден.")
+            return
+        
+        available_points = user.get('stat_points', 0)
+        
+        if available_points <= 0:
+            await update.message.reply_text("Недостаточно очков характеристик.")
+            return
+        
+        current_str = user.get('str', 10)
+        new_str = current_str + 1
+        new_points = available_points - 1
+        
+        await db_manager.update_user(user_id, {
+            'str': new_str,
+            'stat_points': new_points
+        })
+        
+        await update.message.reply_text(f"✅ Вы добавили 1 очко в Силу. Новое значение: {new_str}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при добавлении силы: {e}")
+        await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
+
+async def add_agi(update, context):
+    """Обработчик команды /add_agi - добавляет 1 очко в ловкость"""
+    user_id = update.effective_user.id
+    
+    try:
+        user = await db_manager.get_user(user_id)
+        if not user:
+            await update.message.reply_text("Пользователь не найден.")
+            return
+        
+        available_points = user.get('stat_points', 0)
+        
+        if available_points <= 0:
+            await update.message.reply_text("Недостаточно очков характеристик.")
+            return
+        
+        current_agi = user.get('agi', 10)
+        new_agi = current_agi + 1
+        new_points = available_points - 1
+        
+        await db_manager.update_user(user_id, {
+            'agi': new_agi,
+            'stat_points': new_points
+        })
+        
+        await update.message.reply_text(f"✅ Вы добавили 1 очко в Ловкость. Новое значение: {new_agi}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при добавлении ловкости: {e}")
+        await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
+
+async def add_int(update, context):
+    """Обработчик команды /add_int - добавляет 1 очко в интеллект"""
+    user_id = update.effective_user.id
+    
+    try:
+        user = await db_manager.get_user(user_id)
+        if not user:
+            await update.message.reply_text("Пользователь не найден.")
+            return
+        
+        available_points = user.get('stat_points', 0)
+        
+        if available_points <= 0:
+            await update.message.reply_text("Недостаточно очков характеристик.")
+            return
+        
+        current_int = user.get('int', 10)
+        new_int = current_int + 1
+        new_points = available_points - 1
+        
+        await db_manager.update_user(user_id, {
+            'int': new_int,
+            'stat_points': new_points
+        })
+        
+        await update.message.reply_text(f"✅ Вы добавили 1 очко в Интеллект. Новое значение: {new_int}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при добавлении интеллекта: {e}")
+        await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
+
+async def handle_talents_category(update, context):
+    """Обработчик callback для категорий талантов"""
+    query = update.callback_query
+    category = query.data.replace('talents_category_', '')
+    
+    try:
+        user_talents = await talent_manager.get_user_talents(query.from_user.id)
+        available_talents = await talent_manager.get_available_talents(query.from_user.id)
+        
+        message_parts = [f"🔮 *Таланты - {category.capitalize()}*"]
+        
+        # Изученные таланты
+        learned_talents = user_talents.get(category, [])
+        if learned_talents:
+            message_parts.append("\n*Изученные:*")
+            for talent in learned_talents:
+                message_parts.append(f"• {talent['name']} (Lvl {talent['level']})")
+        else:
+            message_parts.append("\n*Изученные:* Нет")
+        
+        # Доступные для изучения
+        category_available = [t for t in available_talents if t['category'] == category]
+        if category_available:
+            message_parts.append("\n*Доступные для изучения:*")
+            for talent in category_available:
+                message_parts.append(f"• {talent['name']} - {talent['description']} (Цена: {talent['cost']} золота)")
+        else:
+            message_parts.append("\n*Доступные для изучения:* Нет")
+        
+        message = "\n".join(message_parts)
+        
+        await query.edit_message_text(message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Ошибка при обработке callback талантов: {e}")
+        await query.answer("Произошла ошибка. Попробуйте позже.")
+
+async def handle_talents_stats(update, context):
+    """Обработчик callback для статистики талантов"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        bonuses = await talent_manager.get_talent_bonuses(user_id)
+        progress = await talent_manager.get_talent_progress(user_id)
+        
+        message_parts = ["📊 *Статистика талантов*"]
+        
+        # Бонусы
+        message_parts.append("\n*Бонусы от талантов:*")
+        for stat, value in bonuses.items():
+            if value != 1.0 and value != 0:
+                if isinstance(value, float):
+                    message_parts.append(f"• {stat}: x{value:.2f}")
+                else:
+                    message_parts.append(f"• {stat}: +{value}")
+        
+        # Прогресс по категориям
+        message_parts.append("\n*Прогресс по категориям:*")
+        for category, data in progress['categories'].items():
+            message_parts.append(f"• {category.capitalize()}: {data['learned']}/{data['total']} ({data['progress']}%)")
+        
+        message = "\n".join(message_parts)
+        
+        await query.edit_message_text(message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Ошибка при обработке callback статистики талантов: {e}")
+        await query.answer("Произошла ошибка. Попробуйте позже.")
+
+async def handle_talents_main(update, context):
+    """Обработчик callback для возврата в главное меню талантов"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        user_talents = await talent_manager.get_user_talents(user_id)
+        progress = await talent_manager.get_talent_progress(user_id)
+        
+        message_parts = ["🔮 *Таланты*"]
+        message_parts.append(f"\n📊 *Прогресс:* {progress['progress']}% ({progress['learned_talents']}/{progress['total_talents']})")
+        
+        # Категории
+        categories = ['strength', 'agility', 'intelligence', 'hybrid']
+        for category in categories:
+            talents_count = len(user_talents.get(category, []))
+            message_parts.append(f"• {category.capitalize()}: {talents_count} талантов")
+        
+        message = "\n".join(message_parts)
+        
+        await query.edit_message_text(message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Ошибка при обработке callback главного меню талантов: {e}")
+        await query.answer("Произошла ошибка. Попробуйте позже.")
+
+async def handle_learn_talent_callback(update, context):
+    """Обработчик callback для изучения таланта"""
+    query = update.callback_query
+    talent_id = query.data.replace('learn_talent_', '')
+    
+    try:
+        result = await talent_manager.learn_talent(query.from_user.id, talent_id)
+        
+        if result['success']:
+            await query.answer(f"Вы изучили талант '{result['talent_name']}' за {result['cost']} золота!")
+            
+            # Обновляем сообщение
+            await talents(update, context)
+        else:
+            await query.answer(f"Ошибка: {result['message']}", show_alert=True)
+        
+    except Exception as e:
+        logger.error(f"Ошибка при обработке callback изучения таланта: {e}")
+        await query.answer("Произошла ошибка. Попробуйте позже.")
+
 # Функция для регистрации обработчиков талантов
 def register_talent_handlers(application):
     """Регистрация обработчиков талантной системы"""
     # Здесь можно добавить обработчики команд талантов
     pass
 
-__all__ = ['TalentManager', 'talent_manager', 'register_talent_handlers']
+__all__ = ['TalentManager', 'talent_manager', 'talents', 'learn_talent', 'level_up', 'stats_distribute', 
+           'add_str', 'add_agi', 'add_int', 'handle_talents_category', 'handle_talents_stats', 
+           'handle_talents_main', 'handle_learn_talent_callback', 'register_talent_handlers']
