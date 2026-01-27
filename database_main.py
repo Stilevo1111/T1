@@ -377,102 +377,87 @@ def update_fissure_sqlite(uid: int, fissure: float, ts: float):
     sqlite_conn.commit()
 
 # Wrapper functions to handle both PostgreSQL and SQLite
-def get_user(uid: int, username: str) -> dict:
+async def get_user(uid: int, username: str) -> dict:
     """Получение пользователя по ID, создание если не существует"""
     if sqlite_conn:
         return get_user_sqlite(uid, username)
     else:
         # For PostgreSQL, we need to make it async
-        import asyncio
-        async def _get_user_async():
-            async with db_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
+            user = await conn.fetchrow(
+                "SELECT * FROM users WHERE user_id=$1",
+                str(uid),
+            )
+            if not user:
+                await conn.execute(
+                    "INSERT INTO users (user_id, username) VALUES ($1, $2)",
+                    str(uid),
+                    username,
+                )
                 user = await conn.fetchrow(
                     "SELECT * FROM users WHERE user_id=$1",
                     str(uid),
                 )
-                if not user:
+            else:
+                # обновляем имя пользователя, если оно изменилось
+                if user["username"] != username:
                     await conn.execute(
-                        "INSERT INTO users (user_id, username) VALUES ($1, $2)",
-                        str(uid),
+                        "UPDATE users SET username=$1 WHERE user_id=$2",
                         username,
-                    )
-                    user = await conn.fetchrow(
-                        "SELECT * FROM users WHERE user_id=$1",
                         str(uid),
                     )
-                else:
-                    # обновляем имя пользователя, если оно изменилось
-                    if user["username"] != username:
-                        await conn.execute(
-                            "UPDATE users SET username=$1 WHERE user_id=$2",
-                            username,
-                            str(uid),
-                        )
-                return dict(user)
-        return asyncio.run(_get_user_async())
+            return dict(user)
 
-def update_user(uid: int, **kwargs):
+async def update_user(uid: int, **kwargs):
     """Обновление данных пользователя"""
     if sqlite_conn:
         update_user_sqlite(uid, **kwargs)
     else:
         # For PostgreSQL, we need to make it async
-        import asyncio
-        async def _update_user_async():
-            async with db_pool.acquire() as conn:
-                set_clause = ", ".join([f"{k}=${i+1}" for i, k in enumerate(kwargs.keys())])
-                values = list(kwargs.values()) + [str(uid)]
-                await conn.execute(
-                    f"UPDATE users SET {set_clause} WHERE user_id=${len(values)}",
-                    *values
-                )
-        return asyncio.run(_update_user_async())
+        async with db_pool.acquire() as conn:
+            set_clause = ", ".join([f"{k}=${i+1}" for i, k in enumerate(kwargs.keys())])
+            values = list(kwargs.values()) + [str(uid)]
+            await conn.execute(
+                f"UPDATE users SET {set_clause} WHERE user_id=${len(values)}",
+                *values
+            )
 
-def get_top_by_stat(stat: str, limit: int = 10):
+async def get_top_by_stat(stat: str, limit: int = 10):
     """Получение топа по статистике"""
     if sqlite_conn:
         return get_top_by_stat_sqlite(stat, limit)
     else:
         # For PostgreSQL, we need to make it async
-        import asyncio
-        async def _get_top_by_stat_async():
-            async with db_pool.acquire() as conn:
-                return await conn.fetch(f"""
-                    SELECT username, {stat}
-                    FROM users
-                    ORDER BY {stat} DESC
-                    LIMIT $1
-                """, limit)
-        return asyncio.run(_get_top_by_stat_async())
+        async with db_pool.acquire() as conn:
+            return await conn.fetch(f"""
+                SELECT username, {stat}
+                FROM users
+                ORDER BY {stat} DESC
+                LIMIT $1
+            """, limit)
 
-def get_fissure_top(limit: int = 10):
+async def get_fissure_top(limit: int = 10):
     """Получение топа по длине фиссуры"""
     if sqlite_conn:
         return get_fissure_top_sqlite(limit)
     else:
         # For PostgreSQL, we need to make it async
-        import asyncio
-        async def _get_fissure_top_async():
-            async with db_pool.acquire() as conn:
-                return await conn.fetch("""
-                    SELECT username, fissure
-                    FROM users
-                    ORDER BY fissure DESC
-                    LIMIT $1
-                """, limit)
-        return asyncio.run(_get_fissure_top_async())
+        async with db_pool.acquire() as conn:
+            return await conn.fetch("""
+                SELECT username, fissure
+                FROM users
+                ORDER BY fissure DESC
+                LIMIT $1
+            """, limit)
 
-def update_fissure(uid: int, fissure: float, ts: float):
+async def update_fissure(uid: int, fissure: float, ts: float):
     """Обновление длины фиссуры пользователя"""
     if sqlite_conn:
         update_fissure_sqlite(uid, fissure, ts)
     else:
         # For PostgreSQL, we need to make it async
-        import asyncio
-        async def _update_fissure_async():
-            async with db_pool.acquire() as conn:
-                await conn.execute(
-                    "UPDATE users SET fissure=$1, last_fissure=$2 WHERE user_id=$3",
-                    fissure, ts, str(uid),
-                )
-        return asyncio.run(_update_fissure_async())
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE users SET fissure=$1, last_fissure=$2 WHERE user_id=$3",
+                fissure, ts, str(uid),
+            )
