@@ -438,10 +438,126 @@ class AchievementManager:
 # Глобальный экземпляр менеджера достижений
 achievement_manager = AchievementManager()
 
+# Функции для обработки команд достижений
+
+async def achievements(update, context):
+    """Показывает достижения пользователя"""
+    user_id = update.effective_user.id
+    
+    try:
+        achievements_data = await achievement_manager.get_user_achievements(user_id)
+        
+        if not achievements_data['completed'] and not achievements_data['in_progress']:
+            await update.message.reply_text("У вас пока нет достижений. Начните играть, чтобы получить первые!")
+            return
+        
+        # Формируем сообщение
+        message = f"🏆 *Ваши Достижения*\n\n"
+        message += f"Завершено: {achievements_data['total_completed']}/{achievements_data['total_achievements']} "
+        message += f"({achievements_data['completion_percent']}%)\n\n"
+        
+        if achievements_data['completed']:
+            message += "*Завершенные достижения:*\n"
+            for achievement in achievements_data['completed'][:10]:  # Показываем последние 10
+                message += f"• {achievement['icon']} {achievement['name']} ({achievement['category']})\n"
+            
+            if len(achievements_data['completed']) > 10:
+                message += f"и еще {len(achievements_data['completed']) - 10} достижений...\n\n"
+            else:
+                message += "\n"
+        
+        if achievements_data['in_progress']:
+            message += "*В процессе:*\n"
+            for achievement in achievements_data['in_progress'][:5]:  # Показываем первые 5
+                message += f"• {achievement['icon']} {achievement['name']} "
+                message += f"({achievement['current_progress']}/{achievement['target_progress']}) "
+                message += f"[{achievement['progress_percent']}%]\n"
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Ошибка при показе достижений: {e}")
+        await update.message.reply_text("Произошла ошибка при загрузке достижений. Попробуйте позже.")
+
+async def achievement_progress(update, context):
+    """Показывает прогресс по достижениям"""
+    user_id = update.effective_user.id
+    
+    try:
+        stats = await achievement_manager.get_achievement_statistics(user_id)
+        
+        message = f"📊 *Статистика Достижений*\n\n"
+        message += f"Всего завершено: {stats['total_completed']}/{stats['total_achievements']} "
+        message += f"({stats['completion_percent']}%)\n\n"
+        
+        message += "*Прогресс по категориям:*\n"
+        for category, data in stats['categories'].items():
+            category_name = {
+                'combat': 'Боевые',
+                'pvp': 'PvP',
+                'economy': 'Экономика',
+                'progress': 'Развитие',
+                'quests': 'Квесты',
+                'fissure': 'Fissure'
+            }.get(category, category)
+            
+            message += f"• {category_name}: {data['completed']}/{data['total']} ({data['progress']}%)\n"
+        
+        if stats['best_category']:
+            best_category_name = {
+                'combat': 'Боевые',
+                'pvp': 'PvP',
+                'economy': 'Экономика',
+                'progress': 'Развитие',
+                'quests': 'Квесты',
+                'fissure': 'Fissure'
+            }.get(stats['best_category'], stats['best_category'])
+            message += f"\n🏆 Лучшая категория: {best_category_name}"
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Ошибка при показе статистики достижений: {e}")
+        await update.message.reply_text("Произошла ошибка при загрузке статистики. Попробуйте позже.")
+
+async def achievement_rewards(update, context):
+    """Показывает доступные награды за достижения"""
+    message = "🎁 *Награды за Достижения*\n\n"
+    message += "За каждое выполненное достижение вы получаете:\n\n"
+    message += "• Опыт (EXP)\n"
+    message += "• Золото (Gold)\n\n"
+    message += "Чем сложнее достижение, тем больше награда!\n\n"
+    message += "Также вы можете получить:\n"
+    message += "• Редкие предметы\n"
+    message += "• Специальные эффекты\n"
+    message += "• Уникальные титулы\n\n"
+    message += "Продолжайте играть и выполнять задания, чтобы получить больше достижений!"
+    
+    await update.message.reply_text(message, parse_mode='Markdown')
+
+async def handle_achievement_claim(update, context):
+    """Обработка получения награды за достижение"""
+    # Эта функция будет реализована позже при необходимости
+    await update.callback_query.answer("Функция получения награды пока в разработке")
+
+async def handle_achievement_info(update, context):
+    """Обработка просмотра информации о достижении"""
+    # Эта функция будет реализована позже при необходимости
+    await update.callback_query.answer("Функция просмотра информации пока в разработке")
+
 # Функция для регистрации обработчиков достижений
 def register_achievement_handlers(application):
     """Регистрация обработчиков системы достижений"""
     # Здесь можно добавить обработчики команд достижений
     pass
 
-__all__ = ['AchievementManager', 'achievement_manager', 'register_achievement_handlers']
+__all__ = [
+    'AchievementManager', 
+    'achievement_manager', 
+    'register_achievement_handlers',
+    'achievements',
+    'achievement_progress',
+    'achievement_rewards',
+    'handle_achievement_claim',
+    'handle_achievement_info'
+]
