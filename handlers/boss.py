@@ -22,15 +22,3 @@ async def boss(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"👹 Босс появился!\n{boss_data['message']}\n\nСтратегия: {strategy}")
     else:
         await update.message.reply_text(f"❌ Ошибка: {boss_data['message']}")
-
-async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка команды /attack"""
-    user_id = update.effective_user.id
-    user = await get_user(user_id)
-    
-    if not user:
-        await update.message.reply_text("Сначала зарегистрируйтесь с помощью /start")
-        return
-    
-    # Пока заглушка для атаки босса
-    await update.message.reply_text("Атака на босса пока не реализована")

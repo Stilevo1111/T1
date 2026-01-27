@@ -23,11 +23,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"💥 Вы провалились в трещину!\n{result['message']}")
 
-async def fissure_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать топ игроков по трещинам"""
-    # Пока заглушка
-    await update.message.reply_text("Топ игроков по трещинам пока не реализован")
-
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать статистику пользователя"""
     user_id = update.effective_user.id
