@@ -1,9 +1,8 @@
 """Модуль для создания интерактивного меню с кнопками"""
 
 import logging
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
-from telegram import Update
 
 logger = logging.getLogger(__name__)
 

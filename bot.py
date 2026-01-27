@@ -28,6 +28,8 @@ from handlers.register_handlers import register_all_handlers
 
 # Импортируем меню
 from handlers.menu import handle_menu_callback
+# Импортируем обработчики сообщений
+from handlers.messages import handle_message
 
 # ================= ENTRY POINT =================
 

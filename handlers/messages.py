@@ -3,7 +3,7 @@
 import logging
 from typing import Dict, Any
 from telegram import Update
-from telegram.ext import ContextTypes, filters
+from telegram.ext import ContextTypes, filters, MessageHandler
 
 from handlers.main import start, stats, profile
 from handlers.fissure import fissure, stats as fissure_stats

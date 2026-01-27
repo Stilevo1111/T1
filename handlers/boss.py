@@ -1,6 +1,6 @@
 import logging
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, CommandHandler
 from database import get_user, update_user
 from game_logic import spawn_boss, calculate_boss_strategy
 
