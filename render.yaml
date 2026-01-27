@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: fissure-bot
+    runtime: python
+    env: python
+    startCommand: python bot.py
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHONPATH
+        value: .
+      - key: PORT
+        value: 10000

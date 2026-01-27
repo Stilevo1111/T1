@@ -1,11 +1,11 @@
 """Инициализация обработчиков PvP и фиссуры"""
 
-from .fissure import fissure, stats as fissure_stats
+from .fissure import fissure, stats
 from .pvp_system import pvp, handle_pvp_fight_callback, fight
 
 __all__ = [
     # Обработчики фиссуры
-    'fissure', 'fissure_stats',
+    'fissure', 'stats',
     # Обработчики PvP
     'pvp', 'handle_pvp_fight_callback', 'fight',
 ]
