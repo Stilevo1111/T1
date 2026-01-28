@@ -184,18 +184,17 @@ async def main():
         await application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
-            webhook_url=f"{RENDER_URL}/webhook"
+            webhook_url=f"{RENDER_URL}/webhook",
+            drop_pending_updates=True
         )
     else:
         # Запуск polling для локальной разработки
-        await application.run_polling(allowed_updates=Update.ALL_TYPES)
+        await application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == '__main__':
     try:
-        # Запуск бота через run_polling() - это рекомендованный способ для python-telegram-bot v20+
-        # Он сам управляет event loop и не вызывает ошибку "Cannot close a running event loop"
-        # НЕ используем asyncio.run(main()) - это вызывает ошибку "coroutine 'main' was never awaited"
-        main()
+        # Запуск бота через asyncio.run() - это правильный способ для асинхронных функций
+        asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Бот остановлен вручную")
     except Exception as e:
