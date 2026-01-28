@@ -162,20 +162,3 @@ ITEMS = {
 }
 
 __all__ = ['CharacterStats', 'calculate_character_stats', 'get_fissure_result', 'get_user_progress', 'get_next_level_exp']
-
- <environment_details>
-# Cursor Visible Files
-game_logic.py
-
-# Cursor Open Tabs
-requirements.txt
-database.py
-handlers/pvp_system.py
-game_logic.py
-
-# Current Time
-1/28/2026, 1:00:25 PM (Europe/Minsk, UTC+3:00)
-
-# Context Window Usage
-# Current Mode
-ACT MODE
