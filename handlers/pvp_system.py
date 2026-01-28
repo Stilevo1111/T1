@@ -389,22 +389,112 @@ pvp_manager = PvPManager()
 # Функция для регистрации PvP обработчиков
 def register_pvp_handlers(application):
     """Регистрация обработчиков PvP системы"""
-    # Здесь можно добавить обработчики команд PvP
-    pass
+    from telegram.ext import CommandHandler, CallbackQueryHandler
+    
+    # Команда /pvp
+    application.add_handler(CommandHandler("pvp", pvp))
+    
+    # Команда /fight
+    application.add_handler(CommandHandler("fight", fight))
+    
+    # Callback обработчики
+    application.add_handler(CallbackQueryHandler(handle_pvp_fight_callback, pattern="^pvp_"))
+    application.add_handler(CallbackQueryHandler(handle_fight_callback, pattern="^fight_"))
 
-# Функция PvP (заглушка)
+# Функция PvP - выбор противника из списка пользователей чата
 async def pvp(update, context):
-    """Обработчик команды /pvp"""
-    await update.message.reply_text("PvP система в разработке")
+    """Обработчик команды /pvp - выбор противника из списка пользователей чата"""
+    user = update.effective_user
+    
+    # Получаем список пользователей в чате (если это групповой чат)
+    if update.message.chat.type in ['group', 'supergroup']:
+        try:
+            # Получаем список участников чата
+            chat_members = await context.bot.get_chat_members_count(update.message.chat_id)
+            # Для простоты пока просто показываем сообщение с инструкцией
+            keyboard = [
+                [InlineKeyboardButton("Найти случайного противника", callback_data="pvp_random")],
+                [InlineKeyboardButton("Отмена", callback_data="pvp_cancel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"Выберите противника из пользователей чата:\n"
+                f"В чате {chat_members} участников\n\n"
+                "Используйте @username для выбора конкретного игрока, "
+                "или выберите случайного противника.",
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка при получении списка пользователей: {e}")
+    else:
+        await update.message.reply_text("PvP доступен только в групповых чатах")
 
-# Функция обработки PvP боя (заглушка)
+# Функция обработки PvP боя
 async def handle_pvp_fight_callback(update, context):
     """Обработчик callback для PvP боя"""
-    await update.callback_query.answer("PvP бой в разработке")
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "pvp_random":
+        await _start_random_pvp(query, context)
+    elif query.data == "pvp_cancel":
+        await query.edit_message_text("Поиск PvP противника отменен")
 
-# Функция боя (заглушка)
+async def _start_random_pvp(query, context):
+    """Начало PvP с случайным противником"""
+    # Здесь должна быть логика поиска случайного противника из чата
+    # Пока заглушка
+    await query.edit_message_text("Поиск случайного противника... (в разработке)")
+
+# Функция боя - быстрый бой с рандомным противником
 async def fight(update, context):
-    """Обработчик команды /fight"""
-    await update.message.reply_text("Бой в разработке")
+    """Обработчик команды /fight - быстрый бой с рандомным противником"""
+    user = update.effective_user
+    
+    # Проверяем, есть ли другие пользователи в чате
+    if update.message.chat.type in ['group', 'supergroup']:
+        try:
+            # Получаем список участников чата
+            chat_members = await context.bot.get_chat_members_count(update.message.chat_id)
+            
+            if chat_members < 2:
+                await update.message.reply_text("В чате недостаточно участников для PvP")
+                return
+            
+            # Для простоты пока просто показываем сообщение
+            keyboard = [
+                [InlineKeyboardButton("Начать быстрый бой", callback_data="fight_start")],
+                [InlineKeyboardButton("Отмена", callback_data="fight_cancel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"Быстрый бой с случайным противником\n"
+                f"В чате {chat_members} участников\n\n"
+                "Система найдет случайного противника для вас.",
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            await update.message.reply_text(f"Ошибка при получении списка пользователей: {e}")
+    else:
+        await update.message.reply_text("Быстрый бой доступен только в групповых чатах")
+
+# Функция для обработки быстрого боя
+async def handle_fight_callback(update, context):
+    """Обработчик callback для быстрого боя"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "fight_start":
+        await _start_fight(query, context)
+    elif query.data == "fight_cancel":
+        await query.edit_message_text("Быстрый бой отменен")
+
+async def _start_fight(query, context):
+    """Начало быстрого боя"""
+    # Здесь должна быть логика быстрого боя
+    # Пока заглушка
+    await query.edit_message_text("Начинается быстрый бой... (в разработке)")
 
 __all__ = ['PvPQueue', 'PvPManager', 'pvp_manager', 'register_pvp_handlers', 'pvp', 'handle_pvp_fight_callback', 'fight']
