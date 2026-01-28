@@ -24,6 +24,7 @@ from database import init_db, get_user, update_user, get_top_by_stat, get_fissur
 from handlers import fissure, stats, pvp, handle_pvp_fight_callback, fight
 from handlers.fissure import register_fissure_handlers
 from handlers.pvp_system import register_pvp_handlers
+from handlers.stats import register_stats_handlers
 from game_logic import calculate_character_stats, get_fissure_result, get_user_progress, get_next_level_exp
 
 # Настройка логирования
@@ -65,7 +66,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <b>Основные команды:</b>
 /start - Зарегистрироваться в боте
 /help - Показать это сообщение
-/stats - Показать статистику персонажа
+/stats - Проверка длины фиссуры
 /fissure - Пройти трещину (раз в 24 часа)
 
 <b>PvP команды:</b>
@@ -74,11 +75,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>Рейтинги:</b>
 /top_mmr - Топ игроков по MMR
-/top_level - Топ игроков по уровню
 /top_fissure - Топ игроков по длине фиссуры
-
-<b>Информация:</b>
-/info - Информация о боте
 """
     await update.message.reply_text(help_text, parse_mode='HTML')
 
@@ -163,6 +160,7 @@ async def register_handlers(application: Application):
     # Регистрация обработчиков из модулей
     register_fissure_handlers(application)
     register_pvp_handlers(application)
+    register_stats_handlers(application)
 
 async def main():
     """Основная функция запуска бота"""
