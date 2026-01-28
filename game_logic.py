@@ -42,40 +42,22 @@ class CharacterStats:
 
 def get_item_bonus(user: Dict, stat: str) -> int:
     """Получение бонуса от предметов"""
-    bonus = 0
-    if user["items"]:
-        for item_name in user["items"]:
-            if item_name and item_name in ITEMS and stat in ITEMS[item_name]:
-                bonus += ITEMS[item_name][stat]
-    return bonus
+    return 0  # Система предметов удалена
 
 def calculate_character_stats(user: Dict) -> Dict[str, Any]:
     """Рассчитывает все характеристики персонажа"""
-    items = user.get("items", []) or [None] * 6
-    
     # Базовые характеристики
     base_str = user["str"]
     base_agi = user["agi"] 
     base_int = user["int"]
     level = user["level"]
     
-    # Бонусы от предметов
-    str_bonus = get_item_bonus(user, "str")
-    agi_bonus = get_item_bonus(user, "agi")
-    int_bonus = get_item_bonus(user, "int")
-    hp_bonus = get_item_bonus(user, "hp")
-    dmg_bonus = get_item_bonus(user, "dmg")
-    crit_bonus = get_item_bonus(user, "crit")
-    dodge_bonus = get_item_bonus(user, "dodge")
-    heal_bonus = get_item_bonus(user, "heal")
-    exp_bonus = get_item_bonus(user, "exp")
-    
-    # Расчет характеристик
-    max_hp = CharacterStats.calculate_max_hp(base_str + str_bonus, level, hp_bonus)
-    base_damage = CharacterStats.calculate_base_damage(base_str + str_bonus, dmg_bonus)
-    dodge_chance = CharacterStats.calculate_dodge_chance(base_agi + agi_bonus, dodge_bonus)
-    crit_chance = CharacterStats.calculate_crit_chance(base_agi + agi_bonus, crit_bonus)
-    hp_regen = CharacterStats.calculate_hp_regen(base_int + int_bonus, heal_bonus)
+    # Расчет характеристик (без бонусов от предметов)
+    max_hp = CharacterStats.calculate_max_hp(base_str, level, 0)
+    base_damage = CharacterStats.calculate_base_damage(base_str, 0)
+    dodge_chance = CharacterStats.calculate_dodge_chance(base_agi, 0)
+    crit_chance = CharacterStats.calculate_crit_chance(base_agi, 0)
+    hp_regen = CharacterStats.calculate_hp_regen(base_int, 0)
     
     return {
         "max_hp": max_hp,
@@ -83,9 +65,9 @@ def calculate_character_stats(user: Dict) -> Dict[str, Any]:
         "dodge_chance": dodge_chance,
         "crit_chance": crit_chance,
         "hp_regen": hp_regen,
-        "str_total": base_str + str_bonus,
-        "agi_total": base_agi + agi_bonus,
-        "int_total": base_int + int_bonus,
+        "str_total": base_str,
+        "agi_total": base_agi,
+        "int_total": base_int,
         "level": level
     }
 
@@ -127,38 +109,5 @@ def get_next_level_exp(current_level: int) -> int:
     """Рассчитывает опыт для следующего уровня"""
     return int(100 * (1.2 ** (current_level - 1)))  # EXP_PER_LEVEL = 100, EXP_MULTIPLIER = 1.2
 
-# Предметы (упрощенная версия)
-ITEMS = {
-    "Boots of Speed": {"agi": 10},
-    "Phase Boots": {"agi": 22, "dmg": 16},
-    "Power Treads": {"str": 22, "agi": 22},
-    "Arcane Boots": {"int": 10},
-    "Boots of Travel": {"agi": 15, "dmg": 10},
-    "Ring of Protection": {"str": 3},
-    "Vanguard": {"str": 10, "hp": 200},
-    "Crimson Guard": {"str": 15, "hp": 250},
-    "Hood of Defiance": {"int": 10, "hp": 150},
-    "Blade Mail": {"str": 10, "agi": 10},
-    "Quelling Blade": {"dmg": 7},
-    "Sange": {"str": 10, "dmg": 10},
-    "Yasha": {"agi": 16, "crit": 10},
-    "Daedalus": {"crit": 25, "dmg": 81},
-    "Butterfly": {"agi": 30, "dodge": 30},
-    "Stout Shield": {"dodge": 10},
-    "Mekansm": {"str": 5, "hp": 150},
-    "Black King Bar": {"str": 22, "hp": 300},
-    "Heart of Tarrasque": {"str": 45, "hp": 500},
-    "Shiva's Guard": {"str": 20, "agi": 20},
-    "Ring of Basilius": {"str": 5, "int": 5},
-    "Magic Wand": {"hp": 75, "int": 5},
-    "Aghanim's Scepter": {"int": 20, "str": 10},
-    "Eul's Scepter": {"int": 25, "agi": 10},
-    "Gleipnir": {"str": 20, "agi": 20},
-    "Healing Salve": {"heal": 100},
-    "Tome of Knowledge": {"exp": 100},
-    "Ring of Regen": {"hp": 100},
-    "Ring of Health": {"hp": 150},
-    "Perseverance": {"int": 10, "hp": 150}
-}
 
 __all__ = ['CharacterStats', 'calculate_character_stats', 'get_fissure_result', 'get_user_progress', 'get_next_level_exp']
