@@ -194,6 +194,7 @@ if __name__ == '__main__':
     try:
         # Запуск бота через run_polling() - это рекомендованный способ для python-telegram-bot v20+
         # Он сам управляет event loop и не вызывает ошибку "Cannot close a running event loop"
+        # НЕ используем asyncio.run(main()) - это вызывает ошибку "coroutine 'main' was never awaited"
         main()
     except KeyboardInterrupt:
         logger.info("Бот остановлен вручную")
