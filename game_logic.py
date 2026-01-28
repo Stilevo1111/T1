@@ -163,8 +163,6 @@ ITEMS = {
 
 __all__ = ['CharacterStats', 'calculate_character_stats', 'get_fissure_result', 'get_user_progress', 'get_next_level_exp']
 
-</final_file_content>
-
 IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.
 
  <environment_details>
