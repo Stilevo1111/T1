@@ -1,0 +1,10 @@
+services:
+  - type: worker
+    name: fissure-bot
+    env: python
+    region: oregon
+    plan: free
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        fromSecret: BOT_TOKEN
