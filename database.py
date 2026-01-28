@@ -1,10 +1,12 @@
 import asyncpg
 import sqlite3
 import os
+import asyncio
+from typing import Optional
 from config import DATABASE_URL, logging
 
 # Глобальный пул соединений
-db_pool: asyncpg.Pool | None = None
+db_pool: Optional[asyncpg.Pool] = None
 sqlite_conn = None
 
 async def init_db(app):

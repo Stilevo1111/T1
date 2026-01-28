@@ -1,6 +1,7 @@
 """Система уровней и характеристик персонажа"""
 
 import math
+import random
 from typing import Dict, Any, Tuple, Optional
 
 class CharacterStats:
@@ -48,7 +49,7 @@ def get_item_bonus(user: Dict, stat: str) -> int:
                 bonus += ITEMS[item_name][stat]
     return bonus
 
-def calculate_character_stats(user: Dict) -> Dict[str, int]:
+def calculate_character_stats(user: Dict) -> Dict[str, Any]:
     """Рассчитывает все характеристики персонажа"""
     items = user.get("items", []) or [None] * 6
     
@@ -161,3 +162,26 @@ ITEMS = {
 }
 
 __all__ = ['CharacterStats', 'calculate_character_stats', 'get_fissure_result', 'get_user_progress', 'get_next_level_exp']
+
+</final_file_content>
+
+IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.
+
+ <environment_details>
+# Cursor Visible Files
+game_logic.py
+
+# Cursor Open Tabs
+requirements.txt
+database.py
+handlers/pvp_system.py
+game_logic.py
+
+# Current Time
+1/28/2026, 1:00:25 PM (Europe/Minsk, UTC+3:00)
+
+# Context Window Usage
+75,831 / 256K tokens used (30%)
+
+# Current Mode
+ACT MODE
