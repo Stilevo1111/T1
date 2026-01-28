@@ -179,21 +179,30 @@ async def main():
     await register_handlers(application)
     
     # Запуск бота
-    if RENDER_URL:
-        # Запуск вебхука для Render
-        await application.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            webhook_url=f"{RENDER_URL}/webhook",
-            drop_pending_updates=True
-        )
-    else:
-        # Запуск polling для локальной разработки
-        await application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    async with application:
+        await application.initialize()
+        await application.start()
+        
+        if RENDER_URL:
+            # Запуск вебхука для Render
+            await application.updater.start_webhook(
+                listen="0.0.0.0",
+                port=PORT,
+                webhook_url=f"{RENDER_URL}/webhook",
+                drop_pending_updates=True
+            )
+        else:
+            # Запуск polling для локальной разработки
+            await application.updater.start_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True
+            )
+        
+        # Ожидание сигнала остановки
+        await asyncio.Event().wait()
 
 if __name__ == '__main__':
     try:
-        # Запуск бота через asyncio.run() - это правильный способ для асинхронных функций
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Бот остановлен вручную")
