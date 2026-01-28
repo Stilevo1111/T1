@@ -193,7 +193,7 @@ async def main():
 
 if __name__ == '__main__':
     try:
-        main()
+        asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Бот остановлен вручную")
     except Exception as e:
