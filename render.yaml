@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: fissure-bot
+    env: python
+    region: oregon
+    plan: free
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        fromSecret: BOT_TOKEN
+      - key: WEB_CONCURRENCY
+        value: 1
+    healthCheckPath: /health
+    healthCheckInterval: 30
+    healthCheckTimeout: 10
+    healthCheckRetries: 3
+    healthCheckGracePeriod: 300
+
+# Для Telegram бота лучше использовать background worker
+workers:
+  - type: worker
+    name: fissure-bot-worker
+    env: python
+    region: oregon
+    plan: free
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        fromSecret: BOT_TOKEN
+    healthCheckPath: /health
+    healthCheckInterval: 30
+    healthCheckTimeout: 10
+    healthCheckRetries: 3
+    healthCheckGracePeriod: 300
