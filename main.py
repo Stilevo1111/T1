@@ -4,7 +4,7 @@ import time
 import asyncio
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
-from db import init_db, get_user, update_fissure, get_fissure_top
+from db_postgres import init_db, get_user, update_fissure, get_fissure_top
 
 TOKEN = os.getenv("BOT_TOKEN")
 
