@@ -181,7 +181,5 @@ game_logic.py
 1/28/2026, 1:00:25 PM (Europe/Minsk, UTC+3:00)
 
 # Context Window Usage
-75,831 / 256K tokens used (30%)
-
 # Current Mode
 ACT MODE
