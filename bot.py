@@ -179,31 +179,21 @@ async def main():
     await register_handlers(application)
     
     # Запуск бота
-    async with application:
-        await application.initialize()
-        await application.start()
-        
-        if RENDER_URL:
-            # Запуск вебхука для Render
-            await application.updater.start_webhook(
-                listen="0.0.0.0",
-                port=PORT,
-                webhook_url=f"{RENDER_URL}/webhook",
-                drop_pending_updates=True
-            )
-        else:
-            # Запуск polling для локальной разработки
-            await application.updater.start_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True
-            )
-        
-        # Ожидание сигнала остановки
-        await asyncio.Event().wait()
+    if RENDER_URL:
+        # Запуск вебхука для Render
+        await application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_url=f"{RENDER_URL}/webhook",
+            drop_pending_updates=True
+        )
+    else:
+        # Запуск polling для локальной разработки
+        await application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == '__main__':
     try:
-        asyncio.run(main())
+        main()
     except KeyboardInterrupt:
         logger.info("Бот остановлен вручную")
     except Exception as e:
