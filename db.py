@@ -12,6 +12,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             uid INTEGER PRIMARY KEY,
+            username TEXT,
             fissure REAL DEFAULT 0.1,
             last_fissure INTEGER DEFAULT 0
         )
@@ -20,7 +21,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-def get_user(uid):
+def get_user(uid, username=None):
     """Получение пользователя из базы данных"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -32,17 +33,19 @@ def get_user(uid):
         conn.close()
         return {
             "uid": user[0],
-            "fissure": user[1],
-            "last_fissure": user[2]
+            "username": user[1],
+            "fissure": user[2],
+            "last_fissure": user[3]
         }
     else:
-        # Создаем нового пользователя
-        cursor.execute("INSERT INTO users (uid, fissure, last_fissure) VALUES (?, ?, ?)", 
-                      (uid, 0.1, 0))
+        # Создаем нового пользователя с username
+        cursor.execute("INSERT INTO users (uid, username, fissure, last_fissure) VALUES (?, ?, ?, ?)", 
+                      (uid, username, 0.1, 0))
         conn.commit()
         conn.close()
         return {
             "uid": uid,
+            "username": username,
             "fissure": 0.1,
             "last_fissure": 0
         }
@@ -67,7 +70,7 @@ def get_fissure_top(limit=10):
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT uid, fissure 
+        SELECT uid, username, fissure 
         FROM users 
         ORDER BY fissure DESC 
         LIMIT ?
@@ -76,4 +79,4 @@ def get_fissure_top(limit=10):
     users = cursor.fetchall()
     conn.close()
     
-    return [{"uid": u[0], "fissure": u[1]} for u in users]
+    return [{"uid": u[0], "username": u[1], "fissure": u[2]} for u in users]

@@ -96,7 +96,8 @@ async def auto_delete(message, delay=30):
 # ---------- ИГРОВАЯ ЛОГИКА ----------
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    user = get_user(uid)
+    username = update.effective_user.username
+    user = get_user(uid, username)
     now = time.time()
 
     # Удаляем команду пользователя через 30 сек
@@ -130,7 +131,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(auto_delete(update.message, 30))
-    user = get_user(update.effective_user.id)
+    uid = update.effective_user.id
+    username = update.effective_user.username
+    user = get_user(uid, username)
     msg = await update.message.reply_text(f"📏 Текущая длина фиссуры: {user['fissure']:.1f} см")
     asyncio.create_task(auto_delete(msg, 30))
 
@@ -139,13 +142,17 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     top_users = get_fissure_top()
     text = "🏆 Топ Фиссур:\n\n"
     for i, u in enumerate(top_users, 1):
-        text += f"{i}. {u['uid']} — {u['fissure']:.1f} см\n"
+        username = u['username'] if u['username'] else f"Пользователь {u['uid']}"
+        text += f"{i}. {username} — {u['fissure']:.1f} см\n"
     msg = await update.message.reply_text(text)
     asyncio.create_task(auto_delete(msg, 30))
 
 # ---------- МЕНЮ ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(auto_delete(update.message, 30))
+    uid = update.effective_user.id
+    username = update.effective_user.username
+    get_user(uid, username)  # Сохраняем пользователя в базу
     msg = await update.message.reply_text(
         "Добро пожаловать!\nЗдесь можно увеличить фиссуру 😈",
         reply_markup=main_menu()
@@ -155,6 +162,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(auto_delete(update.message, 30))
     text = update.message.text
+    
+    # Сохраняем пользователя в базу при любом взаимодействии
+    uid = update.effective_user.id
+    username = update.effective_user.username
+    get_user(uid, username)
 
     if text == "📈 Увеличить фиссуру":
         await fissure(update, context)
