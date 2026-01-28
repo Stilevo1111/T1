@@ -75,7 +75,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>Рейтинги:</b>
 /top_mmr - Топ игроков по MMR
-/top_fissure - Топ игроков по длине фиссуры
+/top - Топ игроков по длине фиссуры
 """
     await update.message.reply_text(help_text, parse_mode='HTML')
 
@@ -155,7 +155,7 @@ async def register_handlers(application: Application):
     # Рейтинги
     application.add_handler(CommandHandler("top_mmr", top_mmr))
     application.add_handler(CommandHandler("top_level", top_level))
-    application.add_handler(CommandHandler("top_fissure", top_fissure))
+    application.add_handler(CommandHandler("top", top_fissure))
     
     # Регистрация обработчиков из модулей
     register_fissure_handlers(application)
