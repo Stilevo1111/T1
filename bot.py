@@ -130,4 +130,9 @@ def run_bot():
         logger.error(f"❌ Ошибка бота: {e}")
 
 if __name__ == "__main__":
+    # Запускаем Flask сервер в отдельном потоке
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    # Запускаем бота
     run_bot()
