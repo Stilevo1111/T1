@@ -94,37 +94,58 @@ async def main():
     except Exception as e:
         logger.warning(f"⚠️ БД: {e}")
     
-    # Запускаем polling с минимальными настройками
-    logger.info("🔄 Запуск polling...")
-    try:
-        # Инициализируем приложение
-        await application.initialize()
-        
-        # Запускаем polling
-        await application.start()
-        await application.updater.start_polling(
-            drop_pending_updates=True,
-            allowed_updates=["message", "callback_query"],
-            poll_interval=3.0,
-            timeout=30,
-            read_timeout=30,
-            write_timeout=30,
-            connect_timeout=30,
-            pool_timeout=30
-        )
-        
-        # Ждем завершения
-        await asyncio.Event().wait()
-        
-    except Exception as e:
-        logger.error(f"❌ Ошибка polling: {e}")
-        raise
-    finally:
+    # Проверяем, запущен ли бот на Render
+    IS_RENDER = os.getenv("RENDER", False)
+    
+    if IS_RENDER:
+        # Режим webhook для Render
+        logger.info("🔄 Запуск webhook режима...")
         try:
-            await application.stop()
-            await application.shutdown()
-        except:
-            pass
+            # Устанавливаем webhook
+            await application.bot.set_webhook(
+                url=f"{WEBHOOK_URL}/webhook",
+                drop_pending_updates=True
+            )
+            logger.info("✅ Webhook установлен")
+            
+            # Запускаем Flask сервер
+            app.run(host="0.0.0.0", port=PORT)
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка webhook: {e}")
+            raise
+    else:
+        # Режим polling для локальной разработки
+        logger.info("🔄 Запуск polling режима...")
+        try:
+            # Инициализируем приложение
+            await application.initialize()
+            
+            # Запускаем polling
+            await application.start()
+            await application.updater.start_polling(
+                drop_pending_updates=True,
+                allowed_updates=["message", "callback_query"],
+                poll_interval=3.0,
+                timeout=30,
+                read_timeout=30,
+                write_timeout=30,
+                connect_timeout=30,
+                pool_timeout=30
+            )
+            
+            # Ждем завершения
+            await asyncio.Event().wait()
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка polling: {e}")
+            raise
+        finally:
+            try:
+                await application.stop()
+                await application.shutdown()
+            except:
+                pass
 
 def run_bot():
     """Запуск бота"""
