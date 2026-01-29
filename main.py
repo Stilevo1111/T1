@@ -10,14 +10,14 @@ from database import init_db, get_user, update_fissure, get_fissure_top
 from flask import Flask
 
 # Создаем Flask приложение для Render
-app = Flask(__name__)
+flask_app = Flask(__name__)
 
-@app.route('/')
+@flask_app.route('/')
 def health_check():
     """Простой health check endpoint для Render"""
     return "✅ Bot is running!", 200
 
-@app.route('/health')
+@flask_app.route('/health')
 def health():
     """Дополнительный health check endpoint"""
     return {"status": "ok", "service": "fissure-bot"}, 200
@@ -198,7 +198,7 @@ def run_flask():
     """Запуск Flask сервера на порту 10000"""
     try:
         # Запускаем Flask сервер на порту 10000
-        app.run(host='0.0.0.0', port=10000, debug=False)
+        flask_app.run(host='0.0.0.0', port=10000, debug=False)
     except Exception as e:
         logger.error(f"❌ Ошибка Flask сервера: {e}")
 
