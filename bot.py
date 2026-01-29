@@ -69,8 +69,9 @@ async def main():
             secret_token=os.getenv("WEBHOOK_SECRET", "")
         )
         await application.start()
-        await application.updater.stop()
-        await application.stop()
+        
+        # Ожидаем завершения работы (бесконечный цикл)
+        await asyncio.Event().wait()
         
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}", exc_info=True)
