@@ -54,6 +54,7 @@ async def auto_delete(message, delay=30):
         pass
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"Пользователь {update.effective_user.username} ({update.effective_user.id}) вызвал /fissure")
     uid = update.effective_user.id
     username = update.effective_user.username
     user = get_user(uid, username)
@@ -88,6 +89,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(auto_delete(msg, 30))
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"Пользователь {update.effective_user.username} ({update.effective_user.id}) вызвал /stats")
     asyncio.create_task(auto_delete(update.message, 30))
     uid = update.effective_user.id
     username = update.effective_user.username
@@ -96,6 +98,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(auto_delete(msg, 30))
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"Пользователь {update.effective_user.username} ({update.effective_user.id}) вызвал /top")
     asyncio.create_task(auto_delete(update.message, 30))
     top_users = get_fissure_top()
     text = "🏆 Топ Фиссур:\n\n"
@@ -118,6 +121,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(auto_delete(msg, 30))
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"Пользователь {update.effective_user.username} ({update.effective_user.id}) нажал кнопку: {update.message.text}")
     asyncio.create_task(auto_delete(update.message, 30))
     text = update.message.text
     uid = update.effective_user.id
