@@ -3,24 +3,9 @@ import random
 import time
 import asyncio
 import logging
-import threading
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from database import init_db, get_user, update_fissure, get_fissure_top
-from flask import Flask
-
-# Создаем Flask приложение для Render
-flask_app = Flask(__name__)
-
-@flask_app.route('/')
-def health_check():
-    """Простой health check endpoint для Render"""
-    return "✅ Bot is running!", 200
-
-@flask_app.route('/health')
-def health():
-    """Дополнительный health check endpoint"""
-    return {"status": "ok", "service": "fissure-bot"}, 200
 
 # Настройка логирования
 logging.basicConfig(
@@ -194,20 +179,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = await update.message.reply_text("❌ Ошибка при обработке команды")
         asyncio.create_task(auto_delete(msg, 10))
 
-def run_flask():
-    """Запуск Flask сервера на порту 10000"""
-    try:
-        # Запускаем Flask сервер на порту 10000
-        flask_app.run(host='0.0.0.0', port=10000, debug=False)
-    except Exception as e:
-        logger.error(f"❌ Ошибка Flask сервера: {e}")
-
-def main():
-    """Запуск бота в режиме polling + Flask сервер"""
+async def main():
+    """Запуск Telegram бота в режиме polling"""
     try:
         init_db()
         
-        # Создаем Telegram бота
+        # Создаем Telegram бота с правильной настройкой таймаутов
         telegram_app = ApplicationBuilder().token(TOKEN).build()
 
         telegram_app.add_handler(CommandHandler("start", start))
@@ -216,18 +193,24 @@ def main():
         telegram_app.add_handler(CommandHandler("top", top))
         telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
-        # Запускаем Flask сервер в отдельном потоке
-        flask_thread = threading.Thread(target=run_flask, daemon=True)
-        flask_thread.start()
-        
-        logger.info("✅ Flask сервер запущен на порту 10000")
         logger.info("✅ Telegram бот запущен")
         
-        # Запускаем Telegram бота
-        telegram_app.run_polling()
+        # Инициализируем приложение
+        await telegram_app.initialize()
+        
+        # Запускаем polling вручную
+        await telegram_app.start()
+        await telegram_app.updater.start_polling(
+            poll_interval=3.0,
+            allowed_updates=None
+        )
+        
+        # Ждем завершения (никогда не завершится без сигнала)
+        await asyncio.Event().wait()
+        
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}", exc_info=True)
         raise
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

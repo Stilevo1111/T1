@@ -2,6 +2,11 @@ import os
 import sqlite3
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import logging
+
+# Configure logging for database operations
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
@@ -27,6 +32,7 @@ def get_connection():
         return sqlite3.connect(DATABASE_URL)
 
 def init_db():
+    """Initialize database tables. Use migrations instead for production."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -52,9 +58,30 @@ def init_db():
             """)
         conn.commit()
         conn.close()
-        print("✅ База данных инициализирована")
+        logger.info("✅ База данных инициализирована")
     except Exception as e:
-        print(f"❌ Ошибка инициализации БД: {e}")
+        logger.error(f"❌ Ошибка инициализации БД: {e}")
+
+def migrate_db():
+    """Run database migrations using Alembic"""
+    try:
+        import subprocess
+        import sys
+        
+        # Run alembic upgrade head
+        result = subprocess.run([
+            sys.executable, '-m', 'alembic', 'upgrade', 'head'
+        ], capture_output=True, text=True, cwd=os.path.dirname(__file__))
+        
+        if result.returncode == 0:
+            logger.info("✅ Миграции базы данных выполнены успешно")
+            return True
+        else:
+            logger.error(f"❌ Ошибка выполнения миграций: {result.stderr}")
+            return False
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска миграций: {e}")
+        return False
 
 def get_user(telegram_id, username=None):
     try:
