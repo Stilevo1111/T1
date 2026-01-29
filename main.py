@@ -198,11 +198,12 @@ async def main():
         # Инициализируем приложение
         await telegram_app.initialize()
         
-        # Запускаем polling вручную
+        # Запускаем polling вручную с уникальным timeout для избежания конфликтов
         await telegram_app.start()
         await telegram_app.updater.start_polling(
             poll_interval=3.0,
-            allowed_updates=None
+            allowed_updates=None,
+            timeout=20
         )
         
         # Ждем завершения (никогда не завершится без сигнала)

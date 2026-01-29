@@ -10,3 +10,7 @@ services:
         fromSecret: BOT_TOKEN
       - key: DATABASE_URL
         fromSecret: DATABASE_URL
+    healthCheckPath: /health
+    healthCheckInterval: 30
+    healthCheckTimeout: 10
+    healthCheckRetries: 3
