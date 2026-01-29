@@ -2,9 +2,17 @@ import os
 import random
 import time
 import asyncio
+import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
-from db_postgres import init_db, get_user, update_fissure, get_fissure_top
+from database import init_db, get_user, update_fissure, get_fissure_top
+
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
@@ -52,98 +60,142 @@ async def auto_delete(message, delay=30):
     await asyncio.sleep(delay)
     try:
         await message.delete()
-    except:
-        pass
+    except Exception as e:
+        logger.debug(f"Не удалось удалить сообщение: {e}")
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /fissure"""
+    logger.info(f"Пользователь {update.effective_user.id} вызвал fissure")
+    
     uid = update.effective_user.id
     username = update.effective_user.username
-    user = get_user(uid, username)
     now = time.time()
+    
+    try:
+        user = get_user(uid, username)
+        
+        if now - user["last_fissure"] < COOLDOWN:
+            wait = COOLDOWN - (now - user["last_fissure"])
+            msg = await update.message.reply_text(
+                f"⏳ Фиссура ещё восстанавливается.\nЖди: {format_time(wait)}"
+            )
+            asyncio.create_task(auto_delete(msg, 30))
+            return
 
-    asyncio.create_task(auto_delete(update.message, 30))
+        roll = random.choice(ROLLS)
+        new_fissure = max(0.1, user["fissure"] + roll)
+        update_fissure(uid, new_fissure, now)
 
-    if now - user["last_fissure"] < COOLDOWN:
-        wait = COOLDOWN - (now - user["last_fissure"])
+        if roll > 0:
+            phrase = random.choice(FISURE_PHRASES["up"])
+        elif roll < 0:
+            phrase = random.choice(FISURE_PHRASES["down"])
+        else:
+            phrase = random.choice(FISURE_PHRASES["same"])
+
+        meme = random.choice(FISURE_MEMES)
+
         msg = await update.message.reply_text(
-            f"⏳ Фиссура ещё восстанавливается.\nЖди: {format_time(wait)}"
+            f"{FISURE_TEXTS[roll]}\n{phrase}\n\n{meme}\n📏 Теперь длина: {new_fissure:.1f} см"
         )
         asyncio.create_task(auto_delete(msg, 30))
-        return
-
-    roll = random.choice(ROLLS)
-    new_fissure = max(0.1, user["fissure"] + roll)
-    update_fissure(uid, new_fissure, now)
-
-    if roll > 0:
-        phrase = random.choice(FISURE_PHRASES["up"])
-    elif roll < 0:
-        phrase = random.choice(FISURE_PHRASES["down"])
-    else:
-        phrase = random.choice(FISURE_PHRASES["same"])
-
-    meme = random.choice(FISURE_MEMES)
-
-    msg = await update.message.reply_text(
-        f"{FISURE_TEXTS[roll]}\n{phrase}\n\n{meme}\n📏 Теперь длина: {new_fissure:.1f} см"
-    )
-    asyncio.create_task(auto_delete(msg, 30))
+        
+    except Exception as e:
+        logger.error(f"Ошибка в fissure: {e}")
+        msg = await update.message.reply_text("❌ Ошибка при обработке запроса")
+        asyncio.create_task(auto_delete(msg, 10))
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    asyncio.create_task(auto_delete(update.message, 30))
-    uid = update.effective_user.id
-    username = update.effective_user.username
-    user = get_user(uid, username)
-    msg = await update.message.reply_text(f"📏 Текущая длина фиссуры: {user['fissure']:.1f} см")
-    asyncio.create_task(auto_delete(msg, 30))
+    """Показать статистику"""
+    logger.info(f"Пользователь {update.effective_user.id} вызвал stats")
+    
+    try:
+        uid = update.effective_user.id
+        username = update.effective_user.username
+        user = get_user(uid, username)
+        msg = await update.message.reply_text(f"📏 Текущая длина фиссуры: {user['fissure']:.1f} см")
+        asyncio.create_task(auto_delete(msg, 30))
+    except Exception as e:
+        logger.error(f"Ошибка в stats: {e}")
+        msg = await update.message.reply_text("❌ Ошибка при получении статистики")
+        asyncio.create_task(auto_delete(msg, 10))
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    asyncio.create_task(auto_delete(update.message, 30))
-    top_users = get_fissure_top()
-    text = "🏆 Топ Фиссур:\n\n"
-    for i, u in enumerate(top_users, 1):
-        username = u['username'] or f"Пользователь {u['uid']}"
-        text += f"{i}. {username} — {u['fissure']:.1f} см\n"
-    msg = await update.message.reply_text(text)
-    asyncio.create_task(auto_delete(msg, 30))
+    """Показать топ"""
+    logger.info(f"Пользователь {update.effective_user.id} вызвал top")
+    
+    try:
+        top_users = get_fissure_top()
+        text = "🏆 Топ Фиссур:\n\n"
+        for i, u in enumerate(top_users, 1):
+            username = u['username'] or f"Пользователь {u['telegram_id']}"
+            text += f"{i}. {username} — {u['fissure']:.1f} см\n"
+        msg = await update.message.reply_text(text)
+        asyncio.create_task(auto_delete(msg, 30))
+    except Exception as e:
+        logger.error(f"Ошибка в top: {e}")
+        msg = await update.message.reply_text("❌ Ошибка при получении топа")
+        asyncio.create_task(auto_delete(msg, 10))
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    asyncio.create_task(auto_delete(update.message, 30))
-    uid = update.effective_user.id
-    username = update.effective_user.username
-    get_user(uid, username)
-    msg = await update.message.reply_text(
-        "Добро пожаловать!\nЗдесь можно увеличить фиссуру 😈",
-        reply_markup=main_menu()
-    )
-    asyncio.create_task(auto_delete(msg, 30))
+    """Обработчик команды /start"""
+    logger.info(f"Новый пользователь {update.effective_user.id}")
+    
+    try:
+        uid = update.effective_user.id
+        username = update.effective_user.username
+        get_user(uid, username)
+        msg = await update.message.reply_text(
+            "Добро пожаловать!\nЗдесь можно увеличить фиссуру 😈",
+            reply_markup=main_menu()
+        )
+        asyncio.create_task(auto_delete(msg, 30))
+    except Exception as e:
+        logger.error(f"Ошибка в start: {e}")
+        msg = await update.message.reply_text("❌ Ошибка при запуске бота")
+        asyncio.create_task(auto_delete(msg, 10))
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    asyncio.create_task(auto_delete(update.message, 30))
-    text = update.message.text
-    uid = update.effective_user.id
-    username = update.effective_user.username
-    get_user(uid, username)
+    """Обработчик кнопок меню"""
+    logger.info(f"Пользователь {update.effective_user.id} нажал кнопку: {update.message.text}")
+    
+    try:
+        text = update.message.text
+        uid = update.effective_user.id
+        username = update.effective_user.username
+        get_user(uid, username)
 
-    if text == "📈 Увеличить фиссуру":
-        await fissure(update, context)
-    elif text == "📏 Моя длина":
-        await stats(update, context)
-    elif text == "🏆 Топ":
-        await top(update, context)
+        if text == "📈 Увеличить фиссуру":
+            await fissure(update, context)
+        elif text == "📏 Моя длина":
+            await stats(update, context)
+        elif text == "🏆 Топ":
+            await top(update, context)
+        else:
+            msg = await update.message.reply_text("Используйте кнопки меню или команды")
+            asyncio.create_task(auto_delete(msg, 10))
+    except Exception as e:
+        logger.error(f"Ошибка в menu_handler: {e}")
+        msg = await update.message.reply_text("❌ Ошибка при обработке команды")
+        asyncio.create_task(auto_delete(msg, 10))
 
 def main():
-    init_db()
-    app = ApplicationBuilder().token(TOKEN).build()
+    """Запуск бота в режиме polling"""
+    try:
+        init_db()
+        app = ApplicationBuilder().token(TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("fissure", fissure))
-    app.add_handler(CommandHandler("stats", stats))
-    app.add_handler(CommandHandler("top", top))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("fissure", fissure))
+        app.add_handler(CommandHandler("stats", stats))
+        app.add_handler(CommandHandler("top", top))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
-    print("✅ Bot started")
-    app.run_polling()
+        logger.info("✅ Bot started")
+        app.run_polling()
+    except Exception as e:
+        logger.error(f"❌ Критическая ошибка: {e}", exc_info=True)
+        raise
 
 if __name__ == "__main__":
     main()
