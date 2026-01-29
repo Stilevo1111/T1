@@ -185,6 +185,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = update.effective_user.username
         get_user(uid, username)
 
+        # Удаляем сообщение от кнопки через 10 секунд
+        schedule_message_deletion(update.message, 10)
+
         if text == "📈 Увеличить фиссуру":
             await fissure(update, context)
         elif text == "📏 Моя длина":
