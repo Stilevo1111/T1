@@ -6,7 +6,7 @@ import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top
+from database_local import init_db, get_user, update_fissure, get_fissure_top
 from aiohttp import web
 
 # Настройка логирования
