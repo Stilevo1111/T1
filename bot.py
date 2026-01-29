@@ -59,12 +59,15 @@ async def main():
         logger.info(f"🔌 Прослушивание порта {port}")
         
         # Используем правильный метод для запуска
-        await application.run_webhook(
+        await application.updater.start_webhook(
             listen="0.0.0.0",
             port=port,
             webhook_url=WEBHOOK_URL,
             secret_token=os.getenv("WEBHOOK_SECRET", "")
         )
+        await application.start()
+        await application.updater.stop()
+        await application.stop()
         
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}", exc_info=True)
