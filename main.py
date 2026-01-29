@@ -3,9 +3,24 @@ import random
 import time
 import asyncio
 import logging
+import threading
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from database import init_db, get_user, update_fissure, get_fissure_top
+from flask import Flask
+
+# Создаем Flask приложение для Render
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    """Простой health check endpoint для Render"""
+    return "✅ Bot is running!", 200
+
+@app.route('/health')
+def health():
+    """Дополнительный health check endpoint"""
+    return {"status": "ok", "service": "fissure-bot"}, 200
 
 # Настройка логирования
 logging.basicConfig(
@@ -179,20 +194,37 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = await update.message.reply_text("❌ Ошибка при обработке команды")
         asyncio.create_task(auto_delete(msg, 10))
 
+def run_flask():
+    """Запуск Flask сервера на порту 10000"""
+    try:
+        # Запускаем Flask сервер на порту 10000
+        app.run(host='0.0.0.0', port=10000, debug=False)
+    except Exception as e:
+        logger.error(f"❌ Ошибка Flask сервера: {e}")
+
 def main():
-    """Запуск бота в режиме polling"""
+    """Запуск бота в режиме polling + Flask сервер"""
     try:
         init_db()
-        app = ApplicationBuilder().token(TOKEN).build()
+        
+        # Создаем Telegram бота
+        telegram_app = ApplicationBuilder().token(TOKEN).build()
 
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
+        telegram_app.add_handler(CommandHandler("start", start))
+        telegram_app.add_handler(CommandHandler("fissure", fissure))
+        telegram_app.add_handler(CommandHandler("stats", stats))
+        telegram_app.add_handler(CommandHandler("top", top))
+        telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
-        logger.info("✅ Bot started")
-        app.run_polling()
+        # Запускаем Flask сервер в отдельном потоке
+        flask_thread = threading.Thread(target=run_flask, daemon=True)
+        flask_thread.start()
+        
+        logger.info("✅ Flask сервер запущен на порту 10000")
+        logger.info("✅ Telegram бот запущен")
+        
+        # Запускаем Telegram бота
+        telegram_app.run_polling()
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}", exc_info=True)
         raise

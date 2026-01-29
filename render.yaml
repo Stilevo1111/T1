@@ -1,5 +1,5 @@
 services:
-  - type: background
+  - type: web
     name: fissure-bot
     env: python
     region: oregon
