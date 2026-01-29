@@ -58,20 +58,26 @@ async def main():
         port = int(os.getenv("PORT", 10000))
         logger.info(f"🔌 Прослушивание порта {port}")
         
-        # Инициализируем updater
+        # Инициализируем приложение
         await application.initialize()
         
-        # Используем правильный метод для запуска
+        # ✅ ИСПРАВЛЕНО: правильные параметры для start_webhook
         await application.updater.start_webhook(
             listen="0.0.0.0",
             port=port,
-            webhook_url=WEBHOOK_URL,
+            url_path="webhook",  # ✅ url_path вместо webhook_url
+            webhook_url=WEBHOOK_URL,  # ✅ webhook_url как отдельный параметр
             secret_token=os.getenv("WEBHOOK_SECRET", "")
         )
+        
+        # Запускаем приложение
         await application.start()
         
-        # Ожидаем завершения работы (бесконечный цикл)
-        await asyncio.Event().wait()
+        logger.info("✅ Бот запущен и готов к работе")
+        
+        # Бесконечно ждем (бот работает)
+        while True:
+            await asyncio.sleep(3600)  # Спим по часу
         
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}", exc_info=True)
