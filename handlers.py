@@ -3,7 +3,10 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 import random
 import time
 import asyncio
+import logging
 from database import get_user, update_fissure, get_fissure_top
+
+logger = logging.getLogger(__name__)
 
 COOLDOWN = 86400  # 24 часа
 ROLLS = [-5, -3, -1, 0, 1, 3, 5, 10]
@@ -103,6 +106,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(auto_delete(msg, 30))
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"Пользователь {update.effective_user.username} ({update.effective_user.id}) вызвал /start")
     asyncio.create_task(auto_delete(update.message, 30))
     uid = update.effective_user.id
     username = update.effective_user.username
