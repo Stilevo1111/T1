@@ -10,6 +10,12 @@ services:
         fromSecret: BOT_TOKEN
       - key: DATABASE_URL
         fromSecret: DATABASE_URL
+      - key: WEBHOOK_URL
+        value: https://fissure-bot.onrender.com/webhook
+      - key: RENDER_SERVICE_NAME
+        value: fissure-bot
+      - key: RENDER_REGION
+        value: oregon
     healthCheckPath: /health
     healthCheckInterval: 30
     healthCheckTimeout: 10

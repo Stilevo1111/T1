@@ -5,7 +5,9 @@ import asyncio
 import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top
+from aiohttp import web
 
 # Настройка логирования
 logging.basicConfig(
@@ -179,36 +181,74 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = await update.message.reply_text("❌ Ошибка при обработке команды")
         asyncio.create_task(auto_delete(msg, 10))
 
+async def health_check(request):
+    """Health check endpoint for Render"""
+    return web.Response(text="✅ Бот работает", status=200)
+
 async def main():
-    """Запуск Telegram бота в режиме polling"""
+    """Запуск Telegram бота в режиме webhook для Render"""
     try:
         init_db()
         
-        # Создаем Telegram бота с правильной настройкой таймаутов
+        # Создаем Telegram бота
         telegram_app = ApplicationBuilder().token(TOKEN).build()
 
+        # Добавляем обработчики команд
         telegram_app.add_handler(CommandHandler("start", start))
         telegram_app.add_handler(CommandHandler("fissure", fissure))
         telegram_app.add_handler(CommandHandler("stats", stats))
         telegram_app.add_handler(CommandHandler("top", top))
         telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
-        logger.info("✅ Telegram бот запущен")
+        logger.info("✅ Telegram бот запущен в режиме webhook")
         
         # Инициализируем приложение
         await telegram_app.initialize()
         
-        # Запускаем polling вручную с уникальным timeout для избежания конфликтов
+        # Получаем URL для webhook из переменной окружения или используем стандартный
+        webhook_url = os.getenv("WEBHOOK_URL")
+        if not webhook_url:
+            # Для Render сервисов URL формируется автоматически
+            service_name = os.getenv("RENDER_SERVICE_NAME", "fissure-bot")
+            region = os.getenv("RENDER_REGION", "oregon")
+            webhook_url = f"https://{service_name}.onrender.com/webhook"
+        
+        # Запускаем webhook
         await telegram_app.start()
-        await telegram_app.updater.start_polling(
-            poll_interval=3.0,
-            allowed_updates=None,
-            timeout=20
+        
+        # Создаем веб-сервер для обработки webhook и health check
+        port = int(os.getenv("PORT", 10000))
+        
+        # Создаем aiohttp приложение для health check
+        app = web.Application()
+        app.router.add_get('/health', health_check)
+        
+        # Запускаем веб-сервер для webhook
+        await telegram_app.updater.start_webhook(
+            listen="0.0.0.0",
+            port=port,
+            url_path="/webhook",
+            webhook_url=webhook_url,
+            drop_pending_updates=True
         )
+        
+        # Запускаем веб-сервер для health check
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", port + 1)  # Используем другой порт для health check
+        await site.start()
+        
+        logger.info(f"🚀 Бот запущен и готов принимать webhook запросы на порту {port}")
+        logger.info(f"🏥 Health check доступен на порту {port + 1}")
         
         # Ждем завершения (никогда не завершится без сигнала)
         await asyncio.Event().wait()
         
+    except Conflict as e:
+        logger.error(f"❌ Конфликт webhook: {e}")
+        logger.error("💡 Это может означать, что другой экземпляр бота уже использует этот токен")
+        logger.error("💡 Убедитесь, что на Render запущен только один экземпляр бота")
+        raise
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}", exc_info=True)
         raise
