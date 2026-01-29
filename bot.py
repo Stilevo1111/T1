@@ -19,7 +19,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Создаем Flask сервер для health checks
+# Создаем Flask сервер для health checks и webhook
 app = Flask(__name__)
 
 @app.route('/')
@@ -48,13 +48,6 @@ def keep_alive():
         except Exception as e:
             print(f"⚠️ Keep-alive ping failed: {e}")
         time.sleep(300)  # 5 минут
-
-# Запускаем Flask в отдельном потоке
-def run_flask():
-    try:
-        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
-    except Exception as e:
-        logger.error(f"❌ Flask server error: {e}")
 
 # Запускаем keep-alive в отдельном потоке
 keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
@@ -157,9 +150,5 @@ def run_bot():
         logger.error(f"❌ Ошибка бота: {e}")
 
 if __name__ == "__main__":
-    # Запускаем Flask сервер в отдельном потоке
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    
     # Запускаем бота
     run_bot()
