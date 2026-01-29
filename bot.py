@@ -58,6 +58,9 @@ async def main():
         port = int(os.getenv("PORT", 10000))
         logger.info(f"🔌 Прослушивание порта {port}")
         
+        # Инициализируем updater
+        await application.initialize()
+        
         # Используем правильный метод для запуска
         await application.updater.start_webhook(
             listen="0.0.0.0",
