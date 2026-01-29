@@ -21,7 +21,7 @@ async def main():
         RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
         
         if not TOKEN:
-            logger.error("❌ TELEGRAM_BOT_TOKEN не установлен")
+            logger.error("❌ BOT_TOKEN не установлен")
             return
         
         if not RENDER_URL:
@@ -70,21 +70,12 @@ async def main():
         logger.error(f"❌ Критическая ошибка: {e}", exc_info=True)
         raise
 
-def run_bot():
-    """Функция для запуска бота с обработкой событий"""
+if __name__ == "__main__":
     try:
-        # Создаем новую event loop для каждого запуска
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
         # Запускаем основную функцию
-        loop.run_until_complete(main())
-        
+        asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("🛑 Бот остановлен пользователем")
     except Exception as e:
         logger.error(f"❌ Ошибка при запуске бота: {e}", exc_info=True)
         sys.exit(1)
-
-if __name__ == "__main__":
-    run_bot()
