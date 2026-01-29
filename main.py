@@ -90,6 +90,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⏳ Фиссура ещё восстанавливается.\nЖди: {format_time(wait)}"
             )
             schedule_message_deletion(msg, 30)
+            schedule_message_deletion(update.message, 10)
             return
 
         roll = random.choice(ROLLS)
@@ -112,11 +113,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{FISURE_TEXTS[roll]}\n{phrase}\n\n{meme}\n📏 Теперь длина: {new_fissure:.1f} см"
         )
         schedule_message_deletion(msg, 30)
+        schedule_message_deletion(update.message, 10)
         
     except Exception as e:
         logger.error(f"Ошибка в fissure: {e}")
         msg = await update.message.reply_text("❌ Ошибка при обработке запроса")
         schedule_message_deletion(msg, 10)
+        schedule_message_deletion(update.message, 10)
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать статистику"""
@@ -128,10 +131,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(uid, username)
         msg = await update.message.reply_text(f"📏 Текущая длина фиссуры: {user['fissure']:.1f} см")
         schedule_message_deletion(msg, 30)
+        schedule_message_deletion(update.message, 10)
     except Exception as e:
         logger.error(f"Ошибка в stats: {e}")
         msg = await update.message.reply_text("❌ Ошибка при получении статистики")
         schedule_message_deletion(msg, 10)
+        schedule_message_deletion(update.message, 10)
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать топ"""
@@ -152,10 +157,12 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"{i}. {username} — {u['fissure']:.1f} см\n"
         msg = await update.message.reply_text(text)
         schedule_message_deletion(msg, 30)
+        schedule_message_deletion(update.message, 10)
     except Exception as e:
         logger.error(f"Ошибка в top: {e}")
         msg = await update.message.reply_text("❌ Ошибка при получении топа")
         schedule_message_deletion(msg, 10)
+        schedule_message_deletion(update.message, 10)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -174,6 +181,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Ошибка в start: {e}")
         msg = await update.message.reply_text("❌ Ошибка при запуске бота")
         schedule_message_deletion(msg, 10)
+        schedule_message_deletion(update.message, 10)
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик кнопок меню"""
@@ -201,6 +209,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Ошибка в menu_handler: {e}")
         msg = await update.message.reply_text("❌ Ошибка при обработке команды")
         schedule_message_deletion(msg, 10)
+
+    # Удаление сообщений с командами /fissure@DotaFull_bot, /top@DotaFull_bot, /stats@DotaFull_bot
+    if update.message.text and any(cmd in update.message.text for cmd in ['/fissure@DotaFull_bot', '/top@DotaFull_bot', '/stats@DotaFull_bot']):
+        await asyncio.sleep(10)
+        try:
+            await context.bot.delete_message(update.message.chat.id, update.message.message_id)
+        except Exception as e:
+            pass
 
 async def health_check(request):
     """Health check endpoint for Render"""
