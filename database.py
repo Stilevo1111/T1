@@ -12,7 +12,17 @@ else:
 
 def get_connection():
     if DATABASE_URL.startswith("postgresql://"):
-        return psycopg2.connect(DATABASE_URL, sslmode='require')
+        try:
+            # Add timeout and better SSL handling
+            return psycopg2.connect(
+                DATABASE_URL, 
+                sslmode='prefer',  # Changed from 'require' to 'prefer' for better compatibility
+                connect_timeout=10  # 10 second timeout
+            )
+        except Exception as e:
+            print(f"❌ PostgreSQL connection failed: {e}")
+            print("⚠️  Falling back to SQLite...")
+            return sqlite3.connect("fallback.db")
     else:
         return sqlite3.connect(DATABASE_URL)
 
