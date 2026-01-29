@@ -87,6 +87,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         roll = random.choice(ROLLS)
         new_fissure = max(0.1, user["fissure"] + roll)
         update_fissure(uid, new_fissure, now)
+        
+        # Логируем успешное обновление времени перезарядки
+        logger.info(f"Пользователь {uid} использовал фиссуру. Новое время перезарядки: {now}")
 
         if roll > 0:
             phrase = random.choice(FISURE_PHRASES["up"])
@@ -128,6 +131,13 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         top_users = get_fissure_top()
+        logger.info(f"Получено {len(top_users)} пользователей для топа")
+        
+        if not top_users:
+            msg = await update.message.reply_text("🏆 Топ Фиссур:\n\nПока нет данных для отображения топа")
+            asyncio.create_task(auto_delete(msg, 30))
+            return
+            
         text = "🏆 Топ Фиссур:\n\n"
         for i, u in enumerate(top_users, 1):
             username = u['username'] or f"Пользователь {u['telegram_id']}"
