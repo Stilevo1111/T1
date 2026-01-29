@@ -17,7 +17,7 @@ async def main():
     """Основная функция запуска бота"""
     try:
         # Получаем переменные окружения
-        TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+        TOKEN = os.getenv("BOT_TOKEN")
         RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
         
         if not TOKEN:
