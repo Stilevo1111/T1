@@ -59,11 +59,19 @@ def format_time(seconds):
     return f"{int(h)}ч {int(m)}м"
 
 async def auto_delete(message, delay=30):
-    await asyncio.sleep(delay)
+    """Удаляет сообщение через указанное количество секунд"""
     try:
+        await asyncio.sleep(delay)
         await message.delete()
     except Exception as e:
         logger.debug(f"Не удалось удалить сообщение: {e}")
+
+def schedule_message_deletion(message, delay=30):
+    """Планирует удаление сообщения"""
+    try:
+        asyncio.create_task(auto_delete(message, delay))
+    except Exception as e:
+        logger.error(f"Ошибка при планировании удаления сообщения: {e}")
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /fissure"""
@@ -81,7 +89,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg = await update.message.reply_text(
                 f"⏳ Фиссура ещё восстанавливается.\nЖди: {format_time(wait)}"
             )
-            asyncio.create_task(auto_delete(msg, 30))
+            schedule_message_deletion(msg, 30)
             return
 
         roll = random.choice(ROLLS)
@@ -103,12 +111,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = await update.message.reply_text(
             f"{FISURE_TEXTS[roll]}\n{phrase}\n\n{meme}\n📏 Теперь длина: {new_fissure:.1f} см"
         )
-        asyncio.create_task(auto_delete(msg, 30))
+        schedule_message_deletion(msg, 30)
         
     except Exception as e:
         logger.error(f"Ошибка в fissure: {e}")
         msg = await update.message.reply_text("❌ Ошибка при обработке запроса")
-        asyncio.create_task(auto_delete(msg, 10))
+        schedule_message_deletion(msg, 10)
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать статистику"""
@@ -119,11 +127,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = update.effective_user.username
         user = get_user(uid, username)
         msg = await update.message.reply_text(f"📏 Текущая длина фиссуры: {user['fissure']:.1f} см")
-        asyncio.create_task(auto_delete(msg, 30))
+        schedule_message_deletion(msg, 30)
     except Exception as e:
         logger.error(f"Ошибка в stats: {e}")
         msg = await update.message.reply_text("❌ Ошибка при получении статистики")
-        asyncio.create_task(auto_delete(msg, 10))
+        schedule_message_deletion(msg, 10)
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать топ"""
@@ -135,7 +143,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if not top_users:
             msg = await update.message.reply_text("🏆 Топ Фиссур:\n\nПока нет данных для отображения топа")
-            asyncio.create_task(auto_delete(msg, 30))
+            schedule_message_deletion(msg, 30)
             return
             
         text = "🏆 Топ Фиссур:\n\n"
@@ -143,11 +151,11 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username = u['username'] or f"Пользователь {u['telegram_id']}"
             text += f"{i}. {username} — {u['fissure']:.1f} см\n"
         msg = await update.message.reply_text(text)
-        asyncio.create_task(auto_delete(msg, 30))
+        schedule_message_deletion(msg, 30)
     except Exception as e:
         logger.error(f"Ошибка в top: {e}")
         msg = await update.message.reply_text("❌ Ошибка при получении топа")
-        asyncio.create_task(auto_delete(msg, 10))
+        schedule_message_deletion(msg, 10)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -161,11 +169,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Добро пожаловать!\nЗдесь можно увеличить фиссуру 😈",
             reply_markup=main_menu()
         )
-        asyncio.create_task(auto_delete(msg, 30))
+        schedule_message_deletion(msg, 30)
     except Exception as e:
         logger.error(f"Ошибка в start: {e}")
         msg = await update.message.reply_text("❌ Ошибка при запуске бота")
-        asyncio.create_task(auto_delete(msg, 10))
+        schedule_message_deletion(msg, 10)
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик кнопок меню"""
@@ -185,11 +193,11 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await top(update, context)
         else:
             msg = await update.message.reply_text("Используйте кнопки меню или команды")
-            asyncio.create_task(auto_delete(msg, 10))
+            schedule_message_deletion(msg, 10)
     except Exception as e:
         logger.error(f"Ошибка в menu_handler: {e}")
         msg = await update.message.reply_text("❌ Ошибка при обработке команды")
-        asyncio.create_task(auto_delete(msg, 10))
+        schedule_message_deletion(msg, 10)
 
 async def health_check(request):
     """Health check endpoint for Render"""
