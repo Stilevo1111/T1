@@ -15,8 +15,9 @@ def init_db():
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                uid BIGINT PRIMARY KEY,
-                username TEXT,
+                id SERIAL PRIMARY KEY,
+                telegram_id BIGINT UNIQUE NOT NULL,
+                username VARCHAR(255),
                 fissure REAL DEFAULT 0.1,
                 last_fissure DOUBLE PRECISION DEFAULT 0
             )
@@ -27,39 +28,39 @@ def init_db():
     except Exception as e:
         print(f"❌ Ошибка инициализации БД: {e}")
 
-def get_user(uid, username=None):
+def get_user(telegram_id, username=None):
     try:
         conn = get_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM users WHERE uid = %s", (uid,))
+        cursor.execute("SELECT * FROM users WHERE telegram_id = %s", (telegram_id,))
         user = cursor.fetchone()
         if user:
             conn.close()
             return {
-                "uid": user["uid"],
+                "telegram_id": user["telegram_id"],
                 "username": user["username"],
                 "fissure": user["fissure"],
                 "last_fissure": user["last_fissure"]
             }
         else:
             cursor.execute(
-                "INSERT INTO users (uid, username, fissure, last_fissure) VALUES (%s, %s, %s, %s)",
-                (uid, username, 0.1, 0)
+                "INSERT INTO users (telegram_id, username, fissure, last_fissure) VALUES (%s, %s, %s, %s)",
+                (telegram_id, username, 0.1, 0)
             )
             conn.commit()
             conn.close()
-            return {"uid": uid, "username": username, "fissure": 0.1, "last_fissure": 0}
+            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0}
     except Exception as e:
         print(f"❌ Ошибка get_user: {e}")
-        return {"uid": uid, "username": username, "fissure": 0.1, "last_fissure": 0}
+        return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0}
 
-def update_fissure(uid, fissure, last_fissure):
+def update_fissure(telegram_id, fissure, last_fissure):
     try:
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            UPDATE users SET fissure=%s, last_fissure=%s WHERE uid=%s
-        """, (fissure, last_fissure, uid))
+            UPDATE users SET fissure=%s, last_fissure=%s WHERE telegram_id=%s
+        """, (fissure, last_fissure, telegram_id))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -70,11 +71,11 @@ def get_fissure_top(limit=10):
         conn = get_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("""
-            SELECT uid, username, fissure FROM users ORDER BY fissure DESC LIMIT %s
+            SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT %s
         """, (limit,))
         users = cursor.fetchall()
         conn.close()
-        return [{"uid": u["uid"], "username": u["username"], "fissure": u["fissure"]} for u in users]
+        return [{"telegram_id": u["telegram_id"], "username": u["username"], "fissure": u["fissure"]} for u in users]
     except Exception as e:
         print(f"❌ Ошибка get_fissure_top: {e}")
         return []
