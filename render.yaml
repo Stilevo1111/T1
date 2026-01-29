@@ -1,0 +1,12 @@
+services:
+  - type: worker
+    name: fissure-bot
+    env: python
+    region: oregon
+    plan: free
+    startCommand: python main.py
+    envVars:
+      - key: BOT_TOKEN
+        fromSecret: BOT_TOKEN
+      - key: DATABASE_URL
+        fromSecret: DATABASE_URL
