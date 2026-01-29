@@ -105,8 +105,12 @@ async def main():
         await application.updater.start_polling(
             drop_pending_updates=True,
             allowed_updates=["message", "callback_query"],
-            poll_interval=1.0,
-            timeout=20
+            poll_interval=3.0,
+            timeout=30,
+            read_timeout=30,
+            write_timeout=30,
+            connect_timeout=30,
+            pool_timeout=30
         )
         
         # Ждем завершения
