@@ -80,13 +80,18 @@ def update_fissure(telegram_id, fissure, last_fissure):
         print(f"❌ Ошибка update_fissure: {e}")
 
 def get_fissure_top(limit=10):
-    """Get top users by fissure length"""
+    """Get top users by fissure length (excluding test users)"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT ?
+            SELECT telegram_id, username, fissure FROM users 
+            WHERE username NOT LIKE '%test%' 
+            AND username NOT LIKE '%тест%'
+            AND username NOT LIKE '%bot%'
+            AND username NOT LIKE '%бот%'
+            ORDER BY fissure DESC LIMIT ?
         """, (limit,))
         
         users = cursor.fetchall()
