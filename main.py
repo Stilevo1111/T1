@@ -61,25 +61,6 @@ def format_time(seconds):
     m = (seconds % 3600) // 60
     return f"{int(h)}ч {int(m)}м"
 
-async def auto_delete(message, delay=30):
-    """Удаляет сообщение через указанное количество секунд"""
-    try:
-        await asyncio.sleep(delay)
-        await message.delete()
-    except Exception as e:
-        logger.debug(f"Не удалось удалить сообщение: {e}")
-
-def schedule_message_deletion(message, delay=30):
-    """Планирует удаление сообщения"""
-    try:
-        # Создаем асинхронную задачу через asyncio.create_task
-        if hasattr(message, 'chat') and hasattr(message, 'message_id'):
-            asyncio.create_task(auto_delete(message, delay))
-        else:
-            logger.warning("⚠️ Не удалось запланировать удаление: объект сообщения некорректен")
-    except Exception as e:
-        logger.error(f"Ошибка при планировании удаления сообщения: {e}")
-
 async def delete_previous_message(bot, chat_id, last_message_id):
     """Удаляет предыдущее сообщение бота"""
     try:
@@ -92,14 +73,11 @@ async def delete_previous_message(bot, chat_id, last_message_id):
 async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_message_id=0):
     """Отправляет новое сообщение или обновляет существующее"""
     try:
-        # Удаляем предыдущее сообщение
-        await delete_previous_message(bot, chat_id, last_message_id)
-        
-        # Отправляем новое сообщение
+        # Сначала отправляем новое сообщение
         msg = await bot.send_message(chat_id, text, reply_markup=reply_markup)
         
-        # Планируем автоматическое удаление нового сообщения через 2 минуты
-        schedule_message_deletion(msg, 120)
+        # Затем удаляем предыдущее сообщение
+        await delete_previous_message(bot, chat_id, last_message_id)
         
         return msg.message_id
     except Exception as e:
@@ -160,9 +138,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Ошибка в fissure: {e}")
-        msg = await update.message.reply_text("❌ Ошибка при обработке запроса")
-        schedule_message_deletion(msg, 10)
-        schedule_message_deletion(update.message, 10)
+        await update.message.reply_text("❌ Ошибка при обработке запроса")
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать статистику"""
@@ -293,9 +269,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = user_obj.username or user_obj.first_name
         get_user(uid, username)
 
-        # Удаляем сообщение от кнопки через 10 секунд
-        schedule_message_deletion(update.message, 10)
-
         if text == "📈 Увеличить фиссуру":
             await fissure(update, context)
         elif text == "📏 Моя длина":
@@ -303,20 +276,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif text == "🏆 Топ":
             await top(update, context)
         else:
-            msg = await update.message.reply_text("Используйте кнопки меню или команды")
-            schedule_message_deletion(msg, 10)
+            await update.message.reply_text("Используйте кнопки меню или команды")
     except Exception as e:
         logger.error(f"Ошибка в menu_handler: {e}")
-        msg = await update.message.reply_text("❌ Ошибка при обработке команды")
-        schedule_message_deletion(msg, 10)
-
-    # Удаление сообщений с командами /fissure@DotaFull_bot, /top@DotaFull_bot, /stats@DotaFull_bot
-    if update.message.text and any(cmd in update.message.text for cmd in ['/fissure@DotaFull_bot', '/top@DotaFull_bot', '/stats@DotaFull_bot']):
-        await asyncio.sleep(10)
-        try:
-            await context.bot.delete_message(update.message.chat.id, update.message.message_id)
-        except Exception as e:
-            pass
+        await update.message.reply_text("❌ Ошибка при обработке команды")
 
 async def health_check(request):
     """Health check endpoint for Render"""
