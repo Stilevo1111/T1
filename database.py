@@ -141,20 +141,21 @@ class Database:
         
         if "postgres" in scheme:
             cur.execute('''
-                INSERT INTO users (telegram_id, username, fissure, last_fissure)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id)
+                VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (telegram_id) 
                 DO UPDATE SET 
                     username = EXCLUDED.username,
                     fissure = EXCLUDED.fissure,
-                    last_fissure = EXCLUDED.last_fissure
+                    last_fissure = EXCLUDED.last_fissure,
+                    last_message_id = EXCLUDED.last_message_id
                 RETURNING id
-            ''', (user_id, username, 0.1, 0))
+            ''', (user_id, username, 0.1, 0, 0))
         else:
             cur.execute('''
-                INSERT OR REPLACE INTO users (telegram_id, username, fissure, last_fissure)
-                VALUES (?, ?, ?, ?)
-            ''', (user_id, username, 0.1, 0))
+                INSERT OR REPLACE INTO users (telegram_id, username, fissure, last_fissure, last_message_id)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, username, 0.1, 0, 0))
         
         conn.commit()
         if DATABASE_URL.startswith("postgresql://"):
