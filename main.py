@@ -94,7 +94,7 @@ def schedule_auto_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, del
     context.job_queue.run_once(
         auto_delete_message,
         delay,
-        context={
+        data={
             'chat_id': update.message.chat_id,
             'message_id': update.message.message_id
         },
