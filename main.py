@@ -98,8 +98,8 @@ async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_mes
         # Отправляем новое сообщение
         msg = await bot.send_message(chat_id, text, reply_markup=reply_markup)
         
-        # Планируем автоматическое удаление нового сообщения
-        schedule_message_deletion(msg, 30)
+        # Планируем автоматическое удаление нового сообщения через 2 минуты
+        schedule_message_deletion(msg, 120)
         
         return msg.message_id
     except Exception as e:
