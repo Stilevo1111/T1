@@ -281,6 +281,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await stats(update, context)
         elif text == "🏆 Топ":
             await top(update, context)
+        elif text.startswith("/"):
+            # Игнорируем команды - они обрабатываются CommandHandler
+            pass
         else:
             await update.message.reply_text("Используйте кнопки меню или команды")
     except Exception as e:
@@ -303,11 +306,11 @@ async def main():
         # Создаем веб-приложение для webhook
         app = ApplicationBuilder().token(TOKEN).build()
 
-        # Добавляем обработчики команд
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
+        # Добавляем обработчики команд (с поддержкой @botname)
+        app.add_handler(CommandHandler(["start", "start@DotaFull_bot"], start))
+        app.add_handler(CommandHandler(["fissure", "fissure@DotaFull_bot"], fissure))
+        app.add_handler(CommandHandler(["stats", "stats@DotaFull_bot"], stats))
+        app.add_handler(CommandHandler(["top", "top@DotaFull_bot"], top))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
         # Получаем webhook URL из переменных окружения
@@ -375,11 +378,11 @@ async def main_polling():
         # Создаем Telegram бота
         app = ApplicationBuilder().token(TOKEN).build()
 
-        # Добавляем обработчики команд
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
+        # Добавляем обработчики команд (с поддержкой @botname)
+        app.add_handler(CommandHandler(["start", "start@DotaFull_bot"], start))
+        app.add_handler(CommandHandler(["fissure", "fissure@DotaFull_bot"], fissure))
+        app.add_handler(CommandHandler(["stats", "stats@DotaFull_bot"], stats))
+        app.add_handler(CommandHandler(["top", "top@DotaFull_bot"], top))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
         logger.info("✅ Telegram бот запущен в режиме polling")
