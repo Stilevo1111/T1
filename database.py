@@ -184,7 +184,7 @@ class Database:
                         "username": user["username"],
                         "fissure": user["fissure"],
                         "last_fissure": user["last_fissure"],
-                        "last_message_id": user.get("last_message_id", 0)
+                        "last_message_id": user["last_message_id"]
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
@@ -209,7 +209,7 @@ class Database:
                     return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0}
         except Exception as e:
             print(f"❌ Ошибка get_user: {e}")
-            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0}
+            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0}
     
     def update_fissure(self, telegram_id, fissure, last_fissure):
         """Обновление данных пользователя"""
@@ -235,7 +235,7 @@ class Database:
             print(f"❌ Ошибка update_fissure: {e}")
     
     def update_last_message_id(self, telegram_id, message_id):
-        """Обновление ID последнего сообщения бота"""
+        """Обновление ID последнего сообщения пользователя"""
         try:
             conn = self.connect()
             url = urlparse.urlparse(DATABASE_URL)
@@ -295,12 +295,12 @@ def update_fissure(telegram_id, fissure, last_fissure):
     db = Database()
     db.update_fissure(telegram_id, fissure, last_fissure)
 
-def update_last_message_id(telegram_id, message_id):
-    """Функция для обновления ID последнего сообщения"""
-    db = Database()
-    db.update_last_message_id(telegram_id, message_id)
-
 def get_fissure_top(limit=10):
     """Функция для совместимости - использует новый класс Database"""
     db = Database()
     return db.get_fissure_top(limit)
+
+def update_last_message_id(telegram_id, message_id):
+    """Функция для совместимости - использует новый класс Database"""
+    db = Database()
+    db.update_last_message_id(telegram_id, message_id)
