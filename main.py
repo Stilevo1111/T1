@@ -301,15 +301,9 @@ async def main_polling():
 if __name__ == "__main__":
     # Запускаем бота
     try:
-        # Проверяем, запущен ли бот на Render
-        if os.getenv("RENDER_SERVICE_NAME"):
-            # Для Render используем asyncio.run() без ручного управления event loop
-            asyncio.run(main())
-        else:
-            # Для локального запуска создаем новый event loop
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(main())
+        # Используем asyncio.run() для всех случаев
+        # Это создаст новый event loop и корректно его закроет
+        asyncio.run(main())
         
     except Exception as e:
         logger.error(f"❌ Ошибка запуска бота: {e}")
