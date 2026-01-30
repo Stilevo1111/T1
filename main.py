@@ -274,7 +274,8 @@ async def main():
         async def handle_webhook(request):
             """Обработка входящих webhook запросов"""
             try:
-                update = await request.json()
+                data = await request.json()
+                update = Update.de_json(data, app.bot)
                 await app.process_update(update)
                 return web.Response(status=200)
             except Exception as e:
