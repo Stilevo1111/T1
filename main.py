@@ -82,8 +82,8 @@ async def delete_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def auto_delete_message(context: ContextTypes.DEFAULT_TYPE):
     """Автоудаление сообщения через 30 секунд"""
     try:
-        chat_id = context.job.context['chat_id']
-        message_id = context.job.context['message_id']
+        chat_id = context.job.data['chat_id']
+        message_id = context.job.data['message_id']
         await context.bot.delete_message(chat_id, message_id)
         logger.debug(f"Автоудалено сообщение: {message_id}")
     except Exception as e:
@@ -281,8 +281,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         if 'user' in locals():
             update_last_message_id(uid, message_id)
-        
-    async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     logger.info(f"Новый пользователь {update.effective_user.id}")
     
@@ -322,8 +322,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         if 'user' in locals():
             update_last_message_id(uid, message_id)
-        
-    async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик кнопок меню"""
     text = update.message.text
     
