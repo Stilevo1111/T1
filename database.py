@@ -11,17 +11,22 @@ logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    print("⚠️  DATABASE_URL не задан, используем SQLite для тестирования")
-    DATABASE_URL = "test.db"
+    print("❌ DATABASE_URL не задан! Бот не может работать без базы данных.")
+    raise ValueError("DATABASE_URL environment variable is required")
 else:
     print(f"Using DATABASE_URL: {DATABASE_URL[:20]}...")
 
 def get_connection():
     """Получение соединения с базой данных"""
-    if DATABASE_URL.startswith("postgresql://"):
+    # Определяем тип базы данных по схеме URL
+    url = urlparse.urlparse(DATABASE_URL)
+    scheme = url.scheme
+    
+    print(f"DB TYPE: {scheme}")
+    
+    if "postgres" in scheme:
         try:
             # Парсим URL для PostgreSQL
-            url = urlparse.urlparse(DATABASE_URL)
             dbname = url.path[1:]  # Убираем первый символ '/' из пути
             user = url.username
             password = url.password
@@ -37,20 +42,21 @@ def get_connection():
                 port=port,
                 sslmode='require'  # Используем 'require' для Render
             )
+            print("✅ Подключено к PostgreSQL")
             return conn
         except Exception as e:
             print(f"❌ PostgreSQL connection failed: {e}")
-            print("⚠️  Falling back to SQLite...")
-            return sqlite3.connect("fallback.db")
+            raise
     else:
         # Для SQLite обрабатываем URL
         if DATABASE_URL.startswith("sqlite:///"):
-            db_path = DATABASE_URL[10:]  # Убираем "sqlite:///"
+            db_path = DATABASE_URL[10:]  # Убираем "sqlite:///"`
         elif DATABASE_URL.startswith("sqlite://"):
             db_path = DATABASE_URL[9:]   # Убираем "sqlite://"
         else:
             db_path = DATABASE_URL
             
+        print("⚠️  Подключено к SQLite (только для тестирования)")
         return sqlite3.connect(db_path)
 
 def init_db():
@@ -58,7 +64,11 @@ def init_db():
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        if DATABASE_URL.startswith("postgresql://"):
+        # Определяем тип базы данных по схеме URL
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        if "postgres" in scheme:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
@@ -122,7 +132,11 @@ class Database:
         conn = self.connect()
         cur = conn.cursor()
         
-        if DATABASE_URL.startswith("postgresql://"):
+        # Определяем тип базы данных по схеме URL
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        if "postgres" in scheme:
             cur.execute('''
                 INSERT INTO users (telegram_id, username, fissure, last_fissure)
                 VALUES (%s, %s, %s, %s)
@@ -152,7 +166,11 @@ class Database:
         """Получение пользователя"""
         try:
             conn = self.connect()
-            if DATABASE_URL.startswith("postgresql://"):
+            # Определяем тип базы данных по схеме URL
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
+            
+            if "postgres" in scheme:
                 cursor = conn.cursor(cursor_factory=RealDictCursor)
                 cursor.execute("SELECT * FROM users WHERE telegram_id = %s", (telegram_id,))
                 user = cursor.fetchone()
@@ -192,7 +210,11 @@ class Database:
         """Обновление данных пользователя"""
         try:
             conn = self.connect()
-            if DATABASE_URL.startswith("postgresql://"):
+            # Определяем тип базы данных по схеме URL
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
+            
+            if "postgres" in scheme:
                 cursor = conn.cursor()
                 cursor.execute("""
                     UPDATE users SET fissure=%s, last_fissure=%s WHERE telegram_id=%s
@@ -211,7 +233,11 @@ class Database:
         """Получение топ пользователей"""
         try:
             conn = self.connect()
-            if DATABASE_URL.startswith("postgresql://"):
+            # Определяем тип базы данных по схеме URL
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
+            
+            if "postgres" in scheme:
                 cursor = conn.cursor(cursor_factory=RealDictCursor)
                 cursor.execute("""
                     SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT %s
