@@ -332,11 +332,14 @@ async def main():
             """Обработка входящих webhook запросов"""
             try:
                 update_data = await request.json()
+                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
                 update = Update.de_json(update_data, app.bot)
+                logger.info(f"Update parsed: {update}")
                 await app.process_update(update)
+                logger.info(f"Update processed")
                 return web.Response(status=200)
             except Exception as e:
-                logger.error(f"Ошибка обработки webhook: {e}")
+                logger.error(f"Ошибка обработки webhook: {e}", exc_info=True)
                 return web.Response(status=500)
         
         # Создаем приложение
