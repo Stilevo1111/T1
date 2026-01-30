@@ -168,7 +168,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         update_last_message_id(uid, message_id)
         
-        # Планируем автоудаление сообщения пользователя через 30 сек
+        # Сразу удаляем + fallback через 30 сек
+        await delete_user_message(update, context)
         schedule_auto_delete(update, context)
         
     except Exception as e:
@@ -209,7 +210,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'user' in locals():
             update_last_message_id(uid, message_id)
         
-        # Планируем автоудаление сообщения пользователя через 30 сек
+        # Сразу удаляем + fallback через 30 сек
+        await delete_user_message(update, context)
         schedule_auto_delete(update, context)
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -265,7 +267,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'user' in locals():
             update_last_message_id(uid, message_id)
         
-        # Планируем автоудаление сообщения пользователя через 30 сек
+        # Сразу удаляем + fallback через 30 сек
+        await delete_user_message(update, context)
         schedule_auto_delete(update, context)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -302,7 +305,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'user' in locals():
             update_last_message_id(uid, message_id)
         
-        # Планируем автоудаление сообщения пользователя через 30 сек
+        # Сразу удаляем + fallback через 30 сек
+        await delete_user_message(update, context)
         schedule_auto_delete(update, context)
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
