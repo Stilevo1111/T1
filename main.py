@@ -6,7 +6,7 @@ import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, Database
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database
 from aiohttp import web
 
 # Настройка логирования
@@ -80,6 +80,32 @@ def schedule_message_deletion(message, delay=30):
     except Exception as e:
         logger.error(f"Ошибка при планировании удаления сообщения: {e}")
 
+async def delete_previous_message(bot, chat_id, last_message_id):
+    """Удаляет предыдущее сообщение бота"""
+    try:
+        if last_message_id and last_message_id > 0:
+            await bot.delete_message(chat_id, last_message_id)
+            logger.info(f"Удалено предыдущее сообщение: {last_message_id}")
+    except Exception as e:
+        logger.debug(f"Не удалось удалить предыдущее сообщение: {e}")
+
+async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_message_id=0):
+    """Отправляет новое сообщение или обновляет существующее"""
+    try:
+        # Удаляем предыдущее сообщение
+        await delete_previous_message(bot, chat_id, last_message_id)
+        
+        # Отправляем новое сообщение
+        msg = await bot.send_message(chat_id, text, reply_markup=reply_markup)
+        
+        # Планируем автоматическое удаление нового сообщения
+        schedule_message_deletion(msg, 30)
+        
+        return msg.message_id
+    except Exception as e:
+        logger.error(f"Ошибка отправки сообщения: {e}")
+        return 0
+
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /fissure"""
     logger.info(f"Пользователь {update.effective_user.id} вызвал fissure")
@@ -94,11 +120,15 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if now - user["last_fissure"] < COOLDOWN:
             wait = COOLDOWN - (now - user["last_fissure"])
-            msg = await update.message.reply_text(
-                f"⏳ Фиссура ещё восстанавливается.\nЖди: {format_time(wait)}"
+            text = f"⏳ Фиссура ещё восстанавливается.\nЖди: {format_time(wait)}"
+            message_id = await send_or_update_message(
+                update.message.bot,
+                update.message.chat_id,
+                text,
+                None,
+                user.get("last_message_id", 0)
             )
-            schedule_message_deletion(msg, 30)
-            schedule_message_deletion(update.message, 10)
+            update_last_message_id(uid, message_id)
             return
 
         roll = random.choice(ROLLS)
@@ -116,12 +146,17 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             phrase = random.choice(FISURE_PHRASES["same"])
 
         meme = random.choice(FISURE_MEMES)
-
-        msg = await update.message.reply_text(
-            f"{FISURE_TEXTS[roll]}\n{phrase}\n\n{meme}\n📏 Теперь длина: {new_fissure:.1f} см"
+        text = f"{FISURE_TEXTS[roll]}\n{phrase}\n\n{meme}\n📏 Теперь длина: {new_fissure:.1f} см"
+        
+        # Отправляем сообщение с удалением предыдущего
+        message_id = await send_or_update_message(
+            update.message.bot,
+            update.message.chat_id,
+            text,
+            None,
+            user.get("last_message_id", 0)
         )
-        schedule_message_deletion(msg, 30)
-        schedule_message_deletion(update.message, 10)
+        update_last_message_id(uid, message_id)
         
     except Exception as e:
         logger.error(f"Ошибка в fissure: {e}")
@@ -138,41 +173,81 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
         user = get_user(uid, username)
-        msg = await update.message.reply_text(f"📏 Текущая длина фиссуры: {user['fissure']:.1f} см")
-        schedule_message_deletion(msg, 30)
-        schedule_message_deletion(update.message, 10)
+        
+        text = f"📏 Текущая длина фиссуры: {user['fissure']:.1f} см"
+        message_id = await send_or_update_message(
+            update.message.bot,
+            update.message.chat_id,
+            text,
+            None,
+            user.get("last_message_id", 0)
+        )
+        update_last_message_id(uid, message_id)
+        
     except Exception as e:
         logger.error(f"Ошибка в stats: {e}")
-        msg = await update.message.reply_text("❌ Ошибка при получении статистики")
-        schedule_message_deletion(msg, 10)
-        schedule_message_deletion(update.message, 10)
+        text = "❌ Ошибка при получении статистики"
+        message_id = await send_or_update_message(
+            update.message.bot,
+            update.message.chat_id,
+            text,
+            None,
+            user.get("last_message_id", 0) if 'user' in locals() else 0
+        )
+        if 'user' in locals():
+            update_last_message_id(uid, message_id)
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать топ"""
     logger.info(f"Пользователь {update.effective_user.id} вызвал top")
     
     try:
+        uid = update.effective_user.id
+        user_obj = update.effective_user
+        username = user_obj.username or user_obj.first_name
+        user = get_user(uid, username)
+        
         top_users = get_fissure_top()
         logger.info(f"Получено {len(top_users)} пользователей для топа")
         
         if not top_users:
-            msg = await update.message.reply_text("🏆 Топ Фиссур:\n\nПока нет данных для отображения топа")
-            schedule_message_deletion(msg, 30)
+            text = "🏆 Топ Фиссур:\n\nПока нет данных для отображения топа"
+            message_id = await send_or_update_message(
+                update.message.bot,
+                update.message.chat_id,
+                text,
+                None,
+                user.get("last_message_id", 0)
+            )
+            update_last_message_id(uid, message_id)
             return
             
         text = "🏆 Топ Фиссур:\n\n"
         for i, u in enumerate(top_users, 1):
-            user_obj = update.effective_user
             username = u['username'] or f"Пользователь {u['telegram_id']}"
             text += f"{i}. {username} — {u['fissure']:.1f} см\n"
-        msg = await update.message.reply_text(text)
-        schedule_message_deletion(msg, 30)
-        schedule_message_deletion(update.message, 10)
+        
+        message_id = await send_or_update_message(
+            update.message.bot,
+            update.message.chat_id,
+            text,
+            None,
+            user.get("last_message_id", 0)
+        )
+        update_last_message_id(uid, message_id)
+        
     except Exception as e:
         logger.error(f"Ошибка в top: {e}")
-        msg = await update.message.reply_text("❌ Ошибка при получении топа")
-        schedule_message_deletion(msg, 10)
-        schedule_message_deletion(update.message, 10)
+        text = "❌ Ошибка при получении топа"
+        message_id = await send_or_update_message(
+            update.message.bot,
+            update.message.chat_id,
+            text,
+            None,
+            user.get("last_message_id", 0) if 'user' in locals() else 0
+        )
+        if 'user' in locals():
+            update_last_message_id(uid, message_id)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -182,17 +257,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uid = update.effective_user.id
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
-        get_user(uid, username)
-        msg = await update.message.reply_text(
-            "Добро пожаловать!\nЗдесь можно увеличить фиссуру 😈",
-            reply_markup=main_menu()
+        user = get_user(uid, username)
+        
+        text = "Добро пожаловать!\nЗдесь можно увеличить фиссуру 😈"
+        message_id = await send_or_update_message(
+            update.message.bot,
+            update.message.chat_id,
+            text,
+            main_menu(),
+            user.get("last_message_id", 0)
         )
-        schedule_message_deletion(msg, 30)
+        update_last_message_id(uid, message_id)
+        
     except Exception as e:
         logger.error(f"Ошибка в start: {e}")
-        msg = await update.message.reply_text("❌ Ошибка при запуске бота")
-        schedule_message_deletion(msg, 10)
-        schedule_message_deletion(update.message, 10)
+        text = "❌ Ошибка при запуске бота"
+        message_id = await send_or_update_message(
+            update.message.bot,
+            update.message.chat_id,
+            text,
+            None,
+            user.get("last_message_id", 0) if 'user' in locals() else 0
+        )
+        if 'user' in locals():
+            update_last_message_id(uid, message_id)
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик кнопок меню"""

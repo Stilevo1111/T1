@@ -76,7 +76,8 @@ def init_db():
                     telegram_id BIGINT UNIQUE NOT NULL,
                     username VARCHAR(255),
                     fissure REAL DEFAULT 0.1,
-                    last_fissure DOUBLE PRECISION DEFAULT 0
+                    last_fissure DOUBLE PRECISION DEFAULT 0,
+                    last_message_id INTEGER DEFAULT 0
                 )
             """)
         else:
@@ -86,7 +87,8 @@ def init_db():
                     telegram_id INTEGER UNIQUE NOT NULL,
                     username TEXT,
                     fissure REAL DEFAULT 0.1,
-                    last_fissure REAL DEFAULT 0
+                    last_fissure REAL DEFAULT 0,
+                    last_message_id INTEGER DEFAULT 0
                 )
             """)
         conn.commit()
@@ -181,12 +183,13 @@ class Database:
                         "telegram_id": user["telegram_id"],
                         "username": user["username"],
                         "fissure": user["fissure"],
-                        "last_fissure": user["last_fissure"]
+                        "last_fissure": user["last_fissure"],
+                        "last_message_id": user.get("last_message_id", 0)
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
                     cursor.close()
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0}
             else:
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
@@ -197,12 +200,13 @@ class Database:
                         "telegram_id": user[1],
                         "username": user[2],
                         "fissure": user[3],
-                        "last_fissure": user[4]
+                        "last_fissure": user[4],
+                        "last_message_id": user[5] if len(user) > 5 else 0
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
                     cursor.close()
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0}
         except Exception as e:
             print(f"❌ Ошибка get_user: {e}")
             return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0}
@@ -229,6 +233,28 @@ class Database:
             cursor.close()
         except Exception as e:
             print(f"❌ Ошибка update_fissure: {e}")
+    
+    def update_last_message_id(self, telegram_id, message_id):
+        """Обновление ID последнего сообщения бота"""
+        try:
+            conn = self.connect()
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
+            
+            if "postgres" in scheme:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE users SET last_message_id=%s WHERE telegram_id=%s
+                """, (message_id, telegram_id))
+            else:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE users SET last_message_id=? WHERE telegram_id=?
+                """, (message_id, telegram_id))
+            conn.commit()
+            cursor.close()
+        except Exception as e:
+            print(f"❌ Ошибка update_last_message_id: {e}")
     
     def get_fissure_top(self, limit=10):
         """Получение топ пользователей"""
@@ -268,6 +294,11 @@ def update_fissure(telegram_id, fissure, last_fissure):
     """Функция для совместимости - использует новый класс Database"""
     db = Database()
     db.update_fissure(telegram_id, fissure, last_fissure)
+
+def update_last_message_id(telegram_id, message_id):
+    """Функция для обновления ID последнего сообщения"""
+    db = Database()
+    db.update_last_message_id(telegram_id, message_id)
 
 def get_fissure_top(limit=10):
     """Функция для совместимости - использует новый класс Database"""
