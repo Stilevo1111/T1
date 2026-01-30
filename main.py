@@ -285,10 +285,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик кнопок меню"""
-    logger.info(f"Пользователь {update.effective_user.id} нажал кнопку: {update.message.text}")
+    text = update.message.text
+    
+    # Проверяем что это кнопка меню (а не обычный текст)
+    menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
+    
+    if text not in menu_buttons:
+        # Игнорируем все не-кнопочные сообщения
+        return
+    
+    logger.info(f"Пользователь {update.effective_user.id} нажал кнопку: {text}")
     
     try:
-        text = update.message.text
         uid = update.effective_user.id
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
@@ -300,16 +308,11 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await stats(update, context)
         elif text == "🏆 Топ":
             await top(update, context)
-        elif text.startswith("/"):
-            # Игнорируем команды - они обрабатываются CommandHandler
-            pass
-        else:
-            await update.message.reply_text("Используйте кнопки меню или команды")
     except Exception as e:
         logger.error(f"Ошибка в menu_handler: {e}")
         await update.message.reply_text("❌ Ошибка при обработке команды")
 
-    # Удаляем сообщение пользователя (кнопки и @botname команды)
+    # Удаляем сообщение пользователя (только кнопки)
     try:
         await context.bot.delete_message(update.message.chat_id, update.message.message_id)
     except Exception as e:
@@ -341,7 +344,7 @@ async def main():
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
         app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
+        app.add_handler(MessageHandler(filters.Regex(r'^(📈 Увеличить фиссуру|📏 Моя длина|🏆 Топ)$'), menu_handler))
 
         # Получаем webhook URL из переменных окружения
         webhook_url = os.getenv("WEBHOOK_URL")
@@ -418,7 +421,7 @@ async def main_polling():
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
         app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
+        app.add_handler(MessageHandler(filters.Regex(r'^(📈 Увеличить фиссуру|📏 Моя длина|🏆 Топ)$'), menu_handler))
 
         logger.info("✅ Telegram бот запущен в режиме polling")
         
