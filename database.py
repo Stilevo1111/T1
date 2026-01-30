@@ -3,6 +3,7 @@ import sqlite3
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import logging
+import urllib.parse as urlparse
 
 # Configure logging for database operations
 logging.basicConfig(level=logging.INFO)
@@ -13,23 +14,44 @@ if not DATABASE_URL:
     print("⚠️  DATABASE_URL не задан, используем SQLite для тестирования")
     DATABASE_URL = "test.db"
 else:
-    print(f"✅ Используем DATABASE_URL: {DATABASE_URL[:20]}...")
+    print(f"Using DATABASE_URL: {DATABASE_URL[:20]}...")
 
 def get_connection():
+    """Получение соединения с базой данных"""
     if DATABASE_URL.startswith("postgresql://"):
         try:
-            # Add timeout and better SSL handling
-            return psycopg2.connect(
-                DATABASE_URL, 
-                sslmode='prefer',  # Changed from 'require' to 'prefer' for better compatibility
-                connect_timeout=10  # 10 second timeout
+            # Парсим URL для PostgreSQL
+            url = urlparse.urlparse(DATABASE_URL)
+            dbname = url.path[1:]  # Убираем первый символ '/' из пути
+            user = url.username
+            password = url.password
+            host = url.hostname
+            port = url.port
+            
+            # Создаем соединение с SSL
+            conn = psycopg2.connect(
+                dbname=dbname,
+                user=user,
+                password=password,
+                host=host,
+                port=port,
+                sslmode='require'  # Используем 'require' для Render
             )
+            return conn
         except Exception as e:
             print(f"❌ PostgreSQL connection failed: {e}")
             print("⚠️  Falling back to SQLite...")
             return sqlite3.connect("fallback.db")
     else:
-        return sqlite3.connect(DATABASE_URL)
+        # Для SQLite обрабатываем URL
+        if DATABASE_URL.startswith("sqlite:///"):
+            db_path = DATABASE_URL[10:]  # Убираем "sqlite:///"
+        elif DATABASE_URL.startswith("sqlite://"):
+            db_path = DATABASE_URL[9:]   # Убираем "sqlite://"
+        else:
+            db_path = DATABASE_URL
+            
+        return sqlite3.connect(db_path)
 
 def init_db():
     """Initialize database tables. Use migrations instead for production."""
@@ -83,93 +105,147 @@ def migrate_db():
         logger.error(f"❌ Ошибка запуска миграций: {e}")
         return False
 
-def get_user(telegram_id, username=None):
-    try:
-        conn = get_connection()
+class Database:
+    """Класс для работы с базой данных"""
+    
+    def __init__(self):
+        self.conn = None
+    
+    def connect(self):
+        """Устанавливаем соединение"""
+        if not self.conn:
+            self.conn = get_connection()
+        return self.conn
+    
+    def add_user(self, user_id, username, first_name, last_name):
+        """Добавление/обновление пользователя"""
+        conn = self.connect()
+        cur = conn.cursor()
+        
         if DATABASE_URL.startswith("postgresql://"):
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute("SELECT * FROM users WHERE telegram_id = %s", (telegram_id,))
-            user = cursor.fetchone()
-            if user:
-                conn.close()
-                return {
-                    "telegram_id": user["telegram_id"],
-                    "username": user["username"],
-                    "fissure": user["fissure"],
-                    "last_fissure": user["last_fissure"]
-                }
-            else:
-                cursor.execute(
-                    "INSERT INTO users (telegram_id, username, fissure, last_fissure) VALUES (%s, %s, %s, %s)",
-                    (telegram_id, username, 0.1, 0)
-                )
-                conn.commit()
-                conn.close()
-                return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0}
+            cur.execute('''
+                INSERT INTO users (telegram_id, username, fissure, last_fissure)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (telegram_id) 
+                DO UPDATE SET 
+                    username = EXCLUDED.username,
+                    fissure = EXCLUDED.fissure,
+                    last_fissure = EXCLUDED.last_fissure
+                RETURNING id
+            ''', (user_id, username, 0.1, 0))
         else:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
-            user = cursor.fetchone()
-            if user:
-                conn.close()
-                return {
-                    "telegram_id": user[1],
-                    "username": user[2],
-                    "fissure": user[3],
-                    "last_fissure": user[4]
-                }
+            cur.execute('''
+                INSERT OR REPLACE INTO users (telegram_id, username, fissure, last_fissure)
+                VALUES (?, ?, ?, ?)
+            ''', (user_id, username, 0.1, 0))
+        
+        conn.commit()
+        if DATABASE_URL.startswith("postgresql://"):
+            user = cur.fetchone()
+            cur.close()
+            return user[0] if user else None
+        else:
+            cur.close()
+            return None
+    
+    def get_user(self, telegram_id, username=None):
+        """Получение пользователя"""
+        try:
+            conn = self.connect()
+            if DATABASE_URL.startswith("postgresql://"):
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                cursor.execute("SELECT * FROM users WHERE telegram_id = %s", (telegram_id,))
+                user = cursor.fetchone()
+                if user:
+                    cursor.close()
+                    return {
+                        "telegram_id": user["telegram_id"],
+                        "username": user["username"],
+                        "fissure": user["fissure"],
+                        "last_fissure": user["last_fissure"]
+                    }
+                else:
+                    self.add_user(telegram_id, username, None, None)
+                    cursor.close()
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0}
             else:
-                cursor.execute(
-                    "INSERT INTO users (telegram_id, username, fissure, last_fissure) VALUES (?, ?, ?, ?)",
-                    (telegram_id, username, 0.1, 0)
-                )
-                conn.commit()
-                conn.close()
-                return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0}
-    except Exception as e:
-        print(f"❌ Ошибка get_user: {e}")
-        return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0}
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+                user = cursor.fetchone()
+                if user:
+                    cursor.close()
+                    return {
+                        "telegram_id": user[1],
+                        "username": user[2],
+                        "fissure": user[3],
+                        "last_fissure": user[4]
+                    }
+                else:
+                    self.add_user(telegram_id, username, None, None)
+                    cursor.close()
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0}
+        except Exception as e:
+            print(f"❌ Ошибка get_user: {e}")
+            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0}
+    
+    def update_fissure(self, telegram_id, fissure, last_fissure):
+        """Обновление данных пользователя"""
+        try:
+            conn = self.connect()
+            if DATABASE_URL.startswith("postgresql://"):
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE users SET fissure=%s, last_fissure=%s WHERE telegram_id=%s
+                """, (fissure, last_fissure, telegram_id))
+            else:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE users SET fissure=?, last_fissure=? WHERE telegram_id=?
+                """, (fissure, last_fissure, telegram_id))
+            conn.commit()
+            cursor.close()
+        except Exception as e:
+            print(f"❌ Ошибка update_fissure: {e}")
+    
+    def get_fissure_top(self, limit=10):
+        """Получение топ пользователей"""
+        try:
+            conn = self.connect()
+            if DATABASE_URL.startswith("postgresql://"):
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                cursor.execute("""
+                    SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT %s
+                """, (limit,))
+                users = cursor.fetchall()
+                cursor.close()
+                return [{"telegram_id": u["telegram_id"], "username": u["username"], "fissure": u["fissure"]} for u in users]
+            else:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT ?
+                """, (limit,))
+                users = cursor.fetchall()
+                cursor.close()
+                return [{"telegram_id": u[0], "username": u[1], "fissure": u[2]} for u in users]
+        except Exception as e:
+            print(f"❌ Ошибка get_fissure_top: {e}")
+            return []
+
+# Функции для совместимости со старым кодом
+def get_user(telegram_id, username=None):
+    """Функция для совместимости - использует новый класс Database"""
+    db = Database()
+    return db.get_user(telegram_id, username)
 
 def update_fissure(telegram_id, fissure, last_fissure):
-    try:
-        conn = get_connection()
-        if DATABASE_URL.startswith("postgresql://"):
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE users SET fissure=%s, last_fissure=%s WHERE telegram_id=%s
-            """, (fissure, last_fissure, telegram_id))
-        else:
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE users SET fissure=?, last_fissure=? WHERE telegram_id=?
-            """, (fissure, last_fissure, telegram_id))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"❌ Ошибка update_fissure: {e}")
+    """Функция для совместимости - использует новый класс Database"""
+    db = Database()
+    db.update_fissure(telegram_id, fissure, last_fissure)
 
 def get_fissure_top(limit=10):
-    try:
-        conn = get_connection()
-        if DATABASE_URL.startswith("postgresql://"):
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute("""
-                SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT %s
-            """, (limit,))
-            users = cursor.fetchall()
-            conn.close()
-            return [{"telegram_id": u["telegram_id"], "username": u["username"], "fissure": u["fissure"]} for u in users]
-        else:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT ?
-            """, (limit,))
-            users = cursor.fetchall()
-            conn.close()
-            return [{"telegram_id": u[0], "username": u[1], "fissure": u[2]} for u in users]
-    except Exception as e:
-        print(f"❌ Ошибка get_fissure_top: {e}")
-        return []
+    """Функция для совместимости - использует новый класс Database"""
+    db = Database()
+    return db.get_fissure_top(limit)
 
 # ТОЧКА ВХОДА - добавьте этот код
 if __name__ == "__main__":

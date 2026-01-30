@@ -179,9 +179,24 @@ async def test_commands_auto_delete_with_errors():
                     except Exception as e:
                         print(f"    ❌ Ошибка при тестировании команды /{cmd_name}: {e}")
                         return False
-        else:
+        elif cmd_name == "stats":
             with patch('main.get_user') as mock_get_user:
                 mock_get_user.side_effect = Exception("Database error")
+                
+                with patch('main.schedule_message_deletion') as mock_schedule_delete:
+                    try:
+                        await cmd_func(update, context)
+                        
+                        # Проверяем, что schedule_message_deletion был вызван для сообщения об ошибке
+                        mock_schedule_delete.assert_called_with(update.message.reply_text.return_value, 10)
+                        print(f"    ✅ Сообщение об ошибке от команды /{cmd_name} будет удалено через 10 секунд")
+                        
+                    except Exception as e:
+                        print(f"    ❌ Ошибка при тестировании команды /{cmd_name}: {e}")
+                        return False
+        elif cmd_name == "top":
+            with patch('main.get_fissure_top') as mock_get_top:
+                mock_get_top.side_effect = Exception("Database error")
                 
                 with patch('main.schedule_message_deletion') as mock_schedule_delete:
                     try:

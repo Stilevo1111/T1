@@ -40,6 +40,8 @@ def get_database_url():
         # Handle SQLite URLs
         if DATABASE_URL.endswith('.db'):
             return f"sqlite:///{DATABASE_URL}"
+        elif DATABASE_URL.startswith('sqlite:///'):
+            return DATABASE_URL
         return DATABASE_URL
     return config.get_main_option("sqlalchemy.url")
 
