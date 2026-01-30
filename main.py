@@ -70,13 +70,6 @@ async def delete_previous_message(bot, chat_id, last_message_id):
     except Exception as e:
         logger.debug(f"Не удалось удалить предыдущее сообщение: {e}")
 
-async def delete_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Удаляет сообщение пользователя"""
-    try:
-        await context.bot.delete_message(update.message.chat_id, update.message.message_id)
-    except Exception as e:
-        logger.debug(f"Не удалось удалить сообщение пользователя: {e}")
-
 async def auto_delete_message(context: ContextTypes.DEFAULT_TYPE):
     """Автоудаление сообщения через 30 секунд"""
     try:
@@ -168,8 +161,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         update_last_message_id(uid, message_id)
         
-        # Сразу удаляем + fallback через 30 сек
-        await delete_user_message(update, context)
+        # Автоудаление через 30 сек
         schedule_auto_delete(update, context)
         
     except Exception as e:
@@ -210,8 +202,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'user' in locals():
             update_last_message_id(uid, message_id)
         
-        # Сразу удаляем + fallback через 30 сек
-        await delete_user_message(update, context)
+        # Автоудаление через 30 сек
         schedule_auto_delete(update, context)
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -267,8 +258,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'user' in locals():
             update_last_message_id(uid, message_id)
         
-        # Сразу удаляем + fallback через 30 сек
-        await delete_user_message(update, context)
+        # Автоудаление через 30 сек
         schedule_auto_delete(update, context)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -302,11 +292,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             None,
             user.get("last_message_id", 0) if 'user' in locals() else 0
         )
-        if 'user' in locals():
-            update_last_message_id(uid, message_id)
+        update_last_message_id(uid, message_id)
         
-        # Сразу удаляем + fallback через 30 сек
-        await delete_user_message(update, context)
+        # Автоудаление через 30 сек
         schedule_auto_delete(update, context)
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
