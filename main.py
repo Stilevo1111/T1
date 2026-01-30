@@ -250,6 +250,12 @@ async def main():
         webhook_path = "/webhook"
         webhook_url = os.getenv("WEBHOOK_URL") or f"https://{os.getenv('RENDER_SERVICE_NAME')}.onrender.com{webhook_path}"
 
+        # Инициализируем приложение
+        await app.initialize()
+        
+        # Устанавливаем webhook
+        await app.bot.set_webhook(webhook_url)
+        
         # Запускаем webhook через метод run_webhook
         await app.run_webhook(
             listen="0.0.0.0",
