@@ -70,6 +70,13 @@ async def delete_previous_message(bot, chat_id, last_message_id):
     except Exception as e:
         logger.debug(f"Не удалось удалить предыдущее сообщение: {e}")
 
+async def delete_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Удаляет сообщение пользователя"""
+    try:
+        await context.bot.delete_message(update.message.chat_id, update.message.message_id)
+    except Exception as e:
+        logger.debug(f"Не удалось удалить сообщение пользователя: {e}")
+
 async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_message_id=0):
     """Отправляет новое сообщение или обновляет существующее"""
     try:
@@ -139,6 +146,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         update_last_message_id(uid, message_id)
         
+        # Удаляем сообщение пользователя
+        await delete_user_message(update, context)
+        
     except Exception as e:
         logger.error(f"Ошибка в fissure: {e}")
         await update.message.reply_text("❌ Ошибка при обработке запроса")
@@ -176,6 +186,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         if 'user' in locals():
             update_last_message_id(uid, message_id)
+        
+        # Удаляем сообщение пользователя
+        await delete_user_message(update, context)
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать топ"""
@@ -229,6 +242,9 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         if 'user' in locals():
             update_last_message_id(uid, message_id)
+        
+        # Удаляем сообщение пользователя
+        await delete_user_message(update, context)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -263,6 +279,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         if 'user' in locals():
             update_last_message_id(uid, message_id)
+        
+        # Удаляем сообщение пользователя
+        await delete_user_message(update, context)
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик кнопок меню"""
