@@ -171,8 +171,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_last_message_id(uid, message_id)
         
         # Сразу удаляем + fallback через 30 сек
-        await delete_user_message(update, context)
-        schedule_auto_delete(update, context)
+        try:
+            await delete_user_message(update, context)
+            schedule_auto_delete(update, context)
+        except Exception as e:
+            logger.error(f"Ошибка при удалении: {e}")
         
     except Exception as e:
         logger.error(f"Ошибка в fissure: {e}")
@@ -200,8 +203,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_last_message_id(uid, message_id)
         
         # Сразу удаляем + fallback через 30 сек
-        await delete_user_message(update, context)
-        schedule_auto_delete(update, context)
+        try:
+            await delete_user_message(update, context)
+            schedule_auto_delete(update, context)
+        except Exception as e:
+            logger.error(f"Ошибка при удалении: {e}")
         
     except Exception as e:
         logger.error(f"Ошибка в stats: {e}")
@@ -215,10 +221,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         if 'user' in locals():
             update_last_message_id(uid, message_id)
-        
-        # Сразу удаляем + fallback через 30 сек
-        await delete_user_message(update, context)
-        schedule_auto_delete(update, context)
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать топ"""
@@ -261,8 +263,11 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_last_message_id(uid, message_id)
         
         # Сразу удаляем + fallback через 30 сек
-        await delete_user_message(update, context)
-        schedule_auto_delete(update, context)
+        try:
+            await delete_user_message(update, context)
+            schedule_auto_delete(update, context)
+        except Exception as e:
+            logger.error(f"Ошибка при удалении: {e}")
         
     except Exception as e:
         logger.error(f"Ошибка в top: {e}")
@@ -277,11 +282,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'user' in locals():
             update_last_message_id(uid, message_id)
         
-        # Сразу удаляем + fallback через 30 сек
-        await delete_user_message(update, context)
-        schedule_auto_delete(update, context)
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     logger.info(f"Новый пользователь {update.effective_user.id}")
     
@@ -303,8 +304,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_last_message_id(uid, message_id)
         
         # Сразу удаляем + fallback через 30 сек
-        await delete_user_message(update, context)
-        schedule_auto_delete(update, context)
+        try:
+            await delete_user_message(update, context)
+            schedule_auto_delete(update, context)
+        except Exception as e:
+            logger.error(f"Ошибка при удалении: {e}")
         
     except Exception as e:
         logger.error(f"Ошибка в start: {e}")
@@ -319,11 +323,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'user' in locals():
             update_last_message_id(uid, message_id)
         
-        # Сразу удаляем + fallback через 30 сек
-        await delete_user_message(update, context)
-        schedule_auto_delete(update, context)
-
-async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик кнопок меню"""
     text = update.message.text
     
