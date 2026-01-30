@@ -69,7 +69,8 @@ async def auto_delete(message, delay=30):
 def schedule_message_deletion(message, delay=30):
     """Планирует удаление сообщения"""
     try:
-        asyncio.create_task(auto_delete(message, delay))
+        # Используем правильный способ создания фоновых задач
+        context.application.create_task(auto_delete(message, delay))
     except Exception as e:
         logger.error(f"Ошибка при планировании удаления сообщения: {e}")
 
@@ -78,7 +79,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Пользователь {update.effective_user.id} вызвал fissure")
     
     uid = update.effective_user.id
-    username = update.effective_user.username
+    user_obj = update.effective_user
+    username = user_obj.username or user_obj.first_name
     now = time.time()
     
     try:
@@ -127,7 +129,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         uid = update.effective_user.id
-        username = update.effective_user.username
+        user_obj = update.effective_user
+        username = user_obj.username or user_obj.first_name
         user = get_user(uid, username)
         msg = await update.message.reply_text(f"📏 Текущая длина фиссуры: {user['fissure']:.1f} см")
         schedule_message_deletion(msg, 30)
@@ -153,6 +156,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         text = "🏆 Топ Фиссур:\n\n"
         for i, u in enumerate(top_users, 1):
+            user_obj = update.effective_user
             username = u['username'] or f"Пользователь {u['telegram_id']}"
             text += f"{i}. {username} — {u['fissure']:.1f} см\n"
         msg = await update.message.reply_text(text)
@@ -170,7 +174,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         uid = update.effective_user.id
-        username = update.effective_user.username
+        user_obj = update.effective_user
+        username = user_obj.username or user_obj.first_name
         get_user(uid, username)
         msg = await update.message.reply_text(
             "Добро пожаловать!\nЗдесь можно увеличить фиссуру 😈",
@@ -190,7 +195,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         text = update.message.text
         uid = update.effective_user.id
-        username = update.effective_user.username
+        user_obj = update.effective_user
+        username = user_obj.username or user_obj.first_name
         get_user(uid, username)
 
         # Удаляем сообщение от кнопки через 10 секунд
@@ -242,41 +248,32 @@ async def main():
         # Инициализируем приложение
         await telegram_app.initialize()
         
-        # Получаем URL для webhook из переменной окружения или используем стандартный
-        webhook_url = os.getenv("WEBHOOK_URL")
-        if not webhook_url:
-            # Для Render сервисов URL формируется автоматически
-            service_name = os.getenv("RENDER_SERVICE_NAME", "fissure-bot")
-            region = os.getenv("RENDER_REGION", "oregon")
-            webhook_url = f"https://{service_name}.onrender.com/webhook"
-        
-        # Запускаем webhook
-        await telegram_app.start()
-        
-        # Создаем веб-сервер для обработки webhook и health check
+        # Получаем URL для webhook
         port = int(os.getenv("PORT", 10000))
+        webhook_path = "/webhook"
+
+        service_name = os.getenv("RENDER_SERVICE_NAME", "fissure-bot")
+        webhook_url = os.getenv("WEBHOOK_URL") or f"https://{service_name}.onrender.com{webhook_path}"
         
-        # Создаем aiohttp приложение для health check
-        app = web.Application()
-        app.router.add_get('/health', health_check)
-        
-        # Запускаем веб-сервер для webhook
-        await telegram_app.updater.start_webhook(
-            listen="0.0.0.0",
-            port=port,
-            url_path="/webhook",
-            webhook_url=webhook_url,
-            drop_pending_updates=True
-        )
-        
-        # Запускаем веб-сервер для health check
-        runner = web.AppRunner(app)
+        # Единый aiohttp сервер
+        web_app = web.Application()
+        web_app.router.add_get("/health", health_check)
+
+        # Устанавливаем webhook
+        await telegram_app.bot.set_webhook(webhook_url)
+        await telegram_app.start()
+
+        # Telegram webhook endpoint
+        web_app.router.add_post(webhook_path, telegram_app.webhook_handler)
+
+        runner = web.AppRunner(web_app)
         await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", port + 1)  # Используем другой порт для health check
+        site = web.TCPSite(runner, "0.0.0.0", port)
         await site.start()
         
-        logger.info(f"🚀 Бот запущен и готов принимать webhook запросы на порту {port}")
-        logger.info(f"🏥 Health check доступен на порту {port + 1}")
+        logger.info(f"🚀 Webhook и health работают на одном порту {port}")
+        logger.info(f"🏥 Health check доступен на /health")
+        logger.info(f"📨 Webhook доступен на {webhook_path}")
         
         # Ждем завершения (никогда не завершится без сигнала)
         await asyncio.Event().wait()
