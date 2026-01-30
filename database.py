@@ -11,8 +11,9 @@ logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    print("❌ DATABASE_URL не задан! Бот не может работать без базы данных.")
-    raise ValueError("DATABASE_URL environment variable is required")
+    print("⚠️ DATABASE_URL не задан! Используем SQLite для локального тестирования.")
+    DATABASE_URL = "sqlite:///fissure_bot.db"
+    print(f"💡 Используется: {DATABASE_URL}")
 else:
     print(f"Using DATABASE_URL: {DATABASE_URL[:20]}...")
 

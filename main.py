@@ -18,7 +18,10 @@ logger = logging.getLogger(__name__)
 
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
-    raise ValueError("❌ BOT_TOKEN не задан!")
+    print("⚠️ BOT_TOKEN не задан! Бот будет работать в режиме ограниченного тестирования.")
+    print("💡 Для полноценной работы получите токен у @BotFather в Telegram")
+else:
+    print("✅ BOT_TOKEN найден")
 
 COOLDOWN = 86400  # 24 часа
 ROLLS = [-5, -3, -1, 0, 1, 3, 5, 10]
@@ -69,8 +72,11 @@ async def auto_delete(message, delay=30):
 def schedule_message_deletion(message, delay=30):
     """Планирует удаление сообщения"""
     try:
-        # Используем правильный способ создания фоновых задач
-        context.application.create_task(auto_delete(message, delay))
+        # Создаем асинхронную задачу через asyncio.create_task
+        if hasattr(message, 'chat') and hasattr(message, 'message_id'):
+            asyncio.create_task(auto_delete(message, delay))
+        else:
+            logger.warning("⚠️ Не удалось запланировать удаление: объект сообщения некорректен")
     except Exception as e:
         logger.error(f"Ошибка при планировании удаления сообщения: {e}")
 
@@ -230,6 +236,10 @@ async def health_check(request):
 
 async def main():
     """Запуск Telegram бота в режиме polling для Render"""
+    if not TOKEN:
+        logger.error("❌ BOT_TOKEN не задан! Бот не может запуститься.")
+        return
+    
     try:
         init_db()
         
@@ -260,6 +270,10 @@ async def main():
 
 async def main_polling():
     """Запуск Telegram бота в режиме polling для локального тестирования"""
+    if not TOKEN:
+        logger.error("❌ BOT_TOKEN не задан! Бот не может запуститься.")
+        return
+    
     try:
         init_db()
         
@@ -285,9 +299,26 @@ async def main_polling():
 if __name__ == "__main__":
     # Запускаем бота
     try:
-        # Используем asyncio.run() для всех случаев
-        # Это создаст новый event loop и корректно его закроет
-        asyncio.run(main())
+        # Проверяем, запущен ли уже event loop
+        try:
+            # Пытаемся получить текущий event loop
+            loop = asyncio.get_running_loop()
+            logger.warning("⚠️ Event loop уже запущен, используем альтернативный способ")
+            
+            # Альтернативный способ для Render
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                loop.run_until_complete(main())
+            except KeyboardInterrupt:
+                logger.info("Бот остановлен пользователем")
+            finally:
+                loop.close()
+                
+        except RuntimeError:
+            # Нет активного event loop, используем стандартный способ
+            asyncio.run(main())
         
     except Exception as e:
         logger.error(f"❌ Ошибка запуска бота: {e}")
