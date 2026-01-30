@@ -290,12 +290,11 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Ошибка в menu_handler: {e}")
         await update.message.reply_text("❌ Ошибка при обработке команды")
 
-    # Удаляем сообщения с командами (@botname команды)
-    if update.message.text and any(cmd in update.message.text for cmd in ['/start@DotaFull_bot', '/fissure@DotaFull_bot', '/stats@DotaFull_bot', '/top@DotaFull_bot']):
-        try:
-            await context.bot.delete_message(update.message.chat_id, update.message.message_id)
-        except Exception as e:
-            logger.debug(f"Не удалось удалить сообщение команды: {e}")
+    # Удаляем сообщение пользователя (кнопки и @botname команды)
+    try:
+        await context.bot.delete_message(update.message.chat_id, update.message.message_id)
+    except Exception as e:
+        logger.debug(f"Не удалось удалить сообщение: {e}")
 
 async def health_check(request):
     """Health check endpoint for Render"""
