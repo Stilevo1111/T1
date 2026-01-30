@@ -235,7 +235,7 @@ async def health_check(request):
     return web.Response(text="✅ Бот работает", status=200)
 
 async def main():
-    """Запуск Telegram бота в режиме polling для Render"""
+    """Запуск Telegram бота в webhook режиме для Render"""
     if not TOKEN:
         logger.error("❌ BOT_TOKEN не задан! Бот не может запуститься.")
         return
@@ -243,7 +243,7 @@ async def main():
     try:
         init_db()
         
-        # Создаем Telegram бота
+        # Создаем веб-приложение для webhook
         app = ApplicationBuilder().token(TOKEN).build()
 
         # Добавляем обработчики команд
@@ -253,16 +253,48 @@ async def main():
         app.add_handler(CommandHandler("top", top))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
-        logger.info("✅ Telegram бот запущен в режиме polling")
+        # Получаем webhook URL из переменных окружения
+        webhook_url = os.getenv("WEBHOOK_URL")
+        if not webhook_url:
+            logger.error("❌ WEBHOOK_URL не задан! Укажите URL для webhook.")
+            return
+            
+        # Настраиваем webhook
+        await app.bot.set_webhook(url=webhook_url)
         
-        # Запускаем бота в режиме polling
-        await app.run_polling(drop_pending_updates=True)
+        logger.info("✅ Telegram бот запущен в режиме webhook")
+        logger.info(f"📡 Webhook URL: {webhook_url}")
         
-    except Conflict as e:
-        logger.error(f"❌ Конфликт: {e}")
-        logger.error("💡 Это может означать, что другой экземпляр бота уже использует этот токен")
-        logger.error("💡 Убедитесь, что на Render запущен только один экземпляр бота")
-        raise
+        # Создаем веб-сервер с aiohttp
+        from aiohttp import web
+        
+        async def handle_webhook(request):
+            """Обработка входящих webhook запросов"""
+            try:
+                update = await request.json()
+                await app.process_update(update)
+                return web.Response(status=200)
+            except Exception as e:
+                logger.error(f"Ошибка обработки webhook: {e}")
+                return web.Response(status=500)
+        
+        # Создаем приложение
+        web_app = web.Application()
+        web_app.router.add_post('/webhook', handle_webhook)
+        web_app.router.add_get('/health', health_check)
+        
+        # Запускаем веб-сервер
+        runner = web.AppRunner(web_app)
+        await runner.setup()
+        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
+        await site.start()
+        
+        logger.info("🌐 Веб-сервер запущен")
+        
+        # Бесконечный цикл для поддержания работы
+        while True:
+            await asyncio.sleep(3600)
+            
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}", exc_info=True)
         raise
