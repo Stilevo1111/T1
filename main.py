@@ -73,9 +73,11 @@ async def delete_previous_message(bot, chat_id, last_message_id):
 async def delete_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Удаляет сообщение пользователя"""
     try:
+        logger.info(f"Удаляем сообщение пользователя: {update.message.message_id}")
         await context.bot.delete_message(update.message.chat_id, update.message.message_id)
+        logger.info(f"Сообщение пользователя удалено: {update.message.message_id}")
     except Exception as e:
-        logger.debug(f"Не удалось удалить сообщение пользователя: {e}")
+        logger.error(f"Не удалось удалить сообщение пользователя: {e}")
 
 async def auto_delete_message(context: ContextTypes.DEFAULT_TYPE):
     """Автоудаление сообщения через 30 секунд"""
