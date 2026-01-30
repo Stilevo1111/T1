@@ -234,49 +234,30 @@ async def main():
         init_db()
         
         # Создаем Telegram бота
-        telegram_app = ApplicationBuilder().token(TOKEN).build()
+        app = ApplicationBuilder().token(TOKEN).build()
 
         # Добавляем обработчики команд
-        telegram_app.add_handler(CommandHandler("start", start))
-        telegram_app.add_handler(CommandHandler("fissure", fissure))
-        telegram_app.add_handler(CommandHandler("stats", stats))
-        telegram_app.add_handler(CommandHandler("top", top))
-        telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("fissure", fissure))
+        app.add_handler(CommandHandler("stats", stats))
+        app.add_handler(CommandHandler("top", top))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
         logger.info("✅ Telegram бот запущен в режиме webhook")
         
-        # Инициализируем приложение
-        await telegram_app.initialize()
-        
-        # Получаем URL для webhook
+        # Получаем порт и webhook URL
         port = int(os.getenv("PORT", 10000))
         webhook_path = "/webhook"
+        webhook_url = os.getenv("WEBHOOK_URL") or f"https://{os.getenv('RENDER_SERVICE_NAME')}.onrender.com{webhook_path}"
 
-        service_name = os.getenv("RENDER_SERVICE_NAME", "fissure-bot")
-        webhook_url = os.getenv("WEBHOOK_URL") or f"https://{service_name}.onrender.com{webhook_path}"
-        
-        # Единый aiohttp сервер
-        web_app = web.Application()
-        web_app.router.add_get("/health", health_check)
-
-        # Устанавливаем webhook
-        await telegram_app.bot.set_webhook(webhook_url)
-        await telegram_app.start()
-
-        # Telegram webhook endpoint
-        web_app.router.add_post(webhook_path, telegram_app.webhook_handler)
-
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", port)
-        await site.start()
-        
-        logger.info(f"🚀 Webhook и health работают на одном порту {port}")
-        logger.info(f"🏥 Health check доступен на /health")
-        logger.info(f"📨 Webhook доступен на {webhook_path}")
-        
-        # Ждем завершения (никогда не завершится без сигнала)
-        await asyncio.Event().wait()
+        # Запускаем webhook через метод run_webhook
+        await app.run_webhook(
+            listen="0.0.0.0",
+            port=port,
+            url_path=webhook_path,
+            webhook_url=webhook_url,
+            drop_pending_updates=True,
+        )
         
     except Conflict as e:
         logger.error(f"❌ Конфликт webhook: {e}")
