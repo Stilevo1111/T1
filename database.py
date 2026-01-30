@@ -61,15 +61,15 @@ def get_connection():
         return sqlite3.connect(db_path)
 
 def init_db():
-    """Initialize database tables. Use migrations instead for production."""
+    """Initialize database tables and add missing columns."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        # Определяем тип базы данных по схеме URL
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
         
         if "postgres" in scheme:
+            # Создаём таблицу если не существует
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
@@ -80,7 +80,12 @@ def init_db():
                     last_message_id INTEGER DEFAULT 0
                 )
             """)
+            # Добавляем колонку если не существует
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_message_id INTEGER DEFAULT 0
+            """)
         else:
+            # Для SQLite создаём таблицу
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,6 +96,12 @@ def init_db():
                     last_message_id INTEGER DEFAULT 0
                 )
             """)
+            # Для SQLite проверяем есть ли колонка и добавляем если нет
+            cursor.execute("PRAGMA table_info(users)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'last_message_id' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN last_message_id INTEGER DEFAULT 0")
+        
         conn.commit()
         conn.close()
         logger.info("✅ База данных инициализирована")
