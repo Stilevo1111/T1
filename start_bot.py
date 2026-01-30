@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-Альтернативный скрипт для запуска бота на Render
-Использует более стабильный способ управления event loop
+Простой скрипт для локального запуска Telegram бота "Фиссура"
 """
 
 import os
 import sys
 import asyncio
 import logging
-from main import main
+from database import init_db
 
 # Настройка логирования
 logging.basicConfig(
@@ -17,36 +16,61 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def main_render():
-    """Главная функция для запуска бота на Render"""
+def main():
+    """Запуск бота в локальном режиме"""
+    print("🚀 Запуск Telegram бота 'Фиссура'...")
+    print("💡 Для тестирования бот будет использовать SQLite базу данных")
+    print("💡 Вам не нужно настраивать переменные окружения")
+    print()
+    
     try:
+        # Инициализируем базу данных
+        print("📦 Инициализация базы данных...")
+        init_db()
+        print("✅ База данных готова")
+        print()
+        
         # Проверяем наличие токена
-        token = os.getenv("BOT_TOKEN")
-        if not token:
-            logger.error("❌ BOT_TOKEN не задан в переменных окружения!")
-            sys.exit(1)
+        TOKEN = os.getenv("BOT_TOKEN")
+        if not TOKEN:
+            print("⚠️  ВНИМАНИЕ: BOT_TOKEN не найден!")
+            print("   Бот не сможет отправлять сообщения в Telegram.")
+            print("   Для полноценной работы:")
+            print("   1. Создайте Telegram бота у @BotFather")
+            print("   2. Получите BOT_TOKEN")
+            print("   3. Добавьте его в переменные окружения: set BOT_TOKEN=ваш_токен")
+            print()
+            print("   Для тестирования базы данных запустите: python test_bot.py")
+            print()
+        else:
+            print("✅ BOT_TOKEN найден")
+            
+        print("🤖 Запуск бота...")
+        print("Нажмите Ctrl+C для остановки бота")
+        print("-" * 50)
         
-        logger.info("🚀 Запуск бота для Render...")
+        # Импортируем и запускаем основной модуль
+        from main import main_polling as run_bot
         
-        # Создаем новый event loop для Render
+        # Создаем новый event loop для избежания конфликтов
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-        try:
-            # Запускаем основную функцию
-            loop.run_until_complete(main())
-        except KeyboardInterrupt:
-            logger.info("✋ Бот остановлен пользователем")
-        except Exception as e:
-            logger.error(f"❌ Ошибка в работе бота: {e}", exc_info=True)
-            raise
-        finally:
-            # Закрываем event loop
-            loop.close()
-            
+        # Запускаем бота
+        loop.run_until_complete(run_bot())
+        
+    except KeyboardInterrupt:
+        print("\n🛑 Бот остановлен пользователем")
+        sys.exit(0)
     except Exception as e:
-        logger.error(f"❌ Критическая ошибка при запуске: {e}", exc_info=True)
+        print(f"❌ Ошибка запуска бота: {e}")
+        print()
+        print("💡 Советы по решению проблем:")
+        print("1. Убедитесь, что установлены все зависимости: pip install -r requirements.txt")
+        print("2. Проверьте, что Python версии 3.8 или выше")
+        print("3. Убедитесь, что у вас есть действительный BOT_TOKEN")
+        print("4. Проверьте настройки переменных окружения")
         sys.exit(1)
 
 if __name__ == "__main__":
-    main_render()
+    main()

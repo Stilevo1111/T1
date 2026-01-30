@@ -256,7 +256,6 @@ async def main():
         logger.info("✅ Telegram бот запущен в режиме polling")
         
         # Запускаем бота в режиме polling
-        # Это работает лучше на Render, так как не требует управления веб-сервером
         await app.run_polling(drop_pending_updates=True)
         
     except Conflict as e:
@@ -297,29 +296,12 @@ async def main_polling():
         raise
 
 if __name__ == "__main__":
-    # Запускаем бота
+    # Запускаем бота с использованием современного подхода asyncio
     try:
-        # Проверяем, запущен ли уже event loop
-        try:
-            # Пытаемся получить текущий event loop
-            loop = asyncio.get_running_loop()
-            logger.warning("⚠️ Event loop уже запущен, используем альтернативный способ")
-            
-            # Альтернативный способ для Render
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            try:
-                loop.run_until_complete(main())
-            except KeyboardInterrupt:
-                logger.info("Бот остановлен пользователем")
-            finally:
-                loop.close()
-                
-        except RuntimeError:
-            # Нет активного event loop, используем стандартный способ
-            asyncio.run(main())
-        
+        # Используем asyncio.run() для чистого запуска
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n🛑 Бот остановлен пользователем")
     except Exception as e:
-        logger.error(f"❌ Ошибка запуска бота: {e}")
+        print(f"❌ Ошибка запуска бота: {e}")
         raise
