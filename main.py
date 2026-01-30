@@ -4,7 +4,7 @@ import time
 import asyncio
 import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database
 from aiohttp import web
@@ -77,6 +77,28 @@ async def delete_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.debug(f"Не удалось удалить сообщение пользователя: {e}")
 
+async def auto_delete_message(context: ContextTypes.DEFAULT_TYPE):
+    """Автоудаление сообщения через 30 секунд"""
+    try:
+        chat_id = context.job.context['chat_id']
+        message_id = context.job.context['message_id']
+        await context.bot.delete_message(chat_id, message_id)
+        logger.debug(f"Автоудалено сообщение: {message_id}")
+    except Exception as e:
+        logger.debug(f"Не удалось автоудалить сообщение: {e}")
+
+def schedule_auto_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, delay: int = 30):
+    """Планирует автоудаление сообщения пользователя"""
+    context.job_queue.run_once(
+        auto_delete_message,
+        delay,
+        context={
+            'chat_id': update.message.chat_id,
+            'message_id': update.message.message_id
+        },
+        name=f"auto_delete_{update.message.chat_id}_{update.message.message_id}"
+    )
+
 async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_message_id=0):
     """Отправляет новое сообщение или обновляет существующее"""
     try:
@@ -146,8 +168,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         update_last_message_id(uid, message_id)
         
-        # Удаляем сообщение пользователя
-        await delete_user_message(update, context)
+        # Планируем автоудаление сообщения пользователя через 30 сек
+        schedule_auto_delete(update, context)
         
     except Exception as e:
         logger.error(f"Ошибка в fissure: {e}")
@@ -187,8 +209,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'user' in locals():
             update_last_message_id(uid, message_id)
         
-        # Удаляем сообщение пользователя
-        await delete_user_message(update, context)
+        # Планируем автоудаление сообщения пользователя через 30 сек
+        schedule_auto_delete(update, context)
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать топ"""
@@ -243,8 +265,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'user' in locals():
             update_last_message_id(uid, message_id)
         
-        # Удаляем сообщение пользователя
-        await delete_user_message(update, context)
+        # Планируем автоудаление сообщения пользователя через 30 сек
+        schedule_auto_delete(update, context)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -280,8 +302,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'user' in locals():
             update_last_message_id(uid, message_id)
         
-        # Удаляем сообщение пользователя
-        await delete_user_message(update, context)
+        # Планируем автоудаление сообщения пользователя через 30 сек
+        schedule_auto_delete(update, context)
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик кнопок меню"""
@@ -332,7 +354,7 @@ async def main():
         init_db()
         
         # Создаем веб-приложение для webhook
-        app = ApplicationBuilder().token(TOKEN).build()
+        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
 
         # Добавляем обработчики команд
         app.add_handler(CommandHandler("start", start))
@@ -409,7 +431,7 @@ async def main_polling():
         init_db()
         
         # Создаем Telegram бота
-        app = ApplicationBuilder().token(TOKEN).build()
+        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
 
         # Добавляем обработчики команд
         app.add_handler(CommandHandler("start", start))
