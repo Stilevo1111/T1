@@ -73,8 +73,10 @@ async def delete_previous_message(bot, chat_id, last_message_id):
 async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_message_id=0):
     """Отправляет новое сообщение или обновляет существующее"""
     try:
+        logger.info(f"send_or_update_message: chat_id={chat_id}, last_message_id={last_message_id}")
         # Сначала отправляем новое сообщение
         msg = await bot.send_message(chat_id, text, reply_markup=reply_markup)
+        logger.info(f"Отправлено сообщение: {msg.message_id}")
         
         # Затем удаляем предыдущее сообщение
         await delete_previous_message(bot, chat_id, last_message_id)
