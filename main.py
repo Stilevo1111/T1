@@ -275,4 +275,15 @@ async def main():
         raise
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Запускаем бота с правильной обработкой event loop
+    try:
+        # Создаем новый event loop для избежания конфликтов
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Запускаем бота
+        loop.run_until_complete(main())
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска бота: {e}")
+        raise
