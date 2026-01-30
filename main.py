@@ -229,7 +229,7 @@ async def health_check(request):
     return web.Response(text="✅ Бот работает", status=200)
 
 async def main():
-    """Запуск Telegram бота в режиме webhook для Render"""
+    """Запуск Telegram бота в режиме polling для Render"""
     try:
         init_db()
         
@@ -243,30 +243,14 @@ async def main():
         app.add_handler(CommandHandler("top", top))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
-        logger.info("✅ Telegram бот запущен в режиме webhook")
+        logger.info("✅ Telegram бот запущен в режиме polling")
         
-        # Получаем порт и webhook URL
-        port = int(os.getenv("PORT", 10000))
-        webhook_path = "/webhook"
-        webhook_url = os.getenv("WEBHOOK_URL") or f"https://{os.getenv('RENDER_SERVICE_NAME')}.onrender.com{webhook_path}"
-
-        # Инициализируем приложение
-        await app.initialize()
-        
-        # Устанавливаем webhook
-        await app.bot.set_webhook(webhook_url)
-        
-        # Запускаем webhook через метод run_webhook
-        await app.run_webhook(
-            listen="0.0.0.0",
-            port=port,
-            url_path=webhook_path,
-            webhook_url=webhook_url,
-            drop_pending_updates=True,
-        )
+        # Запускаем бота в режиме polling
+        # Это работает лучше на Render, так как не требует управления веб-сервером
+        await app.run_polling(drop_pending_updates=True)
         
     except Conflict as e:
-        logger.error(f"❌ Конфликт webhook: {e}")
+        logger.error(f"❌ Конфликт: {e}")
         logger.error("💡 Это может означать, что другой экземпляр бота уже использует этот токен")
         logger.error("💡 Убедитесь, что на Render запущен только один экземпляр бота")
         raise
