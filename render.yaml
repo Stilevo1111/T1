@@ -1,11 +1,20 @@
 services:
-  - type: worker
+  - type: web
     name: fissure-bot
     env: python
+    region: frankfurt
     plan: free
-    startCommand: python main.py
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main_web_keepalive.py
     envVars:
       - key: BOT_TOKEN
         fromSecret: BOT_TOKEN
       - key: DATABASE_URL
         fromSecret: DATABASE_URL
+      - key: RENDER_EXTERNAL_URL
+        value: https://fissure-bot.onrender.com
+    healthCheckPath: /health
+    healthCheckInterval: 30
+    healthCheckTimeout: 10
+    healthCheckRetries: 3
+    autoDeploy: true
