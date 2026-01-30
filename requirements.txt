@@ -1,0 +1,6 @@
+python-telegram-bot[webhooks]==21.7
+psycopg2==2.9.11
+flask==3.0.2
+requests==2.31.0
+alembic==1.16.5
+aiohttp==3.11.11
