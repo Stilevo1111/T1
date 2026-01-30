@@ -199,6 +199,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         update_last_message_id(uid, message_id)
         
+        # Сразу удаляем + fallback через 30 сек
+        await delete_user_message(update, context)
+        schedule_auto_delete(update, context)
+        
     except Exception as e:
         logger.error(f"Ошибка в stats: {e}")
         text = "❌ Ошибка при получении статистики"
@@ -256,6 +260,10 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         update_last_message_id(uid, message_id)
         
+        # Сразу удаляем + fallback через 30 сек
+        await delete_user_message(update, context)
+        schedule_auto_delete(update, context)
+        
     except Exception as e:
         logger.error(f"Ошибка в top: {e}")
         text = "❌ Ошибка при получении топа"
@@ -293,6 +301,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user.get("last_message_id", 0)
         )
         update_last_message_id(uid, message_id)
+        
+        # Сразу удаляем + fallback через 30 сек
+        await delete_user_message(update, context)
+        schedule_auto_delete(update, context)
         
     except Exception as e:
         logger.error(f"Ошибка в start: {e}")
