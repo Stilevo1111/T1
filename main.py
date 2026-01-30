@@ -262,6 +262,9 @@ async def main():
         # Настраиваем webhook
         await app.bot.set_webhook(url=webhook_url)
         
+        # Инициализируем приложение перед обработкой webhook
+        await app.initialize()
+        
         logger.info("✅ Telegram бот запущен в режиме webhook")
         logger.info(f"📡 Webhook URL: {webhook_url}")
         
