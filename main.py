@@ -97,6 +97,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         user = get_user(uid, username)
+        logger.info(f"user data: {user}")
         
         if now - user["last_fissure"] < COOLDOWN:
             wait = COOLDOWN - (now - user["last_fissure"])
@@ -151,6 +152,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
         user = get_user(uid, username)
+        logger.info(f"stats user data: {user}")
         
         text = f"📏 Текущая длина фиссуры: {user['fissure']:.1f} см"
         message_id = await send_or_update_message(
@@ -184,6 +186,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
         user = get_user(uid, username)
+        logger.info(f"top user data: {user}")
         
         top_users = get_fissure_top()
         logger.info(f"Получено {len(top_users)} пользователей для топа")
@@ -236,6 +239,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
         user = get_user(uid, username)
+        logger.info(f"start user data: {user}")
         
         text = "Добро пожаловать!\nЗдесь можно увеличить фиссуру 😈"
         message_id = await send_or_update_message(
