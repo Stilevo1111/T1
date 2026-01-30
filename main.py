@@ -100,7 +100,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             wait = COOLDOWN - (now - user["last_fissure"])
             text = f"⏳ Фиссура ещё восстанавливается.\nЖди: {format_time(wait)}"
             message_id = await send_or_update_message(
-                update.message.bot,
+                context.bot,
                 update.message.chat_id,
                 text,
                 None,
@@ -128,7 +128,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Отправляем сообщение с удалением предыдущего
         message_id = await send_or_update_message(
-            update.message.bot,
+            context.bot,
             update.message.chat_id,
             text,
             None,
@@ -152,7 +152,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         text = f"📏 Текущая длина фиссуры: {user['fissure']:.1f} см"
         message_id = await send_or_update_message(
-            update.message.bot,
+            context.bot,
             update.message.chat_id,
             text,
             None,
@@ -164,7 +164,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Ошибка в stats: {e}")
         text = "❌ Ошибка при получении статистики"
         message_id = await send_or_update_message(
-            update.message.bot,
+            context.bot,
             update.message.chat_id,
             text,
             None,
@@ -189,7 +189,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not top_users:
             text = "🏆 Топ Фиссур:\n\nПока нет данных для отображения топа"
             message_id = await send_or_update_message(
-                update.message.bot,
+                context.bot,
                 update.message.chat_id,
                 text,
                 None,
@@ -204,7 +204,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"{i}. {username} — {u['fissure']:.1f} см\n"
         
         message_id = await send_or_update_message(
-            update.message.bot,
+            context.bot,
             update.message.chat_id,
             text,
             None,
@@ -216,7 +216,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Ошибка в top: {e}")
         text = "❌ Ошибка при получении топа"
         message_id = await send_or_update_message(
-            update.message.bot,
+            context.bot,
             update.message.chat_id,
             text,
             None,
@@ -237,7 +237,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         text = "Добро пожаловать!\nЗдесь можно увеличить фиссуру 😈"
         message_id = await send_or_update_message(
-            update.message.bot,
+            context.bot,
             update.message.chat_id,
             text,
             main_menu(),
@@ -249,7 +249,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Ошибка в start: {e}")
         text = "❌ Ошибка при запуске бота"
         message_id = await send_or_update_message(
-            update.message.bot,
+            context.bot,
             update.message.chat_id,
             text,
             None,
