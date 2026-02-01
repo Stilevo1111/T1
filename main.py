@@ -421,7 +421,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE, last_messa
         logger.error(f"Error in fissure: {e}")
         await update.message.reply_text("❌ Ошибка обработки запроса")
 
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, last_message_id=0):
     """Show stats"""
     logger.info(f"User {update.effective_user.id} called stats")
     
@@ -446,30 +446,36 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = f"📏 Длина: {user['fissure']:.1f} см"
         
         try:
-            # Send new message (previous messages are deleted in menu_handler)
+            # Try to edit existing message first
+            if last_message_id and last_message_id > 0:
+                try:
+                    await context.bot.edit_message_text(
+                        chat_id=update.message.chat_id,
+                        message_id=last_message_id,
+                        text=text,
+                        reply_markup=main_menu()
+                    )
+                    logger.info(f"Edited stats message {last_message_id} for user {user_obj.id}")
+                    update_last_message_id(user_obj.id, last_message_id)
+                    add_bot_message(update.message.chat_id, last_message_id)
+                    return
+                except Exception as edit_error:
+                    logger.debug(f"Could not edit stats message {last_message_id}: {edit_error}")
+            
+            # Send new message if edit failed
             result_msg = await context.bot.send_message(
                 chat_id=update.message.chat_id,
-                text=text
+                text=text,
+                reply_markup=main_menu()
             )
             add_bot_message(result_msg.chat_id, result_msg.message_id)
             update_last_message_id(user_obj.id, result_msg.message_id)
-        except Exception as e:
-            logger.error(f"Send error: {e}")
-            message_id = await send_or_update_message(
-                context.bot,
-                update.message.chat_id,
-                text,
-                None,
-                user.get("last_message_id", 0)
-            )
-            update_last_message_id(user_obj.id, message_id)
-            add_bot_message(update.message.chat_id, message_id)
     
     except Exception as e:
         logger.error(f"Error in stats: {e}")
         await update.message.reply_text("❌ Ошибка получения статистики")
 
-async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def top(update: Update, context: ContextTypes.DEFAULT_TYPE, last_message_id=0):
     """Show top users"""
     logger.info(f"User {update.effective_user.id} called top")
     
@@ -575,7 +581,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_user(user_id, update.effective_user.username or update.effective_user.first_name)
     last_msg_id = user.get("last_message_id", 0)
     
-    # STEP 3: Call the appropriate function (will edit the existing message)
+    # STEP 3: Call the appropriate function (will try to edit existing message first)
+    try:
+        if text == "📈 Увеличить фиссуру":
+            await fissure(update, context, last_msg_id)
+        elif text == "📏 Моя длина":
+            await stats(update, context, last_msg_id)
+        elif text == "🏆 Топ":
+            await top(update, context, last_msg_id)
+    except Exception as e:
+        logger.error(f"Error in menu_handler: {e}")
+        await update.message.reply_text("❌ Ошибка обработки команды")
     try:
         if text == "📈 Увеличить фиссуру":
             await fissure(update, context, last_msg_id)
