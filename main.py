@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import random
 import time
@@ -98,108 +99,95 @@ ROLL_MEMES = {
     ],
     -3: [
         "Three centimeters to nowhere!",
-        "Like losing 300 rubles in a taxi!",
-        "Fissure went into reduction!"
+        "Oops! The fissure sneezed!",
+        "Gravity wins this round!"
     ],
     -5: [
-        "Five centimeters into the unknown!",
-        "Like spending 500 rubles on something unnecessary!",
-        "Fissure is in depression!"
+        "When your fissure goes on strike!",
+        "Minus five - like a bad review!",
+        "Fissure: 'I need a vacation!'"
     ],
     -10: [
-        "Ten centimeters... like they never existed!",
-        "It's like losing your phone with wallet!",
-        "Fissure experienced an earthquake!"
+        "TOTAL ANNIHILATION!",
+        "From hero to zero!",
+        "The fissure has left the chat!"
     ]
 }
-
-# =====================
-# CATEGORY PHRASES
-# =====================
 
 CATEGORY_PHRASES = {
     "up": [
-        "Growing... and asks nothing!",
-        "Bot invests in your success!",
-        "Who grew here?",
-        "Growth is visible!"
-    ],
-    "same": [
-        "All stable like morning coffee!",
-        "Fissure is thinking about the meaning of life...",
-        "At least it didn't decrease!",
-        "Rest is also work!"
+        "Growing strong!",
+        "Every cm counts!",
+        "Fissure approves!",
+        "Positive dynamics!",
+        "Keep it up!",
+        "On the rise!"
     ],
     "down": [
-        "Shrunk... quietly but proudly!",
-        "A bit shrank from modesty!",
-        "Minus is not a verdict!",
-        "Happens... (sighs)"
+        "A small setback!",
+        "Fissure will recover!",
+        "Tomorrow is a new day!",
+        "Temporary decline!",
+        "Stay strong!",
+        "This is not the end!"
     ],
-    "fatal": [
-        "FISSURE IN SHOCK!",
-        "CRITICAL DAMAGE!",
-        "EVERYTHING IS BURNING!",
-        "STRIKE OF FATE!"
+    "same": [
+        "Stability is good!",
+        "Holding the line!",
+        "No changes - also a result!",
+        "Steady as she goes!",
+        "Consistency matters!",
+        "Solid foundation!"
     ],
     "bonus_help": [
-        "SYSTEM TOOK YOU UNDER ITS WING!",
-        "BOT DECIDED TO HELP A NEWBIE!",
-        "MAGIC OF ALGORITHMS IN ACTION!",
-        "GIFT FROM THE DEVELOPER!"
+        "SYSTEM HELP ACTIVATED!",
+        "Lucky break!",
+        "Bonus achieved!",
+        "Critical support!",
+        "Jackpot mode!",
+        "Bonus multiplier!"
+    ],
+    "fatal": [
+        "CRITICAL HIT!",
+        "But you stayed!",
+        "SURVIVED!",
+        "Still in the game!",
+        "Resilience!",
+        "Never give up!"
     ]
 }
 
-# =====================
-# WELCOME PHRASES FOR NEW MEMBERS
-# =====================
-
 WELCOME_PHRASES = [
-    "Hi, {name}! Glad to see you!",
-    "{name}, welcome to the chat!",
-    "{name} has joined us!",
-    "Oh, newcomer! {name}, welcome!",
-    "Finally! {name}, we've been waiting for you!",
-    "{name}, welcome to our ranks!",
-    "{name}, hello! Play Fissure!",
-    "{name}, welcome, warrior!",
-    "{name}, glad to have a new player!",
-    "{name}, welcome! Press INCREASE!"
+    "Welcome, {name}! Your fissure journey begins now!",
+    "Nice to see you, {name}! Time to grow!",
+    "{name} joined! The fissure community grows!",
+    "Hello, {name}! Let's increase together!",
+    "{name} is here! New opportunities await!",
+    "Welcome, {name}! Your fissure awaits!",
+    "Nice to have you, {name}! Let's get bigger!",
+    "{name} joined the fissure club!",
+    "Hey, {name}! Time to measure!",
+    "{name} is ready to grow!"
 ]
 
-# =====================
-# AUTO-DELETE MESSAGES STORAGE
-# =====================
-
 bot_messages = {}
-AUTO_DELETE_TIME = 30  # Delete messages older than 30 seconds
+AUTO_DELETE_TIME = 30
 
 def add_bot_message(chat_id: int, message_id: int):
-    """Adds bot message to storage for auto-cleanup"""
     if chat_id not in bot_messages:
         bot_messages[chat_id] = {}
     bot_messages[chat_id][message_id] = time.time()
-    logger.debug(f"Added message {message_id} for chat {chat_id}")
 
 async def cleanup_old_messages(bot):
-    """Deletes bot messages older than 30 seconds"""
     now = time.time()
     for chat_id in list(bot_messages.keys()):
-        messages_to_delete = []
-        for msg_id, timestamp in bot_messages[chat_id].items():
+        for msg_id, timestamp in list(bot_messages[chat_id].items()):
             if now - timestamp > AUTO_DELETE_TIME:
-                messages_to_delete.append(msg_id)
-        
-        for msg_id in messages_to_delete:
-            try:
-                await bot.delete_message(chat_id, msg_id)
-                del bot_messages[chat_id][msg_id]
-                logger.debug(f"Auto-deleted message {msg_id} from chat {chat_id}")
-            except Exception as e:
-                logger.debug(f"Could not delete message {msg_id}: {e}")
-                if msg_id in bot_messages[chat_id]:
-                    del bot_messages[chat_id]
-        
+                try:
+                    await bot.delete_message(chat_id, msg_id)
+                    del bot_messages[chat_id][msg_id]
+                except:
+                    pass
         if not bot_messages[chat_id]:
             del bot_messages[chat_id]
 
@@ -275,8 +263,8 @@ def calculate_new_fissure(current_fissure, roll):
 
 def main_menu():
     keyboard = [
-        [KeyboardButton("INCREASE")],
-        [KeyboardButton("MY LENGTH"), KeyboardButton("TOP")],
+        [KeyboardButton("📈 Увеличить фиссуру")],
+        [KeyboardButton("📏 Моя длина"), KeyboardButton("🏆 Топ")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -298,61 +286,49 @@ async def delete_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Deletes user message"""
     try:
         logger.info(f"Deleting user message: {update.message.message_id}")
-        await context.bot.delete_message(update.message.chat_id, update.message.message_id)
-        logger.info(f"User message deleted: {update.message.message_id}")
+        await context.bot.delete_message(
+            chat_id=update.message.chat_id,
+            message_id=update.message.message_id
+        )
     except Exception as e:
-        logger.error(f"Could not delete user message: {e}")
+        logger.debug(f"Could not delete user message: {e}")
 
-async def auto_delete_message(context: ContextTypes.DEFAULT_TYPE):
-    """Auto-delete message after 30 seconds"""
+async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_message_id=None):
+    """Sends or updates a message"""
     try:
-        chat_id = context.job.data['chat_id']
-        message_id = context.job.data['message_id']
-        await context.bot.delete_message(chat_id, message_id)
-        logger.debug(f"Auto-deleted message: {message_id}")
+        if last_message_id and last_message_id > 0:
+            try:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=last_message_id,
+                    text=text,
+                    reply_markup=reply_markup
+                )
+                return last_message_id
+            except:
+                pass
+        result = await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup
+        )
+        return result.message_id
     except Exception as e:
-        logger.debug(f"Could not auto-delete message: {e}")
-
-def schedule_auto_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, delay: int = 30):
-    """Schedules auto-delete for user message"""
-    context.job_queue.run_once(
-        auto_delete_message,
-        delay,
-        data={
-            'chat_id': update.message.chat_id,
-            'message_id': update.message.message_id
-        },
-        name=f"auto_delete_{update.message.chat_id}_{update.message.message_id}"
-    )
-
-async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_message_id=0):
-    """Sends new message or updates existing one"""
-    try:
-        logger.info(f"send_or_update_message: chat_id={chat_id}, last_message_id={last_message_id}")
-        msg = await bot.send_message(chat_id, text, reply_markup=reply_markup)
-        logger.info(f"Sent message: {msg.message_id}")
-        
-        await delete_previous_message(bot, chat_id, last_message_id)
-        
-        return msg.message_id
-    except Exception as e:
-        logger.error(f"Send error: {e}")
-        return 0
+        logger.error(f"Error sending message: {e}")
+        return None
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /fissure command"""
+    """Increase fissure"""
     logger.info(f"User {update.effective_user.id} called fissure")
     
-    # Clean up old bot messages
     await cleanup_old_messages(context.bot)
     
-    uid = update.effective_user.id
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
     now = time.time()
     
     try:
-        user = get_user(uid, username)
+        user = get_user(user_obj.id, username)
         logger.info(f"user data: {user}")
         
         if now - user["last_fissure"] < COOLDOWN:
@@ -365,15 +341,15 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 main_menu(),
                 user.get("last_message_id", 0)
             )
-            update_last_message_id(uid, message_id)
+            update_last_message_id(user_obj.id, message_id)
             return
 
         roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
         roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
         new_fissure = calculate_new_fissure(user["fissure"], roll)
-        update_fissure(uid, new_fissure, now)
+        update_fissure(user_obj.id, new_fissure, now)
         
-        logger.info(f"User {uid} used fissure. New cooldown: {now}")
+        logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
 
         roll_key = min(roll, 50)
         roll_key = max(roll_key, -10)
@@ -411,7 +387,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text=text,
                 reply_markup=main_menu()
             )
-            logger.info(f"Result sent to user {uid}")
+            logger.info(f"Result sent to user {user_obj.id}")
             add_bot_message(result_msg.chat_id, result_msg.message_id)
             # Delete user's message
             try:
@@ -428,7 +404,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 main_menu(),
                 user.get("last_message_id", 0)
             )
-            update_last_message_id(uid, message_id)
+            update_last_message_id(user_obj.id, message_id)
             
             try:
                 await delete_user_message(update, context)
@@ -448,60 +424,41 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await cleanup_old_messages(context.bot)
     
     try:
-        uid = update.effective_user.id
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
-        user = get_user(uid, username)
-        logger.info(f"stats user data: {user}")
+        user = get_user(user_obj.id, username)
         
-        text = f"Current fissure length: {user['fissure']:.1f} cm"
-        message_id = await send_or_update_message(
-            context.bot,
-            update.message.chat_id,
-            text,
-            main_menu(),
-            user.get("last_message_id", 0)
+        last_fissure_time = user["last_fissure"]
+        now = time.time()
+        time_since_last = now - last_fissure_time
+        remaining_cooldown = max(0, COOLDOWN - time_since_last)
+        
+        if remaining_cooldown > 0:
+            wait_text = f"Recovery: {format_time(remaining_cooldown)}"
+        else:
+            wait_text = "Ready to increase!"
+        
+        text = (
+            f"📊 Your Stats\n\n"
+            f"📏 Current length: {user['fissure']:.1f} cm\n"
+            f"📈 Total growth: {user['total_growth']:.1f} cm\n"
+            f"🔄 Total rolls: {user['total_rolls']}\n"
+            f"⏰ {wait_text}"
         )
-        update_last_message_id(uid, message_id)
         
         try:
-            await delete_user_message(update, context)
-            add_bot_message(update.message.chat_id, message_id)
+            result_msg = await context.bot.send_message(
+                chat_id=update.message.chat_id,
+                text=text,
+                reply_markup=main_menu()
+            )
+            add_bot_message(result_msg.chat_id, result_msg.message_id)
+            try:
+                await delete_user_message(update, context)
+            except Exception as e:
+                logger.debug(f"Could not delete user message: {e}")
         except Exception as e:
-            logger.error(f"Delete error: {e}")
-        
-    except Exception as e:
-        logger.error(f"Error in stats: {e}")
-        text = "Error getting stats"
-        message_id = await send_or_update_message(
-            context.bot,
-            update.message.chat_id,
-            text,
-            main_menu(),
-            user.get("last_message_id", 0) if 'user' in locals() else 0
-        )
-        if 'user' in locals():
-            update_last_message_id(uid, message_id)
-
-async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show top"""
-    logger.info(f"User {update.effective_user.id} called top")
-    
-    # Clean up old bot messages
-    await cleanup_old_messages(context.bot)
-    
-    try:
-        uid = update.effective_user.id
-        user_obj = update.effective_user
-        username = user_obj.username or user_obj.first_name
-        user = get_user(uid, username)
-        logger.info(f"top user data: {user}")
-        
-        top_users = get_fissure_top()
-        logger.info(f"Got {len(top_users)} users for top")
-        
-        if not top_users:
-            text = "Top Fissures:\n\nNo data yet"
+            logger.error(f"Send error: {e}")
             message_id = await send_or_update_message(
                 context.bot,
                 update.message.chat_id,
@@ -509,44 +466,60 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 main_menu(),
                 user.get("last_message_id", 0)
             )
-            update_last_message_id(uid, message_id)
-            return
-            
-        text = "Top Fissures:\n\n"
-        for i, u in enumerate(top_users, 1):
-            username = u['username'] or f"User {u['telegram_id']}"
-            text += f"{i}. {username} - {u['fissure']:.1f} cm\n"
+            update_last_message_id(user_obj.id, message_id)
         
-        message_id = await send_or_update_message(
-            context.bot,
-            update.message.chat_id,
-            text,
-            main_menu(),
-            user.get("last_message_id", 0)
-        )
-        update_last_message_id(uid, message_id)
+    except Exception as e:
+        logger.error(f"Error in stats: {e}")
+        await update.message.reply_text("Error getting stats")
+
+async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show top users"""
+    logger.info(f"User {update.effective_user.id} called top")
+    
+    # Clean up old bot messages
+    await cleanup_old_messages(context.bot)
+    
+    try:
+        top_users = get_fissure_top(10)
+        
+        if not top_users:
+            text = "No users yet. Be the first!"
+        else:
+            text = "🏆 Top 10 Fissures\n\n"
+            for i, user in enumerate(top_users, 1):
+                name = user.get('username', 'Unknown')[:15]
+                text += f"{i}. {name}: {user['fissure']:.1f} cm\n"
         
         try:
-            await delete_user_message(update, context)
-            add_bot_message(update.message.chat_id, message_id)
+            result_msg = await context.bot.send_message(
+                chat_id=update.message.chat_id,
+                text=text,
+                reply_markup=main_menu()
+            )
+            add_bot_message(result_msg.chat_id, result_msg.message_id)
+            try:
+                await delete_user_message(update, context)
+            except Exception as e:
+                logger.debug(f"Could not delete user message: {e}")
         except Exception as e:
-            logger.error(f"Delete error: {e}")
+            logger.error(f"Send error: {e}")
+            user_obj = update.effective_user
+            user = get_user(user_obj.id, user_obj.username or user_obj.first_name)
+            message_id = await send_or_update_message(
+                context.bot,
+                update.message.chat_id,
+                text,
+                main_menu(),
+                user.get("last_message_id", 0)
+            )
+            update_last_message_id(user_obj.id, message_id)
         
     except Exception as e:
         logger.error(f"Error in top: {e}")
-        text = "Error getting top"
-        message_id = await send_or_update_message(
-            context.bot,
-            update.message.chat_id,
-            text,
-            main_menu(),
-            user.get("last_message_id", 0) if 'user' in locals() else 0
-        )
-        if 'user' in locals():
-            update_last_message_id(uid, message_id)
+        await update.message.reply_text("Error getting top")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /start command"""
+    """Handle /start command"""
     logger.info(f"New user {update.effective_user.id}")
     
     # Clean up old bot messages
@@ -592,7 +565,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler"""
     text = update.message.text
     
-    menu_buttons = ["INCREASE", "MY LENGTH", "TOP"]
+    menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
     
     if text not in menu_buttons:
         return
@@ -608,11 +581,11 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = user_obj.username or user_obj.first_name
         get_user(uid, username)
 
-        if text == "INCREASE":
+        if text == "📈 Увеличить фиссуру":
             await fissure(update, context)
-        elif text == "MY LENGTH":
+        elif text == "📏 Моя длина":
             await stats(update, context)
-        elif text == "TOP":
+        elif text == "🏆 Топ":
             await top(update, context)
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}")
@@ -676,91 +649,7 @@ async def main():
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
         app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.Regex(r'^(📈 Увеличить фиссуру|📏 Моя длина|🏆 Топ)
-            logger.error("WEBHOOK_URL not set!")
-            return
-            
-        await app.bot.set_webhook(url=webhook_url)
-        await app.initialize()
-        
-        logger.info("Telegram bot started in webhook mode")
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        setup_wake_up(app.job_queue)
-        
-        from aiohttp import web
-        
-        async def handle_webhook(request):
-            """Handle incoming webhook requests"""
-            try:
-                update_data = await request.json()
-                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
-                update = Update.de_json(update_data, app.bot)
-                logger.info(f"Update parsed: {update}")
-                await app.process_update(update)
-                logger.info(f"Update processed")
-                return web.Response(status=200)
-            except Exception as e:
-                logger.error(f"Webhook error: {e}", exc_info=True)
-                return web.Response(status=500)
-        
-        web_app = web.Application()
-        web_app.router.add_post('/webhook', handle_webhook)
-        web_app.router.add_get('/health', health_check)
-        
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
-        await site.start()
-        
-        logger.info("Web server started")
-        
-        while True:
-            await asyncio.sleep(3600)
-            
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-async def main_polling():
-    """Start Telegram bot in polling mode for local testing"""
-    if not TOKEN:
-        logger.error("BOT_TOKEN not set!")
-        return
-    
-    try:
-        init_db()
-        
-        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.Regex(r'^(INCREASE|MY LENGTH|TOP)$'), menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        logger.info("Telegram bot started in polling mode")
-        
-        await app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nBot stopped by user")
-    except Exception as e:
-        print(f"Bot start error: {e}")
-        raise
-), menu_handler))
+        app.add_handler(MessageHandler(filters.Regex(r'^(📈 Увеличить фиссуру|📏 Моя длина|🏆 Топ)$'), menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
         webhook_url = os.getenv("WEBHOOK_URL")
@@ -829,7 +718,7 @@ async def main_polling():
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
         app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.Regex(r'^(INCREASE|MY LENGTH|TOP)$'), menu_handler))
+        app.add_handler(MessageHandler(filters.Regex(r'^(📈 Увеличить фиссуру|📏 Моя длина|🏆 Топ)$'), menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
         logger.info("Telegram bot started in polling mode")
@@ -841,529 +730,7 @@ async def main_polling():
         raise
 
 if __name__ == "__main__":
-    try:
+    if os.getenv("WEBHOOK_URL"):
         asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nBot stopped by user")
-    except Exception as e:
-        print(f"Bot start error: {e}")
-        raise
-), menu_handler))
-        if not webhook_url:
-            logger.error("WEBHOOK_URL not set!")
-            return
-            
-        await app.bot.set_webhook(url=webhook_url)
-        await app.initialize()
-        
-        logger.info("Telegram bot started in webhook mode")
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        setup_wake_up(app.job_queue)
-        
-        from aiohttp import web
-        
-        async def handle_webhook(request):
-            """Handle incoming webhook requests"""
-            try:
-                update_data = await request.json()
-                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
-                update = Update.de_json(update_data, app.bot)
-                logger.info(f"Update parsed: {update}")
-                await app.process_update(update)
-                logger.info(f"Update processed")
-                return web.Response(status=200)
-            except Exception as e:
-                logger.error(f"Webhook error: {e}", exc_info=True)
-                return web.Response(status=500)
-        
-        web_app = web.Application()
-        web_app.router.add_post('/webhook', handle_webhook)
-        web_app.router.add_get('/health', health_check)
-        
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
-        await site.start()
-        
-        logger.info("Web server started")
-        
-        while True:
-            await asyncio.sleep(3600)
-            
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-async def main_polling():
-    """Start Telegram bot in polling mode for local testing"""
-    if not TOKEN:
-        logger.error("BOT_TOKEN not set!")
-        return
-    
-    try:
-        init_db()
-        
-        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.Regex(r'^(INCREASE|MY LENGTH|TOP)$'), menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        logger.info("Telegram bot started in polling mode")
-        
-        await app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nBot stopped by user")
-    except Exception as e:
-        print(f"Bot start error: {e}")
-        raise
-), menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        webhook_url = os.getenv("WEBHOOK_URL")
-        if not webhook_url:
-            logger.error("WEBHOOK_URL not set!")
-            return
-            
-        await app.bot.set_webhook(url=webhook_url)
-        await app.initialize()
-        
-        logger.info("Telegram bot started in webhook mode")
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        setup_wake_up(app.job_queue)
-        
-        from aiohttp import web
-        
-        async def handle_webhook(request):
-            """Handle incoming webhook requests"""
-            try:
-                update_data = await request.json()
-                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
-                update = Update.de_json(update_data, app.bot)
-                logger.info(f"Update parsed: {update}")
-                await app.process_update(update)
-                logger.info(f"Update processed")
-                return web.Response(status=200)
-            except Exception as e:
-                logger.error(f"Webhook error: {e}", exc_info=True)
-                return web.Response(status=500)
-        
-        web_app = web.Application()
-        web_app.router.add_post('/webhook', handle_webhook)
-        web_app.router.add_get('/health', health_check)
-        
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
-        await site.start()
-        
-        logger.info("Web server started")
-        
-        while True:
-            await asyncio.sleep(3600)
-            
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-async def main_polling():
-    """Start Telegram bot in polling mode for local testing"""
-    if not TOKEN:
-        logger.error("BOT_TOKEN not set!")
-        return
-    
-    try:
-        init_db()
-        
-        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.Regex(r'^(INCREASE|MY LENGTH|TOP)$'), menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        logger.info("Telegram bot started in polling mode")
-        
-        await app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nBot stopped by user")
-    except Exception as e:
-        print(f"Bot start error: {e}")
-        raise
-), menu_handler))
-        if not webhook_url:
-            logger.error("WEBHOOK_URL not set!")
-            return
-            
-        await app.bot.set_webhook(url=webhook_url)
-        await app.initialize()
-        
-        logger.info("Telegram bot started in webhook mode")
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        setup_wake_up(app.job_queue)
-        
-        from aiohttp import web
-        
-        async def handle_webhook(request):
-            """Handle incoming webhook requests"""
-            try:
-                update_data = await request.json()
-                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
-                update = Update.de_json(update_data, app.bot)
-                logger.info(f"Update parsed: {update}")
-                await app.process_update(update)
-                logger.info(f"Update processed")
-                return web.Response(status=200)
-            except Exception as e:
-                logger.error(f"Webhook error: {e}", exc_info=True)
-                return web.Response(status=500)
-        
-        web_app = web.Application()
-        web_app.router.add_post('/webhook', handle_webhook)
-        web_app.router.add_get('/health', health_check)
-        
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
-        await site.start()
-        
-        logger.info("Web server started")
-        
-        while True:
-            await asyncio.sleep(3600)
-            
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-async def main_polling():
-    """Start Telegram bot in polling mode for local testing"""
-    if not TOKEN:
-        logger.error("BOT_TOKEN not set!")
-        return
-    
-    try:
-        init_db()
-        
-        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.Regex(r'^(INCREASE|MY LENGTH|TOP)$'), menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        logger.info("Telegram bot started in polling mode")
-        
-        await app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nBot stopped by user")
-    except Exception as e:
-        print(f"Bot start error: {e}")
-        raise
-), menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        webhook_url = os.getenv("WEBHOOK_URL")
-        if not webhook_url:
-            logger.error("WEBHOOK_URL not set!")
-            return
-            
-        await app.bot.set_webhook(url=webhook_url)
-        await app.initialize()
-        
-        logger.info("Telegram bot started in webhook mode")
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        setup_wake_up(app.job_queue)
-        
-        from aiohttp import web
-        
-        async def handle_webhook(request):
-            """Handle incoming webhook requests"""
-            try:
-                update_data = await request.json()
-                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
-                update = Update.de_json(update_data, app.bot)
-                logger.info(f"Update parsed: {update}")
-                await app.process_update(update)
-                logger.info(f"Update processed")
-                return web.Response(status=200)
-            except Exception as e:
-                logger.error(f"Webhook error: {e}", exc_info=True)
-                return web.Response(status=500)
-        
-        web_app = web.Application()
-        web_app.router.add_post('/webhook', handle_webhook)
-        web_app.router.add_get('/health', health_check)
-        
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
-        await site.start()
-        
-        logger.info("Web server started")
-        
-        while True:
-            await asyncio.sleep(3600)
-            
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-async def main_polling():
-    """Start Telegram bot in polling mode for local testing"""
-    if not TOKEN:
-        logger.error("BOT_TOKEN not set!")
-        return
-    
-    try:
-        init_db()
-        
-        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.Regex(r'^(INCREASE|MY LENGTH|TOP)$'), menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        logger.info("Telegram bot started in polling mode")
-        
-        await app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nBot stopped by user")
-    except Exception as e:
-        print(f"Bot start error: {e}")
-        raise
-), menu_handler))
-        if not webhook_url:
-            logger.error("WEBHOOK_URL not set!")
-            return
-            
-        await app.bot.set_webhook(url=webhook_url)
-        await app.initialize()
-        
-        logger.info("Telegram bot started in webhook mode")
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        setup_wake_up(app.job_queue)
-        
-        from aiohttp import web
-        
-        async def handle_webhook(request):
-            """Handle incoming webhook requests"""
-            try:
-                update_data = await request.json()
-                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
-                update = Update.de_json(update_data, app.bot)
-                logger.info(f"Update parsed: {update}")
-                await app.process_update(update)
-                logger.info(f"Update processed")
-                return web.Response(status=200)
-            except Exception as e:
-                logger.error(f"Webhook error: {e}", exc_info=True)
-                return web.Response(status=500)
-        
-        web_app = web.Application()
-        web_app.router.add_post('/webhook', handle_webhook)
-        web_app.router.add_get('/health', health_check)
-        
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
-        await site.start()
-        
-        logger.info("Web server started")
-        
-        while True:
-            await asyncio.sleep(3600)
-            
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-async def main_polling():
-    """Start Telegram bot in polling mode for local testing"""
-    if not TOKEN:
-        logger.error("BOT_TOKEN not set!")
-        return
-    
-    try:
-        init_db()
-        
-        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.Regex(r'^(INCREASE|MY LENGTH|TOP)$'), menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        logger.info("Telegram bot started in polling mode")
-        
-        await app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nBot stopped by user")
-    except Exception as e:
-        print(f"Bot start error: {e}")
-        raise
-), menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        webhook_url = os.getenv("WEBHOOK_URL")
-        if not webhook_url:
-            logger.error("WEBHOOK_URL not set!")
-            return
-            
-        await app.bot.set_webhook(url=webhook_url)
-        await app.initialize()
-        
-        logger.info("Telegram bot started in webhook mode")
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        setup_wake_up(app.job_queue)
-        
-        from aiohttp import web
-        
-        async def handle_webhook(request):
-            """Handle incoming webhook requests"""
-            try:
-                update_data = await request.json()
-                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
-                update = Update.de_json(update_data, app.bot)
-                logger.info(f"Update parsed: {update}")
-                await app.process_update(update)
-                logger.info(f"Update processed")
-                return web.Response(status=200)
-            except Exception as e:
-                logger.error(f"Webhook error: {e}", exc_info=True)
-                return web.Response(status=500)
-        
-        web_app = web.Application()
-        web_app.router.add_post('/webhook', handle_webhook)
-        web_app.router.add_get('/health', health_check)
-        
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
-        await site.start()
-        
-        logger.info("Web server started")
-        
-        while True:
-            await asyncio.sleep(3600)
-            
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-async def main_polling():
-    """Start Telegram bot in polling mode for local testing"""
-    if not TOKEN:
-        logger.error("BOT_TOKEN not set!")
-        return
-    
-    try:
-        init_db()
-        
-        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.Regex(r'^(INCREASE|MY LENGTH|TOP)$'), menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        logger.info("Telegram bot started in polling mode")
-        
-        await app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nBot stopped by user")
-    except Exception as e:
-        print(f"Bot start error: {e}")
-        raise
+    else:
+        asyncio.run(main_polling())
