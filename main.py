@@ -849,3 +849,176 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Bot start error: {e}")
         raise
+), menu_handler))
+        if not webhook_url:
+            logger.error("WEBHOOK_URL not set!")
+            return
+            
+        await app.bot.set_webhook(url=webhook_url)
+        await app.initialize()
+        
+        logger.info("Telegram bot started in webhook mode")
+        logger.info(f"Webhook URL: {webhook_url}")
+        
+        setup_wake_up(app.job_queue)
+        
+        from aiohttp import web
+        
+        async def handle_webhook(request):
+            """Handle incoming webhook requests"""
+            try:
+                update_data = await request.json()
+                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
+                update = Update.de_json(update_data, app.bot)
+                logger.info(f"Update parsed: {update}")
+                await app.process_update(update)
+                logger.info(f"Update processed")
+                return web.Response(status=200)
+            except Exception as e:
+                logger.error(f"Webhook error: {e}", exc_info=True)
+                return web.Response(status=500)
+        
+        web_app = web.Application()
+        web_app.router.add_post('/webhook', handle_webhook)
+        web_app.router.add_get('/health', health_check)
+        
+        runner = web.AppRunner(web_app)
+        await runner.setup()
+        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
+        await site.start()
+        
+        logger.info("Web server started")
+        
+        while True:
+            await asyncio.sleep(3600)
+            
+    except Exception as e:
+        logger.error(f"Critical error: {e}", exc_info=True)
+        raise
+
+async def main_polling():
+    """Start Telegram bot in polling mode for local testing"""
+    if not TOKEN:
+        logger.error("BOT_TOKEN not set!")
+        return
+    
+    try:
+        init_db()
+        
+        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
+
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("fissure", fissure))
+        app.add_handler(CommandHandler("stats", stats))
+        app.add_handler(CommandHandler("top", top))
+        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
+        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
+        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
+        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
+        app.add_handler(MessageHandler(filters.Regex(r'^(INCREASE|MY LENGTH|TOP)$'), menu_handler))
+        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
+
+        logger.info("Telegram bot started in polling mode")
+        
+        await app.run_polling(drop_pending_updates=True)
+        
+    except Exception as e:
+        logger.error(f"Critical error: {e}", exc_info=True)
+        raise
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nBot stopped by user")
+    except Exception as e:
+        print(f"Bot start error: {e}")
+        raise
+), menu_handler))
+        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
+
+        webhook_url = os.getenv("WEBHOOK_URL")
+        if not webhook_url:
+            logger.error("WEBHOOK_URL not set!")
+            return
+            
+        await app.bot.set_webhook(url=webhook_url)
+        await app.initialize()
+        
+        logger.info("Telegram bot started in webhook mode")
+        logger.info(f"Webhook URL: {webhook_url}")
+        
+        setup_wake_up(app.job_queue)
+        
+        from aiohttp import web
+        
+        async def handle_webhook(request):
+            """Handle incoming webhook requests"""
+            try:
+                update_data = await request.json()
+                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
+                update = Update.de_json(update_data, app.bot)
+                logger.info(f"Update parsed: {update}")
+                await app.process_update(update)
+                logger.info(f"Update processed")
+                return web.Response(status=200)
+            except Exception as e:
+                logger.error(f"Webhook error: {e}", exc_info=True)
+                return web.Response(status=500)
+        
+        web_app = web.Application()
+        web_app.router.add_post('/webhook', handle_webhook)
+        web_app.router.add_get('/health', health_check)
+        
+        runner = web.AppRunner(web_app)
+        await runner.setup()
+        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
+        await site.start()
+        
+        logger.info("Web server started")
+        
+        while True:
+            await asyncio.sleep(3600)
+            
+    except Exception as e:
+        logger.error(f"Critical error: {e}", exc_info=True)
+        raise
+
+async def main_polling():
+    """Start Telegram bot in polling mode for local testing"""
+    if not TOKEN:
+        logger.error("BOT_TOKEN not set!")
+        return
+    
+    try:
+        init_db()
+        
+        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
+
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("fissure", fissure))
+        app.add_handler(CommandHandler("stats", stats))
+        app.add_handler(CommandHandler("top", top))
+        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
+        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
+        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
+        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
+        app.add_handler(MessageHandler(filters.Regex(r'^(INCREASE|MY LENGTH|TOP)$'), menu_handler))
+        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
+
+        logger.info("Telegram bot started in polling mode")
+        
+        await app.run_polling(drop_pending_updates=True)
+        
+    except Exception as e:
+        logger.error(f"Critical error: {e}", exc_info=True)
+        raise
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nBot stopped by user")
+    except Exception as e:
+        print(f"Bot start error: {e}")
+        raise
