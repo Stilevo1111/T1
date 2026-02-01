@@ -4,7 +4,7 @@ import time
 import asyncio
 import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database
 from aiohttp import web
@@ -154,6 +154,23 @@ CATEGORY_PHRASES = {
         "🎁 ПОДАРОК ОТ РАЗРАБОТЧИКА!"
     ]
 }
+
+# =====================
+# ПРИВЕТСТВИЯ НОВЫХ УЧАСТНИКОВ
+# =====================
+
+WELCOME_PHRASES = [
+    "👋 Привет, {name}! Рады видеть!",
+    "✨ {name}, добро пожаловать в чат!",
+    "🎉 {name} присоединился к нам!",
+    "🔥 О, новенький! {name}, добро пожаловать!",
+    "👋 Наконец-то! {name}, мы тебя ждали!",
+    "🏆 {name}, добро пожаловать в наши ряды!",
+    "🎮 {name}, привет! Играй в Фиссуру!",
+    "⚔️ {name}, добро пожаловать, воин!",
+    "🌟 {name}, рады новому игроку!",
+    "🎯 {name}, добро пожаловать! Жми 📈!"
+]
 
 def calculate_fissure_roll(current_fissure):
     """
@@ -641,6 +658,28 @@ async def health_check(request):
     """Health check endpoint for Render"""
     return web.Response(text="✅ Бот работает", status=200)
 
+async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Приветствие нового участника чата"""
+    try:
+        chat_id = update.my_chat_member.chat.id
+        new_user = update.my_chat_member.new_chat_member
+        
+        # Проверяем что пользователь именно присоединился
+        if new_user.status in ['member', 'administrator']:
+            name = new_user.user.first_name or "Друг"
+            
+            # Выбираем случайное приветствие
+            welcome_text = random.choice(WELCOME_PHRASES).format(name=name)
+            
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=welcome_text
+            )
+            logger.info(f"Приветствие отправлено для {name}")
+            
+    except Exception as e:
+        logger.error(f"Ошибка в welcome_new_member: {e}")
+
 async def wake_up_callback(context: ContextTypes.DEFAULT_TYPE):
     """Периодический wake-up для предотвращения сна"""
     logger.info("🛠️ Wake-up: бот активен")
@@ -675,6 +714,7 @@ async def main():
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
         app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
         app.add_handler(MessageHandler(filters.Regex(r'^(📈 Увеличить фиссуру|📏 Моя длина|🏆 Топ)$'), menu_handler))
+        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
         # Получаем webhook URL из переменных окружения
         webhook_url = os.getenv("WEBHOOK_URL")
@@ -755,6 +795,7 @@ async def main_polling():
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
         app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
         app.add_handler(MessageHandler(filters.Regex(r'^(📈 Увеличить фиссуру|📏 Моя длина|🏆 Топ)$'), menu_handler))
+        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
         logger.info("✅ Telegram бот запущен в режиме polling")
         
