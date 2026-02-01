@@ -13,7 +13,7 @@ from aiohttp import web
 # Logging setup
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.DEBUG
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,7 @@ def add_bot_message(chat_id: int, message_id: int):
     bot_messages[chat_id][message_id] = time.time()
 
 async def delete_all_chat_messages(bot, chat_id):
-    """Delete ALL bot messages for a chat, keeping only 1 new message"""
+    """Delete ALL bot messages for a chat"""
     async with bot_messages_lock:
         if chat_id not in bot_messages:
             return
@@ -211,7 +211,6 @@ async def cleanup_old_messages(bot, max_age=30):
                         del bot_messages[chat_id][msg_id]
                     except Exception as e:
                         logger.debug(f"Could not auto-delete message {msg_id}: {e}")
-                        # Remove from tracking anyway
                         del bot_messages[chat_id][msg_id]
 
 def calculate_fissure_roll(current_fissure):
@@ -296,45 +295,9 @@ def format_time(seconds):
     m = (seconds % 3600) // 60
     return f"{int(h)}ч {int(m)}м"
 
-async def delete_previous_message(bot, chat_id, last_message_id):
-    """Deletes previous bot message"""
-    try:
-        if last_message_id and last_message_id > 0:
-            await bot.delete_message(chat_id, last_message_id)
-            logger.info(f"Deleted previous message: {last_message_id}")
-    except Exception as e:
-        logger.debug(f"Could not delete previous message: {e}")
-
-
-async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_message_id=None):
-    """Sends or updates a message"""
-    try:
-        if last_message_id and last_message_id > 0:
-            try:
-                await bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=last_message_id,
-                    text=text,
-                    reply_markup=reply_markup
-                )
-                return last_message_id
-            except:
-                pass
-        result = await bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=reply_markup
-        )
-        return result.message_id
-    except Exception as e:
-        logger.error(f"Error sending message: {e}")
-        return None
-
-async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE, last_message_id=0):
+async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Increase fissure"""
     logger.info(f"User {update.effective_user.id} called fissure")
-    
-    await cleanup_old_messages(context.bot)
     
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
@@ -347,15 +310,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE, last_messa
         if now - user["last_fissure"] < COOLDOWN:
             wait = COOLDOWN - (now - user["last_fissure"])
             text = f"⏳ Фиссура восстанавливается. Подожди: {format_time(wait)}"
-            message_id = await send_or_update_message(
-                context.bot,
-                update.message.chat_id,
-                text,
-                main_menu(),
-                user.get("last_message_id", 0)
+            result_msg = await context.bot.send_message(
+                chat_id=update.message.chat_id,
+                text=text,
+                reply_markup=main_menu()
             )
-            update_last_message_id(user_obj.id, message_id)
-            add_bot_message(update.message.chat_id, message_id)
+            add_bot_message(result_msg.chat_id, result_msg.message_id)
+            update_last_message_id(user_obj.id, result_msg.message_id)
             return
 
         roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
@@ -394,39 +355,21 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE, last_messa
         if is_fatal and protection_msg:
             text = f"{text}\n\n{protection_msg}"
         
-        try:
-            # Send new message (previous messages are deleted in menu_handler)
-            result_msg = await context.bot.send_message(
-                chat_id=update.message.chat_id,
-                text=text
-            )
-            logger.info(f"Result sent to user {user_obj.id}")
-            add_bot_message(result_msg.chat_id, result_msg.message_id)
-            update_last_message_id(user_obj.id, result_msg.message_id)
-            # User message deletion is handled in menu_handler()
-                 
-        except Exception as e:
-            logger.error(f"Send error: {e}")
-            message_id = await send_or_update_message(
-                context.bot,
-                update.message.chat_id,
-                text,
-                main_menu(),
-                user.get("last_message_id", 0)
-            )
-            update_last_message_id(user_obj.id, message_id)
-            add_bot_message(update.message.chat_id, message_id)
-        
+        result_msg = await context.bot.send_message(
+            chat_id=update.message.chat_id,
+            text=text
+        )
+        logger.info(f"Result sent to user {user_obj.id}")
+        add_bot_message(result_msg.chat_id, result_msg.message_id)
+        update_last_message_id(user_obj.id, result_msg.message_id)
+                  
     except Exception as e:
         logger.error(f"Error in fissure: {e}")
         await update.message.reply_text("❌ Ошибка обработки запроса")
 
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, last_message_id=0):
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show stats"""
     logger.info(f"User {update.effective_user.id} called stats")
-    
-    # Clean up old bot messages
-    await cleanup_old_messages(context.bot)
     
     try:
         user_obj = update.effective_user
@@ -445,23 +388,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, last_message
         
         text = f"📏 Длина: {user['fissure']:.1f} см"
         
-        # Try to edit existing message first
-        if last_message_id and last_message_id > 0:
-            try:
-                await context.bot.edit_message_text(
-                    chat_id=update.message.chat_id,
-                    message_id=last_message_id,
-                    text=text,
-                    reply_markup=main_menu()
-                )
-                logger.info(f"Edited stats message {last_message_id} for user {user_obj.id}")
-                update_last_message_id(user_obj.id, last_message_id)
-                add_bot_message(update.message.chat_id, last_message_id)
-                return
-            except Exception as edit_error:
-                logger.debug(f"Could not edit stats message {last_message_id}: {edit_error}")
-        
-        # Send new message if edit failed
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
             text=text,
@@ -474,7 +400,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, last_message
         logger.error(f"Error in stats: {e}")
         await update.message.reply_text("❌ Ошибка получения статистики")
 
-async def top(update: Update, context: ContextTypes.DEFAULT_TYPE, last_message_id=0):
+async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show top users"""
     logger.info(f"User {update.effective_user.id} called top")
     
@@ -489,28 +415,12 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE, last_message_i
                 name = user.get('username', 'Unknown')[:15]
                 text += f"{i}. {name}: {user['fissure']:.1f} см\n"
         
-        try:
-            # Send new message (previous messages are deleted in menu_handler)
-            result_msg = await context.bot.send_message(
-                chat_id=update.message.chat_id,
-                text=text
-            )
-            add_bot_message(result_msg.chat_id, result_msg.message_id)
-            update_last_message_id(update.effective_user.id, result_msg.message_id)
-            # User message is deleted in menu_handler()
-        except Exception as e:
-            logger.error(f"Send error: {e}")
-            user_obj = update.effective_user
-            user = get_user(user_obj.id, user_obj.username or user_obj.first_name)
-            message_id = await send_or_update_message(
-                context.bot,
-                update.message.chat_id,
-                text,
-                None,
-                user.get("last_message_id", 0)
-            )
-            update_last_message_id(user_obj.id, message_id)
-            add_bot_message(update.message.chat_id, message_id)
+        result_msg = await context.bot.send_message(
+            chat_id=update.message.chat_id,
+            text=text
+        )
+        add_bot_message(result_msg.chat_id, result_msg.message_id)
+        update_last_message_id(update.effective_user.id, result_msg.message_id)
         
     except Exception as e:
         logger.error(f"Error in top: {e}")
@@ -554,50 +464,36 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update_last_message_id(uid, result_msg.message_id)
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu button handler - edits existing message instead of sending new ones"""
+    """Menu button handler - deletes all old bot messages and sends new one"""
     text = update.message.text.strip()
     
     menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
     
-    logger.debug(f"menu_handler received: '{text}', buttons: {menu_buttons}")
-    
     if text not in menu_buttons:
-        logger.debug(f"Text '{text}' not in menu_buttons, ignoring")
         return
     
     chat_id = update.message.chat_id
     user_id = update.effective_user.id
     logger.info(f"User {user_id} pressed button: {text}")
     
-    # STEP 1: Try to delete user's button press message
+    # STEP 1: Delete ALL previous bot messages for this chat
+    await delete_all_chat_messages(context.bot, chat_id)
+    
+    # STEP 2: Try to delete user's button press message (only works if bot is admin with delete rights)
     try:
         await context.bot.delete_message(chat_id, update.message.message_id)
         logger.debug(f"Deleted user message: {update.message.message_id}")
     except Exception as e:
-        logger.warning(f"Could not delete user message {update.message.message_id}: {e}")
+        logger.debug(f"Could not delete user message {update.message.message_id}: {e}")
     
-    # STEP 2: Get or create last_message_id for this user
-    user = get_user(user_id, update.effective_user.username or update.effective_user.first_name)
-    last_msg_id = user.get("last_message_id", 0)
-    
-    # STEP 3: Call the appropriate function (will try to edit existing message first)
+    # STEP 3: Call the appropriate function
     try:
         if text == "📈 Увеличить фиссуру":
-            await fissure(update, context, last_msg_id)
+            await fissure(update, context)
         elif text == "📏 Моя длина":
-            await stats(update, context, last_msg_id)
+            await stats(update, context)
         elif text == "🏆 Топ":
-            await top(update, context, last_msg_id)
-    except Exception as e:
-        logger.error(f"Error in menu_handler: {e}")
-        await update.message.reply_text("❌ Ошибка обработки команды")
-    try:
-        if text == "📈 Увеличить фиссуру":
-            await fissure(update, context, last_msg_id)
-        elif text == "📏 Моя длина":
-            await stats(update, context, last_msg_id)
-        elif text == "🏆 Топ":
-            await top(update, context, last_msg_id)
+            await top(update, context)
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}")
         await update.message.reply_text("❌ Ошибка обработки команды")
@@ -745,4 +641,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     else:
         asyncio.run(main_polling())
-
