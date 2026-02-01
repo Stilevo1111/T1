@@ -622,6 +622,21 @@ async def health_check(request):
     """Health check endpoint for Render"""
     return web.Response(text="✅ Бот работает", status=200)
 
+async def wake_up_callback(context: ContextTypes.DEFAULT_TYPE):
+    """Периодический wake-up для предотвращения сна"""
+    logger.info("🛠️ Wake-up: бот активен")
+    try:
+        # Пингуем себя через health endpoint
+        await context.bot.send_message(chat_id=int(os.getenv("ADMIN_ID", 0)), text="🛠️ Бот проснулся и работает!")
+    except Exception as e:
+        logger.debug(f"Wake-up ping не отправлен: {e}")
+
+def setup_wake_up(job_queue: JobQueue):
+    """Настраивает периодический wake-up каждые 14 минут"""
+    wake_up_interval = 14 * 60  # 14 минут в секундах
+    job_queue.run_repeating(wake_up_callback, wake_up_interval, first=60)
+    logger.info(f"🌙 Wake-up настроен: каждые {wake_up_interval} секунд")
+
 async def main():
     """Запуск Telegram бота в webhook режиме для Render"""
     if not TOKEN:
@@ -660,6 +675,9 @@ async def main():
         
         logger.info("✅ Telegram бот запущен в режиме webhook")
         logger.info(f"📡 Webhook URL: {webhook_url}")
+        
+        # Настраиваем периодический wake-up
+        setup_wake_up(app.job_queue)
         
         # Создаем веб-сервер с aiohttp
         from aiohttp import web
