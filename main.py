@@ -438,13 +438,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             wait_text = "✅ Готов к увеличению!"
         
-        text = (
-            f"📊 Твоя статистика\n\n"
-            f"📏 Текущая длина: {user['fissure']:.1f} см\n"
-            f"📈 Общий рост: {user['total_growth']:.1f} см\n"
-            f"🔄 Всего роллов: {user['total_rolls']}\n"
-            f"⏰ {wait_text}"
-        )
+        text = f"📏 Длина: {user['fissure']:.1f} см"
         
         try:
             result_msg = await context.bot.send_message(
@@ -597,7 +591,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug(f"Could not delete message: {e}")
 
 async def health_check(request):
-    """Health check endpoint for Render"""
+    """Health check endpoint for Render - also runs cleanup"""
+    # Запускаем очистку старых сообщений
+    try:
+        # Получаем bot из приложения
+        app = request.app.get('bot')
+        if app:
+            await cleanup_old_messages(app.bot)
+    except Exception as e:
+        logger.error(f"Health check cleanup error: {e}")
     return web.Response(text="Bot is working", status=200)
 
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -621,8 +623,13 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"Error in welcome_new_member: {e}")
 
 async def wake_up_callback(context: ContextTypes.DEFAULT_TYPE):
-    """Periodic wake-up to prevent sleeping"""
-    logger.info("Wake-up: bot is active")
+    """Periodic wake-up to prevent sleeping and cleanup old messages"""
+    logger.info("Wake-up: bot is active, running cleanup...")
+    try:
+        await cleanup_old_messages(context.bot)
+        logger.info("Cleanup completed")
+    except Exception as e:
+        logger.error(f"Cleanup error: {e}")
 
 def setup_wake_up(job_queue: JobQueue):
     """Sets up periodic wake-up every 14 minutes"""
@@ -682,6 +689,7 @@ async def main():
                 return web.Response(status=500)
         
         web_app = web.Application()
+        web_app['bot'] = app.bot  # Сохраняем bot для health check
         web_app.router.add_post('/webhook', handle_webhook)
         web_app.router.add_get('/health', health_check)
         
