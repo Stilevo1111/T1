@@ -565,13 +565,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user.get("last_message_id", 0)
         )
         update_last_message_id(uid, message_id)
-        
-        try:
-            await delete_user_message(update, context)
-            add_bot_message(update.message.chat_id, message_id)
-        except Exception as e:
-            logger.error(f"Delete error: {e}")
-        
+        add_bot_message(update.message.chat_id, message_id)
+
     except Exception as e:
         logger.error(f"Error in start: {e}")
         text = "❌ Ошибка запуска бота"
