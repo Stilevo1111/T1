@@ -12,6 +12,8 @@ services:
         fromSecret: DATABASE_URL
       - key: WEBHOOK_URL
         value: https://fissure-bot.onrender.com/webhook
+      - key: BOT_NAME
+        value: fissure_bot
       - key: RENDER_SERVICE_NAME
         value: fissure-bot
       - key: RENDER_REGION
