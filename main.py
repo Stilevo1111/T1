@@ -289,7 +289,7 @@ def main_menu():
         [KeyboardButton("📈 Увеличить фиссуру")],
         [KeyboardButton("📏 Моя длина"), KeyboardButton("🏆 Топ")],
     ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=False, one_time_keyboard=False)
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 def format_time(seconds):
     h = seconds // 3600
@@ -330,7 +330,7 @@ async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_mes
         logger.error(f"Error sending message: {e}")
         return None
 
-async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE, last_message_id=0):
     """Increase fissure"""
     logger.info(f"User {update.effective_user.id} called fissure")
     
@@ -549,7 +549,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update_last_message_id(uid, result_msg.message_id)
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu button handler - deletes all previous messages, keeps only 1 new"""
+    """Menu button handler - edits existing message instead of sending new ones"""
     text = update.message.text.strip()
     
     menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
@@ -561,43 +561,31 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     chat_id = update.message.chat_id
-    logger.info(f"User {update.effective_user.id} pressed button: {text}")
+    user_id = update.effective_user.id
+    logger.info(f"User {user_id} pressed button: {text}")
     
-    # STEP 1: Delete ALL previous bot messages for this chat
-    await delete_all_chat_messages(context.bot, chat_id)
-    
-    # STEP 2: Send menu keyboard (only once, not with every message)
+    # STEP 1: Try to delete user's button press message
     try:
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="Выберите действие:",
-            reply_markup=main_menu()
-        )
+        await context.bot.delete_message(chat_id, update.message.message_id)
+        logger.debug(f"Deleted user message: {update.message.message_id}")
     except Exception as e:
-        logger.debug(f"Could not send menu: {e}")
+        logger.warning(f"Could not delete user message {update.message.message_id}: {e}")
     
-    # STEP 3: Call the appropriate function
+    # STEP 2: Get or create last_message_id for this user
+    user = get_user(user_id, update.effective_user.username or update.effective_user.first_name)
+    last_msg_id = user.get("last_message_id", 0)
+    
+    # STEP 3: Call the appropriate function (will edit the existing message)
     try:
-        uid = update.effective_user.id
-        user_obj = update.effective_user
-        username = user_obj.username or user_obj.first_name
-        get_user(uid, username)
-
         if text == "📈 Увеличить фиссуру":
-            await fissure(update, context)
+            await fissure(update, context, last_msg_id)
         elif text == "📏 Моя длина":
-            await stats(update, context)
+            await stats(update, context, last_msg_id)
         elif text == "🏆 Топ":
-            await top(update, context)
+            await top(update, context, last_msg_id)
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}")
         await update.message.reply_text("❌ Ошибка обработки команды")
-    
-    # STEP 3: Try to delete user's button press message
-    try:
-        await context.bot.delete_message(chat_id, update.message.message_id)
-    except Exception as e:
-        logger.debug(f"Could not delete user message: {e}")
 
 async def health_check(request):
     """Health check endpoint for Render"""
