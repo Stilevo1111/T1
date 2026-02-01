@@ -445,32 +445,31 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, last_message
         
         text = f"📏 Длина: {user['fissure']:.1f} см"
         
-        try:
-            # Try to edit existing message first
-            if last_message_id and last_message_id > 0:
-                try:
-                    await context.bot.edit_message_text(
-                        chat_id=update.message.chat_id,
-                        message_id=last_message_id,
-                        text=text,
-                        reply_markup=main_menu()
-                    )
-                    logger.info(f"Edited stats message {last_message_id} for user {user_obj.id}")
-                    update_last_message_id(user_obj.id, last_message_id)
-                    add_bot_message(update.message.chat_id, last_message_id)
-                    return
-                except Exception as edit_error:
-                    logger.debug(f"Could not edit stats message {last_message_id}: {edit_error}")
-            
-            # Send new message if edit failed
-            result_msg = await context.bot.send_message(
-                chat_id=update.message.chat_id,
-                text=text,
-                reply_markup=main_menu()
-            )
-            add_bot_message(result_msg.chat_id, result_msg.message_id)
-            update_last_message_id(user_obj.id, result_msg.message_id)
-    
+        # Try to edit existing message first
+        if last_message_id and last_message_id > 0:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=update.message.chat_id,
+                    message_id=last_message_id,
+                    text=text,
+                    reply_markup=main_menu()
+                )
+                logger.info(f"Edited stats message {last_message_id} for user {user_obj.id}")
+                update_last_message_id(user_obj.id, last_message_id)
+                add_bot_message(update.message.chat_id, last_message_id)
+                return
+            except Exception as edit_error:
+                logger.debug(f"Could not edit stats message {last_message_id}: {edit_error}")
+        
+        # Send new message if edit failed
+        result_msg = await context.bot.send_message(
+            chat_id=update.message.chat_id,
+            text=text,
+            reply_markup=main_menu()
+        )
+        add_bot_message(result_msg.chat_id, result_msg.message_id)
+        update_last_message_id(user_obj.id, result_msg.message_id)
+        
     except Exception as e:
         logger.error(f"Error in stats: {e}")
         await update.message.reply_text("❌ Ошибка получения статистики")
