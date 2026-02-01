@@ -475,19 +475,23 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     chat_id = update.message.chat_id
     user_id = update.effective_user.id
+    user_msg_id = update.message.message_id
     logger.info(f"User {user_id} pressed button: {text}")
     
-    # STEP 1: Delete ALL previous bot messages for this chat
+    # STEP 1: Save user message ID to delete it later
+    user_message_id_to_delete = update.message.message_id
+    
+    # STEP 2: Delete ALL previous bot messages for this chat
     await delete_all_chat_messages(context.bot, chat_id)
     
-    # STEP 2: Try to delete user's button press message (only works if bot is admin with delete rights)
+    # STEP 3: Delete user's button press message (works if bot is admin with delete rights)
     try:
-        await context.bot.delete_message(chat_id, update.message.message_id)
-        logger.debug(f"Deleted user message: {update.message.message_id}")
+        await context.bot.delete_message(chat_id, user_message_id_to_delete)
+        logger.info(f"Deleted user message: {user_message_id_to_delete}")
     except Exception as e:
-        logger.debug(f"Could not delete user message {update.message.message_id}: {e}")
+        logger.warning(f"Could not delete user message {user_message_id_to_delete}: {e}")
     
-    # STEP 3: Call the appropriate function
+    # STEP 4: Call the appropriate function
     try:
         if text == "📈 Увеличить фиссуру":
             await fissure(update, context)
