@@ -37,123 +37,123 @@ FATAL_ROLL = -10
 # =====================
 
 ROLL_TEXTS = {
-    50: ["INcredible! +50 cm!", "JACKPOT! +50 cm at once!"],
-    30: ["COSMOS! +30 cm!", "SUPER LUCK! +30 cm!"],
-    20: ["MEGA SUCCESS! +20 cm!", "BULLSEYE! +20 cm!"],
-    10: ["LEGEND! +10 cm!", "FIRE! +10 cm!"],
-    5: ["HOORAY! +5 cm!", "GREAT! +5 cm!"],
-    3: ["NOT BAD! +3 cm", "GROWING! +3 cm"],
-    1: ["OK! +1 cm", "THERE IS GROWTH! +1 cm"],
-    0: ["NO CHANGES", "STANDING STILL"],
-    -1: ["SOMEWHAT -1 cm", "MINUS EXISTS -1 cm"],
-    -3: ["OOPS... -3 cm", "DROPPED -3 cm"],
-    -5: ["PAINFUL -5 cm...", "FAIL -5 cm"],
-    -10: ["CATASTROPHE! -10 cm!!!", "APOCALYPSE! -10 cm!!!"]
+    50: ["🔥🔥🔥 НЕВЕРОЯТНО! +50 см!", "💰 ДЖЕКПОТ! +50 см за раз!"],
+    30: ["🚀 КОСМОС! +30 см!", "🍀 СУПЕР УДАЧА! +30 см!"],
+    20: ["💪 MEGA УСПЕХ! +20 см!", "🎯 ТОЧНО В ДЕСЯТКУ! +20 см!"],
+    10: ["🌟 ЛЕГЕНДА! +10 см!", "🔥 ОГОНЬ! +10 см!"],
+    5: ["🎉 УРА! +5 см!", "👍 ОТЛИЧНО! +5 см!"],
+    3: ["😊 НЕПЛОХО! +3 см", "📈 РАСТЁМ! +3 см"],
+    1: ["✅ OK! +1 см", "💪 ЕСТЬ РОСТ! +1 см"],
+    0: ["❌ БЕЗ ИЗМЕНЕНИЙ", "💤 СТОИМ НА МЕСТЕ"],
+    -1: ["🤔 НЕМНОГО -1 см", "📉 МИНУС -1 см"],
+    -3: ["😬 ОЙ... -3 см", "⬇️ УПАЛ -3 см"],
+    -5: ["😢 БОЛЬНО -5 см...", "💔 НЕУДАЧА -5 см"],
+    -10: ["💥 КАТАСТРОФА! -10 см!!!", "🌋 АПОКАЛИПСИС! -10 см!!!"]
 }
 
 ROLL_MEMES = {
     50: [
-        "Your fissure is bigger than someone's self-esteem!",
-        "Random passerby: 'What is that big thing?'",
-        "Now you can start your own OnlyFissures channel!"
+        "💪 Ваша фиссура больше, чем чья-то самооценка!",
+        "🔍 Прохожий: 'А что это за большая штука?'",
+        "📺 Теперь можно создавать OnlyFissures канал!"
     ],
     30: [
-        "It's like finding 1000 rubles in old jeans!",
-        "Now you can reach the remote without getting up!",
-        "Congratulations accepted in rubles, dollars, and cm!"
+        "🎁 Это как найти 1000 рублей в старых джинсах!",
+        "🛋️ Теперь можно достать пульт не вставая!",
+        "💵 Поздравления в рублях, долларах и см!"
     ],
     20: [
-        "Your fissure grew bigger than Tesla stocks!",
-        "Now it's not fissure, but fissURAAAA!",
-        "Size matters! (it turned out)"
+        "📈 Ваша фиссура выросла больше, чем акции Теслы!",
+        "🎤 Это уже не фиссура, а ФИССУУУРА!",
+        "📏 Размер имеет значение! (оказалось, что да)"
     ],
     10: [
-        "It's like getting a bonus on Monday!",
-        "Fissure: 'I'm growing up!'",
-        "Now you're 10 cm closer to the ceiling!"
+        "🎰 Это как получить бонус в понедельник!",
+        "🌱 Фиссура: 'Я расту!'",
+        "🏠 Теперь вы на 10 см ближе к потолку!"
     ],
     5: [
-        "It's like finding 500 rubles in your pocket!",
-        "Average Russian is happy!",
-        "Can measure with an Ikea ruler!"
+        "💰 Это как найти 500 рублей в кармане!",
+        "😄 Среднестатистический русский доволен!",
+        "📐 Можно мерить икеевской линейкой!"
     ],
     3: [
-        "Three centimeters of happiness!",
-        "Like three rubles in wallet - small but nice!",
-        "Slowly but surely!"
+        "🎊 Три сантиметра счастья!",
+        "💵 Как три рубля в кошельке - мелочь, но приятно!",
+        "🐢 Медленно, но верно!"
     ],
     1: [
-        "Small but fierce!",
-        "One cm is better than zero cm!",
-        "Fissure said: 'I'm trying!'"
+        "💪 Маленький, но гордый!",
+        "✅ Один см лучше, чем ноль см!",
+        "🙏 Фиссура сказала: 'Я стараюсь!'",
     ],
     0: [
-        "Stability is a sign of mastery!",
-        "Fissure decided to rest!",
-        "Neither decreased nor increased!"
+        "🛡️ Стабильность - признак мастерства!",
+        "😴 Фиссура решила отдохнуть!",
+        "➡️ Ни уменьшилось, ни увеличилось!"
     ],
     -1: [
-        "Fissure is on a diet!",
-        "One small step back for a big jump forward!",
-        "One centimeter burned... like a match!"
+        "🥗 Фиссура на диете!",
+        "👣 Один маленький шаг назад для большого прыжка вперёд!",
+        "🔥 Один сантиметр сгорел... как спичка!"
     ],
     -3: [
-        "Three centimeters to nowhere!",
-        "Oops! The fissure sneezed!",
-        "Gravity wins this round!"
+        "📉 Три сантиметра в никуда!",
+        "😤 Фиссура чихнула!",
+        "⚖️ Гравитация побеждает в этом раунде!"
     ],
     -5: [
-        "When your fissure goes on strike!",
-        "Minus five - like a bad review!",
-        "Fissure: 'I need a vacation!'"
+        "📺 Когда фиссура объявляет забастовку!",
+        "⭐ Минус пять - как плохой отзыв!",
+        "🏖️ Фиссуре нужен отпуск!"
     ],
     -10: [
-        "TOTAL ANNIHILATION!",
-        "From hero to zero!",
-        "The fissure has left the chat!"
+        "💥 ПОЛНОЕ УНИЧТОЖЕНИЕ!",
+        "🦸 Из героя в ноль!",
+        "👋 Фиссура покинула чат!"
     ]
 }
 
 CATEGORY_PHRASES = {
     "up": [
-        "Growing strong!",
-        "Every cm counts!",
-        "Fissure approves!",
-        "Positive dynamics!",
-        "Keep it up!",
-        "On the rise!"
+        "💪 Растём!",
+        "📏 Каждый см важен!",
+        "✅ Фиссура одобряет!",
+        "📈 Положительная динамика!",
+        "🔥 Так держать!",
+        "⬆️ Вверх и только вверх!"
     ],
     "down": [
-        "A small setback!",
-        "Fissure will recover!",
-        "Tomorrow is a new day!",
-        "Temporary decline!",
-        "Stay strong!",
-        "This is not the end!"
+        "😔 Небольшой откат!",
+        "💪 Фиссура восстановится!",
+        "🌅 Завтра новый день!",
+        "⏳ Временный спад!",
+        "💪 Не сдавайся!",
+        "🎯 Это ещё не конец!"
     ],
     "same": [
-        "Stability is good!",
-        "Holding the line!",
-        "No changes - also a result!",
-        "Steady as she goes!",
-        "Consistency matters!",
-        "Solid foundation!"
+        "🛡 Стабильность - это хорошо!",
+        "💪 Держим позиции!",
+        "➡️ Без изменений - тоже результат!",
+        "⚓ Твёрдо как скала!",
+        "📊 Постоянство важно!",
+        "🏗️ Прочный фундамент!"
     ],
     "bonus_help": [
-        "SYSTEM HELP ACTIVATED!",
-        "Lucky break!",
-        "Bonus achieved!",
-        "Critical support!",
-        "Jackpot mode!",
-        "Bonus multiplier!"
+        "✨ СИСТЕМА ПОМОГЛА!",
+        "🍀 Удачный расклад!",
+        "🎁 БОНУС!",
+        "🛡 КРИТИЧЕСКАЯ ПОДДЕРЖКА!",
+        "💰 ДЖЕКПОТ!",
+        "🚀 МНОЖИТЕЛЬ!"
     ],
     "fatal": [
-        "CRITICAL HIT!",
-        "But you stayed!",
-        "SURVIVED!",
-        "Still in the game!",
-        "Resilience!",
-        "Never give up!"
+        "💥 КРИТИЧЕСКИЙ УРОН!",
+        "🔥 Но ты устоял!",
+        "🦾 ВЫЖИЛ!",
+        "🎮 Ещё в игре!",
+        "💪 Стойкость!",
+        "🏆 Никогда не сдавайся!"
     ]
 }
 
@@ -208,17 +208,17 @@ def calculate_fissure_roll(current_fissure):
             ]
             values, weights = zip(*bonus_options)
             roll = random.choices(values, weights=weights)[0]
-            return roll, "MAXIMUM SYSTEM HELP!", False, True
+            return roll, "✨ МАКСИМАЛЬНАЯ ПОМОЩЬ!", False, True
         
         protected_rolls = [0, 1, 3, 5, 10, 20]
         roll = random.choice(protected_rolls)
-        return roll, "PROTECTED ROLL", False, True
+        return roll, "🛡 ЗАЩИЩЁННЫЙ РОЛЛ", False, True
     
     elif current_fissure < 2:
         if random.random() < 0.4:
             improved_options = [3, 5, 10, 20]
             roll = random.choice(improved_options)
-            return roll, "IMPROVED ROLL!", False, True
+            return roll, "🚀 УЛУЧШЕННЫЙ РОЛЛ!", False, True
         
         weighted_rolls = [
             (-3, 5), (-1, 10), (0, 15), (1, 20), (3, 20), (5, 15), (10, 10), (20, 5)
@@ -230,7 +230,7 @@ def calculate_fissure_roll(current_fissure):
     elif current_fissure < 20:
         if random.random() < 0.2:
             bonus = random.choice([5, 10, 20])
-            return bonus, "LUCKY ROLL!", False, False
+            return bonus, "🍀 УДАЧНЫЙ РОЛЛ!", False, False
         
         weighted_rolls = [
             (-3, 10), (-1, 15), (0, 20), (1, 20), (3, 15), (5, 10), (10, 7), (20, 3)
@@ -251,7 +251,7 @@ def apply_fissure_protection(current_fissure, roll, is_fatal):
     """Applies protection for small fissures on fatal rolls"""
     if is_fatal and current_fissure < 5:
         reduced_roll = max(-5, roll)
-        protection_msg = f"DAMAGE REDUCED! Was {roll}, now {reduced_roll}"
+        protection_msg = f"🛡 УРОН СНИЖЕН! Было {roll}, теперь {reduced_roll}"
         return reduced_roll, protection_msg
     
     return roll, ""
@@ -271,7 +271,7 @@ def main_menu():
 def format_time(seconds):
     h = seconds // 3600
     m = (seconds % 3600) // 60
-    return f"{int(h)}h {int(m)}m"
+    return f"{int(h)}ч {int(m)}м"
 
 async def delete_previous_message(bot, chat_id, last_message_id):
     """Deletes previous bot message"""
@@ -333,7 +333,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if now - user["last_fissure"] < COOLDOWN:
             wait = COOLDOWN - (now - user["last_fissure"])
-            text = f"Fissure is still recovering. Wait: {format_time(wait)}"
+            text = f"⏳ Фиссура восстанавливается. Подожди: {format_time(wait)}"
             message_id = await send_or_update_message(
                 context.bot,
                 update.message.chat_id,
@@ -357,7 +357,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if roll_key in ROLL_TEXTS:
             result_text = random.choice(ROLL_TEXTS[roll_key])
         else:
-            result_text = f"{'+' if roll > 0 else ''}{roll} cm"
+            result_text = f"{'+' if roll > 0 else ''}{roll} см"
         
         if is_fatal:
             category = "fatal"
@@ -375,7 +375,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             extra_text = random.choice(CATEGORY_PHRASES[category])
         
-        text = f"{result_text}\n{extra_text}\n\nLength now: {new_fissure:.1f} cm"
+        text = f"{result_text}\n{extra_text}\n\n📏 Длина сейчас: {new_fissure:.1f} см"
         
         if is_fatal and protection_msg:
             text = f"{text}\n\n{protection_msg}"
@@ -414,7 +414,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Error in fissure: {e}")
-        await update.message.reply_text("Error processing request")
+        await update.message.reply_text("❌ Ошибка обработки запроса")
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show stats"""
@@ -434,15 +434,15 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         remaining_cooldown = max(0, COOLDOWN - time_since_last)
         
         if remaining_cooldown > 0:
-            wait_text = f"Recovery: {format_time(remaining_cooldown)}"
+            wait_text = f"Восстановление: {format_time(remaining_cooldown)}"
         else:
-            wait_text = "Ready to increase!"
+            wait_text = "✅ Готов к увеличению!"
         
         text = (
-            f"📊 Your Stats\n\n"
-            f"📏 Current length: {user['fissure']:.1f} cm\n"
-            f"📈 Total growth: {user['total_growth']:.1f} cm\n"
-            f"🔄 Total rolls: {user['total_rolls']}\n"
+            f"📊 Твоя статистика\n\n"
+            f"📏 Текущая длина: {user['fissure']:.1f} см\n"
+            f"📈 Общий рост: {user['total_growth']:.1f} см\n"
+            f"🔄 Всего роллов: {user['total_rolls']}\n"
             f"⏰ {wait_text}"
         )
         
@@ -483,12 +483,12 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         top_users = get_fissure_top(10)
         
         if not top_users:
-            text = "No users yet. Be the first!"
+            text = "😶 Пока нет игроков. Будь первым!"
         else:
-            text = "🏆 Top 10 Fissures\n\n"
+            text = "🏆 Топ 10 Фиссур\n\n"
             for i, user in enumerate(top_users, 1):
                 name = user.get('username', 'Unknown')[:15]
-                text += f"{i}. {name}: {user['fissure']:.1f} cm\n"
+                text += f"{i}. {name}: {user['fissure']:.1f} см\n"
         
         try:
             result_msg = await context.bot.send_message(
@@ -516,7 +516,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Error in top: {e}")
-        await update.message.reply_text("Error getting top")
+        await update.message.reply_text("❌ Ошибка получения топа")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
@@ -532,7 +532,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(uid, username)
         logger.info(f"start user data: {user}")
         
-        text = "Welcome! You can increase your fissure here"
+        text = "👋 Привет! Здесь можно увеличить свою фиссуру"
         message_id = await send_or_update_message(
             context.bot,
             update.message.chat_id,
@@ -550,7 +550,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Error in start: {e}")
-        text = "Error starting bot"
+        text = "❌ Ошибка запуска бота"
         message_id = await send_or_update_message(
             context.bot,
             update.message.chat_id,
@@ -589,7 +589,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await top(update, context)
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}")
-        await update.message.reply_text("Error processing command")
+        await update.message.reply_text("❌ Ошибка обработки команды")
 
     try:
         await context.bot.delete_message(update.message.chat_id, update.message.message_id)
