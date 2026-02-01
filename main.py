@@ -307,13 +307,15 @@ async def delete_previous_message_safe(bot, chat_id, last_message_id):
 async def delete_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Deletes user message"""
     try:
-        logger.info(f"Deleting user message: {update.message.message_id}")
+        msg_id = update.message.message_id
+        logger.info(f"Deleting user message: {msg_id}")
         await context.bot.delete_message(
             chat_id=update.message.chat_id,
-            message_id=update.message.message_id
+            message_id=msg_id
         )
+        logger.info(f"Successfully deleted user message: {msg_id}")
     except Exception as e:
-        logger.debug(f"Could not delete user message: {e}")
+        logger.warning(f"Could not delete user message: {e}")
 
 async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_message_id=None):
     """Sends or updates a message"""
@@ -416,11 +418,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             add_bot_message(result_msg.chat_id, result_msg.message_id)
             # Update last message id
             update_last_message_id(user_obj.id, result_msg.message_id)
-            # Delete user's message
-            try:
-                await delete_user_message(update, context)
-            except Exception as e:
-                logger.error(f"Could not delete user message: {e}")
+            # User message is deleted in menu_handler()
                 
         except Exception as e:
             logger.error(f"Send error: {e}")
@@ -478,10 +476,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             add_bot_message(result_msg.chat_id, result_msg.message_id)
             update_last_message_id(user_obj.id, result_msg.message_id)
-            try:
-                await delete_user_message(update, context)
-            except Exception as e:
-                logger.debug(f"Could not delete user message: {e}")
+            # User message is deleted in menu_handler()
         except Exception as e:
             logger.error(f"Send error: {e}")
             message_id = await send_or_update_message(
@@ -529,10 +524,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             add_bot_message(result_msg.chat_id, result_msg.message_id)
             update_last_message_id(update.effective_user.id, result_msg.message_id)
-            try:
-                await delete_user_message(update, context)
-            except Exception as e:
-                logger.debug(f"Could not delete user message: {e}")
+            # User message is deleted in menu_handler()
         except Exception as e:
             logger.error(f"Send error: {e}")
             user_obj = update.effective_user
@@ -619,18 +611,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await stats(update, context)
         elif text == "🏆 Топ":
             await top(update, context)
-        
-        # Delete user's button press message
-        try:
-            await context.bot.delete_message(update.message.chat_id, update.message.message_id)
-        except Exception as e:
-            logger.debug(f"Could not delete menu button message: {e}")
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}")
         await update.message.reply_text("❌ Ошибка обработки команды")
 
+    # Delete user's button press message LAST (after all operations)
     try:
         await context.bot.delete_message(update.message.chat_id, update.message.message_id)
+    except Exception as e:
+        logger.debug(f"Could not delete menu button message: {e}")
     except Exception as e:
         logger.debug(f"Could not delete message: {e}")
 
