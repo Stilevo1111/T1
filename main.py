@@ -357,7 +357,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
-            text=text
+            text=text,
+            reply_markup=main_menu()
         )
         logger.info(f"Result sent to user {user_obj.id}")
         add_bot_message(result_msg.chat_id, result_msg.message_id)
