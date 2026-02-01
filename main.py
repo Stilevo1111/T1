@@ -26,6 +26,45 @@ else:
 COOLDOWN = 86400  # 24 часа
 
 # =====================
+# ХРАНИЛИЩЕ СООБЩЕНИЙ ДЛЯ АВТООЧИСТКИ
+# =====================
+
+# Хранит: {chat_id: {message_id: timestamp}}
+bot_messages = {}
+AUTO_DELETE_TIME = 30  # Удалять сообщения старше 30 секунд
+
+def add_bot_message(chat_id: int, message_id: int):
+    """Добавляет сообщение бота в хранилище для автоочистки"
+    if chat_id not in bot_messages:
+        bot_messages[chat_id] = {}
+    bot_messages[chat_id][message_id] = time.time()
+    logger.debug(f"Добавлено сообщение {message_id} для чата {chat_id}")
+
+async def cleanup_old_messages(bot):
+    """Удаляет сообщения бота старше 30 секунд"""
+    now = time.time()
+    for chat_id in list(bot_messages.keys()):
+        messages_to_delete = []
+        for msg_id, timestamp in bot_messages[chat_id].items():
+            if now - timestamp > AUTO_DELETE_TIME:
+                messages_to_delete.append(msg_id)
+        
+        for msg_id in messages_to_delete:
+            try:
+                await bot.delete_message(chat_id, msg_id)
+                del bot_messages[chat_id][msg_id]
+                logger.debug(f"Автоудалено сообщение {msg_id} из чата {chat_id}")
+            except Exception as e:
+                logger.debug(f"Не удалось удалить сообщение {msg_id}: {e}")
+                # Удаляем из хранища даже если не удалилось в Telegram
+                if msg_id in bot_messages[chat_id]:
+                    del bot_messages[chat_id][msg_id]
+        
+        # Если в чате нет сообщений, удаляем ключ
+        if not bot_messages[chat_id]:
+            del bot_messages[chat_id]
+
+# =====================
 # НОВАЯ СИСТЕМА РОЛЛОВ
 # =====================
 
@@ -337,18 +376,6 @@ def schedule_auto_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, del
         name=f"auto_delete_{update.message.chat_id}_{update.message.message_id}"
     )
 
-def schedule_auto_delete_for_bot(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int = 30):
-    """Планирует автоудаление сообщения бота"""
-    context.job_queue.run_once(
-        auto_delete_message,
-        delay,
-        data={
-            'chat_id': chat_id,
-            'message_id': message_id
-        },
-        name=f"auto_delete_bot_{chat_id}_{message_id}"
-    )
-
 async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_message_id=0):
     """Отправляет новое сообщение или обновляет существующее"""
     try:
@@ -368,6 +395,9 @@ async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_mes
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /fissure"""
     logger.info(f"Пользователь {update.effective_user.id} вызвал fissure")
+    
+    # Очищаем старые сообщения бота
+    await cleanup_old_messages(context.bot)
     
     uid = update.effective_user.id
     user_obj = update.effective_user
@@ -451,8 +481,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             logger.info(f"Результат отправлен как reply пользователю {uid}")
             
-            # Планируем автоудаление нашего сообщения через 30 секунд
-            schedule_auto_delete_for_bot(context, result_msg.chat_id, result_msg.message_id)
+            # Добавляем сообщение в хранилище для автоочистки
+            add_bot_message(result_msg.chat_id, result_msg.message_id)
                 
         except Exception as e:
             logger.error(f"Ошибка отправки: {e}")
@@ -466,10 +496,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             update_last_message_id(uid, message_id)
             
-            # Удаляем сообщение пользователя + планируем автоудаление нашего
+            # Удаляем сообщение пользователя + добавляем наше в хранилище
             try:
                 await delete_user_message(update, context)
-                schedule_auto_delete_for_bot(context, update.message.chat_id, message_id)
+                add_bot_message(update.message.chat_id, message_id)
             except Exception as e:
                 logger.error(f"Ошибка при удалении: {e}")
         
@@ -480,6 +510,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать статистику"""
     logger.info(f"Пользователь {update.effective_user.id} вызвал stats")
+    
+    # Очищаем старые сообщения бота
+    await cleanup_old_messages(context.bot)
     
     try:
         uid = update.effective_user.id
@@ -498,10 +531,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         update_last_message_id(uid, message_id)
         
-        # Удаляем сообщение пользователя + планируем автоудаление нашего
+        # Удаляем сообщение пользователя + добавляем наше в хранилище
         try:
             await delete_user_message(update, context)
-            schedule_auto_delete_for_bot(context, update.message.chat_id, message_id)
+            add_bot_message(update.message.chat_id, message_id)
         except Exception as e:
             logger.error(f"Ошибка при удалении: {e}")
         
@@ -521,6 +554,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать топ"""
     logger.info(f"Пользователь {update.effective_user.id} вызвал top")
+    
+    # Очищаем старые сообщения бота
+    await cleanup_old_messages(context.bot)
     
     try:
         uid = update.effective_user.id
@@ -558,10 +594,10 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         update_last_message_id(uid, message_id)
         
-        # Удаляем сообщение пользователя + планируем автоудаление нашего
+        # Удаляем сообщение пользователя + добавляем наше в хранилище
         try:
             await delete_user_message(update, context)
-            schedule_auto_delete_for_bot(context, update.message.chat_id, message_id)
+            add_bot_message(update.message.chat_id, message_id)
         except Exception as e:
             logger.error(f"Ошибка при удалении: {e}")
         
@@ -582,6 +618,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     logger.info(f"Новый пользователь {update.effective_user.id}")
     
+    # Очищаем старые сообщения бота
+    await cleanup_old_messages(context.bot)
+    
     try:
         uid = update.effective_user.id
         user_obj = update.effective_user
@@ -599,10 +638,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         update_last_message_id(uid, message_id)
         
-        # Удаляем сообщение пользователя + планируем автоудаление нашего
+        # Удаляем сообщение пользователя + добавляем наше в хранилище
         try:
             await delete_user_message(update, context)
-            schedule_auto_delete_for_bot(context, update.message.chat_id, message_id)
+            add_bot_message(update.message.chat_id, message_id)
         except Exception as e:
             logger.error(f"Ошибка при удалении: {e}")
         
@@ -622,6 +661,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик кнопок меню"""
     text = update.message.text
+    
+    # Очищаем старые сообщения бота
+    await cleanup_old_messages(context.bot)
     
     # Проверяем что это кнопка меню (а не обычный текст)
     menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
