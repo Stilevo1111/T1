@@ -198,7 +198,7 @@ async def delete_all_chat_messages(bot, chat_id):
         bot_messages[chat_id] = {}
 
 async def cleanup_old_messages(bot, max_age=30):
-    """Delete user messages older than max_age seconds"""
+    """Delete user and bot messages older than max_age seconds"""
     async with bot_messages_lock:
         now = time.time()
         
@@ -216,6 +216,21 @@ async def cleanup_old_messages(bot, max_age=30):
                     except Exception as e:
                         logger.debug(f"Could not auto-delete user message {msg_id}: {e}")
                         del user_messages[chat_id][msg_id]
+        
+        # Delete old bot messages (menu, stats, etc.)
+        for chat_id in list(bot_messages.keys()):
+            if not bot_messages[chat_id]:
+                continue
+            
+            for msg_id, timestamp in list(bot_messages[chat_id].items()):
+                if now - timestamp > max_age:
+                    try:
+                        await bot.delete_message(chat_id, msg_id)
+                        logger.info(f"Auto-deleted old bot message: {msg_id}")
+                        del bot_messages[chat_id][msg_id]
+                    except Exception as e:
+                        logger.debug(f"Could not auto-delete bot message {msg_id}: {e}")
+                        del bot_messages[chat_id][msg_id]
 
 def calculate_fissure_roll(current_fissure):
     """
@@ -320,11 +335,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_msg_id = update.message.message_id
     now = time.time()
     
-    # Delete user's command message
+    # Delete user's command message (delayed 30 sec)
     await delete_user_message(context.bot, chat_id, user_msg_id)
-    
-    # Delete all previous bot messages
-    await delete_all_chat_messages(context.bot, chat_id)
     
     try:
         user = get_user(user_obj.id, username)
@@ -398,11 +410,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     user_msg_id = update.message.message_id
     
-    # Delete user's command message
+    # Delete user's command message (delayed 30 sec)
     await delete_user_message(context.bot, chat_id, user_msg_id)
-    
-    # Delete all previous bot messages
-    await delete_all_chat_messages(context.bot, chat_id)
     
     try:
         user_obj = update.effective_user
@@ -440,11 +449,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     user_msg_id = update.message.message_id
     
-    # Delete user's command message
+    # Delete user's command message (delayed 30 sec)
     await delete_user_message(context.bot, chat_id, user_msg_id)
-    
-    # Delete all previous bot messages
-    await delete_all_chat_messages(context.bot, chat_id)
     
     try:
         top_users = get_fissure_top(10)
