@@ -280,7 +280,7 @@ def main_menu():
         [KeyboardButton("📈 Увеличить фиссуру")],
         [KeyboardButton("📏 Моя длина"), KeyboardButton("🏆 Топ")],
     ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=False, one_time_keyboard=False)
 
 def format_time(seconds):
     h = seconds // 3600
