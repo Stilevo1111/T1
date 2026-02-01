@@ -282,6 +282,25 @@ async def delete_previous_message(bot, chat_id, last_message_id):
     except Exception as e:
         logger.debug(f"Could not delete previous message: {e}")
 
+
+async def delete_previous_message_safe(bot, chat_id, last_message_id):
+    """Safely deletes previous bot message with retry logic"""
+    if not last_message_id or last_message_id <= 0:
+        return
+    
+    # Small delay to ensure message is fully processed
+    await asyncio.sleep(0.1)
+    
+    for attempt in range(2):
+        try:
+            await bot.delete_message(chat_id, last_message_id)
+            logger.info(f"Deleted previous message: {last_message_id}")
+            return
+        except Exception as e:
+            logger.debug(f"Delete attempt {attempt + 1} failed: {e}")
+            if attempt == 0:
+                await asyncio.sleep(0.2)
+
 async def delete_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Deletes user message"""
     try:
@@ -381,6 +400,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = f"{text}\n\n{protection_msg}"
         
         try:
+            # Delete previous bot message FIRST (before sending new one)
+            await delete_previous_message_safe(context.bot, update.message.chat_id, user.get("last_message_id", 0))
+            
             # Send as NEW message with keyboard (Telegram doesn't show keyboard with reply)
             result_msg = await context.bot.send_message(
                 chat_id=update.message.chat_id,
@@ -389,8 +411,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             logger.info(f"Result sent to user {user_obj.id}")
             add_bot_message(result_msg.chat_id, result_msg.message_id)
-            # Delete previous bot message if exists
-            await delete_previous_message(context.bot, update.message.chat_id, user.get("last_message_id", 0))
             # Update last message id
             update_last_message_id(user_obj.id, result_msg.message_id)
             # Delete user's message
@@ -445,14 +465,15 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = f"📏 Длина: {user['fissure']:.1f} см"
         
         try:
+            # Delete previous bot message FIRST
+            await delete_previous_message_safe(context.bot, update.message.chat_id, user.get("last_message_id", 0))
+            
             result_msg = await context.bot.send_message(
                 chat_id=update.message.chat_id,
                 text=text,
                 reply_markup=main_menu()
             )
             add_bot_message(result_msg.chat_id, result_msg.message_id)
-            # Delete previous bot message
-            await delete_previous_message(context.bot, update.message.chat_id, user.get("last_message_id", 0))
             update_last_message_id(user_obj.id, result_msg.message_id)
             try:
                 await delete_user_message(update, context)
@@ -492,15 +513,18 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += f"{i}. {name}: {user['fissure']:.1f} см\n"
         
         try:
+            # Get user data for last_message_id BEFORE deleting
+            user_for_delete = get_user(update.effective_user.id, update.effective_user.username or update.effective_user.first_name)
+            
+            # Delete previous bot message FIRST
+            await delete_previous_message_safe(context.bot, update.message.chat_id, user_for_delete.get("last_message_id", 0))
+            
             result_msg = await context.bot.send_message(
                 chat_id=update.message.chat_id,
                 text=text,
                 reply_markup=main_menu()
             )
             add_bot_message(result_msg.chat_id, result_msg.message_id)
-            # Delete previous bot message
-            user = get_user(update.effective_user.id, update.effective_user.username or update.effective_user.first_name)
-            await delete_previous_message(context.bot, update.message.chat_id, user.get("last_message_id", 0))
             update_last_message_id(update.effective_user.id, result_msg.message_id)
             try:
                 await delete_user_message(update, context)
