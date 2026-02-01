@@ -405,16 +405,19 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = f"{text}\n\n{protection_msg}"
         
         try:
+            # Send as NEW message with keyboard (Telegram doesn't show keyboard with reply)
             result_msg = await context.bot.send_message(
                 chat_id=update.message.chat_id,
                 text=text,
-                reply_markup=main_menu(),
-                reply_to_message_id=update.message.message_id
+                reply_markup=main_menu()
             )
-            logger.info(f"Result sent as reply to user {uid}")
-            
-            # Add message to storage for auto-cleanup
+            logger.info(f"Result sent to user {uid}")
             add_bot_message(result_msg.chat_id, result_msg.message_id)
+            # Delete user's message
+            try:
+                await delete_user_message(update, context)
+            except Exception as e:
+                logger.error(f"Could not delete user message: {e}")
                 
         except Exception as e:
             logger.error(f"Send error: {e}")
