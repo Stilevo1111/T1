@@ -77,12 +77,20 @@ def init_db():
                     username VARCHAR(255),
                     fissure REAL DEFAULT 0.1,
                     last_fissure DOUBLE PRECISION DEFAULT 0,
-                    last_message_id INTEGER DEFAULT 0
+                    last_message_id INTEGER DEFAULT 0,
+                    total_growth REAL DEFAULT 0,
+                    total_rolls INTEGER DEFAULT 0
                 )
             """)
-            # Добавляем колонку если не существует
+            # Добавляем колонки если не существуют
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_message_id INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS total_growth REAL DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS total_rolls INTEGER DEFAULT 0
             """)
         else:
             # Для SQLite создаём таблицу
@@ -93,14 +101,20 @@ def init_db():
                     username TEXT,
                     fissure REAL DEFAULT 0.1,
                     last_fissure REAL DEFAULT 0,
-                    last_message_id INTEGER DEFAULT 0
+                    last_message_id INTEGER DEFAULT 0,
+                    total_growth REAL DEFAULT 0,
+                    total_rolls INTEGER DEFAULT 0
                 )
             """)
-            # Для SQLite проверяем есть ли колонка и добавляем если нет
+            # Для SQLite проверяем есть ли колонки и добавляем если нет
             cursor.execute("PRAGMA table_info(users)")
             columns = [col[1] for col in cursor.fetchall()]
             if 'last_message_id' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN last_message_id INTEGER DEFAULT 0")
+            if 'total_growth' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN total_growth REAL DEFAULT 0")
+            if 'total_rolls' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN total_rolls INTEGER DEFAULT 0")
         
         conn.commit()
         conn.close()
@@ -152,21 +166,23 @@ class Database:
         
         if "postgres" in scheme:
             cur.execute('''
-                INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (telegram_id) 
                 DO UPDATE SET 
                     username = EXCLUDED.username,
                     fissure = EXCLUDED.fissure,
                     last_fissure = EXCLUDED.last_fissure,
-                    last_message_id = EXCLUDED.last_message_id
+                    last_message_id = EXCLUDED.last_message_id,
+                    total_growth = EXCLUDED.total_growth,
+                    total_rolls = EXCLUDED.total_rolls
                 RETURNING id
-            ''', (user_id, username, 0.1, 0, 0))
+            ''', (user_id, username, 0.1, 0, 0, 0, 0))
         else:
             cur.execute('''
-                INSERT OR REPLACE INTO users (telegram_id, username, fissure, last_fissure, last_message_id)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, username, 0.1, 0, 0))
+                INSERT OR REPLACE INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, username, 0.1, 0, 0, 0, 0))
         
         conn.commit()
         if DATABASE_URL.startswith("postgresql://"):
@@ -196,12 +212,14 @@ class Database:
                         "username": user["username"],
                         "fissure": user["fissure"],
                         "last_fissure": user["last_fissure"],
-                        "last_message_id": user["last_message_id"]
+                        "last_message_id": user["last_message_id"],
+                        "total_growth": user.get("total_growth", 0),
+                        "total_rolls": user.get("total_rolls", 0)
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
                     cursor.close()
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0}
             else:
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
@@ -213,17 +231,19 @@ class Database:
                         "username": user[2],
                         "fissure": user[3],
                         "last_fissure": user[4],
-                        "last_message_id": user[5] if len(user) > 5 else 0
+                        "last_message_id": user[5] if len(user) > 5 else 0,
+                        "total_growth": user[6] if len(user) > 6 else 0,
+                        "total_rolls": user[7] if len(user) > 7 else 0
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
                     cursor.close()
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0}
         except Exception as e:
             print(f"❌ Ошибка get_user: {e}")
-            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0}
+            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0}
     
-    def update_fissure(self, telegram_id, fissure, last_fissure):
+    def update_fissure(self, telegram_id, fissure, last_fissure, growth=0):
         """Обновление данных пользователя"""
         try:
             conn = self.connect()
@@ -234,13 +254,19 @@ class Database:
             if "postgres" in scheme:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    UPDATE users SET fissure=%s, last_fissure=%s WHERE telegram_id=%s
-                """, (fissure, last_fissure, telegram_id))
+                    UPDATE users SET fissure=%s, last_fissure=%s, 
+                    total_growth = total_growth + %s,
+                    total_rolls = total_rolls + 1
+                    WHERE telegram_id=%s
+                """, (fissure, last_fissure, growth, telegram_id))
             else:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    UPDATE users SET fissure=?, last_fissure=? WHERE telegram_id=?
-                """, (fissure, last_fissure, telegram_id))
+                    UPDATE users SET fissure=?, last_fissure=?, 
+                    total_growth = total_growth + ?,
+                    total_rolls = total_rolls + 1
+                    WHERE telegram_id=?
+                """, (fissure, last_fissure, growth, telegram_id))
             conn.commit()
             cursor.close()
         except Exception as e:
@@ -302,10 +328,10 @@ def get_user(telegram_id, username=None):
     db = Database()
     return db.get_user(telegram_id, username)
 
-def update_fissure(telegram_id, fissure, last_fissure):
+def update_fissure(telegram_id, fissure, last_fissure, growth=0):
     """Функция для совместимости - использует новый класс Database"""
     db = Database()
-    db.update_fissure(telegram_id, fissure, last_fissure)
+    db.update_fissure(telegram_id, fissure, last_fissure, growth)
 
 def get_fissure_top(limit=10):
     """Функция для совместимости - использует новый класс Database"""

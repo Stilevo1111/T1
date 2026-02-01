@@ -347,7 +347,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
         roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
         new_fissure = calculate_new_fissure(user["fissure"], roll)
-        update_fissure(user_obj.id, new_fissure, now)
+        update_fissure(user_obj.id, new_fissure, now, roll)
         
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
 
