@@ -453,7 +453,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
-            text=text
+            text=text,
+            reply_markup=main_menu()
         )
         add_bot_message(result_msg.chat_id, result_msg.message_id)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
@@ -516,10 +517,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # STEP 1: Save user message ID to delete it later
     user_message_id_to_delete = update.message.message_id
     
-    # STEP 2: Delete ALL previous bot messages for this chat
-    await delete_all_chat_messages(context.bot, chat_id)
-    
-    # STEP 3: Delete user's button press message (works if bot is admin with delete rights)
+    # STEP 2: Delete user's button press message (works if bot is admin with delete rights)
     try:
         await context.bot.delete_message(chat_id, user_message_id_to_delete)
         logger.info(f"Deleted user message: {user_message_id_to_delete}")
