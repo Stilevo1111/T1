@@ -625,11 +625,7 @@ async def health_check(request):
 async def wake_up_callback(context: ContextTypes.DEFAULT_TYPE):
     """Периодический wake-up для предотвращения сна"""
     logger.info("🛠️ Wake-up: бот активен")
-    try:
-        # Пингуем себя через health endpoint
-        await context.bot.send_message(chat_id=int(os.getenv("ADMIN_ID", 0)), text="🛠️ Бот проснулся и работает!")
-    except Exception as e:
-        logger.debug(f"Wake-up ping не отправлен: {e}")
+    # Бот просто логирует активность, не отправляя сообщение
 
 def setup_wake_up(job_queue: JobQueue):
     """Настраивает периодический wake-up каждые 14 минут"""
