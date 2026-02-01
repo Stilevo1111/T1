@@ -275,8 +275,8 @@ def calculate_new_fissure(current_fissure, roll):
 
 def main_menu():
     keyboard = [
-        [KeyboardButton("📈 Увеличить фиссуру")],
-        [KeyboardButton("📏 Моя длина"), KeyboardButton("🏆 Топ")],
+        [KeyboardButton("INCREASE")],
+        [KeyboardButton("MY LENGTH"), KeyboardButton("TOP")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -592,7 +592,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler"""
     text = update.message.text
     
-    menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
+    menu_buttons = ["INCREASE", "MY LENGTH", "TOP"]
     
     if text not in menu_buttons:
         return
@@ -608,11 +608,11 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = user_obj.username or user_obj.first_name
         get_user(uid, username)
 
-        if text == "📈 Увеличить фиссуру":
+        if text == "INCREASE":
             await fissure(update, context)
-        elif text == "📏 Моя длина":
+        elif text == "MY LENGTH":
             await stats(update, context)
-        elif text == "🏆 Топ":
+        elif text == "TOP":
             await top(update, context)
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}")
