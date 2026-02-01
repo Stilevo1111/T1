@@ -13,7 +13,7 @@ from aiohttp import web
 # Logging setup
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.DEBUG
 )
 logger = logging.getLogger(__name__)
 
@@ -346,6 +346,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user.get("last_message_id", 0)
             )
             update_last_message_id(user_obj.id, message_id)
+            add_bot_message(update.message.chat_id, message_id)
             return
 
         roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
@@ -547,7 +548,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
     
+    logger.debug(f"menu_handler received: '{text}', buttons: {menu_buttons}")
+    
     if text not in menu_buttons:
+        logger.debug(f"Text '{text}' not in menu_buttons, ignoring")
         return
     
     chat_id = update.message.chat_id
