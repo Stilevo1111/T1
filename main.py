@@ -320,6 +320,18 @@ def schedule_auto_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, del
         name=f"auto_delete_{update.message.chat_id}_{update.message.message_id}"
     )
 
+def schedule_auto_delete_for_bot(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int = 30):
+    """Планирует автоудаление сообщения бота"""
+    context.job_queue.run_once(
+        auto_delete_message,
+        delay,
+        data={
+            'chat_id': chat_id,
+            'message_id': message_id
+        },
+        name=f"auto_delete_bot_{chat_id}_{message_id}"
+    )
+
 async def send_or_update_message(bot, chat_id, text, reply_markup=None, last_message_id=0):
     """Отправляет новое сообщение или обновляет существующее"""
     try:
@@ -409,15 +421,22 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if is_fatal and protection_msg:
             text = f"{text}\n\n{protection_msg}"
         
+        # Проверяем, нужно ли удалять сообщение пользователя
+        # (всегда удаляем при fallback, при reply - не удаляем чтобы связь не прервалась)
+        
         # Отправляем сообщение в чат с reply на сообщение пользователя
         try:
-            await context.bot.send_message(
+            result_msg = await context.bot.send_message(
                 chat_id=update.message.chat_id,
                 text=text,
                 reply_markup=main_menu(),
                 reply_to_message_id=update.message.message_id
             )
             logger.info(f"Результат отправлен как reply пользователю {uid}")
+            
+            # Планируем автоудаление нашего сообщения через 30 секунд
+            schedule_auto_delete_for_bot(context, result_msg.chat_id, result_msg.message_id)
+                
         except Exception as e:
             logger.error(f"Ошибка отправки: {e}")
             # Fallback - просто отправляем в чат
@@ -429,13 +448,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user.get("last_message_id", 0)
             )
             update_last_message_id(uid, message_id)
-        
-        # Удаляем сообщение пользователя в чате
-        try:
-            await delete_user_message(update, context)
-            schedule_auto_delete(update, context)
-        except Exception as e:
-            logger.error(f"Ошибка при удалении: {e}")
+            
+            # Удаляем сообщение пользователя + планируем автоудаление нашего
+            try:
+                await delete_user_message(update, context)
+                schedule_auto_delete_for_bot(context, update.message.chat_id, message_id)
+            except Exception as e:
+                logger.error(f"Ошибка при удалении: {e}")
         
     except Exception as e:
         logger.error(f"Ошибка в fissure: {e}")
@@ -462,10 +481,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         update_last_message_id(uid, message_id)
         
-        # Сразу удаляем + fallback через 30 сек
+        # Удаляем сообщение пользователя + планируем автоудаление нашего
         try:
             await delete_user_message(update, context)
-            schedule_auto_delete(update, context)
+            schedule_auto_delete_for_bot(context, update.message.chat_id, message_id)
         except Exception as e:
             logger.error(f"Ошибка при удалении: {e}")
         
@@ -522,10 +541,10 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         update_last_message_id(uid, message_id)
         
-        # Сразу удаляем + fallback через 30 сек
+        # Удаляем сообщение пользователя + планируем автоудаление нашего
         try:
             await delete_user_message(update, context)
-            schedule_auto_delete(update, context)
+            schedule_auto_delete_for_bot(context, update.message.chat_id, message_id)
         except Exception as e:
             logger.error(f"Ошибка при удалении: {e}")
         
@@ -563,10 +582,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         update_last_message_id(uid, message_id)
         
-        # Сразу удаляем + fallback через 30 сек
+        # Удаляем сообщение пользователя + планируем автоудаление нашего
         try:
             await delete_user_message(update, context)
-            schedule_auto_delete(update, context)
+            schedule_auto_delete_for_bot(context, update.message.chat_id, message_id)
         except Exception as e:
             logger.error(f"Ошибка при удалении: {e}")
         
