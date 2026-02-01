@@ -170,40 +170,49 @@ WELCOME_PHRASES = [
     "{name} is ready to grow!"
 ]
 
-bot_messages = {}  # {chat_id: [message_id, message_id, ...]}
+bot_messages = {}  # {chat_id: {message_id: timestamp}}
+bot_messages_lock = asyncio.Lock()  # Защита от конфликтов при одновременном доступе
 
 def add_bot_message(chat_id: int, message_id: int):
     if chat_id not in bot_messages:
-        bot_messages[chat_id] = []
-    bot_messages[chat_id].append(message_id)
+        bot_messages[chat_id] = {}
+    bot_messages[chat_id][message_id] = time.time()
 
 async def delete_all_chat_messages(bot, chat_id):
     """Delete ALL bot messages for a chat, keeping only 1 new message"""
-    if chat_id not in bot_messages:
-        return
-    
-    msg_ids = bot_messages[chat_id].copy()
-    for msg_id in msg_ids:
-        try:
-            await bot.delete_message(chat_id, msg_id)
-            logger.info(f"Deleted old message: {msg_id}")
-        except Exception as e:
-            logger.debug(f"Could not delete message {msg_id}: {e}")
-    
-    # Clear the list after deleting all
-    bot_messages[chat_id] = []
-
-async def cleanup_old_messages(bot):
-    """Delete messages older than AUTO_DELETE_TIME"""
-    now = time.time()
-    for chat_id in list(bot_messages.keys()):
-        for msg_id in list(bot_messages[chat_id]):
+    async with bot_messages_lock:
+        if chat_id not in bot_messages:
+            return
+        
+        msg_ids = list(bot_messages[chat_id].keys())
+        for msg_id in msg_ids:
             try:
-                msg_time = bot_messages[chat_id].index(msg_id) / now  # approximate
-            except:
-                pass
-        # Keep only recent messages
-        bot_messages[chat_id] = []
+                await bot.delete_message(chat_id, msg_id)
+                logger.info(f"Deleted old message: {msg_id}")
+            except Exception as e:
+                logger.debug(f"Could not delete message {msg_id}: {e}")
+        
+        # Clear all messages
+        bot_messages[chat_id] = {}
+
+async def cleanup_old_messages(bot, max_age=30):
+    """Delete messages older than max_age seconds"""
+    async with bot_messages_lock:
+        now = time.time()
+        for chat_id in list(bot_messages.keys()):
+            if not bot_messages[chat_id]:
+                continue
+            
+            for msg_id, timestamp in list(bot_messages[chat_id].items()):
+                if now - timestamp > max_age:
+                    try:
+                        await bot.delete_message(chat_id, msg_id)
+                        logger.info(f"Auto-deleted old message: {msg_id}")
+                        del bot_messages[chat_id][msg_id]
+                    except Exception as e:
+                        logger.debug(f"Could not auto-delete message {msg_id}: {e}")
+                        # Remove from tracking anyway
+                        del bot_messages[chat_id][msg_id]
 
 def calculate_fissure_roll(current_fissure):
     """
@@ -389,8 +398,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Send new message (previous messages are deleted in menu_handler)
             result_msg = await context.bot.send_message(
                 chat_id=update.message.chat_id,
-                text=text,
-                reply_markup=main_menu()
+                text=text
             )
             logger.info(f"Result sent to user {user_obj.id}")
             add_bot_message(result_msg.chat_id, result_msg.message_id)
@@ -441,8 +449,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Send new message (previous messages are deleted in menu_handler)
             result_msg = await context.bot.send_message(
                 chat_id=update.message.chat_id,
-                text=text,
-                reply_markup=main_menu()
+                text=text
             )
             add_bot_message(result_msg.chat_id, result_msg.message_id)
             update_last_message_id(user_obj.id, result_msg.message_id)
@@ -452,7 +459,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.bot,
                 update.message.chat_id,
                 text,
-                main_menu(),
+                None,
                 user.get("last_message_id", 0)
             )
             update_last_message_id(user_obj.id, message_id)
@@ -481,8 +488,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Send new message (previous messages are deleted in menu_handler)
             result_msg = await context.bot.send_message(
                 chat_id=update.message.chat_id,
-                text=text,
-                reply_markup=main_menu()
+                text=text
             )
             add_bot_message(result_msg.chat_id, result_msg.message_id)
             update_last_message_id(update.effective_user.id, result_msg.message_id)
@@ -495,7 +501,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.bot,
                 update.message.chat_id,
                 text,
-                main_menu(),
+                None,
                 user.get("last_message_id", 0)
             )
             update_last_message_id(user_obj.id, message_id)
@@ -560,7 +566,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # STEP 1: Delete ALL previous bot messages for this chat
     await delete_all_chat_messages(context.bot, chat_id)
     
-    # STEP 2: Call the appropriate function
+    # STEP 2: Send menu keyboard (only once, not with every message)
+    try:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Выберите действие:",
+            reply_markup=main_menu()
+        )
+    except Exception as e:
+        logger.debug(f"Could not send menu: {e}")
+    
+    # STEP 3: Call the appropriate function
     try:
         uid = update.effective_user.id
         user_obj = update.effective_user
@@ -608,11 +624,11 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"Error in welcome_new_member: {e}")
 
 async def wake_up_callback(context: ContextTypes.DEFAULT_TYPE):
-    """Periodic wake-up to prevent sleeping and cleanup old messages"""
+    """Periodic wake-up to prevent sleeping and cleanup old messages (30 sec)"""
     logger.info("Wake-up: bot is active, running cleanup...")
     try:
-        await cleanup_old_messages(context.bot)
-        logger.info("Cleanup completed")
+        await cleanup_old_messages(context.bot, max_age=30)
+        logger.info("Cleanup completed (30s)")
     except Exception as e:
         logger.error(f"Cleanup error: {e}")
 
