@@ -543,7 +543,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler - deletes all previous messages, keeps only 1 new"""
-    text = update.message.text
+    text = update.message.text.strip()
     
     menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
     
@@ -637,7 +637,7 @@ async def main():
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
         app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.Regex(r'^(📈 Увеличить фиссуру|📏 Моя длина|🏆 Топ)$'), menu_handler))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
         webhook_url = os.getenv("WEBHOOK_URL")
@@ -706,7 +706,7 @@ async def main_polling():
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
         app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.Regex(r'^(📈 Увеличить фиссуру|📏 Моя длина|🏆 Топ)$'), menu_handler))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
         logger.info("Telegram bot started in polling mode")
@@ -722,3 +722,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     else:
         asyncio.run(main_polling())
+
