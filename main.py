@@ -404,7 +404,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             extra_text = random.choice(CATEGORY_PHRASES[category])
         
         # Формируем сообщение
-        text = f"{result_text}\n{extra_text}"
+        text = f"{result_text}\n{extra_text}\n\n📏 Теперь длина: {new_fissure:.1f} см"
         
         if is_fatal and protection_msg:
             text = f"{text}\n\n{protection_msg}"
