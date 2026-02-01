@@ -278,6 +278,15 @@ def apply_fissure_protection(current_fissure, roll, is_fatal):
     
     return roll, ""
 
+
+async def delete_user_message(bot, chat_id, message_id):
+    """Delete user's command message (requires bot to be admin with delete rights)"""
+    try:
+        await bot.delete_message(chat_id, message_id)
+        logger.info(f"Deleted user command message: {message_id}")
+    except Exception as e:
+        logger.warning(f"Could not delete user message {message_id}: {e}")
+
 def calculate_new_fissure(current_fissure, roll):
     """Calculates new fissure size with minimum 0.1"""
     new_value = current_fissure + roll
@@ -301,7 +310,15 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
+    chat_id = update.message.chat_id
+    user_msg_id = update.message.message_id
     now = time.time()
+    
+    # Delete user's command message
+    await delete_user_message(context.bot, chat_id, user_msg_id)
+    
+    # Delete all previous bot messages
+    await delete_all_chat_messages(context.bot, chat_id)
     
     try:
         user = get_user(user_obj.id, username)
@@ -372,6 +389,15 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show stats"""
     logger.info(f"User {update.effective_user.id} called stats")
     
+    chat_id = update.message.chat_id
+    user_msg_id = update.message.message_id
+    
+    # Delete user's command message
+    await delete_user_message(context.bot, chat_id, user_msg_id)
+    
+    # Delete all previous bot messages
+    await delete_all_chat_messages(context.bot, chat_id)
+    
     try:
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
@@ -404,6 +430,15 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show top users"""
     logger.info(f"User {update.effective_user.id} called top")
+    
+    chat_id = update.message.chat_id
+    user_msg_id = update.message.message_id
+    
+    # Delete user's command message
+    await delete_user_message(context.bot, chat_id, user_msg_id)
+    
+    # Delete all previous bot messages
+    await delete_all_chat_messages(context.bot, chat_id)
     
     try:
         top_users = get_fissure_top(10)
