@@ -470,7 +470,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Error in stats: {e}")
-        await update.message.reply_text("Error getting stats")
+        await update.message.reply_text("❌ Ошибка получения статистики")
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show top users"""
