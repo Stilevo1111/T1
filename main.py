@@ -173,6 +173,8 @@ WELCOME_PHRASES = [
 bot_messages = {}  # {chat_id: {message_id: timestamp}}
 bot_messages_lock = asyncio.Lock()  # Защита от конфликтов при одновременном доступе
 
+user_messages = {}  # {chat_id: {message_id: timestamp}} - для отложенного удаления сообщений пользователя
+
 def add_bot_message(chat_id: int, message_id: int):
     if chat_id not in bot_messages:
         bot_messages[chat_id] = {}
@@ -196,22 +198,24 @@ async def delete_all_chat_messages(bot, chat_id):
         bot_messages[chat_id] = {}
 
 async def cleanup_old_messages(bot, max_age=30):
-    """Delete messages older than max_age seconds"""
+    """Delete user messages older than max_age seconds"""
     async with bot_messages_lock:
         now = time.time()
-        for chat_id in list(bot_messages.keys()):
-            if not bot_messages[chat_id]:
+        
+        # Delete old user messages
+        for chat_id in list(user_messages.keys()):
+            if not user_messages[chat_id]:
                 continue
             
-            for msg_id, timestamp in list(bot_messages[chat_id].items()):
+            for msg_id, timestamp in list(user_messages[chat_id].items()):
                 if now - timestamp > max_age:
                     try:
                         await bot.delete_message(chat_id, msg_id)
-                        logger.info(f"Auto-deleted old message: {msg_id}")
-                        del bot_messages[chat_id][msg_id]
+                        logger.info(f"Auto-deleted old user message: {msg_id}")
+                        del user_messages[chat_id][msg_id]
                     except Exception as e:
-                        logger.debug(f"Could not auto-delete message {msg_id}: {e}")
-                        del bot_messages[chat_id][msg_id]
+                        logger.debug(f"Could not auto-delete user message {msg_id}: {e}")
+                        del user_messages[chat_id][msg_id]
 
 def calculate_fissure_roll(current_fissure):
     """
@@ -279,13 +283,15 @@ def apply_fissure_protection(current_fissure, roll, is_fatal):
     return roll, ""
 
 
+def add_user_message(chat_id: int, message_id: int):
+    """Add user message to tracking for delayed deletion"""
+    if chat_id not in user_messages:
+        user_messages[chat_id] = {}
+    user_messages[chat_id][message_id] = time.time()
+
 async def delete_user_message(bot, chat_id, message_id):
-    """Delete user's command message (requires bot to be admin with delete rights)"""
-    try:
-        await bot.delete_message(chat_id, message_id)
-        logger.info(f"Deleted user command message: {message_id}")
-    except Exception as e:
-        logger.warning(f"Could not delete user message {message_id}: {e}")
+    """Save user's command message for delayed deletion (30 sec)"""
+    add_user_message(chat_id, message_id)
 
 def calculate_new_fissure(current_fissure, roll):
     """Calculates new fissure size with minimum 0.1"""
