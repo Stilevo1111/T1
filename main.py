@@ -286,7 +286,10 @@ async def delete_previous_message(bot, chat_id, last_message_id):
 async def delete_previous_message_safe(bot, chat_id, last_message_id):
     """Safely deletes previous bot message with retry logic"""
     if not last_message_id or last_message_id <= 0:
+        logger.info(f"No previous message to delete for chat {chat_id}")
         return
+    
+    logger.info(f"Attempting to delete message {last_message_id} for chat {chat_id}")
     
     # Small delay to ensure message is fully processed
     await asyncio.sleep(0.1)
@@ -294,10 +297,10 @@ async def delete_previous_message_safe(bot, chat_id, last_message_id):
     for attempt in range(2):
         try:
             await bot.delete_message(chat_id, last_message_id)
-            logger.info(f"Deleted previous message: {last_message_id}")
+            logger.info(f"Successfully deleted previous message: {last_message_id}")
             return
         except Exception as e:
-            logger.debug(f"Delete attempt {attempt + 1} failed: {e}")
+            logger.warning(f"Delete attempt {attempt + 1} failed: {e}")
             if attempt == 0:
                 await asyncio.sleep(0.2)
 
@@ -616,6 +619,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await stats(update, context)
         elif text == "🏆 Топ":
             await top(update, context)
+        
+        # Delete user's button press message
+        try:
+            await context.bot.delete_message(update.message.chat_id, update.message.message_id)
+        except Exception as e:
+            logger.debug(f"Could not delete menu button message: {e}")
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}")
         await update.message.reply_text("❌ Ошибка обработки команды")
