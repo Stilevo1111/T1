@@ -389,6 +389,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             logger.info(f"Result sent to user {user_obj.id}")
             add_bot_message(result_msg.chat_id, result_msg.message_id)
+            # Delete previous bot message if exists
+            await delete_previous_message(context.bot, update.message.chat_id, user.get("last_message_id", 0))
+            # Update last message id
+            update_last_message_id(user_obj.id, result_msg.message_id)
             # Delete user's message
             try:
                 await delete_user_message(update, context)
@@ -447,6 +451,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=main_menu()
             )
             add_bot_message(result_msg.chat_id, result_msg.message_id)
+            # Delete previous bot message
+            await delete_previous_message(context.bot, update.message.chat_id, user.get("last_message_id", 0))
+            update_last_message_id(user_obj.id, result_msg.message_id)
             try:
                 await delete_user_message(update, context)
             except Exception as e:
@@ -491,6 +498,10 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=main_menu()
             )
             add_bot_message(result_msg.chat_id, result_msg.message_id)
+            # Delete previous bot message
+            user = get_user(update.effective_user.id, update.effective_user.username or update.effective_user.first_name)
+            await delete_previous_message(context.bot, update.message.chat_id, user.get("last_message_id", 0))
+            update_last_message_id(update.effective_user.id, result_msg.message_id)
             try:
                 await delete_user_message(update, context)
             except Exception as e:
@@ -591,15 +602,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug(f"Could not delete message: {e}")
 
 async def health_check(request):
-    """Health check endpoint for Render - also runs cleanup"""
-    # Запускаем очистку старых сообщений
-    try:
-        # Получаем bot из приложения
-        app = request.app.get('bot')
-        if app:
-            await cleanup_old_messages(app.bot)
-    except Exception as e:
-        logger.error(f"Health check cleanup error: {e}")
+    """Health check endpoint for Render"""
     return web.Response(text="Bot is working", status=200)
 
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -632,8 +635,8 @@ async def wake_up_callback(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Cleanup error: {e}")
 
 def setup_wake_up(job_queue: JobQueue):
-    """Sets up periodic wake-up every 14 minutes"""
-    wake_up_interval = 14 * 60
+    """Sets up periodic wake-up every 2 minutes"""
+    wake_up_interval = 2 * 60
     job_queue.run_repeating(wake_up_callback, wake_up_interval, first=60)
     logger.info(f"Wake-up configured: every {wake_up_interval} seconds")
 
@@ -689,7 +692,6 @@ async def main():
                 return web.Response(status=500)
         
         web_app = web.Application()
-        web_app['bot'] = app.bot  # Сохраняем bot для health check
         web_app.router.add_post('/webhook', handle_webhook)
         web_app.router.add_get('/health', health_check)
         
