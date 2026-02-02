@@ -25,6 +25,21 @@ else:
 
 COOLDOWN = 86400  # 24 hours
 
+
+async def delete_after_delay(bot, chat_id, msg_id, delay):
+    """Удалить сообщение через delay секунд"""
+    await asyncio.sleep(delay)
+    try:
+        await bot.delete_message(chat_id, msg_id)
+    except:
+        pass
+
+
+def schedule_delete(bot, chat_id, msg_id, delay=30):
+    """Запланировать удаление сообщения через delay секунд"""
+    asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay))
+
+
 # =====================
 # ROLL SYSTEM
 # =====================
@@ -170,49 +185,25 @@ WELCOME_PHRASES = [
     "{name} готов расти!"
 ]
 
-bot_messages = {}  # {chat_id: {message_id: timestamp}}
-bot_messages_lock = asyncio.Lock()  # Защита от конфликтов при одновременном доступе
+# Track last bot message per chat for cleanup
+last_bot_message = {}  # {chat_id: message_id}
 
-def add_bot_message(chat_id: int, message_id: int):
-    if chat_id not in bot_messages:
-        bot_messages[chat_id] = {}
-    bot_messages[chat_id][message_id] = time.time()
 
-async def delete_old_bot_messages(bot, chat_id):
-    """Delete all old bot messages for a chat (keeps chat clean)"""
-    async with bot_messages_lock:
-        if chat_id not in bot_messages:
-            return
-        
-        msg_ids = list(bot_messages[chat_id].keys())
-        for msg_id in msg_ids:
-            try:
-                await bot.delete_message(chat_id, msg_id)
-                logger.info(f"Deleted old bot message: {msg_id}")
-            except Exception as e:
-                logger.debug(f"Could not delete bot message {msg_id}: {e}")
-        
-        # Clear all messages
-        bot_messages[chat_id] = {}
+async def delete_last_bot_message(bot, chat_id):
+    """Delete the last bot message for this chat immediately"""
+    if chat_id in last_bot_message:
+        try:
+            await bot.delete_message(chat_id, last_bot_message[chat_id])
+            logger.info(f"Deleted last bot message: {last_bot_message[chat_id]}")
+        except Exception as e:
+            logger.debug(f"Could not delete last bot message: {e}")
+        del last_bot_message[chat_id]
 
-async def cleanup_old_messages(bot, max_age=30):
-    """Delete bot messages older than max_age seconds"""
-    async with bot_messages_lock:
-        now = time.time()
-        
-        for chat_id in list(bot_messages.keys()):
-            if not bot_messages[chat_id]:
-                continue
-            
-            for msg_id, timestamp in list(bot_messages[chat_id].items()):
-                if now - timestamp > max_age:
-                    try:
-                        await bot.delete_message(chat_id, msg_id)
-                        logger.info(f"Auto-deleted old bot message: {msg_id}")
-                        del bot_messages[chat_id][msg_id]
-                    except Exception as e:
-                        logger.debug(f"Could not auto-delete bot message {msg_id}: {e}")
-                        del bot_messages[chat_id][msg_id]
+
+def set_last_bot_message(chat_id, message_id):
+    """Set the last bot message for this chat"""
+    last_bot_message[chat_id] = message_id
+
 
 def calculate_fissure_roll(current_fissure):
     """
@@ -270,6 +261,7 @@ def calculate_fissure_roll(current_fissure):
         roll = random.choices(values, weights=weights)[0]
         return roll, "", False, False
 
+
 def apply_fissure_protection(current_fissure, roll, is_fatal):
     """Applies protection for small fissures on fatal rolls"""
     if is_fatal and current_fissure < 5:
@@ -280,18 +272,11 @@ def apply_fissure_protection(current_fissure, roll, is_fatal):
     return roll, ""
 
 
-async def delete_user_message(bot, chat_id, message_id):
-    """Delete user's command message immediately"""
-    try:
-        await bot.delete_message(chat_id, message_id)
-        logger.info(f"Deleted user message: {message_id}")
-    except Exception as e:
-        logger.warning(f"Could not delete user message {message_id}: {e}")
-
 def calculate_new_fissure(current_fissure, roll):
     """Calculates new fissure size with minimum 0.1"""
     new_value = current_fissure + roll
     return max(0.1, new_value)
+
 
 def main_menu():
     keyboard = [
@@ -300,10 +285,12 @@ def main_menu():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
+
 def format_time(seconds):
     h = seconds // 3600
     m = (seconds % 3600) // 60
     return f"{int(h)}ч {int(m)}м"
+
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Increase fissure"""
@@ -315,11 +302,14 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_msg_id = update.message.message_id
     now = time.time()
     
-    # Delete user message and old bot messages
+    # Delete user message immediately
     try:
         await context.bot.delete_message(chat_id, user_msg_id)
     except Exception:
         pass
+    
+    # Delete last bot message immediately
+    await delete_last_bot_message(context.bot, chat_id)
     
     try:
         user = get_user(user_obj.id, username)
@@ -333,7 +323,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text=text,
                 reply_markup=main_menu()
             )
-            add_bot_message(result_msg.chat_id, result_msg.message_id)
+            set_last_bot_message(chat_id, result_msg.message_id)
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
             update_last_message_id(user_obj.id, result_msg.message_id)
             return
 
@@ -379,12 +370,14 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         logger.info(f"Result sent to user {user_obj.id}")
-        add_bot_message(result_msg.chat_id, result_msg.message_id)
+        set_last_bot_message(chat_id, result_msg.message_id)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
         update_last_message_id(user_obj.id, result_msg.message_id)
                   
     except Exception as e:
         logger.error(f"Error in fissure: {e}")
         await update.message.reply_text("❌ Ошибка обработки запроса")
+
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show stats"""
@@ -393,11 +386,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     user_msg_id = update.message.message_id
     
-    # Delete user message and old bot messages
+    # Delete user message immediately
     try:
         await context.bot.delete_message(chat_id, user_msg_id)
     except Exception:
         pass
+    
+    # Delete last bot message immediately
+    await delete_last_bot_message(context.bot, chat_id)
     
     try:
         user_obj = update.effective_user
@@ -421,12 +417,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=text,
             reply_markup=main_menu()
         )
-        add_bot_message(result_msg.chat_id, result_msg.message_id)
+        set_last_bot_message(chat_id, result_msg.message_id)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
         update_last_message_id(user_obj.id, result_msg.message_id)
         
     except Exception as e:
         logger.error(f"Error in stats: {e}")
         await update.message.reply_text("❌ Ошибка получения статистики")
+
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show top users"""
@@ -435,11 +433,14 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     user_msg_id = update.message.message_id
     
-    # Delete user message and old bot messages
+    # Delete user message immediately
     try:
         await context.bot.delete_message(chat_id, user_msg_id)
     except Exception:
         pass
+    
+    # Delete last bot message immediately
+    await delete_last_bot_message(context.bot, chat_id)
     
     try:
         top_users = get_fissure_top(10)
@@ -457,12 +458,14 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=text,
             reply_markup=main_menu()
         )
-        add_bot_message(result_msg.chat_id, result_msg.message_id)
+        set_last_bot_message(chat_id, result_msg.message_id)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
         
     except Exception as e:
         logger.error(f"Error in top: {e}")
         await update.message.reply_text("❌ Ошибка получения топа")
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
@@ -471,11 +474,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     user_msg_id = update.message.message_id
     
-    # Delete user command message
+    # Delete user command message immediately
     try:
         await context.bot.delete_message(chat_id, user_msg_id)
     except Exception:
         pass
+    
+    # Delete last bot message immediately
+    await delete_last_bot_message(context.bot, chat_id)
     
     try:
         uid = update.effective_user.id
@@ -490,7 +496,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=text,
             reply_markup=main_menu()
         )
-        add_bot_message(chat_id, result_msg.message_id)
+        set_last_bot_message(chat_id, result_msg.message_id)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
         update_last_message_id(uid, result_msg.message_id)
 
     except Exception as e:
@@ -501,12 +508,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=text,
             reply_markup=None
         )
-        add_bot_message(chat_id, result_msg.message_id)
+        set_last_bot_message(chat_id, result_msg.message_id)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
         if 'user' in locals():
             update_last_message_id(uid, result_msg.message_id)
 
+
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu button handler - deletes all old bot messages and sends new one"""
+    """Menu button handler - sends new content, deletes user message and old bot message immediately"""
     try:
         text = update.message.text.strip()
         
@@ -520,25 +529,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_msg_id = update.message.message_id
         logger.info(f"User {user_id} pressed button: {text}")
         
-        # STEP 1: Delete user's command message immediately
+        # Delete user's command message immediately
         try:
             await context.bot.delete_message(chat_id, user_msg_id)
             logger.info(f"Deleted user message: {user_msg_id}")
         except Exception as e:
             logger.warning(f"Could not delete user message: {e}")
         
-        # STEP 2: Delete old bot messages immediately
-        async with bot_messages_lock:
-            if chat_id in bot_messages:
-                for msg_id in list(bot_messages[chat_id].keys()):
-                    try:
-                        await context.bot.delete_message(chat_id, msg_id)
-                        logger.info(f"Deleted old bot message: {msg_id}")
-                    except Exception as e:
-                        logger.debug(f"Could not delete bot message {msg_id}: {e}")
-                bot_messages[chat_id] = {}
+        # Delete last bot message immediately
+        await delete_last_bot_message(context.bot, chat_id)
         
-        # STEP 3: Call the appropriate function
+        # Call the appropriate function
         if text == "📈 Увеличить фиссуру":
             await fissure(update, context)
         elif text == "📏 Моя длина":
@@ -549,9 +550,22 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}", exc_info=True)
 
+
 async def health_check(request):
-    """Health check endpoint for Render"""
+    """Health check endpoint"""
     return web.Response(text="Bot is working", status=200)
+
+
+health_check_handler = None
+
+
+def setup_health_check(bot):
+    """Initialize health check handler with bot instance"""
+    global health_check_handler
+    async def check(request):
+        return web.Response(text="Bot is working", status=200)
+    health_check_handler = check
+
 
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Welcome new chat member"""
@@ -564,29 +578,16 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             welcome_text = random.choice(WELCOME_PHRASES).format(name=name)
             
-            await context.bot.send_message(
+            result_msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text=welcome_text
             )
             logger.info(f"Welcome sent for {name}")
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
             
     except Exception as e:
         logger.error(f"Error in welcome_new_member: {e}")
 
-async def wake_up_callback(context: ContextTypes.DEFAULT_TYPE):
-    """Periodic wake-up to prevent sleeping and cleanup old messages (30 sec)"""
-    logger.info("Wake-up: bot is active, running cleanup...")
-    try:
-        await cleanup_old_messages(context.bot, max_age=30)
-        logger.info("Cleanup completed (30s)")
-    except Exception as e:
-        logger.error(f"Cleanup error: {e}")
-
-def setup_wake_up(job_queue: JobQueue):
-    """Sets up periodic wake-up every 30 seconds"""
-    wake_up_interval = 30
-    job_queue.run_repeating(wake_up_callback, wake_up_interval, first=30)
-    logger.info(f"Wake-up configured: every {wake_up_interval} seconds")
 
 async def main():
     """Start Telegram bot in webhook mode for Render"""
@@ -621,8 +622,6 @@ async def main():
         logger.info("Telegram bot started in webhook mode")
         logger.info(f"Webhook URL: {webhook_url}")
         
-        setup_wake_up(app.job_queue)
-        
         from aiohttp import web
         
         async def handle_webhook(request):
@@ -641,7 +640,10 @@ async def main():
         
         web_app = web.Application()
         web_app.router.add_post('/webhook', handle_webhook)
-        web_app.router.add_get('/health', health_check)
+        
+        # Setup health check with bot access
+        setup_health_check(app.bot)
+        web_app.router.add_get('/health', health_check_handler)
         
         runner = web.AppRunner(web_app)
         await runner.setup()
@@ -656,6 +658,7 @@ async def main():
     except Exception as e:
         logger.error(f"Critical error: {e}", exc_info=True)
         raise
+
 
 async def main_polling():
     """Start Telegram bot in polling mode for local testing"""
@@ -686,6 +689,7 @@ async def main_polling():
     except Exception as e:
         logger.error(f"Critical error: {e}", exc_info=True)
         raise
+
 
 if __name__ == "__main__":
     if os.getenv("WEBHOOK_URL"):
