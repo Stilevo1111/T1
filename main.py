@@ -158,16 +158,16 @@ CATEGORY_PHRASES = {
 }
 
 WELCOME_PHRASES = [
-    "Welcome, {name}! Your fissure journey begins now!",
-    "Nice to see you, {name}! Time to grow!",
-    "{name} joined! The fissure community grows!",
-    "Hello, {name}! Let's increase together!",
-    "{name} is here! New opportunities await!",
-    "Welcome, {name}! Your fissure awaits!",
-    "Nice to have you, {name}! Let's get bigger!",
-    "{name} joined the fissure club!",
-    "Hey, {name}! Time to measure!",
-    "{name} is ready to grow!"
+    "Привет, {name}! Твоя фиссурная история начинается!",
+    "Рады видеть тебя, {name}! Время расти!",
+    "{name} присоединился! Фиссурное сообщество растёт!",
+    "Привет, {name}! Давай увеличивать вместе!",
+    "{name} здесь! Новые возможности ждут!",
+    "Привет, {name}! Твоя фиссура ждёт!",
+    "Приятно видеть, {name}! Давай станем больше!",
+    "{name} присоединился к фиссурному клубу!",
+    "Эй, {name}! Время измерить!",
+    "{name} готов расти!"
 ]
 
 bot_messages = {}  # {chat_id: {message_id: timestamp}}
