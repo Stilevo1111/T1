@@ -315,6 +315,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_msg_id = update.message.message_id
     now = time.time()
     
+    # Delete user message and old bot messages
+    try:
+        await context.bot.delete_message(chat_id, user_msg_id)
+    except Exception:
+        pass
+    
     try:
         user = get_user(user_obj.id, username)
         logger.info(f"user data: {user}")
@@ -387,6 +393,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     user_msg_id = update.message.message_id
     
+    # Delete user message and old bot messages
+    try:
+        await context.bot.delete_message(chat_id, user_msg_id)
+    except Exception:
+        pass
+    
     try:
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
@@ -422,6 +434,12 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     chat_id = update.message.chat_id
     user_msg_id = update.message.message_id
+    
+    # Delete user message and old bot messages
+    try:
+        await context.bot.delete_message(chat_id, user_msg_id)
+    except Exception:
+        pass
     
     try:
         top_users = get_fissure_top(10)
