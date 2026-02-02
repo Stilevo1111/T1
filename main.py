@@ -477,19 +477,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
     
-    # Delete all previous bot messages for this chat
-    try:
-        async with bot_messages_lock:
-            if chat_id in bot_messages:
-                for msg_id in list(bot_messages[chat_id].keys()):
-                    try:
-                        await context.bot.delete_message(chat_id, msg_id)
-                    except Exception:
-                        pass
-                bot_messages[chat_id] = {}
-    except Exception as e:
-        logger.warning(f"Could not delete old messages: {e}")
-    
     try:
         uid = update.effective_user.id
         user_obj = update.effective_user
@@ -540,18 +527,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.warning(f"Could not delete user message: {e}")
         
-        # STEP 2: Delete old bot messages (keep chat clean)
-        async with bot_messages_lock:
-            if chat_id in bot_messages:
-                for msg_id in list(bot_messages[chat_id].keys()):
-                    try:
-                        await context.bot.delete_message(chat_id, msg_id)
-                        logger.info(f"Deleted old bot message: {msg_id}")
-                    except Exception as e:
-                        logger.debug(f"Could not delete bot message {msg_id}: {e}")
-                bot_messages[chat_id] = {}
-        
-        # STEP 3: Call the appropriate function
+        # STEP 2: Call the appropriate function
         if text == "📈 Увеличить фиссуру":
             await fissure(update, context)
         elif text == "📏 Моя длина":
