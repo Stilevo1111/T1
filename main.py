@@ -527,7 +527,18 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.warning(f"Could not delete user message: {e}")
         
-        # STEP 2: Call the appropriate function
+        # STEP 2: Delete old bot messages immediately
+        async with bot_messages_lock:
+            if chat_id in bot_messages:
+                for msg_id in list(bot_messages[chat_id].keys()):
+                    try:
+                        await context.bot.delete_message(chat_id, msg_id)
+                        logger.info(f"Deleted old bot message: {msg_id}")
+                    except Exception as e:
+                        logger.debug(f"Could not delete bot message {msg_id}: {e}")
+                bot_messages[chat_id] = {}
+        
+        # STEP 3: Call the appropriate function
         if text == "📈 Увеличить фиссуру":
             await fissure(update, context)
         elif text == "📏 Моя длина":
@@ -572,9 +583,9 @@ async def wake_up_callback(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Cleanup error: {e}")
 
 def setup_wake_up(job_queue: JobQueue):
-    """Sets up periodic wake-up every 2 minutes"""
-    wake_up_interval = 2 * 60
-    job_queue.run_repeating(wake_up_callback, wake_up_interval, first=60)
+    """Sets up periodic wake-up every 30 seconds"""
+    wake_up_interval = 30
+    job_queue.run_repeating(wake_up_callback, wake_up_interval, first=30)
     logger.info(f"Wake-up configured: every {wake_up_interval} seconds")
 
 async def main():
