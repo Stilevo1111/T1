@@ -469,6 +469,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"New user {update.effective_user.id}")
     
     chat_id = update.message.chat_id
+    user_msg_id = update.message.message_id
+    
+    # Delete user command message
+    try:
+        await context.bot.delete_message(chat_id, user_msg_id)
+    except Exception:
+        pass
     
     # Delete all previous bot messages for this chat
     try:
