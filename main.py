@@ -453,7 +453,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     
     # Delete all previous bot messages for this chat
-    await delete_all_chat_messages(context.bot, chat_id)
+    try:
+        async with bot_messages_lock:
+            if chat_id in bot_messages:
+                for msg_id in list(bot_messages[chat_id].keys()):
+                    try:
+                        await context.bot.delete_message(chat_id, msg_id)
+                    except Exception:
+                        pass
+                bot_messages[chat_id] = {}
+    except Exception as e:
+        logger.warning(f"Could not delete old messages: {e}")
     
     try:
         uid = update.effective_user.id
