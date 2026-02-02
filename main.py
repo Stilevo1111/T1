@@ -178,8 +178,8 @@ def add_bot_message(chat_id: int, message_id: int):
         bot_messages[chat_id] = {}
     bot_messages[chat_id][message_id] = time.time()
 
-async def delete_all_chat_messages(bot, chat_id):
-    """Delete ALL bot messages for a chat"""
+async def delete_old_bot_messages(bot, chat_id):
+    """Delete all old bot messages for a chat (keeps chat clean)"""
     async with bot_messages_lock:
         if chat_id not in bot_messages:
             return
@@ -188,9 +188,9 @@ async def delete_all_chat_messages(bot, chat_id):
         for msg_id in msg_ids:
             try:
                 await bot.delete_message(chat_id, msg_id)
-                logger.info(f"Deleted old message: {msg_id}")
+                logger.info(f"Deleted old bot message: {msg_id}")
             except Exception as e:
-                logger.debug(f"Could not delete message {msg_id}: {e}")
+                logger.debug(f"Could not delete bot message {msg_id}: {e}")
         
         # Clear all messages
         bot_messages[chat_id] = {}
@@ -497,10 +497,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_msg_id = update.message.message_id
     logger.info(f"User {user_id} pressed button: {text}")
     
-    # STEP 1: Save user message ID for delayed deletion (30 sec)
+    # STEP 1: Delete user's command message immediately
     await delete_user_message(context.bot, chat_id, user_msg_id)
     
-    # STEP 2: Call the appropriate function
+    # STEP 2: Delete old bot messages (keep chat clean)
+    await delete_old_bot_messages(context.bot, chat_id)
+    
+    # STEP 3: Call the appropriate function
     try:
         if text == "📈 Увеличить фиссуру":
             await fissure(update, context)
