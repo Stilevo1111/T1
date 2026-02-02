@@ -485,35 +485,47 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler - deletes all old bot messages and sends new one"""
-    text = update.message.text.strip()
-    
-    menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
-    
-    if text not in menu_buttons:
-        return
-    
-    chat_id = update.message.chat_id
-    user_id = update.effective_user.id
-    user_msg_id = update.message.message_id
-    logger.info(f"User {user_id} pressed button: {text}")
-    
-    # STEP 1: Delete user's command message immediately
-    await delete_user_message(context.bot, chat_id, user_msg_id)
-    
-    # STEP 2: Delete old bot messages (keep chat clean)
-    await delete_old_bot_messages(context.bot, chat_id)
-    
-    # STEP 3: Call the appropriate function
     try:
+        text = update.message.text.strip()
+        
+        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
+        
+        if text not in menu_buttons:
+            return
+        
+        chat_id = update.message.chat_id
+        user_id = update.effective_user.id
+        user_msg_id = update.message.message_id
+        logger.info(f"User {user_id} pressed button: {text}")
+        
+        # STEP 1: Delete user's command message immediately
+        try:
+            await context.bot.delete_message(chat_id, user_msg_id)
+            logger.info(f"Deleted user message: {user_msg_id}")
+        except Exception as e:
+            logger.warning(f"Could not delete user message: {e}")
+        
+        # STEP 2: Delete old bot messages (keep chat clean)
+        async with bot_messages_lock:
+            if chat_id in bot_messages:
+                for msg_id in list(bot_messages[chat_id].keys()):
+                    try:
+                        await context.bot.delete_message(chat_id, msg_id)
+                        logger.info(f"Deleted old bot message: {msg_id}")
+                    except Exception as e:
+                        logger.debug(f"Could not delete bot message {msg_id}: {e}")
+                bot_messages[chat_id] = {}
+        
+        # STEP 3: Call the appropriate function
         if text == "📈 Увеличить фиссуру":
             await fissure(update, context)
         elif text == "📏 Моя длина":
             await stats(update, context)
         elif text == "🏆 Топ":
             await top(update, context)
+            
     except Exception as e:
-        logger.error(f"Error in menu_handler: {e}")
-        await update.message.reply_text("❌ Ошибка обработки команды")
+        logger.error(f"Error in menu_handler: {e}", exc_info=True)
 
 async def health_check(request):
     """Health check endpoint for Render"""
