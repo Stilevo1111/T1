@@ -185,24 +185,29 @@ WELCOME_PHRASES = [
     "{name} готов расти!"
 ]
 
-# Track last bot message per chat for cleanup
-last_bot_message = {}  # {chat_id: message_id}
+# Track last bot message per user per chat for cleanup
+last_bot_message = {}  # {chat_id: {user_id: message_id}}
 
 
-async def delete_last_bot_message(bot, chat_id):
-    """Delete the last bot message for this chat immediately"""
-    if chat_id in last_bot_message:
+async def delete_last_bot_message(bot, chat_id, user_id):
+    """Delete the last bot message for this user in this chat immediately"""
+    if chat_id in last_bot_message and user_id in last_bot_message[chat_id]:
         try:
-            await bot.delete_message(chat_id, last_bot_message[chat_id])
-            logger.info(f"Deleted last bot message: {last_bot_message[chat_id]}")
+            await bot.delete_message(chat_id, last_bot_message[chat_id][user_id])
+            logger.info(f"Deleted last bot message for user {user_id}: {last_bot_message[chat_id][user_id]}")
         except Exception as e:
             logger.debug(f"Could not delete last bot message: {e}")
-        del last_bot_message[chat_id]
+        del last_bot_message[chat_id][user_id]
+        # Clean up empty chat entries
+        if not last_bot_message[chat_id]:
+            del last_bot_message[chat_id]
 
 
-def set_last_bot_message(chat_id, message_id):
-    """Set the last bot message for this chat"""
-    last_bot_message[chat_id] = message_id
+def set_last_bot_message(chat_id, user_id, message_id):
+    """Set the last bot message for this user in this chat"""
+    if chat_id not in last_bot_message:
+        last_bot_message[chat_id] = {}
+    last_bot_message[chat_id][user_id] = message_id
 
 
 def calculate_fissure_roll(current_fissure):
@@ -309,7 +314,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
     
     # Delete last bot message immediately
-    await delete_last_bot_message(context.bot, chat_id)
+    await delete_last_bot_message(context.bot, chat_id, user_obj.id)
     
     try:
         user = get_user(user_obj.id, username)
@@ -323,7 +328,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text=text,
                 reply_markup=main_menu()
             )
-            set_last_bot_message(chat_id, result_msg.message_id)
+            set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
             schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
             update_last_message_id(user_obj.id, result_msg.message_id)
             return
@@ -370,8 +375,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         logger.info(f"Result sent to user {user_obj.id}")
-        set_last_bot_message(chat_id, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
+        set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 600)
         update_last_message_id(user_obj.id, result_msg.message_id)
                   
     except Exception as e:
@@ -393,7 +398,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
     
     # Delete last bot message immediately
-    await delete_last_bot_message(context.bot, chat_id)
+    await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
     
     try:
         user_obj = update.effective_user
@@ -417,7 +422,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=text,
             reply_markup=main_menu()
         )
-        set_last_bot_message(chat_id, result_msg.message_id)
+        set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
         update_last_message_id(user_obj.id, result_msg.message_id)
         
@@ -440,7 +445,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
     
     # Delete last bot message immediately
-    await delete_last_bot_message(context.bot, chat_id)
+    await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
     
     try:
         top_users = get_fissure_top(10)
@@ -458,7 +463,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=text,
             reply_markup=main_menu()
         )
-        set_last_bot_message(chat_id, result_msg.message_id)
+        set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
         
@@ -481,7 +486,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
     
     # Delete last bot message immediately
-    await delete_last_bot_message(context.bot, chat_id)
+    await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
     
     try:
         uid = update.effective_user.id
@@ -496,7 +501,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=text,
             reply_markup=main_menu()
         )
-        set_last_bot_message(chat_id, result_msg.message_id)
+        set_last_bot_message(chat_id, uid, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
         update_last_message_id(uid, result_msg.message_id)
 
@@ -508,7 +513,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=text,
             reply_markup=None
         )
-        set_last_bot_message(chat_id, result_msg.message_id)
+        set_last_bot_message(chat_id, uid, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
         if 'user' in locals():
             update_last_message_id(uid, result_msg.message_id)
@@ -537,7 +542,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning(f"Could not delete user message: {e}")
         
         # Delete last bot message immediately
-        await delete_last_bot_message(context.bot, chat_id)
+        await delete_last_bot_message(context.bot, chat_id, user_id)
         
         # Call the appropriate function
         if text == "📈 Увеличить фиссуру":
