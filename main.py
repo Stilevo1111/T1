@@ -369,13 +369,14 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if is_fatal and protection_msg:
             text = f"{text}\n\n{protection_msg}"
         
+        logger.info(f"Sending result message to chat_id={update.message.chat_id}")
+        # Don't use reply_to_message_id because user message was already deleted
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
             text=text,
-            reply_to_message_id=user_msg_id,
             reply_markup=main_menu()
         )
-        logger.info(f"Result sent to user {user_obj.id}")
+        logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 600)
         update_last_message_id(user_obj.id, result_msg.message_id)
