@@ -26,18 +26,48 @@ else:
 COOLDOWN = 86400  # 24 hours
 
 
-async def delete_after_delay(bot, chat_id, msg_id, delay):
+async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
     """Удалить сообщение через delay секунд"""
-    await asyncio.sleep(delay)
+    if job_queue:
+        # Используем JobQueue для надежного планирования
+        job_queue.run_once(
+            delete_message_job,
+            delay,
+            context={'bot': bot, 'chat_id': chat_id, 'msg_id': msg_id},
+            name=f"delete_{chat_id}_{msg_id}"
+        )
+    else:
+        # Fallback - пытаемся удалить сразу (менее надежно)
+        await asyncio.sleep(delay)
+        try:
+            await bot.delete_message(chat_id, msg_id)
+        except:
+            pass
+
+
+async def delete_message_job(context):
+    """Job для удаления сообщения"""
+    bot = context.job.context['bot']
+    chat_id = context.job.context['chat_id']
+    msg_id = context.job.context['msg_id']
     try:
         await bot.delete_message(chat_id, msg_id)
     except:
         pass
 
 
-def schedule_delete(bot, chat_id, msg_id, delay=30):
+def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
     """Запланировать удаление сообщения через delay секунд"""
-    asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay))
+    if job_queue:
+        job_queue.run_once(
+            delete_message_job,
+            delay,
+            context={'bot': bot, 'chat_id': chat_id, 'msg_id': msg_id},
+            name=f"delete_{chat_id}_{msg_id}"
+        )
+    else:
+        # Fallback если job_queue не передан
+        asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay))
 
 
 # =====================
@@ -335,7 +365,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=main_menu()
             )
             set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
-            schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
             update_last_message_id(user_obj.id, result_msg.message_id)
             return
 
@@ -370,7 +400,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             extra_text = random.choice(CATEGORY_PHRASES[category])
         
-        text = f"🎲 {username}\n{result_text}\n{extra_text}\n\n📏 Длина сейчас: {new_fissure:.1f} см"
+        text = (
+            f"🎲 {username}\n\n"
+            f"{result_text}\n"
+            f"{extra_text}\n\n"
+            f"📏 Длина сейчас: {new_fissure:.1f} см"
+        )
         
         if is_fatal and protection_msg:
             text = f"{text}\n\n{protection_msg}"
@@ -384,7 +419,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 600)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
         update_last_message_id(user_obj.id, result_msg.message_id)
                   
     except Exception as e:
@@ -431,7 +466,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(user_obj.id, result_msg.message_id)
         
     except Exception as e:
@@ -478,7 +513,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
         
     except Exception as e:
@@ -516,7 +551,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         set_last_bot_message(chat_id, uid, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(uid, result_msg.message_id)
 
     except Exception as e:
@@ -528,7 +563,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=None
         )
         set_last_bot_message(chat_id, uid, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         if 'user' in locals():
             update_last_message_id(uid, result_msg.message_id)
 
@@ -602,7 +637,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 text=welcome_text
             )
             logger.info(f"Welcome sent for {name}")
-            schedule_delete(context.bot, chat_id, result_msg.message_id, 30)
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
             
     except Exception as e:
         logger.error(f"Error in welcome_new_member: {e}")
