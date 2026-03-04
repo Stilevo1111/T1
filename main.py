@@ -7,7 +7,7 @@ import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank
 from aiohttp import web
 
 # Logging setup
@@ -451,14 +451,20 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         top_users = get_fissure_top(10)
+        user_rank = get_user_rank(update.effective_user.id)
+        user = get_user(update.effective_user.id, update.effective_user.username)
         
         if not top_users:
             text = "😶 Пока нет игроков. Будь первым!"
         else:
             text = "🏆 Топ 10 Фиссур\n\n"
-            for i, user in enumerate(top_users, 1):
-                name = user.get('username', 'Unknown')[:15]
-                text += f"{i}. {name}: {user['fissure']:.1f} см\n"
+            for i, user_top in enumerate(top_users, 1):
+                name = user_top.get('username', 'Unknown')[:15]
+                text += f"{i}. {name}: {user_top['fissure']:.1f} см\n"
+            
+            if user_rank:
+                user_fissure = user.get('fissure', 0) if user else 0
+                text += f"\n👤 Твоя позиция: #{user_rank} ({user_fissure:.1f} см)"
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,

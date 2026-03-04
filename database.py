@@ -321,6 +321,37 @@ class Database:
         except Exception as e:
             print(f"❌ Ошибка get_fissure_top: {e}")
             return []
+    
+    def get_user_rank(self, telegram_id):
+        """Получение позиции игрока в топе"""
+        try:
+            conn = self.connect()
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
+            
+            if "postgres" in scheme:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT COUNT(*) + 1 FROM users WHERE fissure > (
+                        SELECT fissure FROM users WHERE telegram_id = %s
+                    )
+                """, (telegram_id,))
+                rank = cursor.fetchone()[0]
+                cursor.close()
+                return rank
+            else:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT COUNT(*) + 1 FROM users WHERE fissure > (
+                        SELECT fissure FROM users WHERE telegram_id = ?
+                    )
+                """, (telegram_id,))
+                rank = cursor.fetchone()[0]
+                cursor.close()
+                return rank
+        except Exception as e:
+            print(f"❌ Ошибка get_user_rank: {e}")
+            return None
 
 # Функции для совместимости со старым кодом
 def get_user(telegram_id, username=None):
@@ -337,6 +368,11 @@ def get_fissure_top(limit=10):
     """Функция для совместимости - использует новый класс Database"""
     db = Database()
     return db.get_fissure_top(limit)
+
+def get_user_rank(telegram_id):
+    """Получить позицию игрока в топе"""
+    db = Database()
+    return db.get_user_rank(telegram_id)
 
 def update_last_message_id(telegram_id, message_id):
     """Функция для совместимости - использует новый класс Database"""
