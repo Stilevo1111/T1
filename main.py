@@ -41,8 +41,13 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
         await asyncio.sleep(delay)
         try:
             await bot.delete_message(chat_id, msg_id)
-        except:
-            pass
+            logger.info(f"Deleted delayed message {msg_id} in chat {chat_id}")
+        except Exception as e:
+            error_str = str(e).lower()
+            if "message to delete not found" in error_str or "bad request" in error_str:
+                logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
+            else:
+                logger.warning(f"Failed to delete delayed message {msg_id}: {e}")
 
 
 async def delete_message_job(context):
@@ -52,8 +57,14 @@ async def delete_message_job(context):
     msg_id = context.job.context['msg_id']
     try:
         await bot.delete_message(chat_id, msg_id)
-    except:
-        pass
+        logger.info(f"Deleted scheduled message {msg_id} in chat {chat_id}")
+    except Exception as e:
+        error_str = str(e).lower()
+        if "message to delete not found" in error_str or "bad request" in error_str:
+            # Message already deleted or can't be deleted - this is normal
+            logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
+        else:
+            logger.warning(f"Failed to delete message {msg_id} in chat {chat_id}: {e}")
 
 
 def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
@@ -228,15 +239,23 @@ last_bot_message = {}  # {chat_id: {user_id: message_id}}
 async def delete_last_bot_message(bot, chat_id, user_id):
     """Delete the last bot message for this user in this chat immediately"""
     if chat_id in last_bot_message and user_id in last_bot_message[chat_id]:
+        msg_id = last_bot_message[chat_id][user_id]
         try:
-            await bot.delete_message(chat_id, last_bot_message[chat_id][user_id])
-            logger.info(f"Deleted last bot message for user {user_id}: {last_bot_message[chat_id][user_id]}")
+            await bot.delete_message(chat_id, msg_id)
+            logger.info(f"Deleted last bot message for user {user_id}: {msg_id}")
         except Exception as e:
-            logger.debug(f"Could not delete last bot message: {e}")
-        del last_bot_message[chat_id][user_id]
-        # Clean up empty chat entries
-        if not last_bot_message[chat_id]:
-            del last_bot_message[chat_id]
+            error_str = str(e).lower()
+            if "message to delete not found" in error_str or "bad request" in error_str:
+                # Message already deleted or can't be deleted - this is normal
+                logger.debug(f"Message {msg_id} already deleted in chat {chat_id}: {e}")
+            else:
+                logger.warning(f"Could not delete last bot message {msg_id}: {e}")
+        finally:
+            # Always remove from dictionary after trying
+            del last_bot_message[chat_id][user_id]
+            # Clean up empty chat entries
+            if not last_bot_message[chat_id]:
+                del last_bot_message[chat_id]
 
 
 def set_last_bot_message(chat_id, user_id, message_id):
@@ -541,31 +560,53 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uid = update.effective_user.id
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
-        user = get_user(uid, username)
-        logger.info(f"start user data: {user}")
         
+        # Get user data with error handling
+        try:
+            user = get_user(uid, username)
+            logger.info(f"start user data: {user}")
+        except Exception as db_error:
+            logger.error(f"Database error in start: {db_error}")
+            # Continue anyway - the welcome message can still be sent
+            user = None
+        
+        # Send welcome message
         text = "👋 Привет! Здесь можно увеличить свою фиссуру"
         result_msg = await context.bot.send_message(
             chat_id=chat_id,
             text=text,
             reply_markup=main_menu()
         )
+        
+        # Track this message for future deletion
         set_last_bot_message(chat_id, uid, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
-        update_last_message_id(uid, result_msg.message_id)
+        
+        # Only update message ID in database if we got user data
+        if user is not None:
+            try:
+                update_last_message_id(uid, result_msg.message_id)
+            except Exception as e:
+                logger.debug(f"Could not update last message id: {e}")
 
     except Exception as e:
         logger.error(f"Error in start: {e}")
         text = "❌ Ошибка запуска бота"
-        result_msg = await context.bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=None
-        )
-        set_last_bot_message(chat_id, uid, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
-        if 'user' in locals():
-            update_last_message_id(uid, result_msg.message_id)
+        try:
+            result_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=None
+            )
+            set_last_bot_message(chat_id, uid, result_msg.message_id)
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+            try:
+                update_last_message_id(uid, result_msg.message_id)
+            except Exception as e:
+                logger.debug(f"Could not update last message id: {e}")
+        except:
+            # Если не можем отправить сообщение об ошибке - просто логируем
+            logger.error(f"Could not send error message: {e}")
 
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -625,10 +666,16 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Welcome new chat member"""
     try:
         chat_id = update.my_chat_member.chat.id
-        new_user = update.my_chat_member.new_chat_member
+        old_member = update.my_chat_member.old_chat_member
+        new_member = update.my_chat_member.new_chat_member
         
-        if new_user.status in ['member', 'administrator']:
-            name = new_user.user.first_name or "Friend"
+        # Only welcome when user joins (not when they leave or get promoted)
+        old_status = old_member.status
+        new_status = new_member.status
+        
+        # User joined the chat (was not a member, now is member)
+        if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator']:
+            name = new_member.user.first_name or "Friend"
             
             welcome_text = random.choice(WELCOME_PHRASES).format(name=name)
             
@@ -638,7 +685,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
             logger.info(f"Welcome sent for {name}")
             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
-            
+        
     except Exception as e:
         logger.error(f"Error in welcome_new_member: {e}")
 
