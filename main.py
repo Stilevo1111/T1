@@ -477,7 +477,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             wait_text = "✅ Готов к увеличению!"
         
-        text = f"📏 Длина: {user['fissure']:.1f} см"
+        text = f"🎲 {username}\n\n📏 Длина: {user['fissure']:.1f} см"
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
@@ -561,16 +561,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
         
-        # Get user data with error handling
+        # Send welcome message - don't fail on DB errors
         try:
             user = get_user(uid, username)
             logger.info(f"start user data: {user}")
         except Exception as db_error:
-            logger.error(f"Database error in start: {db_error}")
-            # Continue anyway - the welcome message can still be sent
-            user = None
+            logger.warning(f"Database error in start (non-fatal): {db_error}")
         
-        # Send welcome message
+        # Always send welcome message
         text = "👋 Привет! Здесь можно увеличить свою фиссуру"
         result_msg = await context.bot.send_message(
             chat_id=chat_id,
@@ -582,31 +580,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_last_bot_message(chat_id, uid, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         
-        # Only update message ID in database if we got user data
-        if user is not None:
-            try:
-                update_last_message_id(uid, result_msg.message_id)
-            except Exception as e:
-                logger.debug(f"Could not update last message id: {e}")
+        # Try to update message ID in database (non-critical)
+        try:
+            update_last_message_id(uid, result_msg.message_id)
+        except Exception as e:
+            logger.debug(f"Could not update last message id: {e}")
 
     except Exception as e:
         logger.error(f"Error in start: {e}")
-        text = "❌ Ошибка запуска бота"
-        try:
-            result_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                reply_markup=None
-            )
-            set_last_bot_message(chat_id, uid, result_msg.message_id)
-            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
-            try:
-                update_last_message_id(uid, result_msg.message_id)
-            except Exception as e:
-                logger.debug(f"Could not update last message id: {e}")
-        except:
-            # Если не можем отправить сообщение об ошибке - просто логируем
-            logger.error(f"Could not send error message: {e}")
 
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
