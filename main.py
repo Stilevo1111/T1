@@ -33,7 +33,7 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
         job_queue.run_once(
             delete_message_job,
             delay,
-            context={'bot': bot, 'chat_id': chat_id, 'msg_id': msg_id},
+            context={'chat_id': chat_id, 'msg_id': msg_id},  # bot доступен через context.bot
             name=f"delete_{chat_id}_{msg_id}"
         )
     else:
@@ -52,7 +52,7 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
 
 async def delete_message_job(context):
     """Job для удаления сообщения"""
-    bot = context.job.context['bot']
+    bot = context.bot  # Используем context.bot для v20+
     chat_id = context.job.context['chat_id']
     msg_id = context.job.context['msg_id']
     try:
@@ -73,7 +73,7 @@ def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
         job_queue.run_once(
             delete_message_job,
             delay,
-            context={'bot': bot, 'chat_id': chat_id, 'msg_id': msg_id},
+            context={'chat_id': chat_id, 'msg_id': msg_id},  # bot доступен через context.bot
             name=f"delete_{chat_id}_{msg_id}"
         )
     else:
