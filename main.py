@@ -33,7 +33,7 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
         job_queue.run_once(
             delete_message_job,
             delay,
-            context={'chat_id': chat_id, 'msg_id': msg_id},  # bot доступен через context.bot
+            data={'chat_id': chat_id, 'msg_id': msg_id},  # data для PTB
             name=f"delete_{chat_id}_{msg_id}"
         )
     else:
@@ -52,9 +52,9 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
 
 async def delete_message_job(context):
     """Job для удаления сообщения"""
-    bot = context.bot  # Используем context.bot для v20+
-    chat_id = context.job.context['chat_id']
-    msg_id = context.job.context['msg_id']
+    bot = context.bot  # Доступ через context.bot
+    chat_id = context.job.data['chat_id']  # data вместо context
+    msg_id = context.job.data['msg_id']
     try:
         await bot.delete_message(chat_id, msg_id)
         logger.info(f"Deleted scheduled message {msg_id} in chat {chat_id}")
@@ -73,7 +73,7 @@ def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
         job_queue.run_once(
             delete_message_job,
             delay,
-            context={'chat_id': chat_id, 'msg_id': msg_id},  # bot доступен через context.bot
+            data={'chat_id': chat_id, 'msg_id': msg_id},  # data для PTB
             name=f"delete_{chat_id}_{msg_id}"
         )
     else:
