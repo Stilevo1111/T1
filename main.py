@@ -52,8 +52,8 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
 
 async def delete_message_job(context):
     """Job для удаления сообщения"""
-    bot = context.bot  # Доступ через context.bot
-    chat_id = context.job.data['chat_id']  # data вместо context
+    bot = context.application.bot  # Доступ через context.application.bot в PTB v20+
+    chat_id = context.job.data['chat_id']
     msg_id = context.job.data['msg_id']
     try:
         await bot.delete_message(chat_id, msg_id)
@@ -715,7 +715,12 @@ async def main():
     try:
         init_db()
         
-        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
+        # Создаём JobQueue и привязываем к application
+        job_queue = JobQueue()
+        app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
+        
+        # Инициализируем job_queue с application для PTB v20+
+        job_queue.set_application(app)
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("fissure", fissure))
@@ -786,7 +791,12 @@ async def main_polling():
     try:
         init_db()
         
-        app = ApplicationBuilder().token(TOKEN).job_queue(JobQueue()).build()
+        # Создаём JobQueue и привязываем к application
+        job_queue = JobQueue()
+        app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
+        
+        # Инициализируем job_queue с application для PTB v20+
+        job_queue.set_application(app)
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("fissure", fissure))
