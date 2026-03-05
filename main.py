@@ -741,6 +741,9 @@ async def main():
         await app.bot.set_webhook(url=webhook_url)
         await app.initialize()
         
+        # Запускаем application для активации job_queue
+        await app.start()
+        
         logger.info("Telegram bot started in webhook mode")
         logger.info(f"Webhook URL: {webhook_url}")
         
