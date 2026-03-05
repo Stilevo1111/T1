@@ -365,11 +365,14 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Delete user message immediately
     try:
         await context.bot.delete_message(chat_id, user_msg_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Could not delete user message: {e}")
     
     # Delete last bot message immediately
-    await delete_last_bot_message(context.bot, chat_id, user_obj.id)
+    try:
+        await delete_last_bot_message(context.bot, chat_id, user_obj.id)
+    except Exception as e:
+        logger.debug(f"Could not delete last bot message: {e}")
     
     try:
         user = get_user(user_obj.id, username)
@@ -442,8 +445,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_last_message_id(user_obj.id, result_msg.message_id)
                   
     except Exception as e:
-        logger.error(f"Error in fissure: {e}")
-        await update.message.reply_text("❌ Ошибка обработки запроса")
+        logger.error(f"Error in fissure: {e}", exc_info=True)
+        try:
+            if update.message:
+                await update.message.reply_text("❌ Ошибка обработки запроса")
+        except Exception:
+            pass
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -456,11 +463,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Delete user message immediately
     try:
         await context.bot.delete_message(chat_id, user_msg_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Could not delete user message: {e}")
     
     # Delete last bot message immediately
-    await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+    try:
+        await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+    except Exception as e:
+        logger.debug(f"Could not delete last bot message: {e}")
     
     try:
         user_obj = update.effective_user
@@ -489,8 +499,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_last_message_id(user_obj.id, result_msg.message_id)
         
     except Exception as e:
-        logger.error(f"Error in stats: {e}")
-        await update.message.reply_text("❌ Ошибка получения статистики")
+        logger.error(f"Error in stats: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("❌ Ошибка получения статистики")
+        except Exception:
+            pass
 
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -503,11 +516,14 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Delete user message immediately
     try:
         await context.bot.delete_message(chat_id, user_msg_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Could not delete user message: {e}")
     
     # Delete last bot message immediately
-    await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+    try:
+        await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+    except Exception as e:
+        logger.debug(f"Could not delete last bot message: {e}")
     
     try:
         top_users = get_fissure_top(10)
@@ -536,8 +552,11 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_last_message_id(update.effective_user.id, result_msg.message_id)
         
     except Exception as e:
-        logger.error(f"Error in top: {e}")
-        await update.message.reply_text("❌ Ошибка получения топа")
+        logger.error(f"Error in top: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("❌ Ошибка получения топа")
+        except Exception:
+            pass
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
