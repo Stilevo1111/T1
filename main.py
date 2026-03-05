@@ -359,14 +359,16 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
     chat_id = update.message.chat_id
+    chat_type = update.message.chat.type
     user_msg_id = update.message.message_id
     now = time.time()
     
-    # Delete user message immediately
-    try:
-        await context.bot.delete_message(chat_id, user_msg_id)
-    except Exception as e:
-        logger.debug(f"Could not delete user message: {e}")
+    # Delete user message only in groups/channels (not in private)
+    if chat_type in ['group', 'supergroup', 'channel']:
+        try:
+            await context.bot.delete_message(chat_id, user_msg_id)
+        except Exception as e:
+            logger.debug(f"Could not delete user message: {e}")
     
     # Delete last bot message immediately
     try:
@@ -458,13 +460,15 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {update.effective_user.id} called stats")
     
     chat_id = update.message.chat_id
-    user_msg_id = update.message.message_id
+    chat_type = update.message.chat.type
     
-    # Delete user message immediately
-    try:
-        await context.bot.delete_message(chat_id, user_msg_id)
-    except Exception as e:
-        logger.debug(f"Could not delete user message: {e}")
+    # Delete user message only in groups/channels
+    if chat_type in ['group', 'supergroup', 'channel']:
+        user_msg_id = update.message.message_id
+        try:
+            await context.bot.delete_message(chat_id, user_msg_id)
+        except Exception as e:
+            logger.debug(f"Could not delete user message: {e}")
     
     # Delete last bot message immediately
     try:
@@ -511,13 +515,15 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {update.effective_user.id} called top")
     
     chat_id = update.message.chat_id
-    user_msg_id = update.message.message_id
+    chat_type = update.message.chat.type
     
-    # Delete user message immediately
-    try:
-        await context.bot.delete_message(chat_id, user_msg_id)
-    except Exception as e:
-        logger.debug(f"Could not delete user message: {e}")
+    # Delete user message only in groups/channels
+    if chat_type in ['group', 'supergroup', 'channel']:
+        user_msg_id = update.message.message_id
+        try:
+            await context.bot.delete_message(chat_id, user_msg_id)
+        except Exception as e:
+            logger.debug(f"Could not delete user message: {e}")
     
     # Delete last bot message immediately
     try:
@@ -564,16 +570,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"New user {update.effective_user.id}")
     
     chat_id = update.message.chat_id
-    user_msg_id = update.message.message_id
+    chat_type = update.message.chat.type
     
-    # Delete user command message immediately
+    # Delete user command only in groups/channels
+    if chat_type in ['group', 'supergroup', 'channel']:
+        user_msg_id = update.message.message_id
+        try:
+            await context.bot.delete_message(chat_id, user_msg_id)
+        except Exception:
+            pass
+    
+    # Delete last bot message
     try:
-        await context.bot.delete_message(chat_id, user_msg_id)
-    except Exception:
-        pass
-    
-    # Delete last bot message immediately
-    await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+        await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+    except Exception as e:
+        logger.debug(f"Could not delete last bot message: {e}")
     
     try:
         uid = update.effective_user.id
@@ -620,19 +631,24 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         chat_id = update.message.chat_id
+        chat_type = update.message.chat.type
         user_id = update.effective_user.id
-        user_msg_id = update.message.message_id
         logger.info(f"User {user_id} pressed button: {text}")
         
-        # Delete user's command message immediately
-        try:
-            await context.bot.delete_message(chat_id, user_msg_id)
-            logger.info(f"Deleted user message: {user_msg_id}")
-        except Exception as e:
-            logger.warning(f"Could not delete user message: {e}")
+        # Delete user's command only in groups/channels
+        if chat_type in ['group', 'supergroup', 'channel']:
+            user_msg_id = update.message.message_id
+            try:
+                await context.bot.delete_message(chat_id, user_msg_id)
+                logger.info(f"Deleted user message: {user_msg_id}")
+            except Exception as e:
+                logger.debug(f"Could not delete user message: {e}")
         
         # Delete last bot message immediately
-        await delete_last_bot_message(context.bot, chat_id, user_id)
+        try:
+            await delete_last_bot_message(context.bot, chat_id, user_id)
+        except Exception as e:
+            logger.debug(f"Could not delete last bot message: {e}")
         
         # Call the appropriate function
         if text == "📈 Увеличить фиссуру":
