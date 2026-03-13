@@ -561,7 +561,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if medal:
                     text += f"{medal} {name}: {user_top['fissure']:.1f} см\n"
                 else:
-                    text += f"{i}. {name}: {user_top['fissure']:.1f} см\n"
+                    text += f" {i}. {name}: {user_top['fissure']:.1f} см\n"
             
             if user_rank:
                 user_fissure = user.get('fissure', 0) if user else 0
