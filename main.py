@@ -863,9 +863,14 @@ def setup_health_check(bot):
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Welcome new chat member"""
     try:
-        chat_id = update.my_chat_member.chat.id
-        old_member = update.my_chat_member.old_chat_member
-        new_member = update.my_chat_member.new_chat_member
+        chat_update = update.chat_member or update.my_chat_member
+        if chat_update is None:
+            logger.debug("welcome_new_member called without chat_member/my_chat_member data")
+            return
+
+        chat_id = chat_update.chat.id
+        old_member = chat_update.old_chat_member
+        new_member = chat_update.new_chat_member
         
         # Only welcome when user joins (not when they leave or get promoted)
         old_status = old_member.status
