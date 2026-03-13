@@ -212,6 +212,29 @@ async def weekly_digest_job(context):
         logger.error(f"Ошибка в weekly_digest_job: {e}", exc_info=True)
 
 
+async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ручной запуск утреннего дайджеста в этот чат"""
+    try:
+        chat_id = update.effective_chat.id
+        # Сохраняем этот чат как чат для дайджеста
+        set_config("digest_chat_id", chat_id)
+
+        class SimpleContext:
+            def __init__(self, application):
+                self.application = application
+
+        # Создаём простой контекст, чтобы переиспользовать morning_digest_job
+        simple_context = SimpleContext(context.application)
+        await morning_digest_job(simple_context)
+
+        await update.message.reply_text("✅ Утренний дайджест для этого чата создан/обновлён.")
+    except Exception as e:
+        logger.error(f"Error in digest_now: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("❌ Не удалось создать дайджест сейчас")
+        except Exception:
+            pass
+
 # =====================
 # ROLL SYSTEM
 # =====================
@@ -917,6 +940,7 @@ async def main():
         app.add_handler(CommandHandler("fissure", fissure))
         app.add_handler(CommandHandler("stats", stats))
         app.add_handler(CommandHandler("top", top))
+        app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
@@ -1019,6 +1043,7 @@ async def main_polling():
         app.add_handler(CommandHandler("fissure", fissure))
         app.add_handler(CommandHandler("stats", stats))
         app.add_handler(CommandHandler("top", top))
+        app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
