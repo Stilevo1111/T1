@@ -554,9 +554,14 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = "😶 Пока нет игроков. Будь первым!"
         else:
             text = "🏆 Топ 10 Фиссур\n\n"
+            medals = {1: "🥇", 2: "🥈", 3: "🥉"}
             for i, user_top in enumerate(top_users, 1):
                 name = user_top.get('username', 'Unknown')[:15]
-                text += f"{i}. {name}: {user_top['fissure']:.1f} см\n"
+                medal = medals.get(i, f"{i}.")
+                if i <= 3:
+                    text += f"{medal} {name}: {user_top['fissure']:.1f} см\n"
+                else:
+                    text += f"{i}. {name}: {user_top['fissure']:.1f} см\n"
             
             if user_rank:
                 user_fissure = user.get('fissure', 0) if user else 0
