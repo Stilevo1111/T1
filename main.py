@@ -131,7 +131,7 @@ async def morning_digest_job(context):
         else:
             streak_part = "🍀Стрик: —"
 
-        text = f"{growth_part} ❘ {drop_part} ❘{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ"
+        text = f"{growth_part} ❘ {drop_part} ❘{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК"
         
         bot = context.application.bot
         
