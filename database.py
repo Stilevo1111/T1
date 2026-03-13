@@ -95,6 +95,13 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             """)
+            # Для хранения позиций для отслеживания роста/падения
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_week_position INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_day_position INTEGER DEFAULT 0
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -120,6 +127,18 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN total_rolls INTEGER DEFAULT 0")
             if 'last_activity' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+            if 'last_week_position' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN last_week_position INTEGER DEFAULT 0")
+            if 'last_day_position' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN last_day_position INTEGER DEFAULT 0")
+        
+        # Создаём таблицу для настроек бота (чат для дайджестов)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_config (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
         
         conn.commit()
         conn.close()
@@ -395,6 +414,110 @@ class Database:
         except Exception as e:
             print(f"❌ Ошибка decrease_inactive_fissure: {e}")
             return 0
+    
+    def get_config(self, key, default=None):
+        """Получить значение конфигурации"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM bot_config WHERE key = ?", (key,))
+            result = cursor.fetchone()
+            cursor.close()
+            return result[0] if result else default
+        except Exception as e:
+            print(f"❌ Ошибка get_config: {e}")
+            return default
+    
+    def set_config(self, key, value):
+        """Установить значение конфигурации"""
+        try:
+            conn = self.connect()
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO bot_config (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """, (key, str(value)))
+            conn.commit()
+            cursor.close()
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка set_config: {e}")
+            return False
+    
+    def get_digest_stats(self):
+        """Получить статистику для дайджеста"""
+        try:
+            conn = self.connect()
+            url = urlparse(DATABASE_URL)
+            scheme = url.scheme
+            cursor = conn.cursor()
+            
+            # Всего игроков
+            cursor.execute("SELECT COUNT(*) FROM users")
+            total_players = cursor.fetchone()[0]
+            
+            # Новые игроки сегодня
+            if "postgres" in scheme:
+                cursor.execute("SELECT COUNT(*) FROM users WHERE DATE(created_at) = CURRENT_DATE")
+                new_today = cursor.fetchone()[0]
+                # Игроки с наибольшим ростом позиции за день
+                cursor.execute("""
+                    SELECT username, last_day_position - last_week_position as growth
+                    FROM users WHERE last_day_position > 0 ORDER BY growth DESC LIMIT 1
+                """)
+                top_growth = cursor.fetchone()
+            else:
+                cursor.execute("SELECT COUNT(*) FROM users WHERE DATE(created_at) = DATE('now')")
+                new_today = cursor.fetchone()[0]
+                cursor.execute("""
+                    SELECT username, last_day_position - last_week_position as growth
+                    FROM users WHERE last_day_position > 0 ORDER BY growth DESC LIMIT 1
+                """)
+                top_growth = cursor.fetchone()
+            
+            cursor.close()
+            return {
+                'total_players': total_players,
+                'new_today': new_today,
+                'top_growth': top_growth if top_growth else ('None', 0)
+            }
+        except Exception as e:
+            print(f"❌ Ошибка get_digest_stats: {e}")
+            return {'total_players': 0, 'new_today': 0, 'top_growth': ('None', 0)}
+    
+    def update_player_positions(self):
+        """Обновить позиции игроков (вызывается раз в день)"""
+        try:
+            conn = self.connect()
+            url = urlparse(DATABASE_URL)
+            scheme = url.scheme
+            cursor = conn.cursor()
+            
+            # Получаем текущий топ
+            cursor.execute("SELECT telegram_id, ROW_NUMBER() OVER (ORDER BY fissure DESC) as pos FROM users")
+            players = cursor.fetchall()
+            
+            for player in players:
+                telegram_id = player[0]
+                new_position = player[1]
+                
+                if "postgres" in scheme:
+                    cursor.execute("""
+                        UPDATE users SET last_week_position = last_day_position, last_day_position = %s
+                        WHERE telegram_id = %s
+                    """, (new_position, telegram_id))
+                else:
+                    cursor.execute("""
+                        UPDATE users SET last_week_position = last_day_position, last_day_position = ?
+                        WHERE telegram_id = ?
+                    """, (new_position, telegram_id))
+            
+            conn.commit()
+            cursor.close()
+            return len(players)
+        except Exception as e:
+            print(f"❌ Ошибка update_player_positions: {e}")
+            return 0
 
 # Функции для совместимости со старым кодом
 def get_user(telegram_id, username=None):
@@ -426,3 +549,23 @@ def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
     """Уменьшить fissure для неактивных игроков (вызывается ежедневно)"""
     db = Database()
     return db.decrease_inactive_fissure(days_inactive, decrease_amount)
+
+def get_config(key, default=None):
+    """Получить значение конфигурации"""
+    db = Database()
+    return db.get_config(key, default)
+
+def set_config(key, value):
+    """Установить значение конфигурации"""
+    db = Database()
+    return db.set_config(key, value)
+
+def get_digest_stats():
+    """Получить статистику для дайджеста"""
+    db = Database()
+    return db.get_digest_stats()
+
+def update_player_positions():
+    """Обновить позиции игроков"""
+    db = Database()
+    return db.update_player_positions()

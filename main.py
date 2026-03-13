@@ -8,7 +8,7 @@ import datetime
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions
 from aiohttp import web
 
 # Logging setup
@@ -91,8 +91,118 @@ async def decrease_inactive_job(context):
             logger.info(f"Уменьшен fissure для {affected} неактивных игроков")
         else:
             logger.info("Нет неактивных игроков для уменьшения fissure")
+        
+        # Обновляем позиции игроков
+        update_player_positions()
     except Exception as e:
         logger.error(f"Ошибка в decrease_inactive_job: {e}")
+
+
+async def morning_digest_job(context):
+    """Утренний дайджест (9:00)"""
+    try:
+        logger.info("Запуск утреннего дайджеста")
+        
+        # Получаем ID чата для дайджеста
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            logger.info("Чат для дайджеста не настроен")
+            return
+        
+        # Получаем топ-3
+        top_users = get_fissure_top(3)
+        stats = get_digest_stats()
+        
+        # Формируем сообщение
+        text = "🌅 УТРЕННИЙ ДАЙДЖЕСТ ФИССУР\n\n"
+        
+        if top_users:
+            medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+            for i, user in enumerate(top_users, 1):
+                name = user.get('username', 'Unknown')[:15]
+                text += f"{medals.get(i)} {name}: {user['fissure']:.1f} см\n"
+        
+        growth_player, growth_pos = stats.get('top_growth', ('None', 0))
+        if growth_pos > 0:
+            text += f"\n📈 Рост дня: @{growth_player} (+{growth_pos} позиций вверх!)\n"
+        elif growth_pos < 0:
+            text += f"\n💀 Падение дня: @{growth_player} {growth_pos} позиций\n"
+        
+        text += f"\n🔥 Самая длинная фиссура: {top_users[0]['fissure']:.1f} см" if top_users else "\n🔥 Пока нет игроков"
+        text += f"\n📊 Всего игроков: {stats.get('total_players', 0)}"
+        
+        bot = context.application.bot
+        
+        # Пробуем отредактировать существующее сообщение
+        last_message_id = get_config('daily_digest_message_id')
+        if last_message_id:
+            try:
+                await bot.edit_message_text(
+                    chat_id=digest_chat_id,
+                    message_id=int(last_message_id),
+                    text=text
+                )
+                logger.info(f"Обновлён существующий дайджест {last_message_id}")
+                return
+            except Exception as e:
+                logger.info(f"Не удалось редактировать сообщение, создаём новое: {e}")
+        
+        # Отправляем новое сообщение
+        msg = await bot.send_message(chat_id=digest_chat_id, text=text)
+        set_config('daily_digest_message_id', msg.message_id)
+        logger.info(f"Создан новый утренний дайджест {msg.message_id}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка в morning_digest_job: {e}", exc_info=True)
+
+
+async def weekly_digest_job(context):
+    """Еженедельный дайджест (понедельник)"""
+    try:
+        logger.info("Запуск еженедельного дайджеста")
+        
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            logger.info("Чат для дайджеста не настроен")
+            return
+        
+        top_users = get_fissure_top(3)
+        stats = get_digest_stats()
+        
+        text = "🌅 НЕДЕЛЬНЫЙ ДАЙДЖЕСТ ФИССУР\n\n"
+        
+        # Топ-3 за неделю
+        if top_users:
+            text += "📈 Топ-3 за неделю:\n"
+            medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+            for i, user in enumerate(top_users, 1):
+                name = user.get('username', 'Unknown')[:15]
+                text += f"{medals.get(i)} {name}: {user['fissure']:.1f} см\n"
+        
+        text += f"\n📊 Статистика:\n"
+        text += f"• Всего игроков: {stats.get('total_players', 0)}\n"
+        text += f"• Новых игроков: +{stats.get('new_today', 0)}\n"
+        
+        bot = context.application.bot
+        
+        # Пробуем отредактировать
+        last_message_id = get_config('weekly_digest_message_id')
+        if last_message_id:
+            try:
+                await bot.edit_message_text(
+                    chat_id=digest_chat_id,
+                    message_id=int(last_message_id),
+                    text=text
+                )
+                return
+            except:
+                pass
+        
+        msg = await bot.send_message(chat_id=digest_chat_id, text=text)
+        set_config('weekly_digest_message_id', msg.message_id)
+        
+    except Exception as e:
+        logger.error(f"Ошибка в weekly_digest_job: {e}", exc_info=True)
 
 
 # =====================
@@ -748,6 +858,20 @@ async def main():
             days=(0, 1, 2, 3, 4, 5, 6)
         )
         logger.info("Done")
+        
+        # Утренний дайджест в 9:00
+        job_queue.run_daily(
+            morning_digest_job,
+            time=datetime.time(hour=9, minute=0),
+            days=(0, 1, 2, 3, 4, 5, 6)
+        )
+        
+        # Еженедельный дайджест по понедельникам
+        job_queue.run_daily(
+            weekly_digest_job,
+            time=datetime.time(hour=9, minute=0),
+            days=(0,)  # Monday only
+        )
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("fissure", fissure))
@@ -835,6 +959,20 @@ async def main_polling():
             days=(0, 1, 2, 3, 4, 5, 6)
         )
         logger.info("Done")
+        
+        # Утренний дайджест в 9:00
+        job_queue.run_daily(
+            morning_digest_job,
+            time=datetime.time(hour=9, minute=0),
+            days=(0, 1, 2, 3, 4, 5, 6)
+        )
+        
+        # Еженедельный дайджест по понедельникам
+        job_queue.run_daily(
+            weekly_digest_job,
+            time=datetime.time(hour=9, minute=0),
+            days=(0,)  # Monday only
+        )
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("fissure", fissure))
