@@ -557,8 +557,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             medals = {1: "🥇", 2: "🥈", 3: "🥉"}
             for i, user_top in enumerate(top_users, 1):
                 name = user_top.get('username', 'Unknown')[:15]
-                medal = medals.get(i, f"{i}.")
-                if i <= 3:
+                medal = medals.get(i)
+                if medal:
                     text += f"{medal} {name}: {user_top['fissure']:.1f} см\n"
                 else:
                     text += f"{i}. {name}: {user_top['fissure']:.1f} см\n"
