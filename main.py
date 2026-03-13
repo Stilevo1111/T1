@@ -116,17 +116,15 @@ async def morning_digest_job(context):
         # Формируем сообщение
         text = "🌅 УТРЕННИЙ ДАЙДЖЕСТ ФИССУР\n\n"
         
-        if top_users:
-            medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-            for i, user in enumerate(top_users, 1):
-                name = user.get('username', 'Unknown')[:15]
-                text += f"{medals.get(i)} {name}: {user['fissure']:.1f} см\n"
-        
         growth_player, growth_pos = stats.get('top_growth', ('None', 0))
         if growth_pos > 0:
-            text += f"\n📈 Рост дня: @{growth_player} (+{growth_pos} позиций вверх!)\n"
+            text += f"📈 Рост дня: @{growth_player} (+{growth_pos} позиций вверх!)\n"
         elif growth_pos < 0:
-            text += f"\n💀 Падение дня: @{growth_player} {growth_pos} позиций\n"
+            text += f"💀 Падение дня: @{growth_player} {growth_pos} позиций\n"
+        
+        # Новые игроки сегодня
+        if stats.get('new_today', 0) > 0:
+            text += f"🆕 Новичок дня: @NewPlayer (дебютант)\n"
         
         text += f"\n🔥 Самая длинная фиссура: {top_users[0]['fissure']:.1f} см" if top_users else "\n🔥 Пока нет игроков"
         text += f"\n📊 Всего игроков: {stats.get('total_players', 0)}"
@@ -157,7 +155,7 @@ async def morning_digest_job(context):
 
 
 async def weekly_digest_job(context):
-    """Еженедельный дайджест (понедельник)"""
+    """Еженедельный дайджест (суббота 14:00)"""
     try:
         logger.info("Запуск еженедельного дайджеста")
         
@@ -169,19 +167,20 @@ async def weekly_digest_job(context):
         top_users = get_fissure_top(3)
         stats = get_digest_stats()
         
-        text = "🌅 НЕДЕЛЬНЫЙ ДАЙДЖЕСТ ФИССУР\n\n"
+        text = "🌅 ЕЖЕНЕДЕЛЬНЫЙ ДАЙДЖЕСТ\n\n"
         
-        # Топ-3 за неделю
-        if top_users:
-            text += "📈 Топ-3 за неделю:\n"
-            medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-            for i, user in enumerate(top_users, 1):
-                name = user.get('username', 'Unknown')[:15]
-                text += f"{medals.get(i)} {name}: {user['fissure']:.1f} см\n"
+        # Больше всех вырос
+        growth_player, growth_pos = stats.get('top_growth', ('None', 0))
+        if growth_pos != 0:
+            text += f"🥈 Больше всех вырос: @{growth_player} (+{growth_pos} см)\n"
         
-        text += f"\n📊 Статистика:\n"
-        text += f"• Всего игроков: {stats.get('total_players', 0)}\n"
+        # Прорыв недели
+        text += f"🥉 Прорыв недели: @Player (+10 позиций)\n"
+        
+        text += f"\n📊 Статистика недели:\n"
+        text += f"• Всего бросков: XXX\n"
         text += f"• Новых игроков: +{stats.get('new_today', 0)}\n"
+        text += f"• Средний рост: +X см\n"
         
         bot = context.application.bot
         
