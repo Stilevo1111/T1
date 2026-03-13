@@ -79,7 +79,13 @@ def init_db():
                     last_fissure DOUBLE PRECISION DEFAULT 0,
                     last_message_id INTEGER DEFAULT 0,
                     total_growth REAL DEFAULT 0,
-                    total_rolls INTEGER DEFAULT 0
+                    total_rolls INTEGER DEFAULT 0,
+                    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    current_streak INTEGER DEFAULT 0,
+                    best_streak INTEGER DEFAULT 0,
+                    current_position INTEGER DEFAULT 0,
+                    digest_position INTEGER DEFAULT 0,
+                    digest_fissure REAL DEFAULT 0.0
                 )
             """)
             # Добавляем колонки если не существуют
@@ -95,12 +101,20 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             """)
-            # Для хранения позиций для отслеживания роста/падения
             cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_week_position INTEGER DEFAULT 0
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS current_streak INTEGER DEFAULT 0
             """)
             cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_day_position INTEGER DEFAULT 0
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS best_streak INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS current_position INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_position INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_fissure REAL DEFAULT 0.0
             """)
         else:
             # Для SQLite создаём таблицу
@@ -113,7 +127,13 @@ def init_db():
                     last_fissure REAL DEFAULT 0,
                     last_message_id INTEGER DEFAULT 0,
                     total_growth REAL DEFAULT 0,
-                    total_rolls INTEGER DEFAULT 0
+                    total_rolls INTEGER DEFAULT 0,
+                    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    current_streak INTEGER DEFAULT 0,
+                    best_streak INTEGER DEFAULT 0,
+                    current_position INTEGER DEFAULT 0,
+                    digest_position INTEGER DEFAULT 0,
+                    digest_fissure REAL DEFAULT 0.0
                 )
             """)
             # Для SQLite проверяем есть ли колонки и добавляем если нет
@@ -127,10 +147,16 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN total_rolls INTEGER DEFAULT 0")
             if 'last_activity' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-            if 'last_week_position' not in columns:
-                cursor.execute("ALTER TABLE users ADD COLUMN last_week_position INTEGER DEFAULT 0")
-            if 'last_day_position' not in columns:
-                cursor.execute("ALTER TABLE users ADD COLUMN last_day_position INTEGER DEFAULT 0")
+            if 'current_streak' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0")
+            if 'best_streak' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN best_streak INTEGER DEFAULT 0")
+            if 'current_position' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN current_position INTEGER DEFAULT 0")
+            if 'digest_position' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN digest_position INTEGER DEFAULT 0")
+            if 'digest_fissure' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN digest_fissure REAL DEFAULT 0.0")
         
         # Создаём таблицу для настроек бота (чат для дайджестов)
         cursor.execute("""
@@ -274,6 +300,7 @@ class Database:
             # Определяем тип базы данных по схеме URL
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
+            win = 1 if growth > 0 else 0
             
             if "postgres" in scheme:
                 cursor = conn.cursor()
@@ -281,18 +308,22 @@ class Database:
                     UPDATE users SET fissure=%s, last_fissure=%s, 
                     total_growth = total_growth + %s,
                     total_rolls = total_rolls + 1,
-                    last_activity = CURRENT_TIMESTAMP
+                    last_activity = CURRENT_TIMESTAMP,
+                    current_streak = CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END,
+                    best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END)
                     WHERE telegram_id=%s
-                """, (fissure, last_fissure, growth, telegram_id))
+                """, (fissure, last_fissure, growth, win, win, telegram_id))
             else:
                 cursor = conn.cursor()
                 cursor.execute("""
                     UPDATE users SET fissure=?, last_fissure=?, 
                     total_growth = total_growth + ?,
                     total_rolls = total_rolls + 1,
-                    last_activity = CURRENT_TIMESTAMP
+                    last_activity = CURRENT_TIMESTAMP,
+                    current_streak = CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END,
+                    best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END)
                     WHERE telegram_id=?
-                """, (fissure, last_fissure, growth, telegram_id))
+                """, (fissure, last_fissure, growth, win, win, telegram_id))
             conn.commit()
             cursor.close()
         except Exception as e:
@@ -419,8 +450,13 @@ class Database:
         """Получить значение конфигурации"""
         try:
             conn = self.connect()
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
             cursor = conn.cursor()
-            cursor.execute("SELECT value FROM bot_config WHERE key = ?", (key,))
+            if "postgres" in scheme:
+                cursor.execute("SELECT value FROM bot_config WHERE key = %s", (key,))
+            else:
+                cursor.execute("SELECT value FROM bot_config WHERE key = ?", (key,))
             result = cursor.fetchone()
             cursor.close()
             return result[0] if result else default
@@ -432,11 +468,19 @@ class Database:
         """Установить значение конфигурации"""
         try:
             conn = self.connect()
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
             cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO bot_config (key, value) VALUES (?, ?)
-                ON CONFLICT(key) DO UPDATE SET value = excluded.value
-            """, (key, str(value)))
+            if "postgres" in scheme:
+                cursor.execute("""
+                    INSERT INTO bot_config (key, value) VALUES (%s, %s)
+                    ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
+                """, (key, str(value)))
+            else:
+                cursor.execute("""
+                    INSERT INTO bot_config (key, value) VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """, (key, str(value)))
             conn.commit()
             cursor.close()
             return True
@@ -448,75 +492,141 @@ class Database:
         """Получить статистику для дайджеста"""
         try:
             conn = self.connect()
-            url = urlparse(DATABASE_URL)
+            url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             cursor = conn.cursor()
             
-            # Всего игроков
-            cursor.execute("SELECT COUNT(*) FROM users")
-            total_players = cursor.fetchone()[0]
-            
-            # Новые игроки сегодня
             if "postgres" in scheme:
-                cursor.execute("SELECT COUNT(*) FROM users WHERE DATE(created_at) = CURRENT_DATE")
-                new_today = cursor.fetchone()[0]
-                # Игроки с наибольшим ростом позиции за день
                 cursor.execute("""
-                    SELECT username, last_day_position - last_week_position as growth
-                    FROM users WHERE last_day_position > 0 ORDER BY growth DESC LIMIT 1
+                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, best_streak
+                    FROM users
                 """)
-                top_growth = cursor.fetchone()
             else:
-                cursor.execute("SELECT COUNT(*) FROM users WHERE DATE(created_at) = DATE('now')")
-                new_today = cursor.fetchone()[0]
                 cursor.execute("""
-                    SELECT username, last_day_position - last_week_position as growth
-                    FROM users WHERE last_day_position > 0 ORDER BY growth DESC LIMIT 1
+                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, best_streak
+                    FROM users
                 """)
-                top_growth = cursor.fetchone()
+            rows = cursor.fetchall()
             
             cursor.close()
+            users = []
+            for r in rows:
+                users.append({
+                    "telegram_id": r[0],
+                    "username": r[1],
+                    "fissure": float(r[2] or 0.0),
+                    "digest_position": int(r[3] or 0),
+                    "digest_fissure": float(r[4] or 0.0),
+                    "best_streak": int(r[5] or 0),
+                })
+
+            # Текущие позиции по текущей фиссуре
+            users_sorted = sorted(users, key=lambda u: u["fissure"], reverse=True)
+            current_pos_by_id = {u["telegram_id"]: i + 1 for i, u in enumerate(users_sorted)}
+
+            # Рост: насколько позиций вверх за сутки (digest_position - current_position)
+            top_growth_user = None
+            top_growth_positions = 0
+            for u in users:
+                prev_pos = u["digest_position"]
+                cur_pos = current_pos_by_id.get(u["telegram_id"], 0)
+                if prev_pos and cur_pos:
+                    moved_up = prev_pos - cur_pos
+                    if moved_up > top_growth_positions:
+                        top_growth_positions = moved_up
+                        top_growth_user = u["username"] or str(u["telegram_id"])
+
+            # Падение: насколько см уменьшилась фиссура за сутки (current - digest)
+            top_drop_user = None
+            top_drop_cm = 0.0  # negative
+            for u in users:
+                prev_f = u["digest_fissure"]
+                cur_f = u["fissure"]
+                if prev_f and prev_f > 0:
+                    delta = cur_f - prev_f
+                    if delta < top_drop_cm:
+                        top_drop_cm = delta
+                        top_drop_user = u["username"] or str(u["telegram_id"])
+
+            # Стрик: рекордная серия побед за всё время (best_streak)
+            top_streak_user = None
+            top_streak = 0
+            for u in users:
+                if u["best_streak"] > top_streak:
+                    top_streak = u["best_streak"]
+                    top_streak_user = u["username"] or str(u["telegram_id"])
+
             return {
-                'total_players': total_players,
-                'new_today': new_today,
-                'top_growth': top_growth if top_growth else ('None', 0)
+                "top_growth": (top_growth_user or "None", int(top_growth_positions)),
+                "top_drop": (top_drop_user or "None", float(top_drop_cm)),
+                "top_streak": (top_streak_user or "None", int(top_streak)),
             }
         except Exception as e:
             print(f"❌ Ошибка get_digest_stats: {e}")
-            return {'total_players': 0, 'new_today': 0, 'top_growth': ('None', 0)}
+            return {"top_growth": ("None", 0), "top_drop": ("None", 0.0), "top_streak": ("None", 0)}
     
     def update_player_positions(self):
-        """Обновить позиции игроков (вызывается раз в день)"""
+        """Обновить текущие позиции игроков (по fissure DESC)"""
         try:
             conn = self.connect()
-            url = urlparse(DATABASE_URL)
+            url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             cursor = conn.cursor()
             
-            # Получаем текущий топ
-            cursor.execute("SELECT telegram_id, ROW_NUMBER() OVER (ORDER BY fissure DESC) as pos FROM users")
+            if "postgres" in scheme:
+                cursor.execute("SELECT telegram_id, fissure FROM users ORDER BY fissure DESC")
+            else:
+                cursor.execute("SELECT telegram_id, fissure FROM users ORDER BY fissure DESC")
             players = cursor.fetchall()
-            
-            for player in players:
+
+            for idx, player in enumerate(players, start=1):
                 telegram_id = player[0]
-                new_position = player[1]
-                
                 if "postgres" in scheme:
-                    cursor.execute("""
-                        UPDATE users SET last_week_position = last_day_position, last_day_position = %s
-                        WHERE telegram_id = %s
-                    """, (new_position, telegram_id))
+                    cursor.execute("UPDATE users SET current_position = %s WHERE telegram_id = %s", (idx, telegram_id))
                 else:
-                    cursor.execute("""
-                        UPDATE users SET last_week_position = last_day_position, last_day_position = ?
-                        WHERE telegram_id = ?
-                    """, (new_position, telegram_id))
+                    cursor.execute("UPDATE users SET current_position = ? WHERE telegram_id = ?", (idx, telegram_id))
             
             conn.commit()
             cursor.close()
             return len(players)
         except Exception as e:
             print(f"❌ Ошибка update_player_positions: {e}")
+            return 0
+
+    def update_digest_snapshot(self):
+        """Обновить 'снимок' (позиция/фиссура) после отправки дайджеста"""
+        try:
+            conn = self.connect()
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
+            cursor = conn.cursor()
+
+            # Обновляем текущие позиции
+            if "postgres" in scheme:
+                cursor.execute("SELECT telegram_id, fissure FROM users ORDER BY fissure DESC")
+            else:
+                cursor.execute("SELECT telegram_id, fissure FROM users ORDER BY fissure DESC")
+            players = cursor.fetchall()
+
+            for idx, player in enumerate(players, start=1):
+                telegram_id = player[0]
+                fissure = float(player[1] or 0.0)
+                if "postgres" in scheme:
+                    cursor.execute(
+                        "UPDATE users SET current_position=%s, digest_position=%s, digest_fissure=%s WHERE telegram_id=%s",
+                        (idx, idx, fissure, telegram_id),
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE users SET current_position=?, digest_position=?, digest_fissure=? WHERE telegram_id=?",
+                        (idx, idx, fissure, telegram_id),
+                    )
+
+            conn.commit()
+            cursor.close()
+            return len(players)
+        except Exception as e:
+            print(f"❌ Ошибка update_digest_snapshot: {e}")
             return 0
 
 # Функции для совместимости со старым кодом
@@ -569,3 +679,8 @@ def update_player_positions():
     """Обновить позиции игроков"""
     db = Database()
     return db.update_player_positions()
+
+def update_digest_snapshot():
+    """Обновить снимок для дайджеста"""
+    db = Database()
+    return db.update_digest_snapshot()

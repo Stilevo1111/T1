@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import os
 import random
 import time
@@ -8,7 +8,7 @@ import datetime
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot
 from aiohttp import web
 
 # Logging setup
@@ -109,25 +109,29 @@ async def morning_digest_job(context):
             logger.info("Чат для дайджеста не настроен")
             return
         
-        # Получаем топ-3
-        top_users = get_fissure_top(3)
         stats = get_digest_stats()
         
         # Формируем сообщение
-        text = "🌅 УТРЕННИЙ ДАЙДЖЕСТ ФИССУР\n\n"
-        
-        growth_player, growth_pos = stats.get('top_growth', ('None', 0))
+        growth_player, growth_pos = stats.get("top_growth", ("None", 0))
+        drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
+        streak_player, streak_len = stats.get("top_streak", ("None", 0))
+
         if growth_pos > 0:
-            text += f"📈 Рост дня: @{growth_player} (+{growth_pos} позиций вверх!)\n"
-        elif growth_pos < 0:
-            text += f"💀 Падение дня: @{growth_player} {growth_pos} позиций\n"
-        
-        # Новые игроки сегодня
-        if stats.get('new_today', 0) > 0:
-            text += f"🆕 Новичок дня: @NewPlayer (дебютант)\n"
-        
-        text += f"\n🔥 Самая длинная фиссура: {top_users[0]['fissure']:.1f} см" if top_users else "\n🔥 Пока нет игроков"
-        text += f"\n📊 Всего игроков: {stats.get('total_players', 0)}"
+            growth_part = f"📈Рост: {growth_player} +{growth_pos} позиций"
+        else:
+            growth_part = "📈Рост: —"
+
+        if drop_cm < 0:
+            drop_part = f"💀Падение: {drop_player} {drop_cm:.0f} см"
+        else:
+            drop_part = "💀Падение: —"
+
+        if streak_len > 0:
+            streak_part = f"🍀Стрик: {streak_player} {streak_len} РАЗ"
+        else:
+            streak_part = "🍀Стрик: —"
+
+        text = f"{growth_part} ❘ {drop_part} ❘{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ"
         
         bot = context.application.bot
         
@@ -141,6 +145,7 @@ async def morning_digest_job(context):
                     text=text
                 )
                 logger.info(f"Обновлён существующий дайджест {last_message_id}")
+                update_digest_snapshot()
                 return
             except Exception as e:
                 logger.info(f"Не удалось редактировать сообщение, создаём новое: {e}")
@@ -149,6 +154,9 @@ async def morning_digest_job(context):
         msg = await bot.send_message(chat_id=digest_chat_id, text=text)
         set_config('daily_digest_message_id', msg.message_id)
         logger.info(f"Создан новый утренний дайджест {msg.message_id}")
+
+        # Обновляем снимок после отправки/обновления
+        update_digest_snapshot()
         
     except Exception as e:
         logger.error(f"Ошибка в morning_digest_job: {e}", exc_info=True)
@@ -748,6 +756,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in start: {e}")
 
 
+async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Установить текущий чат как чат для утреннего дайджеста"""
+    try:
+        chat = update.effective_chat
+        chat_id = chat.id
+
+        # Сохраняем ID чата в конфиг
+        set_config("digest_chat_id", chat_id)
+
+        await update.message.reply_text(
+            f"✅ Чат для утреннего дайджеста установлен.\n"
+            f"ID чата: `{chat_id}`\n"
+            f"Теперь в 09:00 дайджест будет приходить сюда.",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Error in set_digest_chat: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("❌ Не удалось сохранить чат для дайджеста")
+        except Exception:
+            pass
+
+
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
     try:
@@ -817,6 +848,16 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
         old_status = old_member.status
         new_status = new_member.status
         
+        # Если это сам бот только что добавлен в чат — автоматически запоминаем чат для дайджеста,
+        # если он ещё не настроен
+        try:
+            bot_id = context.bot.id
+            if new_member.user.id == bot_id and not get_config("digest_chat_id"):
+                set_config("digest_chat_id", chat_id)
+                logger.info(f"Автоматически установлен digest_chat_id = {chat_id}")
+        except Exception as e:
+            logger.debug(f"Не удалось автоматически установить digest_chat_id: {e}")
+        
         # User joined the chat (was not a member, now is member)
         if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator']:
             name = new_member.user.first_name or "Friend"
@@ -876,6 +917,7 @@ async def main():
         app.add_handler(CommandHandler("fissure", fissure))
         app.add_handler(CommandHandler("stats", stats))
         app.add_handler(CommandHandler("top", top))
+        app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
@@ -977,6 +1019,7 @@ async def main_polling():
         app.add_handler(CommandHandler("fissure", fissure))
         app.add_handler(CommandHandler("stats", stats))
         app.add_handler(CommandHandler("top", top))
+        app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
