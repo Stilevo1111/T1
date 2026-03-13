@@ -1,13 +1,14 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import os
 import random
 import time
 import asyncio
 import logging
+import datetime
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure
 from aiohttp import web
 
 # Logging setup
@@ -79,6 +80,19 @@ def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
     else:
         # Fallback если job_queue не передан
         asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay))
+
+
+async def decrease_inactive_job(context):
+    """Ежедневное задание: уменьшить fissure неактивным игрокам"""
+    try:
+        logger.info("Запуск ежедневного уменьшения fissure для неактивных игроков")
+        affected = decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0)
+        if affected > 0:
+            logger.info(f"Уменьшен fissure для {affected} неактивных игроков")
+        else:
+            logger.info("Нет неактивных игроков для уменьшения fissure")
+    except Exception as e:
+        logger.error(f"Ошибка в decrease_inactive_job: {e}")
 
 
 # =====================
@@ -721,6 +735,14 @@ async def main():
         
         # Инициализируем job_queue с application для PTB v20+
         job_queue.set_application(app)
+        
+        # Daily job
+        job_queue.run_daily(
+            decrease_inactive_job,
+            time=datetime.time(hour=0, minute=0),
+            days=(0, 1, 2, 3, 4, 5, 6)
+        )
+        logger.info("Done")
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("fissure", fissure))
@@ -800,6 +822,14 @@ async def main_polling():
         
         # Инициализируем job_queue с application для PTB v20+
         job_queue.set_application(app)
+        
+        # Daily job
+        job_queue.run_daily(
+            decrease_inactive_job,
+            time=datetime.time(hour=0, minute=0),
+            days=(0, 1, 2, 3, 4, 5, 6)
+        )
+        logger.info("Done")
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("fissure", fissure))
@@ -826,3 +856,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     else:
         asyncio.run(main_polling())
+

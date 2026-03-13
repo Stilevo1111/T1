@@ -92,6 +92,9 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS total_rolls INTEGER DEFAULT 0
             """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -115,6 +118,8 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN total_growth REAL DEFAULT 0")
             if 'total_rolls' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN total_rolls INTEGER DEFAULT 0")
+            if 'last_activity' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         
         conn.commit()
         conn.close()
@@ -256,7 +261,8 @@ class Database:
                 cursor.execute("""
                     UPDATE users SET fissure=%s, last_fissure=%s, 
                     total_growth = total_growth + %s,
-                    total_rolls = total_rolls + 1
+                    total_rolls = total_rolls + 1,
+                    last_activity = CURRENT_TIMESTAMP
                     WHERE telegram_id=%s
                 """, (fissure, last_fissure, growth, telegram_id))
             else:
@@ -264,7 +270,8 @@ class Database:
                 cursor.execute("""
                     UPDATE users SET fissure=?, last_fissure=?, 
                     total_growth = total_growth + ?,
-                    total_rolls = total_rolls + 1
+                    total_rolls = total_rolls + 1,
+                    last_activity = CURRENT_TIMESTAMP
                     WHERE telegram_id=?
                 """, (fissure, last_fissure, growth, telegram_id))
             conn.commit()
@@ -352,6 +359,42 @@ class Database:
         except Exception as e:
             print(f"❌ Ошибка get_user_rank: {e}")
             return None
+    
+    def decrease_inactive_fissure(self, days_inactive=1, decrease_amount=1.0):
+        """Уменьшить fissure для неактивных игроков"""
+        try:
+            conn = self.connect()
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
+            
+            if "postgres" in scheme:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE users 
+                    SET fissure = GREATEST(0.1, fissure - %s)
+                    WHERE last_activity < CURRENT_TIMESTAMP - INTERVAL '%s days'
+                    AND fissure > 0.1
+                """, (decrease_amount, days_inactive))
+                affected = cursor.rowcount
+                conn.commit()
+                cursor.close()
+                return affected
+            else:
+                # Для SQLite используем datetime function
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE users 
+                    SET fissure = MAX(0.1, fissure - ?)
+                    WHERE last_activity < datetime('now', '-' || ? || ' days')
+                    AND fissure > 0.1
+                """, (decrease_amount, days_inactive))
+                affected = cursor.rowcount
+                conn.commit()
+                cursor.close()
+                return affected
+        except Exception as e:
+            print(f"❌ Ошибка decrease_inactive_fissure: {e}")
+            return 0
 
 # Функции для совместимости со старым кодом
 def get_user(telegram_id, username=None):
@@ -378,3 +421,8 @@ def update_last_message_id(telegram_id, message_id):
     """Функция для совместимости - использует новый класс Database"""
     db = Database()
     db.update_last_message_id(telegram_id, message_id)
+
+def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
+    """Уменьшить fissure для неактивных игроков (вызывается ежедневно)"""
+    db = Database()
+    return db.decrease_inactive_fissure(days_inactive, decrease_amount)
