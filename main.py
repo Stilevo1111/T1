@@ -92,8 +92,9 @@ async def decrease_inactive_job(context):
         else:
             logger.info("Нет неактивных игроков для уменьшения fissure")
         
-        # Обновляем позиции игроков
+        # Обновляем позиции игроков и суточный "снимок" для дайджеста
         update_player_positions()
+        update_digest_snapshot()
     except Exception as e:
         logger.error(f"Ошибка в decrease_inactive_job: {e}")
 
@@ -145,7 +146,6 @@ async def morning_digest_job(context):
                     text=text
                 )
                 logger.info(f"Обновлён существующий дайджест {last_message_id}")
-                update_digest_snapshot()
                 return
             except Exception as e:
                 logger.info(f"Не удалось редактировать сообщение, создаём новое: {e}")
@@ -154,9 +154,6 @@ async def morning_digest_job(context):
         msg = await bot.send_message(chat_id=digest_chat_id, text=text)
         set_config('daily_digest_message_id', msg.message_id)
         logger.info(f"Создан новый утренний дайджест {msg.message_id}")
-
-        # Обновляем снимок после отправки/обновления
-        update_digest_snapshot()
         
     except Exception as e:
         logger.error(f"Ошибка в morning_digest_job: {e}", exc_info=True)
