@@ -116,6 +116,18 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_fissure REAL DEFAULT 0.0
             """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_rolls INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_growth REAL DEFAULT 0.0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_position INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NULL
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -157,6 +169,14 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN digest_position INTEGER DEFAULT 0")
             if 'digest_fissure' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN digest_fissure REAL DEFAULT 0.0")
+            if 'weekly_rolls' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN weekly_rolls INTEGER DEFAULT 0")
+            if 'weekly_growth' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN weekly_growth REAL DEFAULT 0.0")
+            if 'weekly_digest_position' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN weekly_digest_position INTEGER DEFAULT 0")
+            if 'created_at' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT NULL")
         
         # Создаём таблицу для настроек бота (чат для дайджестов)
         cursor.execute("""
@@ -216,8 +236,8 @@ class Database:
         
         if "postgres" in scheme:
             cur.execute('''
-                INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                 ON CONFLICT (telegram_id) 
                 DO UPDATE SET 
                     username = EXCLUDED.username,
@@ -230,8 +250,15 @@ class Database:
             ''', (user_id, username, 0.1, 0, 0, 0, 0))
         else:
             cur.execute('''
-                INSERT OR REPLACE INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(telegram_id) DO UPDATE SET
+                    username = excluded.username,
+                    fissure = excluded.fissure,
+                    last_fissure = excluded.last_fissure,
+                    last_message_id = excluded.last_message_id,
+                    total_growth = excluded.total_growth,
+                    total_rolls = excluded.total_rolls
             ''', (user_id, username, 0.1, 0, 0, 0, 0))
         
         conn.commit()
@@ -302,28 +329,33 @@ class Database:
             scheme = url.scheme
             win = 1 if growth > 0 else 0
             
+            weekly_inc = max(0.0, float(growth))
             if "postgres" in scheme:
                 cursor = conn.cursor()
                 cursor.execute("""
                     UPDATE users SET fissure=%s, last_fissure=%s, 
                     total_growth = total_growth + %s,
                     total_rolls = total_rolls + 1,
+                    weekly_rolls = weekly_rolls + 1,
+                    weekly_growth = weekly_growth + %s,
                     last_activity = CURRENT_TIMESTAMP,
                     current_streak = CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END,
                     best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END)
                     WHERE telegram_id=%s
-                """, (fissure, last_fissure, growth, win, win, telegram_id))
+                """, (fissure, last_fissure, growth, weekly_inc, win, win, telegram_id))
             else:
                 cursor = conn.cursor()
                 cursor.execute("""
                     UPDATE users SET fissure=?, last_fissure=?, 
                     total_growth = total_growth + ?,
                     total_rolls = total_rolls + 1,
+                    weekly_rolls = weekly_rolls + 1,
+                    weekly_growth = weekly_growth + ?,
                     last_activity = CURRENT_TIMESTAMP,
                     current_streak = CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END,
                     best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END)
                     WHERE telegram_id=?
-                """, (fissure, last_fissure, growth, win, win, telegram_id))
+                """, (fissure, last_fissure, growth, weekly_inc, win, win, telegram_id))
             conn.commit()
             cursor.close()
         except Exception as e:
@@ -629,6 +661,126 @@ class Database:
             print(f"❌ Ошибка update_digest_snapshot: {e}")
             return 0
 
+    def get_weekly_digest_stats(self):
+        """Статистика для еженедельного дайджеста: рост в см, прорыв по позициям, броски, новички, общий рост."""
+        try:
+            conn = self.connect()
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
+            cursor = conn.cursor()
+
+            if "postgres" in scheme:
+                cursor.execute("""
+                    SELECT telegram_id, username, fissure, current_position, weekly_digest_position,
+                           weekly_growth, weekly_rolls, created_at
+                    FROM users
+                """)
+            else:
+                cursor.execute("""
+                    SELECT telegram_id, username, fissure, current_position, weekly_digest_position,
+                           weekly_growth, weekly_rolls, created_at
+                    FROM users
+                """)
+            rows = cursor.fetchall()
+
+            if "postgres" in scheme:
+                cursor.execute("SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '7 days'")
+            else:
+                cursor.execute("SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', '-7 days')")
+            new_players_week = cursor.fetchone()[0] or 0
+
+            cursor.close()
+
+            users = []
+            for r in rows:
+                users.append({
+                    "telegram_id": r[0],
+                    "username": r[1],
+                    "fissure": float(r[2] or 0.0),
+                    "current_position": int(r[3] or 0),
+                    "weekly_digest_position": int(r[4] or 0),
+                    "weekly_growth": float(r[5] or 0.0),
+                    "weekly_rolls": int(r[6] or 0),
+                })
+
+            # Текущие позиции по fissure (могут отличаться от current_position если не обновлялись)
+            users_sorted = sorted(users, key=lambda u: u["fissure"], reverse=True)
+            cur_pos = {u["telegram_id"]: i + 1 for i, u in enumerate(users_sorted)}
+
+            # Больше всех вырос в см за неделю
+            top_cm_user = None
+            top_cm = 0.0
+            for u in users:
+                if u["weekly_growth"] > top_cm:
+                    top_cm = u["weekly_growth"]
+                    top_cm_user = u["username"] or str(u["telegram_id"])
+
+            # Прорыв недели: кто поднялся на больше всего позиций в топе
+            breakthrough_user = None
+            breakthrough_pos = 0
+            for u in users:
+                prev = u["weekly_digest_position"]
+                now_pos = cur_pos.get(u["telegram_id"], 0)
+                if prev and now_pos:
+                    gain = prev - now_pos
+                    if gain > breakthrough_pos:
+                        breakthrough_pos = gain
+                        breakthrough_user = u["username"] or str(u["telegram_id"])
+
+            total_rolls_week = sum(u["weekly_rolls"] for u in users)
+            total_growth_week = sum(u["weekly_growth"] for u in users)
+
+            return {
+                "top_growth_cm": (top_cm_user or "None", round(top_cm, 1)),
+                "breakthrough": (breakthrough_user or "None", int(breakthrough_pos)),
+                "total_rolls_week": int(total_rolls_week),
+                "new_players_week": int(new_players_week),
+                "total_growth_week": round(total_growth_week, 1),
+            }
+        except Exception as e:
+            print(f"❌ Ошибка get_weekly_digest_stats: {e}")
+            return {
+                "top_growth_cm": ("None", 0),
+                "breakthrough": ("None", 0),
+                "total_rolls_week": 0,
+                "new_players_week": 0,
+                "total_growth_week": 0,
+            }
+
+    def update_weekly_digest_snapshot(self):
+        """Обновить снимок для недельного дайджеста и обнулить недельные счётчики."""
+        try:
+            conn = self.connect()
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
+            cursor = conn.cursor()
+
+            if "postgres" in scheme:
+                cursor.execute("SELECT telegram_id, fissure FROM users ORDER BY fissure DESC")
+            else:
+                cursor.execute("SELECT telegram_id, fissure FROM users ORDER BY fissure DESC")
+            players = cursor.fetchall()
+
+            for idx, row in enumerate(players, start=1):
+                tid = row[0]
+                if "postgres" in scheme:
+                    cursor.execute("""
+                        UPDATE users SET current_position = %s, weekly_digest_position = %s,
+                        weekly_rolls = 0, weekly_growth = 0 WHERE telegram_id = %s
+                    """, (idx, idx, tid))
+                else:
+                    cursor.execute("""
+                        UPDATE users SET current_position = ?, weekly_digest_position = ?,
+                        weekly_rolls = 0, weekly_growth = 0 WHERE telegram_id = ?
+                    """, (idx, idx, tid))
+
+            conn.commit()
+            cursor.close()
+            return len(players)
+        except Exception as e:
+            print(f"❌ Ошибка update_weekly_digest_snapshot: {e}")
+            return 0
+
 # Функции для совместимости со старым кодом
 def get_user(telegram_id, username=None):
     """Функция для совместимости - использует новый класс Database"""
@@ -684,3 +836,13 @@ def update_digest_snapshot():
     """Обновить снимок для дайджеста"""
     db = Database()
     return db.update_digest_snapshot()
+
+def get_weekly_digest_stats():
+    """Статистика для еженедельного дайджеста"""
+    db = Database()
+    return db.get_weekly_digest_stats()
+
+def update_weekly_digest_snapshot():
+    """Обновить снимок и обнулить недельные счётчики после еженедельного дайджеста"""
+    db = Database()
+    return db.update_weekly_digest_snapshot()

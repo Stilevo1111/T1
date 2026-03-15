@@ -8,7 +8,7 @@ import datetime
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot
 from aiohttp import web
 
 # Logging setup
@@ -92,9 +92,8 @@ async def decrease_inactive_job(context):
         else:
             logger.info("Нет неактивных игроков для уменьшения fissure")
         
-        # Обновляем позиции игроков и суточный "снимок" для дайджеста
+        # Обновляем позиции игроков
         update_player_positions()
-        update_digest_snapshot()
     except Exception as e:
         logger.error(f"Ошибка в decrease_inactive_job: {e}")
 
@@ -118,21 +117,21 @@ async def morning_digest_job(context):
         streak_player, streak_len = stats.get("top_streak", ("None", 0))
 
         if growth_pos > 0:
-            growth_part = f"📈Рост: {growth_player} +{growth_pos} позиций"
+            growth_part = f"📈{growth_player} ↑+{growth_pos}"
         else:
-            growth_part = "📈Рост: —"
+            growth_part = "📈—"
 
         if drop_cm < 0:
-            drop_part = f"💀Падение: {drop_player} {drop_cm:.0f} см"
+            drop_part = f"💀{drop_player} {drop_cm:.0f} см"
         else:
-            drop_part = "💀Падение: —"
+            drop_part = "💀—"
 
         if streak_len > 0:
-            streak_part = f"🍀Стрик: {streak_player} {streak_len} РАЗ"
+            streak_part = f"🍀Стрик: {streak_player} {streak_len} Раз"
         else:
             streak_part = "🍀Стрик: —"
 
-        text = f"{growth_part} ❘ {drop_part} ❘{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК"
+        text = f"{growth_part} {drop_part} {streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК"
         
         bot = context.application.bot
         
@@ -146,6 +145,10 @@ async def morning_digest_job(context):
                     text=text
                 )
                 logger.info(f"Обновлён существующий дайджест {last_message_id}")
+                # Для планового дайджеста (9:00) обновляем "снимок" на следующие сутки.
+                # Для ручного /digestnow snapshot НЕ трогаем, чтобы значение держалось до следующего 9:00.
+                if not getattr(context, "manual", False):
+                    update_digest_snapshot()
                 return
             except Exception as e:
                 logger.info(f"Не удалось редактировать сообщение, создаём новое: {e}")
@@ -154,13 +157,15 @@ async def morning_digest_job(context):
         msg = await bot.send_message(chat_id=digest_chat_id, text=text)
         set_config('daily_digest_message_id', msg.message_id)
         logger.info(f"Создан новый утренний дайджест {msg.message_id}")
+        if not getattr(context, "manual", False):
+            update_digest_snapshot()
         
     except Exception as e:
         logger.error(f"Ошибка в morning_digest_job: {e}", exc_info=True)
 
 
 async def weekly_digest_job(context):
-    """Еженедельный дайджест (суббота 14:00)"""
+    """Еженедельный дайджест (по расписанию)"""
     try:
         logger.info("Запуск еженедельного дайджеста")
         
@@ -169,27 +174,31 @@ async def weekly_digest_job(context):
             logger.info("Чат для дайджеста не настроен")
             return
         
-        top_users = get_fissure_top(3)
-        stats = get_digest_stats()
+        stats = get_weekly_digest_stats()
         
         text = "🌅 ЕЖЕНЕДЕЛЬНЫЙ ДАЙДЖЕСТ\n\n"
         
-        # Больше всех вырос
-        growth_player, growth_pos = stats.get('top_growth', ('None', 0))
-        if growth_pos != 0:
-            text += f"🥈 Больше всех вырос: @{growth_player} (+{growth_pos} см)\n"
+        # Больше всех вырос в см за неделю
+        growth_player, growth_cm = stats.get("top_growth_cm", ("None", 0))
+        if growth_cm > 0:
+            text += f"🍆 Больше всех вырос: @{growth_player} (+{growth_cm:.0f} см)\n"
         
-        # Прорыв недели
-        text += f"🥉 Прорыв недели: @Player (+10 позиций)\n"
+        # Прорыв недели: кто поднялся на больше всего позиций в топе
+        breakthrough_player, breakthrough_pos = stats.get("breakthrough", ("None", 0))
+        if breakthrough_pos > 0:
+            text += f"🔥Прорыв недели: @{breakthrough_player} (+{breakthrough_pos} позиций)\n"
+        
+        total_rolls = stats.get("total_rolls_week", 0)
+        new_players = stats.get("new_players_week", 0)
+        total_growth = stats.get("total_growth_week", 0)
         
         text += f"\n📊 Статистика недели:\n"
-        text += f"• Всего бросков: XXX\n"
-        text += f"• Новых игроков: +{stats.get('new_today', 0)}\n"
-        text += f"• Средний рост: +X см\n"
+        text += f"• Всего бросков: {total_rolls}\n"
+        text += f"• Новых игроков: {new_players}\n"
+        text += f"• Общий рост: +{total_growth:.0f} см\n"
         
         bot = context.application.bot
         
-        # Пробуем отредактировать
         last_message_id = get_config('weekly_digest_message_id')
         if last_message_id:
             try:
@@ -198,12 +207,14 @@ async def weekly_digest_job(context):
                     message_id=int(last_message_id),
                     text=text
                 )
+                update_weekly_digest_snapshot()
                 return
-            except:
+            except Exception:
                 pass
         
         msg = await bot.send_message(chat_id=digest_chat_id, text=text)
         set_config('weekly_digest_message_id', msg.message_id)
+        update_weekly_digest_snapshot()
         
     except Exception as e:
         logger.error(f"Ошибка в weekly_digest_job: {e}", exc_info=True)
@@ -212,23 +223,31 @@ async def weekly_digest_job(context):
 async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ручной запуск утреннего дайджеста в этот чат"""
     try:
-        chat_id = update.effective_chat.id
+        chat = update.effective_chat
+        chat_id = chat.id
         # Сохраняем этот чат как чат для дайджеста
         set_config("digest_chat_id", chat_id)
 
         class SimpleContext:
             def __init__(self, application):
                 self.application = application
+                # Флаг, что это ручной запуск, а не плановый джоб
+                self.manual = True
 
         # Создаём простой контекст, чтобы переиспользовать morning_digest_job
         simple_context = SimpleContext(context.application)
         await morning_digest_job(simple_context)
 
-        await update.message.reply_text("✅ Утренний дайджест для этого чата создан/обновлён.")
+        msg = await update.message.reply_text("✅ Утренний дайджест для этого чата создан/обновлён.")
+        if chat.type in ['group', 'supergroup', 'channel']:
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
     except Exception as e:
         logger.error(f"Error in digest_now: {e}", exc_info=True)
         try:
-            await update.message.reply_text("❌ Не удалось создать дайджест сейчас")
+            err = await update.message.reply_text("❌ Не удалось создать дайджест сейчас")
+            chat = update.effective_chat
+            if chat and chat.type in ['group', 'supergroup', 'channel']:
+                schedule_delete(context.bot, chat.id, err.message_id, 30, context.application.job_queue)
         except Exception:
             pass
 
@@ -781,20 +800,25 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat = update.effective_chat
         chat_id = chat.id
-
         # Сохраняем ID чата в конфиг
         set_config("digest_chat_id", chat_id)
 
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             f"✅ Чат для утреннего дайджеста установлен.\n"
             f"ID чата: `{chat_id}`\n"
             f"Теперь в 09:00 дайджест будет приходить сюда.",
             parse_mode="Markdown"
         )
+        # В группах/каналах удаляем сервисное сообщение через 30 секунд
+        if chat.type in ['group', 'supergroup', 'channel']:
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
     except Exception as e:
         logger.error(f"Error in set_digest_chat: {e}", exc_info=True)
         try:
-            await update.message.reply_text("❌ Не удалось сохранить чат для дайджеста")
+            err = await update.message.reply_text("❌ Не удалось сохранить чат для дайджеста")
+            chat = update.effective_chat
+            if chat and chat.type in ['group', 'supergroup', 'channel']:
+                schedule_delete(context.bot, chat.id, err.message_id, 30, context.application.job_queue)
         except Exception:
             pass
 
