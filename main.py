@@ -225,6 +225,12 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat = update.effective_chat
         chat_id = chat.id
+        # В группах удаляем сообщение пользователя с командой
+        if chat.type in ['group', 'supergroup', 'channel']:
+            try:
+                await context.bot.delete_message(chat_id, update.message.message_id)
+            except Exception as e:
+                logger.debug(f"Could not delete user message: {e}")
         # Сохраняем этот чат как чат для дайджеста
         set_config("digest_chat_id", chat_id)
 
@@ -800,6 +806,12 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat = update.effective_chat
         chat_id = chat.id
+        # В группах удаляем сообщение пользователя с командой
+        if chat.type in ['group', 'supergroup', 'channel']:
+            try:
+                await context.bot.delete_message(chat_id, update.message.message_id)
+            except Exception as e:
+                logger.debug(f"Could not delete user message: {e}")
         # Сохраняем ID чата в конфиг
         set_config("digest_chat_id", chat_id)
 
