@@ -131,7 +131,7 @@ async def morning_digest_job(context):
         else:
             streak_part = "🍀Стрик: —"
 
-        text = f"{growth_part} {drop_part} {streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК"
+        text = f"📈{growth_player} +{growth_pos}⬆ ┃💀{drop_player} {drop_cm:.0f} см┃🍀Стрик {streak_len} : {streak_player}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК"
         
         bot = context.application.bot
         
@@ -997,6 +997,8 @@ async def main():
         
         # Запускаем application для активации job_queue
         await app.start()
+        # Запускаем job_queue для PTB v20+
+        await job_queue.start()
         
         logger.info("Telegram bot started in webhook mode")
         logger.info(f"Webhook URL: {webhook_url}")
@@ -1091,6 +1093,9 @@ async def main_polling():
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
         logger.info("Telegram bot started in polling mode")
+        
+        # Запускаем job_queue для PTB v20+
+        await job_queue.start()
         
         await app.run_polling(drop_pending_updates=True)
         
