@@ -616,7 +616,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             extra_text = random.choice(CATEGORY_PHRASES[category])
         
         text = (
-            f"🎲 {username}\n\n"
+            f"🎲 @{username}\n\n"
             f"{result_text}\n"
             f"{extra_text}\n\n"
             f"📏 Длина сейчас: {new_fissure:.1f} см"
@@ -685,7 +685,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             wait_text = "✅ Готов к увеличению!"
         
-        text = f"🎲 {username}\n\n📏 Длина: {user['fissure']:.1f} см"
+        # Форматируем username с @ для отображения
+        display_username = f"@{username}" if username and not username.startswith("@") else username
+        
+        text = f"👑 {display_username}\n\n📏 Длина: {user['fissure']:.1f} см\n🎲 Бросков: {user.get('total_rolls', 0)}\n🔥 Лучший стрик: {user.get('best_streak', 0)}"
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,

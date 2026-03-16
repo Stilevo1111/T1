@@ -291,7 +291,8 @@ class Database:
                         "last_fissure": user["last_fissure"],
                         "last_message_id": user["last_message_id"],
                         "total_growth": user.get("total_growth", 0),
-                        "total_rolls": user.get("total_rolls", 0)
+                        "total_rolls": user.get("total_rolls", 0),
+                        "best_streak": user.get("best_streak", 0)
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
@@ -310,15 +311,16 @@ class Database:
                         "last_fissure": user[4],
                         "last_message_id": user[5] if len(user) > 5 else 0,
                         "total_growth": user[6] if len(user) > 6 else 0,
-                        "total_rolls": user[7] if len(user) > 7 else 0
+                        "total_rolls": user[7] if len(user) > 7 else 0,
+                        "best_streak": user[8] if len(user) > 8 else 0
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
                     cursor.close()
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0}
         except Exception as e:
             print(f"❌ Ошибка get_user: {e}")
-            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0}
+            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0}
     
     def update_fissure(self, telegram_id, fissure, last_fissure, growth=0):
         """Обновление данных пользователя"""
