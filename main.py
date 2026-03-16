@@ -151,7 +151,13 @@ async def morning_digest_job(context):
                     update_digest_snapshot()
                 return
             except Exception as e:
-                logger.info(f"Не удалось редактировать сообщение, создаём новое: {e}")
+                error_str = str(e)
+                # Если сообщение не найдено (удалено) - очищаем ID
+                if "Message to edit not found" in error_str or "message can't be edited" in error_str:
+                    logger.info(f"Старое сообщение {last_message_id} удалено или нельзя редактировать, создаём новое")
+                    set_config('daily_digest_message_id', None)
+                else:
+                    logger.info(f"Не удалось редактировать сообщение: {e}")
         
         # Отправляем новое сообщение
         msg = await bot.send_message(chat_id=digest_chat_id, text=text)
@@ -615,8 +621,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             extra_text = random.choice(CATEGORY_PHRASES[category])
         
+        user_id = user_obj.id
+        display_username = f"<a href=\"tg://user?id={user_id}\">{username}</a>"
+        
         text = (
-            f"🎲 @{username}\n\n"
+            f"🎲 {display_username}\n\n"
             f"{result_text}\n"
             f"{extra_text}\n\n"
             f"📏 Длина сейчас: {new_fissure:.1f} см"
@@ -633,6 +642,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
             text=text,
+            parse_mode="HTML",
             reply_markup=main_menu()
         )
         logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
@@ -685,14 +695,16 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             wait_text = "✅ Готов к увеличению!"
         
-        # Форматируем username с @ для отображения
-        display_username = f"@{username}" if username and not username.startswith("@") else username
+        # Форматируем username как кликабельную ссылку на профиль
+        user_id = user_obj.id
+        display_username = f"<a href=\"tg://user?id={user_id}\">{username}</a>"
         
         text = f"👑 {display_username}\n\n📏 Длина: {user['fissure']:.1f} см\n🎲 Бросков: {user.get('total_rolls', 0)}\n🔥 Лучший стрик: {user.get('best_streak', 0)}"
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
             text=text,
+            parse_mode="HTML",
             reply_markup=main_menu()
         )
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
