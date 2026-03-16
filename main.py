@@ -470,8 +470,9 @@ def calculate_fissure_roll(current_fissure):
             roll = random.choice(improved_options)
             return roll, "🚀 УЛУЧШЕННЫЙ РОЛЛ!", False, True
         
+        # Уменьшен шанс 0, увеличен шанс роста
         weighted_rolls = [
-            (-3, 5), (-1, 10), (0, 15), (1, 20), (3, 20), (5, 15), (10, 10), (20, 5)
+            (-3, 5), (-1, 10), (0, 5), (1, 25), (3, 25), (5, 15), (10, 10), (20, 5)
         ]
         values, weights = zip(*weighted_rolls)
         roll = random.choices(values, weights=weights)[0]
@@ -482,16 +483,18 @@ def calculate_fissure_roll(current_fissure):
             bonus = random.choice([5, 10, 20])
             return bonus, "🍀 УДАЧНЫЙ РОЛЛ!", False, False
         
+        # Уменьшен шанс 0, увеличен шанс роста
         weighted_rolls = [
-            (-3, 10), (-1, 15), (0, 20), (1, 20), (3, 15), (5, 10), (10, 7), (20, 3)
+            (-3, 8), (-1, 12), (0, 5), (1, 25), (3, 20), (5, 15), (10, 10), (20, 5)
         ]
         values, weights = zip(*weighted_rolls)
         roll = random.choices(values, weights=weights)[0]
         return roll, "", False, False
     
     else:
+        # Уменьшен шанс 0, увеличен шанс роста
         risky_rolls = [
-            (-3, 15), (-1, 20), (0, 15), (1, 15), (3, 10), (5, 10), (10, 5), (20, 3), (50, 2)
+            (-3, 12), (-1, 18), (0, 5), (1, 18), (3, 15), (5, 12), (10, 10), (20, 5), (50, 5)
         ]
         values, weights = zip(*risky_rolls)
         roll = random.choices(values, weights=weights)[0]
