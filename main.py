@@ -542,6 +542,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_msg_id = update.message.message_id
     now = time.time()
     
+    # Проверка на выходные (суббота = 5, воскресенье = 6)
+    import datetime
+    is_weekend = datetime.datetime.now().weekday() in (5, 6)
+    weekend_bonus = ""
+    
     # Delete user message only in groups/channels (not in private)
     if chat_type in ['group', 'supergroup', 'channel']:
         try:
@@ -574,6 +579,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
         roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
+        
+        # Бонус для выходных: увеличиваем положительный ролл
+        if is_weekend and roll > 0 and not is_fatal:
+            bonus_multiplier = random.choice([1.5, 2, 2.5])
+            roll = int(roll * bonus_multiplier)
+            weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f}"
+        
         new_fissure = calculate_new_fissure(user["fissure"], roll)
         update_fissure(user_obj.id, new_fissure, now, roll)
         
@@ -612,6 +624,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if is_fatal and protection_msg:
             text = f"{text}\n\n{protection_msg}"
+        
+        if weekend_bonus:
+            text = f"{text}\n{weekend_bonus}"
         
         logger.info(f"Sending result message to chat_id={update.message.chat_id}")
         # Don't use reply_to_message_id because user message was already deleted
