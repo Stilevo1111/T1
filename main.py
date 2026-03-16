@@ -111,27 +111,40 @@ async def morning_digest_job(context):
         
         stats = get_digest_stats()
         
-        # Формируем сообщение
+        # Формируем сообщение с кликабельными никнеймами
         growth_player, growth_pos = stats.get("top_growth", ("None", 0))
         drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
         streak_player, streak_len = stats.get("top_streak", ("None", 0))
-
-        if growth_pos > 0:
-            growth_part = f"📈{growth_player} ↑+{growth_pos}"
-        else:
-            growth_part = "📈—"
-
+        
+        # Получаем telegram_id для создания кликабельных ссылок
+        growth_id = stats.get("top_growth_id")
+        drop_id = stats.get("top_drop_id")
+        streak_id = stats.get("top_streak_id")
+        
+        # Функция для создания кликабельного никнейма
+        def make_clickable(name, user_id):
+            if name and name != "None" and user_id:
+                return f"<a href=\"tg://user?id={user_id}\">{name}</a>"
+            return name if name and name != "None" else "—"
+        
+        growth_display = make_clickable(growth_player, growth_id)
+        drop_display = make_clickable(drop_player, drop_id)
+        streak_display = make_clickable(streak_player, streak_id)
+        
+        # Формат: 📈stilevo +2⬆️ ┃💀None -X СМ┃🍀Wad1m1 - Стрик 1
+        growth_part = f"📈{growth_display} +{growth_pos}⬆️" if growth_pos > 0 else "📈—"
+        
         if drop_cm < 0:
-            drop_part = f"💀{drop_player} {drop_cm:.0f} см"
+            drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
         else:
             drop_part = "💀—"
-
+        
         if streak_len > 0:
-            streak_part = f"🍀Стрик: {streak_player} {streak_len} Раз"
+            streak_part = f"🍀{streak_display} - Стрик {streak_len}"
         else:
-            streak_part = "🍀Стрик: —"
-
-        text = f"📈{growth_player} +{growth_pos}⬆ ┃💀{drop_player} {drop_cm:.0f} см┃🍀Стрик {streak_len} : {streak_player}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК"
+            streak_part = "🍀—"
+        
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК"
         
         bot = context.application.bot
         
@@ -142,7 +155,8 @@ async def morning_digest_job(context):
                 await bot.edit_message_text(
                     chat_id=digest_chat_id,
                     message_id=int(last_message_id),
-                    text=text
+                    text=text,
+                    parse_mode="HTML"
                 )
                 logger.info(f"Обновлён существующий дайджест {last_message_id}")
                 # Для планового дайджеста (9:00) обновляем "снимок" на следующие сутки.
@@ -160,7 +174,7 @@ async def morning_digest_job(context):
                     logger.info(f"Не удалось редактировать сообщение: {e}")
         
         # Отправляем новое сообщение
-        msg = await bot.send_message(chat_id=digest_chat_id, text=text)
+        msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
         set_config('daily_digest_message_id', msg.message_id)
         logger.info(f"Создан новый утренний дайджест {msg.message_id}")
         if not getattr(context, "manual", False):
@@ -955,15 +969,18 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # User joined the chat (was not a member, now is member)
         if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator']:
             name = new_member.user.first_name or "Friend"
+            user_id = new_member.user.id
             
-            welcome_text = random.choice(WELCOME_PHRASES).format(name=name)
+            # Создаём кликабельную ссылку на пользователя
+            welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>\n\n{random.choice(WELCOME_PHRASES).format(name=name)}"
             
             result_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text=welcome_text
+                text=welcome_text,
+                parse_mode="HTML"
             )
             logger.info(f"Welcome sent for {name}")
-            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+            # Удаляем schedule_delete чтобы сообщение не удалялось
         
     except Exception as e:
         logger.error(f"Error in welcome_new_member: {e}")

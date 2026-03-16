@@ -561,6 +561,7 @@ class Database:
             # Рост: насколько позиций вверх за сутки (digest_position - current_position)
             top_growth_user = None
             top_growth_positions = 0
+            top_growth_id = None
             for u in users:
                 prev_pos = u["digest_position"]
                 cur_pos = current_pos_by_id.get(u["telegram_id"], 0)
@@ -569,10 +570,12 @@ class Database:
                     if moved_up > top_growth_positions:
                         top_growth_positions = moved_up
                         top_growth_user = u["username"] or str(u["telegram_id"])
+                        top_growth_id = u["telegram_id"]
 
             # Падение: насколько см уменьшилась фиссура за сутки (current - digest)
             top_drop_user = None
             top_drop_cm = 0.0  # negative
+            top_drop_id = None
             for u in users:
                 prev_f = u["digest_fissure"]
                 cur_f = u["fissure"]
@@ -581,19 +584,25 @@ class Database:
                     if delta < top_drop_cm:
                         top_drop_cm = delta
                         top_drop_user = u["username"] or str(u["telegram_id"])
+                        top_drop_id = u["telegram_id"]
 
             # Стрик: рекордная серия побед за всё время (best_streak)
             top_streak_user = None
             top_streak = 0
+            top_streak_id = None
             for u in users:
                 if u["best_streak"] > top_streak:
                     top_streak = u["best_streak"]
                     top_streak_user = u["username"] or str(u["telegram_id"])
+                    top_streak_id = u["telegram_id"]
 
             return {
                 "top_growth": (top_growth_user or "None", int(top_growth_positions)),
                 "top_drop": (top_drop_user or "None", float(top_drop_cm)),
                 "top_streak": (top_streak_user or "None", int(top_streak)),
+                "top_growth_id": top_growth_id,
+                "top_drop_id": top_drop_id,
+                "top_streak_id": top_streak_id,
             }
         except Exception as e:
             print(f"❌ Ошибка get_digest_stats: {e}")
