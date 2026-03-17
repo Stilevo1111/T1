@@ -488,12 +488,13 @@ def calculate_fissure_roll(current_fissure):
     Calculates new roll based on current fissure size
     Returns: (roll_value, message, is_fatal, got_help)
     """
-    if current_fissure >= 5:
-        fatal_chance = min(0.05, current_fissure / 500)
+    if current_fissure >= 20:
+        fatal_chance = 0.02  # 2% для фиссур 20+ см
         if random.random() < fatal_chance:
             return FATAL_ROLL, "FATAL DECREASE!", True, False
     
-    if current_fissure < 0.5:
+    # Единый баланс для всех фиссур
+    if current_fissure < 5:
         if random.random() < 0.8:
             bonus_options = [
                 (5, 30), (10, 25), (20, 20), (30, 15), (50, 10)
@@ -506,41 +507,31 @@ def calculate_fissure_roll(current_fissure):
         roll = random.choice(protected_rolls)
         return roll, "🛡 ЗАЩИЩЁННЫЙ РОЛЛ", False, True
     
-    elif current_fissure < 2:
+    elif current_fissure < 20:
         if random.random() < 0.4:
             improved_options = [3, 5, 10, 20]
             roll = random.choice(improved_options)
             return roll, "🚀 УЛУЧШЕННЫЙ РОЛЛ!", False, True
-        
-        # Уменьшен шанс 0, увеличен шанс роста
-        weighted_rolls = [
-            (-3, 5), (-1, 10), (0, 5), (1, 25), (3, 25), (5, 15), (10, 10), (20, 5)
-        ]
-        values, weights = zip(*weighted_rolls)
-        roll = random.choices(values, weights=weights)[0]
-        return roll, "", False, False
     
-    elif current_fissure < 20:
+    elif current_fissure < 100:
         if random.random() < 0.2:
             bonus = random.choice([5, 10, 20])
             return bonus, "🍀 УДАЧНЫЙ РОЛЛ!", False, False
-        
-        # Уменьшен шанс 0, увеличен шанс роста
-        weighted_rolls = [
-            (-3, 8), (-1, 12), (0, 5), (1, 25), (3, 20), (5, 15), (10, 10), (20, 5)
-        ]
-        values, weights = zip(*weighted_rolls)
-        roll = random.choices(values, weights=weights)[0]
-        return roll, "", False, False
     
     else:
-        # Уменьшен шанс 0, увеличен шанс роста
-        risky_rolls = [
-            (-3, 12), (-1, 18), (0, 5), (1, 18), (3, 15), (5, 12), (10, 10), (20, 5), (50, 5)
-        ]
-        values, weights = zip(*risky_rolls)
-        roll = random.choices(values, weights=weights)[0]
-        return roll, "", False, False
+        # Для очень больших фиссур - меньше бонусов
+        if random.random() < 0.1:
+            bonus = random.choice([5, 10, 20])
+            return bonus, "🍀 УДАЧНЫЙ РОЛЛ!", False, False
+    
+    # Единый баланс для всех:
+    # Выигрыш 65%, Проигрыш 30%, Ничья 5%
+    weighted_rolls = [
+        (-3, 15), (-1, 15), (0, 5), (1, 15), (3, 15), (5, 15), (10, 15), (20, 5)
+    ]
+    values, weights = zip(*weighted_rolls)
+    roll = random.choices(values, weights=weights)[0]
+    return roll, "", False, False
 
 
 def apply_fissure_protection(current_fissure, roll, is_fatal):
