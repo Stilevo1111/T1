@@ -534,12 +534,12 @@ class Database:
             
             if "postgres" in scheme:
                 cursor.execute("""
-                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak
+                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak, total_growth
                     FROM users
                 """)
             else:
                 cursor.execute("""
-                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak
+                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak, total_growth
                     FROM users
                 """)
             rows = cursor.fetchall()
@@ -554,6 +554,7 @@ class Database:
                     "digest_position": int(r[3] or 0),
                     "digest_fissure": float(r[4] or 0.0),
                     "current_streak": int(r[5] or 0),
+                    "total_growth": float(r[6] or 0.0),
                 })
 
             # Текущие позиции по текущей фиссуре
