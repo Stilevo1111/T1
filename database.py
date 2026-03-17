@@ -292,12 +292,13 @@ class Database:
                         "last_message_id": user["last_message_id"],
                         "total_growth": user.get("total_growth", 0),
                         "total_rolls": user.get("total_rolls", 0),
-                        "best_streak": user.get("best_streak", 0)
+                        "best_streak": user.get("best_streak", 0),
+                        "current_streak": user.get("current_streak", 0)
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
                     cursor.close()
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0}
             else:
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
@@ -312,15 +313,16 @@ class Database:
                         "last_message_id": user[5] if len(user) > 5 else 0,
                         "total_growth": user[6] if len(user) > 6 else 0,
                         "total_rolls": user[7] if len(user) > 7 else 0,
-                        "best_streak": user[8] if len(user) > 8 else 0
+                        "best_streak": user[8] if len(user) > 8 else 0,
+                        "current_streak": user[9] if len(user) > 9 else 0
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
                     cursor.close()
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0}
         except Exception as e:
             print(f"❌ Ошибка get_user: {e}")
-            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0}
+            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0}
     
     def update_fissure(self, telegram_id, fissure, last_fissure, growth=0):
         """Обновление данных пользователя"""
@@ -532,12 +534,12 @@ class Database:
             
             if "postgres" in scheme:
                 cursor.execute("""
-                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, best_streak
+                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak
                     FROM users
                 """)
             else:
                 cursor.execute("""
-                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, best_streak
+                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak
                     FROM users
                 """)
             rows = cursor.fetchall()
@@ -551,7 +553,7 @@ class Database:
                     "fissure": float(r[2] or 0.0),
                     "digest_position": int(r[3] or 0),
                     "digest_fissure": float(r[4] or 0.0),
-                    "best_streak": int(r[5] or 0),
+                    "current_streak": int(r[5] or 0),
                 })
 
             # Текущие позиции по текущей фиссуре
@@ -586,13 +588,13 @@ class Database:
                         top_drop_user = u["username"] or str(u["telegram_id"])
                         top_drop_id = u["telegram_id"]
 
-            # Стрик: рекордная серия побед за всё время (best_streak)
+            # Стрик: текущая серия побед (current_streak)
             top_streak_user = None
             top_streak = 0
             top_streak_id = None
             for u in users:
-                if u["best_streak"] > top_streak:
-                    top_streak = u["best_streak"]
+                if u["current_streak"] > top_streak:
+                    top_streak = u["current_streak"]
                     top_streak_user = u["username"] or str(u["telegram_id"])
                     top_streak_id = u["telegram_id"]
 

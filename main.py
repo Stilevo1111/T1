@@ -144,7 +144,7 @@ async def morning_digest_job(context):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n📈 = рост позиций в топе\n💀 = падение см\n🍀 = текущий стрик побед"
         
         bot = context.application.bot
         
@@ -735,7 +735,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = user_obj.id
         display_username = f"<a href=\"tg://user?id={user_id}\">{username}</a>"
         
-        text = f"👑 {display_username}\n\n📏 Длина: {user['fissure']:.1f} см\n🎲 Бросков: {user.get('total_rolls', 0)}\n🔥 Лучший стрик: {user.get('best_streak', 0)}"
+        text = f"👑 {display_username}\n\n📏 Длина: {user['fissure']:.1f} см\n🎲 Бросков: {user.get('total_rolls', 0)}\n🔥 Текущий стрик: {user.get('current_streak', 0)}\n🏆 Лучший стрик: {user.get('best_streak', 0)}"
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
@@ -993,8 +993,9 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             name = new_member.user.first_name or "Friend"
             user_id = new_member.user.id
             
-            # Создаём кликабельную ссылку на пользователя
-            welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>\n\n{random.choice(WELCOME_PHRASES).format(name=name)}"
+            # Формируем приветственное сообщение с кликабельным ником
+            welcome_text = f"<a href=\"tg://user?id={user_id}\\>{name}</a>, {random.choice(WELCOME_PHRASES)}"
+
             
             result_msg = await context.bot.send_message(
                 chat_id=chat_id,
@@ -1002,7 +1003,8 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 parse_mode="HTML"
             )
             logger.info(f"Welcome sent for {name}")
-            # Удаляем schedule_delete чтобы сообщение не удалялось
+            # Удаляем приветственное сообщение через час
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 3600, context.application.job_queue)
         
     except Exception as e:
         logger.error(f"Error in welcome_new_member: {e}")
