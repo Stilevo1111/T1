@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import os
 import random
 import time
@@ -182,6 +182,81 @@ async def morning_digest_job(context):
         
     except Exception as e:
         logger.error(f"Ошибка в morning_digest_job: {e}", exc_info=True)
+
+
+async def format_digest_message():
+    """Форматирует текст сообщения дайджеста"""
+    stats = get_digest_stats()
+    
+    growth_player, growth_pos = stats.get("top_growth", ("None", 0))
+    drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
+    streak_player, streak_len = stats.get("top_streak", ("None", 0))
+    
+    growth_id = stats.get("top_growth_id")
+    drop_id = stats.get("top_drop_id")
+    streak_id = stats.get("top_streak_id")
+    
+    def make_clickable(name, user_id):
+        if name and name != "None" and user_id:
+            return f"<a href=\"tg://user?id={user_id}\\>{name}</a>"
+        return name if name and name != "None" else "—"
+    
+    growth_display = make_clickable(growth_player, growth_id)
+    drop_display = make_clickable(drop_player, drop_id)
+    streak_display = make_clickable(streak_player, streak_id)
+    
+    growth_part = f"📈{growth_display} +{growth_pos}⬆️" if growth_pos > 0 else "📈—"
+    
+    if drop_cm < 0:
+        drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
+    else:
+        drop_part = "💀—"
+    
+    if streak_len > 0:
+        streak_part = f"🍀{streak_display} - Стрик {streak_len}"
+    else:
+        streak_part = "🍀—"
+    
+    return f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+
+
+async def refresh_digest_message(bot):
+    """Обновляет сообщение дайджеста после каждого броска"""
+    try:
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            return
+        
+        # Сначала получаем статистику (сравнивает со старым снимком)
+        text = await format_digest_message()
+        
+        # ПОТОМ обновляем снимок для следующего сравнения
+        update_digest_snapshot()
+        
+        last_message_id = get_config('daily_digest_message_id')
+        if last_message_id:
+            try:
+                await bot.edit_message_text(
+                    chat_id=digest_chat_id,
+                    message_id=int(last_message_id),
+                    text=text,
+                    parse_mode="HTML"
+                )
+                logger.debug(f"Обновлён дайджест после броска")
+                return
+            except Exception as e:
+                error_str = str(e)
+                if "Message to edit not found" in error_str or "message can't be edited" in error_str:
+                    set_config('daily_digest_message_id', None)
+                else:
+                    logger.debug(f"Не удалось обновить дайджест: {e}")
+        
+        msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
+        set_config('daily_digest_message_id', msg.message_id)
+        logger.info(f"Создан новый дайджест после броска {msg.message_id}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка в refresh_digest_message: {e}", exc_info=True)
 
 
 async def weekly_digest_job(context):
@@ -622,6 +697,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_fissure = calculate_new_fissure(user["fissure"], roll)
         update_fissure(user_obj.id, new_fissure, now, roll)
         
+        # Обновляем дайджест после каждого броска
+        await refresh_digest_message(context.bot)
+        
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
 
         roll_key = min(roll, 50)
@@ -1026,16 +1104,12 @@ async def main():
         logger.info("Done")
         
         # Утренний дайджест в 9:00
-        job_queue.run_daily(
-            morning_digest_job,
-            time=datetime.time(hour=9, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
+# Утренний дайджест теперь live (обновляется после каждого броска)
         
         # Еженедельный дайджест по понедельникам
         job_queue.run_daily(
             weekly_digest_job,
-            time=datetime.time(hour=9, minute=0),
+            time=datetime.time(hour=6, minute=0),
             days=(0,)  # Monday only
         )
 
@@ -1130,17 +1204,11 @@ async def main_polling():
         )
         logger.info("Done")
         
-        # Утренний дайджест в 9:00
-        job_queue.run_daily(
-            morning_digest_job,
-            time=datetime.time(hour=9, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
-        
+        # Утренний дайджест теперь live (обновляется после каждого броска)
         # Еженедельный дайджест по понедельникам
         job_queue.run_daily(
             weekly_digest_job,
-            time=datetime.time(hour=9, minute=0),
+            time=datetime.time(hour=6, minute=0),
             days=(0,)  # Monday only
         )
 
@@ -1174,4 +1242,8 @@ if __name__ == "__main__":
         asyncio.run(main())
     else:
         asyncio.run(main_polling())
+
+
+
+
 
