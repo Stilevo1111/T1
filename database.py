@@ -517,7 +517,7 @@ class Database:
             else:
                 cursor.execute("""
                     INSERT INTO bot_config (key, value) VALUES (?, ?)
-                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                    ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
                 """, (key, str(value)))
             conn.commit()
             cursor.close()
@@ -530,20 +530,13 @@ class Database:
         """Получить статистику для дайджеста"""
         try:
             conn = self.connect()
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
             cursor = conn.cursor()
             
-            if "postgres" in scheme:
-                cursor.execute("""
-                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak, total_growth
-                    FROM users
-                """)
-            else:
-                cursor.execute("""
-                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak, total_growth
-                    FROM users
-                """)
+            # Один запрос для обоих типов БД (параметры одинаковые)
+            cursor.execute("""
+                SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak, total_growth
+                FROM users
+            """)
             rows = cursor.fetchall()
             
             cursor.close()
@@ -623,22 +616,27 @@ class Database:
             scheme = url.scheme
             cursor = conn.cursor()
             
+            # Используем один запрос с подзапросом для обновления позиций
             if "postgres" in scheme:
-                cursor.execute("SELECT telegram_id, fissure FROM users ORDER BY fissure DESC")
+                cursor.execute("""
+                    UPDATE users SET current_position = subquery.pos
+                    FROM (SELECT telegram_id, ROW_NUMBER() OVER (ORDER BY fissure DESC) as pos FROM users) subquery
+                    WHERE users.telegram_id = subquery.telegram_id
+                """)
             else:
-                cursor.execute("SELECT telegram_id, fissure FROM users ORDER BY fissure DESC")
-            players = cursor.fetchall()
-
-            for idx, player in enumerate(players, start=1):
-                telegram_id = player[0]
-                if "postgres" in scheme:
-                    cursor.execute("UPDATE users SET current_position = %s WHERE telegram_id = %s", (idx, telegram_id))
-                else:
-                    cursor.execute("UPDATE users SET current_position = ? WHERE telegram_id = ?", (idx, telegram_id))
+                # SQLite: используем скалярный подзапрос
+                cursor.execute("""
+                    UPDATE users SET current_position = (
+                        SELECT COUNT(*) + 1 FROM users u2 WHERE u2.fissure > users.fissure
+                    )
+                """)
             
             conn.commit()
+            
+            # Получаем количество затронутых строк
+            affected = cursor.rowcount
             cursor.close()
-            return len(players)
+            return affected
         except Exception as e:
             print(f"❌ Ошибка update_player_positions: {e}")
             return 0
@@ -651,30 +649,41 @@ class Database:
             scheme = url.scheme
             cursor = conn.cursor()
 
-            # Обновляем текущие позиции
+            # Используем один запрос с подзапросом для обновления позиций и снимка
             if "postgres" in scheme:
-                cursor.execute("SELECT telegram_id, fissure FROM users ORDER BY fissure DESC")
+                cursor.execute("""
+                    UPDATE users SET 
+                        current_position = subquery.pos,
+                        digest_position = subquery.pos,
+                        digest_fissure = subquery.fissure
+                    FROM (
+                        SELECT telegram_id, fissure, 
+                               ROW_NUMBER() OVER (ORDER BY fissure DESC) as pos 
+                        FROM users
+                    ) subquery
+                    WHERE users.telegram_id = subquery.telegram_id
+                """)
             else:
-                cursor.execute("SELECT telegram_id, fissure FROM users ORDER BY fissure DESC")
-            players = cursor.fetchall()
-
-            for idx, player in enumerate(players, start=1):
-                telegram_id = player[0]
-                fissure = float(player[1] or 0.0)
-                if "postgres" in scheme:
-                    cursor.execute(
-                        "UPDATE users SET current_position=%s, digest_position=%s, digest_fissure=%s WHERE telegram_id=%s",
-                        (idx, idx, fissure, telegram_id),
-                    )
-                else:
-                    cursor.execute(
-                        "UPDATE users SET current_position=?, digest_position=?, digest_fissure=? WHERE telegram_id=?",
-                        (idx, idx, fissure, telegram_id),
-                    )
+                # SQLite: используем скалярные подзапросы
+                cursor.execute("""
+                    UPDATE users SET 
+                        current_position = (
+                            SELECT COUNT(*) + 1 FROM users u2 WHERE u2.fissure > users.fissure
+                        ),
+                        digest_position = (
+                            SELECT COUNT(*) + 1 FROM users u2 WHERE u2.fissure > users.fissure
+                        ),
+                        digest_fissure = (
+                            SELECT fissure FROM users u2 WHERE u2.telegram_id = users.telegram_id
+                        )
+                """)
 
             conn.commit()
+            
+            # Получаем количество затронутых строк
+            affected = cursor.rowcount
             cursor.close()
-            return len(players)
+            return affected
         except Exception as e:
             print(f"❌ Ошибка update_digest_snapshot: {e}")
             return 0
@@ -687,20 +696,15 @@ class Database:
             scheme = url.scheme
             cursor = conn.cursor()
 
-            if "postgres" in scheme:
-                cursor.execute("""
-                    SELECT telegram_id, username, fissure, current_position, weekly_digest_position,
-                           weekly_growth, weekly_rolls, created_at
-                    FROM users
-                """)
-            else:
-                cursor.execute("""
-                    SELECT telegram_id, username, fissure, current_position, weekly_digest_position,
-                           weekly_growth, weekly_rolls, created_at
-                    FROM users
-                """)
+            # Один запрос для обоих типов БД
+            cursor.execute("""
+                SELECT telegram_id, username, fissure, current_position, weekly_digest_position,
+                       weekly_growth, weekly_rolls, created_at
+                FROM users
+            """)
             rows = cursor.fetchall()
 
+            # Разный синтаксис для дат в PostgreSQL и SQLite
             if "postgres" in scheme:
                 cursor.execute("SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '7 days'")
             else:
@@ -779,28 +783,41 @@ class Database:
             scheme = url.scheme
             cursor = conn.cursor()
 
+            # Используем один запрос с подзапросом
             if "postgres" in scheme:
-                cursor.execute("SELECT telegram_id, fissure FROM users ORDER BY fissure DESC")
+                cursor.execute("""
+                    UPDATE users SET 
+                        current_position = subquery.pos,
+                        weekly_digest_position = subquery.pos,
+                        weekly_rolls = 0,
+                        weekly_growth = 0
+                    FROM (
+                        SELECT telegram_id, 
+                               ROW_NUMBER() OVER (ORDER BY fissure DESC) as pos 
+                        FROM users
+                    ) subquery
+                    WHERE users.telegram_id = subquery.telegram_id
+                """)
             else:
-                cursor.execute("SELECT telegram_id, fissure FROM users ORDER BY fissure DESC")
-            players = cursor.fetchall()
-
-            for idx, row in enumerate(players, start=1):
-                tid = row[0]
-                if "postgres" in scheme:
-                    cursor.execute("""
-                        UPDATE users SET current_position = %s, weekly_digest_position = %s,
-                        weekly_rolls = 0, weekly_growth = 0 WHERE telegram_id = %s
-                    """, (idx, idx, tid))
-                else:
-                    cursor.execute("""
-                        UPDATE users SET current_position = ?, weekly_digest_position = ?,
-                        weekly_rolls = 0, weekly_growth = 0 WHERE telegram_id = ?
-                    """, (idx, idx, tid))
+                # SQLite: используем скалярные подзапросы
+                cursor.execute("""
+                    UPDATE users SET 
+                        current_position = (
+                            SELECT COUNT(*) + 1 FROM users u2 WHERE u2.fissure > users.fissure
+                        ),
+                        weekly_digest_position = (
+                            SELECT COUNT(*) + 1 FROM users u2 WHERE u2.fissure > users.fissure
+                        ),
+                        weekly_rolls = 0,
+                        weekly_growth = 0
+                """)
 
             conn.commit()
+            
+            # Получаем количество затронутых строк
+            affected = cursor.rowcount
             cursor.close()
-            return len(players)
+            return affected
         except Exception as e:
             print(f"❌ Ошибка update_weekly_digest_snapshot: {e}")
             return 0
