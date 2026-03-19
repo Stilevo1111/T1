@@ -313,7 +313,7 @@ class Database:
                         "last_message_id": user[5] if len(user) > 5 else 0,
                         "total_growth": user[6] if len(user) > 6 else 0,
                         "total_rolls": user[7] if len(user) > 7 else 0,
-                        "best_streak": user[8] if len(user) > 8 else 0,
+                        "best_streak": user[10] if len(user) > 10 else 0,
                         "current_streak": user[9] if len(user) > 9 else 0
                     }
                 else:
