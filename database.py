@@ -568,8 +568,9 @@ class Database:
             for u in users:
                 prev_pos = u["digest_position"]
                 cur_pos = current_pos_by_id.get(u["telegram_id"], 0)
-                if prev_pos and cur_pos:
-                    moved_up = prev_pos - cur_pos
+                # Показываем рост если есть текущая позиция
+                if cur_pos > 0:
+                    moved_up = prev_pos - cur_pos if prev_pos > 0 else 0
                     if moved_up > top_growth_positions:
                         top_growth_positions = moved_up
                         top_growth_user = u["username"] or str(u["telegram_id"])
@@ -582,7 +583,8 @@ class Database:
             for u in users:
                 prev_f = u["digest_fissure"]
                 cur_f = u["fissure"]
-                if prev_f and prev_f > 0:
+                # Показываем падение если есть digest_fissure
+                if prev_f is not None and prev_f > 0:
                     delta = cur_f - prev_f
                     if delta < top_drop_cm:
                         top_drop_cm = delta

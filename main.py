@@ -132,14 +132,18 @@ async def morning_digest_job(context):
         streak_display = make_clickable(streak_player, streak_id)
         
         # Формат: 📈stilevo +2⬆️ ┃💀None -X СМ┃🍀Wad1m1 - Стрик 1
-        growth_part = f"📈{growth_display} +{growth_pos}⬆️" if growth_pos > 0 else "📈—"
+        # Всегда показываем данные если есть игрок
+        if growth_player and growth_player != "None":
+            growth_part = f"📈{growth_display} +{growth_pos}⬆️"
+        else:
+            growth_part = "📈—"
         
-        if drop_cm < 0:
+        if drop_player and drop_player != "None":
             drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
         else:
             drop_part = "💀—"
         
-        if streak_len > 0:
+        if streak_player and streak_player != "None":
             streak_part = f"🍀{streak_display} - Стрик {streak_len}"
         else:
             streak_part = "🍀—"
