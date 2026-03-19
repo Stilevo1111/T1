@@ -234,11 +234,9 @@ async def refresh_digest_message(bot):
         if not digest_chat_id:
             return
         
-        # Сначала получаем статистику (сравнивает со старым снимком)
+        # Получаем статистику (сравнивает со старым снимком)
+        # НЕ обновляем снимок! Он обновляется только в morning_digest_job
         text = await format_digest_message()
-        
-        # ПОТОМ обновляем снимок для следующего сравнения
-        update_digest_snapshot()
         
         last_message_id = get_config('daily_digest_message_id')
         if last_message_id:
