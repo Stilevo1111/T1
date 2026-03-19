@@ -205,7 +205,7 @@ async def format_digest_message():
     
     def make_clickable(name, user_id):
         if name and name != "None" and user_id:
-            return f"<a href=\"tg://user?id={user_id}\\>{name}</a>"
+            return f"<a href=\"tg://user?id={user_id}\">{name}</a>"
         return name if name and name != "None" else "—"
     
     growth_display = make_clickable(growth_player, growth_id)
@@ -1089,7 +1089,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             user_id = new_member.user.id
             
             # Формируем приветственное сообщение с кликабельным ником
-            welcome_text = f"<a href=\"tg://user?id={user_id}\\>{name}</a>, {random.choice(WELCOME_PHRASES)}"
+            welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}"
 
             
             result_msg = await context.bot.send_message(
