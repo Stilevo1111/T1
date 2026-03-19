@@ -259,40 +259,6 @@ async def refresh_digest_message(bot):
         logger.error(f"Ошибка в refresh_digest_message: {e}", exc_info=True)
 
 
-async def morning_digest_job(context):
-    """Утренний дайджест в 9:00 утра по МСК (6:00 UTC)"""
-    try:
-        logger.info("Запуск утреннего дайджеста")
-        
-        digest_chat_id = get_config('digest_chat_id')
-        if not digest_chat_id:
-            logger.info("Чат для дайджеста не настроен")
-            return
-        
-        # Формируем и отправляем дайджест
-        text = await format_digest_message()
-        
-        # Обновляем снимок
-        update_digest_snapshot()
-        
-        # Отправляем/обновляем сообщение
-        bot = context.bot
-        last_msg_id = get_config('digest_message_id')
-        
-        if last_msg_id:
-            try:
-                await bot.edit_message_text(text, chat_id=digest_chat_id, message_id=int(last_msg_id), parse_mode='HTML')
-            except:
-                msg = await bot.send_message(digest_chat_id, text, parse_mode='HTML')
-                set_config('digest_message_id', str(msg.message_id))
-        else:
-            msg = await bot.send_message(digest_chat_id, text, parse_mode='HTML')
-            set_config('digest_message_id', str(msg.message_id))
-            
-    except Exception as e:
-        logger.error(f"Ошибка в morning_digest_job: {e}", exc_info=True)
-
-
 async def weekly_digest_job(context):
     """Еженедельный дайджест (по расписанию)"""
     try:
