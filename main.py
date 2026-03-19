@@ -360,8 +360,9 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.delete_message(chat_id, update.message.message_id)
             except Exception as e:
                 logger.debug(f"Could not delete user message: {e}")
-        # Сохраняем этот чат как чат для дайджеста
+        # Сохраняем этот чат как чат для дайджеста и сбрасываем message_id
         set_config("digest_chat_id", chat_id)
+        set_config("digest_message_id", "")
 
         class SimpleContext:
             def __init__(self, application):
