@@ -139,7 +139,10 @@ async def morning_digest_job(context):
             growth_part = "📈—"
         
         if drop_player and drop_player != "None":
-            drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
+            if drop_cm < 0:
+                drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
+            else:
+                drop_part = f"💀{drop_display} +{drop_cm:.0f} СМ"
         else:
             drop_part = "💀—"
         
@@ -332,7 +335,7 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not delete user message: {e}")
         # Сохраняем этот чат как чат для дайджеста и сбрасываем message_id
         set_config("digest_chat_id", chat_id)
-        set_config("digest_message_id", "")
+        set_config("daily_digest_message_id", "")
 
         class SimpleContext:
             def __init__(self, application):
@@ -957,7 +960,7 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not delete user message: {e}")
         # Сохраняем ID чата в конфиг и сбрасываем message_id
         set_config("digest_chat_id", chat_id)
-        set_config("digest_message_id", "")
+        set_config("daily_digest_message_id", "")
 
         msg = await update.message.reply_text(
             f"✅ Чат для утреннего дайджеста установлен.\n"
