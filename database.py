@@ -726,14 +726,17 @@ class Database:
             # Больше всех вырос в см за неделю
             top_cm_user = None
             top_cm = 0.0
+            top_cm_id = None
             for u in users:
                 if u["weekly_growth"] > top_cm:
                     top_cm = u["weekly_growth"]
                     top_cm_user = u["username"] or str(u["telegram_id"])
+                    top_cm_id = u["telegram_id"]
 
             # Прорыв недели: кто поднялся на больше всего позиций в топе
             breakthrough_user = None
             breakthrough_pos = 0
+            breakthrough_id = None
             for u in users:
                 prev = u["weekly_digest_position"]
                 now_pos = cur_pos.get(u["telegram_id"], 0)
@@ -742,13 +745,16 @@ class Database:
                     if gain > breakthrough_pos:
                         breakthrough_pos = gain
                         breakthrough_user = u["username"] or str(u["telegram_id"])
+                        breakthrough_id = u["telegram_id"]
 
             total_rolls_week = sum(u["weekly_rolls"] for u in users)
             total_growth_week = sum(u["weekly_growth"] for u in users)
 
             return {
                 "top_growth_cm": (top_cm_user or "None", round(top_cm, 1)),
+                "top_growth_cm_id": top_cm_id,
                 "breakthrough": (breakthrough_user or "None", int(breakthrough_pos)),
+                "breakthrough_id": breakthrough_id,
                 "total_rolls_week": int(total_rolls_week),
                 "new_players_week": int(new_players_week),
                 "total_growth_week": round(total_growth_week, 1),

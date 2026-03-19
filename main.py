@@ -212,14 +212,23 @@ async def format_digest_message():
     drop_display = make_clickable(drop_player, drop_id)
     streak_display = make_clickable(streak_player, streak_id)
     
-    growth_part = f"📈{growth_display} +{growth_pos}⬆️" if growth_pos > 0 else "📈—"
+    # Рост показываем если есть игрок
+    if growth_player and growth_player != "None":
+        growth_part = f"📈{growth_display} +{growth_pos}⬆️"
+    else:
+        growth_part = "📈—"
     
-    if drop_cm < 0:
-        drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
+    # Падение показываем если есть игрок (может быть + или -)
+    if drop_player and drop_player != "None":
+        if drop_cm < 0:
+            drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
+        else:
+            drop_part = f"💀{drop_display} +{drop_cm:.0f} СМ"
     else:
         drop_part = "💀—"
     
-    if streak_len > 0:
+    # Стрик показываем если есть игрок
+    if streak_player and streak_player != "None":
         streak_part = f"🍀{streak_display} - Стрик {streak_len}"
     else:
         streak_part = "🍀—"
@@ -280,13 +289,23 @@ async def weekly_digest_job(context):
         
         # Больше всех вырос в см за неделю
         growth_player, growth_cm = stats.get("top_growth_cm", ("None", 0))
-        if growth_cm > 0:
-            text += f"🍆 Больше всех вырос: @{growth_player} (+{growth_cm:.0f} см)\n"
+        growth_id = stats.get("top_growth_cm_id")
+        
+        def make_clickable_weekly(name, user_id):
+            if name and name != "None" and user_id:
+                return f"<a href=\"tg://user?id={user_id}\">{name}</a>"
+            return name if name and name != "None" else "—"
+        
+        growth_display = make_clickable_weekly(growth_player, growth_id)
+        if growth_player and growth_player != "None":
+            text += f"🍆 Больше всех вырос: {growth_display} (+{growth_cm:.0f} см)\n"
         
         # Прорыв недели: кто поднялся на больше всего позиций в топе
         breakthrough_player, breakthrough_pos = stats.get("breakthrough", ("None", 0))
-        if breakthrough_pos > 0:
-            text += f"🔥Прорыв недели: @{breakthrough_player} (+{breakthrough_pos} позиций)\n"
+        breakthrough_id = stats.get("breakthrough_id")
+        breakthrough_display = make_clickable_weekly(breakthrough_player, breakthrough_id)
+        if breakthrough_player and breakthrough_player != "None":
+            text += f"🔥 Прорыв недели: {breakthrough_display} (+{breakthrough_pos} позиций)\n"
         
         total_rolls = stats.get("total_rolls_week", 0)
         new_players = stats.get("new_players_week", 0)
