@@ -79,7 +79,7 @@ def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
         )
     else:
         # Fallback если job_queue не передан
-        asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay))
+        asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay, job_queue))
 
 
 async def decrease_inactive_job(context):
