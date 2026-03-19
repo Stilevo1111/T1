@@ -468,12 +468,14 @@ class Database:
             else:
                 # Для SQLite используем datetime function
                 cursor = conn.cursor()
+                # Форматируем строку для days_inactive
+                days_str = f"-{days_inactive} days"
                 cursor.execute("""
                     UPDATE users 
                     SET fissure = MAX(0.1, fissure - ?)
-                    WHERE last_activity < datetime('now', '-' || ? || ' days')
+                    WHERE last_activity < datetime('now', ?)
                     AND fissure > 0.1
-                """, (decrease_amount, days_inactive))
+                """, (decrease_amount, days_str))
                 affected = cursor.rowcount
                 conn.commit()
                 cursor.close()
