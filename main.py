@@ -719,6 +719,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Бонус для выходных: увеличиваем положительный ролл
         if is_weekend and roll > 0 and not is_fatal:
             bonus_multiplier = random.choice([1.5, 2, 2.5])
+            original_roll = roll
             roll = int(roll * bonus_multiplier)
             weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f}"
         
@@ -763,6 +764,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{extra_text}\n\n"
             f"📏 Длина сейчас: {new_fissure:.1f} см"
         )
+        
+        # Добавляем информацию о выходном бонусе, если он был применён
+        if is_weekend and roll > 0 and not is_fatal and 'original_roll' in locals():
+            text += f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} (было {original_roll})"
         
         if is_fatal and protection_msg:
             text = f"{text}\n\n{protection_msg}"
@@ -1426,6 +1431,8 @@ async def main():
         app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
+
+        webhook_url = os.getenv("WEBHOOK_URL")
         if not webhook_url:
             logger.error("WEBHOOK_URL not set!")
             return
