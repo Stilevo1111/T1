@@ -9,6 +9,7 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot
+import dota_mmr
 from aiohttp import web
 
 # Logging setup
@@ -261,13 +262,16 @@ async def refresh_digest_message(bot):
             except Exception as e:
                 error_str = str(e)
                 if "Message to edit not found" in error_str or "message can't be edited" in error_str:
+                    logger.info(f"Сообщение дайджеста {last_message_id} нельзя редактировать, сбрасываем ID")
                     set_config('daily_digest_message_id', None)
+                    return
                 else:
                     logger.debug(f"Не удалось обновить дайджест: {e}")
+                    return
         
-        msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
-        set_config('daily_digest_message_id', msg.message_id)
-        logger.info(f"Создан новый дайджест после броска {msg.message_id}")
+        # Если message_id пустой - не создаём автоматически
+        # Дайджест появится только утром или через /digestnow
+        logger.debug("Сообщения дайджеста нет, не создаём автоматически")
         
     except Exception as e:
         logger.error(f"Ошибка в refresh_digest_message: {e}", exc_info=True)
@@ -909,6 +913,143 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /link command - привязка Steam аккаунта"""
+    try:
+        if not update.message:
+            return
+        
+        user = update.effective_user
+        args = context.args
+        
+        if not args:
+            await update.message.reply_text(
+                "❌ Укажи никнейм или Steam ID\n\n"
+                "Пример: /link Miracle\n"
+                "Пример: /link 76561198012345678"
+            )
+            return
+        
+        identifier = " ".join(args)
+        
+        # Вызываем функцию из dota_mmr.py
+        result = dota_mmr.register_steam(user.id, identifier)
+        
+        if result["success"]:
+            await update.message.reply_text(result["message"])
+        else:
+            await update.message.reply_text(result["message"])
+            
+    except Exception as e:
+        logger.error(f"Error in link: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("❌ Ошибка привязки Steam")
+        except Exception:
+            pass
+
+
+async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /topmmr command - топ по винрейту за неделю"""
+    try:
+        if not update.message:
+            return
+        
+        # Получаем топ из dota_mmr.py
+        top_players = dota_mmr.get_week_top(limit=10)
+        
+        if not top_players:
+            await update.message.reply_text(
+                "📊 Нет данных для топа.\n"
+                "Игроки должны привязать Steam через /link"
+            )
+            return
+        
+        # Формируем сообщение
+        text = "🏆 Топ игроков за неделю (по винрейту)\n\n"
+        
+        medals = ["🥇", "🥈", "🥉"]
+        
+        for i, player in enumerate(top_players):
+            rank = i + 1
+            medal = medals[i] if i < 3 else f"{rank}."
+            username = player.get("username", "Unknown")
+            week_games = player.get("week_games", 0)
+            week_wins = player.get("week_wins", 0)
+            
+            if week_games > 0:
+                winrate = (week_wins / week_games) * 100
+                winrate_str = f"{winrate:.1f}%"
+            else:
+                winrate_str = "0%"
+            
+            text += f"{medal} {username} - {week_games} игр, {winrate_str} ({week_wins}-{week_games-week_wins})\n"
+        
+        await update.message.reply_text(text)
+        
+    except Exception as e:
+        logger.error(f"Error in topmmr: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("❌ Ошибка получения топа MMR")
+        except Exception:
+            pass
+
+
+async def ruiner(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /Ruiner command - найти случайного руинера в чате"""
+    try:
+        if not update.message:
+            return
+        
+        chat_id = update.message.chat_id
+        chat_type = update.message.chat.type
+        
+        if chat_type not in ['group', 'supergroup']:
+            await update.message.reply_text("⚠️ Команда работает только в группах")
+            return
+        
+        # Получаем участников чата
+        try:
+            members = await context.bot.get_chat_administrators(chat_id)
+            users = [m.user for m in members if not m.user.is_bot]
+        except Exception:
+            users = []
+        
+        if not users:
+            await update.message.reply_text("❌ Не удалось найти пользователей в чате")
+            return
+        
+        random_user = random.choice(users)
+        
+        if random_user.username:
+            mention = f"@{random_user.username}"
+        else:
+            mention = f"{random_user.first_name}"
+        
+        jokes = [
+            f"{mention}, ты точно играл, а не смотрел видосы?",
+            f"{mention}, твоя мама горничная? Потому что ты только и делаешь, что убираешь в команде",
+            f"{mention}, тебя забанили в киберкафе за то, что много проигрываешь?",
+            f"{mention}, твои тиммейты плачут, когда ты заходишь в игру",
+            f"{mention}, это ты или мышка сломалась?",
+            f"{mention}, мне сказали, что ты хорош... соврали",
+            f"{mention}, инвайт в команду 'Всегда проигрывает' уже ждёт тебя",
+            f"{mention}, ты понимаешь, что твоя команда - это 4 человека и ты?",
+            f"{mention}, не переживай, ты просто... особенный",
+            f"{mention}, бабушка твоя в доту играет лучше!",
+        ]
+        
+        joke = random.choice(jokes)
+        
+        await update.message.reply_text(f"👻 Руинер найден: {joke}")
+        
+    except Exception as e:
+        logger.error(f"Error in ruiner: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("❌ Ошибка поиска руинера")
+        except Exception:
+            pass
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
     logger.info(f"New user {update.effective_user.id}")
@@ -1257,8 +1398,67 @@ async def main_polling():
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
+        app.add_handler(CommandHandler("link", link))
+        app.add_handler(CommandHandler("topmmr", topmmr))
+        app.add_handler(CommandHandler("Ruiner", ruiner))
+        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot
+        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
+        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
+        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
+
+        logger.info("Telegram bot started in polling mode")
+        
+        # Запускаем job_queue для PTB v20+
+        await job_queue.start()
+        
+        await app.run_polling(drop_pending_updates=True)
+        
+    except Exception as e:
+        logger.error(f"Critical error: {e}", exc_info=True)
+        raise
+
+
+if __name__ == "__main__":
+    if os.getenv("WEBHOOK_URL"):
+        asyncio.run(main())
+    else:
+        asyncio.run(main_polling())
+
+
+
+
+
+), start))
+        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot
+        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
+        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
+        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
+
+        logger.info("Telegram bot started in polling mode")
+        
+        # Запускаем job_queue для PTB v20+
+        await job_queue.start()
+        
+        await app.run_polling(drop_pending_updates=True)
+        
+    except Exception as e:
+        logger.error(f"Critical error: {e}", exc_info=True)
+        raise
+
+
+if __name__ == "__main__":
+    if os.getenv("WEBHOOK_URL"):
+        asyncio.run(main())
+    else:
+        asyncio.run(main_polling())
+
+
+
+
+
+), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
         app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
