@@ -128,6 +128,34 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NULL
             """)
+            # Dota 2 поля
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS steam_id BIGINT
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS steam_nickname VARCHAR(255)
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS dota_total_games INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS dota_wins INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_games INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_wins INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr_updated_at TIMESTAMP
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -177,6 +205,23 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN weekly_digest_position INTEGER DEFAULT 0")
             if 'created_at' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT NULL")
+            # Dota 2 поля
+            if 'steam_id' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN steam_id INTEGER")
+            if 'steam_nickname' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN steam_nickname TEXT")
+            if 'mmr' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN mmr INTEGER DEFAULT 0")
+            if 'dota_total_games' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN dota_total_games INTEGER DEFAULT 0")
+            if 'dota_wins' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN dota_wins INTEGER DEFAULT 0")
+            if 'week_games' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN week_games INTEGER DEFAULT 0")
+            if 'week_wins' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN week_wins INTEGER DEFAULT 0")
+            if 'mmr_updated_at' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN mmr_updated_at TIMESTAMP")
         
         # Создаём таблицу для настроек бота (чат для дайджестов)
         cursor.execute("""
@@ -293,12 +338,22 @@ class Database:
                         "total_growth": user.get("total_growth", 0),
                         "total_rolls": user.get("total_rolls", 0),
                         "best_streak": user.get("best_streak", 0),
-                        "current_streak": user.get("current_streak", 0)
+                        "current_streak": user.get("current_streak", 0),
+                        # Dota 2 поля
+                        "steam_id": user.get("steam_id"),
+                        "steam_nickname": user.get("steam_nickname"),
+                        "mmr": user.get("mmr", 0),
+                        "dota_total_games": user.get("dota_total_games", 0),
+                        "dota_wins": user.get("dota_wins", 0),
+                        "week_games": user.get("week_games", 0),
+                        "week_wins": user.get("week_wins", 0),
+                        "week_updated_at": user.get("week_updated_at"),
+                        "mmr_updated_at": user.get("mmr_updated_at")
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
                     cursor.close()
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_updated_at": None, "mmr_updated_at": None}
             else:
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
@@ -314,12 +369,22 @@ class Database:
                         "total_growth": user[6] if len(user) > 6 else 0,
                         "total_rolls": user[7] if len(user) > 7 else 0,
                         "best_streak": user[10] if len(user) > 10 else 0,
-                        "current_streak": user[9] if len(user) > 9 else 0
+                        "current_streak": user[9] if len(user) > 9 else 0,
+                        # Dota 2 поля
+                        "steam_id": user[20] if len(user) > 20 else None,
+                        "steam_nickname": user[21] if len(user) > 21 else None,
+                        "mmr": user[22] if len(user) > 22 else 0,
+                        "dota_total_games": user[23] if len(user) > 23 else 0,
+                        "dota_wins": user[24] if len(user) > 24 else 0,
+                        "week_games": user[25] if len(user) > 25 else 0,
+                        "week_wins": user[26] if len(user) > 26 else 0,
+                        "week_updated_at": user[27] if len(user) > 27 else None,
+                        "mmr_updated_at": user[28] if len(user) > 28 else None
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
                     cursor.close()
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_updated_at": None, "mmr_updated_at": None}
         except Exception as e:
             print(f"❌ Ошибка get_user: {e}")
             return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0}
@@ -847,6 +912,33 @@ def update_last_message_id(telegram_id, message_id):
     """Функция для совместимости - использует новый класс Database"""
     db = Database()
     db.update_last_message_id(telegram_id, message_id)
+
+def update_user_field(telegram_id, field, value):
+    """Обновление любого поля пользователя"""
+    try:
+        conn = get_connection()
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        cursor = conn.cursor()
+        
+        if "postgres" in scheme:
+            cursor.execute(
+                f"UPDATE users SET {field} = %s WHERE telegram_id = %s",
+                (value, telegram_id)
+            )
+        else:
+            cursor.execute(
+                f"UPDATE users SET {field} = ? WHERE telegram_id = ?",
+                (value, telegram_id)
+            )
+        
+        conn.commit()
+        cursor.close()
+        return True
+    except Exception as e:
+        logger.error(f"Error updating user field: {e}")
+        return False
 
 def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
     """Уменьшить fissure для неактивных игроков (вызывается ежедневно)"""
