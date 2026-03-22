@@ -29,7 +29,7 @@ def search_player_by_nickname(nickname: str) -> dict:
             data = response.json()
             return {
                 "steam_id": data.get("steamId"),
-                "nickname": data.get("nickName"),
+                "nickname": data.get("nickName", nickname),
                 "mmr": data.get("mmr", 0),
                 "total_games": data.get("stats", {}).get("matchCount", 0),
                 "wins": data.get("stats", {}).get("winCount", 0)
@@ -92,7 +92,7 @@ def search_player_opendota(nickname: str) -> dict:
 def get_player_stats(steam_id: int) -> dict:
     """
     Получение полной статистики игрока (Stratz + OpenDota fallback)
-    Returns: {mmr, total_games, wins, week_games, week_wins}
+    Returns: {mmr, total_games, wins, week_games, week_wins, nickname}
     """
     try:
         url = f"{STRATZ_API_URL}/{steam_id}"
@@ -103,6 +103,7 @@ def get_player_stats(steam_id: int) -> dict:
         if response.status_code == 200:
             data = response.json()
             return {
+                "nickname": data.get("nickName", ""),
                 "mmr": data.get("mmr", 0),
                 "total_games": data.get("stats", {}).get("matchCount", 0),
                 "wins": data.get("stats", {}).get("winCount", 0),
@@ -138,9 +139,14 @@ def get_player_stats_opendota(steam_id: int) -> dict:
             # approximate_mmr = rank_tier * 100 + 1000 (грубая оценка)
             approximate_mmr = rank_tier * 100 + 600 if rank_tier else 0
             
-            logger.info(f"OpenDota data: rank_tier={rank_tier}, approximate_mmr={approximate_mmr}")
+            # Получаем ник из профиля
+            profile = data.get("profile", {})
+            nickname = profile.get("personaname", "Unknown")
+            
+            logger.info(f"OpenDota data: rank_tier={rank_tier}, approximate_mmr={approximate_mmr}, nickname={nickname}")
             
             return {
+                "nickname": nickname,
                 "mmr": approximate_mmr,
                 "total_games": data.get("games", 0),
                 "wins": data.get("win", 0),
