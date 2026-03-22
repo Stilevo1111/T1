@@ -1004,7 +1004,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         text = update.message.text.strip()
         
-        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
+        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ", "🎮 Dota MMR", "👻 Найти руинера"]
         
         if text not in menu_buttons:
             return
@@ -1036,6 +1036,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await stats(update, context)
         elif text == "🏆 Топ":
             await top(update, context)
+        elif text == "🎮 Dota MMR":
+            await update.message.reply_text("🎮 Dota MMR\n\nИспользуй /link для привязки Steam аккаунта")
+        elif text == "👻 Найти руинера":
+            await update.message.reply_text("👻 Руинер найден!\n\n@{user}, ты точно играл, а не смотрел видосы?".format(user=update.effective_user.username or update.effective_user.first_name))
             
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}", exc_info=True)
