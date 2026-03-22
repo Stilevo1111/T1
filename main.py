@@ -6,7 +6,7 @@ import asyncio
 import logging
 import datetime
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, ConversationHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot
 import dota_mmr
@@ -26,6 +26,9 @@ else:
     print("BOT_TOKEN found")
 
 COOLDOWN = 86400  # 24 hours
+
+# Conversation states
+WAITING_FOR_STEAM_ID = 1
 
 
 async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
@@ -1004,38 +1007,59 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /link command - link Steam account"""
-    try:
-        user = update.effective_user
-        if not user:
-            return
-        
-        args = context.args
-        if not args:
-            await update.message.reply_text(
-                "📎 <b>Привязка Steam аккаунта</b>\n\n"
-                "Используйте: /link <SteamID или никнейм>",
-                parse_mode='HTML'
-            )
-            return
-        
-        identifier = args[0]
-        result = dota_mmr.register_steam(user.id, identifier)
-        
-        if result.get('success'):
-            await update.message.reply_text(
-                f"✅ <b>Steam аккаунт привязан!</b>\n\n"
-                f"🎮 {result.get('nickname', 'N/A')}",
-                parse_mode='HTML'
-            )
-        else:
-            await update.message.reply_text(
-                f"❌ Ошибка: {result.get('error', 'Unknown')}"
-            )
-    except Exception as e:
-        logger.error(f"link error: {e}")
-        await update.message.reply_text("❌ Error")
+async def link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start linking Steam - ask for ID"""
+    await update.message.reply_text(
+        "🔗 <b>Привязка Steam аккаунта</b>\n\n"
+        "Введите ваш Steam ID (17 цифр)\n"
+        "Например: 76561198012345678\n\n"
+        "Или никнейм: NoNam3",
+        parse_mode='HTML'
+    )
+    return WAITING_FOR_STEAM_ID
+
+
+async def link_receive_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Receive Steam ID from user"""
+    identifier = update.message.text.strip()
+    user_id = update.effective_user.id
+    
+    if not identifier:
+        await update.message.reply_text("❌ Пустой ввод. Попробуйте ещё раз:")
+        return WAITING_FOR_STEAM_ID
+    
+    result = dota_mmr.register_steam(user_id, identifier)
+    
+    if result.get('success'):
+        await update.message.reply_text(
+            f"✅ <b>Steam аккаунт привязан!</b>\n\n"
+            f"🎮 {result.get('nickname', 'N/A')}\n"
+            f"MMR: {result.get('mmr', 0)}",
+            parse_mode='HTML'
+        )
+    else:
+        await update.message.reply_text(
+            f"❌ Ошибка: {result.get('message', 'Unknown error')}\n\n"
+            "Попробуйте ещё раз или нажмите /cancel"
+        )
+        return WAITING_FOR_STEAM_ID
+    
+    return ConversationHandler.END
+
+
+async def link_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel linking"""
+    await update.message.reply_text("❌ Отменено. Для повтора нажмите /link")
+    return ConversationHandler.END
+
+
+link_conv_handler = ConversationHandler(
+    entry_points=[CommandHandler("link", link_start)],
+    states={
+        WAITING_FOR_STEAM_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, link_receive_id)]
+    },
+    fallbacks=[CommandHandler("cancel", link_cancel)]
+)
 
 
 async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1247,7 +1271,7 @@ async def main():
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
-        app.add_handler(CommandHandler("link", link))
+        app.add_handler(link_conv_handler)
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("Ruiner", ruiner))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
