@@ -1011,7 +1011,7 @@ async def link_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start linking Steam - ask for ID"""
     await update.message.reply_text(
         "🔗 <b>Привязка Steam аккаунта</b>\n\n"
-        "Введите ваш Steam ID (17 цифр)\n"
+        "Введите ваш Steam ID (от 9 до 17 цифр)\n"
         "Например: 76561198012345678\n\n"
         "Или никнейм: NoNam3",
         parse_mode='HTML'

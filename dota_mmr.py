@@ -99,6 +99,10 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
     """
     # Проверяем, если это число - это Steam ID
     if identifier.isdigit():
+        # Проверяем длину (от 9 до 17 цифр)
+        if len(identifier) < 9 or len(identifier) > 17:
+            return {"success": False, "message": "❌ Неверный формат Steam ID. Должно быть от 9 до 17 цифр."}
+        
         steam_id = int(identifier)
         # Пробуем получить данные по Steam ID
         player_data = get_player_stats(steam_id)
