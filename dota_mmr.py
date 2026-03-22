@@ -11,11 +11,13 @@ logger = logging.getLogger(__name__)
 
 # Stratz API (бесплатный, без ключа)
 STRATZ_API_URL = "https://api.stratz.com/players"
+# OpenDota API (бесплатный, без ключа) - запасной вариант
+OPENDOTA_API_URL = "https://api.opendota.com/api"
 
 
 def search_player_by_nickname(nickname: str) -> dict:
     """
-    Поиск игрока по никнейму через Stratz API
+    Поиск игрока по никнейму через Stratz API (+ OpenDota fallback)
     Returns: {steam_id, nickname, mmr, total_games, wins}
     """
     try:
@@ -32,8 +34,12 @@ def search_player_by_nickname(nickname: str) -> dict:
                 "total_games": data.get("stats", {}).get("matchCount", 0),
                 "wins": data.get("stats", {}).get("winCount", 0)
             }
+        elif response.status_code == 403:
+            # Stratz API blocked - try OpenDota
+            return search_player_opendota(nickname)
         elif response.status_code == 404:
-            return None
+            # Not found in Stratz - try OpenDota
+            return search_player_opendota(nickname)
         else:
             logger.warning(f"Stratz API error: {response.status_code}")
             return None
@@ -42,9 +48,44 @@ def search_player_by_nickname(nickname: str) -> dict:
         return None
 
 
+def search_player_opendota(nickname: str) -> dict:
+    """
+    Поиск игрока по никнейму через OpenDota API
+    """
+    try:
+        # OpenDota search endpoint
+        url = f"{OPENDOTA_API_URL}/search"
+        params = {"q": nickname}
+        response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data and len(data) > 0:
+                player = data[0]  # Берем первого найденного
+                steam_id = player.get("account_id")
+                if steam_id:
+                    # Конвертируем account_id в Steam ID
+                    steam_id = int(steam_id) + 76561197960265728
+                    
+                    # Получаем статистику этого игрока
+                    stats = get_player_stats_opendota(steam_id)
+                    if stats:
+                        return {
+                            "steam_id": steam_id,
+                            "nickname": player.get("personaname", nickname),
+                            "mmr": stats.get("mmr", 0),
+                            "total_games": stats.get("total_games", 0),
+                            "wins": stats.get("wins", 0)
+                        }
+        return None
+    except Exception as e:
+        logger.error(f"Error searching player in OpenDota: {e}")
+        return None
+
+
 def get_player_stats(steam_id: int) -> dict:
     """
-    Получение полной статистики игрока
+    Получение полной статистики игрока (Stratz + OpenDota fallback)
     Returns: {mmr, total_games, wins, week_games, week_wins}
     """
     try:
@@ -59,9 +100,41 @@ def get_player_stats(steam_id: int) -> dict:
                 "wins": data.get("stats", {}).get("winCount", 0),
                 "rank_tier": data.get("rankTier", 0)
             }
+        elif response.status_code == 403:
+            # Stratz API blocked - try OpenDota fallback
+            return get_player_stats_opendota(steam_id)
         return None
     except Exception as e:
         logger.error(f"Error getting player stats: {e}")
+        return None
+
+
+def get_player_stats_opendota(steam_id: int) -> dict:
+    """
+    Получение статистики через OpenDota API (fallback)
+    """
+    try:
+        url = f"{OPENDOTA_API_URL}/players/{steam_id}"
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            # OpenDota doesn't have MMR directly, but has rank_tier
+            rank_tier = data.get("rank_tier", 0)
+            # Конвертируем rank_tier в примерный MMR
+            # Guardian=1-5, Crusader=10-20, etc
+            # approximate_mmr = rank_tier * 100 + 1000 (грубая оценка)
+            approximate_mmr = rank_tier * 100 + 600 if rank_tier else 0
+            
+            return {
+                "mmr": approximate_mmr,
+                "total_games": data.get("games", 0),
+                "wins": data.get("win", 0),
+                "rank_tier": rank_tier
+            }
+        return None
+    except Exception as e:
+        logger.error(f"Error getting player stats from OpenDota: {e}")
         return None
 
 
