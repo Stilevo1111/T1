@@ -1099,16 +1099,8 @@ async def ruiner(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chosen = random.choice(admin_users)
         user = chosen.user
         
-        jokes = [
-            f"@{user.username}, ты точно играл?",
-            f"@{user.username}, инвайт в команду 'Always Lose' ждёт",
-        ]
-        
-        joke = random.choice(jokes)
-        # Делаем никнейм кликабельным
-        keyboard = [[InlineKeyboardButton(user.username, url=f"tg://user?id={user.id}")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(f"👻 Руинер найден: {user.username}\n\n{joke}", reply_markup=reply_markup)
+        # Просто показываем ник без шуток и кнопок
+        await update.message.reply_text(f"👻 Руинер найден: @{user.username}")
     except Exception as e:
         logger.error(f"ruiner error: {e}")
         await update.message.reply_text("❌ Error")
