@@ -198,11 +198,6 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         
         steam_id = int(identifier)
         
-        # Если это короткий ID (9-10 цифр), конвертируем в Steam ID64
-        if len(identifier) <= 10:
-            steam_id = steam_id + 76561197960265728
-            logger.info(f"Converted short ID {identifier} to Steam ID64: {steam_id}")
-        
         # Пробуем получить данные по Steam ID
         player_data = get_player_stats(steam_id)
         if player_data:
