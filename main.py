@@ -1101,7 +1101,6 @@ async def ruiner(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         jokes = [
             f"@{user.username}, ты точно играл?",
-            f"@{user.username}, твоя мама горничная?",
             f"@{user.username}, инвайт в команду 'Always Lose' ждёт",
         ]
         
