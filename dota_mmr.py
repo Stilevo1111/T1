@@ -198,8 +198,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         
         steam_id = int(identifier)
         
-        # Пробуем получить данные по Steam ID
-        player_data = get_player_stats(steam_id)
+        # Пробуем получить данные по Steam ID напрямую (без конвертации)
         if player_data:
             # Сохраняем в БД
             update_user_field(telegram_id, "steam_id", steam_id)
