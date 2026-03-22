@@ -1149,7 +1149,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif text == "🏆 Топ MMR":
             await topmmr(update, context)
         elif text == "💀 Руинер":
-            await Ruiner(update, context)
+            await ruiner(update, context)
             
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}", exc_info=True)
