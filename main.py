@@ -1000,6 +1000,8 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+
+
 async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /link command - link Steam account"""
     try:
@@ -1011,9 +1013,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not args:
             await update.message.reply_text(
                 "📎 <b>Привязка Steam аккаунта</b>\n\n"
-                "Используйте: /link <SteamID или никнейм>\n\n"
-                "Пример: /link 123456789\n"
-                "Пример: /link Dendi",
+                "Используйте: /link <SteamID или никнейм>",
                 parse_mode='HTML'
             )
             return
@@ -1022,105 +1022,68 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result = dota_mmr.register_steam(user.id, identifier)
         
         if result.get('success'):
-            data = result.get('data', {})
             await update.message.reply_text(
                 f"✅ <b>Steam аккаунт привязан!</b>\n\n"
-                f"🎮 Nickname: {data.get('nickname', 'N/A')}\n"
-                f"📊 MMR: {data.get('mmr', 0)}\n"
-                f"🎮 Игр: {data.get('total_games', 0)}",
+                f"🎮 {result.get('nickname', 'N/A')}",
                 parse_mode='HTML'
             )
         else:
             await update.message.reply_text(
-                f"❌ Ошибка: {result.get('message', 'Неизвестная ошибка')}"
+                f"❌ Ошибка: {result.get('error', 'Unknown')}"
             )
     except Exception as e:
-        logger.error(f"Error in link command: {e}")
-        await update.message.reply_text("❌ Произошла ошибка при обработке команды")
+        logger.error(f"link error: {e}")
+        await update.message.reply_text("❌ Error")
 
 
 async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /topmmr command - show top players by MMR"""
+    """Handle /topmmr command"""
     try:
-        result = dota_mmr.get_mmr_top(limit=10)
+        result = dota_mmr.get_week_top(limit=10)
         
         if not result:
-            await update.message.reply_text(
-                "🏆 <b>Топ игроков по MMR</b>\n\n"
-                "Пока нет данных о игроках. "
-                "Используйте /link для привязки Steam!",
-                parse_mode='HTML'
-            )
+            await update.message.reply_text("🏆 No data. Use /link")
             return
         
-        text = "🏆 <b>Топ игроков по MMR</b>\n\n"
-        for i, player in enumerate(result, 1):
-            text += f"{i}. {player.get('nickname', 'N/A')} - {player.get('mmr', 0)} MMR\n"
+        text = "🏆 Top by MMR\n\n"
+        for i, p in enumerate(result, 1):
+            text += f"{i}. {p.get('nickname','?')} - {p.get('mmr',0)}\n"
         
-        await update.message.reply_text(text, parse_mode='HTML')
+        await update.message.reply_text(text)
     except Exception as e:
-        logger.error(f"Error in topmmr command: {e}")
-        await update.message.reply_text("❌ Произошла ошибка при обработке команды")
-
-
-async def mmr_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /mmr command - show user's Dota MMR"""
-    try:
-        user = update.effective_user
-        if not user:
-            return
-        
-        if not dota_mmr.is_steam_linked(user.id):
-            await update.message.reply_text(
-                "❌ Steam аккаунт не привязан!\n"
-                "Используйте /link <SteamID или никнейм> для привязки."
-            )
-            return
-        
-        result = dota_mmr.get_user_dota_stats(user.id)
-        
-        if result:
-            total_games = result.get('total_games', 0)
-            wins = result.get('wins', 0)
-            winrate = round((wins / total_games * 100) if total_games > 0 else 0, 1)
-            
-            await update.message.reply_text(
-                f"🎮 <b>Твой MMR</b>\n\n"
-                f"Ник: {result.get('steam_nickname', 'N/A')}\n"
-                f"📊 MMR: {result.get('mmr', 0)}\n"
-                f"🎮 Игр: {total_games} | Побед: {wins} ({winrate}%)",
-                parse_mode='HTML'
-            )
-        else:
-            await update.message.reply_text("❌ Не удалось получить статистику")
-    except Exception as e:
-        logger.error(f"Error in mmr command: {e}")
-        await update.message.reply_text("❌ Произошла ошибка при обработке команды")
+        logger.error(f"topmmr error: {e}")
 
 
 async def ruiner(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /Ruiner command - find a random chat member as 'ruiner'"""
+    """Handle /Ruiner - find random admin"""
     try:
-        user = update.effective_user
-        if not user:
+        chat = update.effective_chat
+        if not chat or chat.type not in ['group','supergroup']:
+            await update.message.reply_text("❌ Groups only")
             return
         
+        admins = await context.bot.get_chat_administrators(chat.id)
+        admin_users = [a for a in admins if not a.user.is_bot]
+        
+        if not admin_users:
+            await update.message.reply_text("❌ No admins")
+            return
+        
+        import random
+        chosen = random.choice(admin_users)
+        user = chosen.user
+        
         jokes = [
-            "@{user}, ты точно играл, а не смотрел видосы?",
-            "@{user}, твоя мама горничная?",
-            "@{user}, тебя забанили в киберкафе?",
-            "@{user}, твои тиммейты плачут...",
-            "@{user}, это ты или мышка сломалась?",
+            f"@{user.username}, ты точно играл?",
+            f"@{user.username}, твоя мама горничная?",
+            f"@{user.username}, инвайт в команду 'Always Lose' ждёт",
         ]
         
-        joke = random.choice(jokes).format(user=user.username or user.first_name)
-        
-        await update.message.reply_text(
-            f"👻 <b>Руинер найден!</b>\n\n{joke}",
-            parse_mode='HTML'
-        )
+        joke = random.choice(jokes)
+        await update.message.reply_text(f"👻 Ruiner: @{user.username}\n\n{joke}")
     except Exception as e:
-        logger.error(f"Error in ruiner command: {e}")
+        logger.error(f"ruiner error: {e}")
+        await update.message.reply_text("❌ Error")
 
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1128,7 +1091,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         text = update.message.text.strip()
         
-        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ", "🎮 Dota MMR", "🏆 Топ MMR", "👻 Найти руинера"]
+        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
         
         if text not in menu_buttons:
             return
@@ -1160,10 +1123,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await stats(update, context)
         elif text == "🏆 Топ":
             await top(update, context)
-        elif text == "🎮 Dota MMR":
-            await update.message.reply_text("🎮 Dota MMR\n\nИспользуй /link для привязки Steam аккаунта")
-        elif text == "👻 Найти руинера":
-            await update.message.reply_text("👻 Руинер найден!\n\n@{user}, ты точно играл, а не смотрел видосы?".format(user=update.effective_user.username or update.effective_user.first_name))
             
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}", exc_info=True)
@@ -1280,525 +1239,12 @@ async def main():
         app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(CommandHandler("link", link))
-        app.add_handler(CommandHandler("mmr", mmr_command))
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("Ruiner", ruiner))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot
-        if not webhook_url:
-            logger.error("WEBHOOK_URL not set!")
-            return
-            
-        await app.bot.set_webhook(url=webhook_url)
-        await app.initialize()
-        
-        # Запускаем application для активации job_queue
-        await app.start()
-        # Запускаем job_queue для PTB v20+
-        await job_queue.start()
-        
-        logger.info("Telegram bot started in webhook mode")
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        from aiohttp import web
-        
-        async def handle_webhook(request):
-            """Handle incoming webhook requests"""
-            try:
-                update_data = await request.json()
-                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
-                update = Update.de_json(update_data, app.bot)
-                logger.info(f"Update parsed: {update}")
-                await app.process_update(update)
-                logger.info(f"Update processed")
-                return web.Response(status=200)
-            except Exception as e:
-                logger.error(f"Webhook error: {e}", exc_info=True)
-                return web.Response(status=500)
-        
-        web_app = web.Application()
-        web_app.router.add_post('/webhook', handle_webhook)
-        
-        # Setup health check with bot access
-        setup_health_check(app.bot)
-        web_app.router.add_get('/health', health_check_handler)
-        
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
-        await site.start()
-        
-        logger.info("Web server started")
-        
-        while True:
-            await asyncio.sleep(3600)
-            
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-
-async def main_polling():
-    """Start Telegram bot in polling mode for local testing"""
-    if not TOKEN:
-        logger.error("BOT_TOKEN not set!")
-        return
-    
-    try:
-        init_db()
-        
-        # Создаём JobQueue и привязываем к application
-        job_queue = JobQueue()
-        app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
-        
-        # Инициализируем job_queue с application для PTB v20+
-        job_queue.set_application(app)
-        
-        # Daily job
-        job_queue.run_daily(
-            decrease_inactive_job,
-            time=datetime.time(hour=0, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
-        
-        # Утренний дайджест в 9:00 утра по МСК (6:00 UTC)
-        job_queue.run_daily(
-            morning_digest_job,
-            time=datetime.time(hour=6, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
-        logger.info("Done")
-        
-        # Утренний дайджест теперь live (обновляется после каждого броска)
-        # Еженедельный дайджест по понедельникам
-        job_queue.run_daily(
-            weekly_digest_job,
-            time=datetime.time(hour=6, minute=0),
-            days=(0,)  # Monday only
-        )
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(CommandHandler("digestnow", digest_now))
-        app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
         app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        logger.info("Telegram bot started in polling mode")
-        
-        # Запускаем job_queue для PTB v20+
-        await job_queue.start()
-        
-        await app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-
-if __name__ == "__main__":
-    if os.getenv("WEBHOOK_URL"):
-        asyncio.run(main())
-    else:
-        asyncio.run(main_polling())
-
-
-
-
-
-), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot
-        if not webhook_url:
-            logger.error("WEBHOOK_URL not set!")
-            return
-            
-        await app.bot.set_webhook(url=webhook_url)
-        await app.initialize()
-        
-        # Запускаем application для активации job_queue
-        await app.start()
-        # Запускаем job_queue для PTB v20+
-        await job_queue.start()
-        
-        logger.info("Telegram bot started in webhook mode")
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        from aiohttp import web
-        
-        async def handle_webhook(request):
-            """Handle incoming webhook requests"""
-            try:
-                update_data = await request.json()
-                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
-                update = Update.de_json(update_data, app.bot)
-                logger.info(f"Update parsed: {update}")
-                await app.process_update(update)
-                logger.info(f"Update processed")
-                return web.Response(status=200)
-            except Exception as e:
-                logger.error(f"Webhook error: {e}", exc_info=True)
-                return web.Response(status=500)
-        
-        web_app = web.Application()
-        web_app.router.add_post('/webhook', handle_webhook)
-        
-        # Setup health check with bot access
-        setup_health_check(app.bot)
-        web_app.router.add_get('/health', health_check_handler)
-        
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
-        await site.start()
-        
-        logger.info("Web server started")
-        
-        while True:
-            await asyncio.sleep(3600)
-            
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-
-async def main_polling():
-    """Start Telegram bot in polling mode for local testing"""
-    if not TOKEN:
-        logger.error("BOT_TOKEN not set!")
-        return
-    
-    try:
-        init_db()
-        
-        # Создаём JobQueue и привязываем к application
-        job_queue = JobQueue()
-        app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
-        
-        # Инициализируем job_queue с application для PTB v20+
-        job_queue.set_application(app)
-        
-        # Daily job
-        job_queue.run_daily(
-            decrease_inactive_job,
-            time=datetime.time(hour=0, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
-        
-        # Утренний дайджест в 9:00 утра по МСК (6:00 UTC)
-        job_queue.run_daily(
-            morning_digest_job,
-            time=datetime.time(hour=6, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
-        logger.info("Done")
-        
-        # Утренний дайджест теперь live (обновляется после каждого броска)
-        # Еженедельный дайджест по понедельникам
-        job_queue.run_daily(
-            weekly_digest_job,
-            time=datetime.time(hour=6, minute=0),
-            days=(0,)  # Monday only
-        )
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(CommandHandler("digestnow", digest_now))
-        app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        logger.info("Telegram bot started in polling mode")
-        
-        # Запускаем job_queue для PTB v20+
-        await job_queue.start()
-        
-        await app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-
-if __name__ == "__main__":
-    if os.getenv("WEBHOOK_URL"):
-        asyncio.run(main())
-    else:
-        asyncio.run(main_polling())
-
-
-
-
-
-), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot
-        if not webhook_url:
-            logger.error("WEBHOOK_URL not set!")
-            return
-            
-        await app.bot.set_webhook(url=webhook_url)
-        await app.initialize()
-        
-        # Запускаем application для активации job_queue
-        await app.start()
-        # Запускаем job_queue для PTB v20+
-        await job_queue.start()
-        
-        logger.info("Telegram bot started in webhook mode")
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        from aiohttp import web
-        
-        async def handle_webhook(request):
-            """Handle incoming webhook requests"""
-            try:
-                update_data = await request.json()
-                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
-                update = Update.de_json(update_data, app.bot)
-                logger.info(f"Update parsed: {update}")
-                await app.process_update(update)
-                logger.info(f"Update processed")
-                return web.Response(status=200)
-            except Exception as e:
-                logger.error(f"Webhook error: {e}", exc_info=True)
-                return web.Response(status=500)
-        
-        web_app = web.Application()
-        web_app.router.add_post('/webhook', handle_webhook)
-        
-        # Setup health check with bot access
-        setup_health_check(app.bot)
-        web_app.router.add_get('/health', health_check_handler)
-        
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
-        await site.start()
-        
-        logger.info("Web server started")
-        
-        while True:
-            await asyncio.sleep(3600)
-            
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-
-async def main_polling():
-    """Start Telegram bot in polling mode for local testing"""
-    if not TOKEN:
-        logger.error("BOT_TOKEN not set!")
-        return
-    
-    try:
-        init_db()
-        
-        # Создаём JobQueue и привязываем к application
-        job_queue = JobQueue()
-        app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
-        
-        # Инициализируем job_queue с application для PTB v20+
-        job_queue.set_application(app)
-        
-        # Daily job
-        job_queue.run_daily(
-            decrease_inactive_job,
-            time=datetime.time(hour=0, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
-        
-        # Утренний дайджест в 9:00 утра по МСК (6:00 UTC)
-        job_queue.run_daily(
-            morning_digest_job,
-            time=datetime.time(hour=6, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
-        logger.info("Done")
-        
-        # Утренний дайджест теперь live (обновляется после каждого броска)
-        # Еженедельный дайджест по понедельникам
-        job_queue.run_daily(
-            weekly_digest_job,
-            time=datetime.time(hour=6, minute=0),
-            days=(0,)  # Monday only
-        )
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(CommandHandler("digestnow", digest_now))
-        app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        logger.info("Telegram bot started in polling mode")
-        
-        # Запускаем job_queue для PTB v20+
-        await job_queue.start()
-        
-        await app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-
-if __name__ == "__main__":
-    if os.getenv("WEBHOOK_URL"):
-        asyncio.run(main())
-    else:
-        asyncio.run(main_polling())
-
-
-
-
-
-), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot
-        if not webhook_url:
-            logger.error("WEBHOOK_URL not set!")
-            return
-            
-        await app.bot.set_webhook(url=webhook_url)
-        await app.initialize()
-        
-        # Запускаем application для активации job_queue
-        await app.start()
-        # Запускаем job_queue для PTB v20+
-        await job_queue.start()
-        
-        logger.info("Telegram bot started in webhook mode")
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        from aiohttp import web
-        
-        async def handle_webhook(request):
-            """Handle incoming webhook requests"""
-            try:
-                update_data = await request.json()
-                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
-                update = Update.de_json(update_data, app.bot)
-                logger.info(f"Update parsed: {update}")
-                await app.process_update(update)
-                logger.info(f"Update processed")
-                return web.Response(status=200)
-            except Exception as e:
-                logger.error(f"Webhook error: {e}", exc_info=True)
-                return web.Response(status=500)
-        
-        web_app = web.Application()
-        web_app.router.add_post('/webhook', handle_webhook)
-        
-        # Setup health check with bot access
-        setup_health_check(app.bot)
-        web_app.router.add_get('/health', health_check_handler)
-        
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 8080)))
-        await site.start()
-        
-        logger.info("Web server started")
-        
-        while True:
-            await asyncio.sleep(3600)
-            
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-
-async def main_polling():
-    """Start Telegram bot in polling mode for local testing"""
-    if not TOKEN:
-        logger.error("BOT_TOKEN not set!")
-        return
-    
-    try:
-        init_db()
-        
-        # Создаём JobQueue и привязываем к application
-        job_queue = JobQueue()
-        app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
-        
-        # Инициализируем job_queue с application для PTB v20+
-        job_queue.set_application(app)
-        
-        # Daily job
-        job_queue.run_daily(
-            decrease_inactive_job,
-            time=datetime.time(hour=0, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
-        
-        # Утренний дайджест в 9:00 утра по МСК (6:00 UTC)
-        job_queue.run_daily(
-            morning_digest_job,
-            time=datetime.time(hour=6, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
-        logger.info("Done")
-        
-        # Утренний дайджест теперь live (обновляется после каждого броска)
-        # Еженедельный дайджест по понедельникам
-        job_queue.run_daily(
-            weekly_digest_job,
-            time=datetime.time(hour=6, minute=0),
-            days=(0,)  # Monday only
-        )
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(CommandHandler("digestnow", digest_now))
-        app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        logger.info("Telegram bot started in polling mode")
-        
-        # Запускаем job_queue для PTB v20+
-        await job_queue.start()
-        
-        await app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
-
-if __name__ == "__main__":
-    if os.getenv("WEBHOOK_URL"):
-        asyncio.run(main())
-    else:
-        asyncio.run(main_polling())
-
-
-
-
-
-), top))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
