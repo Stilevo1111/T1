@@ -3,6 +3,8 @@
 
 import requests
 import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes
 from database import get_user, update_user_field
 
 logger = logging.getLogger(__name__)
@@ -165,3 +167,31 @@ def is_steam_linked(telegram_id: int) -> bool:
     """Проверка, привязан ли Steam к аккаунту"""
     user = get_user(telegram_id)
     return user and user.get("steam_id") is not None
+
+
+async def show_mmr_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать меню Dota 2 MMR"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    user_id = update.effective_user.id
+    user = get_user(user_id)
+    
+    keyboard = []
+    
+    if user and user.get("steam_id"):
+        mmr = user.get("mmr", 0)
+        nickname = user.get("steam_nickname", "Unknown")
+        total_games = user.get("dota_total_games", 0)
+        wins = user.get("dota_wins", 0)
+        winrate = f"{(wins/total_games*100):.1f}%" if total_games > 0 else "0%"
+        
+        text = f"🎮 {nickname}\nMMR: {mmr}\nИгр: {total_games} (WR: {winrate})"
+        keyboard.append([InlineKeyboardButton("🔄 Обновить MMR", callback_data="refresh_mmr")])
+    else:
+        text = "🔗 Привяжи свой Steam аккаунт\n\nИспользуй /link \u003cnickname\u003d или Steam ID\nПример: /link NoNam3"
+    
+    keyboard.append([InlineKeyboardButton("🏆 Топ недели", callback_data="week_top")])
+    keyboard.append([InlineKeyboardButton("« Назад в меню", callback_data="back_to_menu")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(text, reply_markup=reply_markup)

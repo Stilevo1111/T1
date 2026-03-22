@@ -655,6 +655,8 @@ def main_menu():
     keyboard = [
         [KeyboardButton("📈 Увеличить фиссуру")],
         [KeyboardButton("📏 Моя длина"), KeyboardButton("🏆 Топ")],
+        [KeyboardButton("🔗 Dota 2 MMR"), KeyboardButton("🏆 Топ MMR")],
+        [KeyboardButton("💀 Руинер")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
@@ -1091,7 +1093,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         text = update.message.text.strip()
         
-        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
+        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ", "🔗 Dota 2 MMR", "🏆 Топ MMR", "💀 Руинер"]
         
         if text not in menu_buttons:
             return
@@ -1123,6 +1125,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await stats(update, context)
         elif text == "🏆 Топ":
             await top(update, context)
+        elif text == "🔗 Dota 2 MMR":
+            from dota_mmr import show_mmr_menu
+            await show_mmr_menu(update, context)
+        elif text == "🏆 Топ MMR":
+            await topmmr(update, context)
+        elif text == "💀 Руинер":
+            await Ruiner(update, context)
             
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}", exc_info=True)
