@@ -53,19 +53,25 @@ def search_player_opendota(nickname: str) -> dict:
     Поиск игрока по никнейму через OpenDota API
     """
     try:
+        logger.info(f"Searching OpenDota for nickname: {nickname}")
         # OpenDota search endpoint
         url = f"{OPENDOTA_API_URL}/search"
         params = {"q": nickname}
         response = requests.get(url, params=params, timeout=10)
         
+        logger.info(f"OpenDota search response status: {response.status_code}")
+        
         if response.status_code == 200:
             data = response.json()
+            logger.info(f"OpenDota search data: {data}")
             if data and len(data) > 0:
                 player = data[0]  # Берем первого найденного
                 steam_id = player.get("account_id")
+                logger.info(f"Found player account_id: {steam_id}")
                 if steam_id:
                     # Конвертируем account_id в Steam ID
                     steam_id = int(steam_id) + 76561197960265728
+                    logger.info(f"Converted to Steam ID: {steam_id}")
                     
                     # Получаем статистику этого игрока
                     stats = get_player_stats_opendota(steam_id)
@@ -92,6 +98,8 @@ def get_player_stats(steam_id: int) -> dict:
         url = f"{STRATZ_API_URL}/{steam_id}"
         response = requests.get(url, timeout=10)
         
+        logger.info(f"Stratz response status: {response.status_code} for steam_id: {steam_id}")
+        
         if response.status_code == 200:
             data = response.json()
             return {
@@ -101,6 +109,7 @@ def get_player_stats(steam_id: int) -> dict:
                 "rank_tier": data.get("rankTier", 0)
             }
         elif response.status_code == 403:
+            logger.warning(f"Stratz API 403 error, trying OpenDota fallback")
             # Stratz API blocked - try OpenDota fallback
             return get_player_stats_opendota(steam_id)
         return None
@@ -114,8 +123,11 @@ def get_player_stats_opendota(steam_id: int) -> dict:
     Получение статистики через OpenDota API (fallback)
     """
     try:
+        logger.info(f"Trying OpenDota for steam_id: {steam_id}")
         url = f"{OPENDOTA_API_URL}/players/{steam_id}"
         response = requests.get(url, timeout=10)
+        
+        logger.info(f"OpenDota response status: {response.status_code}, url: {url}")
         
         if response.status_code == 200:
             data = response.json()
@@ -125,6 +137,8 @@ def get_player_stats_opendota(steam_id: int) -> dict:
             # Guardian=1-5, Crusader=10-20, etc
             # approximate_mmr = rank_tier * 100 + 1000 (грубая оценка)
             approximate_mmr = rank_tier * 100 + 600 if rank_tier else 0
+            
+            logger.info(f"OpenDota data: rank_tier={rank_tier}, approximate_mmr={approximate_mmr}")
             
             return {
                 "mmr": approximate_mmr,
