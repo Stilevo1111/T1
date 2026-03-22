@@ -156,9 +156,38 @@ def get_user_dota_stats(telegram_id: int) -> dict:
 
 def get_week_top(limit: int = 10) -> list:
     """Получение топа за неделю по винрейту"""
-    # Здесь нужна будет функция в database.py для получения топа
-    # Пока возвращаем заглушку
-    return []
+    from database import get_week_top as db_get_week_top
+    return db_get_week_top(limit)
+
+
+def get_mmr_top(limit: int = 10) -> list:
+    """Получение топа по MMR (все время)"""
+    from database import Database
+    db = Database()
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT username, steam_nickname, mmr
+            FROM users
+            WHERE steam_id IS NOT NULL AND mmr > 0
+            ORDER BY mmr DESC
+            LIMIT %s
+        """, (limit,))
+        results = cursor.fetchall()
+        return [
+            {
+                "username": row[0],
+                "nickname": row[1] or row[0],
+                "mmr": row[2]
+            }
+            for row in results
+        ]
+    except Exception as e:
+        logger.error(f"Error getting MMR top: {e}")
+        return []
+    finally:
+        cursor.close()
 
 
 def is_steam_linked(telegram_id: int) -> bool:

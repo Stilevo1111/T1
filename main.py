@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import os
 import random
 import time
@@ -9,6 +9,7 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot
+import dota_mmr
 from aiohttp import web
 
 # Logging setup
@@ -28,17 +29,17 @@ COOLDOWN = 86400  # 24 hours
 
 
 async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
-    """Удалить сообщение через delay секунд"""
+    """������� ��������� ����� delay ������"""
     if job_queue:
-        # Используем JobQueue для надежного планирования
+        # ���������� JobQueue ��� ��������� ������������
         job_queue.run_once(
             delete_message_job,
             delay,
-            data={'chat_id': chat_id, 'msg_id': msg_id},  # data для PTB
+            data={'chat_id': chat_id, 'msg_id': msg_id},  # data ��� PTB
             name=f"delete_{chat_id}_{msg_id}"
         )
     else:
-        # Fallback - пытаемся удалить сразу (менее надежно)
+        # Fallback - �������� ������� ����� (����� �������)
         await asyncio.sleep(delay)
         try:
             await bot.delete_message(chat_id, msg_id)
@@ -52,8 +53,8 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
 
 
 async def delete_message_job(context):
-    """Job для удаления сообщения"""
-    bot = context.application.bot  # Доступ через context.application.bot в PTB v20+
+    """Job ��� �������� ���������"""
+    bot = context.application.bot  # ������ ����� context.application.bot � PTB v20+
     chat_id = context.job.data['chat_id']
     msg_id = context.job.data['msg_id']
     try:
@@ -69,93 +70,93 @@ async def delete_message_job(context):
 
 
 def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
-    """Запланировать удаление сообщения через delay секунд"""
+    """������������� �������� ��������� ����� delay ������"""
     if job_queue:
         job_queue.run_once(
             delete_message_job,
             delay,
-            data={'chat_id': chat_id, 'msg_id': msg_id},  # data для PTB
+            data={'chat_id': chat_id, 'msg_id': msg_id},  # data ��� PTB
             name=f"delete_{chat_id}_{msg_id}"
         )
     else:
-        # Fallback если job_queue не передан
+        # Fallback ���� job_queue �� �������
         asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay, job_queue))
 
 
 async def decrease_inactive_job(context):
-    """Ежедневное задание: уменьшить fissure неактивным игрокам"""
+    """���������� �������: ��������� fissure ���������� �������"""
     try:
-        logger.info("Запуск ежедневного уменьшения fissure для неактивных игроков")
+        logger.info("������ ����������� ���������� fissure ��� ���������� �������")
         affected = decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0)
         if affected > 0:
-            logger.info(f"Уменьшен fissure для {affected} неактивных игроков")
+            logger.info(f"�������� fissure ��� {affected} ���������� �������")
         else:
-            logger.info("Нет неактивных игроков для уменьшения fissure")
+            logger.info("��� ���������� ������� ��� ���������� fissure")
         
-        # Обновляем позиции игроков
+        # ��������� ������� �������
         update_player_positions()
     except Exception as e:
-        logger.error(f"Ошибка в decrease_inactive_job: {e}")
+        logger.error(f"������ � decrease_inactive_job: {e}")
 
 
 async def morning_digest_job(context):
-    """Утренний дайджест (9:00)"""
+    """�������� �������� (9:00)"""
     try:
-        logger.info("Запуск утреннего дайджеста")
+        logger.info("������ ��������� ���������")
         
-        # Получаем ID чата для дайджеста
+        # �������� ID ���� ��� ���������
         digest_chat_id = get_config('digest_chat_id')
         if not digest_chat_id:
-            logger.info("Чат для дайджеста не настроен")
+            logger.info("��� ��� ��������� �� ��������")
             return
         
         stats = get_digest_stats()
         
-        # Формируем сообщение с кликабельными никнеймами
+        # ��������� ��������� � ������������� ����������
         growth_player, growth_pos = stats.get("top_growth", ("None", 0))
         drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
         streak_player, streak_len = stats.get("top_streak", ("None", 0))
         
-        # Получаем telegram_id для создания кликабельных ссылок
+        # �������� telegram_id ��� �������� ������������ ������
         growth_id = stats.get("top_growth_id")
         drop_id = stats.get("top_drop_id")
         streak_id = stats.get("top_streak_id")
         
-        # Функция для создания кликабельного никнейма
+        # ������� ��� �������� ������������� ��������
         def make_clickable(name, user_id):
             if name and name != "None" and user_id:
                 return f"<a href=\"tg://user?id={user_id}\">{name}</a>"
-            return name if name and name != "None" else "—"
+            return name if name and name != "None" else "�"
         
         growth_display = make_clickable(growth_player, growth_id)
         drop_display = make_clickable(drop_player, drop_id)
         streak_display = make_clickable(streak_player, streak_id)
         
-        # Формат: 📈stilevo +2⬆️ ┃💀None -X СМ┃🍀Wad1m1 - Стрик 1
-        # Всегда показываем данные если есть игрок
+        # ������: ??stilevo +2?? ???None -X ��???Wad1m1 - ����� 1
+        # ������ ���������� ������ ���� ���� �����
         if growth_player and growth_player != "None":
-            growth_part = f"📈{growth_display} +{growth_pos}⬆️"
+            growth_part = f"??{growth_display} +{growth_pos}??"
         else:
-            growth_part = "📈—"
+            growth_part = "??�"
         
         if drop_player and drop_player != "None":
             if drop_cm < 0:
-                drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
+                drop_part = f"??{drop_display} {drop_cm:.0f} ��"
             else:
-                drop_part = f"💀{drop_display} +{drop_cm:.0f} СМ"
+                drop_part = f"??{drop_display} +{drop_cm:.0f} ��"
         else:
-            drop_part = "💀—"
+            drop_part = "??�"
         
         if streak_player and streak_player != "None":
-            streak_part = f"🍀{streak_display} - Стрик {streak_len}"
+            streak_part = f"??{streak_display} - ����� {streak_len}"
         else:
-            streak_part = "🍀—"
+            streak_part = "??�"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+        text = f"{growth_part} ?{drop_part} ?{streak_part}\n\n??������� �������� ?? 9:00 ���\n\n?? = ���� ������� � ����\n?? = ��� �������\n?? = ������� ����� �����"
         
         bot = context.application.bot
         
-        # Пробуем отредактировать существующее сообщение
+        # ������� ��������������� ������������ ���������
         last_message_id = get_config('daily_digest_message_id')
         if last_message_id:
             try:
@@ -165,34 +166,34 @@ async def morning_digest_job(context):
                     text=text,
                     parse_mode="HTML"
                 )
-                logger.info(f"Обновлён существующий дайджест {last_message_id}")
-                # Для планового дайджеста (9:00) обновляем "снимок" на следующие сутки.
-                # Для ручного /digestnow snapshot НЕ трогаем, чтобы значение держалось до следующего 9:00.
+                logger.info(f"������� ������������ �������� {last_message_id}")
+                # ��� ��������� ��������� (9:00) ��������� "������" �� ��������� �����.
+                # ��� ������� /digestnow snapshot �� �������, ����� �������� ��������� �� ���������� 9:00.
                 if not getattr(context, "manual", False):
                     update_digest_snapshot()
                 return
             except Exception as e:
                 error_str = str(e)
-                # Если сообщение не найдено (удалено) - очищаем ID
+                # ���� ��������� �� ������� (�������) - ������� ID
                 if "Message to edit not found" in error_str or "message can't be edited" in error_str:
-                    logger.info(f"Старое сообщение {last_message_id} удалено или нельзя редактировать, создаём новое")
+                    logger.info(f"������ ��������� {last_message_id} ������� ��� ������ �������������, ������ �����")
                     set_config('daily_digest_message_id', None)
                 else:
-                    logger.info(f"Не удалось редактировать сообщение: {e}")
+                    logger.info(f"�� ������� ������������� ���������: {e}")
         
-        # Отправляем новое сообщение
+        # ���������� ����� ���������
         msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
         set_config('daily_digest_message_id', msg.message_id)
-        logger.info(f"Создан новый утренний дайджест {msg.message_id}")
+        logger.info(f"������ ����� �������� �������� {msg.message_id}")
         if not getattr(context, "manual", False):
             update_digest_snapshot()
         
     except Exception as e:
-        logger.error(f"Ошибка в morning_digest_job: {e}", exc_info=True)
+        logger.error(f"������ � morning_digest_job: {e}", exc_info=True)
 
 
 async def format_digest_message():
-    """Форматирует текст сообщения дайджеста"""
+    """����������� ����� ��������� ���������"""
     stats = get_digest_stats()
     
     growth_player, growth_pos = stats.get("top_growth", ("None", 0))
@@ -206,45 +207,45 @@ async def format_digest_message():
     def make_clickable(name, user_id):
         if name and name != "None" and user_id:
             return f"<a href=\"tg://user?id={user_id}\">{name}</a>"
-        return name if name and name != "None" else "—"
+        return name if name and name != "None" else "�"
     
     growth_display = make_clickable(growth_player, growth_id)
     drop_display = make_clickable(drop_player, drop_id)
     streak_display = make_clickable(streak_player, streak_id)
     
-    # Рост показываем если есть игрок
+    # ���� ���������� ���� ���� �����
     if growth_player and growth_player != "None":
-        growth_part = f"📈{growth_display} +{growth_pos}⬆️"
+        growth_part = f"??{growth_display} +{growth_pos}??"
     else:
-        growth_part = "📈—"
+        growth_part = "??�"
     
-    # Падение показываем если есть игрок (может быть + или -)
+    # ������� ���������� ���� ���� ����� (����� ���� + ��� -)
     if drop_player and drop_player != "None":
         if drop_cm < 0:
-            drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
+            drop_part = f"??{drop_display} {drop_cm:.0f} ��"
         else:
-            drop_part = f"💀{drop_display} +{drop_cm:.0f} СМ"
+            drop_part = f"??{drop_display} +{drop_cm:.0f} ��"
     else:
-        drop_part = "💀—"
+        drop_part = "??�"
     
-    # Стрик показываем если есть игрок
+    # ����� ���������� ���� ���� �����
     if streak_player and streak_player != "None":
-        streak_part = f"🍀{streak_display} - Стрик {streak_len}"
+        streak_part = f"??{streak_display} - ����� {streak_len}"
     else:
-        streak_part = "🍀—"
+        streak_part = "??�"
     
-    return f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+    return f"{growth_part} ?{drop_part} ?{streak_part}\n\n??������� �������� ?? 9:00 ���\n\n?? = ���� ������� � ����\n?? = ��� �������\n?? = ������� ����� �����"
 
 
 async def refresh_digest_message(bot):
-    """Обновляет сообщение дайджеста после каждого броска"""
+    """��������� ��������� ��������� ����� ������� ������"""
     try:
         digest_chat_id = get_config('digest_chat_id')
         if not digest_chat_id:
             return
         
-        # Получаем статистику (сравнивает со старым снимком)
-        # НЕ обновляем снимок! Он обновляется только в morning_digest_job
+        # �������� ���������� (���������� �� ������ �������)
+        # �� ��������� ������! �� ����������� ������ � morning_digest_job
         text = await format_digest_message()
         
         last_message_id = get_config('daily_digest_message_id')
@@ -256,65 +257,68 @@ async def refresh_digest_message(bot):
                     text=text,
                     parse_mode="HTML"
                 )
-                logger.debug(f"Обновлён дайджест после броска")
+                logger.debug(f"������� �������� ����� ������")
                 return
             except Exception as e:
                 error_str = str(e)
                 if "Message to edit not found" in error_str or "message can't be edited" in error_str:
+                    logger.info(f"��������� ��������� {last_message_id} ������ �������������, ���������� ID")
                     set_config('daily_digest_message_id', None)
+                    return
                 else:
-                    logger.debug(f"Не удалось обновить дайджест: {e}")
+                    logger.debug(f"�� ������� �������� ��������: {e}")
+                    return
         
-        msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
-        set_config('daily_digest_message_id', msg.message_id)
-        logger.info(f"Создан новый дайджест после броска {msg.message_id}")
+        # ���� message_id ������ - �� ������ �������������
+        # �������� �������� ������ ����� ��� ����� /digestnow
+        logger.debug("��������� ��������� ���, �� ������ �������������")
         
     except Exception as e:
-        logger.error(f"Ошибка в refresh_digest_message: {e}", exc_info=True)
+        logger.error(f"������ � refresh_digest_message: {e}", exc_info=True)
 
 
 async def weekly_digest_job(context):
-    """Еженедельный дайджест (по расписанию)"""
+    """������������ �������� (�� ����������)"""
     try:
-        logger.info("Запуск еженедельного дайджеста")
+        logger.info("������ ������������� ���������")
         
         digest_chat_id = get_config('digest_chat_id')
         if not digest_chat_id:
-            logger.info("Чат для дайджеста не настроен")
+            logger.info("��� ��� ��������� �� ��������")
             return
         
         stats = get_weekly_digest_stats()
         
-        text = "🌅 ЕЖЕНЕДЕЛЬНЫЙ ДАЙДЖЕСТ\n\n"
+        text = "?? ������������ ��������\n\n"
         
-        # Больше всех вырос в см за неделю
+        # ������ ���� ����� � �� �� ������
         growth_player, growth_cm = stats.get("top_growth_cm", ("None", 0))
         growth_id = stats.get("top_growth_cm_id")
         
         def make_clickable_weekly(name, user_id):
             if name and name != "None" and user_id:
                 return f"<a href=\"tg://user?id={user_id}\">{name}</a>"
-            return name if name and name != "None" else "—"
+            return name if name and name != "None" else "�"
         
         growth_display = make_clickable_weekly(growth_player, growth_id)
         if growth_player and growth_player != "None":
-            text += f"🍆 Больше всех вырос: {growth_display} (+{growth_cm:.0f} см)\n"
+            text += f"?? ������ ���� �����: {growth_display} (+{growth_cm:.0f} ��)\n"
         
-        # Прорыв недели: кто поднялся на больше всего позиций в топе
+        # ������ ������: ��� �������� �� ������ ����� ������� � ����
         breakthrough_player, breakthrough_pos = stats.get("breakthrough", ("None", 0))
         breakthrough_id = stats.get("breakthrough_id")
         breakthrough_display = make_clickable_weekly(breakthrough_player, breakthrough_id)
         if breakthrough_player and breakthrough_player != "None":
-            text += f"🔥 Прорыв недели: {breakthrough_display} (+{breakthrough_pos} позиций)\n"
+            text += f"?? ������ ������: {breakthrough_display} (+{breakthrough_pos} �������)\n"
         
         total_rolls = stats.get("total_rolls_week", 0)
         new_players = stats.get("new_players_week", 0)
         total_growth = stats.get("total_growth_week", 0)
         
-        text += f"\n📊 Статистика недели:\n"
-        text += f"• Всего бросков: {total_rolls}\n"
-        text += f"• Новых игроков: {new_players}\n"
-        text += f"• Общий рост: +{total_growth:.0f} см\n"
+        text += f"\n?? ���������� ������:\n"
+        text += f"� ����� �������: {total_rolls}\n"
+        text += f"� ����� �������: {new_players}\n"
+        text += f"� ����� ����: +{total_growth:.0f} ��\n"
         
         bot = context.application.bot
         
@@ -336,41 +340,41 @@ async def weekly_digest_job(context):
         update_weekly_digest_snapshot()
         
     except Exception as e:
-        logger.error(f"Ошибка в weekly_digest_job: {e}", exc_info=True)
+        logger.error(f"������ � weekly_digest_job: {e}", exc_info=True)
 
 
 async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ручной запуск утреннего дайджеста в этот чат"""
+    """������ ������ ��������� ��������� � ���� ���"""
     try:
         chat = update.effective_chat
         chat_id = chat.id
-        # В группах удаляем сообщение пользователя с командой
+        # � ������� ������� ��������� ������������ � ��������
         if chat.type in ['group', 'supergroup', 'channel']:
             try:
                 await context.bot.delete_message(chat_id, update.message.message_id)
             except Exception as e:
                 logger.debug(f"Could not delete user message: {e}")
-        # Сохраняем этот чат как чат для дайджеста и сбрасываем message_id
+        # ��������� ���� ��� ��� ��� ��� ��������� � ���������� message_id
         set_config("digest_chat_id", chat_id)
         set_config("daily_digest_message_id", "")
 
         class SimpleContext:
             def __init__(self, application):
                 self.application = application
-                # Флаг, что это ручной запуск, а не плановый джоб
+                # ����, ��� ��� ������ ������, � �� �������� ����
                 self.manual = True
 
-        # Создаём простой контекст, чтобы переиспользовать morning_digest_job
+        # ������ ������� ��������, ����� ���������������� morning_digest_job
         simple_context = SimpleContext(context.application)
         await morning_digest_job(simple_context)
 
-        msg = await update.message.reply_text("✅ Утренний дайджест для этого чата создан/обновлён.")
+        msg = await update.message.reply_text("? �������� �������� ��� ����� ���� ������/�������.")
         if chat.type in ['group', 'supergroup', 'channel']:
             schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
     except Exception as e:
         logger.error(f"Error in digest_now: {e}", exc_info=True)
         try:
-            err = await update.message.reply_text("❌ Не удалось создать дайджест сейчас")
+            err = await update.message.reply_text("? �� ������� ������� �������� ������")
             chat = update.effective_chat
             if chat and chat.type in ['group', 'supergroup', 'channel']:
                 schedule_delete(context.bot, chat.id, err.message_id, 30, context.application.job_queue)
@@ -389,165 +393,165 @@ FATAL_ROLL = -10
 # =====================
 
 ROLL_TEXTS = {
-    50: ["🔥🔥🔥 НЕВЕРОЯТНО! +50 см!", "💰 ДЖЕКПОТ! +50 см за раз!", "🦸 ЛЕГЕНДАРНО! +50 СМ!", "👑 ДОМИНИРУЕШЬ! +50 СМ!", "💀 БОЖЕСТВЕННО! +50 СМ!"],
-    30: ["🚀 КОСМОС! +30 см!", "🍀 СУПЕР УДАЧА! +30 см!", "⚡ СИЛА УЛЬТЫ! +30 СМ!", "🔥 МЕГА КИЛЛ! +30 СМ!"],
-    20: ["💪 MEGA УСПЕХ! +20 см!", "🎯 ТОЧНО В ДЕСЯТКУ! +20 см!", "🎯 ДВОЙНОЙ КИЛЛ! +20 СМ!", "💪 НЕУДЕРЖИМ! +20 СМ!"],
-    10: ["🌟 ЛЕГЕНДА! +10 см!", "🔥 ОГОНЬ! +10 см!", "🌟 ПЕРВАЯ КРОВЬ! +10 СМ!", "🎮 УБИЙСТВЕННАЯ СЕРИЯ! +10 СМ!"],
-    5: ["🎉 УРА! +5 см!", "👍 ОТЛИЧНО! +5 см!", "✅ НОРМ! +5 СМ!", "👍 КРАСАВА! +5 СМ!"],
-    3: ["😊 НЕПЛОХО! +3 см", "📈 РАСТЁМ! +3 см", "💪 НА! +3 СМ", "🔥 В ОГНЕ! +3 СМ"],
-    1: ["✅ OK! +1 см", "💪 ЕСТЬ РОСТ! +1 см", "🙄 ПОВЕЗЛО! +1 СМ", "🤔 МОГЛО БЫТЬ ХУЖЕ! +1 СМ"],
-    0: ["❌ БЕЗ ИЗМЕНЕНИЙ", "💤 СТОИМ НА МЕСТЕ", "❌ НИЧЬЯ", "💤 АФК?"],
-    -1: ["🤔 НЕМНОГО -1 см", "📉 МИНУС -1 см", "😬 ОЙ! -1 СМ", "💀 КОРМ! -1 СМ"],
-    -3: ["😬 ОЙ... -3 см", "⬇️ УПАЛ -3 см", "🤕 ДЕНАЙ! -3 СМ", "☠️ НАРЖАЛ! -3 СМ"],
-    -5: ["😢 БОЛЬНО -5 см...", "💔 НЕУДАЧА -5 см", "💀 ПОПАЛ! -5 СМ...", "🎮 ГГ ВП... -5 СМ"],
-    -10: ["💥 КАТАСТРОФА! -10 см!!!", "🌋 АПОКАЛИПСИС! -10 см!!!", "😵 СЕРВЕР УПАЛ! -10 СМ!!!", "💥 ДИСКОННЕКТ! -10 СМ!!!"]
+    50: ["?????? ����������! +50 ��!", "?? �������! +50 �� �� ���!", "?? ����������! +50 ��!", "?? �����������! +50 ��!", "?? �����������! +50 ��!"],
+    30: ["?? ������! +30 ��!", "?? ����� �����! +30 ��!", "? ���� �����! +30 ��!", "?? ���� ����! +30 ��!"],
+    20: ["?? MEGA �����! +20 ��!", "?? ����� � �������! +20 ��!", "?? ������� ����! +20 ��!", "?? ���������! +20 ��!"],
+    10: ["?? �������! +10 ��!", "?? �����! +10 ��!", "?? ������ �����! +10 ��!", "?? ������������ �����! +10 ��!"],
+    5: ["?? ���! +5 ��!", "?? �������! +5 ��!", "? ����! +5 ��!", "?? �������! +5 ��!"],
+    3: ["?? �������! +3 ��", "?? ���Ҩ�! +3 ��", "?? ��! +3 ��", "?? � ����! +3 ��"],
+    1: ["? OK! +1 ��", "?? ���� ����! +1 ��", "?? �������! +1 ��", "?? ����� ���� ����! +1 ��"],
+    0: ["? ��� ���������", "?? ����� �� �����", "? �����", "?? ���?"],
+    -1: ["?? ������� -1 ��", "?? ����� -1 ��", "?? ��! -1 ��", "?? ����! -1 ��"],
+    -3: ["?? ��... -3 ��", "?? ���� -3 ��", "?? �����! -3 ��", "?? ������! -3 ��"],
+    -5: ["?? ������ -5 ��...", "?? ������� -5 ��", "?? �����! -5 ��...", "?? �� ��... -5 ��"],
+    -10: ["?? ����������! -10 ��!!!", "?? �����������! -10 ��!!!", "?? ������ ����! -10 ��!!!", "?? ����������! -10 ��!!!"]
 }
 
 ROLL_MEMES = {
     50: [
-        "💪 Ваша фиссура больше, чем чья-то самооценка!",
-        "🔍 Прохожий: 'А что это за большая штука?'",
-        "📺 Теперь можно создавать OnlyFissures канал!"
+        "?? ���� ������� ������, ��� ���-�� ����������!",
+        "?? ��������: '� ��� ��� �� ������� �����?'",
+        "?? ������ ����� ��������� OnlyFissures �����!"
     ],
     30: [
-        "🎁 Это как найти 1000 рублей в старых джинсах!",
-        "🛋️ Теперь можно достать пульт не вставая!",
-        "💵 Поздравления в рублях, долларах и см!"
+        "?? ��� ��� ����� 1000 ������ � ������ �������!",
+        "??? ������ ����� ������� ����� �� �������!",
+        "?? ������������ � ������, �������� � ��!"
     ],
     20: [
-        "📈 Ваша фиссура выросла больше, чем акции Теслы!",
-        "🎤 Это уже не фиссура, а ФИССУУУРА!",
-        "📏 Размер имеет значение! (оказалось, что да)"
+        "?? ���� ������� ������� ������, ��� ����� �����!",
+        "?? ��� ��� �� �������, � ���������!",
+        "?? ������ ����� ��������! (���������, ��� ��)"
     ],
     10: [
-        "🎰 Это как получить бонус в понедельник!",
-        "🌱 Фиссура: 'Я расту!'",
-        "🏠 Теперь вы на 10 см ближе к потолку!"
+        "?? ��� ��� �������� ����� � �����������!",
+        "?? �������: '� �����!'",
+        "?? ������ �� �� 10 �� ����� � �������!"
     ],
     5: [
-        "💰 Это как найти 500 рублей в кармане!",
-        "😄 Среднестатистический русский доволен!",
-        "📐 Можно мерить икеевской линейкой!"
+        "?? ��� ��� ����� 500 ������ � �������!",
+        "?? �������������������� ������� �������!",
+        "?? ����� ������ ��������� ��������!"
     ],
     3: [
-        "🎊 Три сантиметра счастья!",
-        "💵 Как три рубля в кошельке - мелочь, но приятно!",
-        "🐢 Медленно, но верно!"
+        "?? ��� ���������� �������!",
+        "?? ��� ��� ����� � �������� - ������, �� �������!",
+        "?? ��������, �� �����!"
     ],
     1: [
-        "💪 Маленький, но гордый!",
-        "✅ Один см лучше, чем ноль см!",
-        "🙏 Фиссура сказала: 'Я стараюсь!'",
-        "🌱 Будет и на вашей улице праздник!"
+        "?? ���������, �� ������!",
+        "? ���� �� �����, ��� ���� ��!",
+        "?? ������� �������: '� ��������!'",
+        "?? ����� � �� ����� ����� ��������!"
     ],
     0: [
-        "🛡️ Стабильность - признак мастерства!",
-        "😴 Фиссура решила отдохнуть!",
-        "➡️ Ни уменьшилось, ни увеличилось!"
+        "??? ������������ - ������� ����������!",
+        "?? ������� ������ ���������!",
+        "?? �� �����������, �� �����������!"
     ],
     -1: [
-        "🥗 Фиссура на диете!",
-        "👣 Один маленький шаг назад для большого прыжка вперёд!",
-        "🔥 Один сантиметр сгорел... как спичка!"
+        "?? ������� �� �����!",
+        "?? ���� ��������� ��� ����� ��� �������� ������ �����!",
+        "?? ���� ��������� ������... ��� ������!"
     ],
     -3: [
-        "📉 Три сантиметра в никуда!",
-        "😤 Фиссура чихнула!",
-        "⚖️ Гравитация побеждает в этом раунде!",
-        "😤 Ганкнули на ровном месте!"
+        "?? ��� ���������� � ������!",
+        "?? ������� �������!",
+        "?? ���������� ��������� � ���� ������!",
+        "?? �������� �� ������ �����!"
     ],
     -5: [
-        "📺 Когда фиссура объявляет забастовку!",
-        "⭐ Минус пять - как плохой отзыв!",
-        "🏖️ Фиссуре нужен отпуск!",
-        "💀 Бездыханное тело!"
+        "?? ����� ������� ��������� ����������!",
+        "? ����� ���� - ��� ������ �����!",
+        "??? ������� ����� ������!",
+        "?? ����������� ����!"
     ],
     -10: [
-        "💥 ПОЛНОЕ УНИЧТОЖЕНИЕ!",
-        "🦸 Из героя в ноль!",
-        "👋 Фиссура покинула чат!",
-        "👻 0/10/0!",
-        "🔥 ТИЛЬТ МОД АКТИВИРОВАН!",
-        "☠️ ГГ, СЛЕДУЮЩИЙ!"
+        "?? ������ �����������!",
+        "?? �� ����� � ����!",
+        "?? ������� �������� ���!",
+        "?? 0/10/0!",
+        "?? ����� ��� �����������!",
+        "?? ��, ���������!"
     ]
 }
 
 CATEGORY_PHRASES = {
     "up": [
-        "💪 Растём!",
-        "📏 Каждый см важен!",
-        "✅ Фиссура одобряет!",
-        "📈 Положительная динамика!",
-        "🔥 Так держать!",
-        "⬆️ Вверх и только вверх!"
+        "?? �����!",
+        "?? ������ �� �����!",
+        "? ������� ��������!",
+        "?? ������������� ��������!",
+        "?? ��� �������!",
+        "?? ����� � ������ �����!"
     ],
     "down": [
-        "😔 Небольшой откат!",
-        "💪 Фиссура восстановится!",
-        "🌅 Завтра новый день!",
-        "⏳ Временный спад!",
-        "💪 Не сдавайся!",
-        "🎯 Это ещё не конец!"
+        "?? ��������� �����!",
+        "?? ������� �������������!",
+        "?? ������ ����� ����!",
+        "? ��������� ����!",
+        "?? �� ��������!",
+        "?? ��� ��� �� �����!"
     ],
     "same": [
-        "🛡 Стабильность - это хорошо!",
-        "💪 Держим позиции!",
-        "➡️ Без изменений - тоже результат!",
-        "⚓ Твёрдо как скала!",
-        "📊 Постоянство важно!",
-        "🏗️ Прочный фундамент!"
+        "?? ������������ - ��� ������!",
+        "?? ������ �������!",
+        "?? ��� ��������� - ���� ���������!",
+        "? ����� ��� �����!",
+        "?? ����������� �����!",
+        "??? ������� ���������!"
     ],
     "bonus_help": [
-        "✨ СИСТЕМА ПОМОГЛА!",
-        "🍀 Удачный расклад!",
-        "🎁 БОНУС!",
-        "🛡 КРИТИЧЕСКАЯ ПОДДЕРЖКА!",
-        "💰 ДЖЕКПОТ!",
-        "🚀 МНОЖИТЕЛЬ!"
+        "? ������� �������!",
+        "?? ������� �������!",
+        "?? �����!",
+        "?? ����������� ���������!",
+        "?? �������!",
+        "?? ���������!"
     ],
     "fatal": [
-        "💥 КРИТИЧЕСКИЙ УРОН!",
-        "🔥 Но ты устоял!",
-        "🦾 ВЫЖИЛ!",
-        "🎮 Ещё в игре!",
-        "💪 Стойкость!",
-        "🏆 Никогда не сдавайся!"
+        "?? ����������� ����!",
+        "?? �� �� ������!",
+        "?? �����!",
+        "?? ��� � ����!",
+        "?? ���������!",
+        "?? ������� �� ��������!"
     ]
 }
 
 WELCOME_PHRASES = [
-    # Dota 2 длинные мемы
-    "{name}, добро пожаловать! Сразимся на поле боя?",
-    "{name} присоединился! Время фармить и побеждать!",
-    "{name}, готов к эпичной битве? Давай нальём!",
-    "Внимание! {name} зашел в лобби - игра начинается!",
-    "{name} в чате! Теперь команда непобедима!",
-    "Добро пожаловать, {name}! Заказываем мида или харда?",
-    "{name}, не забудь купить варды и ганкнуть!",
-    "{name} в игре! Время показать на что способен!",
-    "Наконец-то {name} здесь! Рошан не за горами!",
-    "{name}, не стой на линии! Фарми быстрее!",
-    "Готовься, {name}! Сегодня будет винрейт 100%!",
-    "{name}, не зевай! Враг уже идет!",
-    "{name} в команде! Это гарантированная победа!",
-    "Добро пожаловать в ад, {name}! Удачи!",
-    "{name}, не забывай пить воду между играми!",
-    "Фарми, {name}, фарми! Крипы не сами себя скроят!",
-    "{name}, выйди из куста! Мы видим тебя!",
-    "Приветствуем нового героя - {name}!",
-    "{name}, бери херо и играй!",
-    "{name}, не говори что ты хардкор игрок!",
-    # Ещё
-    "{name}, добро пожаловать! Сколько крипов нафармил?",
-    "{name} в деле! Время пикать!",
-    "Привет, {name}! Давай выиграем эту игру!",
-    "{name}, ты готов к бою? Враг на базе!",
-    "Добро пожаловать, {name}! Не забудь про ульт!",
-    "{name}, не тупи! Время пушить!",
-    "{name}, заходи в игру! Команда ждёт!",
-    "{name}, фокус! Мы на тебя рассчитываем!",
-    "{name}, давай без багов! Играем чисто!",
-    "{name}, готов к победе? Враг слаб!",
+    # Dota 2 ������� ����
+    "{name}, ����� ����������! �������� �� ���� ���?",
+    "{name} �������������! ����� ������� � ���������!",
+    "{name}, ����� � ������� �����? ����� ������!",
+    "��������! {name} ����� � ����� - ���� ����������!",
+    "{name} � ����! ������ ������� ����������!",
+    "����� ����������, {name}! ���������� ���� ��� �����?",
+    "{name}, �� ������ ������ ����� � ��������!",
+    "{name} � ����! ����� �������� �� ��� ��������!",
+    "�������-�� {name} �����! ����� �� �� ������!",
+    "{name}, �� ���� �� �����! ����� �������!",
+    "��������, {name}! ������� ����� ������� 100%!",
+    "{name}, �� �����! ���� ��� ����!",
+    "{name} � �������! ��� ��������������� ������!",
+    "����� ���������� � ��, {name}! �����!",
+    "{name}, �� ������� ���� ���� ����� ������!",
+    "�����, {name}, �����! ����� �� ���� ���� ������!",
+    "{name}, ����� �� �����! �� ����� ����!",
+    "������������ ������ ����� - {name}!",
+    "{name}, ���� ���� � �����!",
+    "{name}, �� ������ ��� �� ������� �����!",
+    # ���
+    "{name}, ����� ����������! ������� ������ ��������?",
+    "{name} � ����! ����� ������!",
+    "������, {name}! ����� �������� ��� ����!",
+    "{name}, �� ����� � ���? ���� �� ����!",
+    "����� ����������, {name}! �� ������ ��� ����!",
+    "{name}, �� ����! ����� ������!",
+    "{name}, ������ � ����! ������� ���!",
+    "{name}, �����! �� �� ���� ������������!",
+    "{name}, ����� ��� �����! ������ �����!",
+    "{name}, ����� � ������? ���� ����!",
 ]
 
 # Track last bot message per user per chat for cleanup
@@ -589,11 +593,11 @@ def calculate_fissure_roll(current_fissure):
     Returns: (roll_value, message, is_fatal, got_help)
     """
     if current_fissure >= 20:
-        fatal_chance = 0.02  # 2% для фиссур 20+ см
+        fatal_chance = 0.02  # 2% ��� ������ 20+ ��
         if random.random() < fatal_chance:
             return FATAL_ROLL, "FATAL DECREASE!", True, False
     
-    # Единый баланс для всех фиссур
+    # ������ ������ ��� ���� ������
     if current_fissure < 5:
         if random.random() < 0.8:
             bonus_options = [
@@ -601,31 +605,31 @@ def calculate_fissure_roll(current_fissure):
             ]
             values, weights = zip(*bonus_options)
             roll = random.choices(values, weights=weights)[0]
-            return roll, "✨ МАКСИМАЛЬНАЯ ПОМОЩЬ!", False, True
+            return roll, "? ������������ ������!", False, True
         
         protected_rolls = [0, 1, 3, 5, 10, 20]
         roll = random.choice(protected_rolls)
-        return roll, "🛡 ЗАЩИЩЁННЫЙ РОЛЛ", False, True
+        return roll, "?? ����٨���� ����", False, True
     
     elif current_fissure < 20:
         if random.random() < 0.4:
             improved_options = [3, 5, 10, 20]
             roll = random.choice(improved_options)
-            return roll, "🚀 УЛУЧШЕННЫЙ РОЛЛ!", False, True
+            return roll, "?? ���������� ����!", False, True
     
     elif current_fissure < 100:
         if random.random() < 0.2:
             bonus = random.choice([5, 10, 20])
-            return bonus, "🍀 УДАЧНЫЙ РОЛЛ!", False, False
+            return bonus, "?? ������� ����!", False, False
     
     else:
-        # Для очень больших фиссур - меньше бонусов
+        # ��� ����� ������� ������ - ������ �������
         if random.random() < 0.1:
             bonus = random.choice([5, 10, 20])
-            return bonus, "🍀 УДАЧНЫЙ РОЛЛ!", False, False
+            return bonus, "?? ������� ����!", False, False
     
-    # Единый баланс для всех:
-    # Выигрыш 65%, Проигрыш 30%, Ничья 5%
+    # ������ ������ ��� ����:
+    # ������� 65%, �������� 30%, ����� 5%
     weighted_rolls = [
         (-3, 15), (-1, 15), (0, 5), (1, 15), (3, 15), (5, 15), (10, 15), (20, 5)
     ]
@@ -638,7 +642,7 @@ def apply_fissure_protection(current_fissure, roll, is_fatal):
     """Applies protection for small fissures on fatal rolls"""
     if is_fatal and current_fissure < 5:
         reduced_roll = max(-5, roll)
-        protection_msg = f"🛡 УРОН СНИЖЕН! Было {roll}, теперь {reduced_roll}"
+        protection_msg = f"?? ���� ������! ���� {roll}, ������ {reduced_roll}"
         return reduced_roll, protection_msg
     
     return roll, ""
@@ -652,8 +656,8 @@ def calculate_new_fissure(current_fissure, roll):
 
 def main_menu():
     keyboard = [
-        [KeyboardButton("📈 Увеличить фиссуру")],
-        [KeyboardButton("📏 Моя длина"), KeyboardButton("🏆 Топ")],
+        [KeyboardButton("?? ��������� �������")],
+        [KeyboardButton("?? ��� �����"), KeyboardButton("?? ���")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
@@ -661,7 +665,7 @@ def main_menu():
 def format_time(seconds):
     h = seconds // 3600
     m = (seconds % 3600) // 60
-    return f"{int(h)}ч {int(m)}м"
+    return f"{int(h)}� {int(m)}�"
 
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -675,7 +679,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_msg_id = update.message.message_id
     now = time.time()
     
-    # Проверка на выходные (суббота = 5, воскресенье = 6)
+    # �������� �� �������� (������� = 5, ����������� = 6)
     import datetime
     is_weekend = datetime.datetime.now().weekday() in (5, 6)
     weekend_bonus = ""
@@ -699,7 +703,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if now - user["last_fissure"] < COOLDOWN:
             wait = COOLDOWN - (now - user["last_fissure"])
-            text = f"⏳ Фиссура восстанавливается. Подожди: {format_time(wait)}"
+            text = f"? ������� �����������������. �������: {format_time(wait)}"
             result_msg = await context.bot.send_message(
                 chat_id=update.message.chat_id,
                 text=text,
@@ -713,16 +717,16 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
         roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
         
-        # Бонус для выходных: увеличиваем положительный ролл
+        # ����� ��� ��������: ����������� ������������� ����
         if is_weekend and roll > 0 and not is_fatal:
             bonus_multiplier = random.choice([1.5, 2, 2.5])
             roll = int(roll * bonus_multiplier)
-            weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f}"
+            weekend_bonus = f"\n?? ��������! x{bonus_multiplier:.1f}"
         
         new_fissure = calculate_new_fissure(user["fissure"], roll)
         update_fissure(user_obj.id, new_fissure, now, roll)
         
-        # Обновляем дайджест после каждого броска
+        # ��������� �������� ����� ������� ������
         await refresh_digest_message(context.bot)
         
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
@@ -733,7 +737,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if roll_key in ROLL_TEXTS:
             result_text = random.choice(ROLL_TEXTS[roll_key])
         else:
-            result_text = f"{'+' if roll > 0 else ''}{roll} см"
+            result_text = f"{'+' if roll > 0 else ''}{roll} ��"
         
         if is_fatal:
             category = "fatal"
@@ -755,10 +759,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         display_username = f"<a href=\"tg://user?id={user_id}\">{username}</a>"
         
         text = (
-            f"🎲 {display_username}\n\n"
+            f"?? {display_username}\n\n"
             f"{result_text}\n"
             f"{extra_text}\n\n"
-            f"📏 Длина сейчас: {new_fissure:.1f} см"
+            f"?? ����� ������: {new_fissure:.1f} ��"
         )
         
         if is_fatal and protection_msg:
@@ -784,7 +788,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in fissure: {e}", exc_info=True)
         try:
             if update.message:
-                await update.message.reply_text("❌ Ошибка обработки запроса")
+                await update.message.reply_text("? ������ ��������� �������")
         except Exception:
             pass
 
@@ -821,15 +825,15 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         remaining_cooldown = max(0, COOLDOWN - time_since_last)
         
         if remaining_cooldown > 0:
-            wait_text = f"Восстановление: {format_time(remaining_cooldown)}"
+            wait_text = f"��������������: {format_time(remaining_cooldown)}"
         else:
-            wait_text = "✅ Готов к увеличению!"
+            wait_text = "? ����� � ����������!"
         
-        # Форматируем username как кликабельную ссылку на профиль
+        # ����������� username ��� ������������ ������ �� �������
         user_id = user_obj.id
         display_username = f"<a href=\"tg://user?id={user_id}\">{username}</a>"
         
-        text = f"👑 {display_username}\n\n📏 Длина: {user['fissure']:.1f} см\n🎲 Бросков: {user.get('total_rolls', 0)}\n🔥 Текущий стрик: {user.get('current_streak', 0)}\n🏆 Лучший стрик: {user.get('best_streak', 0)}"
+        text = f"?? {display_username}\n\n?? �����: {user['fissure']:.1f} ��\n?? �������: {user.get('total_rolls', 0)}\n?? ������� �����: {user.get('current_streak', 0)}\n?? ������ �����: {user.get('best_streak', 0)}"
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
@@ -844,7 +848,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in stats: {e}", exc_info=True)
         try:
-            await update.message.reply_text("❌ Ошибка получения статистики")
+            await update.message.reply_text("? ������ ��������� ����������")
         except Exception:
             pass
 
@@ -876,21 +880,21 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(update.effective_user.id, update.effective_user.username)
         
         if not top_users:
-            text = "😶 Пока нет игроков. Будь первым!"
+            text = "?? ���� ��� �������. ���� ������!"
         else:
-            text = "🏆 Топ 10 Фиссур\n\n"
-            medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+            text = "?? ��� 10 ������\n\n"
+            medals = {1: "??", 2: "??", 3: "??"}
             for i, user_top in enumerate(top_users, 1):
                 name = user_top.get('username', 'Unknown')[:15]
                 medal = medals.get(i)
                 if medal:
-                    text += f"{medal} {name}: {user_top['fissure']:.1f} см\n"
+                    text += f"{medal} {name}: {user_top['fissure']:.1f} ��\n"
                 else:
-                    text += f" {i}. {name}: {user_top['fissure']:.1f} см\n"
+                    text += f" {i}. {name}: {user_top['fissure']:.1f} ��\n"
             
             if user_rank:
                 user_fissure = user.get('fissure', 0) if user else 0
-                text += f"\n👤 Твоя позиция: #{user_rank} ({user_fissure:.1f} см)"
+                text += f"\n?? ���� �������: #{user_rank} ({user_fissure:.1f} ��)"
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
@@ -904,7 +908,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in top: {e}", exc_info=True)
         try:
-            await update.message.reply_text("❌ Ошибка получения топа")
+            await update.message.reply_text("? ������ ��������� ����")
         except Exception:
             pass
 
@@ -943,7 +947,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning(f"Database error in start (non-fatal): {db_error}")
         
         # Always send welcome message
-        text = "👋 Привет! Здесь можно увеличить свою фиссуру"
+        text = "?? ������! ����� ����� ��������� ���� �������"
         result_msg = await context.bot.send_message(
             chat_id=chat_id,
             text=text,
@@ -965,33 +969,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Установить текущий чат как чат для утреннего дайджеста"""
+    """���������� ������� ��� ��� ��� ��� ��������� ���������"""
     try:
         chat = update.effective_chat
         chat_id = chat.id
-        # В группах удаляем сообщение пользователя с командой
+        # � ������� ������� ��������� ������������ � ��������
         if chat.type in ['group', 'supergroup', 'channel']:
             try:
                 await context.bot.delete_message(chat_id, update.message.message_id)
             except Exception as e:
                 logger.debug(f"Could not delete user message: {e}")
-        # Сохраняем ID чата в конфиг и сбрасываем message_id
+        # ��������� ID ���� � ������ � ���������� message_id
         set_config("digest_chat_id", chat_id)
         set_config("daily_digest_message_id", "")
 
         msg = await update.message.reply_text(
-            f"✅ Чат для утреннего дайджеста установлен.\n"
-            f"ID чата: `{chat_id}`\n"
-            f"Теперь в 09:00 дайджест будет приходить сюда.",
+            f"? ��� ��� ��������� ��������� ����������.\n"
+            f"ID ����: `{chat_id}`\n"
+            f"������ � 09:00 �������� ����� ��������� ����.",
             parse_mode="Markdown"
         )
-        # В группах/каналах удаляем сервисное сообщение через 30 секунд
+        # � �������/������� ������� ��������� ��������� ����� 30 ������
         if chat.type in ['group', 'supergroup', 'channel']:
             schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
     except Exception as e:
         logger.error(f"Error in set_digest_chat: {e}", exc_info=True)
         try:
-            err = await update.message.reply_text("❌ Не удалось сохранить чат для дайджеста")
+            err = await update.message.reply_text("? �� ������� ��������� ��� ��� ���������")
             chat = update.effective_chat
             if chat and chat.type in ['group', 'supergroup', 'channel']:
                 schedule_delete(context.bot, chat.id, err.message_id, 30, context.application.job_queue)
@@ -999,12 +1003,145 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+
+
+async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /link command - link Steam account"""
+    try:
+        user = update.effective_user
+        if not user:
+            return
+        
+        args = context.args
+        if not args:
+            await update.message.reply_text(
+                "?? <b>�������� Steam ��������</b>\n\n"
+                "�����������: /link <SteamID ��� �������>\n\n"
+                "������: /link 123456789\n"
+                "������: /link Dendi",
+                parse_mode='HTML'
+            )
+            return
+        
+        identifier = args[0]
+        result = dota_mmr.register_steam(user.id, identifier)
+        
+        if result.get('success'):
+            data = result.get('data', {})
+            await update.message.reply_text(
+                f"? <b>Steam ������� ��������!</b>\n\n"
+                f"?? Nickname: {data.get('nickname', 'N/A')}\n"
+                f"?? MMR: {data.get('mmr', 0)}\n"
+                f"?? ���: {data.get('total_games', 0)}",
+                parse_mode='HTML'
+            )
+        else:
+            await update.message.reply_text(
+                f"? ������: {result.get('message', '����������� ������')}"
+            )
+    except Exception as e:
+        logger.error(f"Error in link command: {e}")
+        await update.message.reply_text("? ��������� ������ ��� ��������� �������")
+
+
+async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /topmmr command - show top players by MMR"""
+    try:
+        result = dota_mmr.get_mmr_top(limit=10)
+        
+        if not result:
+            await update.message.reply_text(
+                "?? <b>��� ������� �� MMR</b>\n\n"
+                "���� ��� ������ � �������. "
+                "����������� /link ��� �������� Steam!",
+                parse_mode='HTML'
+            )
+            return
+        
+        text = "?? <b>��� ������� �� MMR</b>\n\n"
+        for i, player in enumerate(result, 1):
+            text += f"{i}. {player.get('nickname', 'N/A')} - {player.get('mmr', 0)} MMR\n"
+        
+        await update.message.reply_text(text, parse_mode='HTML')
+    except Exception as e:
+        logger.error(f"Error in topmmr command: {e}")
+        await update.message.reply_text("? ��������� ������ ��� ��������� �������")
+
+
+async def mmr_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /mmr command - show user's Dota MMR"""
+    try:
+        user = update.effective_user
+        if not user:
+            return
+        
+        # Check if Steam is linked
+        if not dota_mmr.is_steam_linked(user.id):
+            await update.message.reply_text(
+                "? Steam ������� �� ��������!\n"
+                "����������� /link <SteamID ��� �������> ��� ��������."
+            )
+            return
+        
+        result = dota_mmr.get_user_dota_stats(user.id)
+        
+        if result:
+            total_games = result.get('total_games', 0)
+            wins = result.get('wins', 0)
+            winrate = round((wins / total_games * 100) if total_games > 0 else 0, 1)
+            
+            text = (
+                f"?? <b>���� MMR</b>\n\n"
+                f"���: {result.get('steam_nickname', 'N/A')}\n"
+                f"?? MMR: {result.get('mmr', 0)}\n"
+                f"?? ���: {total_games} | �����: {wins} ({winrate}%)"
+            )
+            await update.message.reply_text(text, parse_mode='HTML')
+        else:
+            await update.message.reply_text("? �� ������� �������� ����������")
+    except Exception as e:
+        logger.error(f"Error in mmr command: {e}")
+        await update.message.reply_text("? ��������� ������ ��� ��������� �������")
+
+
+async def ruiner(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /Ruiner command - find a random chat member as 'ruiner'"""
+    try:
+        user = update.effective_user
+        if not user:
+            return
+        
+        # Random jokes about being a "ruiner"
+        jokes = [
+            "@{user}, �� ����� �����, � �� ������� ������?",
+            "@{user}, ���� ���� ���������? ������ ��� �� ������ � �������, ��� �������� � �������",
+            "@{user}, ���� �������� � ��������� �� ��, ��� ����� ������������?",
+            "@{user}, ���� �������� ������, ����� �� �������� � ����",
+            "@{user}, ��� �� ��� ����� ���������?",
+            "@{user}, ��� �������, ��� �� �����... �������",
+            "@{user}, ������ � ������� '������ �����������' ��� ��� ����",
+            "@{user}, Valve ������ ���� ������ '����� � ��������� �������'",
+            "@{user}, �� ���������, ��� ���� ������� - ��� 4 �������� � ��?",
+            "@{user}, �� ������� ���, ����� � ���� 100 ���� � 2 FPS",
+        ]
+        
+        joke = random.choice(jokes).format(user=user.username or user.first_name)
+        
+        await update.message.reply_text(
+            f"?? <b>������ ������!</b>\n\n{joke}",
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        logger.error(f"Error in ruiner command: {e}")
+        await update.message.reply_text("? ��������� ������ ��� ��������� �������")
+
+
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
     try:
         text = update.message.text.strip()
         
-        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
+        menu_buttons = ["?? ��������� �������", "?? ��� �����", "?? ���"]
         
         if text not in menu_buttons:
             return
@@ -1030,11 +1167,11 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.debug(f"Could not delete last bot message: {e}")
         
         # Call the appropriate function
-        if text == "📈 Увеличить фиссуру":
+        if text == "?? ��������� �������":
             await fissure(update, context)
-        elif text == "📏 Моя длина":
+        elif text == "?? ��� �����":
             await stats(update, context)
-        elif text == "🏆 Топ":
+        elif text == "?? ���":
             await top(update, context)
             
     except Exception as e:
@@ -1073,22 +1210,22 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
         old_status = old_member.status
         new_status = new_member.status
         
-        # Если это сам бот только что добавлен в чат — автоматически запоминаем чат для дайджеста,
-        # если он ещё не настроен
+        # ���� ��� ��� ��� ������ ��� �������� � ��� � ������������� ���������� ��� ��� ���������,
+        # ���� �� ��� �� ��������
         try:
             bot_id = context.bot.id
             if new_member.user.id == bot_id and not get_config("digest_chat_id"):
                 set_config("digest_chat_id", chat_id)
-                logger.info(f"Автоматически установлен digest_chat_id = {chat_id}")
+                logger.info(f"������������� ���������� digest_chat_id = {chat_id}")
         except Exception as e:
-            logger.debug(f"Не удалось автоматически установить digest_chat_id: {e}")
+            logger.debug(f"�� ������� ������������� ���������� digest_chat_id: {e}")
         
         # User joined the chat (was not a member, now is member)
         if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator']:
             name = new_member.user.first_name or "Friend"
             user_id = new_member.user.id
             
-            # Формируем приветственное сообщение с кликабельным ником
+            # ��������� �������������� ��������� � ������������ �����
             welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}"
 
             
@@ -1098,7 +1235,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 parse_mode="HTML"
             )
             logger.info(f"Welcome sent for {name}")
-            # Удаляем приветственное сообщение через час
+            # ������� �������������� ��������� ����� ���
             schedule_delete(context.bot, chat_id, result_msg.message_id, 3600, context.application.job_queue)
         
     except Exception as e:
@@ -1114,11 +1251,11 @@ async def main():
     try:
         init_db()
         
-        # Создаём JobQueue и привязываем к application
+        # ������ JobQueue � ����������� � application
         job_queue = JobQueue()
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
         
-        # Инициализируем job_queue с application для PTB v20+
+        # �������������� job_queue � application ��� PTB v20+
         job_queue.set_application(app)
         
         # Daily job
@@ -1128,7 +1265,7 @@ async def main():
             days=(0, 1, 2, 3, 4, 5, 6)
         )
         
-        # Утренний дайджест в 9:00 утра по МСК (6:00 UTC)
+        # �������� �������� � 9:00 ���� �� ��� (6:00 UTC)
         job_queue.run_daily(
             morning_digest_job,
             time=datetime.time(hour=6, minute=0),
@@ -1136,9 +1273,9 @@ async def main():
         )
         logger.info("Done")
         
-        # Утренний дайджест теперь live (обновляется после каждого броска)
+        # �������� �������� ������ live (����������� ����� ������� ������)
         
-        # Еженедельный дайджест по понедельникам
+        # ������������ �������� �� �������������
         job_queue.run_daily(
             weekly_digest_job,
             time=datetime.time(hour=6, minute=0),
@@ -1151,6 +1288,9 @@ async def main():
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
+        app.add_handler(CommandHandler("link", link))
+        app.add_handler(CommandHandler("topmmr", topmmr))
+        app.add_handler(CommandHandler("Ruiner", ruiner))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
@@ -1166,9 +1306,9 @@ async def main():
         await app.bot.set_webhook(url=webhook_url)
         await app.initialize()
         
-        # Запускаем application для активации job_queue
+        # ��������� application ��� ��������� job_queue
         await app.start()
-        # Запускаем job_queue для PTB v20+
+        # ��������� job_queue ��� PTB v20+
         await job_queue.start()
         
         logger.info("Telegram bot started in webhook mode")
@@ -1221,11 +1361,11 @@ async def main_polling():
     try:
         init_db()
         
-        # Создаём JobQueue и привязываем к application
+        # ������ JobQueue � ����������� � application
         job_queue = JobQueue()
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
         
-        # Инициализируем job_queue с application для PTB v20+
+        # �������������� job_queue � application ��� PTB v20+
         job_queue.set_application(app)
         
         # Daily job
@@ -1235,7 +1375,7 @@ async def main_polling():
             days=(0, 1, 2, 3, 4, 5, 6)
         )
         
-        # Утренний дайджест в 9:00 утра по МСК (6:00 UTC)
+        # �������� �������� � 9:00 ���� �� ��� (6:00 UTC)
         job_queue.run_daily(
             morning_digest_job,
             time=datetime.time(hour=6, minute=0),
@@ -1243,8 +1383,8 @@ async def main_polling():
         )
         logger.info("Done")
         
-        # Утренний дайджест теперь live (обновляется после каждого броска)
-        # Еженедельный дайджест по понедельникам
+        # �������� �������� ������ live (����������� ����� ������� ������)
+        # ������������ �������� �� �������������
         job_queue.run_daily(
             weekly_digest_job,
             time=datetime.time(hour=6, minute=0),
@@ -1257,6 +1397,9 @@ async def main_polling():
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
+        app.add_handler(CommandHandler("link", link))
+        app.add_handler(CommandHandler("topmmr", topmmr))
+        app.add_handler(CommandHandler("Ruiner", ruiner))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
@@ -1266,7 +1409,7 @@ async def main_polling():
 
         logger.info("Telegram bot started in polling mode")
         
-        # Запускаем job_queue для PTB v20+
+        # ��������� job_queue ��� PTB v20+
         await job_queue.start()
         
         await app.run_polling(drop_pending_updates=True)

@@ -979,3 +979,104 @@ def update_weekly_digest_snapshot():
     """Обновить снимок и обнулить недельные счётчики после еженедельного дайджеста"""
     db = Database()
     return db.update_weekly_digest_snapshot()
+
+
+def register_steam(telegram_id, steam_id, steam_nickname, mmr=0, dota_total_games=0, dota_wins=0):
+    """Регистрация Steam аккаунта пользователя"""
+    db = Database()
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE users SET 
+                steam_id = %s,
+                steam_nickname = %s,
+                mmr = %s,
+                dota_total_games = %s,
+                dota_wins = %s,
+                mmr_updated_at = CURRENT_TIMESTAMP
+            WHERE telegram_id = %s
+        """, (steam_id, steam_nickname, mmr, dota_total_games, dota_wins, telegram_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Error registering steam: {e}")
+        return False
+    finally:
+        cursor.close()
+
+
+def get_week_top(limit=10):
+    """Получить топ игроков за неделю по винрейту"""
+    db = Database()
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT username, week_games, week_wins, mmr
+            FROM users
+            WHERE steam_id IS NOT NULL AND week_games >= 10
+            ORDER BY 
+                CASE WHEN week_games > 0 THEN (week_wins::float / week_games) ELSE 0 END DESC,
+                week_games DESC
+            LIMIT %s
+        """, (limit,))
+        results = cursor.fetchall()
+        return [
+            {
+                "username": row[0],
+                "week_games": row[1],
+                "week_wins": row[2],
+                "mmr": row[3]
+            }
+            for row in results
+        ]
+    except Exception as e:
+        logger.error(f"Error getting week top: {e}")
+        return []
+    finally:
+        cursor.close()
+
+
+def reset_weekly_stats():
+    """Сбросить недельную статистику (вызывается каждое воскресенье)"""
+    db = Database()
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE users SET 
+                week_games = 0,
+                week_wins = 0,
+                week_updated_at = CURRENT_TIMESTAMP
+            WHERE week_games > 0 OR week_wins > 0
+        """)
+        conn.commit()
+        return cursor.rowcount
+    except Exception as e:
+        logger.error(f"Error resetting weekly stats: {e}")
+        return 0
+    finally:
+        cursor.close()
+
+
+def update_weekly_stats(telegram_id, win):
+    """Обновить недельную статистику (вызывается при броске фиссуры)"""
+    db = Database()
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE users SET 
+                week_games = week_games + 1,
+                week_wins = week_wins + %s,
+                week_updated_at = CURRENT_TIMESTAMP
+            WHERE telegram_id = %s
+        """, (1 if win else 0, telegram_id))
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        logger.error(f"Error updating weekly stats: {e}")
+        return False
+    finally:
+        cursor.close()
