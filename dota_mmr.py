@@ -298,3 +298,31 @@ async def show_mmr_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(text, reply_markup=reply_markup)
+
+
+async def handle_mmr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle inline button callbacks for MMR menu"""
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
+    
+    if data == "refresh_mmr":
+        # Обновляем MMR
+        success = update_user_mmr(user_id)
+        if success:
+            user = get_user(user_id)
+            mmr = user.get("mmr", 0) if user else 0
+            await query.edit_message_text(f"✅ MMR обновлён!\nТекущий MMR: {mmr}")
+        else:
+            await query.edit_message_text("❌ Не удалось обновить MMR. Попробуй позже.")
+    elif data == "week_top":
+        # Показываем топ недели
+        from dota_mmr import get_week_top, show_week_top_message
+        top = get_week_top()
+        await show_week_top_message(update, context, top)
+    elif data == "back_to_menu":
+        # Возвращаемся в меню
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [[InlineKeyboardButton("📈 Увеличить фиссуру", callback_data="fissure")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text("Выбери действие:", reply_markup=reply_markup)
