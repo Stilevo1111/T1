@@ -1002,32 +1002,33 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     
     args = context.args
-    if not args:
-        # При нажатии кнопки - отправить инструкцию
-        sent_msg = await update.message.reply_text(
-            "🎮 *Привязка Steam аккаунта*\n\n"
-            "Пожалуйста, укажите ваш ник в Steam или Steam ID\n\n"
-            "Пример: `Miracle`\n"
-            "Пример: `76561198012345678`\n\n"
-            "_Отправьте ник в ответ на это сообщение_",
-            parse_mode='Markdown'
-        )
-        # Сохраняем ID сообщения для обработки ответа
+    identifier = args[0] if args else None
+    
+    # Если есть аргумент - сразу привязываем
+    if identifier:
+        try:
+            from dota_mmr import register_steam
+            result = register_steam(update.effective_user.id, identifier)
+            
+            if result.get('success'):
+                await update.message.reply_text(result.get('message'))
+            else:
+                await update.message.reply_text(result.get('message'))
+        except Exception as e:
+            logger.error(f"Error in link: {e}")
+            await update.message.reply_text("❌ Ошибка привязки Steam аккаунта")
         return
     
-    identifier = args[0]
-    
-    try:
-        from dota_mmr import register_steam
-        result = register_steam(update.effective_user.id, identifier)
-        
-        if result.get('success'):
-            await update.message.reply_text(result.get('message'))
-        else:
-            await update.message.reply_text(result.get('message'))
-    except Exception as e:
-        logger.error(f"Error in link: {e}")
-        await update.message.reply_text("❌ Ошибка привязки Steam аккаунта")
+    # Если нет аргумента - отправляем инструкцию
+    await update.message.reply_text(
+        "🎮 *Привязка Steam аккаунта*\n\n"
+        "Используйте команду с никнеймом или Steam ID:\n"
+        "`/link Miracle` - по нику\n"
+        "`/link 76561198012345678` - по Steam ID\n"
+        "`/link https://ru.dotabuff.com/players/347614699` - по Dotabuff\n\n"
+        "Или нажмите кнопку и введите ник в ответ на это сообщение",
+        parse_mode='Markdown'
+    )
 
 
 async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
