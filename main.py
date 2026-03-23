@@ -98,6 +98,33 @@ async def decrease_inactive_job(context):
         logger.error(f"Ошибка в decrease_inactive_job: {e}")
 
 
+async def update_all_mmr_job(context):
+    """Ежедневное обновление MMR всех пользователей с привязанным Steam"""
+    try:
+        logger.info("Запуск ежедневного обновления MMR")
+        from dota_mmr import update_user_mmr
+        from database import get_all_users_with_steam
+        
+        users = get_all_users_with_steam()
+        if not users:
+            logger.info("Нет пользователей с привязанным Steam для обновления MMR")
+            return
+        
+        logger.info(f"Обновление MMR для {len(users)} пользователей")
+        success_count = 0
+        for user in users:
+            try:
+                result = update_user_mmr(user['telegram_id'])
+                if result:
+                    success_count += 1
+            except Exception as e:
+                logger.error(f"Ошибка обновления MMR для {user['telegram_id']}: {e}")
+        
+        logger.info(f"MMR обновлён для {success_count}/{len(users)} пользователей")
+    except Exception as e:
+        logger.error(f"Ошибка в update_all_mmr_job: {e}")
+
+
 async def morning_digest_job(context):
     """Утренний дайджест (9:00)"""
     try:
@@ -121,12 +148,7 @@ async def morning_digest_job(context):
         drop_id = stats.get("top_drop_id")
         streak_id = stats.get("top_streak_id")
         
-        # Функция для создания кликабельного никнейма
-        def make_clickable(name, user_id):
-            if name and name != "None" and user_id:
-                return f"<a href=\"tg://user?id={user_id}\">{name}</a>"
-            return name if name and name != "None" else "—"
-        
+        # Используем глобальную функцию make_clickable
         growth_display = make_clickable(growth_player, growth_id)
         drop_display = make_clickable(drop_player, drop_id)
         streak_display = make_clickable(streak_player, streak_id)
@@ -202,11 +224,6 @@ async def format_digest_message():
     growth_id = stats.get("top_growth_id")
     drop_id = stats.get("top_drop_id")
     streak_id = stats.get("top_streak_id")
-    
-    def make_clickable(name, user_id):
-        if name and name != "None" and user_id:
-            return f"<a href=\"tg://user?id={user_id}\">{name}</a>"
-        return name if name and name != "None" else "—"
     
     growth_display = make_clickable(growth_player, growth_id)
     drop_display = make_clickable(drop_player, drop_id)
@@ -550,6 +567,17 @@ WELCOME_PHRASES = [
     "{name}, готов к победе? Враг слаб!",
 ]
 
+
+# =====================
+# 🔧 УТИЛИТЫ
+# =====================
+
+def make_clickable(name, user_id):
+    """Создать кликабельный никнейм для Telegram"""
+    if name and name != "None" and user_id:
+        return f"<a href=\"tg://user?id={user_id}\">{name}</a>"
+    return name if name and name != "None" else "—"
+
 # Track last bot message per user per chat for cleanup
 last_bot_message = {}  # {chat_id: {user_id: message_id}}
 
@@ -654,6 +682,7 @@ def main_menu():
     keyboard = [
         [KeyboardButton("📈 Увеличить фиссуру")],
         [KeyboardButton("📏 Моя длина"), KeyboardButton("🏆 Топ")],
+        [KeyboardButton("🏆 Топ MMR"), KeyboardButton("🔗 Привязать Steam")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
@@ -909,6 +938,136 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать топ игроков по MMR"""
+    logger.info(f"User {update.effective_user.id} called topmmr")
+    
+    chat_id = update.message.chat_id
+    chat_type = update.message.chat.type
+    
+    # Delete user message only in groups/channels
+    if chat_type in ['group', 'supergroup', 'channel']:
+        try:
+            await context.bot.delete_message(chat_id, update.message.message_id)
+        except Exception:
+            pass
+    
+    try:
+        from dota_mmr import get_mmr_top
+        top_users = get_mmr_top(10)
+        
+        if not top_users:
+            text = "🏆 Топ по MMR\n\nПока нет данных об MMR игроков."
+        else:
+            lines = ["🏆 Топ игроков по MMR (неделя)\n"]
+            for i, player in enumerate(top_users, 1):
+                username = player.get('steam_nickname') or player.get('username') or 'Unknown'
+                mmr = player.get('mmr', 0)
+                week_games = player.get('week_games', 0)
+                week_wins = player.get('week_wins', 0)
+                week_losses = week_games - week_wins
+                winrate = player.get('winrate', 0)
+                
+                if i == 1:
+                    prefix = "🥇"
+                elif i == 2:
+                    prefix = "🥈"
+                elif i == 3:
+                    prefix = "🥉"
+                else:
+                    prefix = f"{i}."
+                
+                lines.append(f"{prefix} {username} | MMR: {mmr}\n   📊 {week_games} игр | ✅ {week_wins} | ❌ {week_losses} | {winrate}%")
+            
+            text = "\n".join(lines)
+        
+        await update.message.reply_text(text)
+    except Exception as e:
+        logger.error(f"Error in topmmr: {e}")
+        await update.message.reply_text("❌ Ошибка получения топа MMR")
+
+
+async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Привязка Steam аккаунта по нику или Steam ID"""
+    logger.info(f"User {update.effective_user.id} called link")
+    
+    chat_id = update.message.chat_id
+    chat_type = update.message.chat.type
+    
+    # Delete user message only in groups/channels
+    if chat_type in ['group', 'supergroup', 'channel']:
+        try:
+            await context.bot.delete_message(chat_id, update.message.message_id)
+        except Exception:
+            pass
+    
+    args = context.args
+    if not args:
+        # При нажатии кнопки - отправить инструкцию
+        sent_msg = await update.message.reply_text(
+            "🎮 *Привязка Steam аккаунта*\n\n"
+            "Пожалуйста, укажите ваш ник в Steam или Steam ID\n\n"
+            "Пример: `Miracle`\n"
+            "Пример: `76561198012345678`\n\n"
+            "_Отправьте ник в ответ на это сообщение_",
+            parse_mode='Markdown'
+        )
+        # Сохраняем ID сообщения для обработки ответа
+        return
+    
+    identifier = args[0]
+    
+    try:
+        from dota_mmr import register_steam
+        result = register_steam(update.effective_user.id, identifier)
+        
+        if result.get('success'):
+            await update.message.reply_text(result.get('message'))
+        else:
+            await update.message.reply_text(result.get('message'))
+    except Exception as e:
+        logger.error(f"Error in link: {e}")
+        await update.message.reply_text("❌ Ошибка привязки Steam аккаунта")
+
+
+async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обновить MMR одного пользователя"""
+    logger.info(f"User {update.effective_user.id} called refresh")
+    
+    chat_id = update.message.chat_id
+    chat_type = update.message.chat.type
+    
+    # Delete user message only in groups/channels
+    if chat_type in ['group', 'supergroup', 'channel']:
+        try:
+            await context.bot.delete_message(chat_id, update.message.message_id)
+        except Exception:
+            pass
+    
+    try:
+        from dota_mmr import update_user_mmr
+        from database import get_user
+        
+        # Обновляем MMR только этого пользователя
+        result = update_user_mmr(update.effective_user.id)
+        
+        if result:
+            user = get_user(update.effective_user.id)
+            if user and user.get('steam_nickname'):
+                await update.message.reply_text(
+                    f"✅ MMR обновлён!\n"
+                    f"{user['steam_nickname']} - {user['mmr']}\n"
+                    f"📊 Всего игр: {user['dota_total_games']}"
+                )
+            else:
+                await update.message.reply_text("❌ Не удалось получить статистику")
+        else:
+            await update.message.reply_text("❌ У тебя не привязан Steam аккаунт. Используй /link")
+    except Exception as e:
+        logger.error(f"Error in refresh: {e}")
+        await update.message.reply_text("❌ Ошибка обновления MMR")
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
     logger.info(f"New user {update.effective_user.id}")
@@ -1004,7 +1163,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         text = update.message.text.strip()
         
-        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ"]
+        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ", "🏆 Топ MMR", "🔗 Привязать Steam"]
         
         if text not in menu_buttons:
             return
@@ -1036,6 +1195,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await stats(update, context)
         elif text == "🏆 Топ":
             await top(update, context)
+        elif text == "🏆 Топ MMR":
+            await topmmr(update, context)
+        elif text == "🔗 Привязать Steam":
+            await link(update, context)
             
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}", exc_info=True)
@@ -1113,6 +1276,8 @@ async def main():
     
     try:
         init_db()
+        # Запускаем миграции базы данных
+        migrate_db()
         
         # Создаём JobQueue и привязываем к application
         job_queue = JobQueue()
@@ -1134,6 +1299,14 @@ async def main():
             time=datetime.time(hour=6, minute=0),
             days=(0, 1, 2, 3, 4, 5, 6)
         )
+        
+        # Ежедневное обновление MMR всех пользователей с привязанным Steam
+        job_queue.run_daily(
+            update_all_mmr_job,
+            time=datetime.time(hour=7, minute=0),  # 7:00 утра по МСК (4:00 UTC)
+            days=(0, 1, 2, 3, 4, 5, 6)
+        )
+        
         logger.info("Done")
         
         # Утренний дайджест теперь live (обновляется после каждого броска)
@@ -1149,6 +1322,9 @@ async def main():
         app.add_handler(CommandHandler("fissure", fissure))
         app.add_handler(CommandHandler("stats", stats))
         app.add_handler(CommandHandler("top", top))
+        app.add_handler(CommandHandler("topmmr", topmmr))
+        app.add_handler(CommandHandler("link", link))
+        app.add_handler(CommandHandler("refresh", refresh))
         app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))

@@ -1,322 +1,301 @@
 # -*- coding: utf-8 -*-
-"""Модуль для работы с Dota 2 MMR"""
-
+import re
+import time
 import requests
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
 from database import get_user, update_user_field
 
 logger = logging.getLogger(__name__)
 
-# Stratz API (бесплатный, без ключа)
-STRATZ_API_URL = "https://api.stratz.com/players"
-# OpenDota API (бесплатный, без ключа) - запасной вариант
 OPENDOTA_API_URL = "https://api.opendota.com/api"
+STEAM_OFFSET = 76561197960265728
+
+# Простой кеш для запросов (5 минут)
+_cache = {}
+CACHE_TTL = 300  # 5 минут
 
 
-def search_player_by_nickname(nickname: str) -> dict:
+def _get_cached(key):
+    """Получить значение из кеша"""
+    if key in _cache:
+        value, timestamp = _cache[key]
+        if time.time() - timestamp < CACHE_TTL:
+            return value
+        del _cache[key]
+    return None
+
+
+def _set_cached(key, value):
+    """Сохранить значение в кеш"""
+    _cache[key] = (value, time.time())
+
+
+# ========================
+# 🔧 UTILS
+# ========================
+
+def steam64_to_account_id(steam_id: int) -> int:
+    return steam_id - STEAM_OFFSET
+
+
+def account_id_to_steam64(account_id: int) -> int:
+    return account_id + STEAM_OFFSET
+
+
+def parse_steam_identifier(identifier: str) -> int:
     """
-    Поиск игрока по никнейму через Stratz API (+ OpenDota fallback)
-    Returns: {steam_id, nickname, mmr, total_games, wins}
+    Возвращает SteamID64 из:
+    - SteamID64 (17 цифр, 7656119...)
+    - Account ID (короткий)
+    - Dotabuff-ссылки (https://www.dotabuff.com/players/123456789)
+    - Никнейм (возвращает None, обработаем позже)
     """
+    identifier = identifier.strip()
+    
+    # Dotabuff ссылка
+    match = re.search(r"players/(\d+)", identifier)
+    if match:
+        account_id = int(match.group(1))
+        return account_id_to_steam64(account_id)
+    
+    # Чистые цифры
+    if identifier.isdigit():
+        number = int(identifier)
+        if len(identifier) >= 17:  # SteamID64
+            return number
+        else:  # короткий Account ID
+            return account_id_to_steam64(number)
+    
+    # Никнейм (не цифры) → вернем None, обработаем позже
+    return None
+
+
+def safe_winrate(wins: int, games: int) -> float:
+    return round((wins / games * 100), 1) if games > 0 else 0
+
+
+# ========================
+# 🎯 MMR (примерный)
+# ========================
+
+def rank_to_mmr(rank_tier: int) -> int:
+    if not rank_tier:
+        return 0
+
+    tier = rank_tier // 10
+    star = rank_tier % 10
+
+    return tier * 700 + star * 150
+
+
+# ========================
+# 🔍 SEARCH PLAYER
+# ========================
+
+def search_player(nickname: str) -> dict:
     try:
-        # Stratz allows searching by nickname
-        url = f"{STRATZ_API_URL}/{nickname}"
-        response = requests.get(url, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            return {
-                "steam_id": data.get("steamId"),
-                "nickname": data.get("nickName", nickname),
-                "mmr": data.get("mmr", 0),
-                "total_games": data.get("stats", {}).get("matchCount", 0),
-                "wins": data.get("stats", {}).get("winCount", 0)
-            }
-        elif response.status_code == 403:
-            # Stratz API blocked - try OpenDota
-            return search_player_opendota(nickname)
-        elif response.status_code == 404:
-            # Not found in Stratz - try OpenDota
-            return search_player_opendota(nickname)
-        else:
-            logger.warning(f"Stratz API error: {response.status_code}")
-            return None
-    except Exception as e:
-        logger.error(f"Error searching player: {e}")
-        return None
-
-
-def search_player_opendota(nickname: str) -> dict:
-    """
-    Поиск игрока по никнейму через OpenDota API
-    """
-    try:
-        logger.info(f"Searching OpenDota for nickname: {nickname}")
-        # OpenDota search endpoint
         url = f"{OPENDOTA_API_URL}/search"
-        params = {"q": nickname}
-        response = requests.get(url, params=params, timeout=10)
+        r = requests.get(url, params={"q": nickname}, timeout=10)
+
+        if r.status_code != 200:
+            return None
+
+        data = r.json()
+        if not data:
+            return None
+
+        player = data[0]
+        account_id = player.get("account_id")
+
+        if not account_id:
+            return None
+
+        steam_id = account_id_to_steam64(account_id)
+        stats = get_player_stats(steam_id)
+
+        if not stats:
+            return None
+
+        # Обновляем никнейм из результатов поиска
+        stats["nickname"] = player.get("personaname", stats.get("nickname", "Unknown"))
         
-        logger.info(f"OpenDota search response status: {response.status_code}")
-        
-        if response.status_code == 200:
-            data = response.json()
-            logger.info(f"OpenDota search data: {data}")
-            if data and len(data) > 0:
-                player = data[0]  # Берем первого найденного
-                steam_id = player.get("account_id")
-                logger.info(f"Found player account_id: {steam_id}")
-                if steam_id:
-                    # Конвертируем account_id в Steam ID
-                    steam_id = int(steam_id) + 76561197960265728
-                    logger.info(f"Converted to Steam ID: {steam_id}")
-                    
-                    # Получаем статистику этого игрока
-                    stats = get_player_stats_opendota(steam_id)
-                    if stats:
-                        return {
-                            "steam_id": steam_id,
-                            "nickname": player.get("personaname", nickname),
-                            "mmr": stats.get("mmr", 0),
-                            "total_games": stats.get("total_games", 0),
-                            "wins": stats.get("wins", 0)
-                        }
-        return None
+        return {
+            "steam_id": steam_id,
+            **stats
+        }
+
     except Exception as e:
-        logger.error(f"Error searching player in OpenDota: {e}")
+        logger.error(f"search error: {e}")
         return None
 
+
+# ========================
+# 📊 GET STATS
+# ========================
 
 def get_player_stats(steam_id: int) -> dict:
-    """
-    Получение полной статистики игрока (Stratz + OpenDota fallback)
-    Returns: {mmr, total_games, wins, week_games, week_wins, nickname}
-    """
     try:
-        url = f"{STRATZ_API_URL}/{steam_id}"
-        response = requests.get(url, timeout=10)
+        # Проверяем кеш
+        cache_key = f"player_{steam_id}"
+        cached = _get_cached(cache_key)
+        if cached:
+            return cached
+            
+        account_id = steam64_to_account_id(steam_id)
+        url = f"{OPENDOTA_API_URL}/players/{account_id}"
+
+        r = requests.get(url, timeout=10)
+
+        if r.status_code != 200:
+            return None
+
+        data = r.json()
+
+        profile = data.get("profile", {})
+        rank_tier = data.get("rank_tier") or 0
         
-        logger.info(f"Stratz response status: {response.status_code} for steam_id: {steam_id}")
+        # Получаем статистику побед/поражений через отдельный запрос
+        wl_url = f"{OPENDOTA_API_URL}/players/{account_id}/wl"
+        r2 = requests.get(wl_url, timeout=10)
         
-        if response.status_code == 200:
-            data = response.json()
-            return {
-                "nickname": data.get("nickName", ""),
-                "mmr": data.get("mmr", 0),
-                "total_games": data.get("stats", {}).get("matchCount", 0),
-                "wins": data.get("stats", {}).get("winCount", 0),
-                "rank_tier": data.get("rankTier", 0)
-            }
-        elif response.status_code == 403:
-            logger.warning(f"Stratz API 403 error, trying OpenDota fallback")
-            # Stratz API blocked - try OpenDota fallback
-            return get_player_stats_opendota(steam_id)
-        return None
+        if r2.status_code == 200:
+            wl = r2.json() or {}
+            wins = wl.get("win", 0)
+            loses = wl.get("lose", 0)
+            total_games = wins + loses
+        else:
+            total_games = 0
+            wins = 0
+        
+        # Используем mmr_estimate для более точного MMR
+        mmr_estimate = data.get("mmr_estimate", {}).get("estimate", 0)
+        mmr = mmr_estimate or rank_to_mmr(rank_tier)
+        
+        # Вычисляем винрейт
+        winrate = safe_winrate(wins, total_games)
+
+        result = {
+            "nickname": profile.get("personaname", "Unknown"),
+            "mmr": mmr,
+            "total_games": total_games,
+            "wins": wins,
+            "winrate": winrate,
+        }
+        
+        # Сохраняем в кеш
+        _set_cached(cache_key, result)
+        
+        return result
+
     except Exception as e:
-        logger.error(f"Error getting player stats: {e}")
+        logger.error(f"stats error: {e}")
         return None
 
 
-def get_player_stats_opendota(steam_id: int) -> dict:
-    """
-    Получение статистики через OpenDota API (fallback)
-    """
+# ========================
+# 🔗 REGISTER
+# ========================
+
+def register_steam(telegram_id: int, identifier: str) -> dict:
     try:
-        logger.info(f"Trying OpenDota for steam_id: {steam_id}")
-        url = f"{OPENDOTA_API_URL}/players/{steam_id}"
-        response = requests.get(url, timeout=10)
-        
-        logger.info(f"OpenDota response status: {response.status_code}, url: {url}")
-        
-        if response.status_code == 200:
-            data = response.json()
-            # OpenDota doesn't have MMR directly, but has rank_tier
-            rank_tier = data.get("rank_tier", 0)
-            # Конвертируем rank_tier в примерный MMR
-            # Guardian=1-5, Crusader=10-20, etc
-            # approximate_mmr = rank_tier * 100 + 1000 (грубая оценка)
-            approximate_mmr = rank_tier * 100 + 600 if rank_tier else 0
-            
-            # Получаем ник из профиля
-            profile = data.get("profile", {})
-            nickname = profile.get("personaname", "Unknown")
-            
-            logger.info(f"OpenDota data: rank_tier={rank_tier}, approximate_mmr={approximate_mmr}, nickname={nickname}")
-            
-            return {
-                "nickname": nickname,
-                "mmr": approximate_mmr,
-                "total_games": data.get("games", 0),
-                "wins": data.get("win", 0),
-                "rank_tier": rank_tier
-            }
-        return None
-    except Exception as e:
-        logger.error(f"Error getting player stats from OpenDota: {e}")
-        return None
+        steam_id = parse_steam_identifier(identifier)
 
+        if steam_id:
+            # если получилось получить steam_id → stats по ID
+            stats = get_player_stats(steam_id)
+            if not stats:
+                return {"success": False, "message": "❌ Игрок не найден"}
+        else:
+            # иначе ищем по никнейму через OpenDota
+            data = search_player(identifier)
+            if not data:
+                return {"success": False, "message": "❌ Игрок не найден"}
+            steam_id = data["steam_id"]
+            stats = data
+
+        # сохраняем в БД
+        update_user_field(telegram_id, "steam_id", steam_id)
+        update_user_field(telegram_id, "steam_nickname", stats["nickname"])
+        update_user_field(telegram_id, "mmr", stats["mmr"])
+        update_user_field(telegram_id, "dota_total_games", stats["total_games"])
+        update_user_field(telegram_id, "dota_wins", stats["wins"])
+        update_user_field(telegram_id, "last_dota_games", stats["total_games"])
+        
+        # Обновляем недельную статистику сразу после привязки
+        update_user_mmr(telegram_id)
+
+        return {
+            "success": True,
+            "message": f"✅ {stats['nickname']} | MMR: {stats['mmr']} | Winrate: {stats.get('winrate', 0)}%"
+        }
+
+    except Exception as e:
+        logger.error(f"register error: {e}")
+        return {"success": False, "message": "❌ Ошибка"}
+
+
+# ========================
+# 🔄 UPDATE MMR
+# ========================
 
 def update_user_mmr(telegram_id: int) -> bool:
-    """
-    Обновление MMR пользователя из Stratz API
-    Returns: True если обновление прошло успешно
-    """
     try:
         user = get_user(telegram_id)
         if not user or not user.get("steam_id"):
             return False
+
+        stats = get_player_stats(user["steam_id"])
+        if not stats:
+            return False
+
+        current_games = stats["total_games"]
+        current_wins = stats["wins"]
+
+        last_games = user.get("last_dota_games", 0)
+        last_wins = user.get("dota_wins", 0)
+        week_games = user.get("week_games", 0)
         
-        steam_id = user["steam_id"]
-        player_data = get_player_stats(steam_id)
-        
-        if player_data:
-            # Обновляем MMR и статистику
-            update_user_field(telegram_id, "mmr", player_data.get("mmr", 0))
-            update_user_field(telegram_id, "dota_total_games", player_data.get("total_games", 0))
-            update_user_field(telegram_id, "dota_wins", player_data.get("wins", 0))
-            update_user_field(telegram_id, "mmr_updated_at", "CURRENT_TIMESTAMP")
-            
-            return True
-        return False
+        # Если это первое обновление - инициализируем недельную статистику
+        if last_games == 0 or week_games == 0:
+            update_user_field(telegram_id, "week_games", current_games)
+            update_user_field(telegram_id, "week_wins", current_wins)
+        else:
+            new_games = max(0, current_games - last_games)
+            new_wins = max(0, current_wins - last_wins)
+
+            if new_games > 0:
+                update_user_field(
+                    telegram_id,
+                    "week_games",
+                    week_games + new_games
+                )
+                update_user_field(
+                    telegram_id,
+                    "week_wins",
+                    user.get("week_wins", 0) + new_wins
+                )
+
+        update_user_field(telegram_id, "mmr", stats["mmr"])
+        update_user_field(telegram_id, "dota_total_games", current_games)
+        update_user_field(telegram_id, "dota_wins", current_wins)
+        update_user_field(telegram_id, "last_dota_games", current_games)
+
+        return True
+
     except Exception as e:
-        logger.error(f"Error updating user MMR: {e}")
+        logger.error(f"update error: {e}")
         return False
 
 
-def register_steam(telegram_id: int, identifier: str) -> dict:
-    """
-    Регистрация Steam аккаунта по нику или Steam ID
-    Returns: {success: bool, message: str, data: dict}
-    """
-    # Проверяем, если это число - это Steam ID
-    if identifier.isdigit():
-        # Проверяем длину (от 9 до 17 цифр)
-        if len(identifier) < 9 or len(identifier) > 17:
-            return {"success": False, "message": "❌ Неверный формат Steam ID. Должно быть от 9 до 17 цифр."}
-        
-        steam_id = int(identifier)
-        
-        # Пробуем получить данные по Steam ID напрямую (без конвертации)
-        if player_data:
-            # Сохраняем в БД
-            update_user_field(telegram_id, "steam_id", steam_id)
-            update_user_field(telegram_id, "steam_nickname", player_data.get("nickname", ""))
-            update_user_field(telegram_id, "mmr", player_data.get("mmr", 0))
-            update_user_field(telegram_id, "dota_total_games", player_data.get("total_games", 0))
-            update_user_field(telegram_id, "dota_wins", player_data.get("wins", 0))
-            return {
-                "success": True,
-                "message": f"✅ Привязано! {player_data.get('nickname')} - MMR: {player_data.get('mmr')}",
-                "data": player_data
-            }
-        else:
-            return {"success": False, "message": "❌ Не удалось найти игрока по этому Steam ID"}
-    
-    # Иначе - ищем по никнейму
-    player_data = search_player_by_nickname(identifier)
-    if player_data and player_data.get("steam_id"):
-        steam_id = player_data["steam_id"]
-        # Сохраняем в БД
-        update_user_field(telegram_id, "steam_id", steam_id)
-        update_user_field(telegram_id, "steam_nickname", player_data.get("nickname", identifier))
-        update_user_field(telegram_id, "mmr", player_data.get("mmr", 0))
-        update_user_field(telegram_id, "dota_total_games", player_data.get("total_games", 0))
-        update_user_field(telegram_id, "dota_wins", player_data.get("wins", 0))
-        
-        return {
-            "success": True,
-            "message": f"✅ Привязано! {player_data.get('nickname')} - MMR: {player_data.get('mmr')}",
-            "data": player_data
-        }
-    else:
-        return {"success": False, "message": "❌ Не удалось найти игрока. Попробуй другой ник или используй Steam ID"}
+# ========================
+# 🏆 TOP MMR (без API!)
+# ========================
+
+def get_mmr_top(limit=10):
+    from database import get_dota_mmr_top
+    return get_dota_mmr_top(limit)
 
 
-def get_user_dota_stats(telegram_id: int) -> dict:
-    """Получение сохранённой статистики Dota 2 пользователя"""
-    user = get_user(telegram_id)
-    if not user:
-        return None
-    
-    return {
-        "steam_id": user.get("steam_id"),
-        "steam_nickname": user.get("steam_nickname"),
-        "mmr": user.get("mmr", 0),
-        "total_games": user.get("dota_total_games", 0),
-        "wins": user.get("dota_wins", 0),
-        "week_games": user.get("week_games", 0),
-        "week_wins": user.get("week_wins", 0),
-        "week_updated_at": user.get("week_updated_at"),
-        "mmr_updated_at": user.get("mmr_updated_at")
-    }
-
-
-def get_week_top(limit: int = 10) -> list:
-    """Получение топа за неделю по винрейту"""
-    # Здесь нужна будет функция в database.py для получения топа
-    # Пока возвращаем заглушку
-    return []
-
-
-def is_steam_linked(telegram_id: int) -> bool:
-    """Проверка, привязан ли Steam к аккаунту"""
-    user = get_user(telegram_id)
-    return user and user.get("steam_id") is not None
-
-
-async def show_mmr_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать меню Dota 2 MMR"""
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-    
-    user_id = update.effective_user.id
-    user = get_user(user_id)
-    
-    keyboard = []
-    
-    if user and user.get("steam_id"):
-        mmr = user.get("mmr", 0)
-        nickname = user.get("steam_nickname", "Unknown")
-        total_games = user.get("dota_total_games", 0)
-        wins = user.get("dota_wins", 0)
-        winrate = f"{(wins/total_games*100):.1f}%" if total_games > 0 else "0%"
-        
-        text = f"🎮 {nickname}\nMMR: {mmr}\nИгр: {total_games} (WR: {winrate})"
-        keyboard.append([InlineKeyboardButton("🔄 Обновить MMR", callback_data="refresh_mmr")])
-    else:
-        text = "🔗 Привяжи свой Steam аккаунт\n\nИспользуй /link \u003cnickname\u003d или Steam ID\nПример: /link NoNam3"
-    
-    keyboard.append([InlineKeyboardButton("🏆 Топ недели", callback_data="week_top")])
-    keyboard.append([InlineKeyboardButton("« Назад в меню", callback_data="back_to_menu")])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(text, reply_markup=reply_markup)
-
-
-async def handle_mmr_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle inline button callbacks for MMR menu"""
-    query = update.callback_query
-    data = query.data
-    user_id = query.from_user.id
-    
-    if data == "refresh_mmr":
-        # Обновляем MMR
-        success = update_user_mmr(user_id)
-        if success:
-            user = get_user(user_id)
-            mmr = user.get("mmr", 0) if user else 0
-            await query.edit_message_text(f"✅ MMR обновлён!\nТекущий MMR: {mmr}")
-        else:
-            await query.edit_message_text("❌ Не удалось обновить MMR. Попробуй позже.")
-    elif data == "week_top":
-        # Показываем топ недели
-        from dota_mmr import get_week_top, show_week_top_message
-        top = get_week_top()
-        await show_week_top_message(update, context, top)
-    elif data == "back_to_menu":
-        # Возвращаемся в меню
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        keyboard = [[InlineKeyboardButton("📈 Увеличить фиссуру", callback_data="fissure")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text("Выбери действие:", reply_markup=reply_markup)
+def get_week_top(limit=10):
+    from database import get_dota_week_top
+    return get_dota_week_top(limit)

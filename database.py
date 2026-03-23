@@ -151,6 +151,9 @@ def init_db():
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS week_wins INTEGER DEFAULT 0
             """)
             cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_dota_games INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP
             """)
             cursor.execute("""
@@ -220,6 +223,8 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN week_games INTEGER DEFAULT 0")
             if 'week_wins' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN week_wins INTEGER DEFAULT 0")
+            if 'last_dota_games' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN last_dota_games INTEGER DEFAULT 0")
             if 'mmr_updated_at' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN mmr_updated_at TIMESTAMP")
         
@@ -978,4 +983,255 @@ def get_weekly_digest_stats():
 def update_weekly_digest_snapshot():
     """Обновить снимок и обнулить недельные счётчики после еженедельного дайджеста"""
     db = Database()
-    return db.update_weekly_digest_snapshot()
+    return db.update_weekly_digest_snapshot()# Temporary file to add new functions to database.py
+
+# Function to add to database.py at the end:
+
+def get_dota_mmr_top(limit=10):
+    """Получение топа игроков Dota 2 по MMR"""
+    try:
+        conn = get_connection()
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        cursor = conn.cursor()
+        
+        if "postgres" in scheme:
+            cursor.execute("""
+                SELECT telegram_id, username, steam_nickname, mmr, 
+                       dota_total_games, dota_wins
+                FROM users 
+                WHERE steam_id IS NOT NULL AND mmr > 0
+                ORDER BY mmr DESC
+                LIMIT %s
+            """, (limit,))
+            users = cursor.fetchall()
+            cursor.close()
+            return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
+                    "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5]} for u in users]
+        else:
+            cursor.execute("""
+                SELECT telegram_id, username, steam_nickname, mmr, 
+                       dota_total_games, dota_wins
+                FROM users 
+                WHERE steam_id IS NOT NULL AND mmr > 0
+                ORDER BY mmr DESC
+                LIMIT ?
+            """, (limit,))
+            users = cursor.fetchall()
+            cursor.close()
+            return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
+                    "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5]} for u in users]
+    except Exception as e:
+        logger.error(f"Ошибка get_dota_mmr_top: {e}")
+        return []
+
+
+def get_dota_week_top(limit=10):
+    """Получение топа игроков Dota 2 за неделю по винрейту (без минимума игр)"""
+    try:
+        conn = get_connection()
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        cursor = conn.cursor()
+        
+        if "postgres" in scheme:
+            cursor.execute("""
+                SELECT telegram_id, username, steam_nickname, mmr, 
+                       week_games, week_wins, 
+                       CASE WHEN week_games > 0 
+                            THEN ROUND(week_wins::float / week_games * 100, 1) 
+                            ELSE 0 END as winrate
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_games > 0
+                ORDER BY winrate DESC, week_games DESC
+                LIMIT %s
+            """, (limit,))
+            users = cursor.fetchall()
+            cursor.close()
+            return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
+                    "mmr": u[3], "week_games": u[4], "week_wins": u[5], "winrate": u[6]} for u in users]
+        else:
+            cursor.execute("""
+                SELECT telegram_id, username, steam_nickname, mmr, 
+                       week_games, week_wins, 
+                       CASE WHEN week_games > 0 
+                            THEN ROUND(week_wins * 100.0 / week_games, 1) 
+                            ELSE 0 END as winrate
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_games > 0
+                ORDER BY winrate DESC, week_games DESC
+                LIMIT ?
+            """, (limit,))
+            users = cursor.fetchall()
+            cursor.close()
+            return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
+                    "mmr": u[3], "week_games": u[4], "week_wins": u[5], "winrate": u[6]} for u in users]
+    except Exception as e:
+        logger.error(f"Ошибка get_dota_week_top: {e}")
+        return []
+
+
+def get_all_users_with_steam():
+    """Получение всех пользователей с привязанным Steam"""
+    try:
+        conn = get_connection()
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        cursor = conn.cursor()
+        
+        if "postgres" in scheme:
+            cursor.execute("""
+                SELECT telegram_id, steam_id FROM users WHERE steam_id IS NOT NULL
+            """)
+            users = cursor.fetchall()
+            cursor.close()
+            return [{"telegram_id": u[0], "steam_id": u[1]} for u in users]
+        else:
+            cursor.execute("""
+                SELECT telegram_id, steam_id FROM users WHERE steam_id IS NOT NULL
+            """)
+            users = cursor.fetchall()
+            cursor.close()
+            return [{"telegram_id": u[0], "steam_id": u[1]} for u in users]
+    except Exception as e:
+        logger.error(f"Ошибка get_all_users_with_steam: {e}")
+        return []
+
+
+def backup_database(backup_dir=None):
+    """Создать резервную копию базы данных"""
+    try:
+        if backup_dir is None:
+            backup_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        if "postgres" in scheme:
+            # Для PostgreSQL используем pg_dump
+            import subprocess
+            import tempfile
+            
+            # Создаем имя файла резервной копии
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = os.path.join(backup_dir, f"fissure_bot_backup_{timestamp}.sql")
+            
+            # Формируем команду pg_dump
+            cmd = [
+                "pg_dump",
+                "-h", url.hostname,
+                "-p", str(url.port),
+                "-U", url.username,
+                "-d", url.path[1:],  # Убираем первый символ '/' из пути
+                "-f", backup_file,
+                "--no-password"
+            ]
+            
+            # Устанавливаем переменную окружения для пароля
+            env = os.environ.copy()
+            env["PGPASSWORD"] = url.password
+            
+            # Выполняем команду
+            result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                logger.info(f"Резервная копия PostgreSQL создана: {backup_file}")
+                return backup_file
+            else:
+                logger.error(f"Ошибка создания резервной копии PostgreSQL: {result.stderr}")
+                return None
+        else:
+            # Для SQLite просто копируем файл
+            if DATABASE_URL.startswith("sqlite:///"):
+                db_path = DATABASE_URL[10:]  # Убираем "sqlite:///"`
+            elif DATABASE_URL.startswith("sqlite://"):
+                db_path = DATABASE_URL[9:]   # Убираем "sqlite://"
+            else:
+                db_path = DATABASE_URL
+            
+            # Создаем имя файла резервной копии
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = os.path.join(backup_dir, f"fissure_bot_backup_{timestamp}.db")
+            
+            # Копируем файл базы данных
+            import shutil
+            shutil.copy2(db_path, backup_file)
+            
+            logger.info(f"Резервная копия SQLite создана: {backup_file}")
+            return backup_file
+            
+    except Exception as e:
+        logger.error(f"Ошибка создания резервной копии: {e}")
+        return None
+
+
+def restore_database(backup_file):
+    """Восстановить базу данных из резервной копии"""
+    try:
+        if not os.path.exists(backup_file):
+            logger.error(f"Файл резервной копии не существует: {backup_file}")
+            return False
+        
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        if "postgres" in scheme:
+            # Для PostgreSQL используем psql
+            import subprocess
+            
+            # Формируем команду psql
+            cmd = [
+                "psql",
+                "-h", url.hostname,
+                "-p", str(url.port),
+                "-U", url.username,
+                "-d", url.path[1:],  # Убираем первый символ '/' из пути
+                "-f", backup_file,
+                "--no-password"
+            ]
+            
+            # Устанавливаем переменную окружения для пароля
+            env = os.environ.copy()
+            env["PGPASSWORD"] = url.password
+            
+            # Выполняем команду
+            result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                logger.info(f"База данных PostgreSQL восстановлена из: {backup_file}")
+                return True
+            else:
+                logger.error(f"Ошибка восстановления PostgreSQL: {result.stderr}")
+                return False
+        else:
+            # Для SQLite копируем файл обратно
+            if DATABASE_URL.startswith("sqlite:///"):
+                db_path = DATABASE_URL[10:]  # Убираем "sqlite:///"`
+            elif DATABASE_URL.startswith("sqlite://"):
+                db_path = DATABASE_URL[9:]   # Убираем "sqlite://"
+            else:
+                db_path = DATABASE_URL
+            
+            import shutil
+            shutil.copy2(backup_file, db_path)
+            
+            logger.info(f"База данных SQLite восстановлена из: {backup_file}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Ошибка восстановления базы данных: {e}")
+        return False
+
+
+def get_db_type():
+    """Получить тип базы данных"""
+    url = urlparse.urlparse(DATABASE_URL)
+    scheme = url.scheme
+    
+    if "postgres" in scheme:
+        return "postgresql"
+    else:
+        return "sqlite"
