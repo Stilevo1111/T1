@@ -656,14 +656,26 @@ class Database:
                 result = self.execute_query(query, (key,), fetch="one")
                 logger.info(f"get_config result: {result}, type={type(result)}")
                 if result is None:
+                    logger.info(f"get_config: result is None, returning default={default}")
                     return default
                 # PostgreSQL с RealDictCursor возвращает словарь {'value': '...'}
                 if isinstance(result, dict):
-                    return result.get('value', default) if result.get('value') else default
+                    val = result.get('value')
+                    logger.info(f"get_config: dict value = {repr(val)}")
+                    # Проверяем что значение не пустое и не "0"
+                    if val is not None and val != '' and val != '0':
+                        return val
+                    logger.info(f"get_config: empty or zero value, returning default={default}")
+                    return default
                 # result может быть (value,) или просто value
                 if isinstance(result, tuple):
-                    return result[0] if result[0] else default
-                return result if result else default
+                    val = result[0]
+                    if val and val != '0':
+                        return val
+                    return default
+                if result and result != '0':
+                    return result
+                return default
             else:
                 query = "SELECT value FROM bot_config WHERE key = ?"
                 result = self.execute_query(query, (key,), fetch="one")
