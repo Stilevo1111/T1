@@ -376,7 +376,9 @@ def update_user_mmr(telegram_id: int) -> dict:
                         # Определяем победу по полю radiant_win
                         radiant_win = match.get("radiant_win", False)
                         player_is_radiant = match.get("radiant", True)
-                        if (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win):
+                        is_win = (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win)
+                        logger.info(f"topmmr: match {match.get('match_id')} - radiant={player_is_radiant}, radiant_win={radiant_win}, is_win={is_win}, date={match_date}")
+                        if is_win:
                             week_wins += 1
                 except:
                     pass
