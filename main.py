@@ -1643,7 +1643,13 @@ def setup_health_check(bot):
     """Initialize health check handler with bot instance"""
     global health_check_handler
     async def check(request):
-        return web.Response(text="Bot is working", status=200)
+        try:
+            # Пингуем бота чтобы не давать Render уснуть
+            await bot.get_me()
+            return web.Response(text="Bot is working", status=200)
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return web.Response(text="Bot error", status=500)
     health_check_handler = check
 
 
@@ -1781,13 +1787,16 @@ async def main():
             logger.error("WEBHOOK_URL not set!")
             return
             
-        await app.bot.set_webhook(url=webhook_url)
+        # Сначала инициализируем application
         await app.initialize()
         
         # Запускаем application для активации job_queue
         await app.start()
         # Запускаем job_queue для PTB v20+
         await job_queue.start()
+        
+        # Устанавливаем webhook после инициализации
+        await app.bot.set_webhook(url=webhook_url)
         
         logger.info("Telegram bot started in webhook mode")
         logger.info(f"Webhook URL: {webhook_url}")
