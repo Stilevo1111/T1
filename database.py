@@ -201,6 +201,9 @@ def init_db():
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_dota_games INTEGER DEFAULT 0
             """)
             cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_dota_wins INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP
             """)
             cursor.execute("""
@@ -284,6 +287,8 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN week_wins INTEGER DEFAULT 0")
             if 'last_dota_games' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN last_dota_games INTEGER DEFAULT 0")
+            if 'last_dota_wins' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN last_dota_wins INTEGER DEFAULT 0")
             if 'mmr_updated_at' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN mmr_updated_at TIMESTAMP")
             if 'rank_tier' not in columns:
@@ -1118,7 +1123,7 @@ def get_dota_week_top(limit=10):
                 SELECT telegram_id, username, steam_nickname, mmr, 
                        week_games, week_wins, rank_tier,
                        CASE WHEN week_games > 0 
-                            THEN ROUND(week_wins::float / week_games * 100, 1) 
+                            THEN ROUND((week_wins::float / week_games::float) * 100, 1) 
                             ELSE 0 END as winrate
                 FROM users 
                 WHERE steam_id IS NOT NULL
