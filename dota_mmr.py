@@ -364,6 +364,15 @@ def update_user_mmr(telegram_id: int) -> dict:
         # Получаем последние 50 матчей
         matches = get_recent_matches(user["steam_id"], limit=50)
         
+        # Логируем все полученные матчи
+        if matches:
+            logger.info(f"topmmr: total matches received from API: {len(matches)}")
+            for i, match in enumerate(matches):
+                match_date = datetime.utcfromtimestamp(match.get("start_time", 0))
+                logger.info(f"topmmr: match[{i}] id={match.get('match_id')} start_time={match.get('start_time')} date={match_date} week_start={week_start_utc} in_week={match_date >= week_start_utc}")
+        else:
+            logger.warning("topmmr: no matches received from API")
+        
         week_games = 0
         week_wins = 0
         
