@@ -1213,10 +1213,15 @@ def get_dota_week_top(limit=10):
         # Сначала проверим, есть ли вообще данные
         cursor.execute("""
             SELECT COUNT(*) FROM users 
+            WHERE steam_id IS NOT NULL
+        """)
+        total_with_steam = cursor.fetchone()[0]
+        cursor.execute("""
+            SELECT COUNT(*) FROM users 
             WHERE steam_id IS NOT NULL AND week_games > 0
         """)
         count = cursor.fetchone()[0]
-        logger.info(f"get_dota_week_top: found {count} users with week_games > 0")
+        logger.info(f"get_dota_week_top: {total_with_steam} users with steam_id, {count} with week_games > 0")
         
         # Если нет пользователей с недельными играми, вернем пустой список
         if count == 0:
