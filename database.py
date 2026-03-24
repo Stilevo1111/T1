@@ -1120,8 +1120,8 @@ def get_dota_week_top(limit=10):
                             THEN ROUND(week_wins::float / week_games * 100, 1) 
                             ELSE 0 END as winrate
                 FROM users 
-                WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY week_wins DESC, winrate DESC
+                WHERE steam_id IS NOT NULL
+                ORDER BY mmr DESC, week_wins DESC
                 LIMIT %s
             """, (limit,))
             users = cursor.fetchall()
@@ -1136,8 +1136,8 @@ def get_dota_week_top(limit=10):
                             THEN ROUND(week_wins * 100.0 / week_games, 1) 
                             ELSE 0 END as winrate
                 FROM users 
-                WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY week_wins DESC, winrate DESC
+                WHERE steam_id IS NOT NULL
+                ORDER BY mmr DESC, week_wins DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
