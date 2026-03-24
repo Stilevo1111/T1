@@ -454,7 +454,10 @@ class Database:
                         "week_games": user.get("week_games", 0),
                         "week_wins": user.get("week_wins", 0),
                         "week_updated_at": user.get("week_updated_at"),
-                        "mmr_updated_at": user.get("mmr_updated_at")
+                        "mmr_updated_at": user.get("mmr_updated_at"),
+                        "last_dota_games": user.get("last_dota_games", 0),
+                        "last_dota_wins": user.get("last_dota_wins", 0),
+                        "week_start_date": user.get("week_start_date")
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
