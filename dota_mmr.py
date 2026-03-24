@@ -359,7 +359,7 @@ def update_user_mmr(telegram_id: int) -> dict:
         monday_utc = today_utc - timedelta(days=today_utc.weekday())
         week_start_utc = monday_utc.replace(hour=0, minute=0, second=0, microsecond=0)
         logger.info(f"topmmr: week start (UTC) = {week_start_utc} (Monday)")
-        logger.info(f"topmmr: week start = {week_start} (Monday)")
+        logger.info(f"topmmr: week start (UTC) = {week_start_utc} (Monday)")
         
         # Получаем последние 50 матчей
         matches = get_recent_matches(user["steam_id"], limit=50)
