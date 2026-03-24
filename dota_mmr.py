@@ -366,11 +366,12 @@ def update_user_mmr(telegram_id: int) -> dict:
                 in_week = match_date >= week_start_utc
                 logger.info(f"topmmr: match[{i}] id={match.get('match_id')} start_time={match.get('start_time')} date={match_date} week_start={week_start_utc} in_week={in_week}")
                 if in_week:
-                    # Детальное логирование для матчей в неделе
-                    radiant_win = match.get("radiant_win", False)
-                    player_is_radiant = match.get("radiant", True)
-                    is_win = (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win)
-                    logger.info(f"topmmr:   -> radiant={player_is_radiant}, radiant_win={radiant_win}, is_win={is_win}")
+                    # Детальное логирование только для первых 3 матчей в неделе
+                    if i < 3:
+                        radiant_win = match.get("radiant_win", False)
+                        player_is_radiant = match.get("radiant", True)
+                        is_win = (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win)
+                        logger.info(f"topmmr:   -> radiant={player_is_radiant}, radiant_win={radiant_win}, is_win={is_win}")
         else:
             logger.warning("topmmr: no matches received from API")
         
@@ -388,8 +389,9 @@ def update_user_mmr(telegram_id: int) -> dict:
                         player_slot = match.get("player_slot")
                         radiant_win = match.get("radiant_win", False)
                         
-                        # Логируем ВСЕ значения для отладки
-                        logger.info(f"topmmr: DEBUG match {match.get('match_id')} player_slot={player_slot} radiant_win={radiant_win}")
+                        # Логируем ВСЕ значения для отладки (первые 3 матча)
+                        if week_games <= 3:
+                            logger.info(f"topmmr: DEBUG match {match.get('match_id')} player_slot={player_slot} radiant_win={radiant_win}")
                         
                         # player_slot: 0-4 = Radiant, 128-132 = Dire
                         if player_slot is not None:
@@ -405,7 +407,9 @@ def update_user_mmr(telegram_id: int) -> dict:
                         else:
                             is_win = False
                         
-                        logger.info(f"topmmr: match {match.get('match_id')} - player_was_radiant={player_was_radiant}, is_win={is_win}")
+                        # Логируем только для отладки (можно убрать после проверки)
+                        if week_games <= 3:
+                            logger.info(f"topmmr: match {match.get('match_id')} - player_was_radiant={player_was_radiant}, is_win={is_win}")
                         if is_win:
                             week_wins += 1
                 except:
