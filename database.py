@@ -325,6 +325,12 @@ def migrate_db():
         import subprocess
         import sys
         
+        # Check if alembic.ini exists
+        alembic_ini_path = os.path.join(os.path.dirname(__file__), 'alembic.ini')
+        if not os.path.exists(alembic_ini_path):
+            logger.info("ℹ️ Alembic не настроен, пропускаем миграции")
+            return True
+        
         # Run alembic upgrade head
         result = subprocess.run([
             sys.executable, '-m', 'alembic', 'upgrade', 'head'
