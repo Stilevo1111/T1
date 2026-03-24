@@ -354,12 +354,11 @@ def update_user_mmr(telegram_id: int) -> dict:
         # Получаем последние матчи для расчёта недельной статистики
         # Фиксированная неделя: с понедельника по воскресенье
         from datetime import datetime, timedelta
-        today = datetime.utcnow()
-        monday = today - timedelta(days=today.weekday())  # Понедельник текущей недели
-        
-        # Если сегодня воскресенье (weekday=6), то неделя ещё не закончилась
-        # Но для подсчёта берём текущую неделю
-        week_start = monday.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Используем UTC для расчёта начала недели, затем конвертируем в UTC для сравнения с timestamp
+        today_utc = datetime.utcnow()
+        monday_utc = today_utc - timedelta(days=today_utc.weekday())
+        week_start_utc = monday_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+        logger.info(f"topmmr: week start (UTC) = {week_start_utc} (Monday)")
         logger.info(f"topmmr: week start = {week_start} (Monday)")
         
         # Получаем последние 50 матчей
@@ -372,7 +371,7 @@ def update_user_mmr(telegram_id: int) -> dict:
             for match in matches:
                 try:
                     match_date = datetime.utcfromtimestamp(match.get("start_time", 0))
-                    if match_date >= week_start:
+                    if match_date >= week_start_utc:
                         week_games += 1
                         # Определяем победу по полю radiant_win
                         radiant_win = match.get("radiant_win", False)
