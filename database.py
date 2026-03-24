@@ -578,7 +578,12 @@ class Database:
                     ) AND steam_id IS NOT NULL
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
-                return result[0] if result else None
+                # Если пользователь первый (нет тех, у кого больше MMR), возвращаем 1
+                if result and result[0] is not None:
+                    rank = int(result[0])
+                    # Если rank = 0, значит пользователь первый (у него максимальный MMR)
+                    return rank if rank > 0 else 1
+                return None
             else:
                 query = """
                     SELECT COUNT(*) + 1 FROM users WHERE mmr > (
@@ -586,7 +591,12 @@ class Database:
                     ) AND steam_id IS NOT NULL
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
-                return result[0] if result else None
+                # Если пользователь первый (нет тех, у кого больше MMR), возвращаем 1
+                if result and result[0] is not None:
+                    rank = int(result[0])
+                    # Если rank = 0, значит пользователь первый (у него максимальный MMR)
+                    return rank if rank > 0 else 1
+                return None
         except Exception as e:
             logger.error(f"Error getting user rank: {e}")
             return None
