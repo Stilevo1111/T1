@@ -8,7 +8,7 @@ import datetime
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection
 from aiohttp import web
 
 # Logging setup
@@ -380,16 +380,16 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
         manual_context = ManualContext(context.application, context.bot)
         await morning_digest_job(manual_context)
 
-        msg = await update.message.reply_text("✅ Утренний дайджест для этого чата создан/обновлён.")
+        msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ Утренний дайджест для этого чата создан/обновлён.")
         if chat.type in ['group', 'supergroup', 'channel']:
             schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
     except Exception as e:
         logger.error(f"Error in digest_now: {e}", exc_info=True)
         try:
-            err = await update.message.reply_text("❌ Не удалось создать дайджест сейчас")
+            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось создать дайджест сейчас")
             chat = update.effective_chat
             if chat and chat.type in ['group', 'supergroup', 'channel']:
-                schedule_delete(context.bot, chat.id, err.message_id, 30, context.application.job_queue)
+                schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
         except Exception:
             pass
 
@@ -1081,7 +1081,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             text = "\n".join(lines)
         
-        await update.message.reply_text(text)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
     except Exception as e:
         logger.error(f"Error in topmmr: {e}")
         # Send new message instead of replying to avoid "Message not found" error
@@ -1157,18 +1157,18 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if result:
             user = get_user(update.effective_user.id)
             if user and user.get('steam_nickname'):
-                await update.message.reply_text(
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=(
                     f"✅ MMR обновлён!\n"
                     f"{user['steam_nickname']} - {user['mmr']}\n"
                     f"📊 Всего игр: {user['dota_total_games']}"
-                )
+                ))
             else:
-                await update.message.reply_text("❌ Не удалось получить статистику")
+                await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось получить статистику")
         else:
-            await update.message.reply_text("❌ У тебя не привязан Steam аккаунт. Используй /link")
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ У тебя не привязан Steam аккаунт. Используй /link")
     except Exception as e:
         logger.error(f"Error in refresh: {e}")
-        await update.message.reply_text("❌ Ошибка обновления MMR")
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка обновления MMR")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1241,8 +1241,9 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_config("digest_chat_id", chat_id)
         set_config("daily_digest_message_id", None)
 
-        msg = await update.message.reply_text(
-            f"✅ Чат для утреннего дайджеста установлен.\n"
+        msg = await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"✅ Чат для утреннего дайджеста установлен.\n"
             f"ID чата: `{chat_id}`\n"
             f"Теперь в 09:00 дайджест будет приходить сюда.",
             parse_mode="Markdown"
@@ -1253,10 +1254,10 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in set_digest_chat: {e}", exc_info=True)
         try:
-            err = await update.message.reply_text("❌ Не удалось сохранить чат для дайджеста")
+            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось сохранить чат для дайджеста")
             chat = update.effective_chat
             if chat and chat.type in ['group', 'supergroup', 'channel']:
-                schedule_delete(context.bot, chat.id, err.message_id, 30, context.application.job_queue)
+                schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
         except Exception:
             pass
 
@@ -1287,16 +1288,16 @@ async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
         manual_context = ManualContext(context.application, context.bot)
         await weekly_digest_job(manual_context)
         
-        msg = await update.message.reply_text("✅ Еженедельный дайджест для этого чата создан/обновлён.")
+        msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ Еженедельный дайджест для этого чата создан/обновлён.")
         if chat.type in ['group', 'supergroup', 'channel']:
             schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
     except Exception as e:
         logger.error(f"Error in weekly_digest_now: {e}", exc_info=True)
         try:
-            err = await update.message.reply_text("❌ Не удалось создать дайджест сейчас")
+            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось создать дайджест сейчас")
             chat = update.effective_chat
             if chat and chat.type in ['group', 'supergroup', 'channel']:
-                schedule_delete(context.bot, chat.id, err.message_id, 30, context.application.job_queue)
+                schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
         except Exception:
             pass
 
