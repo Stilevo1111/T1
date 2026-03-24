@@ -565,7 +565,7 @@ class Database:
             return []
     
     def get_user_rank(self, telegram_id):
-        """Получение позиции игрока в топе"""
+        """Получение позиции игрока в топе по MMR"""
         try:
             # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
@@ -573,17 +573,17 @@ class Database:
             
             if "postgres" in scheme:
                 query = """
-                    SELECT COUNT(*) + 1 FROM users WHERE fissure > (
-                        SELECT fissure FROM users WHERE telegram_id = %s
-                    )
+                    SELECT COUNT(*) + 1 FROM users WHERE mmr > (
+                        SELECT mmr FROM users WHERE telegram_id = %s
+                    ) AND steam_id IS NOT NULL
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 return result[0] if result else None
             else:
                 query = """
-                    SELECT COUNT(*) + 1 FROM users WHERE fissure > (
-                        SELECT fissure FROM users WHERE telegram_id = ?
-                    )
+                    SELECT COUNT(*) + 1 FROM users WHERE mmr > (
+                        SELECT mmr FROM users WHERE telegram_id = ?
+                    ) AND steam_id IS NOT NULL
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 return result[0] if result else None
