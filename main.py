@@ -1321,7 +1321,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user_pos:
                 lines.append(f"#{user_pos} — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
             else:
-                lines.append(f"— — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
+                if user and user.get('steam_id'):
+                    lines.append(f"#? — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
+                else:
+                    lines.append(f"Не привязан")
             
             text = "\n".join(lines)
         

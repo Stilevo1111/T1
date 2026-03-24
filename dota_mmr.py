@@ -387,8 +387,8 @@ def update_user_mmr(telegram_id: int) -> dict:
         # Даже если week_games = 0, все равно обновляем, чтобы сбросить старые данные
         update_user_field(telegram_id, "week_games", week_games)
         update_user_field(telegram_id, "week_wins", week_wins)
-        update_user_field(telegram_id, "week_start_date", week_start.strftime("%Y-%m-%d"))
-        logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_start={week_start}")
+        update_user_field(telegram_id, "week_start_date", week_start_utc.strftime("%Y-%m-%d"))
+        logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_start={week_start_utc}")
         
         # Получаем общие данные
         current_games = stats["total_games"]
