@@ -959,22 +959,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         from dota_mmr import get_week_top, update_user_mmr
         from database import get_user
-        # Обновляем MMR если прошло более 5 минут с последнего обновления
+        # Всегда обновляем MMR при вызове команды (без ограничения по времени)
         user = get_user(update.effective_user.id)
         if user and user.get('steam_id'):
-            mmr_updated = user.get('mmr_updated_at')
-            should_update = True
-            if mmr_updated:
-                from datetime import datetime, timedelta
-                if isinstance(mmr_updated, str):
-                    try:
-                        mmr_updated = datetime.fromisoformat(mmr_updated.replace('Z', '+00:00'))
-                    except:
-                        mmr_updated = None
-                if mmr_updated and (datetime.utcnow() - mmr_updated.replace(tzinfo=None) if mmr_updated else None) <= timedelta(minutes=5):
-                    should_update = False
-            if should_update:
-                update_user_mmr(update.effective_user.id)
+            update_user_mmr(update.effective_user.id)
         top_users = get_week_top(10)
         logger.info(f"topmmr: top_users = {top_users}")
         
