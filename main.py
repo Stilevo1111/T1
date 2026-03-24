@@ -1705,8 +1705,8 @@ if __name__ == "__main__":
 
 
 
-), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot
+        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
+        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
         await app.initialize()
         
         # Запускаем application для активации job_queue
