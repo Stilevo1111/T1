@@ -390,14 +390,29 @@ def update_user_mmr(telegram_id: int) -> dict:
                     match_date = datetime.utcfromtimestamp(match.get("start_time", 0))
                     if match_date >= week_start_utc:
                         week_games += 1
-                        # Определяем победу по полю radiant_win
-                        radiant_win = match.get("radiant_win", False)
-                        player_is_radiant = match.get("radiant", True)
-                        is_win = (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win)
+                        # Детальное логирование ВСЕХ полей для отладки
+                        radiant_win = match.get("radiant_win")
+                        player_is_radiant = match.get("radiant")
+                        # Также проверим group_id или другие поля
+                        player_slot = match.get("player_slot")
+                        
+                        # Определяем сторону игрока по player_slot:
+                        # player_slot: 0-4 = Radiant, 128-132 = Dire
+                        if player_slot is not None:
+                            player_was_radiant = player_slot < 127
+                        else:
+                            player_was_radiant = player_is_radiant if player_is_radiant is not None else True
+                        
+                        # Победа: игрок был на стороне победившей команды
+                        if radiant_win is True and player_was_radiant:
+                            is_win = True
+                        elif radiant_win is False and not player_was_radiant:
+                            is_win = True
+                        else:
+                            is_win = False
+                        
                         # Детальное логирование
-                        logger.info(f"topmmr: match {match.get('match_id')} - radiant={player_is_radiant}, radiant_win={radiant_win}, is_win={is_win}, date={match_date}")
-                        # Логируем все ключи матча для отладки
-                        logger.info(f"topmmr:   -> match keys: {list(match.keys())}")
+                        logger.info(f"topmmr: match {match.get('match_id')} - player_slot={player_slot}, player_was_radiant={player_was_radiant}, radiant_win={radiant_win}, is_win={is_win}, date={match_date}")
                         if is_win:
                             week_wins += 1
                 except:
