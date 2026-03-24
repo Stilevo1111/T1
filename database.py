@@ -611,6 +611,39 @@ class Database:
             logger.error(f"Error getting user rank: {e}", exc_info=True)
             return None
     
+    def get_fissure_rank(self, telegram_id):
+        """Получение позиции игрока в топе по fissure"""
+        logger.info(f"DEBUG: get_fissure_rank called for {telegram_id}")
+        try:
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
+            
+            if "postgres" in scheme:
+                query = """
+                    SELECT COUNT(*) + 1 as rank FROM users WHERE fissure > (
+                        SELECT fissure FROM users WHERE telegram_id = %s
+                    )
+                """
+                result = self.execute_query(query, (telegram_id,), fetch="one")
+                if result and result.get('rank') is not None:
+                    rank = int(result['rank'])
+                    return rank if rank > 0 else 1
+                return None
+            else:
+                query = """
+                    SELECT COUNT(*) + 1 FROM users WHERE fissure > (
+                        SELECT fissure FROM users WHERE telegram_id = ?
+                    )
+                """
+                result = self.execute_query(query, (telegram_id,), fetch="one")
+                if result and result[0] is not None:
+                    rank = int(result[0])
+                    return rank if rank > 0 else 1
+                return None
+        except Exception as e:
+            logger.error(f"Error getting fissure rank: {e}", exc_info=True)
+            return None
+    
     def decrease_inactive_fissure(self, days_inactive=1, decrease_amount=1.0):
         """Уменьшить fissure для неактивных игроков"""
         try:
@@ -1036,9 +1069,14 @@ def get_fissure_top(limit=10):
     return db.get_fissure_top(limit)
 
 def get_user_rank(telegram_id):
-    """Получить позицию игрока в топе"""
+    """Получить позицию игрока в топе по MMR"""
     db = Database()
     return db.get_user_rank(telegram_id)
+
+def get_fissure_rank(telegram_id):
+    """Получить позицию игрока в топе по fissure"""
+    db = Database()
+    return db.get_fissure_rank(telegram_id)
 
 def update_last_message_id(telegram_id, message_id):
     """Функция для совместимости - использует новый класс Database"""
