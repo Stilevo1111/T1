@@ -440,7 +440,7 @@ async def dota_digest_job(context):
             bottom_part = "💀—"
         
         if streak_player and streak_player != "None":
-            streak_part = f"🔥{streak_display} - {streak_wins} побед"
+            streak_part = f"🔥{streak_display} - {streak_wins} Стрик"
         else:
             streak_part = "🔥—"
         
@@ -599,7 +599,7 @@ async def alternate_digest_job(context):
                 bottom_part = "💀—"
             
             if streak_player and streak_player != "None":
-                streak_part = f"🔥{streak_display} - {streak_wins} побед"
+                streak_part = f"🔥{streak_display} - {streak_wins} Стрик"
             else:
                 streak_part = "🔥—"
             
