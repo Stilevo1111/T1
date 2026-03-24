@@ -180,15 +180,8 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
 def is_win(match: dict, steam_id: int) -> bool:
     """Определить, выиграл ли игрок матч по данным матча"""
     try:
-        account_id = steam64_to_account_id(steam_id)
-        # radiant_win = True означает что Radiant выиграл
-        # player_is_radiant = нужно проверить radiant
-        radiant_win = match.get("radiant_win", False)
-        player_is_radiant = match.get("radiant", True)
-        
-        # Если игрок на Radiant и Radiant выиграл -> победа
-        # Если игрок на Dire и Dire выиграл (Radiant проиграл) -> победа
-        return (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win)
+        # OpenDota API provides direct 'win' field - используем его
+        return match.get("win", False)
     except Exception as e:
         logger.error(f"is_win error: {e}", exc_info=True)
         return False
@@ -390,29 +383,11 @@ def update_user_mmr(telegram_id: int) -> dict:
                     match_date = datetime.utcfromtimestamp(match.get("start_time", 0))
                     if match_date >= week_start_utc:
                         week_games += 1
-                        # Детальное логирование ВСЕХ полей для отладки
-                        radiant_win = match.get("radiant_win")
-                        player_is_radiant = match.get("radiant")
-                        # Также проверим group_id или другие поля
-                        player_slot = match.get("player_slot")
-                        
-                        # Определяем сторону игрока по player_slot:
-                        # player_slot: 0-4 = Radiant, 128-132 = Dire
-                        if player_slot is not None:
-                            player_was_radiant = player_slot < 127
-                        else:
-                            player_was_radiant = player_is_radiant if player_is_radiant is not None else True
-                        
-                        # Победа: игрок был на стороне победившей команды
-                        if radiant_win is True and player_was_radiant:
-                            is_win = True
-                        elif radiant_win is False and not player_was_radiant:
-                            is_win = True
-                        else:
-                            is_win = False
+                        # Используем прямое поле 'win' из API - проще и надёжнее
+                        is_win = match.get("win", False)
                         
                         # Детальное логирование
-                        logger.info(f"topmmr: match {match.get('match_id')} - player_slot={player_slot}, player_was_radiant={player_was_radiant}, radiant_win={radiant_win}, is_win={is_win}, date={match_date}")
+                        logger.info(f"topmmr: match {match.get('match_id')} - win={is_win}, date={match_date}")
                         if is_win:
                             week_wins += 1
                 except:
