@@ -1979,7 +1979,7 @@ if __name__ == "__main__":
 
 
 
-), top))
+        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
