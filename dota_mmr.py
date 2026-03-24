@@ -345,7 +345,9 @@ def update_user_mmr(telegram_id: int) -> dict:
         if not user or not user.get("steam_id"):
             return {"success": False, "rank_up": None}
 
+        logger.info(f"topmmr: calling get_player_stats for steam_id={user['steam_id']}")
         stats = get_player_stats(user["steam_id"], use_cache=False)
+        logger.info(f"topmmr: get_player_stats returned: {stats}")
         if not stats:
             return {"success": False, "rank_up": None}
 
