@@ -960,9 +960,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from dota_mmr import get_week_top, update_user_mmr
         from database import get_user
         # Всегда обновляем MMR при вызове команды (без ограничения по времени)
+        logger.info(f"topmmr: starting update for user {update.effective_user.id}")
         user = get_user(update.effective_user.id)
         if user and user.get('steam_id'):
-            update_user_mmr(update.effective_user.id)
+            logger.info(f"topmmr: user has steam_id, calling update_user_mmr")
+            result = update_user_mmr(update.effective_user.id)
+            logger.info(f"topmmr: update_user_mmr result = {result}")
+        else:
+            logger.info(f"topmmr: user has no steam_id")
         top_users = get_week_top(10)
         logger.info(f"topmmr: top_users = {top_users}")
         

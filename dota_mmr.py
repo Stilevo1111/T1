@@ -389,6 +389,9 @@ def update_user_mmr(telegram_id: int) -> dict:
             # При первом обновлении считаем все игры как недельные
             update_user_field(telegram_id, "week_games", current_games)
             update_user_field(telegram_id, "week_wins", current_wins)
+            # Сохраняем текущие значения для следующего обновления
+            update_user_field(telegram_id, "last_dota_games", current_games)
+            update_user_field(telegram_id, "last_dota_wins", current_wins)
         elif week_reset:
             # После сброса недели всегда инициализируем новую статистику
             new_games = max(0, current_games - last_games)
@@ -396,6 +399,9 @@ def update_user_mmr(telegram_id: int) -> dict:
             logger.info(f"Week stats initializing after reset for {telegram_id}: new_games={new_games}")
             update_user_field(telegram_id, "week_games", new_games)
             update_user_field(telegram_id, "week_wins", new_wins)
+            # Сохраняем текущие значения для следующего обновления
+            update_user_field(telegram_id, "last_dota_games", current_games)
+            update_user_field(telegram_id, "last_dota_wins", current_wins)
         elif week_games == 0:
             # Если неделя начата, но статистики нет - инициализируем
             new_games = max(0, current_games - last_games)
@@ -403,6 +409,9 @@ def update_user_mmr(telegram_id: int) -> dict:
             logger.info(f"Week stats initializing for {telegram_id}: new_games={new_games}")
             update_user_field(telegram_id, "week_games", new_games)
             update_user_field(telegram_id, "week_wins", new_wins)
+            # Сохраняем текущие значения для следующего обновления
+            update_user_field(telegram_id, "last_dota_games", current_games)
+            update_user_field(telegram_id, "last_dota_wins", current_wins)
         else:
             # Обновляем существующую статистику
             new_games = max(0, current_games - last_games)
@@ -420,6 +429,9 @@ def update_user_mmr(telegram_id: int) -> dict:
                     "week_wins",
                     user.get("week_wins", 0) + new_wins
                 )
+            # Сохраняем текущие значения для следующего обновления
+            update_user_field(telegram_id, "last_dota_games", current_games)
+            update_user_field(telegram_id, "last_dota_wins", current_wins)
 
         # Обновляем rank_tier если изменился
         new_rank_tier = stats.get("rank_tier", 0)
