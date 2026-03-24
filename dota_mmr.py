@@ -389,22 +389,24 @@ def update_user_mmr(telegram_id: int) -> dict:
                         player_slot = match.get("player_slot")
                         radiant_win = match.get("radiant_win", False)
                         
+                        # player_slot < 127 означает Radiant (0-4)
+                        # player_slot >= 128 означает Dire (128-132)
                         if player_slot is not None:
                             player_was_radiant = player_slot < 127
                         else:
-                            # Fallback - используем radiant поле
-                            player_was_radiant = match.get("radiant", True)
+                            # Если player_slot None - считаем как победу по умолчанию
+                            player_was_radiant = True
                         
                         # Победа: игрок был на стороне победившей команды
-                        if radiant_win is True and player_was_radiant:
+                        if radiant_win and player_was_radiant:
                             is_win = True
-                        elif radiant_win is False and not player_was_radiant:
+                        elif not radiant_win and not player_was_radiant:
                             is_win = True
                         else:
                             is_win = False
                         
                         # Детальное логирование
-                        logger.info(f"topmmr: match {match.get('match_id')} - player_slot={player_slot}, radiant_win={radiant_win}, is_win={is_win}, date={match_date}")
+                        logger.info(f"topmmr: match {match.get('match_id')} - player_slot={player_slot}, player_was_radiant={player_was_radiant}, radiant_win={radiant_win}, is_win={is_win}, date={match_date}")
                         if is_win:
                             week_wins += 1
                 except:
