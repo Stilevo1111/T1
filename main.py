@@ -952,20 +952,40 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     
     try:
-        from dota_mmr import get_mmr_top
-        top_users = get_mmr_top(10)
+        from dota_mmr import get_week_top
+        top_users = get_week_top(10)
         
         if not top_users:
-            text = "🏆 Топ по MMR\n\nПока нет данных об MMR игроков."
+            text = "🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
         else:
-            lines = ["🏆 Топ игроков по MMR (неделя)\n"]
+            lines = ["🏆 Топ MMR за неделю\n"]
             for i, player in enumerate(top_users, 1):
                 username = player.get('steam_nickname') or player.get('username') or 'Unknown'
-                mmr = player.get('mmr', 0)
+                rank_tier = player.get('rank_tier', 0)
                 week_games = player.get('week_games', 0)
                 week_wins = player.get('week_wins', 0)
                 week_losses = week_games - week_wins
-                winrate = player.get('winrate', 0)
+                
+                # Форматируем ранг
+                if rank_tier:
+                    # Конвертируем rank_tier в строку ранга
+                    ranks = ["Рекрут", "Страж", "Рыцарь", "Герой", "Легенда", "Властелин", "Божество", "Титан"]
+                    tier = min(rank_tier // 10, 8)
+                    star = rank_tier % 10
+                    
+                    if tier < 1 or tier > 8:
+                        rank_str = "Неизвестно"
+                    else:
+                        rank_name = ranks[tier - 1]
+                        if tier == 8:  # Immortal
+                            rank_str = rank_name
+                        else:
+                            rank_str = f"{rank_name} {star}"
+                else:
+                    rank_str = "Не ранжирован"
+                
+                # Форматируем winrate
+                winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
                 
                 if i == 1:
                     prefix = "🥇"
@@ -976,7 +996,40 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     prefix = f"{i}."
                 
-                lines.append(f"{prefix} {username} | MMR: {mmr}\n   📊 {week_games} игр | ✅ {week_wins} | ❌ {week_losses} | {winrate}%")
+                lines.append(f"{prefix} {username} — {rank_str}\n└ 📊 {week_wins}W • {week_losses}L • WR {winrate}%")
+            
+            # Добавляем позицию пользователя
+            user = get_user(update.effective_user.id)
+            user_pos = get_user_rank(update.effective_user.id)
+            user_rank_tier = user.get('rank_tier', 0) if user else 0
+            
+            if user_rank_tier:
+                # Конвертируем rank_tier в строку ранга
+                ranks = ["Рекрут", "Страж", "Рыцарь", "Герой", "Легенда", "Властелин", "Божество", "Титан"]
+                tier = min(user_rank_tier // 10, 8)
+                star = user_rank_tier % 10
+                
+                if tier < 1 or tier > 8:
+                    user_rank_str = "Неизвестно"
+                else:
+                    rank_name = ranks[tier - 1]
+                    if tier == 8:  # Immortal
+                        user_rank_str = rank_name
+                    else:
+                        user_rank_str = f"{rank_name} {star}"
+            else:
+                user_rank_str = "Не ранжирован"
+            
+            user_week_games = user.get('week_games', 0) if user else 0
+            user_week_wins = user.get('week_wins', 0) if user else 0
+            user_week_losses = user_week_games - user_week_wins
+            user_winrate = round((user_week_wins / user_week_games * 100), 1) if user_week_games > 0 else 0
+            
+            lines.append(f"\n👤 Твоя позиция:")
+            if user_pos:
+                lines.append(f"🏅 #{user_pos} — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
+            else:
+                lines.append(f"🏅 — — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
             
             text = "\n".join(lines)
         
