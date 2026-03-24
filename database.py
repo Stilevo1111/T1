@@ -1141,6 +1141,20 @@ def get_dota_week_top(limit=10):
         
         cursor = conn.cursor()
         
+        # Сначала проверим, есть ли вообще данные
+        cursor.execute("""
+            SELECT COUNT(*) FROM users 
+            WHERE steam_id IS NOT NULL AND week_games > 0
+        """)
+        count = cursor.fetchone()[0]
+        logger.info(f"get_dota_week_top: found {count} users with week_games > 0")
+        
+        # Если нет пользователей с недельными играми, вернем пустой список
+        if count == 0:
+            cursor.close()
+            conn.close()
+            return []
+        
         if "postgres" in scheme:
             cursor.execute("""
                 SELECT telegram_id, username, steam_nickname, mmr, 
@@ -1149,15 +1163,31 @@ def get_dota_week_top(limit=10):
                             THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
                             ELSE 0 END as winrate
                 FROM users 
-                WHERE steam_id IS NOT NULL
-                ORDER BY mmr DESC, week_wins DESC
+                WHERE steam_id IS NOT NULL AND week_games > 0
+                ORDER BY week_wins DESC, winrate DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
             users = cursor.fetchall()
             logger.info(f"get_dota_week_top: postgres users={users}")
             cursor.close()
-            return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
-                    "mmr": u[3], "week_games": u[4], "week_wins": u[5], "rank_tier": u[6], "winrate": u[7]} for u in users]
+            result = []
+            for u in users:
+                result.append({
+                    'telegram_id': u[0],
+                    'username': u[1],
+                    'steam_nickname': u[2],
+                    'mmr': u[3],
+                    'week_games': u[4],
+                    'week_wins': u[5],
+                    'rank_tier': u[6],
+                    'winrate': u[7]
+                })
+            
+            logger.info(f"get_dota_week_top: returning {len(result)} users")
+            for r in result:
+                logger.info(f"  - {r['steam_nickname']}: {r['week_wins']}W / {r['week_games']}G")
+            
+            return result
         else:
             cursor.execute("""
                 SELECT telegram_id, username, steam_nickname, mmr, 
@@ -1166,15 +1196,31 @@ def get_dota_week_top(limit=10):
                             THEN ROUND(week_wins * 100.0 / week_games, 1) 
                             ELSE 0 END as winrate
                 FROM users 
-                WHERE steam_id IS NOT NULL
-                ORDER BY mmr DESC, week_wins DESC
+                WHERE steam_id IS NOT NULL AND week_games > 0
+                ORDER BY week_wins DESC, winrate DESC, mmr DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
             logger.info(f"get_dota_week_top: sqlite users={users}")
             cursor.close()
-            return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
-                    "mmr": u[3], "week_games": u[4], "week_wins": u[5], "rank_tier": u[6], "winrate": u[7]} for u in users]
+            result = []
+            for u in users:
+                result.append({
+                    'telegram_id': u[0],
+                    'username': u[1],
+                    'steam_nickname': u[2],
+                    'mmr': u[3],
+                    'week_games': u[4],
+                    'week_wins': u[5],
+                    'rank_tier': u[6],
+                    'winrate': u[7]
+                })
+            
+            logger.info(f"get_dota_week_top: returning {len(result)} users")
+            for r in result:
+                logger.info(f"  - {r['steam_nickname']}: {r['week_wins']}W / {r['week_games']}G")
+            
+            return result
     except Exception as e:
         logger.error(f"Ошибка get_dota_week_top: {e}")
         logger.error(f"Query result: users = {users}")

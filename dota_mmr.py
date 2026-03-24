@@ -377,14 +377,11 @@ def update_user_mmr(telegram_id: int) -> dict:
         
         logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}")
         
-        # Если есть данные из матчей - используем их и сохраняем
-        if week_games > 0:
-            # Обновляем week_games и week_wins из матчей
-            update_user_field(telegram_id, "week_games", week_games)
-            update_user_field(telegram_id, "week_wins", week_wins)
-            update_user_field(telegram_id, "last_dota_games", week_games)
-            update_user_field(telegram_id, "last_dota_wins", week_wins)
-            logger.info(f"Saved week stats from matches: {week_games} games, {week_wins} wins")
+        # ВАЖНО: Всегда обновляем недельную статистику из матчей
+        # Даже если week_games = 0, все равно обновляем, чтобы сбросить старые данные
+        update_user_field(telegram_id, "week_games", week_games)
+        update_user_field(telegram_id, "week_wins", week_wins)
+        logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins")
         
         # Получаем общие данные
         current_games = stats["total_games"]
@@ -402,12 +399,18 @@ def update_user_mmr(telegram_id: int) -> dict:
                 "new_rank": new_rank_str
             }
         
+        # Обновляем остальные поля
         update_user_field(telegram_id, "rank_tier", new_rank_tier)
         update_user_field(telegram_id, "wins", stats.get("wins", 0))
         update_user_field(telegram_id, "losses", stats.get("losses", 0))
         update_user_field(telegram_id, "mmr", stats["mmr"])
         update_user_field(telegram_id, "dota_total_games", current_games)
         update_user_field(telegram_id, "dota_wins", current_wins)
+        
+        # Обновляем last_dota_games и last_dota_wins для совместимости
+        # Используем общую статистику, а не недельную
+        update_user_field(telegram_id, "last_dota_games", current_games)
+        update_user_field(telegram_id, "last_dota_wins", current_wins)
 
         return {"success": True, "rank_up": rank_up}
 
