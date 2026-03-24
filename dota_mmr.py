@@ -383,7 +383,10 @@ def update_user_mmr(telegram_id: int) -> dict:
                     match_date = datetime.utcfromtimestamp(match.get("start_time", 0))
                     if match_date >= week_start_utc:
                         week_games += 1
-                        # Используем прямое поле 'win' из API - проще и надёжнее
+                        # Логируем ВСЕ ключи чтобы понять какие поля есть
+                        logger.info(f"topmmr: match keys for {match.get('match_id')}: {list(match.keys())}")
+                        
+                        # Пробуем использовать прямое поле 'win'
                         is_win = match.get("win", False)
                         
                         # Детальное логирование
