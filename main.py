@@ -1084,7 +1084,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text)
     except Exception as e:
         logger.error(f"Error in topmmr: {e}")
-        await update.message.reply_text("❌ Ошибка получения топа MMR")
+        # Send new message instead of replying to avoid "Message not found" error
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка получения топа MMR")
 
 
 async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
