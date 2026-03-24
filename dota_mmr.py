@@ -102,20 +102,20 @@ def rank_to_mmr(rank_tier: int) -> int:
 
 
 def rank_to_string(rank_tier: int) -> str:
-    """Конвертировать rank_tier в читаемый вид (например: "Guardian 3", "Ancient 5", "Immortal")"""
+    """Конвертировать rank_tier в читаемый вид (например: "Страж 3", "Архонт 5", "Бессмертный")"""
     if not rank_tier:
-        return "Unranked"
+        return "Не ранжирован"
     
-    ranks = ["Herald", "Guardian", "Crusader", "Archon", "Legend", "Ancient", "Divine", "Immortal"]
+    ranks = ["Рекрут", "Страж", "Рыцарь", "Герой", "Легенда", "Властелин", "Божество", "Титан"]
     tier = rank_tier // 10
     star = rank_tier % 10
     
     if tier < 1 or tier > 8:
-        return "Unknown"
+        return "Неизвестно"
     
     rank_name = ranks[tier - 1]
     
-    # Immortal не имеет звёзд
+    # Титан не имеет звёзд
     if tier == 8:
         return rank_name
     
