@@ -169,7 +169,8 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
         
-        matches = _api_get(url, {"limit": limit})
+        # Сортируем по start_time (дата матча) чтобы получать последние матчи
+        matches = _api_get(url, {"limit": limit, "sort": "start_time"})
         return matches or []
     except Exception as e:
         logger.error(f"get_recent_matches error: {e}", exc_info=True)
