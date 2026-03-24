@@ -25,6 +25,9 @@ if not TOKEN:
 else:
     print("BOT_TOKEN found")
 
+# Глобальная переменная для отслеживания активности бота
+last_update_time = time.time()
+
 COOLDOWN = 86400  # 24 hours
 
 
@@ -1651,6 +1654,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def health_check(request):
     """Health check endpoint"""
+    import time
     return web.Response(text="Bot is working", status=200)
 
 
@@ -1661,10 +1665,21 @@ def setup_health_check(bot):
     """Initialize health check handler with bot instance"""
     global health_check_handler
     async def check(request):
+        global last_update_time
         try:
-            # Пингуем бота чтобы не давать Render уснуть
-            await bot.get_me()
+            # Проверяем что бот жив - пингуем Telegram API
+            await asyncio.wait_for(bot.get_me(), timeout=5)
+            
+            # Проверяем активность - был ли апдейт за последние 2 минуты?
+            time_since_update = time.time() - last_update_time
+            if time_since_update > 120:
+                logger.warning(f"Health check: no updates for {time_since_update:.0f}s, marking as degraded")
+                return web.Response(text=f"Bot degraded: no updates for {time_since_update:.0f}s", status=503)
+            
             return web.Response(text="Bot is working", status=200)
+        except asyncio.TimeoutError:
+            logger.error("Health check: bot.get_me() timed out")
+            return web.Response(text="Bot timeout", status=500)
         except Exception as e:
             logger.error(f"Health check failed: {e}")
             return web.Response(text="Bot error", status=500)
@@ -1823,6 +1838,7 @@ async def main():
         
         async def handle_webhook(request):
             """Handle incoming webhook requests"""
+            global last_update_time
             try:
                 update_data = await request.json()
                 logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
@@ -1830,6 +1846,8 @@ async def main():
                 logger.info(f"Update parsed: {update}")
                 await app.process_update(update)
                 logger.info(f"Update processed")
+                # Обновляем время последнего апдейта
+                last_update_time = time.time()
                 return web.Response(status=200)
             except Exception as e:
                 logger.error(f"Webhook error: {e}", exc_info=True)
