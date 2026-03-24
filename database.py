@@ -1109,6 +1109,7 @@ def get_dota_week_top(limit=10):
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
+        logger.info(f"get_dota_week_top: scheme={scheme}, limit={limit}")
         
         cursor = conn.cursor()
         
@@ -1125,6 +1126,7 @@ def get_dota_week_top(limit=10):
                 LIMIT %s
             """, (limit,))
             users = cursor.fetchall()
+            logger.info(f"get_dota_week_top: postgres users={users}")
             cursor.close()
             return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
                     "mmr": u[3], "week_games": u[4], "week_wins": u[5], "rank_tier": u[6], "winrate": u[7]} for u in users]
@@ -1141,11 +1143,13 @@ def get_dota_week_top(limit=10):
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
+            logger.info(f"get_dota_week_top: sqlite users={users}")
             cursor.close()
             return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
                     "mmr": u[3], "week_games": u[4], "week_wins": u[5], "rank_tier": u[6], "winrate": u[7]} for u in users]
     except Exception as e:
         logger.error(f"Ошибка get_dota_week_top: {e}")
+        logger.error(f"Query result: users = {users}")
         return []
 
 

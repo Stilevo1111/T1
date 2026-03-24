@@ -959,6 +959,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         from dota_mmr import get_week_top
         top_users = get_week_top(10)
+        logger.info(f"topmmr: top_users = {top_users}")
         
         if not top_users:
             text = "🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
