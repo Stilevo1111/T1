@@ -221,6 +221,9 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_match_id BIGINT DEFAULT 0
             """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_start_date DATE
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -1123,7 +1126,7 @@ def get_dota_week_top(limit=10):
                 SELECT telegram_id, username, steam_nickname, mmr, 
                        week_games, week_wins, rank_tier,
                        CASE WHEN week_games > 0 
-                            THEN ROUND((week_wins::float / week_games::float) * 100, 1) 
+                            THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
                             ELSE 0 END as winrate
                 FROM users 
                 WHERE steam_id IS NOT NULL

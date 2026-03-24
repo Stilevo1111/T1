@@ -305,7 +305,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         update_user_field(telegram_id, "rank_tier", stats.get("rank_tier", 0))
         update_user_field(telegram_id, "wins", stats.get("wins", 0))
         update_user_field(telegram_id, "losses", stats.get("losses", 0))
-        update_user_field(telegram_id, "dota_games", stats["total_games"])
+        update_user_field(telegram_id, "dota_total_games", stats["total_games"])
         update_user_field(telegram_id, "dota_wins", stats["wins"])
         # Инициализируем last_dota_games и last_dota_wins для корректного подсчёта недельной статистики
         update_user_field(telegram_id, "last_dota_games", stats["total_games"])
@@ -438,7 +438,7 @@ def update_user_mmr(telegram_id: int) -> dict:
         update_user_field(telegram_id, "wins", stats.get("wins", 0))
         update_user_field(telegram_id, "losses", stats.get("losses", 0))
         update_user_field(telegram_id, "mmr", stats["mmr"])
-        update_user_field(telegram_id, "dota_games", current_games)
+        update_user_field(telegram_id, "dota_total_games", current_games)
         update_user_field(telegram_id, "dota_wins", current_wins)
         # Обновляем last_dota_games и last_dota_wins для корректного подсчёта недельной статистики
         update_user_field(telegram_id, "last_dota_games", current_games)
