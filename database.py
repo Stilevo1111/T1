@@ -583,14 +583,14 @@ class Database:
             
             if "postgres" in scheme:
                 query = """
-                    SELECT COUNT(*) + 1 FROM users WHERE mmr > (
+                    SELECT COUNT(*) + 1 as rank FROM users WHERE mmr > (
                         SELECT mmr FROM users WHERE telegram_id = %s
                     ) AND steam_id IS NOT NULL
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 # Если пользователь первый (нет тех, у кого больше MMR), возвращаем 1
-                if result and result[0] is not None:
-                    rank = int(result[0])
+                if result and result.get('rank') is not None:
+                    rank = int(result['rank'])
                     # Если rank = 0, значит пользователь первый (у него максимальный MMR)
                     return rank if rank > 0 else 1
                 return None
