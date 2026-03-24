@@ -649,15 +649,26 @@ class Database:
             # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
+            logger.info(f"get_config: key={key}, scheme={scheme}")
             
             if "postgres" in scheme:
                 query = "SELECT value FROM bot_config WHERE key = %s"
                 result = self.execute_query(query, (key,), fetch="one")
-                return result[0] if result else default
+                logger.info(f"get_config result: {result}, type={type(result)}")
+                if result is None:
+                    return default
+                # result может быть (value,) или просто value
+                if isinstance(result, tuple):
+                    return result[0] if result[0] else default
+                return result if result else default
             else:
                 query = "SELECT value FROM bot_config WHERE key = ?"
                 result = self.execute_query(query, (key,), fetch="one")
-                return result[0] if result else default
+                if result is None:
+                    return default
+                if isinstance(result, tuple):
+                    return result[0] if result[0] else default
+                return result if result else default
         except Exception as e:
             logger.error(f"Error getting config: {e}")
             return default
@@ -668,6 +679,7 @@ class Database:
             # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
+            logger.info(f"set_config: key={key}, value={value}, scheme={scheme}")
             
             if "postgres" in scheme:
                 query = """
@@ -681,6 +693,8 @@ class Database:
                     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
                 """
                 self.execute_query(query, (key, str(value)))
+            
+            logger.info(f"set_config completed for key={key}")
             return True
         except Exception as e:
             logger.error(f"Error setting config: {e}")
