@@ -958,7 +958,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         from dota_mmr import get_week_top, update_user_mmr
-        from database import get_user
+        from database import get_user, get_connection, DATABASE_URL
         # Всегда обновляем MMR при вызове команды (без ограничения по времени)
         logger.info(f"topmmr: starting update for user {update.effective_user.id}")
         user = get_user(update.effective_user.id)
@@ -1075,9 +1075,9 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             lines.append(f"\n👤 Твоя позиция:")
             if user_pos:
-                lines.append(f"🏅 #{user_pos} — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
+                lines.append(f"#{user_pos} — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
             else:
-                lines.append(f"🏅 — — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
+                lines.append(f"— — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
             
             text = "\n".join(lines)
         
