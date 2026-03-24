@@ -1015,8 +1015,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines.append(f"{prefix} {username} — {rank_str}\n└ 📊 {week_wins}W • {week_losses}L • WR {winrate}%")
             
             # Добавляем позицию пользователя
-            user = get_user(update.effective_user.id)
-            user_pos = get_user_rank(update.effective_user.id)
             user_rank_tier = user.get('rank_tier', 0) if user else 0
             
             if user_rank_tier:
@@ -1040,6 +1038,35 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_week_wins = user.get('week_wins', 0) if user else 0
             user_week_losses = user_week_games - user_week_wins
             user_winrate = round((user_week_wins / user_week_games * 100), 1) if user_week_games > 0 else 0
+            
+            # Вычисляем позицию пользователя в недельном топе
+            # Считаем сколько игроков имеют больше недельных побед
+            user_pos = None
+            if user and user.get('steam_id') and user_week_games > 0:
+                try:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    url = urlparse.urlparse(DATABASE_URL)
+                    scheme = url.scheme
+                    
+                    if 'postgres' in scheme:
+                        cursor.execute("""
+                            SELECT COUNT(*) + 1 as rank FROM users 
+                            WHERE week_wins > %s AND steam_id IS NOT NULL AND week_games > 0
+                        """, (user_week_wins,))
+                    else:
+                        cursor.execute("""
+                            SELECT COUNT(*) + 1 FROM users 
+                            WHERE week_wins > ? AND steam_id IS NOT NULL AND week_games > 0
+                        """, (user_week_wins,))
+                    
+                    result = cursor.fetchone()
+                    if result:
+                        user_pos = result[0] if not isinstance(result, dict) else result.get('rank')
+                    cursor.close()
+                    conn.close()
+                except Exception as e:
+                    logger.error(f"Error getting week rank: {e}")
             
             lines.append(f"\n👤 Твоя позиция:")
             if user_pos:
