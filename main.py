@@ -1112,17 +1112,18 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result = register_steam(update.effective_user.id, identifier)
             
             if result.get('success'):
-                await update.message.reply_text(result.get('message'))
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=result.get('message'))
             else:
-                await update.message.reply_text(result.get('message'))
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=result.get('message'))
         except Exception as e:
             logger.error(f"Error in link: {e}")
-            await update.message.reply_text("❌ Ошибка привязки Steam аккаунта")
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Steam аккаунта")
         return
     
     # Если нет аргумента - отправляем инструкцию
-    await update.message.reply_text(
-        "🎮 *Привязка Steam аккаунта*\n\n"
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="🎮 *Привязка Steam аккаунта*\n\n"
         "Используйте команду с никнеймом или Steam ID:\n"
         "`/link Miracle` - по нику\n"
         "`/link 76561198012345678` - по Steam ID\n"
