@@ -5,6 +5,7 @@ import time
 import asyncio
 import logging
 import datetime
+import urllib.parse as urlparse
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
