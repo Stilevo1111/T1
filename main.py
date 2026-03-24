@@ -1211,6 +1211,46 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ручной запуск еженедельного дайджеста в этот чат"""
+    try:
+        chat = update.effective_chat
+        chat_id = chat.id
+        
+        # В группах удаляем сообщение пользователя с командой
+        if chat.type in ['group', 'supergroup', 'channel']:
+            try:
+                await context.bot.delete_message(chat_id, update.message.message_id)
+            except Exception as e:
+                logger.debug(f"Could not delete user message: {e}")
+        
+        # Сохраняем этот чат как чат для дайджеста и сбрасываем message_id
+        set_config("digest_chat_id", chat_id)
+        set_config("weekly_digest_message_id", None)
+        
+        # Создаём контекст для ручного вызова дайджеста
+        class ManualContext:
+            def __init__(self, app, bot):
+                self.application = app
+                self.bot = bot
+        
+        manual_context = ManualContext(context.application, context.bot)
+        await weekly_digest_job(manual_context)
+        
+        msg = await update.message.reply_text("✅ Еженедельный дайджест для этого чата создан/обновлён.")
+        if chat.type in ['group', 'supergroup', 'channel']:
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+    except Exception as e:
+        logger.error(f"Error in weekly_digest_now: {e}", exc_info=True)
+        try:
+            err = await update.message.reply_text("❌ Не удалось создать дайджест сейчас")
+            chat = update.effective_chat
+            if chat and chat.type in ['group', 'supergroup', 'channel']:
+                schedule_delete(context.bot, chat.id, err.message_id, 30, context.application.job_queue)
+        except Exception:
+            pass
+
+
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
     try:
@@ -1385,6 +1425,7 @@ async def main():
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler("refresh", refresh))
         app.add_handler(CommandHandler("digestnow", digest_now))
+        app.add_handler(CommandHandler("weeklydigest", weekly_digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
