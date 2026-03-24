@@ -455,6 +455,7 @@ class Database:
                         "steam_id": user.get("steam_id"),
                         "steam_nickname": user.get("steam_nickname"),
                         "mmr": user.get("mmr", 0),
+                        "rank_tier": user.get("rank_tier", 0),
                         "dota_total_games": user.get("dota_total_games", 0),
                         "dota_wins": user.get("dota_wins", 0),
                         "week_games": user.get("week_games", 0),
@@ -486,6 +487,7 @@ class Database:
                         "steam_id": user[20] if len(user) > 20 else None,
                         "steam_nickname": user[21] if len(user) > 21 else None,
                         "mmr": user[22] if len(user) > 22 else 0,
+                        "rank_tier": user[32] if len(user) > 32 else 0,
                         "dota_total_games": user[23] if len(user) > 23 else 0,
                         "dota_wins": user[24] if len(user) > 24 else 0,
                         "week_games": user[25] if len(user) > 25 else 0,
@@ -495,7 +497,7 @@ class Database:
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_updated_at": None, "mmr_updated_at": None}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_updated_at": None, "mmr_updated_at": None}
         except Exception as e:
             logger.error(f"Error getting user: {e}")
             return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0}

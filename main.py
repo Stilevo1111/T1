@@ -1278,7 +1278,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         user_rank_str = f"{rank_name} {star}"
             else:
-                user_rank_str = "Не ранжирован"
+                # Пользователь без ранга (rank_tier=0), но возможно с играми
+                user_rank_str = "Без ранга"
             
             user_week_games = user.get('week_games', 0) if user else 0
             user_week_wins = user.get('week_wins', 0) if user else 0
@@ -1286,6 +1287,13 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_winrate = round((user_week_wins / user_week_games * 100), 1) if user_week_games > 0 else 0
             
             logger.info(f"topmmr: user position calc - week_games={user_week_games}, week_wins={user_week_wins}, winrate={user_winrate}")
+            
+            # Проверяем, находится ли пользователь уже в общем топе
+            user_is_in_top = False
+            for player in top_users:
+                if user and player.get('telegram_id') == user.get('telegram_id'):
+                    user_is_in_top = True
+                    break
             
             # Вычисляем позицию пользователя в недельном топе по винрейту
             user_pos = None
@@ -1317,14 +1325,16 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     logger.error(f"Error getting week rank: {e}")
             
-            lines.append(f"\n👤 Твоя позиция:")
-            if user_pos:
-                lines.append(f"#{user_pos} — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
-            else:
-                if user and user.get('steam_id'):
-                    lines.append(f"#? — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
+            # Показываем позицию только если пользователь НЕ в общем топе (избегаем дублирования)
+            if not user_is_in_top:
+                lines.append(f"\n👤 Твоя позиция:")
+                if user_pos:
+                    lines.append(f"#{user_pos} — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
                 else:
-                    lines.append(f"Не привязан")
+                    if user and user.get('steam_id'):
+                        lines.append(f"#? — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
+                    else:
+                        lines.append(f"Не привязан")
             
             text = "\n".join(lines)
         
