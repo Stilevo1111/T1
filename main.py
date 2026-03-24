@@ -1041,11 +1041,12 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_week_losses = user_week_games - user_week_wins
             user_winrate = round((user_week_wins / user_week_games * 100), 1) if user_week_games > 0 else 0
             
+            logger.info(f"topmmr: user position calc - week_games={user_week_games}, week_wins={user_week_wins}, winrate={user_winrate}")
+            
             # Вычисляем позицию пользователя в недельном топе по винрейту
             user_pos = None
             if user and user.get('steam_id') and user_week_games > 0 and user_week_wins > 0:
                 try:
-                    user_winrate = (user_week_wins / user_week_games * 100) if user_week_games > 0 else 0
                     conn = get_connection()
                     cursor = conn.cursor()
                     url = urlparse.urlparse(DATABASE_URL)
