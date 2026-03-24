@@ -377,100 +377,18 @@ def update_user_mmr(telegram_id: int) -> dict:
         
         logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}")
         
-        # Если есть данные из матчей - используем их
+        # Если есть данные из матчей - используем их и сохраняем
         if week_games > 0:
             # Обновляем week_games и week_wins из матчей
             update_user_field(telegram_id, "week_games", week_games)
             update_user_field(telegram_id, "week_wins", week_wins)
             update_user_field(telegram_id, "last_dota_games", week_games)
             update_user_field(telegram_id, "last_dota_wins", week_wins)
+            logger.info(f"Saved week stats from matches: {week_games} games, {week_wins} wins")
         
+        # Получаем общие данные
         current_games = stats["total_games"]
         current_wins = stats["wins"]
-
-        # === Проверка и сброс недельной статистики ===
-        today = datetime.utcnow().date()
-        week_start = user.get("week_start_date")
-        
-        if week_start:
-            # Преобразуем строку в дату если нужно
-            if isinstance(week_start, str):
-                try:
-                    week_start = datetime.strptime(week_start, "%Y-%m-%d").date()
-                except:
-                    logger.warning(f"Invalid week_start_date format for {telegram_id}, using today")
-                    week_start = today
-        
-        week_reset = False
-        # Если нет даты начала недели - ставим текущую
-        if not week_start:
-            update_user_field(telegram_id, "week_start_date", today.isoformat())
-            week_start = today
-        # Если прошло >= 7 дней - сбрасываем статистику
-        elif (today - week_start).days >= 7:
-            logger.info(f"Week reset for {telegram_id}: {(today - week_start).days} days passed")
-            update_user_field(telegram_id, "week_games", 0)
-            update_user_field(telegram_id, "week_wins", 0)
-            update_user_field(telegram_id, "week_start_date", today.isoformat())
-            week_reset = True
-        
-        last_games = user.get("last_dota_games", 0)
-        last_wins = user.get("last_dota_wins", 0)
-        week_games = user.get("week_games", 0)
-        
-        logger.info(f"MMR update for {telegram_id}: current_games={current_games}, last_games={last_games}, week_games={week_games}")
-        
-        # Если это первое обновление - инициализируем недельную статистику
-        if last_games == 0:
-            logger.info(f"First MMR update for {telegram_id}: initializing week stats to current")
-            # При первом обновлении считаем все игры как недельные
-            update_user_field(telegram_id, "week_games", current_games)
-            update_user_field(telegram_id, "week_wins", current_wins)
-            # Сохраняем текущие значения для следующего обновления
-            update_user_field(telegram_id, "last_dota_games", current_games)
-            update_user_field(telegram_id, "last_dota_wins", current_wins)
-        elif week_reset:
-            # После сброса недели всегда инициализируем новую статистику
-            new_games = max(0, current_games - last_games)
-            new_wins = max(0, current_wins - last_wins)
-            logger.info(f"Week stats initializing after reset for {telegram_id}: new_games={new_games}")
-            update_user_field(telegram_id, "week_games", new_games)
-            update_user_field(telegram_id, "week_wins", new_wins)
-            # Сохраняем текущие значения для следующего обновления
-            update_user_field(telegram_id, "last_dota_games", current_games)
-            update_user_field(telegram_id, "last_dota_wins", current_wins)
-        elif week_games == 0:
-            # Если неделя начата, но статистики нет - инициализируем
-            new_games = max(0, current_games - last_games)
-            new_wins = max(0, current_wins - last_wins)
-            logger.info(f"Week stats initializing for {telegram_id}: new_games={new_games}")
-            update_user_field(telegram_id, "week_games", new_games)
-            update_user_field(telegram_id, "week_wins", new_wins)
-            # Сохраняем текущие значения для следующего обновления
-            update_user_field(telegram_id, "last_dota_games", current_games)
-            update_user_field(telegram_id, "last_dota_wins", current_wins)
-        else:
-            # Обновляем существующую статистику
-            new_games = max(0, current_games - last_games)
-            new_wins = max(0, current_wins - last_wins)
-            logger.info(f"Updating week stats for {telegram_id}: new_games={new_games}, new_wins={new_wins}")
-
-            if new_games > 0:
-                update_user_field(
-                    telegram_id,
-                    "week_games",
-                    week_games + new_games
-                )
-                update_user_field(
-                    telegram_id,
-                    "week_wins",
-                    user.get("week_wins", 0) + new_wins
-                )
-            # Сохраняем текущие значения для следующего обновления
-            update_user_field(telegram_id, "last_dota_games", current_games)
-            update_user_field(telegram_id, "last_dota_wins", current_wins)
-
-        # Обновляем rank_tier если изменился
         new_rank_tier = stats.get("rank_tier", 0)
         old_rank_tier = user.get("rank_tier", 0)
         
@@ -490,9 +408,6 @@ def update_user_mmr(telegram_id: int) -> dict:
         update_user_field(telegram_id, "mmr", stats["mmr"])
         update_user_field(telegram_id, "dota_total_games", current_games)
         update_user_field(telegram_id, "dota_wins", current_wins)
-        # Обновляем last_dota_games и last_dota_wins для корректного подсчёта недельной статистики
-        update_user_field(telegram_id, "last_dota_games", current_games)
-        update_user_field(telegram_id, "last_dota_wins", current_wins)
 
         return {"success": True, "rank_up": rank_up}
 
