@@ -1589,21 +1589,25 @@ async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
     try:
-        text = update.message.text.strip()
+        # Handle edited messages
+        message = update.message or update.edited_message
+        if not message:
+            return
+        text = message.text.strip() if message.text else ""
         
         menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ Фиссур", "🏆 Топ MMR", "🔗 Привязать Steam"]
         
         if text not in menu_buttons:
             return
         
-        chat_id = update.message.chat_id
-        chat_type = update.message.chat.type
+        chat_id = message.chat_id
+        chat_type = message.chat.type
         user_id = update.effective_user.id
         logger.info(f"User {user_id} pressed button: {text}")
         
         # Delete user's command only in groups/channels
         if chat_type in ['group', 'supergroup', 'channel']:
-            user_msg_id = update.message.message_id
+            user_msg_id = message.message_id
             try:
                 await context.bot.delete_message(chat_id, user_msg_id)
                 logger.info(f"Deleted user message: {user_msg_id}")
