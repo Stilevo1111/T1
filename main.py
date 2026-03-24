@@ -1842,8 +1842,8 @@ if __name__ == "__main__":
 
 
 
-), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot
+        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
+        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
         await app.initialize()
         
         # Запускаем application для активации job_queue
