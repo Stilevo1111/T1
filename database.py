@@ -566,6 +566,7 @@ class Database:
     
     def get_user_rank(self, telegram_id):
         """Получение позиции игрока в топе по MMR"""
+        logger.info(f"DEBUG: get_user_rank called for {telegram_id}")
         try:
             # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
