@@ -657,6 +657,9 @@ class Database:
                 logger.info(f"get_config result: {result}, type={type(result)}")
                 if result is None:
                     return default
+                # PostgreSQL с RealDictCursor возвращает словарь {'value': '...'}
+                if isinstance(result, dict):
+                    return result.get('value', default) if result.get('value') else default
                 # result может быть (value,) или просто value
                 if isinstance(result, tuple):
                     return result[0] if result[0] else default
