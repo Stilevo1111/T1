@@ -351,6 +351,40 @@ def update_user_mmr(telegram_id: int) -> dict:
         if not stats:
             return {"success": False, "rank_up": None}
 
+        # Получаем последние матчи для расчёта недельной статистики
+        from datetime import datetime, timedelta
+        one_week_ago = datetime.utcnow() - timedelta(days=7)
+        
+        # Получаем последние 50 матчей
+        matches = get_recent_matches(user["steam_id"], limit=50)
+        
+        week_games = 0
+        week_wins = 0
+        
+        if matches:
+            for match in matches:
+                try:
+                    match_date = datetime.utcfromtimestamp(match.get("start_time", 0))
+                    if match_date >= one_week_ago:
+                        week_games += 1
+                        # Определяем победу по полю radiant_win
+                        radiant_win = match.get("radiant_win", False)
+                        player_is_radiant = match.get("radiant", True)
+                        if (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win):
+                            week_wins += 1
+                except:
+                    pass
+        
+        logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}")
+        
+        # Если есть данные из матчей - используем их
+        if week_games > 0:
+            # Обновляем week_games и week_wins из матчей
+            update_user_field(telegram_id, "week_games", week_games)
+            update_user_field(telegram_id, "week_wins", week_wins)
+            update_user_field(telegram_id, "last_dota_games", week_games)
+            update_user_field(telegram_id, "last_dota_wins", week_wins)
+        
         current_games = stats["total_games"]
         current_wins = stats["wins"]
 
