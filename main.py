@@ -213,44 +213,6 @@ async def morning_digest_job(context):
         logger.error(f"Ошибка в morning_digest_job: {e}", exc_info=True)
 
 
-async def format_digest_message():
-    """Форматирует текст сообщения дайджеста"""
-    stats = get_digest_stats()
-    
-    growth_player, growth_pos = stats.get("top_growth", ("None", 0))
-    drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
-    streak_player, streak_len = stats.get("top_streak", ("None", 0))
-    
-    growth_id = stats.get("top_growth_id")
-    drop_id = stats.get("top_drop_id")
-    streak_id = stats.get("top_streak_id")
-    
-    growth_display = make_clickable(growth_player, growth_id)
-    drop_display = make_clickable(drop_player, drop_id)
-    streak_display = make_clickable(streak_player, streak_id)
-    
-    # Рост показываем если есть игрок
-    if growth_player and growth_player != "None":
-        growth_part = f"📈{growth_display} +{growth_pos}⬆️"
-    else:
-        growth_part = "📈—"
-    
-    # Падение показываем если есть игрок (может быть + или -)
-    if drop_player and drop_player != "None":
-        if drop_cm < 0:
-            drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
-        else:
-            drop_part = f"💀{drop_display} +{drop_cm:.0f} СМ"
-    else:
-        drop_part = "💀—"
-    
-    # Стрик показываем если есть игрок
-    if streak_player and streak_player != "None":
-        streak_part = f"🍀{streak_display} - Стрик {streak_len}"
-    else:
-        streak_part = "🍀—"
-    
-    return f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
 
 
 async def refresh_digest_message(bot):
@@ -262,7 +224,44 @@ async def refresh_digest_message(bot):
         
         # Получаем статистику (сравнивает со старым снимком)
         # НЕ обновляем снимок! Он обновляется только в morning_digest_job
-        text = await format_digest_message()
+        stats = get_digest_stats()
+        
+        # Формируем сообщение с кликабельными никнеймами
+        growth_player, growth_pos = stats.get("top_growth", ("None", 0))
+        drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
+        streak_player, streak_len = stats.get("top_streak", ("None", 0))
+        
+        # Получаем telegram_id для создания кликабельных ссылок
+        growth_id = stats.get("top_growth_id")
+        drop_id = stats.get("top_drop_id")
+        streak_id = stats.get("top_streak_id")
+        
+        # Используем глобальную функцию make_clickable
+        growth_display = make_clickable(growth_player, growth_id)
+        drop_display = make_clickable(drop_player, drop_id)
+        streak_display = make_clickable(streak_player, streak_id)
+        
+        # Формат: 📈stilevo +2⬆️ ┃💀None -X СМ┃🍀Wad1m1 - Стрик 1
+        # Всегда показываем данные если есть игрок
+        if growth_player and growth_player != "None":
+            growth_part = f"📈{growth_display} +{growth_pos}⬆️"
+        else:
+            growth_part = "📈—"
+        
+        if drop_player and drop_player != "None":
+            if drop_cm < 0:
+                drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
+            else:
+                drop_part = f"💀{drop_display} +{drop_cm:.0f} СМ"
+        else:
+            drop_part = "💀—"
+        
+        if streak_player and streak_player != "None":
+            streak_part = f"🍀{streak_display} - Стрик {streak_len}"
+        else:
+            streak_part = "🍀—"
+        
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
         
         last_message_id = get_config('daily_digest_message_id')
         if last_message_id:
@@ -371,15 +370,15 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_config("digest_chat_id", chat_id)
         set_config("daily_digest_message_id", None)
 
-        class SimpleContext:
-            def __init__(self, application):
+        # Создаём контекст для ручного вызова дайджеста
+        class ManualContext:
+            def __init__(self, application, bot):
                 self.application = application
-                # Флаг, что это ручной запуск, а не плановый джоб
+                self.bot = bot
                 self.manual = True
 
-        # Создаём простой контекст, чтобы переиспользовать morning_digest_job
-        simple_context = SimpleContext(context.application)
-        await morning_digest_job(simple_context)
+        manual_context = ManualContext(context.application, context.bot)
+        await morning_digest_job(manual_context)
 
         msg = await update.message.reply_text("✅ Утренний дайджест для этого чата создан/обновлён.")
         if chat.type in ['group', 'supergroup', 'channel']:
@@ -1233,37 +1232,43 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
         old_member = chat_update.old_chat_member
         new_member = chat_update.new_chat_member
         
-        # Only welcome when user joins (not when they leave or get promoted)
-        old_status = old_member.status
-        new_status = new_member.status
-        
-        # Если это сам бот только что добавлен в чат — автоматически запоминаем чат для дайджеста,
-        # если он ещё не настроен
-        try:
+        # Handle bot added to chat (my_chat_member)
+        if old_member and new_member and old_member.user.id == new_member.user.id:
             bot_id = context.bot.id
-            if new_member.user.id == bot_id and not get_config("digest_chat_id"):
-                set_config("digest_chat_id", chat_id)
-                logger.info(f"Автоматически установлен digest_chat_id = {chat_id}")
-        except Exception as e:
-            logger.debug(f"Не удалось автоматически установить digest_chat_id: {e}")
+            if new_member.user.id == bot_id:
+                # Bot was added to chat
+                if old_member.status in ['left', 'kicked'] and new_member.status in ['member', 'administrator']:
+                    # Автоматически запоминаем чат для дайджеста, если он ещё не настроен
+                    try:
+                        if not get_config("digest_chat_id"):
+                            set_config("digest_chat_id", chat_id)
+                            logger.info(f"Автоматически установлен digest_chat_id = {chat_id}")
+                    except Exception as e:
+                        logger.debug(f"Не удалось автоматически установить digest_chat_id: {e}")
+                return
         
-        # User joined the chat (was not a member, now is member)
-        if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator']:
-            name = new_member.user.first_name or "Friend"
-            user_id = new_member.user.id
+        # Handle user added to chat (chat_member)
+        if old_member and new_member and old_member.user.id != new_member.user.id:
+            old_status = old_member.status
+            new_status = new_member.status
             
-            # Формируем приветственное сообщение с кликабельным ником
-            welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}"
+            # User joined the chat (was not a member, now is member)
+            if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator']:
+                name = new_member.user.first_name or "Friend"
+                user_id = new_member.user.id
+                
+                # Формируем приветственное сообщение с кликабельным ником
+                welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}"
 
-            
-            result_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text=welcome_text,
-                parse_mode="HTML"
-            )
-            logger.info(f"Welcome sent for {name}")
-            # Удаляем приветственное сообщение через час
-            schedule_delete(context.bot, chat_id, result_msg.message_id, 3600, context.application.job_queue)
+                
+                result_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=welcome_text,
+                    parse_mode="HTML"
+                )
+                logger.info(f"Welcome sent for {name}")
+                # Удаляем приветственное сообщение через час
+                schedule_delete(context.bot, chat_id, result_msg.message_id, 3600, context.application.job_queue)
         
     except Exception as e:
         logger.error(f"Error in welcome_new_member: {e}")
@@ -1397,6 +1402,8 @@ async def main_polling():
     
     try:
         init_db()
+        # Запускаем миграции базы данных
+        migrate_db()
         
         # Создаём JobQueue и привязываем к application
         job_queue = JobQueue()
@@ -1418,6 +1425,14 @@ async def main_polling():
             time=datetime.time(hour=6, minute=0),
             days=(0, 1, 2, 3, 4, 5, 6)
         )
+        
+        # Ежедневное обновление MMR всех пользователей с привязанным Steam
+        job_queue.run_daily(
+            update_all_mmr_job,
+            time=datetime.time(hour=7, minute=0),  # 7:00 утра по МСК (4:00 UTC)
+            days=(0, 1, 2, 3, 4, 5, 6)
+        )
+        
         logger.info("Done")
         
         # Утренний дайджест теперь live (обновляется после каждого броска)
@@ -1432,6 +1447,9 @@ async def main_polling():
         app.add_handler(CommandHandler("fissure", fissure))
         app.add_handler(CommandHandler("stats", stats))
         app.add_handler(CommandHandler("top", top))
+        app.add_handler(CommandHandler("topmmr", topmmr))
+        app.add_handler(CommandHandler("link", link))
+        app.add_handler(CommandHandler("refresh", refresh))
         app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))

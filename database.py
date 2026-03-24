@@ -4,6 +4,9 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import logging
 import urllib.parse as urlparse
+import threading
+from contextlib import contextmanager
+from datetime import datetime
 
 # Configure logging for database operations
 logging.basicConfig(level=logging.INFO)
@@ -17,48 +20,92 @@ if not DATABASE_URL:
 else:
     print(f"Using DATABASE_URL: {DATABASE_URL[:20]}...")
 
-def get_connection():
-    """Получение соединения с базой данных"""
-    # Определяем тип базы данных по схеме URL
+# Connection pool management
+_connection_pool = {}
+_pool_lock = threading.Lock()
+
+def get_db_type():
+    """Получить тип базы данных"""
     url = urlparse.urlparse(DATABASE_URL)
     scheme = url.scheme
+    return "postgresql" if "postgres" in scheme else "sqlite"
+
+def get_connection():
+    """Получение соединения с базой данных с пулом"""
+    db_type = get_db_type()
     
-    print(f"DB TYPE: {scheme}")
-    
-    if "postgres" in scheme:
-        try:
-            # Парсим URL для PostgreSQL
-            dbname = url.path[1:]  # Убираем первый символ '/' из пути
-            user = url.username
-            password = url.password
-            host = url.hostname
-            port = url.port
-            
-            # Создаем соединение с SSL
-            conn = psycopg2.connect(
-                dbname=dbname,
-                user=user,
-                password=password,
-                host=host,
-                port=port,
-                sslmode='require'  # Используем 'require' для Render
-            )
-            print("✅ Подключено к PostgreSQL")
-            return conn
-        except Exception as e:
-            print(f"❌ PostgreSQL connection failed: {e}")
-            raise
-    else:
-        # Для SQLite обрабатываем URL
-        if DATABASE_URL.startswith("sqlite:///"):
-            db_path = DATABASE_URL[10:]  # Убираем "sqlite:///"`
-        elif DATABASE_URL.startswith("sqlite://"):
-            db_path = DATABASE_URL[9:]   # Убираем "sqlite://"
+    with _pool_lock:
+        # Проверяем активное соединение в пуле
+        if db_type in _connection_pool:
+            conn = _connection_pool[db_type]
+            try:
+                # Проверяем соединение
+                if db_type == "postgresql":
+                    conn.cursor().execute("SELECT 1")
+                else:
+                    conn.cursor().execute("SELECT 1")
+                return conn
+            except:
+                # Соединение неактивно, удаляем из пула
+                try:
+                    conn.close()
+                except:
+                    pass
+                del _connection_pool[db_type]
+        
+        # Создаем новое соединение
+        if db_type == "postgresql":
+            try:
+                url = urlparse.urlparse(DATABASE_URL)
+                dbname = url.path[1:]
+                user = url.username
+                password = url.password
+                host = url.hostname
+                port = url.port
+                
+                conn = psycopg2.connect(
+                    dbname=dbname,
+                    user=user,
+                    password=password,
+                    host=host,
+                    port=port,
+                    sslmode='require'
+                )
+                print("✅ Подключено к PostgreSQL")
+            except Exception as e:
+                print(f"❌ PostgreSQL connection failed: {e}")
+                raise
         else:
-            db_path = DATABASE_URL
+            if DATABASE_URL.startswith("sqlite:///"):
+                db_path = DATABASE_URL[10:]
+            elif DATABASE_URL.startswith("sqlite://"):
+                db_path = DATABASE_URL[9:]
+            else:
+                db_path = DATABASE_URL
             
-        print("⚠️  Подключено к SQLite (только для тестирования)")
-        return sqlite3.connect(db_path)
+            conn = sqlite3.connect(db_path)
+            print("⚠️ Подключено к SQLite (только для тестирования)")
+        
+        # Сохраняем в пул
+        _connection_pool[db_type] = conn
+        return conn
+
+@contextmanager
+def get_db_connection():
+    """Контекстный менеджер для безопасного управления соединениями"""
+    conn = None
+    try:
+        conn = get_connection()
+        yield conn
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Database transaction failed: {e}")
+        raise
+    finally:
+        # Соединение остается в пуле, не закрываем его
+        pass
 
 def init_db():
     """Initialize database tables and add missing columns."""
@@ -159,6 +206,18 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr_updated_at TIMESTAMP
             """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS rank_tier INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS wins INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS losses INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_match_id BIGINT DEFAULT 0
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -227,6 +286,16 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN last_dota_games INTEGER DEFAULT 0")
             if 'mmr_updated_at' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN mmr_updated_at TIMESTAMP")
+            if 'rank_tier' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN rank_tier INTEGER DEFAULT 0")
+            if 'wins' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN wins INTEGER DEFAULT 0")
+            if 'losses' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN losses INTEGER DEFAULT 0")
+            if 'last_match_id' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN last_match_id INTEGER DEFAULT 0")
+            if 'week_start_date' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN week_start_date DATE")
         
         # Создаём таблицу для настроек бота (чат для дайджестов)
         cursor.execute("""
@@ -264,7 +333,7 @@ def migrate_db():
         return False
 
 class Database:
-    """Класс для работы с базой данных"""
+    """Класс для работы с базой данных с улучшенным управлением соединениями"""
     
     def __init__(self):
         self.conn = None
@@ -275,65 +344,89 @@ class Database:
             self.conn = get_connection()
         return self.conn
     
-    def add_user(self, user_id, username, first_name, last_name):
-        """Добавление/обновление пользователя"""
-        conn = self.connect()
-        cur = conn.cursor()
-        
-        # Определяем тип базы данных по схеме URL
-        url = urlparse.urlparse(DATABASE_URL)
-        scheme = url.scheme
-        
-        if "postgres" in scheme:
-            cur.execute('''
-                INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT (telegram_id) 
-                DO UPDATE SET 
-                    username = EXCLUDED.username,
-                    fissure = EXCLUDED.fissure,
-                    last_fissure = EXCLUDED.last_fissure,
-                    last_message_id = EXCLUDED.last_message_id,
-                    total_growth = EXCLUDED.total_growth,
-                    total_rolls = EXCLUDED.total_rolls
-                RETURNING id
-            ''', (user_id, username, 0.1, 0, 0, 0, 0))
-        else:
-            cur.execute('''
-                INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-                ON CONFLICT(telegram_id) DO UPDATE SET
-                    username = excluded.username,
-                    fissure = excluded.fissure,
-                    last_fissure = excluded.last_fissure,
-                    last_message_id = excluded.last_message_id,
-                    total_growth = excluded.total_growth,
-                    total_rolls = excluded.total_rolls
-            ''', (user_id, username, 0.1, 0, 0, 0, 0))
-        
-        conn.commit()
-        if DATABASE_URL.startswith("postgresql://"):
-            user = cur.fetchone()
-            cur.close()
-            return user[0] if user else None
-        else:
-            cur.close()
-            return None
-    
-    def get_user(self, telegram_id, username=None):
-        """Получение пользователя"""
+    def execute_query(self, query, params=None, fetch=False):
+        """Унифицированный метод выполнения запросов"""
         try:
             conn = self.connect()
-            # Определяем тип базы данных по схеме URL
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             
             if "postgres" in scheme:
                 cursor = conn.cursor(cursor_factory=RealDictCursor)
-                cursor.execute("SELECT * FROM users WHERE telegram_id = %s", (telegram_id,))
-                user = cursor.fetchone()
+            else:
+                cursor = conn.cursor()
+            
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            
+            if fetch == "one":
+                result = cursor.fetchone()
+            elif fetch == "all":
+                result = cursor.fetchall()
+            else:
+                result = None
+            
+            conn.commit()
+            cursor.close()
+            return result
+        except Exception as e:
+            logger.error(f"Database query failed: {e}")
+            return None
+    
+    def add_user(self, user_id, username, first_name, last_name):
+        """Добавление/обновление пользователя"""
+        try:
+            # Используем execute_query для безопасного выполнения
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
+            
+            if "postgres" in scheme:
+                query = '''
+                    INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (telegram_id) 
+                    DO UPDATE SET 
+                        username = EXCLUDED.username,
+                        fissure = EXCLUDED.fissure,
+                        last_fissure = EXCLUDED.last_fissure,
+                        last_message_id = EXCLUDED.last_message_id,
+                        total_growth = EXCLUDED.total_growth,
+                        total_rolls = EXCLUDED.total_rolls
+                    RETURNING id
+                '''
+                result = self.execute_query(query, (user_id, username, 0.1, 0, 0, 0, 0), fetch="one")
+                return result[0] if result else None
+            else:
+                query = '''
+                    INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                    ON CONFLICT(telegram_id) DO UPDATE SET
+                        username = excluded.username,
+                        fissure = excluded.fissure,
+                        last_fissure = excluded.last_fissure,
+                        last_message_id = excluded.last_message_id,
+                        total_growth = excluded.total_growth,
+                        total_rolls = excluded.total_rolls
+                '''
+                self.execute_query(query, (user_id, username, 0.1, 0, 0, 0, 0))
+                return None
+        except Exception as e:
+            logger.error(f"Error adding user: {e}")
+            return None
+    
+    def get_user(self, telegram_id, username=None):
+        """Получение пользователя"""
+        try:
+            # Используем execute_query для безопасного выполнения
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
+            
+            if "postgres" in scheme:
+                query = "SELECT * FROM users WHERE telegram_id = %s"
+                user = self.execute_query(query, (telegram_id,), fetch="one")
                 if user:
-                    cursor.close()
                     return {
                         "telegram_id": user["telegram_id"],
                         "username": user["username"],
@@ -357,14 +450,11 @@ class Database:
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
-                    cursor.close()
                     return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_updated_at": None, "mmr_updated_at": None}
             else:
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
-                user = cursor.fetchone()
+                query = "SELECT * FROM users WHERE telegram_id = ?"
+                user = self.execute_query(query, (telegram_id,), fetch="one")
                 if user:
-                    cursor.close()
                     return {
                         "telegram_id": user[1],
                         "username": user[2],
@@ -388,25 +478,22 @@ class Database:
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
-                    cursor.close()
                     return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_updated_at": None, "mmr_updated_at": None}
         except Exception as e:
-            print(f"❌ Ошибка get_user: {e}")
+            logger.error(f"Error getting user: {e}")
             return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0}
     
     def update_fissure(self, telegram_id, fissure, last_fissure, growth=0):
         """Обновление данных пользователя"""
         try:
-            conn = self.connect()
-            # Определяем тип базы данных по схеме URL
+            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             win = 1 if growth > 0 else 0
             
             weekly_inc = max(0.0, float(growth))
             if "postgres" in scheme:
-                cursor = conn.cursor()
-                cursor.execute("""
+                query = """
                     UPDATE users SET fissure=%s, last_fissure=%s, 
                     total_growth = total_growth + %s,
                     total_rolls = total_rolls + 1,
@@ -416,10 +503,10 @@ class Database:
                     current_streak = CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END,
                     best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END)
                     WHERE telegram_id=%s
-                """, (fissure, last_fissure, growth, weekly_inc, win, win, telegram_id))
+                """
+                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, win, win, telegram_id))
             else:
-                cursor = conn.cursor()
-                cursor.execute("""
+                query = """
                     UPDATE users SET fissure=?, last_fissure=?, 
                     total_growth = total_growth + ?,
                     total_rolls = total_rolls + 1,
@@ -429,198 +516,189 @@ class Database:
                     current_streak = CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END,
                     best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END)
                     WHERE telegram_id=?
-                """, (fissure, last_fissure, growth, weekly_inc, win, win, telegram_id))
-            conn.commit()
-            cursor.close()
+                """
+                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, win, win, telegram_id))
         except Exception as e:
-            print(f"❌ Ошибка update_fissure: {e}")
+            logger.error(f"Error updating fissure: {e}")
     
     def update_last_message_id(self, telegram_id, message_id):
         """Обновление ID последнего сообщения пользователя"""
         try:
-            conn = self.connect()
+            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             
             if "postgres" in scheme:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    UPDATE users SET last_message_id=%s WHERE telegram_id=%s
-                """, (message_id, telegram_id))
+                query = "UPDATE users SET last_message_id=%s WHERE telegram_id=%s"
+                self.execute_query(query, (message_id, telegram_id))
             else:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    UPDATE users SET last_message_id=? WHERE telegram_id=?
-                """, (message_id, telegram_id))
-            conn.commit()
-            cursor.close()
+                query = "UPDATE users SET last_message_id=? WHERE telegram_id=?"
+                self.execute_query(query, (message_id, telegram_id))
         except Exception as e:
-            print(f"❌ Ошибка update_last_message_id: {e}")
+            logger.error(f"Error updating last message ID: {e}")
     
     def get_fissure_top(self, limit=10):
         """Получение топ пользователей"""
         try:
-            conn = self.connect()
-            # Определяем тип базы данных по схеме URL
+            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             
             if "postgres" in scheme:
-                cursor = conn.cursor(cursor_factory=RealDictCursor)
-                cursor.execute("""
-                    SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT %s
-                """, (limit,))
-                users = cursor.fetchall()
-                cursor.close()
+                query = "SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT %s"
+                users = self.execute_query(query, (limit,), fetch="all")
                 return [{"telegram_id": u["telegram_id"], "username": u["username"], "fissure": u["fissure"]} for u in users]
             else:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT ?
-                """, (limit,))
-                users = cursor.fetchall()
-                cursor.close()
+                query = "SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT ?"
+                users = self.execute_query(query, (limit,), fetch="all")
                 return [{"telegram_id": u[0], "username": u[1], "fissure": u[2]} for u in users]
         except Exception as e:
-            print(f"❌ Ошибка get_fissure_top: {e}")
+            logger.error(f"Error getting fissure top: {e}")
             return []
     
     def get_user_rank(self, telegram_id):
         """Получение позиции игрока в топе"""
         try:
-            conn = self.connect()
+            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             
             if "postgres" in scheme:
-                cursor = conn.cursor()
-                cursor.execute("""
+                query = """
                     SELECT COUNT(*) + 1 FROM users WHERE fissure > (
                         SELECT fissure FROM users WHERE telegram_id = %s
                     )
-                """, (telegram_id,))
-                rank = cursor.fetchone()[0]
-                cursor.close()
-                return rank
+                """
+                result = self.execute_query(query, (telegram_id,), fetch="one")
+                return result[0] if result else None
             else:
-                cursor = conn.cursor()
-                cursor.execute("""
+                query = """
                     SELECT COUNT(*) + 1 FROM users WHERE fissure > (
                         SELECT fissure FROM users WHERE telegram_id = ?
                     )
-                """, (telegram_id,))
-                rank = cursor.fetchone()[0]
-                cursor.close()
-                return rank
+                """
+                result = self.execute_query(query, (telegram_id,), fetch="one")
+                return result[0] if result else None
         except Exception as e:
-            print(f"❌ Ошибка get_user_rank: {e}")
+            logger.error(f"Error getting user rank: {e}")
             return None
     
     def decrease_inactive_fissure(self, days_inactive=1, decrease_amount=1.0):
         """Уменьшить fissure для неактивных игроков"""
         try:
-            conn = self.connect()
+            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             
             if "postgres" in scheme:
-                cursor = conn.cursor()
-                cursor.execute("""
+                query = """
                     UPDATE users 
                     SET fissure = GREATEST(0.1, fissure - %s)
                     WHERE last_activity < CURRENT_TIMESTAMP - INTERVAL '%s days'
                     AND fissure > 0.1
-                """, (decrease_amount, days_inactive))
-                affected = cursor.rowcount
-                conn.commit()
-                cursor.close()
-                return affected
+                """
+                result = self.execute_query(query, (decrease_amount, days_inactive))
+                return result if result is not None else 0
             else:
                 # Для SQLite используем datetime function
-                cursor = conn.cursor()
-                # Форматируем строку для days_inactive
-                days_str = f"-{days_inactive} days"
-                cursor.execute("""
+                query = """
                     UPDATE users 
                     SET fissure = MAX(0.1, fissure - ?)
                     WHERE last_activity < datetime('now', ?)
                     AND fissure > 0.1
-                """, (decrease_amount, days_str))
-                affected = cursor.rowcount
-                conn.commit()
-                cursor.close()
-                return affected
+                """
+                # Форматируем строку для days_inactive
+                days_str = f"-{days_inactive} days"
+                result = self.execute_query(query, (decrease_amount, days_str))
+                return result if result is not None else 0
         except Exception as e:
-            print(f"❌ Ошибка decrease_inactive_fissure: {e}")
+            logger.error(f"Error decreasing inactive fissure: {e}")
             return 0
     
     def get_config(self, key, default=None):
         """Получить значение конфигурации"""
         try:
-            conn = self.connect()
+            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            cursor = conn.cursor()
+            
             if "postgres" in scheme:
-                cursor.execute("SELECT value FROM bot_config WHERE key = %s", (key,))
+                query = "SELECT value FROM bot_config WHERE key = %s"
+                result = self.execute_query(query, (key,), fetch="one")
+                return result[0] if result else default
             else:
-                cursor.execute("SELECT value FROM bot_config WHERE key = ?", (key,))
-            result = cursor.fetchone()
-            cursor.close()
-            return result[0] if result else default
+                query = "SELECT value FROM bot_config WHERE key = ?"
+                result = self.execute_query(query, (key,), fetch="one")
+                return result[0] if result else default
         except Exception as e:
-            print(f"❌ Ошибка get_config: {e}")
+            logger.error(f"Error getting config: {e}")
             return default
     
     def set_config(self, key, value):
         """Установить значение конфигурации"""
         try:
-            conn = self.connect()
+            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            cursor = conn.cursor()
+            
             if "postgres" in scheme:
-                cursor.execute("""
+                query = """
                     INSERT INTO bot_config (key, value) VALUES (%s, %s)
                     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
-                """, (key, str(value)))
+                """
+                self.execute_query(query, (key, str(value)))
             else:
-                cursor.execute("""
+                query = """
                     INSERT INTO bot_config (key, value) VALUES (?, ?)
                     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
-                """, (key, str(value)))
-            conn.commit()
-            cursor.close()
+                """
+                self.execute_query(query, (key, str(value)))
             return True
         except Exception as e:
-            print(f"❌ Ошибка set_config: {e}")
+            logger.error(f"Error setting config: {e}")
             return False
     
     def get_digest_stats(self):
         """Получить статистику для дайджеста"""
         try:
-            conn = self.connect()
-            cursor = conn.cursor()
+            # Используем execute_query для безопасного выполнения
+            url = urlparse.urlparse(DATABASE_URL)
+            scheme = url.scheme
             
-            # Один запрос для обоих типов БД (параметры одинаковые)
-            cursor.execute("""
-                SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak, total_growth
-                FROM users
-            """)
-            rows = cursor.fetchall()
-            
-            cursor.close()
-            users = []
-            for r in rows:
-                users.append({
-                    "telegram_id": r[0],
-                    "username": r[1],
-                    "fissure": float(r[2] or 0.0),
-                    "digest_position": int(r[3] or 0),
-                    "digest_fissure": float(r[4] or 0.0),
-                    "current_streak": int(r[5] or 0),
-                    "total_growth": float(r[6] or 0.0),
-                })
+            if "postgres" in scheme:
+                query = """
+                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak, total_growth
+                    FROM users
+                """
+                rows = self.execute_query(query, fetch="all")
+                users = []
+                for r in rows:
+                    users.append({
+                        "telegram_id": r["telegram_id"],
+                        "username": r["username"],
+                        "fissure": float(r["fissure"] or 0.0),
+                        "digest_position": int(r["digest_position"] or 0),
+                        "digest_fissure": float(r["digest_fissure"] or 0.0),
+                        "current_streak": int(r["current_streak"] or 0),
+                        "total_growth": float(r["total_growth"] or 0.0),
+                    })
+            else:
+                query = """
+                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak, total_growth
+                    FROM users
+                """
+                rows = self.execute_query(query, fetch="all")
+                users = []
+                for r in rows:
+                    users.append({
+                        "telegram_id": r[0],
+                        "username": r[1],
+                        "fissure": float(r[2] or 0.0),
+                        "digest_position": int(r[3] or 0),
+                        "digest_fissure": float(r[4] or 0.0),
+                        "current_streak": int(r[5] or 0),
+                        "total_growth": float(r[6] or 0.0),
+                    })
 
             # Текущие позиции по текущей фиссуре
             users_sorted = sorted(users, key=lambda u: u["fissure"], reverse=True)
@@ -675,53 +753,46 @@ class Database:
                 "top_streak_id": top_streak_id,
             }
         except Exception as e:
-            print(f"❌ Ошибка get_digest_stats: {e}")
+            logger.error(f"Error getting digest stats: {e}")
             return {"top_growth": ("None", 0), "top_drop": ("None", 0.0), "top_streak": ("None", 0)}
     
     def update_player_positions(self):
         """Обновить текущие позиции игроков (по fissure DESC)"""
         try:
-            conn = self.connect()
+            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            cursor = conn.cursor()
             
-            # Используем один запрос с подзапросом для обновления позиций
             if "postgres" in scheme:
-                cursor.execute("""
+                query = """
                     UPDATE users SET current_position = subquery.pos
                     FROM (SELECT telegram_id, ROW_NUMBER() OVER (ORDER BY fissure DESC) as pos FROM users) subquery
                     WHERE users.telegram_id = subquery.telegram_id
-                """)
+                """
+                result = self.execute_query(query)
+                return result if result is not None else 0
             else:
                 # SQLite: используем скалярный подзапрос
-                cursor.execute("""
+                query = """
                     UPDATE users SET current_position = (
                         SELECT COUNT(*) + 1 FROM users u2 WHERE u2.fissure > users.fissure
                     )
-                """)
-            
-            conn.commit()
-            
-            # Получаем количество затронутых строк
-            affected = cursor.rowcount
-            cursor.close()
-            return affected
+                """
+                result = self.execute_query(query)
+                return result if result is not None else 0
         except Exception as e:
-            print(f"❌ Ошибка update_player_positions: {e}")
+            logger.error(f"Error updating player positions: {e}")
             return 0
 
     def update_digest_snapshot(self):
         """Обновить 'снимок' (позиция/фиссура) после отправки дайджеста"""
         try:
-            conn = self.connect()
+            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            cursor = conn.cursor()
-
-            # Используем один запрос с подзапросом для обновления позиций и снимка
+            
             if "postgres" in scheme:
-                cursor.execute("""
+                query = """
                     UPDATE users SET 
                         current_position = subquery.pos,
                         digest_position = subquery.pos,
@@ -732,10 +803,12 @@ class Database:
                         FROM users
                     ) subquery
                     WHERE users.telegram_id = subquery.telegram_id
-                """)
+                """
+                result = self.execute_query(query)
+                return result if result is not None else 0
             else:
                 # SQLite: используем скалярные подзапросы
-                cursor.execute("""
+                query = """
                     UPDATE users SET 
                         current_position = (
                             SELECT COUNT(*) + 1 FROM users u2 WHERE u2.fissure > users.fissure
@@ -746,42 +819,44 @@ class Database:
                         digest_fissure = (
                             SELECT fissure FROM users u2 WHERE u2.telegram_id = users.telegram_id
                         )
-                """)
-
-            conn.commit()
-            
-            # Получаем количество затронутых строк
-            affected = cursor.rowcount
-            cursor.close()
-            return affected
+                """
+                result = self.execute_query(query)
+                return result if result is not None else 0
         except Exception as e:
-            print(f"❌ Ошибка update_digest_snapshot: {e}")
+            logger.error(f"Error updating digest snapshot: {e}")
             return 0
 
     def get_weekly_digest_stats(self):
         """Статистика для еженедельного дайджеста: рост в см, прорыв по позициям, броски, новички, общий рост."""
         try:
-            conn = self.connect()
+            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            cursor = conn.cursor()
-
-            # Один запрос для обоих типов БД
-            cursor.execute("""
-                SELECT telegram_id, username, fissure, current_position, weekly_digest_position,
-                       weekly_growth, weekly_rolls, created_at
-                FROM users
-            """)
-            rows = cursor.fetchall()
-
-            # Разный синтаксис для дат в PostgreSQL и SQLite
+            
             if "postgres" in scheme:
-                cursor.execute("SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '7 days'")
+                query = """
+                    SELECT telegram_id, username, fissure, current_position, weekly_digest_position,
+                           weekly_growth, weekly_rolls, created_at
+                    FROM users
+                """
+                rows = self.execute_query(query, fetch="all")
+                
+                # Разный синтаксис для дат в PostgreSQL
+                query_count = "SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '7 days'"
+                new_players_week = self.execute_query(query_count, fetch="one")
+                new_players_week = new_players_week[0] if new_players_week else 0
             else:
-                cursor.execute("SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', '-7 days')")
-            new_players_week = cursor.fetchone()[0] or 0
-
-            cursor.close()
+                query = """
+                    SELECT telegram_id, username, fissure, current_position, weekly_digest_position,
+                           weekly_growth, weekly_rolls, created_at
+                    FROM users
+                """
+                rows = self.execute_query(query, fetch="all")
+                
+                # Разный синтаксис для дат в SQLite
+                query_count = "SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', '-7 days')"
+                new_players_week = self.execute_query(query_count, fetch="one")
+                new_players_week = new_players_week[0] if new_players_week else 0
 
             users = []
             for r in rows:
@@ -836,7 +911,7 @@ class Database:
                 "total_growth_week": round(total_growth_week, 1),
             }
         except Exception as e:
-            print(f"❌ Ошибка get_weekly_digest_stats: {e}")
+            logger.error(f"Error getting weekly digest stats: {e}")
             return {
                 "top_growth_cm": ("None", 0),
                 "breakthrough": ("None", 0),
@@ -848,14 +923,12 @@ class Database:
     def update_weekly_digest_snapshot(self):
         """Обновить снимок для недельного дайджеста и обнулить недельные счётчики."""
         try:
-            conn = self.connect()
+            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            cursor = conn.cursor()
-
-            # Используем один запрос с подзапросом
+            
             if "postgres" in scheme:
-                cursor.execute("""
+                query = """
                     UPDATE users SET 
                         current_position = subquery.pos,
                         weekly_digest_position = subquery.pos,
@@ -867,10 +940,12 @@ class Database:
                         FROM users
                     ) subquery
                     WHERE users.telegram_id = subquery.telegram_id
-                """)
+                """
+                result = self.execute_query(query)
+                return result if result is not None else 0
             else:
                 # SQLite: используем скалярные подзапросы
-                cursor.execute("""
+                query = """
                     UPDATE users SET 
                         current_position = (
                             SELECT COUNT(*) + 1 FROM users u2 WHERE u2.fissure > users.fissure
@@ -880,16 +955,11 @@ class Database:
                         ),
                         weekly_rolls = 0,
                         weekly_growth = 0
-                """)
-
-            conn.commit()
-            
-            # Получаем количество затронутых строк
-            affected = cursor.rowcount
-            cursor.close()
-            return affected
+                """
+                result = self.execute_query(query)
+                return result if result is not None else 0
         except Exception as e:
-            print(f"❌ Ошибка update_weekly_digest_snapshot: {e}")
+            logger.error(f"Error updating weekly digest snapshot: {e}")
             return 0
 
 # Функции для совместимости со старым кодом
@@ -999,29 +1069,35 @@ def get_dota_mmr_top(limit=10):
         if "postgres" in scheme:
             cursor.execute("""
                 SELECT telegram_id, username, steam_nickname, mmr, 
-                       dota_total_games, dota_wins
+                       dota_total_games, dota_wins, week_games, week_wins,
+                       rank_tier, wins, losses
                 FROM users 
-                WHERE steam_id IS NOT NULL AND mmr > 0
-                ORDER BY mmr DESC
+                WHERE steam_id IS NOT NULL AND rank_tier > 0
+                ORDER BY rank_tier DESC
                 LIMIT %s
             """, (limit,))
             users = cursor.fetchall()
             cursor.close()
             return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
-                    "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5]} for u in users]
+                    "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
+                    "week_games": u[6], "week_wins": u[7],
+                    "rank_tier": u[8], "wins": u[9], "losses": u[10]} for u in users]
         else:
             cursor.execute("""
                 SELECT telegram_id, username, steam_nickname, mmr, 
-                       dota_total_games, dota_wins
+                       dota_total_games, dota_wins, week_games, week_wins,
+                       rank_tier, wins, losses
                 FROM users 
-                WHERE steam_id IS NOT NULL AND mmr > 0
-                ORDER BY mmr DESC
+                WHERE steam_id IS NOT NULL AND rank_tier > 0
+                ORDER BY rank_tier DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
             cursor.close()
             return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
-                    "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5]} for u in users]
+                    "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
+                    "week_games": u[6], "week_wins": u[7],
+                    "rank_tier": u[8], "wins": u[9], "losses": u[10]} for u in users]
     except Exception as e:
         logger.error(f"Ошибка get_dota_mmr_top: {e}")
         return []
@@ -1039,35 +1115,35 @@ def get_dota_week_top(limit=10):
         if "postgres" in scheme:
             cursor.execute("""
                 SELECT telegram_id, username, steam_nickname, mmr, 
-                       week_games, week_wins, 
+                       week_games, week_wins, rank_tier,
                        CASE WHEN week_games > 0 
                             THEN ROUND(week_wins::float / week_games * 100, 1) 
                             ELSE 0 END as winrate
                 FROM users 
                 WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY winrate DESC, week_games DESC
+                ORDER BY week_wins DESC, winrate DESC
                 LIMIT %s
             """, (limit,))
             users = cursor.fetchall()
             cursor.close()
             return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
-                    "mmr": u[3], "week_games": u[4], "week_wins": u[5], "winrate": u[6]} for u in users]
+                    "mmr": u[3], "week_games": u[4], "week_wins": u[5], "rank_tier": u[6], "winrate": u[7]} for u in users]
         else:
             cursor.execute("""
                 SELECT telegram_id, username, steam_nickname, mmr, 
-                       week_games, week_wins, 
+                       week_games, week_wins, rank_tier,
                        CASE WHEN week_games > 0 
                             THEN ROUND(week_wins * 100.0 / week_games, 1) 
                             ELSE 0 END as winrate
                 FROM users 
                 WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY winrate DESC, week_games DESC
+                ORDER BY week_wins DESC, winrate DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
             cursor.close()
             return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
-                    "mmr": u[3], "week_games": u[4], "week_wins": u[5], "winrate": u[6]} for u in users]
+                    "mmr": u[3], "week_games": u[4], "week_wins": u[5], "rank_tier": u[6], "winrate": u[7]} for u in users]
     except Exception as e:
         logger.error(f"Ошибка get_dota_week_top: {e}")
         return []
@@ -1099,6 +1175,34 @@ def get_all_users_with_steam():
     except Exception as e:
         logger.error(f"Ошибка get_all_users_with_steam: {e}")
         return []
+
+
+def reset_weekly_stats():
+    """Сброс недельной статистики для всех пользователей (вызывается по понедельникам)"""
+    try:
+        conn = get_connection()
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        cursor = conn.cursor()
+        
+        if "postgres" in scheme:
+            cursor.execute("""
+                UPDATE users SET week_games = 0, week_wins = 0 WHERE steam_id IS NOT NULL
+            """)
+        else:
+            cursor.execute("""
+                UPDATE users SET week_games = 0, week_wins = 0 WHERE steam_id IS NOT NULL
+            """)
+        
+        affected = cursor.rowcount
+        conn.commit()
+        cursor.close()
+        logger.info(f"Сброшена недельная статистика для {affected} пользователей")
+        return affected
+    except Exception as e:
+        logger.error(f"Ошибка reset_weekly_stats: {e}")
+        return 0
 
 
 def backup_database(backup_dir=None):
