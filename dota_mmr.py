@@ -369,7 +369,14 @@ def update_user_mmr(telegram_id: int) -> dict:
             logger.info(f"topmmr: total matches received from API: {len(matches)}")
             for i, match in enumerate(matches):
                 match_date = datetime.utcfromtimestamp(match.get("start_time", 0))
-                logger.info(f"topmmr: match[{i}] id={match.get('match_id')} start_time={match.get('start_time')} date={match_date} week_start={week_start_utc} in_week={match_date >= week_start_utc}")
+                in_week = match_date >= week_start_utc
+                logger.info(f"topmmr: match[{i}] id={match.get('match_id')} start_time={match.get('start_time')} date={match_date} week_start={week_start_utc} in_week={in_week}")
+                if in_week:
+                    # Детальное логирование для матчей в неделе
+                    radiant_win = match.get("radiant_win", False)
+                    player_is_radiant = match.get("radiant", True)
+                    is_win = (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win)
+                    logger.info(f"topmmr:   -> radiant={player_is_radiant}, radiant_win={radiant_win}, is_win={is_win}")
         else:
             logger.warning("topmmr: no matches received from API")
         
@@ -386,7 +393,10 @@ def update_user_mmr(telegram_id: int) -> dict:
                         radiant_win = match.get("radiant_win", False)
                         player_is_radiant = match.get("radiant", True)
                         is_win = (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win)
+                        # Детальное логирование
                         logger.info(f"topmmr: match {match.get('match_id')} - radiant={player_is_radiant}, radiant_win={radiant_win}, is_win={is_win}, date={match_date}")
+                        # Логируем все ключи матча для отладки
+                        logger.info(f"topmmr:   -> match keys: {list(match.keys())}")
                         if is_win:
                             week_wins += 1
                 except:
