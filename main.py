@@ -957,9 +957,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     
     try:
-        from dota_mmr import get_week_top, update_user_mmr
-        # Обновляем MMR пользователя перед показом топа
-        update_user_mmr(update.effective_user.id)
+        from dota_mmr import get_week_top
         top_users = get_week_top(10)
         logger.info(f"topmmr: top_users = {top_users}")
         
