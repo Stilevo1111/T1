@@ -383,14 +383,28 @@ def update_user_mmr(telegram_id: int) -> dict:
                     match_date = datetime.utcfromtimestamp(match.get("start_time", 0))
                     if match_date >= week_start_utc:
                         week_games += 1
-                        # Логируем ВСЕ ключи чтобы понять какие поля есть
-                        logger.info(f"topmmr: match keys for {match.get('match_id')}: {list(match.keys())}")
                         
-                        # Пробуем использовать прямое поле 'win'
-                        is_win = match.get("win", False)
+                        # Определяем победу используя player_slot и radiant_win
+                        # player_slot: 0-4 = Radiant, 128-132 = Dire
+                        player_slot = match.get("player_slot")
+                        radiant_win = match.get("radiant_win", False)
+                        
+                        if player_slot is not None:
+                            player_was_radiant = player_slot < 127
+                        else:
+                            # Fallback - используем radiant поле
+                            player_was_radiant = match.get("radiant", True)
+                        
+                        # Победа: игрок был на стороне победившей команды
+                        if radiant_win is True and player_was_radiant:
+                            is_win = True
+                        elif radiant_win is False and not player_was_radiant:
+                            is_win = True
+                        else:
+                            is_win = False
                         
                         # Детальное логирование
-                        logger.info(f"topmmr: match {match.get('match_id')} - win={is_win}, date={match_date}")
+                        logger.info(f"topmmr: match {match.get('match_id')} - player_slot={player_slot}, radiant_win={radiant_win}, is_win={is_win}, date={match_date}")
                         if is_win:
                             week_wins += 1
                 except:
