@@ -1164,7 +1164,7 @@ def get_dota_week_top(limit=10):
                             ELSE 0 END as winrate
                 FROM users 
                 WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY week_wins DESC, winrate DESC, mmr DESC
+                ORDER BY winrate DESC, week_wins DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
             users = cursor.fetchall()
@@ -1197,7 +1197,7 @@ def get_dota_week_top(limit=10):
                             ELSE 0 END as winrate
                 FROM users 
                 WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY week_wins DESC, winrate DESC, mmr DESC
+                ORDER BY winrate DESC, week_wins DESC, mmr DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()

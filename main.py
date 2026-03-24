@@ -1039,11 +1039,11 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_week_losses = user_week_games - user_week_wins
             user_winrate = round((user_week_wins / user_week_games * 100), 1) if user_week_games > 0 else 0
             
-            # Вычисляем позицию пользователя в недельном топе
-            # Считаем сколько игроков имеют больше недельных побед
+            # Вычисляем позицию пользователя в недельном топе по винрейту
             user_pos = None
-            if user and user.get('steam_id') and user_week_games > 0:
+            if user and user.get('steam_id') and user_week_games > 0 and user_week_wins > 0:
                 try:
+                    user_winrate = (user_week_wins / user_week_games * 100) if user_week_games > 0 else 0
                     conn = get_connection()
                     cursor = conn.cursor()
                     url = urlparse.urlparse(DATABASE_URL)
@@ -1052,13 +1052,15 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if 'postgres' in scheme:
                         cursor.execute("""
                             SELECT COUNT(*) + 1 as rank FROM users 
-                            WHERE week_wins > %s AND steam_id IS NOT NULL AND week_games > 0
-                        """, (user_week_wins,))
+                            WHERE (week_wins::numeric / NULLIF(week_games, 0) * 100) > %s 
+                            AND steam_id IS NOT NULL AND week_games > 0
+                        """, (user_winrate,))
                     else:
                         cursor.execute("""
                             SELECT COUNT(*) + 1 FROM users 
-                            WHERE week_wins > ? AND steam_id IS NOT NULL AND week_games > 0
-                        """, (user_week_wins,))
+                            WHERE (week_wins * 100.0 / NULLIF(week_games, 0)) > ? 
+                            AND steam_id IS NOT NULL AND week_games > 0
+                        """, (user_winrate,))
                     
                     result = cursor.fetchone()
                     if result:
