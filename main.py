@@ -278,13 +278,13 @@ async def refresh_digest_message(bot):
             except Exception as e:
                 error_str = str(e)
                 if "Message to edit not found" in error_str or "message can't be edited" in error_str:
+                    logger.info(f"Старый дайджест {last_message_id} удалён/недоступен, сбрасываем ID")
                     set_config('daily_digest_message_id', None)
                 else:
                     logger.debug(f"Не удалось обновить дайджест: {e}")
         
-        msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
-        set_config('daily_digest_message_id', msg.message_id)
-        logger.info(f"Создан новый дайджест после броска {msg.message_id}")
+        # Если message_id пустой/None - не создаём новое сообщение, morning_digest_job создаст его
+        logger.debug("Нет message_id для дайджеста, не создаём (ждём morning_digest_job)")
         
     except Exception as e:
         logger.error(f"Ошибка в refresh_digest_message: {e}", exc_info=True)
@@ -369,7 +369,7 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not delete user message: {e}")
         # Сохраняем этот чат как чат для дайджеста и сбрасываем message_id
         set_config("digest_chat_id", chat_id)
-        set_config("daily_digest_message_id", "")
+        set_config("daily_digest_message_id", None)
 
         class SimpleContext:
             def __init__(self, application):
@@ -1137,7 +1137,7 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not delete user message: {e}")
         # Сохраняем ID чата в конфиг и сбрасываем message_id
         set_config("digest_chat_id", chat_id)
-        set_config("daily_digest_message_id", "")
+        set_config("daily_digest_message_id", None)
 
         msg = await update.message.reply_text(
             f"✅ Чат для утреннего дайджеста установлен.\n"
