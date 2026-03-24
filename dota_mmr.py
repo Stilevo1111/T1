@@ -352,8 +352,15 @@ def update_user_mmr(telegram_id: int) -> dict:
             return {"success": False, "rank_up": None}
 
         # Получаем последние матчи для расчёта недельной статистики
+        # Фиксированная неделя: с понедельника по воскресенье
         from datetime import datetime, timedelta
-        one_week_ago = datetime.utcnow() - timedelta(days=7)
+        today = datetime.utcnow()
+        monday = today - timedelta(days=today.weekday())  # Понедельник текущей недели
+        
+        # Если сегодня воскресенье (weekday=6), то неделя ещё не закончилась
+        # Но для подсчёта берём текущую неделю
+        week_start = monday.replace(hour=0, minute=0, second=0, microsecond=0)
+        logger.info(f"topmmr: week start = {week_start} (Monday)")
         
         # Получаем последние 50 матчей
         matches = get_recent_matches(user["steam_id"], limit=50)
@@ -365,7 +372,7 @@ def update_user_mmr(telegram_id: int) -> dict:
             for match in matches:
                 try:
                     match_date = datetime.utcfromtimestamp(match.get("start_time", 0))
-                    if match_date >= one_week_ago:
+                    if match_date >= week_start:
                         week_games += 1
                         # Определяем победу по полю radiant_win
                         radiant_win = match.get("radiant_win", False)
@@ -381,7 +388,8 @@ def update_user_mmr(telegram_id: int) -> dict:
         # Даже если week_games = 0, все равно обновляем, чтобы сбросить старые данные
         update_user_field(telegram_id, "week_games", week_games)
         update_user_field(telegram_id, "week_wins", week_wins)
-        logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins")
+        update_user_field(telegram_id, "week_start_date", week_start.strftime("%Y-%m-%d"))
+        logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_start={week_start}")
         
         # Получаем общие данные
         current_games = stats["total_games"]
