@@ -428,12 +428,14 @@ async def dota_digest_job(context):
         
         # Формат аналогичен утреннему дайджесту
         if top_player and top_player != "None":
-            top_part = f"🎯{top_display} {top_winrate}% ({top_wins}W/{top_games}G)"
+            top_losses = top_games - top_wins
+            top_part = f"🎯{top_display} {top_winrate}% ({top_wins}W/{top_losses}L)"
         else:
             top_part = "🎯—"
         
         if bottom_player and bottom_player != "None":
-            bottom_part = f"💀{bottom_display} {bottom_winrate}% ({bottom_wins}W/{bottom_games}G)"
+            bottom_losses = bottom_games - bottom_wins
+            bottom_part = f"💀{bottom_display} {bottom_winrate}% ({bottom_wins}W/{bottom_losses}L)"
         else:
             bottom_part = "💀—"
         
@@ -585,12 +587,14 @@ async def alternate_digest_job(context):
             streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" else "—"
             
             if top_player and top_player != "None":
-                top_part = f"🎯{top_display} {top_winrate}% ({top_wins}W/{top_games}G)"
+                top_losses = top_games - top_wins
+                top_part = f"🎯{top_display} {top_winrate}% ({top_wins}W/{top_losses}L)"
             else:
                 top_part = "🎯—"
             
             if bottom_player and bottom_player != "None":
-                bottom_part = f"💀{bottom_display} {bottom_winrate}% ({bottom_wins}W/{bottom_games}G)"
+                bottom_losses = bottom_games - bottom_wins
+                bottom_part = f"💀{bottom_display} {bottom_winrate}% ({bottom_wins}W/{bottom_losses}L)"
             else:
                 bottom_part = "💀—"
             
