@@ -680,7 +680,7 @@ def calculate_new_fissure(current_fissure, roll):
 def main_menu():
     keyboard = [
         [KeyboardButton("📈 Увеличить фиссуру")],
-        [KeyboardButton("📏 Моя длина"), KeyboardButton("🏆 Топ")],
+        [KeyboardButton("📏 Моя длина"), KeyboardButton("🏆 Топ Фиссур")],
         [KeyboardButton("🏆 Топ MMR"), KeyboardButton("🔗 Привязать Steam")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
@@ -966,6 +966,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"topmmr: user has steam_id, calling update_user_mmr")
             result = update_user_mmr(update.effective_user.id)
             logger.info(f"topmmr: update_user_mmr result = {result}")
+            # Получаем свежие данные пользователя после обновления
+            user = get_user(update.effective_user.id)
         else:
             logger.info(f"topmmr: user has no steam_id")
         top_users = get_week_top(10)
@@ -1301,7 +1303,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         text = update.message.text.strip()
         
-        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ", "🏆 Топ MMR", "🔗 Привязать Steam"]
+        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ Фиссур", "🏆 Топ MMR", "🔗 Привязать Steam"]
         
         if text not in menu_buttons:
             return
@@ -1331,7 +1333,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await fissure(update, context)
         elif text == "📏 Моя длина":
             await stats(update, context)
-        elif text == "🏆 Топ":
+        elif text == "🏆 Топ Фиссур":
             await top(update, context)
         elif text == "🏆 Топ MMR":
             await topmmr(update, context)
