@@ -8,7 +8,7 @@ import datetime
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats
 from aiohttp import web
 
 # Logging setup
@@ -392,6 +392,245 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
         except Exception:
             pass
+
+
+async def dota_digest_job(context):
+    """Dota дайджест - лучший/худший винрейт и стрик побед за неделю"""
+    try:
+        logger.info("Запуск Dota дайджеста")
+        
+        # Получаем ID чата для дайджеста
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            logger.info("Чат для дайджеста не настроен")
+            return
+        
+        stats = get_dota_digest_stats()
+        
+        # Формируем сообщение
+        # top_winrate: (nickname, rank_tier, week_games, week_wins, telegram_id)
+        # bottom_winrate: (nickname, rank_tier, week_games, week_wins, telegram_id)
+        # top_streak: (nickname, week_wins, telegram_id)
+        
+        top_player, top_rank, top_games, top_wins, top_id = stats.get("top_winrate", ("None", 0, 0, 0, None))
+        bottom_player, bottom_rank, bottom_games, bottom_wins, bottom_id = stats.get("bottom_winrate", ("None", 0, 0, 0, None))
+        streak_player, streak_wins, streak_id = stats.get("top_streak", ("None", 0, None))
+        
+        # Форматируем винрейт
+        top_winrate = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
+        bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
+        
+        # Используем make_clickable для никнеймов
+        top_display = make_clickable(top_player, top_id) if top_player and top_player != "None" else "—"
+        bottom_display = make_clickable(bottom_player, bottom_id) if bottom_player and bottom_player != "None" else "—"
+        streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" else "—"
+        
+        # Формат аналогичен утреннему дайджесту
+        if top_player and top_player != "None":
+            top_part = f"🎯{top_display} {top_winrate}% ({top_wins}W/{top_games}G)"
+        else:
+            top_part = "🎯—"
+        
+        if bottom_player and bottom_player != "None":
+            bottom_part = f"💀{bottom_display} {bottom_winrate}% ({bottom_wins}W/{bottom_games}G)"
+        else:
+            bottom_part = "💀—"
+        
+        if streak_player and streak_player != "None":
+            streak_part = f"🔥{streak_display} - {streak_wins} побед"
+        else:
+            streak_part = "🔥—"
+        
+        text = f"{top_part} ┃{bottom_part} ┃{streak_part}\n\n🎮 DOTA ДАЙДЖЕСТ 📊\n\n🎯 = лучший винрейт за неделю\n💀 = худший винрейт за неделю\n🔥 = больше всего побед за неделю"
+        
+        bot = context.application.bot
+        
+        # Пробуем отредактировать существующее сообщение
+        last_message_id = get_config('dota_digest_message_id')
+        if last_message_id:
+            try:
+                await bot.edit_message_text(
+                    chat_id=digest_chat_id,
+                    message_id=int(last_message_id),
+                    text=text,
+                    parse_mode="HTML"
+                )
+                logger.info(f"Обновлён существующий Dota дайджест {last_message_id}")
+                return
+            except Exception as e:
+                error_str = str(e)
+                if "Message to edit not found" in error_str or "message can't be edited" in error_str:
+                    logger.info(f"Старое сообщение {last_message_id} удалено или нельзя редактировать, создаём новое")
+                    set_config('dota_digest_message_id', None)
+                else:
+                    logger.info(f"Не удалось редактировать сообщение: {e}")
+        
+        # Отправляем новое сообщение
+        msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
+        set_config('dota_digest_message_id', msg.message_id)
+        logger.info(f"Создан новый Dota дайджест {msg.message_id}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка в dota_digest_job: {e}", exc_info=True)
+
+
+async def dota_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ручной запуск Dota дайджеста в этот чат"""
+    try:
+        chat = update.effective_chat
+        chat_id = chat.id
+        # В группах удаляем сообщение пользователя с командой
+        if chat.type in ['group', 'supergroup', 'channel']:
+            try:
+                await context.bot.delete_message(chat_id, update.message.message_id)
+            except Exception as e:
+                logger.debug(f"Could not delete user message: {e}")
+        # Сохраняем этот чат как чат для дайджеста и сбрасываем message_id
+        set_config("digest_chat_id", chat_id)
+        set_config("dota_digest_message_id", None)
+
+        # Создаём контекст для ручного вызова дайджеста
+        class ManualContext:
+            def __init__(self, application, bot):
+                self.application = application
+                self.bot = bot
+                self.manual = True
+
+        manual_context = ManualContext(context.application, context.bot)
+        await dota_digest_job(manual_context)
+
+        msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ Dota дайджест для этого чата создан/обновлён.")
+        if chat.type in ['group', 'supergroup', 'channel']:
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+    except Exception as e:
+        logger.error(f"Error in dota_digest_now: {e}", exc_info=True)
+        try:
+            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось создать Dota дайджест сейчас")
+            chat = update.effective_chat
+            if chat and chat.type in ['group', 'supergroup', 'channel']:
+                schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
+        except Exception:
+            pass
+
+
+async def alternate_digest_job(context):
+    """Чередование утреннего и Dota дайджестов каждые 10 минут"""
+    try:
+        logger.info("Запуск alternate_digest_job")
+        
+        # Получаем ID чата для дайджеста
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            logger.info("Чат для дайджеста не настроен")
+            return
+        
+        bot = context.application.bot
+        
+        # Получаем текущий тип дайджеста (0 = morning, 1 = dota)
+        current_type = get_config('alternate_digest_type')
+        if current_type is None:
+            current_type = "0"
+        
+        # Формируем текст в зависимости от типа
+        if current_type == "0":
+            # Утренний дайджест
+            stats = get_digest_stats()
+            
+            growth_player, growth_pos = stats.get("top_growth", ("None", 0))
+            drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
+            streak_player, streak_len = stats.get("top_streak", ("None", 0))
+            
+            growth_id = stats.get("top_growth_id")
+            drop_id = stats.get("top_drop_id")
+            streak_id = stats.get("top_streak_id")
+            
+            growth_display = make_clickable(growth_player, growth_id)
+            drop_display = make_clickable(drop_player, drop_id)
+            streak_display = make_clickable(streak_player, streak_id)
+            
+            if growth_player and growth_player != "None":
+                growth_part = f"📈{growth_display} +{growth_pos}⬆️"
+            else:
+                growth_part = "📈—"
+            
+            if drop_player and drop_player != "None":
+                if drop_cm < 0:
+                    drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
+                else:
+                    drop_part = f"💀{drop_display} +{drop_cm:.0f} СМ"
+            else:
+                drop_part = "💀—"
+            
+            if streak_player and streak_player != "None":
+                streak_part = f"🍀{streak_display} - Стрик {streak_len}"
+            else:
+                streak_part = "🍀—"
+            
+            text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+            next_type = "1"
+        else:
+            # Dota дайджест
+            stats = get_dota_digest_stats()
+            
+            top_player, top_rank, top_games, top_wins, top_id = stats.get("top_winrate", ("None", 0, 0, 0, None))
+            bottom_player, bottom_rank, bottom_games, bottom_wins, bottom_id = stats.get("bottom_winrate", ("None", 0, 0, 0, None))
+            streak_player, streak_wins, streak_id = stats.get("top_streak", ("None", 0, None))
+            
+            top_winrate = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
+            bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
+            
+            top_display = make_clickable(top_player, top_id) if top_player and top_player != "None" else "—"
+            bottom_display = make_clickable(bottom_player, bottom_id) if bottom_player and bottom_player != "None" else "—"
+            streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" else "—"
+            
+            if top_player and top_player != "None":
+                top_part = f"🎯{top_display} {top_winrate}% ({top_wins}W/{top_games}G)"
+            else:
+                top_part = "🎯—"
+            
+            if bottom_player and bottom_player != "None":
+                bottom_part = f"💀{bottom_display} {bottom_winrate}% ({bottom_wins}W/{bottom_games}G)"
+            else:
+                bottom_part = "💀—"
+            
+            if streak_player and streak_player != "None":
+                streak_part = f"🔥{streak_display} - {streak_wins} побед"
+            else:
+                streak_part = "🔥—"
+            
+            text = f"{top_part} ┃{bottom_part} ┃{streak_part}\n\n🎮 DOTA ДАЙДЖЕСТ 📊\n\n🎯 = лучший винрейт за неделю\n💀 = худший винрейт за неделю\n🔥 = больше всего побед за неделю"
+            next_type = "0"
+        
+        # Пробуем отредактировать существующее сообщение
+        last_message_id = get_config('alternate_digest_message_id')
+        if last_message_id:
+            try:
+                await bot.edit_message_text(
+                    chat_id=digest_chat_id,
+                    message_id=int(last_message_id),
+                    text=text,
+                    parse_mode="HTML"
+                )
+                logger.info(f"Обновлён alternate дайджест {last_message_id}")
+                # Меняем тип для следующего раза
+                set_config('alternate_digest_type', next_type)
+                return
+            except Exception as e:
+                error_str = str(e)
+                if "Message to edit not found" in error_str or "message can't be edited" in error_str:
+                    logger.info(f"Старое сообщение {last_message_id} удалено, создаём новое")
+                    set_config('alternate_digest_message_id', None)
+                else:
+                    logger.info(f"Не удалось редактировать: {e}")
+        
+        # Отправляем новое сообщение
+        msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
+        set_config('alternate_digest_message_id', msg.message_id)
+        set_config('alternate_digest_type', next_type)
+        logger.info(f"Создан новый alternate дайджест {msg.message_id}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
 
 # =====================
 # ROLL SYSTEM
@@ -1511,6 +1750,13 @@ async def main():
             time=datetime.time(hour=6, minute=0),
             days=(0,)  # Monday only
         )
+        
+        # Чередование утреннего и Dota дайджеста каждые 10 минут
+        job_queue.run_repeating(
+            alternate_digest_job,
+            interval=datetime.timedelta(minutes=10),
+            first=datetime.datetime.now()
+        )
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("fissure", fissure))
@@ -1520,6 +1766,7 @@ async def main():
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler("refresh", refresh))
         app.add_handler(CommandHandler("digestnow", digest_now))
+        app.add_handler(CommandHandler("dotadigestnow", dota_digest_now))
         app.add_handler(CommandHandler("weeklydigest", weekly_digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
@@ -1631,6 +1878,13 @@ async def main_polling():
             time=datetime.time(hour=6, minute=0),
             days=(0,)  # Monday only
         )
+        
+        # Чередование утреннего и Dota дайджеста каждые 10 минут
+        job_queue.run_repeating(
+            alternate_digest_job,
+            interval=datetime.timedelta(minutes=10),
+            first=datetime.datetime.now()
+        )
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("fissure", fissure))
@@ -1640,6 +1894,7 @@ async def main_polling():
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler("refresh", refresh))
         app.add_handler(CommandHandler("digestnow", digest_now))
+        app.add_handler(CommandHandler("dotadigestnow", dota_digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))

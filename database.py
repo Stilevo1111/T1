@@ -1227,6 +1227,116 @@ def get_dota_week_top(limit=10):
         return []
 
 
+def get_dota_digest_stats():
+    """Получение статистики для Dota дайджеста: лучший и худший винрейт"""
+    try:
+        conn = get_connection()
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        cursor = conn.cursor()
+        
+        # Проверяем есть ли пользователи с играми за неделю
+        cursor.execute("""
+            SELECT COUNT(*) FROM users 
+            WHERE steam_id IS NOT NULL AND week_games > 0
+        """)
+        count = cursor.fetchone()[0]
+        
+        if count == 0:
+            cursor.close()
+            conn.close()
+            return {
+                "top_winrate": ("None", 0, 0, 0, None),
+                "bottom_winrate": ("None", 0, 0, 0, None),
+                "top_streak": ("None", 0, None)
+            }
+        
+        if "postgres" in scheme:
+            # Лучший винрейт
+            cursor.execute("""
+                SELECT telegram_id, steam_nickname, week_games, week_wins, rank_tier,
+                       CASE WHEN week_games > 0 THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) ELSE 0 END as winrate
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_games > 0
+                ORDER BY winrate DESC, week_wins DESC
+                LIMIT 1
+            """)
+            top = cursor.fetchone()
+            
+            # Худший винрейт
+            cursor.execute("""
+                SELECT telegram_id, steam_nickname, week_games, week_wins, rank_tier,
+                       CASE WHEN week_games > 0 THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) ELSE 0 END as winrate
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_games > 0
+                ORDER BY winrate ASC, week_wins ASC
+                LIMIT 1
+            """)
+            bottom = cursor.fetchone()
+            
+            # Лучший стрик побед (по week_wins - больше всего побед за неделю)
+            cursor.execute("""
+                SELECT telegram_id, steam_nickname, week_wins, rank_tier
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_wins > 0
+                ORDER BY week_wins DESC
+                LIMIT 1
+            """)
+            streak = cursor.fetchone()
+        else:
+            # Лучший винрейт (SQLite)
+            cursor.execute("""
+                SELECT telegram_id, steam_nickname, week_games, week_wins, rank_tier,
+                       CASE WHEN week_games > 0 THEN ROUND(week_wins * 100.0 / week_games, 1) ELSE 0 END as winrate
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_games > 0
+                ORDER BY winrate DESC, week_wins DESC
+                LIMIT 1
+            """)
+            top = cursor.fetchone()
+            
+            # Худший винрейт (SQLite)
+            cursor.execute("""
+                SELECT telegram_id, steam_nickname, week_games, week_wins, rank_tier,
+                       CASE WHEN week_games > 0 THEN ROUND(week_wins * 100.0 / week_games, 1) ELSE 0 END as winrate
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_games > 0
+                ORDER BY winrate ASC, week_wins ASC
+                LIMIT 1
+            """)
+            bottom = cursor.fetchone()
+            
+            # Лучший стрик побед (SQLite)
+            cursor.execute("""
+                SELECT telegram_id, steam_nickname, week_wins, rank_tier
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_wins > 0
+                ORDER BY week_wins DESC
+                LIMIT 1
+            """)
+            streak = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        result = {
+            "top_winrate": (top[1] if top else "None", top[4] if top else 0, top[2] if top else 0, top[3] if top else 0, top[0] if top else None) if top else ("None", 0, 0, 0, None),
+            "bottom_winrate": (bottom[1] if bottom else "None", bottom[4] if bottom else 0, bottom[2] if bottom else 0, bottom[3] if bottom else 0, bottom[0] if bottom else None) if bottom else ("None", 0, 0, 0, None),
+            "top_streak": (streak[1] if streak else "None", streak[2] if streak else 0, streak[0] if streak else None) if streak else ("None", 0, None)
+        }
+        
+        logger.info(f"Dota digest stats: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Ошибка get_dota_digest_stats: {e}")
+        return {
+            "top_winrate": ("None", 0, 0, 0, None),
+            "bottom_winrate": ("None", 0, 0, 0, None),
+            "top_streak": ("None", 0, None)
+        }
+
+
 def get_all_users_with_steam():
     """Получение всех пользователей с привязанным Steam"""
     try:
