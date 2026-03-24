@@ -1849,6 +1849,22 @@ async def main():
         
         logger.info("Web server started")
         
+        # Запускаем фоновую задачу для пинга /health чтобы бот не засыпал
+        async def ping_health():
+            """Периодически пингуем свой собственный /health чтобы Render не уснул"""
+            import httpx
+            while True:
+                try:
+                    await asyncio.sleep(300)  # каждые 5 минут
+                    async with httpx.AsyncClient() as client:
+                        await client.get("http://127.0.0.1:10000/health", timeout=10)
+                        logger.debug("Self-ping to /health completed")
+                except Exception as e:
+                    logger.debug(f"Self-ping failed: {e}")
+        
+        # Запускаем фоновую задачу
+        asyncio.create_task(ping_health())
+        
         while True:
             await asyncio.sleep(3600)
             
