@@ -219,13 +219,14 @@ def is_win_api(match_id: int, steam_id: int) -> bool:
 # 📊 GET STATS
 # ========================
 
-def get_player_stats(steam_id: int) -> dict:
+def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
     try:
         # Проверяем кеш
         cache_key = f"player_{steam_id}"
-        cached = _get_cached(cache_key)
-        if cached:
-            return cached
+        if use_cache:
+            cached = _get_cached(cache_key)
+            if cached:
+                return cached
             
         account_id = steam64_to_account_id(steam_id)
         
@@ -344,7 +345,7 @@ def update_user_mmr(telegram_id: int) -> dict:
         if not user or not user.get("steam_id"):
             return {"success": False, "rank_up": None}
 
-        stats = get_player_stats(user["steam_id"])
+        stats = get_player_stats(user["steam_id"], use_cache=False)
         if not stats:
             return {"success": False, "rank_up": None}
 

@@ -602,7 +602,7 @@ class Database:
                     return rank if rank > 0 else 1
                 return None
         except Exception as e:
-            logger.error(f"Error getting user rank: {e}")
+            logger.error(f"Error getting user rank: {e}", exc_info=True)
             return None
     
     def decrease_inactive_fissure(self, days_inactive=1, decrease_amount=1.0):
