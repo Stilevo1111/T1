@@ -1081,10 +1081,23 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             text = "\n".join(lines)
         
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
+        # Delete previous bot message before sending new one
+        try:
+            await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+        except Exception as e:
+            logger.debug(f"Could not delete last bot message: {e}")
+        
+        result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
+        # Track this message for future deletion
+        set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
     except Exception as e:
         logger.error(f"Error in topmmr: {e}")
         # Send new message instead of replying to avoid "Message not found" error
+        try:
+            await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+        except Exception:
+            pass
         await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка получения топа MMR")
 
 
@@ -1111,17 +1124,32 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from dota_mmr import register_steam
             result = register_steam(update.effective_user.id, identifier)
             
+            # Delete previous bot message before sending new one
+            try:
+                await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+            except Exception as e:
+                logger.debug(f"Could not delete last bot message: {e}")
+            
             if result.get('success'):
-                await context.bot.send_message(chat_id=update.effective_chat.id, text=result.get('message'))
+                result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text=result.get('message'))
             else:
-                await context.bot.send_message(chat_id=update.effective_chat.id, text=result.get('message'))
+                result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text=result.get('message'))
+            # Track this message for future deletion
+            set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         except Exception as e:
             logger.error(f"Error in link: {e}")
             await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Steam аккаунта")
         return
     
     # Если нет аргумента - отправляем инструкцию
-    await context.bot.send_message(
+    # Delete previous bot message before sending new one
+    try:
+        await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+    except Exception as e:
+        logger.debug(f"Could not delete last bot message: {e}")
+    
+    result_msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text="🎮 *Привязка Steam аккаунта*\n\n"
         "Используйте команду с никнеймом или Steam ID:\n"
@@ -1131,6 +1159,9 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Или нажмите кнопку и введите ник в ответ на это сообщение",
         parse_mode='Markdown'
     )
+    # Track this message for future deletion
+    set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+    schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
 
 
 async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1154,20 +1185,33 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Обновляем MMR только этого пользователя
         result = update_user_mmr(update.effective_user.id)
         
+        # Delete previous bot message before sending new one
+        try:
+            await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+        except Exception as e:
+            logger.debug(f"Could not delete last bot message: {e}")
+        
         if result:
             user = get_user(update.effective_user.id)
             if user and user.get('steam_nickname'):
-                await context.bot.send_message(chat_id=update.effective_chat.id, text=(
+                result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text=(
                     f"✅ MMR обновлён!\n"
                     f"{user['steam_nickname']} - {user['mmr']}\n"
                     f"📊 Всего игр: {user['dota_total_games']}"
                 ))
             else:
-                await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось получить статистику")
+                result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось получить статистику")
         else:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ У тебя не привязан Steam аккаунт. Используй /link")
+            result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ У тебя не привязан Steam аккаунт. Используй /link")
+        # Track this message for future deletion
+        set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
     except Exception as e:
         logger.error(f"Error in refresh: {e}")
+        try:
+            await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+        except Exception:
+            pass
         await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка обновления MMR")
 
 
