@@ -385,9 +385,10 @@ def update_user_mmr(telegram_id: int) -> dict:
         
         # Если это первое обновление - инициализируем недельную статистику
         if last_games == 0:
-            logger.info(f"First MMR update for {telegram_id}: initializing week stats")
-            update_user_field(telegram_id, "week_games", 0)
-            update_user_field(telegram_id, "week_wins", 0)
+            logger.info(f"First MMR update for {telegram_id}: initializing week stats to current")
+            # При первом обновлении считаем все игры как недельные
+            update_user_field(telegram_id, "week_games", current_games)
+            update_user_field(telegram_id, "week_wins", current_wins)
         elif week_reset:
             # После сброса недели всегда инициализируем новую статистику
             new_games = max(0, current_games - last_games)
