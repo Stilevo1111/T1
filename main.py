@@ -1670,6 +1670,9 @@ def setup_health_check(bot):
             # Проверяем что бот жив - пингуем Telegram API
             await asyncio.wait_for(bot.get_me(), timeout=5)
             
+            # Обновляем время после успешного пинга
+            last_update_time = time.time()
+            
             # Проверяем активность - был ли апдейт за последние 3 минуты?
             time_since_update = time.time() - last_update_time
             if time_since_update > 180:
