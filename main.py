@@ -1883,10 +1883,11 @@ async def main():
                         last_update_time = time.time()
                         logger.debug(f"Self-ping to /health completed, status={response.status_code}, updated last_update_time")
                 except Exception as e:
-                    logger.debug(f"Self-ping failed: {e}")
+                    logger.warning(f"Self-ping failed: {e}")
         
-        # Запускаем фоновую задачу
+        # Запускаем фоновую задачу для пинга /health
         asyncio.create_task(ping_health())
+        logger.info("Ping health task started")
         
         while True:
             await asyncio.sleep(3600)
