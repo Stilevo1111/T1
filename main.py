@@ -1104,7 +1104,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = user_obj.id
         display_username = f"<a href=\"tg://user?id={user_id}\">{username}</a>"
         
-        text = f"👑 {display_username}\n\n📏 Длина: {user['fissure']:.1f} см\n🎲 Бросков: {user.get('total_rolls', 0)}\n🔥 Текущий стрик: {user.get('current_streak', 0)}\n🏆 Лучший стрик: {user.get('best_streak', 0)}"
+        text = f"👑 {display_username}\n\n📏 Длина: {user['fissure']:.1f} см\n🎲 Бросков: {user.get('total_rolls', 0)}\n🔥 Стрек: {user.get('current_streak', 0)}/{user.get('best_streak', 0)}"
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
@@ -1873,10 +1873,12 @@ async def main():
             import httpx
             while True:
                 try:
-                    await asyncio.sleep(300)  # каждые 5 минут
+                    await asyncio.sleep(180)  # каждые 3 минуты - достаточно чтобы Render не уснул
                     async with httpx.AsyncClient() as client:
                         await client.get("http://127.0.0.1:10000/health", timeout=10)
-                        logger.debug("Self-ping to /health completed")
+                        # Обновляем время последнего апдейта чтобы health check был доволен
+                        last_update_time = time.time()
+                        logger.debug("Self-ping to /health completed, updated last_update_time")
                 except Exception as e:
                     logger.debug(f"Self-ping failed: {e}")
         

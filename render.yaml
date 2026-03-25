@@ -19,6 +19,6 @@ services:
       - key: RENDER_REGION
         value: oregon
     healthCheckPath: /health
-    healthCheckInterval: 30
+    healthCheckInterval: 60
     healthCheckTimeout: 10
     healthCheckRetries: 3
