@@ -1223,8 +1223,10 @@ def get_dota_week_top(limit=10):
         count = cursor.fetchone()[0]
         logger.info(f"get_dota_week_top: {total_with_steam} users with steam_id, {count} with week_games > 0")
         
-        # Если нет пользователей с недельными играми, вернем пустой список
-        if count == 0:
+        # Если нет пользователей с недельными играми, возвращаем всех с steam_id
+        if count == 0 and total_with_steam > 0:
+            logger.info("get_dota_week_top: no users with week_games > 0, returning all with steam_id")
+        elif count == 0:
             cursor.close()
             conn.close()
             return []
@@ -1237,8 +1239,8 @@ def get_dota_week_top(limit=10):
                             THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
                             ELSE 0 END as winrate
                 FROM users 
-                WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY winrate DESC, week_wins DESC, mmr DESC
+                WHERE steam_id IS NOT NULL
+                ORDER BY week_games DESC, winrate DESC, week_wins DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
             users = cursor.fetchall()
@@ -1270,8 +1272,8 @@ def get_dota_week_top(limit=10):
                             THEN ROUND(week_wins * 100.0 / week_games, 1) 
                             ELSE 0 END as winrate
                 FROM users 
-                WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY winrate DESC, week_wins DESC, mmr DESC
+                WHERE steam_id IS NOT NULL
+                ORDER BY week_games DESC, winrate DESC, week_wins DESC, mmr DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
