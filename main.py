@@ -1876,12 +1876,12 @@ async def main():
             import httpx
             while True:
                 try:
-                    await asyncio.sleep(90)  # каждые 90 секунд - достаточно чтобы Render не уснул и health check проходил
+                    await asyncio.sleep(30)  # каждые 30 секунд - короче чем Render health check (60s)
                     async with httpx.AsyncClient() as client:
-                        await client.get("http://127.0.0.1:10000/health", timeout=10)
-                        # Обновляем время последнего апдейта чтобы health check был доволен
+                        response = await client.get("http://127.0.0.1:10000/health", timeout=10)
+                        # Обновляем время последнего апдейта - бот активен раз отвечает на запросы
                         last_update_time = time.time()
-                        logger.debug("Self-ping to /health completed, updated last_update_time")
+                        logger.debug(f"Self-ping to /health completed, status={response.status_code}, updated last_update_time")
                 except Exception as e:
                     logger.debug(f"Self-ping failed: {e}")
         
