@@ -1670,9 +1670,9 @@ def setup_health_check(bot):
             # Проверяем что бот жив - пингуем Telegram API
             await asyncio.wait_for(bot.get_me(), timeout=5)
             
-            # Проверяем активность - был ли апдейт за последние 2 минуты?
+            # Проверяем активность - был ли апдейт за последние 3 минуты?
             time_since_update = time.time() - last_update_time
-            if time_since_update > 120:
+            if time_since_update > 180:
                 logger.warning(f"Health check: no updates for {time_since_update:.0f}s, marking as degraded")
                 return web.Response(text=f"Bot degraded: no updates for {time_since_update:.0f}s", status=503)
             
@@ -1873,7 +1873,7 @@ async def main():
             import httpx
             while True:
                 try:
-                    await asyncio.sleep(180)  # каждые 3 минуты - достаточно чтобы Render не уснул
+                    await asyncio.sleep(90)  # каждые 90 секунд - достаточно чтобы Render не уснул и health check проходил
                     async with httpx.AsyncClient() as client:
                         await client.get("http://127.0.0.1:10000/health", timeout=10)
                         # Обновляем время последнего апдейта чтобы health check был доволен
