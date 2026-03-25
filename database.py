@@ -224,6 +224,9 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS week_start_date DATE
             """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_best_streak INTEGER DEFAULT 0
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -304,6 +307,8 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN last_match_id INTEGER DEFAULT 0")
             if 'week_start_date' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN week_start_date DATE")
+            if 'week_best_streak' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN week_best_streak INTEGER DEFAULT 0")
         
         # Создаём таблицу для настроек бота (чат для дайджестов)
         cursor.execute("""
@@ -460,6 +465,7 @@ class Database:
                         "dota_wins": user.get("dota_wins", 0),
                         "week_games": user.get("week_games", 0),
                         "week_wins": user.get("week_wins", 0),
+                        "week_best_streak": user.get("week_best_streak", 0),
                         "week_updated_at": user.get("week_updated_at"),
                         "mmr_updated_at": user.get("mmr_updated_at"),
                         "last_dota_games": user.get("last_dota_games", 0),
@@ -492,12 +498,13 @@ class Database:
                         "dota_wins": user[24] if len(user) > 24 else 0,
                         "week_games": user[25] if len(user) > 25 else 0,
                         "week_wins": user[26] if len(user) > 26 else 0,
+                        "week_best_streak": user[29] if len(user) > 29 else 0,
                         "week_updated_at": user[27] if len(user) > 27 else None,
                         "mmr_updated_at": user[28] if len(user) > 28 else None
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_updated_at": None, "mmr_updated_at": None}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_updated_at": None, "mmr_updated_at": None}
         except Exception as e:
             logger.error(f"Error getting user: {e}")
             return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0}
@@ -1351,12 +1358,12 @@ def get_dota_digest_stats():
             """)
             bottom = cursor.fetchone()
             
-            # Лучший стрик побед (по week_wins - больше всего побед за неделю)
+            # Лучший стрик побед (по week_best_streak - больше всего побед подряд за неделю)
             cursor.execute("""
-                SELECT telegram_id, steam_nickname, week_wins, rank_tier
+                SELECT telegram_id, steam_nickname, week_best_streak, rank_tier
                 FROM users 
-                WHERE steam_id IS NOT NULL AND week_wins > 0
-                ORDER BY week_wins DESC
+                WHERE steam_id IS NOT NULL AND week_best_streak > 0
+                ORDER BY week_best_streak DESC
                 LIMIT 1
             """)
             streak = cursor.fetchone()
@@ -1383,12 +1390,12 @@ def get_dota_digest_stats():
             """)
             bottom = cursor.fetchone()
             
-            # Лучший стрик побед (SQLite)
+            # Лучший стрик побед (SQLite) - по week_best_streak
             cursor.execute("""
-                SELECT telegram_id, steam_nickname, week_wins, rank_tier
+                SELECT telegram_id, steam_nickname, week_best_streak, rank_tier
                 FROM users 
-                WHERE steam_id IS NOT NULL AND week_wins > 0
-                ORDER BY week_wins DESC
+                WHERE steam_id IS NOT NULL AND week_best_streak > 0
+                ORDER BY week_best_streak DESC
                 LIMIT 1
             """)
             streak = cursor.fetchone()

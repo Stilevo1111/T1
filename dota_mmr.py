@@ -377,6 +377,8 @@ def update_user_mmr(telegram_id: int) -> dict:
         
         week_games = 0
         week_wins = 0
+        current_streak = 0
+        max_streak = 0
         
         if matches:
             for match in matches:
@@ -412,17 +414,23 @@ def update_user_mmr(telegram_id: int) -> dict:
                             logger.info(f"topmmr: match {match.get('match_id')} - player_was_radiant={player_was_radiant}, is_win={is_win}")
                         if is_win:
                             week_wins += 1
+                            current_streak += 1
+                            if current_streak > max_streak:
+                                max_streak = current_streak
+                        else:
+                            current_streak = 0
                 except:
                     pass
         
-        logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}")
+        logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}, week_streak={max_streak}")
         
         # ВАЖНО: Всегда обновляем недельную статистику из матчей
         # Даже если week_games = 0, все равно обновляем, чтобы сбросить старые данные
         update_user_field(telegram_id, "week_games", week_games)
         update_user_field(telegram_id, "week_wins", week_wins)
+        update_user_field(telegram_id, "week_best_streak", max_streak)
         update_user_field(telegram_id, "week_start_date", week_start_utc.strftime("%Y-%m-%d"))
-        logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_start={week_start_utc}")
+        logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_streak={max_streak}, week_start={week_start_utc}")
         
         # Получаем общие данные
         current_games = stats["total_games"]
