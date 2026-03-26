@@ -1425,7 +1425,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "`/link 76561198012345678`\n"
         "`/link https://steamcommunity.com/id/ваш_ник`\n\n"
         "⚠️ Профиль должен быть открытым\n"
-        "📡 Статистика с OpenDota"
+        "📡 Статистика с OpenDota",
         parse_mode='Markdown'
     )
     # Track this message for future deletion
