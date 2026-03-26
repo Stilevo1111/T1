@@ -1761,6 +1761,13 @@ async def main():
         # Запускаем миграции базы данных
         migrate_db()
         
+        # ЗАГРУЖАЕМ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ В КЕШ ПРИ ЗАПУСКЕ
+        from database import get_all_users_with_steam, user_cache
+        all_users = get_all_users_with_steam()
+        for u in all_users:
+            user_cache.set(u['telegram_id'], u)
+        logger.info(f"Loaded {len(all_users)} users with Steam into cache on startup")
+        
         # Создаём JobQueue и привязываем к application
         job_queue = JobQueue()
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
@@ -1912,6 +1919,13 @@ async def main_polling():
         init_db()
         # Запускаем миграции базы данных
         migrate_db()
+        
+        # ЗАГРУЖАЕМ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ В КЕШ ПРИ ЗАПУСКЕ
+        from database import get_all_users_with_steam, user_cache
+        all_users = get_all_users_with_steam()
+        for u in all_users:
+            user_cache.set(u['telegram_id'], u)
+        logger.info(f"Loaded {len(all_users)} users with Steam into cache on startup")
         
         # Создаём JobQueue и привязываем к application
         job_queue = JobQueue()
