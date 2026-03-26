@@ -424,12 +424,22 @@ def update_user_mmr(telegram_id: int) -> dict:
         
         logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}, week_streak={max_streak}")
         
+        # Проверяем смену недели - если неделя изменилась, сбрасываем статистику
+        user_week_start = user.get('week_start_date')
+        current_week_start = week_start_utc.strftime("%Y-%m-%d")
+        
+        if user_week_start and user_week_start != current_week_start:
+            logger.info(f"Week changed for {telegram_id}: {user_week_start} -> {current_week_start}, resetting week stats")
+            update_user_field(telegram_id, "week_games", 0)
+            update_user_field(telegram_id, "week_wins", 0)
+            update_user_field(telegram_id, "week_best_streak", 0)
+        
         # ВАЖНО: Всегда обновляем недельную статистику из матчей
         # Даже если week_games = 0, все равно обновляем, чтобы сбросить старые данные
         update_user_field(telegram_id, "week_games", week_games)
         update_user_field(telegram_id, "week_wins", week_wins)
         update_user_field(telegram_id, "week_best_streak", max_streak)
-        update_user_field(telegram_id, "week_start_date", week_start_utc.strftime("%Y-%m-%d"))
+        update_user_field(telegram_id, "week_start_date", current_week_start)
         logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_streak={max_streak}, week_start={week_start_utc}")
         
         # Получаем общие данные
