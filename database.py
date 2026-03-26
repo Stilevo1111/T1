@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import psycopg2
+import time
 from psycopg2.extras import RealDictCursor
 import logging
 import urllib.parse as urlparse
@@ -73,6 +74,49 @@ class UserCache:
 
 # Глобальный экземпляр кеша
 user_cache = UserCache()
+
+
+class TTLCache:
+    """Кеш с автоматическим истечением по времени (TTL)"""
+    
+    def __init__(self, default_ttl=60):
+        self._cache = {}  # key -> (value, expiry_time)
+        self._lock = threading.Lock()
+        self._default_ttl = default_ttl  # TTL в секундах
+    
+    def get(self, key):
+        """Получить значение из кеша"""
+        with self._lock:
+            if key in self._cache:
+                value, expiry = self._cache[key]
+                if time.time() < expiry:
+                    return value
+                else:
+                    # Кеш истёк, удаляем
+                    del self._cache[key]
+        return None
+    
+    def set(self, key, value, ttl=None):
+        """Установить значение в кеш с TTL"""
+        if ttl is None:
+            ttl = self._default_ttl
+        with self._lock:
+            self._cache[key] = (value, time.time() + ttl)
+    
+    def delete(self, key):
+        """Удалить значение из кеша"""
+        with self._lock:
+            self._cache.pop(key, None)
+    
+    def clear(self):
+        """Очистить весь кеш"""
+        with self._lock:
+            self._cache.clear()
+
+
+# Глобальные экземпляры кешей
+config_cache = TTLCache(default_ttl=300)  # 5 минут для конфигурации
+top_cache = TTLCache(default_ttl=60)  # 1 минута для топов и рангов
 
 
 def flush_users_cache():
@@ -1306,6 +1350,8 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
         
         # Сбрасываем кеши дайджестов при изменении fissure
         user_cache.set('digest_stats', None)
+        # Сбрасываем кеш топа при изменении fissure
+        top_cache.clear()
     else:
         # Пользователя нет - создаем нового
         db = Database()
@@ -1323,21 +1369,61 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
             user['best_streak'] = 1 if growth > 0 else 0
             user_cache.set(telegram_id, user)
             user_cache.mark_dirty(telegram_id)
+            # Сбрасываем кеш топа при создании нового пользователя
+            top_cache.clear()
 
 def get_fissure_top(limit=10):
-    """Функция для совместимости - использует новый класс Database"""
+    """Получение топа пользователей - из кеша"""
+    cache_key = f'fissure_top_{limit}'
+    cached = top_cache.get(cache_key)
+    if cached is not None:
+        logger.info(f"get_fissure_top: returning from cache for limit={limit}")
+        return cached
+    
+    # Нет в кеше - читаем из БД
     db = Database()
-    return db.get_fissure_top(limit)
+    result = db.get_fissure_top(limit)
+    
+    # Сохраняем в кеш
+    top_cache.set(cache_key, result)
+    
+    return result
 
 def get_user_rank(telegram_id):
-    """Получить позицию игрока в топе по MMR"""
+    """Получить позицию игрока в топе по MMR - из кеша"""
+    cache_key = f'user_rank_{telegram_id}'
+    cached = top_cache.get(cache_key)
+    if cached is not None:
+        logger.info(f"get_user_rank: returning from cache for {telegram_id}")
+        return cached
+    
+    # Нет в кеше - читаем из БД
     db = Database()
-    return db.get_user_rank(telegram_id)
+    result = db.get_user_rank(telegram_id)
+    
+    # Сохраняем в кеш (если результат не None)
+    if result is not None:
+        top_cache.set(cache_key, result)
+    
+    return result
 
 def get_fissure_rank(telegram_id):
-    """Получить позицию игрока в топе по fissure"""
+    """Получить позицию игрока в топе по fissure - из кеша"""
+    cache_key = f'fissure_rank_{telegram_id}'
+    cached = top_cache.get(cache_key)
+    if cached is not None:
+        logger.info(f"get_fissure_rank: returning from cache for {telegram_id}")
+        return cached
+    
+    # Нет в кеше - читаем из БД
     db = Database()
-    return db.get_fissure_rank(telegram_id)
+    result = db.get_fissure_rank(telegram_id)
+    
+    # Сохраняем в кеш (если результат не None)
+    if result is not None:
+        top_cache.set(cache_key, result)
+    
+    return result
 
 def update_last_message_id(telegram_id, message_id):
     """Функция для совместимости - использует новый класс Database"""
@@ -1369,6 +1455,8 @@ def update_user_field(telegram_id, field, value):
         user_cache.set('digest_stats', None)
         user_cache.set('weekly_digest_stats', None)
         user_cache.set('dota_digest_stats', None)
+        # Сбрасываем кеш топа при изменении данных пользователей
+        top_cache.clear()
         
         return True
     return False
@@ -1409,17 +1497,37 @@ def _save_user_to_db_immediately(telegram_id, user_data):
 def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
     """Уменьшить fissure для неактивных игроков (вызывается ежедневно)"""
     db = Database()
-    return db.decrease_inactive_fissure(days_inactive, decrease_amount)
+    result = db.decrease_inactive_fissure(days_inactive, decrease_amount)
+    # Сбрасываем кеш топа при изменении fissure
+    if result > 0:
+        top_cache.clear()
+    return result
 
 def get_config(key, default=None):
-    """Получить значение конфигурации"""
+    """Получить значение конфигурации - из кеша"""
+    # Пробуем получить из кеша
+    cached = config_cache.get(key)
+    if cached is not None:
+        logger.info(f"get_config: returning from cache for key={key}")
+        return cached
+    
+    # Нет в кеше - читаем из БД
     db = Database()
-    return db.get_config(key, default)
+    result = db.get_config(key, default)
+    
+    # Сохраняем в кеш (если значение не None)
+    if result is not None:
+        config_cache.set(key, result)
+    
+    return result
 
 def set_config(key, value):
     """Установить значение конфигурации"""
     db = Database()
-    return db.set_config(key, value)
+    result = db.set_config(key, value)
+    # Сбрасываем кеш конфигурации при изменении
+    config_cache.delete(key)
+    return result
 
 def get_digest_stats():
     """Получить статистику для дайджеста - из кеша"""
@@ -1437,7 +1545,10 @@ def get_digest_stats():
 def update_player_positions():
     """Обновить позиции игроков"""
     db = Database()
-    return db.update_player_positions()
+    result = db.update_player_positions()
+    # Сбрасываем кеш топа при обновлении позиций
+    top_cache.clear()
+    return result
 
 
 
@@ -1447,6 +1558,8 @@ def update_digest_snapshot():
     result = db.update_digest_snapshot()
     # Сбрасываем кеш дайджеста
     user_cache.set('digest_stats', None)
+    # Сбрасываем кеш топа при обновлении снимка
+    top_cache.clear()
     return result
 
 
@@ -1469,6 +1582,8 @@ def update_weekly_digest_snapshot():
     result = db.update_weekly_digest_snapshot()
     # Сбрасываем кеш
     user_cache.set('weekly_digest_stats', None)
+    # Сбрасываем кеш топа при обновлении снимка
+    top_cache.clear()
     return result
 
 def get_dota_mmr_top(limit=10):

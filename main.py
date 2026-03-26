@@ -617,6 +617,7 @@ async def alternate_digest_job(context):
         
         # Пробуем отредактировать существующее сообщение
         last_message_id = get_config('alternate_digest_message_id')
+        logger.info(f"alternate_digest_job: text = {text[:100]}...")
         if last_message_id:
             try:
                 await bot.edit_message_text(
@@ -631,6 +632,7 @@ async def alternate_digest_job(context):
                 return
             except Exception as e:
                 error_str = str(e)
+                logger.info(f"Ошибка редактирования: {e}")
                 if "Message to edit not found" in error_str or "message can't be edited" in error_str:
                     logger.info(f"Старое сообщение {last_message_id} удалено, создаём новое")
                     set_config('alternate_digest_message_id', None)
@@ -641,7 +643,7 @@ async def alternate_digest_job(context):
         msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
         set_config('alternate_digest_message_id', msg.message_id)
         set_config('alternate_digest_type', next_type)
-        logger.info(f"Создан новый alternate дайджест {msg.message_id}")
+        logger.info(f"Создан новый alternate дайджест {msg.message_id}, type={next_type}")
         
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
@@ -1417,16 +1419,13 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     result_msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="🎮 *Привязка Steam аккаунта*\n\n"
-        "Чтобы участвовать в топах MMR и получать статистику,\n"
-        "привяжите свой аккаунт Steam.\n\n"
-        "📝 Введите ссылку на профиль:\n"
-        "   • Steam ID: 76561198012345678\n"
-        "   • Dotabuff: ru.dotabuff.com/players/347614699\n\n"
-        "⚠️ Важно:\n"
-        "   1) Профиль Steam должен быть открытым\n"
-        "   2) сыграно хотя бы 1 игру в Dota 2\n\n"
-        "📡 Статистика берется с сервиса OpenDota",
+        text="🎮 *Привязка Steam*\n\n"
+        "Отправьте `/link` и ваш Steam ID или ссылку на профиль.\n\n"
+        "*Примеры:*\n"
+        "`/link 76561198012345678`\n"
+        "`/link https://steamcommunity.com/id/ваш_ник`\n\n"
+        "⚠️ Профиль должен быть открытым\n"
+        "📡 Статистика с OpenDota"
         parse_mode='Markdown'
     )
     # Track this message for future deletion
