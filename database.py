@@ -82,6 +82,9 @@ def flush_users_cache():
         logger.info("flush_users_cache: no dirty users")
         return 0
     
+    # Обновляем кеш топа перед сбросом
+    update_dota_week_top_cache()
+    
     db = Database()
     flushed = 0
     
@@ -151,10 +154,45 @@ def flush_users_cache():
     return flushed
 
 
+def update_dota_week_top_cache():
+    """Обновление кеша топа MMR из данных пользователей"""
+    all_users = user_cache.get_all_users()
+    if not all_users:
+        logger.info("update_dota_week_top_cache: no users in cache")
+        return
+    
+    top_users = []
+    for telegram_id in all_users:
+        user = user_cache.get(telegram_id)
+        if not user or not user.get('steam_id'):
+            continue
+        
+        week_games = user.get('week_games', 0)
+        week_wins = user.get('week_wins', 0)
+        winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
+        
+        top_users.append({
+            'telegram_id': telegram_id,
+            'username': user.get('username'),
+            'steam_nickname': user.get('steam_nickname'),
+            'mmr': user.get('mmr', 0),
+            'week_games': week_games,
+            'week_wins': week_wins,
+            'rank_tier': user.get('rank_tier', 0),
+            'winrate': winrate
+        })
+    
+    # Сортируем по week_games DESC, winrate DESC, week_wins DESC, mmr DESC
+    top_users.sort(key=lambda x: (-x['week_games'], -x['winrate'], -x['week_wins'], -x['mmr']))
+    
+    # Сохраняем в кеш
+    user_cache.set('dota_week_top', top_users)
+    logger.info(f"update_dota_week_top_cache: cached {len(top_users)} users")
+
+
 # Connection pool management
 _connection_pool = {}
 _pool_lock = threading.Lock()
-
 def get_db_type():
     """Получить тип базы данных"""
     url = urlparse.urlparse(DATABASE_URL)
@@ -1277,6 +1315,11 @@ def update_user_field(telegram_id, field, value):
         user[field] = value
         user_cache.set(telegram_id, user)
         user_cache.mark_dirty(telegram_id)
+        
+        # Обновляем кеш топа MMR если изменились соответствующие поля
+        if field in ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname']:
+            update_dota_week_top_cache()
+        
         return True
     return False
 
@@ -1369,7 +1412,20 @@ def get_dota_mmr_top(limit=10):
 
 
 def get_dota_week_top(limit=10):
-    """Получение топа игроков Dota 2 за неделю по винрейту (без минимума игр)"""
+    """Получение топа игроков Dota 2 за неделю - сначала из кеша, потом из БД"""
+    # Пробуем получить из кеша
+    from database import user_cache
+    cached_top = user_cache.get('dota_week_top')
+    if cached_top:
+        logger.info("get_dota_week_top: returning from cache")
+        return cached_top[:limit]
+    
+    # Нет в кеше - читаем из БД
+    return get_dota_week_top_from_db(limit)
+
+
+def get_dota_week_top_from_db(limit=10):
+    """Получение топа игроков Dota 2 за неделю напрямую из БД"""
     try:
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
