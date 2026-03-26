@@ -77,11 +77,14 @@ class DonationManager:
         if not ranked:
             return None, 0, 0
         
+        # Увеличиваем индекс перед получением пользователя
+        self.current_index += 1
         if self.current_index >= len(ranked):
             self.current_index = 0
         
         username, amount = ranked[self.current_index]
         pyperclip.copy(username)
+        print(f"DEBUG: Копируем пользователя {username} (позиция {self.current_index + 1})")
         
         return username, amount, self.current_index + 1
     
@@ -297,12 +300,19 @@ class DonationApp:
     
     def copy_next(self):
         """Копирование следующего пользователя"""
-        username, amount, position = self.manager.copy_next_user()
-        if username:
-            self.update_ranking()
-            self.status_var.set(f"Скопировано: {username}")
-        else:
+        # При ручном нажатии кнопки просто копируем следующего, не увеличивая индекс
+        ranked = self.manager.get_ranked_list()
+        if not ranked:
             messagebox.showinfo("Информация", "Нет пользователей для копирования")
+            print("DEBUG: Нет пользователей для копирования")
+            return
+        
+        # Получаем текущего пользователя без изменения индекса
+        username, amount = ranked[self.manager.current_index]
+        pyperclip.copy(username)
+        self.update_ranking()
+        self.status_var.set(f"Скопировано: {username} (позиция {self.manager.current_index + 1})")
+        print(f"DEBUG: Скопировано {username}, позиция {self.manager.current_index + 1}")
     
     def toggle_monitoring(self):
         """Включение/выключение мониторинга"""
@@ -329,10 +339,19 @@ class DonationApp:
     
     def on_clipboard_change(self):
         """Обработчик изменения буфера обмена"""
-        # Автоматически копируем следующего пользователя
-        self.copy_next()
-        # Обновляем таблицу для отображения текущего пользователя
-        self.update_ranking()
+        # Увеличиваем индекс для перехода к следующему пользователю
+        ranked = self.manager.get_ranked_list()
+        if ranked:
+            self.manager.current_index += 1
+            if self.manager.current_index >= len(ranked):
+                self.manager.current_index = 0
+            
+            # Копируем следующего пользователя
+            username, amount = ranked[self.manager.current_index]
+            pyperclip.copy(username)
+            self.update_ranking()
+            self.status_var.set(f"Скопировано: {username} (позиция {self.manager.current_index + 1})")
+            print(f"DEBUG: Автоматически переключились на {username}, позиция {self.manager.current_index + 1}")
     
     def save_data(self):
         """Сохранение данных"""
