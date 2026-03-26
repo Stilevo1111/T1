@@ -1693,7 +1693,7 @@ def get_dota_week_top_from_db(limit=10):
                                 ELSE 0 END as winrate
                     FROM users 
                     WHERE steam_id IS NOT NULL
-                ORDER BY week_games DESC, winrate DESC, week_wins DESC, mmr DESC
+                ORDER BY week_games DESC, winrate * LN(week_games + 1) DESC, week_wins DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
             users = cursor.fetchall()
@@ -1726,7 +1726,7 @@ def get_dota_week_top_from_db(limit=10):
                             ELSE 0 END as winrate
                 FROM users 
                 WHERE steam_id IS NOT NULL
-                ORDER BY week_games DESC, winrate DESC, week_wins DESC, mmr DESC
+                ORDER BY week_games DESC, winrate * LOG(week_games + 1) DESC, week_wins DESC, mmr DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
@@ -1790,22 +1790,22 @@ def get_dota_digest_stats():
             return result
         
         if "postgres" in scheme:
-            # Лучший винрейт
+            # Лучший винрейт (взвешенная оценка: winrate * LOG(games + 1))
             cursor.execute("""
                 SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
                 FROM users 
                 WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY (week_wins::numeric / week_games::numeric) DESC, week_games DESC
+                ORDER BY (week_wins::numeric / week_games::numeric) * LN(week_games + 1) DESC
                 LIMIT 1
             """)
             top = cursor.fetchone()
             
-            # Худший винрейт
+            # Худший винрейт (взвешенная оценка: winrate * LOG(games + 1))
             cursor.execute("""
                 SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
                 FROM users 
                 WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY (week_wins::numeric / week_games::numeric) ASC, week_games DESC
+                ORDER BY (week_wins::numeric / week_games::numeric) * LN(week_games + 1) ASC
                 LIMIT 1
             """)
             bottom = cursor.fetchone()
@@ -1820,12 +1820,12 @@ def get_dota_digest_stats():
             """)
             streak = cursor.fetchone()
         else:
-            # SQLite
+            # SQLite (взвешенная оценка: winrate * LOG(games + 1))
             cursor.execute("""
                 SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
                 FROM users 
                 WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY (week_wins * 1.0 / week_games) DESC, week_games DESC
+                ORDER BY (week_wins * 1.0 / week_games) * LOG(week_games + 1) DESC
                 LIMIT 1
             """)
             top = cursor.fetchone()
@@ -1834,7 +1834,7 @@ def get_dota_digest_stats():
                 SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
                 FROM users 
                 WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY (week_wins * 1.0 / week_games) ASC, week_games DESC
+                ORDER BY (week_wins * 1.0 / week_games) * LOG(week_games + 1) ASC
                 LIMIT 1
             """)
             bottom = cursor.fetchone()
