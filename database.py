@@ -897,6 +897,9 @@ class Database:
                 if isinstance(result, dict):
                     val = result.get('value')
                     logger.info(f"get_config: dict value = {repr(val)}")
+                    # Для alternate_digest_type разрешаем "0" как валидное значение
+                    if key == 'alternate_digest_type' and val in ('0', '1'):
+                        return val
                     # Проверяем что значение не пустое и не "0"
                     if val is not None and val != '' and val != '0':
                         return val
@@ -905,7 +908,7 @@ class Database:
                 # result может быть (value,) или просто value
                 if isinstance(result, tuple):
                     val = result[0]
-                    if val and val != '0':
+                    if val and str(val) != '0':
                         return val
                     return default
                 if result and result != '0':
