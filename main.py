@@ -432,13 +432,13 @@ async def dota_digest_job(context):
         # Формат аналогичен утреннему дайджесту
         if top_player and top_player != "None":
             top_losses = top_games - top_wins
-            top_part = f"🎯{top_display} {top_winrate}% ({top_wins}W/{top_losses}L)"
+            top_part = f"🎯{top_display} {top_wins}W/{top_losses}L•{top_winrate}%"
         else:
             top_part = "🎯—"
         
         if bottom_player and bottom_player != "None":
             bottom_losses = bottom_games - bottom_wins
-            bottom_part = f"💀{bottom_display} {bottom_winrate}% ({bottom_wins}W/{bottom_losses}L)"
+            bottom_part = f"💀{bottom_display} {bottom_wins}W/{bottom_losses}L•{bottom_winrate}%"
         else:
             bottom_part = "💀—"
         
@@ -591,13 +591,13 @@ async def alternate_digest_job(context):
             
             if top_player and top_player != "None":
                 top_losses = top_games - top_wins
-                top_part = f"🎯{top_display} {top_winrate}% ({top_wins}W/{top_losses}L)"
+                top_part = f"🎯{top_display} {top_wins}W/{top_losses}L•{top_winrate}%"
             else:
                 top_part = "🎯—"
             
             if bottom_player and bottom_player != "None":
                 bottom_losses = bottom_games - bottom_wins
-                bottom_part = f"💀{bottom_display} {bottom_winrate}% ({bottom_wins}W/{bottom_losses}L)"
+                bottom_part = f"💀{bottom_display} {bottom_wins}W/{bottom_losses}L•{bottom_winrate}%"
             else:
                 bottom_part = "💀—"
             
@@ -606,7 +606,7 @@ async def alternate_digest_job(context):
             else:
                 streak_part = "🔥—"
             
-            text = f"{top_part} ┃{bottom_part} ┃{streak_part}\n\n🎮 DOTA ДАЙДЖЕСТ 📊\n\n🎯 = лучший винрейт за неделю\n💀 = худший винрейт за неделю\n🔥 = больше всего побед за неделю"
+            text = f"{top_part} ┃{bottom_part} ┃{streak_part}\n\n🎮 DOTA ДАЙДЖЕСТ 📊\n\n🎯 = лучший винрейт за неделю\n💀 = худший винрейт за неделю\n🔥 = текущий стрик побед"
             next_type = "0"
         
         # Пробуем отредактировать существующее сообщение
