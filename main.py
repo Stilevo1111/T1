@@ -1793,10 +1793,10 @@ async def main():
             days=(0,)  # Monday only
         )
         
-        # Чередование утреннего и Dota дайджеста каждые 5 минут
+        # Чередование утреннего и Dota дайджеста каждые 15 секунд
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(minutes=5),
+            interval=datetime.timedelta(seconds=15),
             first=datetime.datetime.now()
         )
 
@@ -1944,10 +1944,10 @@ async def main_polling():
             days=(0,)  # Monday only
         )
         
-        # Чередование утреннего и Dota дайджеста каждые 5 минут
+        # Чередование утреннего и Dota дайджеста каждые 15 секунд
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(minutes=5),
+            interval=datetime.timedelta(seconds=15),
             first=datetime.datetime.now()
         )
 
