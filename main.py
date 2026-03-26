@@ -1416,15 +1416,16 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result_msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text="🎮 *Привязка Steam аккаунта*\n\n"
-        "Используйте команду с никнеймом или Steam ID:\n"
-        "`/link Miracle` - по нику\n"
-        "`/link 76561198012345678` - по Steam ID\n"
-        "`/link https://ru.dotabuff.com/players/347614699` - по Dotabuff\n\n"
-        "📡 Данные берутся с OpenDota.\n"
-        "❗ Аккаунт Steam должен быть\n"
-        "   - не скрытый (открытый профиль)\n"
-        "   - сыграно хотя бы 1 игру\n\n"
-        "Или нажмите кнопку и введите ник в ответ на это сообщение",
+        "Чтобы участвовать в топах MMR и получать статистику,\n"
+        "привяжите свой аккаунт Steam.\n\n"
+        "📝 Введите никнейм или ссылку на профиль:\n"
+        "   • Ник: Miracle\n"
+        "   • Steam ID: 76561198012345678\n"
+        "   • Dotabuff: ru.dotabuff.com/players/347614699\n\n"
+        "⚠️ Важно:\n"
+        "   1) Профиль Steam должен быть открытым\n"
+        "   2) сыграно хотя бы 1 игру в Dota 2\n\n"
+        "📡 Статистика берется с сервиса OpenDota",
         parse_mode='Markdown'
     )
     # Track this message for future deletion
