@@ -157,8 +157,22 @@ def flush_users_cache():
 def update_dota_week_top_cache():
     """Обновление кеша топа MMR из данных пользователей"""
     all_users = user_cache.get_all_users()
+    
+    # Если в кеше нет пользователей - загружаем из БД
     if not all_users:
-        logger.info("update_dota_week_top_cache: no users in cache")
+        logger.info("update_dota_week_top_cache: no users in cache, loading from DB")
+        try:
+            from database import get_all_users_with_steam
+            db_users = get_all_users_with_steam()
+            for u in db_users:
+                user_cache.set(u['telegram_id'], u)
+            all_users = user_cache.get_all_users()
+            logger.info(f"update_dota_week_top_cache: loaded {len(all_users)} users from DB to cache")
+        except Exception as e:
+            logger.error(f"update_dota_week_top_cache: error loading users: {e}")
+    
+    if not all_users:
+        logger.info("update_dota_week_top_cache: no users found")
         return
     
     top_users = []
@@ -1447,11 +1461,25 @@ def get_dota_week_top(limit=10):
     # Пробуем получить из кеша
     from database import user_cache
     cached_top = user_cache.get('dota_week_top')
-    if cached_top:
-        logger.info("get_dota_week_top: returning from cache")
+    
+    # Проверяем есть ли данные в кеше
+    all_users = user_cache.get_all_users()
+    
+    if cached_top and len(cached_top) > 0 and len(all_users) > 0:
+        logger.info(f"get_dota_week_top: returning from cache ({len(cached_top)} users)")
         return cached_top[:limit]
     
-    # Нет в кеше - читаем из БД
+    # Кеш пустой - обновляем его из БД
+    logger.info("get_dota_week_top: cache empty, refreshing from DB")
+    from database import update_dota_week_top_cache
+    update_dota_week_top_cache()
+    
+    # Теперь получаем из кеша
+    cached_top = user_cache.get('dota_week_top')
+    if cached_top:
+        return cached_top[:limit]
+    
+    # Если всё ещё нет - читаем напрямую
     return get_dota_week_top_from_db(limit)
 
 

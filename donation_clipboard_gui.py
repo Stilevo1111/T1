@@ -236,6 +236,9 @@ class DonationApp:
         load_btn = ttk.Button(bottom_frame, text="Загрузить данные", command=self.load_data)
         load_btn.pack(side='left', padx=(0, 5))
         
+        import_btn = ttk.Button(bottom_frame, text="Импортировать из CSV", command=self.import_from_csv)
+        import_btn.pack(side='left', padx=(0, 5))
+        
         clear_btn = ttk.Button(bottom_frame, text="Очистить список", command=self.clear_data)
         clear_btn.pack(side='left', padx=(0, 5))
         
@@ -420,6 +423,32 @@ class DonationApp:
                 self.manager.save_data()
                 self.update_ranking()
                 self.status_var.set(f"Удален пользователь: {username}")
+    
+    def import_from_csv(self):
+        """Импорт данных из CSV файла"""
+        file_path = filedialog.askopenfilename(
+            title="Выберите CSV файл",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        
+        if not file_path:
+            return
+        
+        try:
+            imported_count = 0
+            with open(file_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    username = row['username'].strip()
+                    amount = float(row['amount'])
+                    self.manager.donations[username] = amount
+                    imported_count += 1
+            
+            self.manager.save_data()
+            self.update_ranking()
+            self.status_var.set(f"Импортировано {imported_count} пользователей из {file_path}")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось импортировать данные: {e}")
     
     def clear_data(self):
         """Очистка данных"""
