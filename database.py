@@ -20,6 +20,137 @@ if not DATABASE_URL:
 else:
     print(f"Using DATABASE_URL: {DATABASE_URL[:20]}...")
 
+
+class UserCache:
+    """Кеш данных пользователей в памяти с записью в БД раз в сутки"""
+    
+    def __init__(self):
+        self._cache = {}  # telegram_id -> user_data
+        self._dirty = {}  # telegram_id -> True
+        self._lock = threading.Lock()
+    
+    def get(self, telegram_id):
+        """Получить данные пользователя из кеша"""
+        with self._lock:
+            return self._cache.get(telegram_id)
+    
+    def set(self, telegram_id, data):
+        """Установить данные пользователя в кеш"""
+        with self._lock:
+            self._cache[telegram_id] = data
+    
+    def mark_dirty(self, telegram_id):
+        """Пометить пользователя как изменённого"""
+        with self._lock:
+            self._dirty[telegram_id] = True
+    
+    def is_dirty(self, telegram_id):
+        """Проверить, изменён ли пользователь"""
+        with self._lock:
+            return self._dirty.get(telegram_id, False)
+    
+    def get_all_dirty(self):
+        """Получить список всех изменённых пользователей"""
+        with self._lock:
+            return [tid for tid, is_dirty in self._dirty.items() if is_dirty]
+    
+    def clear_dirty(self, telegram_id):
+        """Очистить флаг dirty для пользователя"""
+        with self._lock:
+            self._dirty[telegram_id] = False
+    
+    def get_all_users(self):
+        """Получить всех пользователей из кеша"""
+        with self._lock:
+            return list(self._cache.keys())
+    
+    def remove(self, telegram_id):
+        """Удалить пользователя из кеша"""
+        with self._lock:
+            self._cache.pop(telegram_id, None)
+            self._dirty.pop(telegram_id, None)
+
+
+# Глобальный экземпляр кеша
+user_cache = UserCache()
+
+
+def flush_users_cache():
+    """Сброс всех изменённых пользователей в БД"""
+    dirty_users = user_cache.get_all_dirty()
+    if not dirty_users:
+        logger.info("flush_users_cache: no dirty users")
+        return 0
+    
+    db = Database()
+    flushed = 0
+    
+    for telegram_id in dirty_users:
+        user_data = user_cache.get(telegram_id)
+        if not user_data:
+            continue
+        
+        try:
+            # Используем batch update для всех полей
+            query = """
+                UPDATE users SET 
+                    username = %s,
+                    fissure = %s,
+                    last_fissure = %s,
+                    total_growth = %s,
+                    total_rolls = %s,
+                    current_streak = %s,
+                    best_streak = %s,
+                    weekly_rolls = %s,
+                    weekly_growth = %s,
+                    steam_id = %s,
+                    steam_nickname = %s,
+                    mmr = %s,
+                    rank_tier = %s,
+                    dota_total_games = %s,
+                    dota_wins = %s,
+                    last_dota_games = %s,
+                    last_dota_wins = %s,
+                    week_games = %s,
+                    week_wins = %s,
+                    week_best_streak = %s,
+                    week_start_date = %s,
+                    last_activity = CURRENT_TIMESTAMP
+                WHERE telegram_id = %s
+            """
+            db.execute_query(query, (
+                user_data.get('username'),
+                user_data.get('fissure', 0),
+                user_data.get('last_fissure', 0),
+                user_data.get('total_growth', 0),
+                user_data.get('total_rolls', 0),
+                user_data.get('current_streak', 0),
+                user_data.get('best_streak', 0),
+                user_data.get('weekly_rolls', 0),
+                user_data.get('weekly_growth', 0),
+                user_data.get('steam_id'),
+                user_data.get('steam_nickname'),
+                user_data.get('mmr', 0),
+                user_data.get('rank_tier', 0),
+                user_data.get('dota_total_games', 0),
+                user_data.get('dota_wins', 0),
+                user_data.get('last_dota_games', 0),
+                user_data.get('last_dota_wins', 0),
+                user_data.get('week_games', 0),
+                user_data.get('week_wins', 0),
+                user_data.get('week_best_streak', 0),
+                user_data.get('week_start_date'),
+                telegram_id
+            ))
+            user_cache.clear_dirty(telegram_id)
+            flushed += 1
+        except Exception as e:
+            logger.error(f"flush_users_cache: error for {telegram_id}: {e}")
+    
+    logger.info(f"flush_users_cache: flushed {flushed} users")
+    return flushed
+
+
 # Connection pool management
 _connection_pool = {}
 _pool_lock = threading.Lock()
@@ -1063,14 +1194,60 @@ class Database:
 
 # Функции для совместимости со старым кодом
 def get_user(telegram_id, username=None):
-    """Функция для совместимости - использует новый класс Database"""
+    """Получить пользователя - сначала из кеша, потом из БД"""
+    # Пробуем получить из кеша
+    cached_user = user_cache.get(telegram_id)
+    if cached_user:
+        return cached_user
+    
+    # Нет в кеше - читаем из БД
     db = Database()
-    return db.get_user(telegram_id, username)
+    user = db.get_user(telegram_id, username)
+    
+    # Сохраняем в кеш если пользователь найден
+    if user:
+        user_cache.set(telegram_id, user)
+    
+    return user
+
 
 def update_fissure(telegram_id, fissure, last_fissure, growth=0):
-    """Функция для совместимости - использует новый класс Database"""
-    db = Database()
-    db.update_fissure(telegram_id, fissure, last_fissure, growth)
+    """Обновление fissure - пишем в кеш"""
+    # Получаем текущие данные пользователя
+    user = get_user(telegram_id)
+    
+    if user:
+        # Обновляем данные в кеше
+        user['fissure'] = fissure
+        user['last_fissure'] = last_fissure
+        user['total_growth'] = user.get('total_growth', 0) + growth
+        user['total_rolls'] = user.get('total_rolls', 0) + 1
+        user['weekly_rolls'] = user.get('weekly_rolls', 0) + 1
+        user['weekly_growth'] = user.get('weekly_growth', 0) + max(0, growth)
+        
+        win = 1 if growth > 0 else 0
+        user['current_streak'] = user.get('current_streak', 0) + 1 if win else 0
+        user['best_streak'] = max(user.get('best_streak', 0), user['current_streak'])
+        
+        user_cache.set(telegram_id, user)
+        user_cache.mark_dirty(telegram_id)
+    else:
+        # Пользователя нет - создаем нового
+        db = Database()
+        db.add_user(telegram_id, "", "", "")
+        # Теперь пробуем снова
+        user = db.get_user(telegram_id)
+        if user:
+            user['fissure'] = fissure
+            user['last_fissure'] = last_fissure
+            user['total_growth'] = growth
+            user['total_rolls'] = 1
+            user['weekly_rolls'] = 1
+            user['weekly_growth'] = max(0, growth)
+            user['current_streak'] = 1 if growth > 0 else 0
+            user['best_streak'] = 1 if growth > 0 else 0
+            user_cache.set(telegram_id, user)
+            user_cache.mark_dirty(telegram_id)
 
 def get_fissure_top(limit=10):
     """Функция для совместимости - использует новый класс Database"""
@@ -1093,31 +1270,15 @@ def update_last_message_id(telegram_id, message_id):
     db.update_last_message_id(telegram_id, message_id)
 
 def update_user_field(telegram_id, field, value):
-    """Обновление любого поля пользователя"""
-    try:
-        conn = get_connection()
-        url = urlparse.urlparse(DATABASE_URL)
-        scheme = url.scheme
-        
-        cursor = conn.cursor()
-        
-        if "postgres" in scheme:
-            cursor.execute(
-                f"UPDATE users SET {field} = %s WHERE telegram_id = %s",
-                (value, telegram_id)
-            )
-        else:
-            cursor.execute(
-                f"UPDATE users SET {field} = ? WHERE telegram_id = ?",
-                (value, telegram_id)
-            )
-        
-        conn.commit()
-        cursor.close()
+    """Обновление любого поля пользователя - пишем в кеш"""
+    user = get_user(telegram_id)
+    
+    if user:
+        user[field] = value
+        user_cache.set(telegram_id, user)
+        user_cache.mark_dirty(telegram_id)
         return True
-    except Exception as e:
-        logger.error(f"Error updating user field: {e}")
-        return False
+    return False
 
 def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
     """Уменьшить fissure для неактивных игроков (вызывается ежедневно)"""

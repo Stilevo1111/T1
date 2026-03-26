@@ -1870,6 +1870,23 @@ async def main():
         
         logger.info("Web server started")
         
+        # Запускаем задачу flush кеша в БД каждый день в полночь UTC
+        import asyncio
+        async def daily_flush_cache():
+            """Сбрасывает кеш пользователей в БД раз в сутки"""
+            from database import flush_users_cache
+            while True:
+                try:
+                    await asyncio.sleep(86400)  # 24 часа
+                    logger.info("Daily flush cache job starting...")
+                    flushed = flush_users_cache()
+                    logger.info(f"Daily flush cache completed: {flushed} users")
+                except Exception as e:
+                    logger.error(f"Daily flush cache error: {e}")
+        
+        asyncio.create_task(daily_flush_cache())
+        logger.info("Daily flush cache task started")
+        
         while True:
             await asyncio.sleep(3600)
             
