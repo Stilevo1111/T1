@@ -1468,19 +1468,21 @@ def _save_user_to_db_immediately(telegram_id, user_data):
         db = Database()
         query = """
             UPDATE users SET 
-                mmr = %s, rank_tier = %s, week_games = %s, week_wins = %s, 
-                week_best_streak = %s, steam_nickname = %s, dota_total_games = %s,
+                steam_id = %s, steam_nickname = %s, mmr = %s, rank_tier = %s,
+                week_games = %s, week_wins = %s, 
+                week_best_streak = %s, dota_total_games = %s,
                 dota_wins = %s, last_dota_games = %s, last_dota_wins = %s,
                 wins = %s, losses = %s, week_start_date = %s
             WHERE telegram_id = %s
         """
         db.execute_query(query, (
+            user_data.get('steam_id'),
+            user_data.get('steam_nickname'),
             user_data.get('mmr', 0),
             user_data.get('rank_tier', 0),
             user_data.get('week_games', 0),
             user_data.get('week_wins', 0),
             user_data.get('week_best_streak', 0),
-            user_data.get('steam_nickname'),
             user_data.get('dota_total_games', 0),
             user_data.get('dota_wins', 0),
             user_data.get('last_dota_games', 0),
