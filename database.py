@@ -1269,6 +1269,9 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
         
         user_cache.set(telegram_id, user)
         user_cache.mark_dirty(telegram_id)
+        
+        # Сбрасываем кеши дайджестов при изменении fissure
+        user_cache.set('digest_stats', None)
     else:
         # Пользователя нет - создаем нового
         db = Database()
@@ -1320,6 +1323,11 @@ def update_user_field(telegram_id, field, value):
         if field in ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname']:
             update_dota_week_top_cache()
         
+        # Сбрасываем кеши дайджестов при изменении данных пользователя
+        user_cache.set('digest_stats', None)
+        user_cache.set('weekly_digest_stats', None)
+        user_cache.set('dota_digest_stats', None)
+        
         return True
     return False
 
@@ -1339,31 +1347,54 @@ def set_config(key, value):
     return db.set_config(key, value)
 
 def get_digest_stats():
-    """Получить статистику для дайджеста"""
+    """Получить статистику для дайджеста - из кеша"""
+    cached = user_cache.get('digest_stats')
+    if cached:
+        logger.info("get_digest_stats: returning from cache")
+        return cached
+    
     db = Database()
-    return db.get_digest_stats()
+    result = db.get_digest_stats()
+    user_cache.set('digest_stats', result)
+    return result
+
 
 def update_player_positions():
     """Обновить позиции игроков"""
     db = Database()
     return db.update_player_positions()
 
+
+
 def update_digest_snapshot():
     """Обновить снимок для дайджеста"""
     db = Database()
-    return db.update_digest_snapshot()
+    result = db.update_digest_snapshot()
+    # Сбрасываем кеш дайджеста
+    user_cache.set('digest_stats', None)
+    return result
+
 
 def get_weekly_digest_stats():
-    """Статистика для еженедельного дайджеста"""
+    """Статистика для еженедельного дайджеста - из кеша"""
+    cached = user_cache.get('weekly_digest_stats')
+    if cached:
+        logger.info("get_weekly_digest_stats: returning from cache")
+        return cached
+    
     db = Database()
-    return db.get_weekly_digest_stats()
+    result = db.get_weekly_digest_stats()
+    user_cache.set('weekly_digest_stats', result)
+    return result
+
 
 def update_weekly_digest_snapshot():
     """Обновить снимок и обнулить недельные счётчики после еженедельного дайджеста"""
     db = Database()
-    return db.update_weekly_digest_snapshot()# Temporary file to add new functions to database.py
-
-# Function to add to database.py at the end:
+    result = db.update_weekly_digest_snapshot()
+    # Сбрасываем кеш
+    user_cache.set('weekly_digest_stats', None)
+    return result
 
 def get_dota_mmr_top(limit=10):
     """Получение топа игроков Dota 2 по MMR"""
@@ -1528,7 +1559,116 @@ def get_dota_week_top_from_db(limit=10):
 
 
 def get_dota_digest_stats():
-    """Получение статистики для Dota дайджеста: лучший и худший винрейт"""
+    """Получение статистики для Dota дайджеста - из кеша"""
+    cached = user_cache.get('dota_digest_stats')
+    if cached:
+        logger.info("get_dota_digest_stats: returning from cache")
+        return cached
+    
+    # Читаем из БД
+    try:
+        conn = get_connection()
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        cursor = conn.cursor()
+        
+        # Проверяем есть ли пользователи с играми за неделю
+        cursor.execute("""
+            SELECT COUNT(*) FROM users 
+            WHERE steam_id IS NOT NULL AND week_games > 0
+        """)
+        count = cursor.fetchone()[0]
+        
+        if count == 0:
+            cursor.close()
+            conn.close()
+            result = {
+                "top_winrate": ("None", 0, 0, 0, None),
+                "bottom_winrate": ("None", 0, 0, 0, None),
+                "top_streak": ("None", 0, None)
+            }
+            user_cache.set('dota_digest_stats', result)
+            return result
+        
+        if "postgres" in scheme:
+            # Лучший винрейт
+            cursor.execute("""
+                SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_games > 0
+                ORDER BY (week_wins::numeric / week_games::numeric) DESC, week_games DESC
+                LIMIT 1
+            """)
+            top = cursor.fetchone()
+            
+            # Худший винрейт
+            cursor.execute("""
+                SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_games > 0
+                ORDER BY (week_wins::numeric / week_games::numeric) ASC, week_games DESC
+                LIMIT 1
+            """)
+            bottom = cursor.fetchone()
+            
+            # Лучший стрик
+            cursor.execute("""
+                SELECT steam_nickname, week_best_streak, telegram_id
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_best_streak > 0
+                ORDER BY week_best_streak DESC
+                LIMIT 1
+            """)
+            streak = cursor.fetchone()
+        else:
+            # SQLite
+            cursor.execute("""
+                SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_games > 0
+                ORDER BY (week_wins * 1.0 / week_games) DESC, week_games DESC
+                LIMIT 1
+            """)
+            top = cursor.fetchone()
+            
+            cursor.execute("""
+                SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_games > 0
+                ORDER BY (week_wins * 1.0 / week_games) ASC, week_games DESC
+                LIMIT 1
+            """)
+            bottom = cursor.fetchone()
+            
+            cursor.execute("""
+                SELECT steam_nickname, week_best_streak, telegram_id
+                FROM users 
+                WHERE steam_id IS NOT NULL AND week_best_streak > 0
+                ORDER BY week_best_streak DESC
+                LIMIT 1
+            """)
+            streak = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        result = {
+            "top_winrate": (top[1] if top else "None", top[4] if top else 0, top[2] if top else 0, top[3] if top else 0, top[0] if top else None) if top else ("None", 0, 0, 0, None),
+            "bottom_winrate": (bottom[1] if bottom else "None", bottom[4] if bottom else 0, bottom[2] if bottom else 0, bottom[3] if bottom else 0, bottom[0] if bottom else None) if bottom else ("None", 0, 0, 0, None),
+            "top_streak": (streak[1] if streak else "None", streak[2] if streak else 0, streak[0] if streak else None) if streak else ("None", 0, None)
+        }
+        
+        logger.info(f"Dota digest stats: {result}")
+        user_cache.set('dota_digest_stats', result)
+        return result
+    except Exception as e:
+        logger.error(f"Ошибка get_dota_digest_stats: {e}")
+        return {
+            "top_winrate": ("None", 0, 0, 0, None),
+            "bottom_winrate": ("None", 0, 0, 0, None),
+            "top_streak": ("None", 0, None)
+        }
     try:
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
