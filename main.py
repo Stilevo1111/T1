@@ -1420,6 +1420,10 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "`/link Miracle` - по нику\n"
         "`/link 76561198012345678` - по Steam ID\n"
         "`/link https://ru.dotabuff.com/players/347614699` - по Dotabuff\n\n"
+        "📡 Данные берутся с OpenDota.\n"
+        "❗ Аккаунт Steam должен быть\n"
+        "   - не скрытый (открытый профиль)\n"
+        "   - сыграно хотя бы 1 игру\n\n"
         "Или нажмите кнопку и введите ник в ответ на это сообщение",
         parse_mode='Markdown'
     )
