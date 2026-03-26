@@ -420,9 +420,9 @@ async def dota_digest_job(context):
         bottom_player, bottom_rank, bottom_games, bottom_wins, bottom_id = stats.get("bottom_winrate", ("None", 0, 0, 0, None))
         streak_player, streak_wins, streak_id = stats.get("top_streak", ("None", 0, None))
         
-        # Форматируем винрейт
-        top_winrate = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
-        bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
+        # Форматируем винрейт (с ограничением 0-100%)
+        top_winrate = min(round((top_wins / top_games * 100), 1), 100.0) if top_games > 0 else 0
+        bottom_winrate = min(round((bottom_wins / bottom_games * 100), 1), 100.0) if bottom_games > 0 else 0
         
         # Используем make_clickable для никнеймов
         top_display = make_clickable(top_player, top_id) if top_player and top_player != "None" else "—"
