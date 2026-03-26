@@ -530,6 +530,7 @@ async def alternate_digest_job(context):
         
         # Получаем ID чата для дайджеста
         digest_chat_id = get_config('digest_chat_id')
+        logger.info(f"alternate_digest_job: digest_chat_id = {digest_chat_id}")
         if not digest_chat_id:
             logger.info("Чат для дайджеста не настроен")
             return
@@ -538,6 +539,7 @@ async def alternate_digest_job(context):
         
         # Получаем текущий тип дайджеста (0 = morning, 1 = dota)
         current_type = get_config('alternate_digest_type')
+        logger.info(f"alternate_digest_job: current_type = {current_type}")
         if current_type is None:
             current_type = "0"
         
