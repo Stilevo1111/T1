@@ -1858,10 +1858,11 @@ async def main():
         
         runner = web.AppRunner(web_app)
         await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(os.getenv('PORT', 10000)))
+        port = int(os.getenv('PORT', 10000))
+        logger.info(f"Starting web server on port {port}")
+        site = web.TCPSite(runner, '0.0.0.0', port)
         await site.start()
-        
-        logger.info("Web server started")
+        logger.info(f"Web server started on port {port}")
         
         # Запускаем задачу flush кеша в БД каждый день в полночь UTC
         import asyncio
