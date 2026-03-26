@@ -1885,6 +1885,22 @@ async def main():
         asyncio.create_task(daily_flush_cache())
         logger.info("Daily flush cache task started")
         
+        # Пингуем себя каждые 2 минуты чтобы Render не засыпал
+        async def keep_alive_ping():
+            """Пингует свой собственный /health чтобы бот не засыпал"""
+            import aiohttp
+            while True:
+                try:
+                    await asyncio.sleep(120)  # каждые 2 минуты
+                    async with aiohttp.ClientSession() as session:
+                        await session.get('http://127.0.0.1:10000/health')
+                        logger.info("Keep-alive ping sent")
+                except Exception as e:
+                    logger.error(f"Keep-alive ping error: {e}")
+        
+        asyncio.create_task(keep_alive_ping())
+        logger.info("Keep-alive task started - will ping every 2 minutes")
+        
         while True:
             await asyncio.sleep(3600)
             
