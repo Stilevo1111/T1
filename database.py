@@ -812,22 +812,28 @@ class Database:
             
             if "postgres" in scheme:
                 query = """
-                    SELECT COUNT(*) + 1 as rank FROM users WHERE fissure > (
+                    SELECT COUNT(*) + 1 as rank FROM users 
+                    WHERE fissure IS NOT NULL 
+                    AND fissure > COALESCE((
                         SELECT fissure FROM users WHERE telegram_id = %s
-                    )
+                    ), -1)
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
-                if result and result.get('rank') is not None:
+                logger.info(f"get_fissure_rank result: {result}, type={type(result)}")
+                if result and isinstance(result, dict) and result.get('rank') is not None:
                     rank = int(result['rank'])
                     return rank if rank > 0 else 1
                 return None
             else:
                 query = """
-                    SELECT COUNT(*) + 1 FROM users WHERE fissure > (
+                    SELECT COUNT(*) + 1 FROM users 
+                    WHERE fissure IS NOT NULL 
+                    AND fissure > COALESCE((
                         SELECT fissure FROM users WHERE telegram_id = ?
-                    )
+                    ), -1)
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
+                logger.info(f"get_fissure_rank result: {result}, type={type(result)}")
                 if result and result[0] is not None:
                     rank = int(result[0])
                     return rank if rank > 0 else 1
@@ -1506,13 +1512,8 @@ def get_dota_week_top_from_db(limit=10):
         count = cursor.fetchone()[0]
         logger.info(f"get_dota_week_top: {total_with_steam} users with steam_id, {count} with week_games > 0")
         
-        # Если нет пользователей с недельными играми, возвращаем всех с steam_id
-        if count == 0 and total_with_steam > 0:
-            logger.info("get_dota_week_top: no users with week_games > 0, returning all with steam_id")
-        elif count == 0:
-            cursor.close()
-            conn.close()
-            return []
+        # Если нет пользователей с недельными играми, возвращаем всех с steam_id (независимо от count)
+        if total_with_steam > 0:
         
         if "postgres" in scheme:
             cursor.execute("""
