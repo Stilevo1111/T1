@@ -1338,20 +1338,13 @@ def update_last_message_id(telegram_id, message_id):
     db.update_last_message_id(telegram_id, message_id)
 
 def update_user_field(telegram_id, field, value):
-    """Обновление любого поля пользователя - пишем в кеш и сразу в БД для важных полей"""
+    """Обновление любого поля пользователя - пишем в кеш"""
     user = get_user(telegram_id)
     
     if user:
         user[field] = value
         user_cache.set(telegram_id, user)
         user_cache.mark_dirty(telegram_id)
-        
-        # ДОТА ПОЛЯ: записываем сразу в БД (не ждём flush)
-        dota_fields = ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 
-                       'steam_nickname', 'dota_total_games', 'dota_wins', 'last_dota_games', 
-                       'last_dota_wins', 'wins', 'losses', 'week_start_date']
-        if field in dota_fields:
-            _save_user_to_db_immediately(telegram_id, user)
         
         # Обновляем кеш топа MMR если изменились соответствующие поля
         if field in ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname']:
