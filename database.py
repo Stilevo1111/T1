@@ -1512,18 +1512,17 @@ def get_dota_week_top_from_db(limit=10):
         count = cursor.fetchone()[0]
         logger.info(f"get_dota_week_top: {total_with_steam} users with steam_id, {count} with week_games > 0")
         
-        # Если нет пользователей с недельными играми, возвращаем всех с steam_id (независимо от count)
+        # Если есть пользователи с steam_id, выполняем запрос
         if total_with_steam > 0:
-        
-        if "postgres" in scheme:
-            cursor.execute("""
-                SELECT telegram_id, username, steam_nickname, mmr, 
-                       week_games, week_wins, rank_tier,
-                       CASE WHEN week_games > 0 
-                            THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
-                            ELSE 0 END as winrate
-                FROM users 
-                WHERE steam_id IS NOT NULL
+            if "postgres" in scheme:
+                cursor.execute("""
+                    SELECT telegram_id, username, steam_nickname, mmr, 
+                           week_games, week_wins, rank_tier,
+                           CASE WHEN week_games > 0 
+                                THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
+                                ELSE 0 END as winrate
+                    FROM users 
+                    WHERE steam_id IS NOT NULL
                 ORDER BY week_games DESC, winrate DESC, week_wins DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
