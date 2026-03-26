@@ -1,0 +1,6 @@
+{
+  "delay_range": [1, 3],
+  "max_retries": 3,
+  "timeout": 10,
+  "tiktok_studio_path": "C:\\Program Files\\TikTok\\TikTok Studio.exe"
+}
