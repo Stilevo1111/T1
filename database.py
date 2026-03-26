@@ -177,6 +177,10 @@ def update_dota_week_top_cache():
     
     top_users = []
     for telegram_id in all_users:
+        # Пропускаем метаданные (не числовые ключи)
+        if not isinstance(telegram_id, int):
+            continue
+        
         user = user_cache.get(telegram_id)
         if not user or not user.get('steam_id'):
             continue
