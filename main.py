@@ -25,8 +25,12 @@ if not TOKEN:
 else:
     print("BOT_TOKEN found")
 
-# Глобальная переменная для отслеживания активности бота
+# Глобальная переменные для отслеживания активности бота
 last_update_time = time.time()
+# Время запуска бота - health check не проверяет активность в первые 5 минут
+bot_start_time = time.time()
+# Период ожидания после запуска (секунд)
+HEALTH_CHECK_GRACE_PERIOD = 300
 
 COOLDOWN = 86400  # 24 hours
 
@@ -1665,7 +1669,7 @@ def setup_health_check(bot):
     """Initialize health check handler with bot instance"""
     global health_check_handler
     async def check(request):
-        global last_update_time
+        global last_update_time, bot_start_time
         try:
             # Проверяем что бот жив - пингуем Telegram API
             await asyncio.wait_for(bot.get_me(), timeout=5)
@@ -1674,10 +1678,13 @@ def setup_health_check(bot):
             last_update_time = time.time()
             
             # Проверяем активность - был ли апдейт за последние 3 минуты?
-            time_since_update = time.time() - last_update_time
-            if time_since_update > 180:
-                logger.warning(f"Health check: no updates for {time_since_update:.0f}s, marking as degraded")
-                return web.Response(text=f"Bot degraded: no updates for {time_since_update:.0f}s", status=503)
+            # НО! В первые 5 минут после запуска не проверяем активность
+            time_since_start = time.time() - bot_start_time
+            if time_since_start > HEALTH_CHECK_GRACE_PERIOD:
+                time_since_update = time.time() - last_update_time
+                if time_since_update > 180:
+                    logger.warning(f"Health check: no updates for {time_since_update:.0f}s, marking as degraded")
+                    return web.Response(text=f"Bot degraded: no updates for {time_since_update:.0f}s", status=503)
             
             return web.Response(text="Bot is working", status=200)
         except asyncio.TimeoutError:
