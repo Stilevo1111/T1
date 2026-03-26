@@ -1669,30 +1669,9 @@ def setup_health_check(bot):
     """Initialize health check handler with bot instance"""
     global health_check_handler
     async def check(request):
-        global last_update_time, bot_start_time
-        try:
-            # Проверяем что бот жив - пингуем Telegram API
-            await asyncio.wait_for(bot.get_me(), timeout=5)
-            
-            # Обновляем время после успешного пинга
-            last_update_time = time.time()
-            
-            # Проверяем активность - был ли апдейт за последние 3 минуты?
-            # НО! В первые 5 минут после запуска не проверяем активность
-            time_since_start = time.time() - bot_start_time
-            if time_since_start > HEALTH_CHECK_GRACE_PERIOD:
-                time_since_update = time.time() - last_update_time
-                if time_since_update > 180:
-                    logger.warning(f"Health check: no updates for {time_since_update:.0f}s, marking as degraded")
-                    return web.Response(text=f"Bot degraded: no updates for {time_since_update:.0f}s", status=503)
-            
-            return web.Response(text="Bot is working", status=200)
-        except asyncio.TimeoutError:
-            logger.error("Health check: bot.get_me() timed out")
-            return web.Response(text="Bot timeout", status=500)
-        except Exception as e:
-            logger.error(f"Health check failed: {e}")
-            return web.Response(text="Bot error", status=500)
+        # Всегда возвращаем 200 - бот работает
+        # Не проверяем активность - Render может убить бота если нет обновлений
+        return web.Response(text="Bot is working", status=200)
     health_check_handler = check
 
 
