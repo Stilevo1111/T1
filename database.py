@@ -1338,13 +1338,20 @@ def update_last_message_id(telegram_id, message_id):
     db.update_last_message_id(telegram_id, message_id)
 
 def update_user_field(telegram_id, field, value):
-    """Обновление любого поля пользователя - пишем в кеш"""
+    """Обновление любого поля пользователя - пишем в кеш и сразу в БД для важных полей"""
     user = get_user(telegram_id)
     
     if user:
         user[field] = value
         user_cache.set(telegram_id, user)
         user_cache.mark_dirty(telegram_id)
+        
+        # ДОТА ПОЛЯ: записываем сразу в БД (не ждём flush)
+        dota_fields = ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 
+                       'steam_nickname', 'dota_total_games', 'dota_wins', 'last_dota_games', 
+                       'last_dota_wins', 'wins', 'losses', 'week_start_date']
+        if field in dota_fields:
+            _save_user_to_db_immediately(telegram_id, user)
         
         # Обновляем кеш топа MMR если изменились соответствующие поля
         if field in ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname']:
@@ -1357,6 +1364,39 @@ def update_user_field(telegram_id, field, value):
         
         return True
     return False
+
+
+def _save_user_to_db_immediately(telegram_id, user_data):
+    """Сохранение пользователя в БД сразу (для важных полей)"""
+    try:
+        db = Database()
+        query = """
+            UPDATE users SET 
+                mmr = %s, rank_tier = %s, week_games = %s, week_wins = %s, 
+                week_best_streak = %s, steam_nickname = %s, dota_total_games = %s,
+                dota_wins = %s, last_dota_games = %s, last_dota_wins = %s,
+                wins = %s, losses = %s, week_start_date = %s
+            WHERE telegram_id = %s
+        """
+        db.execute_query(query, (
+            user_data.get('mmr', 0),
+            user_data.get('rank_tier', 0),
+            user_data.get('week_games', 0),
+            user_data.get('week_wins', 0),
+            user_data.get('week_best_streak', 0),
+            user_data.get('steam_nickname'),
+            user_data.get('dota_total_games', 0),
+            user_data.get('dota_wins', 0),
+            user_data.get('last_dota_games', 0),
+            user_data.get('last_dota_wins', 0),
+            user_data.get('wins', 0),
+            user_data.get('losses', 0),
+            user_data.get('week_start_date'),
+            telegram_id
+        ))
+        logger.info(f"Saved user {telegram_id} Dota fields to DB immediately")
+    except Exception as e:
+        logger.error(f"Error saving user to DB immediately: {e}")
 
 def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
     """Уменьшить fissure для неактивных игроков (вызывается ежедневно)"""
