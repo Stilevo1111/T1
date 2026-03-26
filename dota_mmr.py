@@ -278,6 +278,12 @@ def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
 
 def register_steam(telegram_id: int, identifier: str) -> dict:
     try:
+        # Создаем пользователя если не существует
+        from database import get_user
+        user = get_user(telegram_id)
+        if not user:
+            return {"success": False, "message": "❌ Пользователь не найден. Сначала отправьте /start или /fissure"}
+        
         steam_id = parse_steam_identifier(identifier)
 
         if steam_id:
