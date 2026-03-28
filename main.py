@@ -1326,19 +1326,42 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     'streak': streak_text
                 })
             
-            # Выравнивание колонок
-            max_user = max(len(l['username']) for l in lines)
-            max_rank = max(len(l['rank']) for l in lines)
-            max_wl = max(len(l['wl']) for l in lines)
-            max_wr = max(len(l['wr']) for l in lines)
+            # Выравнивание колонок с учётом ширины эмодзи
+            def display_width(s):
+                """Подсчёт отображаемой ширины: эмодзи с вариационным селектором = 2 символа"""
+                import re
+                # Эмодзи с вариационным селектором (FE0F) занимают 2 символа в моноширинном
+                w = 0
+                i = 0
+                while i < len(s):
+                    if i + 1 < len(s) and ord(s[i+1]) == 0xFE0F:
+                        w += 2
+                        i += 2
+                    elif ord(s[i]) > 0xFFFF:
+                        w += 2
+                        i += 1
+                    else:
+                        w += 1
+                        i += 1
+                return w
+            
+            def ljust_display(s, width):
+                """Выравнивание по ширине отображения"""
+                cur = display_width(s)
+                return s + ' ' * max(0, width - cur)
+            
+            max_user = max(display_width(l['username']) for l in lines)
+            max_rank = max(display_width(l['rank']) for l in lines)
+            max_wl = max(display_width(l['wl']) for l in lines)
+            max_wr = max(display_width(l['wr']) for l in lines)
             
             import html as html_mod
             formatted = ["🏆 Топ MMR за неделю\n"]
             for l in lines:
-                u = html_mod.escape(l['username'].ljust(max_user))
-                r = html_mod.escape(l['rank'].ljust(max_rank))
-                w = l['wl'].ljust(max_wl)
-                x = l['wr'].ljust(max_wr)
+                u = html_mod.escape(ljust_display(l['username'], max_user))
+                r = html_mod.escape(ljust_display(l['rank'], max_rank))
+                w = ljust_display(l['wl'], max_wl)
+                x = ljust_display(l['wr'], max_wr)
                 row = f"{l['prefix']} {u} {r}  {w} {x}{l['streak']}"
                 formatted.append(f"<code>{row}</code>")
             
