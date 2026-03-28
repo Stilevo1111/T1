@@ -1477,21 +1477,9 @@ def get_user_rank(telegram_id):
     return result
 
 def get_fissure_rank(telegram_id):
-    """Получить позицию игрока в топе по fissure - из кеша"""
-    cache_key = f'fissure_rank_{telegram_id}'
-    cached = top_cache.get(cache_key)
-    if cached is not None:
-        logger.info(f"get_fissure_rank: returning from cache for {telegram_id}")
-        return cached
-    
-    # Нет в кеше - читаем из БД
+    """Получить позицию игрока в топе по fissure"""
     db = Database()
     result = db.get_fissure_rank(telegram_id)
-    
-    # Сохраняем в кеш (если результат не None)
-    if result is not None:
-        top_cache.set(cache_key, result)
-    
     return result
 
 def update_last_message_id(telegram_id, message_id):
@@ -1510,9 +1498,8 @@ def update_user_field(telegram_id, field, value):
         
         # Поля Steam: записываем сразу в БД
         steam_fields = ['steam_id', 'steam_nickname', 'mmr', 'rank_tier', 
-                       'dota_total_games', 'dota_wins', 'wins', 'losses',
-                       'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'week_start_date',
-                       'last_dota_games', 'last_dota_wins']
+                        'wins', 'losses',
+                        'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'week_start_date']
         if field in steam_fields:
             _save_user_to_db_immediately(telegram_id, user)
         
