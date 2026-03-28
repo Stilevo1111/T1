@@ -1168,9 +1168,9 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 name = user_top.get('username', 'Unknown')[:15]
                 medal = medals.get(i)
                 if medal:
-                    text += f"{medal} {name}: {user_top['fissure']:.1f} см\n\n"
+                    text += f"{medal} {name}: {user_top['fissure']:.1f} см\n"
                 else:
-                    text += f" {i}. {name}: {user_top['fissure']:.1f} см\n\n"
+                    text += f" {i}. {name}: {user_top['fissure']:.1f} см\n"
             
             # Всегда показываем позицию пользователя, даже если он не в топе
             if user_rank:
