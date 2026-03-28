@@ -1339,7 +1339,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 r = html_mod.escape(l['rank'].ljust(max_rank))
                 w = l['wl'].ljust(max_wl)
                 x = l['wr'].ljust(max_wr)
-                row = f"{l['prefix']} {u} {r} | {w} {x}{l['streak']}"
+                row = f"{l['prefix']} {u} {r}  {w} {x}{l['streak']}"
                 formatted.append(f"<code>{row}</code>")
             
             text = "\n".join(formatted)
