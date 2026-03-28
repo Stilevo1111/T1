@@ -1363,9 +1363,10 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
         
         # Пишем в БД сразу чтобы не потерять при перезапуске
         try:
-            conn, scheme = get_connection()
+            conn = get_connection()
+            scheme = get_db_type()
             cursor = conn.cursor()
-            if "postgres" in scheme:
+            if scheme == "postgresql":
                 cursor.execute("""
                     UPDATE users SET 
                         fissure = %s, last_fissure = %s,
@@ -1393,7 +1394,6 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
                 """, (fissure, last_fissure, growth, max(0, growth), win, win, telegram_id))
             conn.commit()
             cursor.close()
-            conn.close()
         except Exception as e:
             logger.error(f"update_fissure: DB write error: {e}")
         
