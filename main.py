@@ -688,7 +688,11 @@ async def alternate_digest_job(context):
         set_config('alternate_digest_type', next_type)
         logger.info(f"Создан новый alternate дайджест {msg.message_id}, type={next_type}")
         
-        # Закрепляем дайджест
+        # Закрепляем дайджест (открепляем старый, закрепляем новый)
+        try:
+            await bot.unpin_chat_message(chat_id=digest_chat_id)
+        except Exception as e:
+            logger.debug(f"Не удалось открепить старый: {e}")
         try:
             await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
             logger.info(f"Дайджест {msg.message_id} закреплён")
