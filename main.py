@@ -1278,7 +1278,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Форматируем ранг
                 if rank_tier:
                     # Конвертируем rank_tier в строку ранга
-                    ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🦸 Герой", "🌟 Легенда", "👑 Властелин", "☀️ Божество", "🔥 Титан"]
+                    ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🐉 Титан"]
                     tier = min(rank_tier // 10, 8)
                     star = rank_tier % 10
                     
@@ -1314,7 +1314,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if user_rank_tier:
                 # Конвертируем rank_tier в строку ранга
-                ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🦸 Герой", "🌟 Легенда", "👑 Властелин", "☀️ Божество", "🔥 Титан"]
+                ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🐉 Титан"]
                 tier = min(user_rank_tier // 10, 8)
                 star = user_rank_tier % 10
                 
