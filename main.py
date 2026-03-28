@@ -1113,7 +1113,17 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = user_obj.id
         display_username = f"<a href=\"tg://user?id={user_id}\">{username}</a>"
         
-        text = f"👑 {display_username}\n\n📏 Длина: {user['fissure']:.1f} см\n🎲 Бросков: {user.get('total_rolls', 0)}\n🔥 Стрик: {user.get('current_streak', 0)}/{user.get('best_streak', 0)}"
+        text = f"👑 {display_username}\n\n📏 Длина: {user['fissure']:.1f} см\n🎲 Бросков: {user.get('total_rolls', 0)}\n🔥 Фиссура: {user.get('current_streak', 0)}/{user.get('best_streak', 0)}"
+
+        # Добавляем стрик Dota если привязан Steam
+        if user.get('steam_id'):
+            week_streak = user.get('week_current_streak', 0)
+            week_best = user.get('week_best_streak', 0)
+            week_games = user.get('week_games', 0)
+            week_wins = user.get('week_wins', 0)
+            week_losses = week_games - week_wins
+            winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
+            text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n🔥 Стрик: {week_streak}/{week_best}"
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
@@ -1270,7 +1280,9 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     prefix = f"{i}."
                 
-                lines.append(f"{prefix} {username} — {rank_str}\n└ 📊 {week_wins}W • {week_losses}L • WR {winrate}%\n")
+                streak = player.get('week_current_streak', 0)
+                streak_text = f" | 🔥{streak}" if streak > 0 else ""
+                lines.append(f"{prefix} {username} — {rank_str}\n└ 📊 {week_wins}W • {week_losses}L • WR {winrate}%{streak_text}\n")
             
             # Добавляем позицию пользователя
             user_rank_tier = user.get('rank_tier', 0) if user else 0

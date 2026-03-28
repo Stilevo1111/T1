@@ -241,7 +241,8 @@ def update_dota_week_top_cache():
             'week_games': week_games,
             'week_wins': week_wins,
             'rank_tier': user.get('rank_tier', 0),
-            'winrate': winrate
+            'winrate': winrate,
+            'week_current_streak': user.get('week_current_streak', 0)
         })
     
     # Сортируем по Байесовскому среднему: (wins + 4) / (games + 10), затем по week_wins DESC, затем по mmr DESC
@@ -1700,7 +1701,8 @@ def get_dota_week_top_from_db(limit=10):
                            week_games, week_wins, rank_tier,
                            CASE WHEN week_games > 0 
                                 THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
-                                ELSE 0 END as winrate
+                                ELSE 0 END as winrate,
+                           COALESCE(week_current_streak, 0)
                     FROM users 
                     WHERE steam_id IS NOT NULL
                 ORDER BY (week_wins::numeric + 4) / (week_games::numeric + 10) DESC, week_wins DESC, mmr DESC
@@ -1719,7 +1721,8 @@ def get_dota_week_top_from_db(limit=10):
                     'week_games': u[4],
                     'week_wins': u[5],
                     'rank_tier': u[6],
-                    'winrate': u[7]
+                    'winrate': u[7],
+                    'week_current_streak': u[8] if len(u) > 8 else 0
                 })
             
             logger.info(f"get_dota_week_top: returning {len(result)} users")
@@ -1733,7 +1736,8 @@ def get_dota_week_top_from_db(limit=10):
                        week_games, week_wins, rank_tier,
                        CASE WHEN week_games > 0 
                             THEN ROUND(week_wins * 100.0 / week_games, 1) 
-                            ELSE 0 END as winrate
+                            ELSE 0 END as winrate,
+                       COALESCE(week_current_streak, 0)
                 FROM users 
                 WHERE steam_id IS NOT NULL
                 ORDER BY (week_wins + 4.0) / (week_games + 10.0) DESC, week_wins DESC, mmr DESC
@@ -1752,7 +1756,8 @@ def get_dota_week_top_from_db(limit=10):
                     'week_games': u[4],
                     'week_wins': u[5],
                     'rank_tier': u[6],
-                    'winrate': u[7]
+                    'winrate': u[7],
+                    'week_current_streak': u[8] if len(u) > 8 else 0
                 })
             
             logger.info(f"get_dota_week_top: returning {len(result)} users")
