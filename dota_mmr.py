@@ -385,6 +385,7 @@ def update_user_mmr(telegram_id: int) -> dict:
         week_wins = 0
         current_streak = 0
         max_streak = 0
+        week_current_streak = 0
         
         if matches:
             for match in matches:
@@ -421,10 +422,12 @@ def update_user_mmr(telegram_id: int) -> dict:
                         if is_win:
                             week_wins += 1
                             current_streak += 1
+                            week_current_streak = current_streak
                             if current_streak > max_streak:
                                 max_streak = current_streak
                         else:
                             current_streak = 0
+                            week_current_streak = 0
                 except:
                     pass
         
@@ -445,6 +448,7 @@ def update_user_mmr(telegram_id: int) -> dict:
         update_user_field(telegram_id, "week_games", week_games)
         update_user_field(telegram_id, "week_wins", week_wins)
         update_user_field(telegram_id, "week_best_streak", max_streak)
+        update_user_field(telegram_id, "week_current_streak", week_current_streak)
         update_user_field(telegram_id, "week_start_date", current_week_start)
         logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_streak={max_streak}, week_start={week_start_utc}")
         

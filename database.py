@@ -459,6 +459,9 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS week_best_streak INTEGER DEFAULT 0
             """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_current_streak INTEGER DEFAULT 0
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -541,6 +544,8 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN week_start_date DATE")
             if 'week_best_streak' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN week_best_streak INTEGER DEFAULT 0")
+            if 'week_current_streak' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN week_current_streak INTEGER DEFAULT 0")
         
         # Создаём таблицу для настроек бота (чат для дайджестов)
         cursor.execute("""
@@ -698,6 +703,7 @@ class Database:
                         "week_games": user.get("week_games", 0),
                         "week_wins": user.get("week_wins", 0),
                         "week_best_streak": user.get("week_best_streak", 0),
+                        "week_current_streak": user.get("week_current_streak", 0),
                         "week_updated_at": user.get("week_updated_at"),
                         "mmr_updated_at": user.get("mmr_updated_at"),
                         "last_dota_games": user.get("last_dota_games", 0),
@@ -706,7 +712,7 @@ class Database:
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_updated_at": None, "mmr_updated_at": None}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "week_updated_at": None, "mmr_updated_at": None}
             else:
                 query = "SELECT * FROM users WHERE telegram_id = ?"
                 user = self.execute_query(query, (telegram_id,), fetch="one")
@@ -731,15 +737,16 @@ class Database:
                         "week_games": user[25] if len(user) > 25 else 0,
                         "week_wins": user[26] if len(user) > 26 else 0,
                         "week_best_streak": user[29] if len(user) > 29 else 0,
+                        "week_current_streak": user[30] if len(user) > 30 else 0,
                         "week_updated_at": user[27] if len(user) > 27 else None,
                         "mmr_updated_at": user[28] if len(user) > 28 else None
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_updated_at": None, "mmr_updated_at": None}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "week_updated_at": None, "mmr_updated_at": None}
         except Exception as e:
             logger.error(f"Error getting user: {e}")
-            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0}
+            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "week_current_streak": 0}
     
     def update_fissure(self, telegram_id, fissure, last_fissure, growth=0):
         """Обновление данных пользователя"""
@@ -1443,7 +1450,7 @@ def update_user_field(telegram_id, field, value):
         # Поля Steam: записываем сразу в БД
         steam_fields = ['steam_id', 'steam_nickname', 'mmr', 'rank_tier', 
                        'dota_total_games', 'dota_wins', 'wins', 'losses',
-                       'week_games', 'week_wins', 'week_best_streak', 'week_start_date',
+                       'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'week_start_date',
                        'last_dota_games', 'last_dota_wins']
         if field in steam_fields:
             _save_user_to_db_immediately(telegram_id, user)
@@ -1471,7 +1478,7 @@ def _save_user_to_db_immediately(telegram_id, user_data):
             UPDATE users SET 
                 steam_id = %s, steam_nickname = %s, mmr = %s, rank_tier = %s,
                 week_games = %s, week_wins = %s, 
-                week_best_streak = %s, dota_total_games = %s,
+                week_best_streak = %s, week_current_streak = %s, dota_total_games = %s,
                 dota_wins = %s, last_dota_games = %s, last_dota_wins = %s,
                 wins = %s, losses = %s, week_start_date = %s
             WHERE telegram_id = %s
@@ -1484,6 +1491,7 @@ def _save_user_to_db_immediately(telegram_id, user_data):
             user_data.get('week_games', 0),
             user_data.get('week_wins', 0),
             user_data.get('week_best_streak', 0),
+            user_data.get('week_current_streak', 0),
             user_data.get('dota_total_games', 0),
             user_data.get('dota_wins', 0),
             user_data.get('last_dota_games', 0),
@@ -1813,12 +1821,12 @@ def get_dota_digest_stats():
             """)
             bottom = cursor.fetchone()
             
-            # Лучший стрик
+            # Текущий стрик
             cursor.execute("""
-                SELECT steam_nickname, week_best_streak, telegram_id
+                SELECT steam_nickname, week_current_streak, telegram_id
                 FROM users 
-                WHERE steam_id IS NOT NULL AND week_best_streak > 0
-                ORDER BY week_best_streak DESC
+                WHERE steam_id IS NOT NULL AND week_current_streak > 0
+                ORDER BY week_current_streak DESC
                 LIMIT 1
             """)
             streak = cursor.fetchone()
@@ -1843,10 +1851,10 @@ def get_dota_digest_stats():
             bottom = cursor.fetchone()
             
             cursor.execute("""
-                SELECT steam_nickname, week_best_streak, telegram_id
+                SELECT steam_nickname, week_current_streak, telegram_id
                 FROM users 
-                WHERE steam_id IS NOT NULL AND week_best_streak > 0
-                ORDER BY week_best_streak DESC
+                WHERE steam_id IS NOT NULL AND week_current_streak > 0
+                ORDER BY week_current_streak DESC
                 LIMIT 1
             """)
             streak = cursor.fetchone()
@@ -1859,8 +1867,8 @@ def get_dota_digest_stats():
             # (steam_nickname, rank_tier, week_games, week_wins, telegram_id)
             "top_winrate": (top[0], top[3], top[2], top[1], top[4]) if top else ("None", 0, 0, 0, None),
             "bottom_winrate": (bottom[0], bottom[3], bottom[2], bottom[1], bottom[4]) if bottom else ("None", 0, 0, 0, None),
-            # SQL: SELECT steam_nickname, week_best_streak, telegram_id
-            # (steam_nickname, week_best_streak, telegram_id)
+            # SQL: SELECT steam_nickname, week_current_streak, telegram_id
+            # (steam_nickname, week_current_streak, telegram_id)
             "top_streak": (streak[0], streak[1], streak[2]) if streak else ("None", 0, None)
         }
         
