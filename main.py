@@ -9,7 +9,7 @@ import urllib.parse as urlparse
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat
 from aiohttp import web
 
 # Logging setup
@@ -1456,7 +1456,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         except Exception as e:
             logger.error(f"Error in link: {e}")
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Steam аккаунта")
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Dota аккаунта")
         return
     
     # Если нет аргумента - отправляем инструкцию
@@ -1468,11 +1468,11 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     result_msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="🎮 *Привязка Steam*\n\n"
-        "Отправьте `/link` и ваш Steam ID или ссылку на профиль.\n\n"
+        text="🦞 *Привязка Dota*\n\n"
+        "Отправьте `/link` и ваш Dota ID или ссылку на профиль.\n\n"
         "*Примеры:*\n"
         "`/link 76561198012345678`\n"
-        "`/link https://steamcommunity.com/id/ваш_ник`\n\n"
+        "`/link https://ru.dotabuff.com/players/347614699`\n\n"
         "⚠️ Профиль должен быть открытым\n"
         "📡 Статистика с OpenDota",
         parse_mode='Markdown'
@@ -1567,7 +1567,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning(f"Database error in start (non-fatal): {db_error}")
         
         # Always send welcome message
-        text = "👋 Привет! Здесь можно увеличить свою фиссуру"
+        text = (
+            "👋 Привет! Здесь можно:\n\n"
+            "🎲 Увеличить свою фиссуру\n"
+            "📊 Смотреть топ фиссур и MMR\n"
+            "🦞 Привязать Dota аккаунт и отслеживать статистику\n"
+            "🔥 Следить за стриком побед"
+        )
         result_msg = await context.bot.send_message(
             chat_id=chat_id,
             text=text,
@@ -1742,7 +1748,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
         new_member = chat_update.new_chat_member
         
         # Handle bot added to chat (my_chat_member)
-        if old_member and new_member and old_member.user.id == new_member.user.id:
+        if old_member and new_member:
             bot_id = context.bot.id
             if new_member.user.id == bot_id:
                 # Bot was added to chat
@@ -1757,7 +1763,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 return
         
         # Handle user added to chat (chat_member)
-        if old_member and new_member and old_member.user.id != new_member.user.id:
+        if old_member and new_member and new_member.user.id != context.bot.id:
             old_status = old_member.status
             new_status = new_member.status
             
@@ -1765,6 +1771,12 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator']:
                 name = new_member.user.first_name or "Friend"
                 user_id = new_member.user.id
+                
+                # Отмечаем пользователя как участника чата
+                try:
+                    set_user_in_chat(user_id, True)
+                except Exception as e:
+                    logger.debug(f"Could not set in_chat=True for {user_id}: {e}")
                 
                 # Формируем приветственное сообщение с кликабельным ником
                 welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}"
@@ -1778,6 +1790,16 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 logger.info(f"Welcome sent for {name}")
                 # Удаляем приветственное сообщение через час
                 schedule_delete(context.bot, chat_id, result_msg.message_id, 3600, context.application.job_queue)
+            
+            # User left the chat (was member, now is left/kicked)
+            elif old_status in ['member', 'administrator'] and new_status in ['left', 'kicked']:
+                user_id = new_member.user.id
+                name = new_member.user.first_name or "Unknown"
+                try:
+                    set_user_in_chat(user_id, False)
+                    logger.info(f"User {name} ({user_id}) left chat, set in_chat=False")
+                except Exception as e:
+                    logger.debug(f"Could not set in_chat=False for {user_id}: {e}")
         
     except Exception as e:
         logger.error(f"Error in welcome_new_member: {e}")

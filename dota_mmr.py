@@ -388,7 +388,8 @@ def update_user_mmr(telegram_id: int) -> dict:
         week_current_streak = 0
         
         if matches:
-            for match in matches:
+            # Идём от старых к новым, чтобы current_streak в конце = текущий стрик
+            for match in reversed(matches):
                 try:
                     match_date = datetime.utcfromtimestamp(match.get("start_time", 0))
                     if match_date >= week_start_utc:

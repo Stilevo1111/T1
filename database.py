@@ -462,6 +462,9 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS week_current_streak INTEGER DEFAULT 0
             """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS in_chat BOOLEAN DEFAULT TRUE
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -546,6 +549,8 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN week_best_streak INTEGER DEFAULT 0")
             if 'week_current_streak' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN week_current_streak INTEGER DEFAULT 0")
+            if 'in_chat' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN in_chat INTEGER DEFAULT 1")
         
         # Создаём таблицу для настроек бота (чат для дайджестов)
         cursor.execute("""
@@ -810,11 +815,11 @@ class Database:
             scheme = url.scheme
             
             if "postgres" in scheme:
-                query = "SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT %s"
+                query = "SELECT telegram_id, username, fissure FROM users WHERE in_chat = TRUE ORDER BY fissure DESC LIMIT %s"
                 users = self.execute_query(query, (limit,), fetch="all")
                 return [{"telegram_id": u["telegram_id"], "username": u["username"], "fissure": u["fissure"]} for u in users]
             else:
-                query = "SELECT telegram_id, username, fissure FROM users ORDER BY fissure DESC LIMIT ?"
+                query = "SELECT telegram_id, username, fissure FROM users WHERE in_chat = 1 ORDER BY fissure DESC LIMIT ?"
                 users = self.execute_query(query, (limit,), fetch="all")
                 return [{"telegram_id": u[0], "username": u[1], "fissure": u[2]} for u in users]
         except Exception as e:
@@ -1380,6 +1385,26 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
             # Сбрасываем кеш топа при создании нового пользователя
             top_cache.clear()
 
+
+def set_user_in_chat(telegram_id: int, in_chat: bool):
+    """Установить статус нахождения пользователя в чате"""
+    try:
+        conn, scheme = get_connection()
+        cursor = conn.cursor()
+        if "postgres" in scheme:
+            cursor.execute("UPDATE users SET in_chat = %s WHERE telegram_id = %s", (in_chat, telegram_id))
+        else:
+            cursor.execute("UPDATE users SET in_chat = ? WHERE telegram_id = ?", (1 if in_chat else 0, telegram_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        # Сбрасываем кеш топов
+        top_cache.clear()
+        logger.info(f"set_user_in_chat: telegram_id={telegram_id}, in_chat={in_chat}")
+    except Exception as e:
+        logger.error(f"set_user_in_chat error: {e}")
+
+
 def get_fissure_top(limit=10):
     """Получение топа пользователей - из кеша"""
     cache_key = f'fissure_top_{limit}'
@@ -1704,7 +1729,7 @@ def get_dota_week_top_from_db(limit=10):
                                 ELSE 0 END as winrate,
                            COALESCE(week_current_streak, 0)
                     FROM users 
-                    WHERE steam_id IS NOT NULL
+                    WHERE steam_id IS NOT NULL AND COALESCE(in_chat, TRUE) = TRUE
                 ORDER BY (week_wins::numeric + 4) / (week_games::numeric + 10) DESC, week_wins DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
@@ -1739,7 +1764,7 @@ def get_dota_week_top_from_db(limit=10):
                             ELSE 0 END as winrate,
                        COALESCE(week_current_streak, 0)
                 FROM users 
-                WHERE steam_id IS NOT NULL
+                WHERE steam_id IS NOT NULL AND COALESCE(in_chat, 1) = 1
                 ORDER BY (week_wins + 4.0) / (week_games + 10.0) DESC, week_wins DESC, mmr DESC
                 LIMIT ?
             """, (limit,))
