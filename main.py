@@ -1167,9 +1167,9 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 name = user_top.get('username', 'Unknown')[:15]
                 medal = medals.get(i)
                 if medal:
-                    text += f"{medal} {name}: {user_top['fissure']:.1f} см\n"
+                    text += f"{medal} {name}: {user_top['fissure']:.1f} см\n\n"
                 else:
-                    text += f" {i}. {name}: {user_top['fissure']:.1f} см\n"
+                    text += f" {i}. {name}: {user_top['fissure']:.1f} см\n\n"
             
             # Всегда показываем позицию пользователя, даже если он не в топе
             if user_rank:
@@ -1269,7 +1269,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     prefix = f"{i}."
                 
-                lines.append(f"{prefix} {username} — {rank_str}\n└ 📊 {week_wins}W • {week_losses}L • WR {winrate}%")
+                lines.append(f"{prefix} {username} — {rank_str}\n└ 📊 {week_wins}W • {week_losses}L • WR {winrate}%\n")
             
             # Добавляем позицию пользователя
             user_rank_tier = user.get('rank_tier', 0) if user else 0
