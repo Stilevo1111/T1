@@ -244,8 +244,8 @@ def update_dota_week_top_cache():
             'winrate': winrate
         })
     
-    # Сортируем по week_games DESC, winrate DESC, week_wins DESC, mmr DESC
-    top_users.sort(key=lambda x: (-x['week_games'], -x['winrate'], -x['week_wins'], -x['mmr']))
+    # Сортируем по week_wins DESC, week_losses ASC (меньше поражений = лучше), week_games DESC, mmr DESC
+    top_users.sort(key=lambda x: (-x['week_wins'], x['week_games'] - x['week_wins'], -x['week_games'], -x['mmr']))
     
     # Сохраняем в кеш
     user_cache.set('dota_week_top', top_users)
@@ -1695,7 +1695,7 @@ def get_dota_week_top_from_db(limit=10):
                                 ELSE 0 END as winrate
                     FROM users 
                     WHERE steam_id IS NOT NULL
-                ORDER BY week_games DESC, winrate * LN(week_games + 1) DESC, week_wins DESC, mmr DESC
+                ORDER BY week_wins DESC, (week_games - week_wins) ASC, week_games DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
             users = cursor.fetchall()
@@ -1728,7 +1728,7 @@ def get_dota_week_top_from_db(limit=10):
                             ELSE 0 END as winrate
                 FROM users 
                 WHERE steam_id IS NOT NULL
-                ORDER BY week_games DESC, winrate * LOG(week_games + 1) DESC, week_wins DESC, mmr DESC
+                ORDER BY week_wins DESC, (week_games - week_wins) ASC, week_games DESC, mmr DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
