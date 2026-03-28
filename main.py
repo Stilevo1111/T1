@@ -1887,16 +1887,24 @@ async def main():
         asyncio.create_task(daily_flush_cache())
         logger.info("Daily flush cache task started")
         
-        # Пингуем себя каждые 2 минуты чтобы Render не засыпал
+        # Пингуем внешний URL каждые 10 минут чтобы Render не засыпал
         async def keep_alive_ping():
-            """Пингует свой собственный /health чтобы бот не засыпал"""
+            """Пингует внешний URL чтобы Render не засыпал (localhost пинг не считается)"""
             import aiohttp
+            webhook_url = os.getenv('WEBHOOK_URL', '')
+            # Извлекаем базовый URL из webhook (например https://xxx.onrender.com)
+            if webhook_url:
+                ping_url = webhook_url.rsplit('/webhook', 1)[0] + '/health'
+            else:
+                port = int(os.getenv('PORT', 10000))
+                ping_url = f'http://127.0.0.1:{port}/health'
+            logger.info(f"Keep-alive target: {ping_url}")
             while True:
                 try:
-                    await asyncio.sleep(120)  # каждые 2 минуты
+                    await asyncio.sleep(600)  # каждые 10 минут
                     async with aiohttp.ClientSession() as session:
-                        await session.get('http://127.0.0.1:10000/health')
-                        logger.info("Keep-alive ping sent")
+                        await session.get(ping_url, timeout=aiohttp.ClientTimeout(total=30))
+                        logger.info(f"Keep-alive ping sent to {ping_url}")
                 except Exception as e:
                     logger.error(f"Keep-alive ping error: {e}")
         
