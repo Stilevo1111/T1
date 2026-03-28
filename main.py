@@ -1308,8 +1308,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     prefix = emoji_nums.get(i, f"{i}.")
                 
                 streak = player.get('week_current_streak', 0)
-                streak_text = f" | 🔥{streak}" if streak > 0 else ""
-                lines.append(f"{prefix} {username} — {rank_str}\n└ 📊 {week_wins}W • {week_losses}L • WR {winrate}%{streak_text}\n")
+                streak_text = f" 🔥{streak}" if streak > 0 else ""
+                lines.append(f"{prefix} {username} {rank_str} | {week_wins}W/{week_losses}L {winrate}%{streak_text}")
             
             # Добавляем позицию пользователя
             user_rank_tier = user.get('rank_tier', 0) if user else 0
@@ -1378,14 +1378,13 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Показываем позицию только если пользователь НЕ в общем топе (избегаем дублирования)
             if not user_is_in_top:
-                lines.append(f"\n👤 Твоя позиция:")
                 if user_pos:
-                    lines.append(f"#{user_pos} — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
+                    lines.append(f"\n👤 #{user_pos} {user_rank_str} | {user_week_wins}W/{user_week_losses}L {user_winrate}%")
                 else:
                     if user and user.get('steam_id'):
-                        lines.append(f"#? — {user_rank_str}\n📊 {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%")
+                        lines.append(f"\n👤 {user_rank_str} | {user_week_wins}W/{user_week_losses}L {user_winrate}%")
                     else:
-                        lines.append(f"Не привязан")
+                        lines.append(f"\n👤 Не привязан")
             
             text = "\n".join(lines)
         
