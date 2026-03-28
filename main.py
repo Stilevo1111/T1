@@ -1003,7 +1003,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f}"
         
         new_fissure = calculate_new_fissure(user["fissure"], roll)
-        update_fissure(user_obj.id, new_fissure, now, roll)
+        growth = new_fissure - user["fissure"]
+        update_fissure(user_obj.id, new_fissure, now, growth)
         
         # Обновляем дайджест после каждого броска
         await refresh_digest_message(context.bot)
