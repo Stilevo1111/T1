@@ -1341,7 +1341,7 @@ def get_user(telegram_id, username=None):
 
 
 def update_fissure(telegram_id, fissure, last_fissure, growth=0):
-    """Обновление fissure - пишем в кеш"""
+    """Обновление fissure - пишем в кеш и сразу в БД"""
     # Получаем текущие данные пользователя
     user = get_user(telegram_id)
     
@@ -1360,6 +1360,42 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
         
         user_cache.set(telegram_id, user)
         user_cache.mark_dirty(telegram_id)
+        
+        # Пишем в БД сразу чтобы не потерять при перезапуске
+        try:
+            conn, scheme = get_connection()
+            cursor = conn.cursor()
+            if "postgres" in scheme:
+                cursor.execute("""
+                    UPDATE users SET 
+                        fissure = %s, last_fissure = %s,
+                        total_growth = total_growth + %s,
+                        total_rolls = total_rolls + 1,
+                        weekly_rolls = weekly_rolls + 1,
+                        weekly_growth = weekly_growth + %s,
+                        current_streak = CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END,
+                        best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END),
+                        last_activity = CURRENT_TIMESTAMP
+                    WHERE telegram_id = %s
+                """, (fissure, last_fissure, growth, max(0, growth), win, win, telegram_id))
+            else:
+                cursor.execute("""
+                    UPDATE users SET 
+                        fissure = ?, last_fissure = ?,
+                        total_growth = total_growth + ?,
+                        total_rolls = total_rolls + 1,
+                        weekly_rolls = weekly_rolls + 1,
+                        weekly_growth = weekly_growth + ?,
+                        current_streak = CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END,
+                        best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END),
+                        last_activity = CURRENT_TIMESTAMP
+                    WHERE telegram_id = ?
+                """, (fissure, last_fissure, growth, max(0, growth), win, win, telegram_id))
+            conn.commit()
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            logger.error(f"update_fissure: DB write error: {e}")
         
         # Сбрасываем кеши дайджестов при изменении fissure
         user_cache.set('digest_stats', None)
