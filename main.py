@@ -136,6 +136,15 @@ async def update_all_mmr_job(context):
 async def morning_digest_job(context):
     """Утренний дайджест (9:00)"""
     try:
+        # Блокировка от параллельного запуска
+        import time
+        last_run = get_config('morning_digest_last_run')
+        now = time.time()
+        if last_run and (now - float(last_run)) < 30:
+            logger.info(f"morning_digest_job: пропуск (запущен {(now - float(last_run)):.1f}с назад)")
+            return
+        set_config('morning_digest_last_run', str(now))
+        
         logger.info("Запуск утреннего дайджеста")
         
         # Получаем ID чата для дайджеста
@@ -300,6 +309,15 @@ async def refresh_digest_message(bot):
 async def weekly_digest_job(context):
     """Еженедельный дайджест (по расписанию)"""
     try:
+        # Блокировка от параллельного запуска
+        import time
+        last_run = get_config('weekly_digest_last_run')
+        now = time.time()
+        if last_run and (now - float(last_run)) < 60:
+            logger.info(f"weekly_digest_job: пропуск (запущен {(now - float(last_run)):.1f}с назад)")
+            return
+        set_config('weekly_digest_last_run', str(now))
+        
         logger.info("Запуск еженедельного дайджеста")
         
         digest_chat_id = get_config('digest_chat_id')
@@ -405,6 +423,15 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def dota_digest_job(context):
     """Dota дайджест - лучший/худший винрейт и стрик побед за неделю"""
     try:
+        # Блокировка от параллельного запуска
+        import time
+        last_run = get_config('dota_digest_last_run')
+        now = time.time()
+        if last_run and (now - float(last_run)) < 30:
+            logger.info(f"dota_digest_job: пропуск (запущен {(now - float(last_run)):.1f}с назад)")
+            return
+        set_config('dota_digest_last_run', str(now))
+        
         logger.info("Запуск Dota дайджеста")
         
         # Получаем ID чата для дайджеста
@@ -526,6 +553,15 @@ async def dota_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов каждые 10 минут"""
     try:
+        # Блокировка от параллельного запуска (два экземпляра бота)
+        import time
+        last_run = get_config('alternate_digest_last_run')
+        now = time.time()
+        if last_run and (now - float(last_run)) < 10:
+            logger.info(f"alternate_digest_job: пропуск (запущен {(now - float(last_run)):.1f}с назад другим экземпляром)")
+            return
+        set_config('alternate_digest_last_run', str(now))
+        
         logger.info("Запуск alternate_digest_job")
         
         # Получаем ID чата для дайджеста
