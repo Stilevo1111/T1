@@ -1313,7 +1313,36 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 streak = player.get('week_current_streak', 0)
                 streak_text = f" 🔥{streak}" if streak > 0 else ""
-                lines.append(f"{prefix} {username} {rank_str} | {week_wins}W/{week_losses}L {winrate}%{streak_text}")
+                # Сохраняем данные для выравнивания
+                rank_short = rank_str  # уже с эмодзи
+                wl_text = f"{week_wins}W/{week_losses}L"
+                wr_text = f"{winrate}%"
+                lines.append({
+                    'prefix': prefix,
+                    'username': username,
+                    'rank': rank_short,
+                    'wl': wl_text,
+                    'wr': wr_text,
+                    'streak': streak_text
+                })
+            
+            # Выравнивание колонок
+            max_user = max(len(l['username']) for l in lines)
+            max_rank = max(len(l['rank']) for l in lines)
+            max_wl = max(len(l['wl']) for l in lines)
+            max_wr = max(len(l['wr']) for l in lines)
+            
+            import html as html_mod
+            formatted = ["🏆 Топ MMR за неделю\n"]
+            for l in lines:
+                u = html_mod.escape(l['username'].ljust(max_user))
+                r = html_mod.escape(l['rank'].ljust(max_rank))
+                w = l['wl'].ljust(max_wl)
+                x = l['wr'].ljust(max_wr)
+                row = f"{l['prefix']} {u} {r} | {w} {x}{l['streak']}"
+                formatted.append(f"<code>{row}</code>")
+            
+            text = "\n".join(formatted)
             
             # Добавляем позицию пользователя
             user_rank_tier = user.get('rank_tier', 0) if user else 0
@@ -1398,7 +1427,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.debug(f"Could not delete last bot message: {e}")
         
-        result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
+        result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text=text, parse_mode="HTML")
         # Track this message for future deletion
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
