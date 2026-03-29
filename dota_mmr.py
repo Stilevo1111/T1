@@ -99,15 +99,16 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
         if not heroes_data:
             return []
         
-        # Считаем количество игр на каждом герое
         from collections import Counter
         hero_counts = Counter()
+        hero_wins = Counter()
         for match in matches:
             hero_id = match.get("hero_id")
             if hero_id:
                 hero_counts[hero_id] += 1
+                if is_win(match, steam_id):
+                    hero_wins[hero_id] += 1
         
-        # Берём топ-K
         result = []
         for hero_id, count in hero_counts.most_common(top_k):
             hero_info = heroes_data.get(hero_id)
@@ -118,6 +119,7 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
                     "image_url": hero_info["image_url"],
                     "icon_url": hero_info["icon_url"],
                     "picks": count,
+                    "wins": hero_wins.get(hero_id, 0),
                 })
         
         return result
@@ -171,8 +173,9 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             
             draw.rectangle([x - 1, y - 1, x + icon_size, y + icon_size], outline=(120, 170, 210), width=1)
             
-            picks = hero["picks"]
-            text = f"x{picks}"
+            wins = hero.get("wins", 0)
+            losses = hero["picks"] - wins
+            text = f"{wins}/{losses}"
             
             bbox = draw.textbbox((0, 0), text, font=font)
             tw = bbox[2] - bbox[0]
