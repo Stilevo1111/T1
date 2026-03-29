@@ -101,13 +101,10 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
         
         from collections import Counter
         hero_counts = Counter()
-        hero_wins = Counter()
         for match in matches:
             hero_id = match.get("hero_id")
             if hero_id:
                 hero_counts[hero_id] += 1
-                if is_win(match, steam_id):
-                    hero_wins[hero_id] += 1
         
         result = []
         for hero_id, count in hero_counts.most_common(top_k):
@@ -119,7 +116,6 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
                     "image_url": hero_info["image_url"],
                     "icon_url": hero_info["icon_url"],
                     "picks": count,
-                    "wins": hero_wins.get(hero_id, 0),
                 })
         
         return result
@@ -140,22 +136,12 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         
         icon_size = 63
         padding = 10
-        text_height = 20
         cell_width = icon_size + padding * 2
-        cell_height = icon_size + text_height + padding * 2
+        height = icon_size + padding * 2
         width = cell_width * len(top_heroes) + padding
-        height = cell_height
         
         img = Image.new("RGB", (width, height), color=(40, 55, 70))
         draw = ImageDraw.Draw(img)
-        
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 12)
-        except:
-            try:
-                font = ImageFont.truetype("arial.ttf", 12)
-            except:
-                font = ImageFont.load_default()
         
         for i, hero in enumerate(top_heroes):
             x = padding + i * cell_width
@@ -172,17 +158,6 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                 draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(80, 95, 110))
             
             draw.rectangle([x - 1, y - 1, x + icon_size, y + icon_size], outline=(120, 170, 210), width=1)
-            
-            wins = int(hero.get("wins", 0))
-            losses = int(hero["picks"]) - wins
-            text = f"{wins}/{losses}"
-            
-            bbox = draw.textbbox((0, 0), text, font=font)
-            tw = bbox[2] - bbox[0]
-            tx = x + (icon_size - tw) // 2
-            ty = y + icon_size + 3
-            
-            draw.text((tx, ty), text, fill=(180, 230, 255), font=font)
         
         buf = io.BytesIO()
         img.save(buf, format="PNG")
