@@ -1036,9 +1036,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if now - user["last_fissure"] < COOLDOWN:
             wait = COOLDOWN - (now - user["last_fissure"])
             elapsed = COOLDOWN - wait
-            filled = int(elapsed / COOLDOWN * 14)
-            bar = "🟩" * filled + "⬜" * (14 - filled)
-            text = f"🧬 Фиссура восстанавливается. {format_time(wait)}\n{bar}"
+            filled = int(elapsed / COOLDOWN * 10)
+            bar = "🟩" * filled + "⬜" * (10 - filled)
+            text = f"🧬 Восстанавливается. {format_time(wait)}\n{bar}"
             result_msg = await context.bot.send_message(
                 chat_id=update.message.chat_id,
                 text=text,
