@@ -99,18 +99,13 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
         if not heroes_data:
             return []
         
-        # Считаем количество игр и собираем результаты по каждому герою
+        # Считаем количество игр на каждом герое
         from collections import Counter
         hero_counts = Counter()
-        hero_results = {}
         for match in matches:
             hero_id = match.get("hero_id")
             if hero_id:
                 hero_counts[hero_id] += 1
-                if hero_id not in hero_results:
-                    hero_results[hero_id] = []
-                won = is_win(match, steam_id)
-                hero_results[hero_id].append(won)
         
         # Берём топ-K
         result = []
@@ -123,7 +118,6 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
                     "image_url": hero_info["image_url"],
                     "icon_url": hero_info["icon_url"],
                     "picks": count,
-                    "results": hero_results.get(hero_id, []),
                 })
         
         return result
@@ -144,16 +138,22 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         
         icon_size = 63
         padding = 10
-        block_size = 5
-        block_gap = 2
-        blocks_h = block_size + 4
+        text_height = 20
         cell_width = icon_size + padding * 2
-        cell_height = icon_size + blocks_h + padding * 2
+        cell_height = icon_size + text_height + padding * 2
         width = cell_width * len(top_heroes) + padding
         height = cell_height
         
         img = Image.new("RGB", (width, height), color=(40, 55, 70))
         draw = ImageDraw.Draw(img)
+        
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 12)
+        except:
+            try:
+                font = ImageFont.truetype("arial.ttf", 12)
+            except:
+                font = ImageFont.load_default()
         
         for i, hero in enumerate(top_heroes):
             x = padding + i * cell_width
@@ -171,23 +171,15 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             
             draw.rectangle([x - 1, y - 1, x + icon_size, y + icon_size], outline=(120, 170, 210), width=1)
             
-            # 10 кубиков под иконкой
-            results = hero.get("results", [])
-            blocks_y = y + icon_size + 2
-            total_blocks_w = 10 * block_size + 9 * block_gap
-            blocks_x_start = x + (icon_size - total_blocks_w) // 2
+            picks = hero["picks"]
+            text = f"x{picks}"
             
-            for j in range(10):
-                bx = blocks_x_start + j * (block_size + block_gap)
-                by = blocks_y
-                if j < len(results):
-                    if results[j]:
-                        fill = (80, 200, 120)  # зелёный — победа
-                    else:
-                        fill = (220, 80, 80)   # красный — поражение
-                else:
-                    fill = (70, 80, 95)        # пустой
-                draw.rectangle([bx, by, bx + block_size, by + block_size], fill=fill)
+            bbox = draw.textbbox((0, 0), text, font=font)
+            tw = bbox[2] - bbox[0]
+            tx = x + (icon_size - tw) // 2
+            ty = y + icon_size + 3
+            
+            draw.text((tx, ty), text, fill=(180, 230, 255), font=font)
         
         buf = io.BytesIO()
         img.save(buf, format="PNG")
