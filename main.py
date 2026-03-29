@@ -1473,7 +1473,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
     except Exception as e:
-        logger.error(f"Error in topmmr: {e}")
+        logger.error(f"Error in topmmr: {e}", exc_info=True)
         # Send new message instead of replying to avoid "Message not found" error
         try:
             await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
