@@ -1249,7 +1249,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         import io
                         label_msg = await context.bot.send_message(
                             chat_id=update.message.chat_id,
-                            text="🦸 Любимые герои за 10 матчей"
+                            text="🌟 Любимые герои за 10 матчей"
                         )
                         schedule_delete(context.bot, chat_id, label_msg.message_id, 30, context.application.job_queue)
                         hero_msg = await context.bot.send_photo(
