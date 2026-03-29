@@ -219,12 +219,31 @@ async def morning_digest_job(context):
                 else:
                     logger.info(f"Не удалось редактировать сообщение: {e}")
         
+        # Удаляем старое сообщение дайджеста перед созданием нового
+        if last_message_id:
+            try:
+                await bot.delete_message(chat_id=digest_chat_id, message_id=int(last_message_id))
+                logger.info(f"Удалено старое сообщение дайджеста {last_message_id}")
+            except Exception as e:
+                logger.debug(f"Не удалось удалить старое сообщение дайджеста: {e}")
+        
         # Отправляем новое сообщение
         msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
         set_config('daily_digest_message_id', msg.message_id)
         logger.info(f"Создан новый утренний дайджест {msg.message_id}")
         if not getattr(context, "manual", False):
             update_digest_snapshot()
+        
+        # Закрепляем новый дайджест
+        try:
+            await bot.unpin_chat_message(chat_id=digest_chat_id)
+        except Exception as e:
+            logger.debug(f"Не удалось открепить старый дайджест: {e}")
+        try:
+            await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
+            logger.info(f"Дайджест {msg.message_id} закреплён")
+        except Exception as e:
+            logger.debug(f"Не удалось закрепить дайджест: {e}")
         
     except Exception as e:
         logger.error(f"Ошибка в morning_digest_job: {e}", exc_info=True)
@@ -681,6 +700,14 @@ async def alternate_digest_job(context):
                     set_config('alternate_digest_message_id', None)
                 else:
                     logger.info(f"Не удалось редактировать: {e}")
+        
+        # Удаляем старое сообщение дайджеста перед созданием нового
+        if last_message_id:
+            try:
+                await bot.delete_message(chat_id=digest_chat_id, message_id=int(last_message_id))
+                logger.info(f"Удалено старое alternate сообщение {last_message_id}")
+            except Exception as e:
+                logger.debug(f"Не удалось удалить старое alternate сообщение: {e}")
         
         # Отправляем новое сообщение
         msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
