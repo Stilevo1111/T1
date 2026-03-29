@@ -1303,7 +1303,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Convert user rank tier to string
             if user_rank_tier:
-                ranks = ["🌱Рекрут", "🛡️Страж", "⚔️Рыцарь", "🗡️Герой", "💫Легенда", "👑Властелин", "💎Божество", "🔱Титан"]
+                ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
                 tier = min(user_rank_tier // 10, 8)
                 star = user_rank_tier % 10
                 
@@ -1370,7 +1370,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Format rank
                 if rank_tier:
-                    ranks = ["🌱Рекрут", "🛡️Страж", "⚔️Рыцарь", "🗡️Герой", "💫Легенда", "👑Властелин", "💎Божество", "🔱Титан"]
+                    ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
                     tier = min(rank_tier // 10, 8)
                     star = rank_tier % 10
                     
@@ -1401,19 +1401,21 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Format streak
                 streak = player.get('week_current_streak', 0)
-                streak_text = f" • 🔥{streak}" if streak > 0 else ""
                 
-                # Build player entry - one line per player
-                lines.append(f"{prefix} {username} • {week_wins}W/{week_losses}L • {winrate}%{streak_text} • {rank_str}\n")
+                # Build player entry - two lines per player
+                lines.append(f"{prefix} {username} — {rank_str}\n")
+                lines.append(f" └ {week_wins}W/{week_losses}L • WR {winrate}% • 🔥{streak}\n\n")
             
             # Добавляем позицию пользователя только если пользователь НЕ в общем топе (избегаем дублирования)
             if not user_is_in_top:
                 lines.append("\n👤 Твоя позиция")
                 if user_pos:
-                    lines.append(f"#{user_pos} • {user_week_games}W/{user_week_losses}L • {user_winrate}% • {user_rank_str}")
+                    lines.append(f"\n#{user_pos} — {user_rank_str}\n")
+                    lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
                 else:
                     if user and user.get('steam_id'):
-                        lines.append(f"{user_week_games}W/{user_week_losses}L • {user_winrate}% • {user_rank_str}")
+                        lines.append(f"\n{user_rank_str}\n")
+                        lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
                     else:
                         lines.append("Не привязан")
             
