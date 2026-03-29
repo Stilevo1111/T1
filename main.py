@@ -1836,6 +1836,10 @@ async def main():
         # Запускаем миграции базы данных
         migrate_db()
         
+        # Инициализируем снимок дайджеста при запуске (чтобы digest_position/digest_fissure не были 0)
+        update_digest_snapshot()
+        logger.info("Digest snapshot initialized on startup")
+        
         # ЗАГРУЖАЕМ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ В КЕШ ПРИ ЗАПУСКЕ
         from database import get_all_users_with_steam, user_cache
         all_users = get_all_users_with_steam()
@@ -2019,6 +2023,10 @@ async def main_polling():
         init_db()
         # Запускаем миграции базы данных
         migrate_db()
+        
+        # Инициализируем снимок дайджеста при запуске (чтобы digest_position/digest_fissure не были 0)
+        update_digest_snapshot()
+        logger.info("Digest snapshot initialized on startup")
         
         # ЗАГРУЖАЕМ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ В КЕШ ПРИ ЗАПУСКЕ
         from database import get_all_users_with_steam, user_cache
