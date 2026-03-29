@@ -325,8 +325,7 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
 def is_win(match: dict, steam_id: int) -> bool:
     """Определить, выиграл ли игрок матч по данным матча"""
     try:
-        # OpenDota API provides direct 'win' field - используем его
-        return match.get("win", False)
+        return bool(match.get("win", False))
     except Exception as e:
         logger.error(f"is_win error: {e}", exc_info=True)
         return False
