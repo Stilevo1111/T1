@@ -161,7 +161,6 @@ def generate_heroes_images(top_heroes: list) -> list:
                 resp = req.get(hero["icon_url"], timeout=5)
                 if resp.status_code == 200:
                     icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    icon = icon.resize((icon_w, icon_h), Image.LANCZOS)
                     img.paste(icon, (padding, padding), icon)
             except Exception as e:
                 logger.debug(f"Could not load hero icon: {e}")
