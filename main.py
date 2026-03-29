@@ -1015,7 +1015,7 @@ def main_menu():
     keyboard = [
         [KeyboardButton("📈 Увеличить фиссуру")],
         [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
-        [KeyboardButton("📏 Моя длина"), KeyboardButton("🔗 Привязать Steam")],
+        [KeyboardButton("👤 Профиль"), KeyboardButton("🔗 Привязать Steam")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
@@ -1739,7 +1739,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         text = update.message.text.strip()
         
-        menu_buttons = ["📈 Увеличить фиссуру", "📏 Моя длина", "🏆 Топ Фиссур", "🏆 Топ MMR", "🔗 Привязать Steam"]
+        menu_buttons = ["📈 Увеличить фиссуру", "👤 Профиль", "🏆 Топ Фиссур", "🏆 Топ MMR", "🔗 Привязать Steam"]
         
         if text not in menu_buttons:
             return
@@ -1767,7 +1767,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Call the appropriate function
         if text == "📈 Увеличить фиссуру":
             await fissure(update, context)
-        elif text == "📏 Моя длина":
+        elif text == "👤 Профиль":
             await stats(update, context)
         elif text == "🏆 Топ Фиссур":
             await top(update, context)
