@@ -144,7 +144,7 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         width = cell_width * len(top_heroes) + padding
         height = cell_height
         
-        img = Image.new("RGB", (width, height), color=(30, 30, 46))
+        img = Image.new("RGB", (width, height), color=(40, 55, 70))
         draw = ImageDraw.Draw(img)
         
         try:
@@ -167,20 +167,19 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                     img.paste(icon, (x, y), icon)
             except Exception as e:
                 logger.debug(f"Could not load hero icon: {e}")
-                draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(60, 60, 80))
+                draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(80, 95, 110))
             
-            draw.rectangle([x - 1, y - 1, x + icon_size, y + icon_size], outline=(100, 100, 140), width=1)
+            draw.rectangle([x - 1, y - 1, x + icon_size, y + icon_size], outline=(120, 170, 210), width=1)
             
-            name = hero["name"]
             picks = hero["picks"]
-            text = f"{name} x{picks}"
+            text = f"x{picks}"
             
             bbox = draw.textbbox((0, 0), text, font=font)
             tw = bbox[2] - bbox[0]
             tx = x + (icon_size - tw) // 2
             ty = y + icon_size + 3
             
-            draw.text((tx, ty), text, fill=(200, 200, 220), font=font)
+            draw.text((tx, ty), text, fill=(180, 230, 255), font=font)
         
         buf = io.BytesIO()
         img.save(buf, format="PNG")
