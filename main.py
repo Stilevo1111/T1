@@ -1195,13 +1195,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = user_obj.id
         display_username = f"<a href=\"tg://user?id={user_id}\">{username}</a>"
         
-        text = f"📏 Длина: {user['fissure']:.1f} см\n🎲 Бросков: {user.get('total_rolls', 0)}\n🔥 Фиссура: {user.get('current_streak', 0)}/{user.get('best_streak', 0)}"
-
-        stats_lines = [
-            f"📏 Длина: {user['fissure']:.1f} см",
-            f"🎲 Бросков: {user.get('total_rolls', 0)}",
-            f"🔥 Фиссура: {user.get('current_streak', 0)}/{user.get('best_streak', 0)}",
-        ]
+        text = f"👑 {display_username}\n\n📏 Длина: {user['fissure']:.1f} см\n🎲 Бросков: {user.get('total_rolls', 0)}\n🔥 Фиссура: {user.get('current_streak', 0)}/{user.get('best_streak', 0)}"
 
         # Добавляем стрик Dota если привязан Steam
         if user.get('steam_id'):
@@ -1212,46 +1206,34 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             week_losses = week_games - week_wins
             winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
             text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n🔥 Стрик: {week_streak}/{week_best}"
-            stats_lines.append("")
-            stats_lines.append("🎮 Dota за неделю:")
-            stats_lines.append(f"📊 {week_wins}W • {week_losses}L • WR {winrate}%")
-            stats_lines.append(f"🔥 Стрик: {week_streak}/{week_best}")
         
-        caption = f"👑 {display_username}"
-        
-        # Если привязан Steam — отправляем картинку со статой + героями
-        if user.get('steam_id'):
-            try:
-                from dota_mmr import get_top_heroes, generate_heroes_image
-                top_heroes = get_top_heroes(user['steam_id'], last_n=10, top_k=3)
-                if top_heroes:
-                    img_bytes = generate_heroes_image(top_heroes, stats_lines)
-                    if img_bytes:
-                        import io
-                        result_msg = await context.bot.send_photo(
-                            chat_id=update.message.chat_id,
-                            photo=io.BytesIO(img_bytes),
-                            caption=caption,
-                            parse_mode="HTML",
-                            reply_markup=main_menu()
-                        )
-                        set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
-                        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
-                        update_last_message_id(user_obj.id, result_msg.message_id)
-                        return
-            except Exception as e:
-                logger.debug(f"Could not send hero icons: {e}")
-        
-        # Без Steam или если не удалось — отправляем текстом
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
-            text=f"{caption}\n\n{text}",
+            text=text,
             parse_mode="HTML",
             reply_markup=main_menu()
         )
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(user_obj.id, result_msg.message_id)
+        
+        # Отправляем топ-3 героя за последние 10 игр (если привязан Steam)
+        if user.get('steam_id'):
+            try:
+                from dota_mmr import get_top_heroes, generate_heroes_image
+                top_heroes = get_top_heroes(user['steam_id'], last_n=10, top_k=3)
+                if top_heroes:
+                    img_bytes = generate_heroes_image(top_heroes)
+                    if img_bytes:
+                        import io
+                        hero_msg = await context.bot.send_photo(
+                            chat_id=update.message.chat_id,
+                            photo=io.BytesIO(img_bytes),
+                            caption="⚡ Любимые герои — последние 10 игр"
+                        )
+                        schedule_delete(context.bot, chat_id, hero_msg.message_id, 30, context.application.job_queue)
+            except Exception as e:
+                logger.debug(f"Could not send hero icons: {e}")
         
     except Exception as e:
         logger.error(f"Error in stats: {e}", exc_info=True)
