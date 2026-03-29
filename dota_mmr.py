@@ -136,12 +136,11 @@ def generate_heroes_images(top_heroes: list) -> list:
         if not top_heroes:
             return []
         
-        icon_w = 88
-        icon_h = 63
+        icon_size = 90
         padding = 6
         text_h = 20
-        width = icon_w + padding * 2
-        height = icon_h + text_h + padding * 2
+        width = icon_size + padding * 2
+        height = icon_size + text_h + padding * 2
         
         try:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 11)
@@ -161,10 +160,11 @@ def generate_heroes_images(top_heroes: list) -> list:
                 resp = req.get(hero["icon_url"], timeout=5)
                 if resp.status_code == 200:
                     icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                    icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
                     img.paste(icon, (padding, padding), icon)
             except Exception as e:
                 logger.debug(f"Could not load hero icon: {e}")
-                draw.rounded_rectangle([padding, padding, padding + icon_w, padding + icon_h], radius=6, fill=(60, 60, 80, 200))
+                draw.rounded_rectangle([padding, padding, padding + icon_size, padding + icon_size], radius=6, fill=(60, 60, 80, 200))
             
             # Подпись
             name = hero["name"]
@@ -173,7 +173,7 @@ def generate_heroes_images(top_heroes: list) -> list:
             bbox = draw.textbbox((0, 0), text, font=font)
             tw = bbox[2] - bbox[0]
             tx = (width - tw) // 2
-            draw.text((tx, padding + icon_h + 2), text, fill=(200, 200, 220, 255), font=font)
+            draw.text((tx, padding + icon_size + 2), text, fill=(200, 200, 220, 255), font=font)
             
             buf = io.BytesIO()
             img.save(buf, format="PNG")
