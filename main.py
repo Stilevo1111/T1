@@ -1590,11 +1590,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Always send welcome message
         text = (
-            "👋 Привет! Здесь можно:\n\n"
-            "🎲 Увеличить свою фиссуру\n"
-            "📊 Смотреть топ фиссур и MMR\n"
-            "🦞 Привязать Dota аккаунт и отслеживать статистику\n"
-            "🔥 Следить за стриком побед"
+            "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
         )
         result_msg = await context.bot.send_message(
             chat_id=chat_id,
