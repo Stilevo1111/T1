@@ -52,6 +52,7 @@ def _api_get(url: str, params: dict = None) -> dict:
 # ========================
 
 HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes"
+HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
 
 
 def get_heroes_data() -> dict:
@@ -76,6 +77,7 @@ def get_heroes_data() -> dict:
                 "name": hero["localized_name"],
                 "short_name": short_name,
                 "image_url": f"{HERO_IMAGE_BASE}/{short_name}.png",
+                "icon_url": f"{HERO_ICON_BASE}/{short_name}.png",
             }
         
         _set_cached("heroes_data", heroes)
@@ -114,6 +116,7 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
                     "id": hero_id,
                     "name": hero_info["name"],
                     "image_url": hero_info["image_url"],
+                    "icon_url": hero_info["icon_url"],
                     "picks": count,
                 })
         
@@ -121,6 +124,80 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
     except Exception as e:
         logger.error(f"get_top_heroes error: {e}", exc_info=True)
         return []
+
+
+def generate_heroes_image(top_heroes: list) -> bytes | None:
+    """Сгенерировать картинку с иконками топ-героев (горизонтально)"""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        import io
+        import requests as req
+        
+        if not top_heroes:
+            return None
+        
+        # Размеры
+        icon_size = 63  # Стандартный размер иконки OpenDota
+        padding = 10
+        text_height = 20
+        cell_width = icon_size + padding * 2
+        cell_height = icon_size + text_height + padding * 2
+        width = cell_width * len(top_heroes) + padding
+        height = cell_height
+        
+        # Создаём картинку с тёмным фоном
+        img = Image.new("RGB", (width, height), color=(30, 30, 46))
+        draw = ImageDraw.Draw(img)
+        
+        # Пытаемся загрузить шрифт
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 12)
+        except:
+            try:
+                font = ImageFont.truetype("arial.ttf", 12)
+            except:
+                font = ImageFont.load_default()
+        
+        for i, hero in enumerate(top_heroes):
+            x = padding + i * cell_width
+            y = padding
+            
+            # Скачиваем иконку
+            try:
+                resp = req.get(hero["icon_url"], timeout=5)
+                if resp.status_code == 200:
+                    icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                    icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
+                    img.paste(icon, (x, y), icon)
+            except Exception as e:
+                logger.debug(f"Could not load hero icon: {e}")
+                # Рисуем заглушку
+                draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(60, 60, 80))
+            
+            # Рисуем рамку вокруг иконки
+            draw.rectangle([x - 1, y - 1, x + icon_size, y + icon_size], outline=(100, 100, 140), width=1)
+            
+            # Подпись: "Имя xN"
+            name = hero["name"]
+            picks = hero["picks"]
+            text = f"{name} x{picks}"
+            
+            # Центрируем текст
+            bbox = draw.textbbox((0, 0), text, font=font)
+            tw = bbox[2] - bbox[0]
+            tx = x + (icon_size - tw) // 2
+            ty = y + icon_size + 3
+            
+            draw.text((tx, ty), text, fill=(200, 200, 220), font=font)
+        
+        # Сохраняем в байты
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return buf.read()
+    except Exception as e:
+        logger.error(f"generate_heroes_image error: {e}", exc_info=True)
+        return None
 
 def steam64_to_account_id(steam_id: int) -> int:
     return steam_id - STEAM_OFFSET
