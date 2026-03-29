@@ -1227,20 +1227,17 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if img_bytes:
                         week_w = user.get('week_wins', 0)
                         week_l = user.get('week_games', 0) - week_w
-                        wl_line = ""
-                        blocks = ""
+                        pairs = ""
                         for i in range(week_w + week_l):
                             if i < week_w:
-                                wl_line += " W "
-                                blocks += "🟩"
+                                pairs += "W🟩"
                             else:
-                                wl_line += " L "
-                                blocks += "🟥"
+                                pairs += "L🟥"
                         import io
                         hero_msg = await context.bot.send_photo(
                             chat_id=update.message.chat_id,
                             photo=io.BytesIO(img_bytes),
-                            caption=f"⚡ Любимые герои\n{wl_line}\n{blocks}"
+                            caption=f"⚡ Любимые герои\n{pairs}"
                         )
                         schedule_delete(context.bot, chat_id, hero_msg.message_id, 30, context.application.job_queue)
             except Exception as e:
