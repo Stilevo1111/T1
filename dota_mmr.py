@@ -126,39 +126,34 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
         return []
 
 
-def generate_heroes_image(top_heroes: list) -> bytes | None:
-    """Сгенерировать картинку с иконками топ-героев (3 кубика без фона)"""
+def generate_heroes_images(top_heroes: list) -> list:
+    """Сгенерировать 3 отдельных квадратика с иконками героев"""
     try:
         from PIL import Image, ImageDraw, ImageFont
         import io
         import requests as req
         
         if not top_heroes:
-            return None
+            return []
         
-        # Размеры
         icon_size = 90
-        gap = 12
-        text_h = 18
-        total = len(top_heroes)
-        width = icon_size * total + gap * (total - 1)
-        height = icon_size + text_h + 4
-        
-        # Прозрачный фон
-        img = Image.new("RGBA", (width, height), color=(0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
+        padding = 6
+        text_h = 20
+        width = icon_size + padding * 2
+        height = icon_size + text_h + padding * 2
         
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 12)
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 11)
         except:
             try:
-                font = ImageFont.truetype("arial.ttf", 12)
+                font = ImageFont.truetype("arial.ttf", 11)
             except:
                 font = ImageFont.load_default()
         
-        for i, hero in enumerate(top_heroes):
-            x = i * (icon_size + gap)
-            y = 0
+        result = []
+        for hero in top_heroes:
+            img = Image.new("RGBA", (width, height), color=(0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
             
             # Скачиваем иконку
             try:
@@ -166,10 +161,10 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                 if resp.status_code == 200:
                     icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
                     icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
-                    img.paste(icon, (x, y), icon)
+                    img.paste(icon, (padding, padding), icon)
             except Exception as e:
                 logger.debug(f"Could not load hero icon: {e}")
-                draw.rounded_rectangle([x, y, x + icon_size, y + icon_size], radius=8, fill=(60, 60, 80, 200))
+                draw.rounded_rectangle([padding, padding, padding + icon_size, padding + icon_size], radius=6, fill=(60, 60, 80, 200))
             
             # Подпись
             name = hero["name"]
@@ -177,14 +172,18 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             text = f"{name[:10]} x{picks}"
             bbox = draw.textbbox((0, 0), text, font=font)
             tw = bbox[2] - bbox[0]
-            tx = x + (icon_size - tw) // 2
-            draw.text((tx, y + icon_size + 2), text, fill=(200, 200, 220, 255), font=font)
+            tx = (width - tw) // 2
+            draw.text((tx, padding + icon_size + 2), text, fill=(200, 200, 220, 255), font=font)
+            
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            buf.seek(0)
+            result.append(buf.read())
         
-        # Конвертируем в RGB для Telegram (PNG с прозрачностью)
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        return buf.read()
+        return result
+    except Exception as e:
+        logger.error(f"generate_heroes_images error: {e}", exc_info=True)
+        return []
     except Exception as e:
         logger.error(f"generate_heroes_image error: {e}", exc_info=True)
         return None

@@ -1220,18 +1220,25 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Отправляем топ-3 героя за последние 10 игр (если привязан Steam)
         if user.get('steam_id'):
             try:
-                from dota_mmr import get_top_heroes, generate_heroes_image
+                from dota_mmr import get_top_heroes, generate_heroes_images
+                from telegram import InputMediaPhoto
                 top_heroes = get_top_heroes(user['steam_id'], last_n=10, top_k=3)
                 if top_heroes:
-                    img_bytes = generate_heroes_image(top_heroes)
-                    if img_bytes:
+                    images = generate_heroes_images(top_heroes)
+                    if images:
                         import io
-                        hero_msg = await context.bot.send_photo(
+                        media = []
+                        for i, img_bytes in enumerate(images):
+                            name = top_heroes[i]["name"]
+                            picks = top_heroes[i]["picks"]
+                            caption = f"🦸 {name} — {picks} из 10" if i == 0 else None
+                            media.append(InputMediaPhoto(media=io.BytesIO(img_bytes), caption=caption))
+                        hero_msgs = await context.bot.send_media_group(
                             chat_id=update.message.chat_id,
-                            photo=io.BytesIO(img_bytes),
-                            caption="🦸 Топ героев за 10 игр"
+                            media=media
                         )
-                        schedule_delete(context.bot, chat_id, hero_msg.message_id, 30, context.application.job_queue)
+                        for hm in hero_msgs:
+                            schedule_delete(context.bot, chat_id, hm.message_id, 30, context.application.job_queue)
             except Exception as e:
                 logger.debug(f"Could not send hero icons: {e}")
         
