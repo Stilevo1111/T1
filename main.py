@@ -209,16 +209,6 @@ async def morning_digest_job(context):
                 # Для ручного /digestnow snapshot НЕ трогаем, чтобы значение держалось до следующего 9:00.
                 if not getattr(context, "manual", False):
                     update_digest_snapshot()
-                # Закрепляем (даже если редактировали существующее)
-                try:
-                    await bot.unpin_chat_message(chat_id=digest_chat_id)
-                except Exception as e:
-                    logger.debug(f"Не удалось открепить старый дайджест: {e}")
-                try:
-                    await bot.pin_chat_message(chat_id=digest_chat_id, message_id=int(last_message_id), disable_notification=True)
-                    logger.info(f"Дайджест {last_message_id} закреплён")
-                except Exception as e:
-                    logger.debug(f"Не удалось закрепить дайджест: {e}")
                 return
             except Exception as e:
                 error_str = str(e)
@@ -700,16 +690,6 @@ async def alternate_digest_job(context):
                 )
                 logger.info(f"Обновлён alternate дайджест {last_message_id}")
                 set_config('alternate_digest_type', next_type)
-                # Закрепляем (даже если редактировали существующее)
-                try:
-                    await bot.unpin_chat_message(chat_id=digest_chat_id)
-                except Exception as e:
-                    logger.debug(f"Не удалось открепить старый: {e}")
-                try:
-                    await bot.pin_chat_message(chat_id=digest_chat_id, message_id=int(last_message_id), disable_notification=True)
-                    logger.info(f"Дайджест {last_message_id} закреплён")
-                except Exception as e:
-                    logger.debug(f"Не удалось закрепить: {e}")
                 return
             except Exception as e:
                 error_str = str(e)
