@@ -1229,7 +1229,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         hero_msg = await context.bot.send_photo(
                             chat_id=update.message.chat_id,
                             photo=io.BytesIO(img_bytes),
-                            caption="🦸 Топ героев за 10 игр"
+                            caption="⚡ Любимые герои — последние 10 игр"
                         )
                         schedule_delete(context.bot, chat_id, hero_msg.message_id, 30, context.application.job_queue)
             except Exception as e:
