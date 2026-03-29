@@ -76,6 +76,23 @@ async def delete_message_job(context):
             logger.warning(f"Failed to delete message {msg_id} in chat {chat_id}: {e}")
 
 
+
+_bot_can_delete_cache = {}
+
+async def bot_can_delete(bot, chat_id):
+    """Проверить может ли бот удалять сообщения в чате"""
+    if chat_id in _bot_can_delete_cache:
+        return _bot_can_delete_cache[chat_id]
+    try:
+        me = await bot.get_me()
+        member = await bot.get_chat_member(chat_id, me.id)
+        can_delete = getattr(member, 'can_delete_messages', False) or member.status in ('administrator', 'creator')
+        _bot_can_delete_cache[chat_id] = can_delete
+        return can_delete
+    except Exception:
+        _bot_can_delete_cache[chat_id] = False
+        return False
+
 def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
     """Запланировать удаление сообщения через delay секунд"""
     if job_queue:
@@ -407,10 +424,11 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = chat.id
         # В группах удаляем сообщение пользователя с командой
         if chat.type in ['group', 'supergroup', 'channel']:
-            try:
-                await context.bot.delete_message(chat_id, update.message.message_id)
-            except Exception as e:
-                logger.debug(f"Could not delete user message: {e}")
+            if await bot_can_delete(context.bot, chat_id):
+                try:
+                    await context.bot.delete_message(chat_id, update.message.message_id)
+                except Exception as e:
+                    logger.debug(f"Could not delete user message: {e}")
         # Сохраняем этот чат как чат для дайджеста и сбрасываем message_id
         set_config("digest_chat_id", chat_id)
         set_config("daily_digest_message_id", None)
@@ -537,10 +555,11 @@ async def dota_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = chat.id
         # В группах удаляем сообщение пользователя с командой
         if chat.type in ['group', 'supergroup', 'channel']:
-            try:
-                await context.bot.delete_message(chat_id, update.message.message_id)
-            except Exception as e:
-                logger.debug(f"Could not delete user message: {e}")
+            if await bot_can_delete(context.bot, chat_id):
+                try:
+                    await context.bot.delete_message(chat_id, update.message.message_id)
+                except Exception as e:
+                    logger.debug(f"Could not delete user message: {e}")
         # Сохраняем этот чат как чат для дайджеста и сбрасываем message_id
         set_config("digest_chat_id", chat_id)
         set_config("dota_digest_message_id", None)
@@ -1044,10 +1063,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Delete user message only in groups/channels (not in private)
     if chat_type in ['group', 'supergroup', 'channel']:
-        try:
-            await context.bot.delete_message(chat_id, user_msg_id)
-        except Exception as e:
-            logger.debug(f"Could not delete user message: {e}")
+        if await bot_can_delete(context.bot, chat_id):
+            try:
+                await context.bot.delete_message(chat_id, user_msg_id)
+            except Exception as e:
+                logger.debug(f"Could not delete user message: {e}")
     
     # Delete last bot message immediately
     try:
@@ -1162,13 +1182,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     chat_type = update.message.chat.type
     
-    # Delete user message only in groups/channels
+    # Delete user message only in groups/channels if bot has permissions
     if chat_type in ['group', 'supergroup', 'channel']:
-        user_msg_id = update.message.message_id
-        try:
-            await context.bot.delete_message(chat_id, user_msg_id)
-        except Exception as e:
-            logger.debug(f"Could not delete user message: {e}")
+        if await bot_can_delete(context.bot, chat_id):
+            user_msg_id = update.message.message_id
+            try:
+                await context.bot.delete_message(chat_id, user_msg_id)
+            except Exception as e:
+                logger.debug(f"Could not delete user message: {e}")
     
     # Delete last bot message immediately
     try:
@@ -1252,11 +1273,12 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Delete user message only in groups/channels
     if chat_type in ['group', 'supergroup', 'channel']:
-        user_msg_id = update.message.message_id
-        try:
-            await context.bot.delete_message(chat_id, user_msg_id)
-        except Exception as e:
-            logger.debug(f"Could not delete user message: {e}")
+        if await bot_can_delete(context.bot, chat_id):
+            user_msg_id = update.message.message_id
+            try:
+                await context.bot.delete_message(chat_id, user_msg_id)
+            except Exception as e:
+                logger.debug(f"Could not delete user message: {e}")
     
     # Delete last bot message immediately
     try:
@@ -1318,11 +1340,12 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Delete user message only in groups/channels
     if chat_type in ['group', 'supergroup', 'channel']:
-        try:
-            await context.bot.delete_message(chat_id, update.message.message_id)
-        except Exception:
-            pass
-    
+        if await bot_can_delete(context.bot, chat_id):
+            try:
+                await context.bot.delete_message(chat_id, update.message.message_id)
+            except Exception:
+                pass
+
     try:
         from dota_mmr import get_week_top
         from database import get_user, get_connection, DATABASE_URL
@@ -1495,11 +1518,12 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Delete user message only in groups/channels
     if chat_type in ['group', 'supergroup', 'channel']:
-        try:
-            await context.bot.delete_message(chat_id, update.message.message_id)
-        except Exception:
-            pass
-    
+        if await bot_can_delete(context.bot, chat_id):
+            try:
+                await context.bot.delete_message(chat_id, update.message.message_id)
+            except Exception:
+                pass
+
     args = context.args
     identifier = args[0] if args else None
     
@@ -1557,12 +1581,13 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     chat_type = update.message.chat.type
     
-    # Delete user message only in groups/channels
+    # Delete user message only in groups/channels if bot has permissions
     if chat_type in ['group', 'supergroup', 'channel']:
-        try:
-            await context.bot.delete_message(chat_id, update.message.message_id)
-        except Exception:
-            pass
+        if await bot_can_delete(context.bot, chat_id):
+            try:
+                await context.bot.delete_message(chat_id, update.message.message_id)
+            except Exception:
+                pass
     
     try:
         from dota_mmr import update_user_mmr
@@ -1608,13 +1633,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     chat_type = update.message.chat.type
     
-    # Delete user command only in groups/channels
+    # Delete user command only in groups/channels if bot has permissions
     if chat_type in ['group', 'supergroup', 'channel']:
-        user_msg_id = update.message.message_id
-        try:
-            await context.bot.delete_message(chat_id, user_msg_id)
-        except Exception:
-            pass
+        if await bot_can_delete(context.bot, chat_id):
+            user_msg_id = update.message.message_id
+            try:
+                await context.bot.delete_message(chat_id, user_msg_id)
+            except Exception:
+                pass
     
     # Delete last bot message
     try:
@@ -1665,10 +1691,11 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = chat.id
         # В группах удаляем сообщение пользователя с командой
         if chat.type in ['group', 'supergroup', 'channel']:
-            try:
-                await context.bot.delete_message(chat_id, update.message.message_id)
-            except Exception as e:
-                logger.debug(f"Could not delete user message: {e}")
+            if await bot_can_delete(context.bot, chat_id):
+                try:
+                    await context.bot.delete_message(chat_id, update.message.message_id)
+                except Exception as e:
+                    logger.debug(f"Could not delete user message: {e}")
         # Сохраняем ID чата в конфиг и сбрасываем message_id
         set_config("digest_chat_id", chat_id)
         set_config("daily_digest_message_id", None)
@@ -1702,10 +1729,11 @@ async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # В группах удаляем сообщение пользователя с командой
         if chat.type in ['group', 'supergroup', 'channel']:
-            try:
-                await context.bot.delete_message(chat_id, update.message.message_id)
-            except Exception as e:
-                logger.debug(f"Could not delete user message: {e}")
+            if await bot_can_delete(context.bot, chat_id):
+                try:
+                    await context.bot.delete_message(chat_id, update.message.message_id)
+                except Exception as e:
+                    logger.debug(f"Could not delete user message: {e}")
         
         # Сохраняем этот чат как чат для дайджеста и сбрасываем message_id
         set_config("digest_chat_id", chat_id)
@@ -1751,12 +1779,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Delete user's command only in groups/channels
         if chat_type in ['group', 'supergroup', 'channel']:
-            user_msg_id = update.message.message_id
-            try:
-                await context.bot.delete_message(chat_id, user_msg_id)
-                logger.info(f"Deleted user message: {user_msg_id}")
-            except Exception as e:
-                logger.debug(f"Could not delete user message: {e}")
+            if await bot_can_delete(context.bot, chat_id):
+                user_msg_id = update.message.message_id
+                try:
+                    await context.bot.delete_message(chat_id, user_msg_id)
+                    logger.info(f"Deleted user message: {user_msg_id}")
+                except Exception as e:
+                    logger.debug(f"Could not delete user message: {e}")
         
         # Delete last bot message immediately
         try:
