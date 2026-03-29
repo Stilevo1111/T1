@@ -1249,7 +1249,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         import io
                         await context.bot.send_message(
                             chat_id=update.message.chat_id,
-                            text="🌟 Любимые герои за 10 матчей"
+                            text="🌟 Любимые герои за 10 матчей:"
                         )
                         hero_msg = await context.bot.send_photo(
                             chat_id=update.message.chat_id,
