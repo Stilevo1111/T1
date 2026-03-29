@@ -127,7 +127,7 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
 
 
 def generate_heroes_image(top_heroes: list) -> bytes | None:
-    """Сгенерировать картинку с иконками топ-героев (горизонтально)"""
+    """Сгенерировать картинку с иконками топ-героев (3 кубика без фона)"""
     try:
         from PIL import Image, ImageDraw, ImageFont
         import io
@@ -137,19 +137,17 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             return None
         
         # Размеры
-        icon_size = 63  # Стандартный размер иконки OpenDota
-        padding = 10
-        text_height = 20
-        cell_width = icon_size + padding * 2
-        cell_height = icon_size + text_height + padding * 2
-        width = cell_width * len(top_heroes) + padding
-        height = cell_height
+        icon_size = 90
+        gap = 12
+        text_h = 18
+        total = len(top_heroes)
+        width = icon_size * total + gap * (total - 1)
+        height = icon_size + text_h + 4
         
-        # Создаём картинку с тёмным фоном
-        img = Image.new("RGB", (width, height), color=(30, 30, 46))
+        # Прозрачный фон
+        img = Image.new("RGBA", (width, height), color=(0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         
-        # Пытаемся загрузить шрифт
         try:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 12)
         except:
@@ -159,8 +157,8 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                 font = ImageFont.load_default()
         
         for i, hero in enumerate(top_heroes):
-            x = padding + i * cell_width
-            y = padding
+            x = i * (icon_size + gap)
+            y = 0
             
             # Скачиваем иконку
             try:
@@ -171,26 +169,18 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                     img.paste(icon, (x, y), icon)
             except Exception as e:
                 logger.debug(f"Could not load hero icon: {e}")
-                # Рисуем заглушку
-                draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(60, 60, 80))
+                draw.rounded_rectangle([x, y, x + icon_size, y + icon_size], radius=8, fill=(60, 60, 80, 200))
             
-            # Рисуем рамку вокруг иконки
-            draw.rectangle([x - 1, y - 1, x + icon_size, y + icon_size], outline=(100, 100, 140), width=1)
-            
-            # Подпись: "Имя xN"
+            # Подпись
             name = hero["name"]
             picks = hero["picks"]
-            text = f"{name} x{picks}"
-            
-            # Центрируем текст
+            text = f"{name[:10]} x{picks}"
             bbox = draw.textbbox((0, 0), text, font=font)
             tw = bbox[2] - bbox[0]
             tx = x + (icon_size - tw) // 2
-            ty = y + icon_size + 3
-            
-            draw.text((tx, ty), text, fill=(200, 200, 220), font=font)
+            draw.text((tx, y + icon_size + 2), text, fill=(200, 200, 220, 255), font=font)
         
-        # Сохраняем в байты
+        # Конвертируем в RGB для Telegram (PNG с прозрачностью)
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         buf.seek(0)
