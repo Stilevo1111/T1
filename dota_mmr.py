@@ -104,7 +104,7 @@ def rank_to_mmr(rank_tier: int) -> int:
 def rank_to_string(rank_tier: int) -> str:
     """Конвертировать rank_tier в читаемый вид (например: "Страж 3", "Архонт 5", "Бессмертный")"""
     if not rank_tier:
-        return "Не ранжирован"
+        return "Не откалиброван"
     
     ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
     tier = rank_tier // 10

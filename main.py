@@ -1383,7 +1383,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         else:
                             rank_str = f"{rank_name} {star}"
                 else:
-                    rank_str = "Не ранжирован"
+                    rank_str = "Не откалиброван"
                 
                 # Format winrate
                 winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
