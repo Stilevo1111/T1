@@ -173,8 +173,8 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             
             draw.rectangle([x - 1, y - 1, x + icon_size, y + icon_size], outline=(120, 170, 210), width=1)
             
-            wins = hero.get("wins", 0)
-            losses = hero["picks"] - wins
+            wins = int(hero.get("wins", 0))
+            losses = int(hero["picks"]) - wins
             text = f"{wins}/{losses}"
             
             bbox = draw.textbbox((0, 0), text, font=font)
