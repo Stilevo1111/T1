@@ -1289,7 +1289,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not top_users:
             text = "🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
         else:
-            lines = ["🏆 Топ MMR за неделю\n"]
+            lines = []
             for i, player in enumerate(top_users, 1):
                 username = player.get('steam_nickname') or player.get('username') or 'Unknown'
                 rank_tier = player.get('rank_tier', 0)
