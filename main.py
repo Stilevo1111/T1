@@ -1452,14 +1452,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Показываем позицию только если пользователь НЕ в общем топе (избегаем дублирования)
             if not user_is_in_top:
                 if user_pos:
-                    lines.append(f"\n👤 #{user_pos} {user_rank_str} | {user_week_wins}W/{user_week_losses}L {user_winrate}%")
+                    formatted.append(f"\n👤 #{user_pos} {user_rank_str} | {user_week_wins}W/{user_week_losses}L {user_winrate}%")
                 else:
                     if user and user.get('steam_id'):
-                        lines.append(f"\n👤 {user_rank_str} | {user_week_wins}W/{user_week_losses}L {user_winrate}%")
+                        formatted.append(f"\n👤 {user_rank_str} | {user_week_wins}W/{user_week_losses}L {user_winrate}%")
                     else:
-                        lines.append(f"\n👤 Не привязан")
+                        formatted.append(f"\n👤 Не привязан")
             
-            text = "\n".join(lines)
+            text = "\n".join(formatted)
         
         # Delete previous bot message before sending new one
         try:
