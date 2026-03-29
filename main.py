@@ -1216,7 +1216,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = user_obj.id
         display_username = f"<a href=\"tg://user?id={user_id}\">{username}</a>"
         
-        text = f"👑 {display_username}\n\n📏 Длина: {user['fissure']:.1f} см\n🎲 Бросков: {user.get('total_rolls', 0)}\n🔥 Фиссура: {user.get('current_streak', 0)}/{user.get('best_streak', 0)}"
+        text = f"👑 {display_username}\n\n🍆Фиссура:\n📏{user['fissure']:.1f} см • 🎲{user.get('total_rolls', 0)} •🔥{user.get('current_streak', 0)}/{user.get('best_streak', 0)}"
 
         # Добавляем стрик Dota если привязан Steam
         if user.get('steam_id'):
