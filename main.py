@@ -1287,9 +1287,11 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"topmmr: top_users = {top_users}")
         
         if not top_users:
-            text = "🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
+            text = "🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроках."
         else:
-            lines = []
+            # Build the top MMR text in the requested format
+            lines = ["🏆 Топ MMR за неделю\n"]
+            
             for i, player in enumerate(top_users, 1):
                 username = player.get('steam_nickname') or player.get('username') or 'Unknown'
                 rank_tier = player.get('rank_tier', 0)
@@ -1297,9 +1299,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 week_wins = player.get('week_wins', 0)
                 week_losses = week_games - week_wins
                 
-                # Форматируем ранг
+                # Format rank
                 if rank_tier:
-                    # Конвертируем rank_tier в строку ранга
                     ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
                     tier = min(rank_tier // 10, 8)
                     star = rank_tier % 10
@@ -1315,9 +1316,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     rank_str = "Не ранжирован"
                 
-                # Форматируем winrate
+                # Format winrate
                 winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
                 
+                # Format prefix (medal or number)
                 if i == 1:
                     prefix = "🥇"
                 elif i == 2:
@@ -1328,138 +1330,26 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     emoji_nums = {4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
                     prefix = emoji_nums.get(i, f"{i}.")
                 
+                # Format streak
                 streak = player.get('week_current_streak', 0)
                 streak_text = f" 🔥{streak}" if streak > 0 else ""
-                # Сохраняем данные для выравнивания
-                rank_short = rank_str  # уже с эмодзи
-                wl_text = f"{week_wins}W/{week_losses}L"
-                wr_text = f"{winrate}%"
-                lines.append({
-                    'prefix': prefix,
-                    'username': username,
-                    'rank': rank_short,
-                    'wl': wl_text,
-                    'wr': wr_text,
-                    'streak': streak_text
-                })
-            
-            # Выравнивание колонок с учётом ширины эмодзи
-            def display_width(s):
-                """Подсчёт отображаемой ширины: эмодзи с вариационным селектором = 2 символа"""
-                import re
-                # Эмодзи с вариационным селектором (FE0F) занимают 2 символа в моноширинном
-                w = 0
-                i = 0
-                while i < len(s):
-                    if i + 1 < len(s) and ord(s[i+1]) == 0xFE0F:
-                        w += 2
-                        i += 2
-                    elif ord(s[i]) > 0xFFFF:
-                        w += 2
-                        i += 1
-                    else:
-                        w += 1
-                        i += 1
-                return w
-            
-            def ljust_display(s, width):
-                """Выравнивание по ширине отображения"""
-                cur = display_width(s)
-                return s + ' ' * max(0, width - cur)
-            
-            max_user = max(display_width(l['username']) for l in lines)
-            max_rank = max(display_width(l['rank']) for l in lines)
-            max_wl = max(display_width(l['wl']) for l in lines)
-            max_wr = max(display_width(l['wr']) for l in lines)
-            
-            import html as html_mod
-            formatted = ["🏆 Топ MMR за неделю\n"]
-            for l in lines:
-                u = html_mod.escape(ljust_display(l['username'], max_user))
-                r = html_mod.escape(ljust_display(l['rank'], max_rank))
-                w = ljust_display(l['wl'], max_wl)
-                x = ljust_display(l['wr'], max_wr)
-                row = f"{l['prefix']} {u} {r}  {w} {x}{l['streak']}"
-                formatted.append(f"<code>{row}</code>")
-            
-            text = "\n".join(formatted)
-            
-            # Добавляем позицию пользователя
-            user_rank_tier = user.get('rank_tier', 0) if user else 0
-            
-            if user_rank_tier:
-                # Конвертируем rank_tier в строку ранга
-                ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
-                tier = min(user_rank_tier // 10, 8)
-                star = user_rank_tier % 10
                 
-                if tier < 1 or tier > 8:
-                    user_rank_str = "Неизвестно"
-                else:
-                    rank_name = ranks[tier - 1]
-                    if tier == 8:  # Immortal
-                        user_rank_str = rank_name
-                    else:
-                        user_rank_str = f"{rank_name} {star}"
-            else:
-                # Пользователь без ранга (rank_tier=0), но возможно с играми
-                user_rank_str = "Без ранга"
+                # Build player entry - two lines per player
+                lines.append(f"{prefix} {username}")
+                lines.append(f"{rank_str} • {week_wins}W/{week_losses}L • {winrate}%{streak_text}\n")
             
-            user_week_games = user.get('week_games', 0) if user else 0
-            user_week_wins = user.get('week_wins', 0) if user else 0
-            user_week_losses = user_week_games - user_week_wins
-            user_winrate = round((user_week_wins / user_week_games * 100), 1) if user_week_games > 0 else 0
-            
-            logger.info(f"topmmr: user position calc - week_games={user_week_games}, week_wins={user_week_wins}, winrate={user_winrate}")
-            
-            # Проверяем, находится ли пользователь уже в общем топе
-            user_is_in_top = False
-            for player in top_users:
-                if user and player.get('telegram_id') == user.get('telegram_id'):
-                    user_is_in_top = True
-                    break
-            
-            # Вычисляем позицию пользователя в недельном топе по винрейту
-            user_pos = None
-            if user and user.get('steam_id') and user_week_games > 0 and user_week_wins > 0:
-                try:
-                    conn = get_connection()
-                    cursor = conn.cursor()
-                    url = urlparse.urlparse(DATABASE_URL)
-                    scheme = url.scheme
-                    
-                    if 'postgres' in scheme:
-                        cursor.execute("""
-                            SELECT COUNT(*) + 1 as rank FROM users 
-                            WHERE (week_wins::numeric / NULLIF(week_games, 0) * 100) > %s 
-                            AND steam_id IS NOT NULL AND week_games > 0
-                        """, (user_winrate,))
-                    else:
-                        cursor.execute("""
-                            SELECT COUNT(*) + 1 FROM users 
-                            WHERE (week_wins * 100.0 / NULLIF(week_games, 0)) > ? 
-                            AND steam_id IS NOT NULL AND week_games > 0
-                        """, (user_winrate,))
-                    
-                    result = cursor.fetchone()
-                    if result:
-                        user_pos = result[0] if not isinstance(result, dict) else result.get('rank')
-                    cursor.close()
-                    conn.close()
-                except Exception as e:
-                    logger.error(f"Error getting week rank: {e}")
-            
-            # Показываем позицию только если пользователь НЕ в общем топе (избегаем дублирования)
+            # Добавляем позицию пользователя только если пользователь НЕ в общем топе (избегаем дублирования)
             if not user_is_in_top:
+                lines.append("\n👤 Твоя позиция")
                 if user_pos:
-                    formatted.append(f"\n👤 #{user_pos} {user_rank_str} | {user_week_wins}W/{user_week_losses}L {user_winrate}%")
+                    lines.append(f"#{user_pos} {user_rank_str} • {user_week_wins}W/{user_week_losses}L • {user_winrate}%")
                 else:
                     if user and user.get('steam_id'):
-                        formatted.append(f"\n👤 {user_rank_str} | {user_week_wins}W/{user_week_losses}L {user_winrate}%")
+                        lines.append(f"{user_rank_str} • {user_week_wins}W/{user_week_losses}L • {user_winrate}%")
                     else:
-                        formatted.append(f"\n👤 Не привязан")
+                        lines.append("Не привязан")
             
-            text = "\n".join(formatted)
+            text = "".join(lines)
         
         # Delete previous bot message before sending new one
         try:
