@@ -44,8 +44,83 @@ def _api_get(url: str, params: dict = None) -> dict:
 
 
 # ========================
-# 🔧 UTILS
+# 🎮 MATCHES
 # ========================
+
+# ========================
+# 🦸 HEROES
+# ========================
+
+HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes"
+
+
+def get_heroes_data() -> dict:
+    """Получить данные всех героев из OpenDota (с кешированием)"""
+    cached = _get_cached("heroes_data")
+    if cached:
+        return cached
+    
+    try:
+        url = f"{OPENDOTA_API_URL}/heroes"
+        data = _api_get(url)
+        if not data:
+            return {}
+        
+        heroes = {}
+        for hero in data:
+            hero_id = hero["id"]
+            # npc_dota_hero_antimage -> antimage
+            short_name = hero["name"].replace("npc_dota_hero_", "")
+            heroes[hero_id] = {
+                "id": hero_id,
+                "name": hero["localized_name"],
+                "short_name": short_name,
+                "image_url": f"{HERO_IMAGE_BASE}/{short_name}.png",
+            }
+        
+        _set_cached("heroes_data", heroes)
+        logger.info(f"Loaded {len(heroes)} heroes from OpenDota")
+        return heroes
+    except Exception as e:
+        logger.error(f"get_heroes_data error: {e}", exc_info=True)
+        return {}
+
+
+def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
+    """Получить топ-{top_k} популярных героев за последние {last_n} игр"""
+    try:
+        matches = get_recent_matches(steam_id, limit=last_n)
+        if not matches:
+            return []
+        
+        heroes_data = get_heroes_data()
+        if not heroes_data:
+            return []
+        
+        # Считаем количество игр на каждом герое
+        from collections import Counter
+        hero_counts = Counter()
+        for match in matches:
+            hero_id = match.get("hero_id")
+            if hero_id:
+                hero_counts[hero_id] += 1
+        
+        # Берём топ-K
+        result = []
+        for hero_id, count in hero_counts.most_common(top_k):
+            hero_info = heroes_data.get(hero_id)
+            if hero_info:
+                result.append({
+                    "id": hero_id,
+                    "name": hero_info["name"],
+                    "image_url": hero_info["image_url"],
+                    "picks": count,
+                })
+        
+        return result
+    except Exception as e:
+        logger.error(f"get_top_heroes error: {e}", exc_info=True)
+        return []
 
 def steam64_to_account_id(steam_id: int) -> int:
     return steam_id - STEAM_OFFSET

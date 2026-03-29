@@ -6,7 +6,7 @@ import asyncio
 import logging
 import datetime
 import urllib.parse as urlparse
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InputMediaPhoto
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat
@@ -1217,6 +1217,31 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(user_obj.id, result_msg.message_id)
+        
+        # Отправляем топ-3 героя за последние 10 игр (если привязан Steam)
+        if user.get('steam_id'):
+            try:
+                from dota_mmr import get_top_heroes
+                top_heroes = get_top_heroes(user['steam_id'], last_n=10, top_k=3)
+                if top_heroes:
+                    media = []
+                    captions = []
+                    for i, hero in enumerate(top_heroes):
+                        caption = f"🦸 {hero['name']} — {hero['picks']} из 10"
+                        captions.append(caption)
+                        media.append(InputMediaPhoto(
+                            media=hero['image_url'],
+                            caption=caption
+                        ))
+                    if media:
+                        hero_msgs = await context.bot.send_media_group(
+                            chat_id=update.message.chat_id,
+                            media=media
+                        )
+                        for hm in hero_msgs:
+                            schedule_delete(context.bot, chat_id, hm.message_id, 30, context.application.job_queue)
+            except Exception as e:
+                logger.debug(f"Could not send hero images: {e}")
         
     except Exception as e:
         logger.error(f"Error in stats: {e}", exc_info=True)
