@@ -126,8 +126,8 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
         return []
 
 
-def generate_heroes_image(top_heroes: list) -> bytes | None:
-    """Сгенерировать картинку с иконками топ-героев (горизонтально)"""
+def generate_heroes_image(top_heroes: list, stats_lines: list = None) -> bytes | None:
+    """Сгенерировать картинку с текстом статы и иконками топ-героев"""
     try:
         from PIL import Image, ImageDraw, ImageFont
         import io
@@ -141,23 +141,50 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         text_height = 20
         cell_width = icon_size + padding * 2
         cell_height = icon_size + text_height + padding * 2
-        width = cell_width * len(top_heroes) + padding
-        height = cell_height
+        heroes_width = cell_width * len(top_heroes) + padding
+        heroes_height = cell_height
+        
+        # Вычисляем размер блока статы
+        line_height = 18
+        stats_padding = 12
+        if stats_lines:
+            stats_block_h = len(stats_lines) * line_height + stats_padding * 2
+        else:
+            stats_block_h = 0
+        
+        separator_h = 8
+        width = heroes_width
+        height = stats_block_h + separator_h + heroes_height
         
         img = Image.new("RGB", (width, height), color=(40, 55, 70))
         draw = ImageDraw.Draw(img)
         
         try:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 12)
+            font_sm = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 11)
         except:
             try:
                 font = ImageFont.truetype("arial.ttf", 12)
+                font_sm = ImageFont.truetype("arial.ttf", 11)
             except:
                 font = ImageFont.load_default()
+                font_sm = font
         
+        # Рисуем стату
+        y_offset = 0
+        if stats_lines:
+            for line in stats_lines:
+                draw.text((stats_padding, y_offset + stats_padding), line, fill=(180, 230, 255), font=font_sm)
+                y_offset += line_height
+            # Разделитель
+            draw.line([(padding, y_offset + stats_padding), (width - padding, y_offset + stats_padding)], fill=(120, 170, 210), width=1)
+            y_offset += separator_h
+        
+        # Рисуем иконки героев
+        hero_y_base = y_offset
         for i, hero in enumerate(top_heroes):
             x = padding + i * cell_width
-            y = padding
+            y = hero_y_base + padding
             
             try:
                 resp = req.get(hero["icon_url"], timeout=5)
