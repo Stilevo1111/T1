@@ -123,10 +123,93 @@ async def decrease_inactive_job(context):
         logger.error(f"Ошибка в decrease_inactive_job: {e}")
 
 
+async def announce_weekly_mmr_winner(bot):
+    """Отправляет поздравление победителю недельного топа MMR при смене недели."""
+    try:
+        today_utc = datetime.datetime.utcnow()
+        monday_utc = today_utc - datetime.timedelta(days=today_utc.weekday())
+        current_week_start = monday_utc.strftime("%Y-%m-%d")
+
+        last_announced = get_config('mmr_week_top_announced')
+        if last_announced == current_week_start:
+            return
+
+        if today_utc.weekday() != 0:
+            return
+
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            logger.info("announce_weekly_mmr_winner: чат для дайджеста не настроен")
+            return
+
+        from database import get_dota_week_top_from_db
+        top_users = get_dota_week_top_from_db(5)
+        if not top_users or all(u.get('week_games', 0) == 0 for u in top_users):
+            logger.info("announce_weekly_mmr_winner: нет данных для топа MMR (никто не играл)")
+            set_config('mmr_week_top_announced', current_week_start)
+            return
+
+        # Берём первого с week_games > 0
+        winner = next((u for u in top_users if u.get('week_games', 0) > 0), top_users[0])
+        if winner.get('week_games', 0) == 0:
+            set_config('mmr_week_top_announced', current_week_start)
+            return
+        username = winner.get('steam_nickname') or winner.get('username') or 'Игрок'
+        week_wins = winner.get('week_wins', 0)
+        week_games = winner.get('week_games', 0)
+        week_losses = week_games - week_wins
+        winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
+        rank_tier = winner.get('rank_tier', 0)
+        mmr = winner.get('mmr', 0)
+        telegram_id = winner.get('telegram_id')
+        streak = winner.get('week_current_streak', 0)
+
+        if rank_tier:
+            ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
+            tier = min(rank_tier // 10, 8)
+            star = rank_tier % 10
+            if tier < 1 or tier > 8:
+                rank_str = "Без ранга"
+            elif tier == 8:
+                rank_str = ranks[tier - 1]
+            else:
+                rank_str = f"{ranks[tier - 1]} {star}"
+        else:
+            rank_str = "Без ранга"
+
+        if telegram_id:
+            name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>"
+        else:
+            name_display = username
+
+        streak_text = f"\n🔥 Текущий стрик: {streak} побед" if streak > 0 else ""
+
+        text = (
+            f"🏆 ПОЗДРАВЛЯЕМ ПОБЕДИТЕЛЯ НЕДЕЛИ 🏆\n\n"
+            f"🥇 {name_display}\n"
+            f"📊 {rank_str} • {mmr} MMR\n\n"
+            f"📈 Результат за неделю:\n"
+            f" └ {week_wins}W / {week_losses}L • WR {winrate}%{streak_text}\n\n"
+            f"Этот игрок показал лучший результат в топе MMR за неделю!"
+        )
+
+        await bot.send_message(
+            chat_id=digest_chat_id,
+            text=text,
+            parse_mode="HTML"
+        )
+        set_config('mmr_week_top_announced', current_week_start)
+        logger.info(f"announce_weekly_mmr_winner: отправлено поздравление для {username} (неделя {current_week_start})")
+
+    except Exception as e:
+        logger.error(f"Ошибка в announce_weekly_mmr_winner: {e}", exc_info=True)
+
+
 async def update_all_mmr_job(context):
     """Ежедневное обновление MMR всех пользователей с привязанным Steam"""
     try:
         logger.info("Запуск ежедневного обновления MMR")
+        await announce_weekly_mmr_winner(context.bot)
         from dota_mmr import update_user_mmr
         from database import get_all_users_with_steam
         
@@ -397,19 +480,27 @@ async def weekly_digest_job(context):
         bot = context.application.bot
         
         last_message_id = get_config('weekly_digest_message_id')
-        if last_message_id:
+        if last_message_id and last_message_id != "None":
             try:
                 await bot.edit_message_text(
                     chat_id=digest_chat_id,
                     message_id=int(last_message_id),
-                    text=text
+                    text=text,
+                    parse_mode="HTML"
                 )
                 update_weekly_digest_snapshot()
                 return
-            except Exception:
-                pass
+            except Exception as e:
+                logger.info(f"Не удалось отредактировать еженедельный дайджест: {e}")
+                # Удаляем старое сообщение перед созданием нового, чтобы не дублировать
+                set_config('weekly_digest_message_id', None)
+                try:
+                    await bot.delete_message(chat_id=digest_chat_id, message_id=int(last_message_id))
+                    logger.info(f"Старое сообщение дайджеста {last_message_id} удалено")
+                except Exception as del_err:
+                    logger.debug(f"Не удалось удалить старое сообщение {last_message_id}: {del_err}")
         
-        msg = await bot.send_message(chat_id=digest_chat_id, text=text)
+        msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
         set_config('weekly_digest_message_id', msg.message_id)
         update_weekly_digest_snapshot()
         

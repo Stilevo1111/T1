@@ -986,6 +986,17 @@ class Database:
     def set_config(self, key, value):
         """Установить значение конфигурации"""
         try:
+            # Если значение None — удаляем ключ вместо сохранения строки "None"
+            if value is None:
+                url = urlparse.urlparse(DATABASE_URL)
+                scheme = url.scheme
+                if "postgres" in scheme:
+                    self.execute_query("DELETE FROM bot_config WHERE key = %s", (key,))
+                else:
+                    self.execute_query("DELETE FROM bot_config WHERE key = ?", (key,))
+                logger.info(f"set_config deleted key={key}")
+                return True
+
             # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
