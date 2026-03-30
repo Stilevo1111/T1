@@ -1202,9 +1202,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_msg_id = update.message.message_id
     now = time.time()
     
-    # Проверка на выходные (суббота = 5, воскресенье = 6)
+    # Проверка на выходные по МСК (суббота = 5, воскресенье = 6)
     import datetime
-    is_weekend = datetime.datetime.now().weekday() in (5, 6)
+    msk_time = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+    is_weekend = msk_time.weekday() in (5, 6)
     weekend_bonus = ""
     
     # Delete user message only in groups/channels (not in private)
