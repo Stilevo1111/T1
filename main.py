@@ -25,12 +25,8 @@ if not TOKEN:
 else:
     print("BOT_TOKEN found")
 
-# Глобальная переменные для отслеживания активности бота
+# Глобальная переменная для отслеживания активности бота
 last_update_time = time.time()
-# Время запуска бота - health check не проверяет активность в первые 5 минут
-bot_start_time = time.time()
-# Период ожидания после запуска (секунд)
-HEALTH_CHECK_GRACE_PERIOD = 300
 
 COOLDOWN = 86400  # 24 hours
 
@@ -78,19 +74,23 @@ async def delete_message_job(context):
 
 
 _bot_can_delete_cache = {}
+_bot_can_delete_ttl = 3600  # 1 час
 
 async def bot_can_delete(bot, chat_id):
     """Проверить может ли бот удалять сообщения в чате"""
-    if chat_id in _bot_can_delete_cache:
-        return _bot_can_delete_cache[chat_id]
+    cached = _bot_can_delete_cache.get(chat_id)
+    if cached is not None:
+        cached_val, cached_time = cached
+        if time.time() - cached_time < _bot_can_delete_ttl:
+            return cached_val
     try:
         me = await bot.get_me()
         member = await bot.get_chat_member(chat_id, me.id)
         can_delete = getattr(member, 'can_delete_messages', False) or member.status in ('administrator', 'creator')
-        _bot_can_delete_cache[chat_id] = can_delete
+        _bot_can_delete_cache[chat_id] = (can_delete, time.time())
         return can_delete
     except Exception:
-        _bot_can_delete_cache[chat_id] = False
+        _bot_can_delete_cache[chat_id] = (False, time.time())
         return False
 
 def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
@@ -256,6 +256,30 @@ async def update_all_mmr_job(context):
                 result = update_user_mmr(user['telegram_id'])
                 if result:
                     success_count += 1
+                    # Уведомление о повышении ранга
+                    if result.get('rank_up'):
+                        rank_info = result['rank_up']
+                        digest_chat_id = get_config('digest_chat_id')
+                        if digest_chat_id:
+                            try:
+                                username = user.get('steam_nickname') or user.get('username') or 'Игрок'
+                                telegram_id = user.get('telegram_id')
+                                if telegram_id:
+                                    name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>"
+                                else:
+                                    name_display = username
+                                text = (
+                                    f"🎉 РАНК АП! 🎉\n\n"
+                                    f"{name_display} повысил ранг!\n"
+                                    f"{rank_info['old_rank']} → {rank_info['new_rank']}"
+                                )
+                                await context.bot.send_message(
+                                    chat_id=digest_chat_id,
+                                    text=text,
+                                    parse_mode="HTML"
+                                )
+                            except Exception as notify_err:
+                                logger.error(f"Ошибка отправки уведомления о ранк-апе: {notify_err}")
             except Exception as e:
                 logger.error(f"Ошибка обновления MMR для {user['telegram_id']}: {e}")
         
@@ -1699,6 +1723,61 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
 
 
+async def unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отвязка Steam аккаунта"""
+    logger.info(f"User {update.effective_user.id} called unlink")
+    
+    chat_id = update.message.chat_id
+    chat_type = update.message.chat.type
+    
+    if chat_type in ['group', 'supergroup', 'channel']:
+        if await bot_can_delete(context.bot, chat_id):
+            try:
+                await context.bot.delete_message(chat_id, update.message.message_id)
+            except Exception:
+                pass
+
+    try:
+        user = get_user(update.effective_user.id)
+        if not user or not user.get('steam_id'):
+            msg = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="❌ Steam аккаунт не привязан"
+            )
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+            return
+
+        from database import update_user_field
+        old_name = user.get('steam_nickname') or 'Аккаунт'
+        update_user_field(update.effective_user.id, "steam_id", None)
+        update_user_field(update.effective_user.id, "steam_nickname", None)
+        update_user_field(update.effective_user.id, "mmr", 0)
+        update_user_field(update.effective_user.id, "rank_tier", 0)
+        update_user_field(update.effective_user.id, "week_games", 0)
+        update_user_field(update.effective_user.id, "week_wins", 0)
+        update_user_field(update.effective_user.id, "week_best_streak", 0)
+        update_user_field(update.effective_user.id, "week_current_streak", 0)
+        update_user_field(update.effective_user.id, "dota_total_games", 0)
+        update_user_field(update.effective_user.id, "dota_wins", 0)
+        update_user_field(update.effective_user.id, "wins", 0)
+        update_user_field(update.effective_user.id, "losses", 0)
+
+        try:
+            await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+        except Exception:
+            pass
+
+        result_msg = await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"✅ Steam аккаунт {old_name} отвязан.\nИспользуйте `/link` для привязки нового.",
+            parse_mode='Markdown'
+        )
+        set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+    except Exception as e:
+        logger.error(f"Error in unlink: {e}", exc_info=True)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка отвязки")
+
 async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обновить MMR одного пользователя"""
     logger.info(f"User {update.effective_user.id} called refresh")
@@ -2097,6 +2176,7 @@ async def main():
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("link", link))
+        app.add_handler(CommandHandler("unlink", unlink))
         app.add_handler(CommandHandler("refresh", refresh))
         app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("dotadigestnow", dota_digest_now))
@@ -2209,6 +2289,13 @@ async def main():
     except Exception as e:
         logger.error(f"Critical error: {e}", exc_info=True)
         raise
+    finally:
+        try:
+            from database import flush_users_cache
+            flushed = flush_users_cache()
+            logger.info(f"Shutdown: flushed {flushed} users to DB")
+        except Exception as flush_err:
+            logger.error(f"Shutdown flush error: {flush_err}")
 
 
 async def main_polling():
@@ -2284,14 +2371,8 @@ async def main_polling():
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("link", link))
-        app.add_handler(CommandHandler("refresh", refresh))
-        app.add_handler(CommandHandler("digestnow", digest_now))
-        app.add_handler(CommandHandler("dotadigestnow", dota_digest_now))
+        app.add_handler(CommandHandler("unlink", unlink))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
@@ -2305,6 +2386,13 @@ async def main_polling():
     except Exception as e:
         logger.error(f"Critical error: {e}", exc_info=True)
         raise
+    finally:
+        try:
+            from database import flush_users_cache
+            flushed = flush_users_cache()
+            logger.info(f"Shutdown: flushed {flushed} users to DB")
+        except Exception as flush_err:
+            logger.error(f"Shutdown flush error: {flush_err}")
 
 
 if __name__ == "__main__":

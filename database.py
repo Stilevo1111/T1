@@ -941,19 +941,19 @@ class Database:
             # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            logger.info(f"get_config: key={key}, scheme={scheme}")
+            logger.debug(f"get_config: key={key}, scheme={scheme}")
             
             if "postgres" in scheme:
                 query = "SELECT value FROM bot_config WHERE key = %s"
                 result = self.execute_query(query, (key,), fetch="one")
-                logger.info(f"get_config result: {result}, type={type(result)}")
+                logger.debug(f"get_config result: {result}, type={type(result)}")
                 if result is None:
-                    logger.info(f"get_config: result is None, returning default={default}")
+                    logger.debug(f"get_config: result is None, returning default={default}")
                     return default
                 # PostgreSQL с RealDictCursor возвращает словарь {'value': '...'}
                 if isinstance(result, dict):
                     val = result.get('value')
-                    logger.info(f"get_config: dict value = {repr(val)}")
+                    logger.debug(f"get_config: dict value = {repr(val)}")
                     # Для alternate_digest_type разрешаем "0" как валидное значение
                     if key == 'alternate_digest_type' and val in ('0', '1'):
                         return val
@@ -994,13 +994,13 @@ class Database:
                     self.execute_query("DELETE FROM bot_config WHERE key = %s", (key,))
                 else:
                     self.execute_query("DELETE FROM bot_config WHERE key = ?", (key,))
-                logger.info(f"set_config deleted key={key}")
+                logger.debug(f"set_config deleted key={key}")
                 return True
 
             # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            logger.info(f"set_config: key={key}, value={value}, scheme={scheme}")
+            logger.debug(f"set_config: key={key}, value={value}, scheme={scheme}")
             
             if "postgres" in scheme:
                 query = """
