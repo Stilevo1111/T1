@@ -1723,61 +1723,6 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
 
 
-async def unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отвязка Steam аккаунта"""
-    logger.info(f"User {update.effective_user.id} called unlink")
-    
-    chat_id = update.message.chat_id
-    chat_type = update.message.chat.type
-    
-    if chat_type in ['group', 'supergroup', 'channel']:
-        if await bot_can_delete(context.bot, chat_id):
-            try:
-                await context.bot.delete_message(chat_id, update.message.message_id)
-            except Exception:
-                pass
-
-    try:
-        user = get_user(update.effective_user.id)
-        if not user or not user.get('steam_id'):
-            msg = await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="❌ Steam аккаунт не привязан"
-            )
-            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
-            return
-
-        from database import update_user_field
-        old_name = user.get('steam_nickname') or 'Аккаунт'
-        update_user_field(update.effective_user.id, "steam_id", None)
-        update_user_field(update.effective_user.id, "steam_nickname", None)
-        update_user_field(update.effective_user.id, "mmr", 0)
-        update_user_field(update.effective_user.id, "rank_tier", 0)
-        update_user_field(update.effective_user.id, "week_games", 0)
-        update_user_field(update.effective_user.id, "week_wins", 0)
-        update_user_field(update.effective_user.id, "week_best_streak", 0)
-        update_user_field(update.effective_user.id, "week_current_streak", 0)
-        update_user_field(update.effective_user.id, "dota_total_games", 0)
-        update_user_field(update.effective_user.id, "dota_wins", 0)
-        update_user_field(update.effective_user.id, "wins", 0)
-        update_user_field(update.effective_user.id, "losses", 0)
-
-        try:
-            await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
-        except Exception:
-            pass
-
-        result_msg = await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"✅ Steam аккаунт {old_name} отвязан.\nИспользуйте `/link` для привязки нового.",
-            parse_mode='Markdown'
-        )
-        set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
-    except Exception as e:
-        logger.error(f"Error in unlink: {e}", exc_info=True)
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка отвязки")
-
 async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обновить MMR одного пользователя"""
     logger.info(f"User {update.effective_user.id} called refresh")
@@ -2094,9 +2039,22 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 name = new_member.user.first_name or "Unknown"
                 try:
                     set_user_in_chat(user_id, False)
-                    logger.info(f"User {name} ({user_id}) left chat, set in_chat=False")
+                    from database import update_user_field
+                    update_user_field(user_id, "steam_id", None)
+                    update_user_field(user_id, "steam_nickname", None)
+                    update_user_field(user_id, "mmr", 0)
+                    update_user_field(user_id, "rank_tier", 0)
+                    update_user_field(user_id, "week_games", 0)
+                    update_user_field(user_id, "week_wins", 0)
+                    update_user_field(user_id, "week_best_streak", 0)
+                    update_user_field(user_id, "week_current_streak", 0)
+                    update_user_field(user_id, "dota_total_games", 0)
+                    update_user_field(user_id, "dota_wins", 0)
+                    update_user_field(user_id, "wins", 0)
+                    update_user_field(user_id, "losses", 0)
+                    logger.info(f"User {name} ({user_id}) left chat, set in_chat=False and reset Steam data")
                 except Exception as e:
-                    logger.debug(f"Could not set in_chat=False for {user_id}: {e}")
+                    logger.debug(f"Could not process user leave for {user_id}: {e}")
         
     except Exception as e:
         logger.error(f"Error in welcome_new_member: {e}")
@@ -2176,7 +2134,6 @@ async def main():
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("link", link))
-        app.add_handler(CommandHandler("unlink", unlink))
         app.add_handler(CommandHandler("refresh", refresh))
         app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("dotadigestnow", dota_digest_now))
@@ -2371,7 +2328,6 @@ async def main_polling():
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("link", link))
-        app.add_handler(CommandHandler("unlink", unlink))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
