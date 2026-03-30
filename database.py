@@ -1436,7 +1436,8 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
 def set_user_in_chat(telegram_id: int, in_chat: bool):
     """Установить статус нахождения пользователя в чате"""
     try:
-        conn, scheme = get_connection()
+        conn = get_connection()
+        scheme = get_db_type()
         cursor = conn.cursor()
         if "postgres" in scheme:
             cursor.execute("UPDATE users SET in_chat = %s WHERE telegram_id = %s", (in_chat, telegram_id))
@@ -1533,14 +1534,19 @@ def _save_user_to_db_immediately(telegram_id, user_data):
     """Сохранение пользователя в БД сразу (для важных полей)"""
     try:
         db = Database()
-        query = """
+        scheme = get_db_type()
+        if "postgres" in scheme:
+            placeholders = "%s"
+        else:
+            placeholders = "?"
+        query = f"""
             UPDATE users SET 
-                steam_id = %s, steam_nickname = %s, mmr = %s, rank_tier = %s,
-                week_games = %s, week_wins = %s, 
-                week_best_streak = %s, week_current_streak = %s, dota_total_games = %s,
-                dota_wins = %s, last_dota_games = %s, last_dota_wins = %s,
-                wins = %s, losses = %s, week_start_date = %s
-            WHERE telegram_id = %s
+                steam_id = {placeholders}, steam_nickname = {placeholders}, mmr = {placeholders}, rank_tier = {placeholders},
+                week_games = {placeholders}, week_wins = {placeholders}, 
+                week_best_streak = {placeholders}, week_current_streak = {placeholders}, dota_total_games = {placeholders},
+                dota_wins = {placeholders}, last_dota_games = {placeholders}, last_dota_wins = {placeholders},
+                wins = {placeholders}, losses = {placeholders}, week_start_date = {placeholders}
+            WHERE telegram_id = {placeholders}
         """
         db.execute_query(query, (
             user_data.get('steam_id'),
@@ -1826,7 +1832,6 @@ def get_dota_week_top_from_db(limit=10):
             return result
     except Exception as e:
         logger.error(f"Ошибка get_dota_week_top: {e}")
-        logger.error(f"Query result: users = {users}")
         return []
 
 
@@ -2042,7 +2047,7 @@ def backup_database(backup_dir=None):
             import tempfile
             
             # Создаем имя файла резервной копии
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_file = os.path.join(backup_dir, f"fissure_bot_backup_{timestamp}.sql")
             
             # Формируем команду pg_dump
@@ -2079,7 +2084,7 @@ def backup_database(backup_dir=None):
                 db_path = DATABASE_URL
             
             # Создаем имя файла резервной копии
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_file = os.path.join(backup_dir, f"fissure_bot_backup_{timestamp}.db")
             
             # Копируем файл базы данных

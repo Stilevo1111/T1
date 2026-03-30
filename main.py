@@ -2201,7 +2201,7 @@ async def main():
                     logger.error(f"Keep-alive ping error: {e}")
         
         asyncio.create_task(keep_alive_ping())
-        logger.info("Keep-alive task started - will ping every 2 minutes")
+        logger.info("Keep-alive task started - will ping every 10 minutes")
         
         while True:
             await asyncio.sleep(3600)
