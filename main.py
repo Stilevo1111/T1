@@ -137,6 +137,37 @@ async def announce_weekly_mmr_winner(bot):
         if today_utc.weekday() != 0:
             return
 
+        # Объявляем только в первый час понедельника (00:00–01:00 UTC), чтобы не спамить при перезапуске
+        if today_utc.hour >= 1:
+            logger.info(f"announce_weekly_mmr_winner: пропуск, уже {today_utc.hour}:00 UTC — окно объявления прошло")
+            set_config('mmr_week_top_announced', current_week_start)
+            return
+
+        # Проверяем: есть ли пользователи с данными ПРОШЛОЙ недели (ещё не сброшены)
+        # Если week_start_date == current_week_start, данные уже обновлены — объявлять поздно
+        from database import get_connection, DATABASE_URL
+        conn = get_connection()
+        cursor = conn.cursor()
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        if "postgres" in scheme:
+            cursor.execute(
+                "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND (week_start_date IS NULL OR week_start_date::text != %s)",
+                (current_week_start,)
+            )
+        else:
+            cursor.execute(
+                "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND (week_start_date IS NULL OR week_start_date != ?)",
+                (current_week_start,)
+            )
+        stale_count = cursor.fetchone()[0]
+        cursor.close()
+
+        if stale_count == 0:
+            logger.info("announce_weekly_mmr_winner: все пользователи уже обновлены на новую неделю, пропуск")
+            set_config('mmr_week_top_announced', current_week_start)
+            return
+
         digest_chat_id = get_config('digest_chat_id')
         if not digest_chat_id:
             logger.info("announce_weekly_mmr_winner: чат для дайджеста не настроен")
