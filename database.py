@@ -1393,10 +1393,11 @@ def get_user_by_username(username):
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
         if "postgres" in scheme:
-            cursor.execute("SELECT telegram_id FROM users WHERE LOWER(username) = %s LIMIT 1", (username,))
+            cursor.execute("SELECT telegram_id, username FROM users WHERE LOWER(username) = %s LIMIT 1", (username,))
         else:
-            cursor.execute("SELECT telegram_id FROM users WHERE LOWER(username) = ? LIMIT 1", (username,))
+            cursor.execute("SELECT telegram_id, username FROM users WHERE LOWER(username) = ? LIMIT 1", (username,))
         result = cursor.fetchone()
+        logger.info(f"get_user_by_username: DB query for '{username}' returned: {result}")
         cursor.close()
         if result:
             tid = result[0] if not isinstance(result, dict) else result.get('telegram_id')
