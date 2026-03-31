@@ -1372,7 +1372,12 @@ def get_user_by_username(username):
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT telegram_id FROM users WHERE LOWER(username) = %s LIMIT 1", (username,))
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        if "postgres" in scheme:
+            cursor.execute("SELECT telegram_id FROM users WHERE LOWER(username) = %s LIMIT 1", (username,))
+        else:
+            cursor.execute("SELECT telegram_id FROM users WHERE LOWER(username) = ? LIMIT 1", (username,))
         result = cursor.fetchone()
         cursor.close()
         if result:
