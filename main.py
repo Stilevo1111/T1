@@ -1630,7 +1630,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Подсказка как смотреть чужой профиль
         if not viewing_other:
-            text += "\n\n💡 <code>/profile @username</code> — чужой профиль"
+            text += "\n\n<code>/profile @username</code> — 💡 чужой профиль"
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
