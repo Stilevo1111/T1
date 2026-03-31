@@ -1393,18 +1393,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         zeus_text = ""
         display_username = f"<a href=\"tg://user?id={user_obj.id}\">{username}</a>"
         
-        # Отправляем начальное сообщение
-        anim_msg = await context.bot.send_message(
-            chat_id=update.message.chat_id,
-            text=f"🎲 {display_username}\n\n🌀 Бросаем кубик...",
-            parse_mode="HTML"
-        )
-        set_last_bot_message(chat_id, user_obj.id, anim_msg.message_id)
-        
         # Один рандом: что выпало?
         event_roll = random.random()
         multicast_chance, zeus_chance = get_event_chances()
         increment_stat("rolls")
+        anim_msg = None
         
         if event_roll < zeus_chance:
             # ⚡ ЗЕВС — отдельное событие, без ролла
@@ -1454,14 +1447,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 👹 МУЛЬТИКАСТ — гарантированно ×2, затем каскад до ×4 с анимацией
             cascade_count = 2  # гарантированный ×2
             
-            # Анимация ×2
-            try:
-                await anim_msg.edit_text(
-                    f"🎲 {display_username}\n\n👹⚡ Мультикаст ×2!",
-                    parse_mode="HTML"
-                )
-            except Exception:
-                pass
+            # Отправляем первое сообщение ×2
+            anim_msg = await context.bot.send_message(
+                chat_id=update.message.chat_id,
+                text=f"🎲 {display_username}\n\n👹⚡ Мультикаст ×2!",
+                parse_mode="HTML"
+            )
+            set_last_bot_message(chat_id, user_obj.id, anim_msg.message_id)
             await asyncio.sleep(0.7)
             
             # Проверяем ×3
