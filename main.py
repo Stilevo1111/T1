@@ -1377,8 +1377,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update_last_message_id(user_obj.id, result_msg.message_id)
             return
 
-        roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
-        
         multicast_count = 1
         multicast_text = ""
         zeus_triggered = False
@@ -1399,23 +1397,50 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         increment_stat("rolls")
         
         if not is_fatal and event_roll < zeus_chance:
-            # ⚡ ЗЕВС (5%)
+            # ⚡ ЗЕВС — отдельное событие, без ролла
             zeus_triggered = True
             increment_stat("zeus")
             affected = zeus_strike()
-            zeus_text = random.choice(ZEUS_TEXTS)
-            zeus_text = f"\n\n{zeus_text}\n<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>"
             
+            # Фиссура пользователя не меняется (Зевс бьёт всех, но не даёт ролл)
+            new_fissure = user["fissure"]
+            update_fissure(user_obj.id, new_fissure, now, 0)
+            
+            zeus_text = random.choice(ZEUS_TEXTS)
+            
+            text = (
+                f"🎲 {display_username}\n\n"
+                f"{zeus_text}\n"
+                f"<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>\n\n"
+                f"📏 Длина сейчас: {new_fissure:.1f} см"
+            )
+            
+            logger.info(f"User {user_obj.id} triggered Zeus. No roll.")
+            
+            # Отправляем результат
+            result_msg = await context.bot.send_message(
+                chat_id=update.message.chat_id, text=text, parse_mode="HTML", reply_markup=main_menu()
+            )
+            set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
+            update_last_message_id(user_obj.id, result_msg.message_id)
+            
+            # Иконка Зевса
             try:
-                await anim_msg.edit_text(
-                    f"🎲 {display_username}\n\n⚡ ГРОМ!!! Молния бьёт по всем фиссурам...",
-                    parse_mode="HTML"
-                )
-            except Exception:
-                pass
-            await asyncio.sleep(1.0)
+                zeus_bytes = await fetch_hero_icon(ZEUS_ICON_URL)
+                if zeus_bytes:
+                    zeus_msg = await context.bot.send_photo(chat_id=update.message.chat_id, photo=zeus_bytes)
+                    schedule_delete(context.bot, chat_id, zeus_msg.message_id, 600, context.application.job_queue)
+            except Exception as e:
+                logger.debug(f"Could not send Zeus icon: {e}")
+            
+            await refresh_digest_message(context.bot)
+            return  # выходим — без ролла
         
-        elif not is_fatal and event_roll < zeus_chance + multicast_chance:
+        # Остальные события (обычный ролл или мулькаст)
+        roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
+        
+        if not is_fatal and event_roll < zeus_chance + multicast_chance:
             # 👹 МУЛЬТИКАСТ — умножает ролл на количество срабатываний
             cascade_count = 1
             for i, chance in enumerate(MULTICAST_CASCADE):
