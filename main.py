@@ -9,7 +9,7 @@ import urllib.parse as urlparse
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username
 from aiohttp import web
 
 # Logging setup
@@ -1551,7 +1551,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show stats"""
+    """Show stats — свой или чужой профиль: /profile или /profile @username"""
     logger.info(f"User {update.effective_user.id} called stats")
     
     chat_id = update.message.chat_id
@@ -1573,11 +1573,29 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug(f"Could not delete last bot message: {e}")
     
     try:
-        user_obj = update.effective_user
-        username = user_obj.username or user_obj.first_name
-        user = get_user(user_obj.id, username)
+        # Определяем: свой профиль или чужой
+        target_user = None
+        viewing_other = False
         
-        last_fissure_time = user["last_fissure"]
+        if context.args and context.args[0].startswith("@"):
+            # /profile @username — ищем другого пользователя
+            target_username = context.args[0].lstrip("@")
+            target_user = get_user_by_username(target_username)
+            if not target_user:
+                msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"❌ Игрок @{target_username} не найден"
+                )
+                schedule_delete(context.bot, chat_id, msg.message_id, 15, context.application.job_queue)
+                return
+            viewing_other = True
+        
+        if not target_user:
+            user_obj = update.effective_user
+            username = user_obj.username or user_obj.first_name
+            target_user = get_user(user_obj.id, username)
+        
+        last_fissure_time = target_user["last_fissure"]
         now = time.time()
         time_since_last = now - last_fissure_time
         remaining_cooldown = max(0, COOLDOWN - time_since_last)
@@ -1587,21 +1605,32 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             wait_text = "✅ Готов к увеличению!"
         
-        # Форматируем username как кликабельную ссылку на профиль
-        user_id = user_obj.id
-        display_username = f"<a href=\"tg://user?id={user_id}\">{username}</a>"
+        # Форматируем username как кликабельную ссылку
+        if viewing_other:
+            target_id = target_user.get('telegram_id', 0)
+            target_name = target_user.get('username') or target_user.get('steam_nickname') or 'Unknown'
+            display_username = f"<a href=\"tg://user?id={target_id}\">{target_name}</a>"
+        else:
+            user_obj = update.effective_user
+            target_id = user_obj.id
+            target_name = user_obj.username or user_obj.first_name
+            display_username = f"<a href=\"tg://user?id={target_id}\">{target_name}</a>"
         
-        text = f"👑 {display_username}\n\n🍆 Фиссура:\n📏 {user['fissure']:.1f} см • 🎲 Броски: {user.get('total_rolls', 0)}\n🔥 Стрик: {user.get('current_streak', 0)}/{user.get('best_streak', 0)}"
+        text = f"👑 {display_username}\n\n🍆 Фиссура:\n📏 {target_user['fissure']:.1f} см • 🎲 Броски: {target_user.get('total_rolls', 0)}\n🔥 Стрик: {target_user.get('current_streak', 0)}/{target_user.get('best_streak', 0)}"
 
         # Добавляем стрик Dota если привязан Steam
-        if user.get('steam_id'):
-            week_streak = user.get('week_current_streak', 0)
-            week_best = user.get('week_best_streak', 0)
-            week_games = user.get('week_games', 0)
-            week_wins = user.get('week_wins', 0)
+        if target_user.get('steam_id'):
+            week_streak = target_user.get('week_current_streak', 0)
+            week_best = target_user.get('week_best_streak', 0)
+            week_games = target_user.get('week_games', 0)
+            week_wins = target_user.get('week_wins', 0)
             week_losses = week_games - week_wins
             winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
             text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n🔥 Стрик: {week_streak}/{week_best}"
+        
+        # Подсказка как смотреть чужой профиль
+        if not viewing_other:
+            text += "\n\n💡 /profile @username — чужой профиль"
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
@@ -1609,15 +1638,15 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML",
             reply_markup=main_menu()
         )
-        set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
+        set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
-        update_last_message_id(user_obj.id, result_msg.message_id)
+        update_last_message_id(update.effective_user.id, result_msg.message_id)
         
         # Отправляем топ-3 героя за последние 10 игр (если привязан Steam)
-        if user.get('steam_id'):
+        if target_user.get('steam_id'):
             try:
                 from dota_mmr import get_top_heroes, generate_heroes_image
-                top_heroes = get_top_heroes(user['steam_id'], last_n=10, top_k=3)
+                top_heroes = get_top_heroes(target_user['steam_id'], last_n=10, top_k=3)
                 if top_heroes:
                     img_bytes = generate_heroes_image(top_heroes)
                     if img_bytes:

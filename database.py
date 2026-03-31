@@ -1356,6 +1356,24 @@ def get_user(telegram_id, username=None):
     return user
 
 
+def get_user_by_username(username):
+    """Найти пользователя по username (без @)"""
+    username = username.lstrip("@").lower()
+    db = Database()
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT telegram_id FROM users WHERE LOWER(username) = %s LIMIT 1", (username,))
+        result = cursor.fetchone()
+        cursor.close()
+        if result:
+            tid = result[0] if not isinstance(result, dict) else result.get('telegram_id')
+            return get_user(tid)
+    except Exception as e:
+        logger.error(f"get_user_by_username error: {e}")
+    return None
+
+
 def update_fissure(telegram_id, fissure, last_fissure, growth=0):
     """Обновление fissure - пишем в кеш и сразу в БД"""
     # Получаем текущие данные пользователя
