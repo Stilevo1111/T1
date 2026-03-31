@@ -2099,6 +2099,44 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+async def setchance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Изменить шансы событий: /setchance multicast 0.10 или /setchance zeus 0.05"""
+    try:
+        # Проверяем аргументы
+        if not context.args or len(context.args) < 2:
+            stats = _load_stats()
+            mc, ze = get_event_chances()
+            await update.message.reply_text(
+                f"📊 Текущие шансы:\n"
+                f"  👹 Мулькаст: {mc*100:.0f}%\n"
+                f"  ⚡ Зевс: {ze*100:.0f}%\n\n"
+                f"Использование: /setchance multicast 10\n"
+                f"Статистика: бросков={stats['rolls']}, мулькаст={stats['multicast']}, зевс={stats['zeus']}"
+            )
+            return
+        
+        event = context.args[0].lower()
+        try:
+            value = float(context.args[1])
+        except ValueError:
+            await update.message.reply_text("❌ Шанс должен быть числом (например: 10 для 10%)")
+            return
+        
+        if event in ("multicast", "mc", "м"):
+            set_config("multicast_chance", str(value / 100.0))
+            _event_chances_cache["ts"] = 0  # сброс кеша
+            await update.message.reply_text(f"✅ Шанс мулькаста: {value:.0f}%")
+        elif event in ("zeus", "z", "з"):
+            set_config("zeus_chance", str(value / 100.0))
+            _event_chances_cache["ts"] = 0
+            await update.message.reply_text(f"✅ Шанс Зевса: {value:.0f}%")
+        else:
+            await update.message.reply_text("❌ Неизвестное событие. Используй: multicast или zeus")
+    except Exception as e:
+        logger.error(f"Error in setchance: {e}")
+        await update.message.reply_text("❌ Ошибка")
+
+
 async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ручной запуск еженедельного дайджеста в этот чат"""
     try:
@@ -2368,6 +2406,7 @@ async def main():
         app.add_handler(CommandHandler("dotadigestnow", dota_digest_now))
         app.add_handler(CommandHandler("weeklydigest", weekly_digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
+        app.add_handler(CommandHandler("setchance", setchance))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
@@ -2558,6 +2597,7 @@ async def main_polling():
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
+        app.add_handler(CommandHandler("setchance", setchance))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
