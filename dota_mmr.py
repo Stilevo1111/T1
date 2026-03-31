@@ -481,7 +481,7 @@ def update_user_mmr(telegram_id: int) -> dict:
         if matches:
             logger.info(f"topmmr: total matches received from API: {len(matches)}")
             for i, match in enumerate(matches):
-                match_date = datetime.utcfromtimestamp(match.get("start_time", 0))
+                match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=timezone.utc)
                 in_week = match_date >= week_start_utc
                 logger.info(f"topmmr: match[{i}] id={match.get('match_id')} start_time={match.get('start_time')} date={match_date} week_start={week_start_utc} in_week={in_week}")
                 if in_week:
