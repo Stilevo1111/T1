@@ -1186,7 +1186,7 @@ def calculate_new_fissure(current_fissure, roll):
 # ── Мультикаст (каскадный) ───────────────────────────────────────────
 # Шансы загружаются из bot_config, дефолты здесь
 MULTICAST_DEFAULT_CHANCE = 0.07
-MULTICAST_CASCADE = [0.75, 0.30, 0.15]
+MULTICAST_CASCADE = [0.75, 0.50, 0.40]  # [не используется, ×3 шанс, ×4 шанс]
 
 ZEUS_DEFAULT_CHANCE = 0.03
 ZEUS_ICON_URL = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/zuus.png"
