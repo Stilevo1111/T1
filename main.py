@@ -2199,44 +2199,125 @@ async def setchance(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Тест броска фиссуры без кулдауна"""
+    """Тест броска фиссуры без кулдауна — со всеми фичами"""
     try:
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
         display_username = f"<a href=\"tg://user?id={user_obj.id}\">{username}</a>"
+        chat_id = update.message.chat_id
         
-        roll, special_message, is_fatal, got_help = calculate_fissure_roll(0)
+        # Берём реальную фиссуру пользователя
+        user = get_user(user_obj.id, username)
+        current_fissure = user["fissure"]
         
-        # Мулькаст
+        roll, special_message, is_fatal, got_help = calculate_fissure_roll(current_fissure)
+        
         multicast_count = 1
-        cascade_steps = list(check_multicast(0))
-        if cascade_steps:
+        multicast_text = ""
+        zeus_triggered = False
+        zeus_text = ""
+        
+        # Один рандом: что выпало?
+        event_roll = random.random()
+        multicast_chance, zeus_chance = get_event_chances()
+        
+        if not is_fatal and event_roll < zeus_chance:
+            # ⚡ ЗЕВС
+            zeus_triggered = True
+            affected = zeus_strike()
+            zeus_text = random.choice(ZEUS_TEXTS)
+            zeus_text = f"\n\n{zeus_text}\n<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>"
+            await asyncio.sleep(0.5)
+        
+        elif not is_fatal and event_roll < zeus_chance + multicast_chance:
+            # 👹 МУЛЬТИКАСТ
+            cascade_steps = list(check_multicast(current_fissure))
             for step_num, extra_roll in cascade_steps:
                 multicast_count = step_num
                 if extra_roll > roll:
                     roll = extra_roll
+                dots = "." * (step_num - 1)
+                await asyncio.sleep(0.5)
+            multicast_text = f"\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
         
+        # Защита
+        roll, protection_msg = apply_fissure_protection(current_fissure, roll, is_fatal)
+        
+        # Выходной бонус
+        import datetime
+        msk_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)
+        is_weekend = msk_time.weekday() in (5, 6)
+        weekend_bonus = ""
+        if is_weekend and roll > 0 and not is_fatal:
+            bonus_multiplier = random.choice([1.5, 2, 2.5])
+            roll = int(roll * bonus_multiplier)
+            weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f}"
+        
+        # Новая фиссура (Зевс не влияет на тест — только показываем)
+        if zeus_triggered and current_fissure >= 5:
+            base_fissure = current_fissure * 0.95
+        else:
+            base_fissure = current_fissure
+        base_fissure = max(0.1, base_fissure)
+        new_fissure = calculate_new_fissure(base_fissure, roll)
+        
+        # Формируем текст
         roll_key = min(roll, 50)
         roll_key = max(roll_key, -10)
-        
         if roll_key in ROLL_TEXTS:
             result_text = random.choice(ROLL_TEXTS[roll_key])
         else:
             result_text = f"{'+' if roll > 0 else ''}{roll} см"
         
-        text = f"🎲 {display_username}\n\n🧪 ТЕСТ (без кулдауна)\n{result_text}"
+        extra_text = random.choice(CATEGORY_PHRASES.get("up" if roll > 0 else ("down" if roll < 0 else "same"), [""]))
         
         if multicast_count > 1:
-            text = f"{text}\n\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
+            text = (
+                f"🎲 {display_username}\n\n"
+                f"🧪 ТЕСТ (без записи в БД)\n"
+                f"{extra_text}\n"
+                f"{result_text}\n\n"
+                f"{multicast_text}\n\n"
+                f"📏 {new_fissure:.1f} см"
+            )
+        else:
+            text = (
+                f"🎲 {display_username}\n\n"
+                f"🧪 ТЕСТ (без записи в БД)\n"
+                f"{result_text}\n"
+                f"{extra_text}\n\n"
+                f"📏 Длина сейчас: {new_fissure:.1f} см"
+            )
         
-        if is_fatal:
-            text = f"{text}\n💀 ФАТАЛЬНЫЙ!"
+        if is_fatal and protection_msg:
+            text = f"{text}\n{protection_msg}"
+        if weekend_bonus:
+            text = f"{text}\n{weekend_bonus}"
+        if zeus_text:
+            text = f"{text}\n{zeus_text}"
         
-        await context.bot.send_message(
-            chat_id=update.message.chat_id,
-            text=text,
-            parse_mode="HTML"
+        result_msg = await context.bot.send_message(
+            chat_id=chat_id, text=text, parse_mode="HTML"
         )
+        
+        # Иконки
+        if multicast_count > 1:
+            try:
+                hero_url = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/ogre_magi.png"
+                hero_bytes = await fetch_hero_icon(hero_url)
+                if hero_bytes:
+                    await context.bot.send_photo(chat_id=chat_id, photo=hero_bytes)
+            except Exception as e:
+                logger.debug(f"Could not send hero icon: {e}")
+        
+        if zeus_triggered:
+            try:
+                zeus_bytes = await fetch_hero_icon(ZEUS_ICON_URL)
+                if zeus_bytes:
+                    await context.bot.send_photo(chat_id=chat_id, photo=zeus_bytes)
+            except Exception as e:
+                logger.debug(f"Could not send Zeus icon: {e}")
+        
     except Exception as e:
         import traceback
         logger.error(f"Error in testfissure: {e}\n{traceback.format_exc()}")
