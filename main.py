@@ -838,6 +838,7 @@ async def alternate_digest_job(context):
         # Пробуем отредактировать существующее сообщение
         last_message_id = get_config('alternate_digest_message_id')
         logger.info(f"alternate_digest_job: text = {text[:100]}...")
+        edited = False
         if last_message_id:
             try:
                 await bot.edit_message_text(
@@ -847,30 +848,33 @@ async def alternate_digest_job(context):
                     parse_mode="HTML"
                 )
                 logger.info(f"Обновлён alternate дайджест {last_message_id}")
-                set_config('alternate_digest_type', next_type)
-                return
+                edited = True
             except Exception as e:
                 error_str = str(e)
                 logger.info(f"Ошибка редактирования: {e}")
                 if "Message to edit not found" in error_str or "message can't be edited" in error_str:
                     logger.info(f"Старое сообщение {last_message_id} удалено, создаём новое")
                     set_config('alternate_digest_message_id', None)
+                    last_message_id = None
                 else:
                     logger.info(f"Не удалось редактировать: {e}")
         
-        # Удаляем старое сообщение дайджеста перед созданием нового
-        if last_message_id:
-            try:
-                await bot.delete_message(chat_id=digest_chat_id, message_id=int(last_message_id))
-                logger.info(f"Удалено старое alternate сообщение {last_message_id}")
-            except Exception as e:
-                logger.debug(f"Не удалось удалить старое alternate сообщение: {e}")
-        
-        # Отправляем новое сообщение
-        msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
-        set_config('alternate_digest_message_id', msg.message_id)
+        # Переключаем тип ВСЕГДА
         set_config('alternate_digest_type', next_type)
-        logger.info(f"Создан новый alternate дайджест {msg.message_id}, type={next_type}")
+        
+        if not edited:
+            # Удаляем старое сообщение перед созданием нового
+            if last_message_id:
+                try:
+                    await bot.delete_message(chat_id=digest_chat_id, message_id=int(last_message_id))
+                    logger.info(f"Удалено старое alternate сообщение {last_message_id}")
+                except Exception as e:
+                    logger.debug(f"Не удалось удалить старое alternate сообщение: {e}")
+            
+            # Отправляем новое сообщение
+            msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
+            set_config('alternate_digest_message_id', msg.message_id)
+            logger.info(f"Создан новый alternate дайджест {msg.message_id}, type={next_type}")
         
         # Закрепляем дайджест (открепляем старый, закрепляем новый)
         try:
@@ -2194,6 +2198,55 @@ async def setchance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Ошибка")
 
 
+async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Тест броска фиссуры без кулдауна"""
+    try:
+        user_obj = update.effective_user
+        username = user_obj.username or user_obj.first_name
+        display_username = f"<a href=\"tg://user?id={user_obj.id}\">{username}</a>"
+        
+        roll, special_message, is_fatal, got_help = calculate_fissure_roll(0)
+        
+        # Мулькаст
+        multicast_count = 1
+        cascade_steps = list(check_multicast(0))
+        if cascade_steps:
+            for step_num, extra_roll in cascade_steps:
+                multicast_count = step_num
+                if extra_roll > roll:
+                    roll = extra_roll
+        
+        roll_key = min(roll, 50)
+        roll_key = max(roll_key, -10)
+        
+        if roll_key in ROLL_TEXTS:
+            result_text = random.choice(ROLL_TEXTS[roll_key])
+        else:
+            result_text = f"{'+' if roll > 0 else ''}{roll} см"
+        
+        text = f"🎲 {display_username}\n\n🧪 ТЕСТ (без кулдауна)\n{result_text}"
+        
+        if multicast_count > 1:
+            text = f"{text}\n\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
+        
+        if is_fatal:
+            text = f"{text}\n💀 ФАТАЛЬНЫЙ!"
+        
+        await context.bot.send_message(
+            chat_id=update.message.chat_id,
+            text=text,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        import traceback
+        logger.error(f"Error in testfissure: {e}\n{traceback.format_exc()}")
+        await context.bot.send_message(
+            chat_id=update.message.chat_id,
+            text=f"❌ Ошибка: <code>{e}</code>",
+            parse_mode="HTML"
+        )
+
+
 async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ручной запуск еженедельного дайджеста в этот чат"""
     try:
@@ -2465,6 +2518,7 @@ async def main():
         app.add_handler(CommandHandler("weeklydigest", weekly_digest_now))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(CommandHandler("setchance", setchance))
+        app.add_handler(CommandHandler("testfissure", testfissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
         app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
         app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
@@ -2662,6 +2716,7 @@ async def main_polling():
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(CommandHandler("setchance", setchance))
+        app.add_handler(CommandHandler("testfissure", testfissure))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
