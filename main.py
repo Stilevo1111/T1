@@ -2467,8 +2467,8 @@ async def main():
         # Запускаем job_queue для PTB v20+
         await job_queue.start()
         
-        # Устанавливаем webhook после инициализации
-        await app.bot.set_webhook(url=webhook_url)
+        # Устанавливаем webhook после инициализации (drop_pending_updates очищает старые обновления)
+        await app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
         
         logger.info("Telegram bot started in webhook mode")
         logger.info(f"Webhook URL: {webhook_url}")
