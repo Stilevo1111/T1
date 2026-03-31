@@ -504,7 +504,7 @@ def update_user_mmr(telegram_id: int) -> dict:
             # Идём от старых к новым, чтобы current_streak в конце = текущий стрик
             for match in reversed(matches):
                 try:
-                    match_date = datetime.utcfromtimestamp(match.get("start_time", 0))
+                    match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=timezone.utc)
                     if match_date >= week_start_utc:
                         week_games += 1
                         
