@@ -735,20 +735,20 @@ async def dota_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def alternate_digest_job(context):
-    """Чередование утреннего и Dota дайджестов каждые 10 минут"""
+    """Чередование утреннего и Dota дайджестов каждые 15 секунд"""
     try:
-        # Блокировка от параллельного запуска (два экземпляра бота)
+        # Блокировка от параллельного запуска
         import time
         last_run = get_config('alternate_digest_last_run')
         now = time.time()
-        if last_run and (now - float(last_run)) < 10:
-            logger.info(f"alternate_digest_job: пропуск (запущен {(now - float(last_run)):.1f}с назад другим экземпляром)")
+        if last_run and (now - float(last_run)) < 12:
+            logger.debug(f"alternate_digest_job: пропуск ({(now - float(last_run)):.1f}с назад)")
             return
         set_config('alternate_digest_last_run', str(now))
         
         # Не показывать дайджест ночью (0:00 - 9:00 МСК)
         import datetime
-        hour_msk = (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).hour
+        hour_msk = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)).hour
         if hour_msk < 9:
             logger.info(f"alternate_digest_job: пропуск (ночь {hour_msk}:00 МСК)")
             return
