@@ -1285,6 +1285,39 @@ ZEUS_TEXTS = [
 ]
 
 
+SLOT_SYMBOLS = ["🍒", "🍋", "🍇", "💎", "🔥", "⚡", "7️⃣", "🎰"]
+
+
+def slot_animation(level):
+    """Генерирует слот-анимацию: 3 одинаковых = переход на уровень"""
+    symbol = random.choice(SLOT_SYMBOLS)
+    return f"🎰 {symbol}{symbol}{symbol}"
+
+
+async def send_multicast_anim(chat_id, display_username, level, bot, is_test=False):
+    """Анимация мультикаста с слот-машиной"""
+    prefix = "🧪 ТЕСТ\n" if is_test else ""
+    slot_text = slot_animation(level)
+    return await bot.send_message(
+        chat_id=chat_id,
+        text=f"🎲 {display_username}\n\n{prefix}{slot_text}\n👹⚡ Мультикаст ×{level}!",
+        parse_mode="HTML"
+    )
+
+
+async def edit_multicast_anim(anim_msg, display_username, level, is_test=False):
+    """Редактирование анимации мультикаста"""
+    prefix = "🧪 ТЕСТ\n" if is_test else ""
+    slot_text = slot_animation(level)
+    try:
+        await anim_msg.edit_text(
+            f"🎲 {display_username}\n\n{prefix}{slot_text}\n👹⚡ Мультикаст ×{level}!",
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
+
 def check_multicast(fissure_size):
     """
     Каскадный мультикаст (генератор).
@@ -1300,8 +1333,8 @@ def check_multicast(fissure_size):
             break
 
 
-async def fetch_hero_icon(url, session=None):
-    """Скачать иконку героя через aiohttp (неблокирующий)"""
+async def fetch_hero_icon(url, session=None, size=96):
+    """Скачать и уменьшить иконку героя через aiohttp"""
     import io
     close_session = False
     if session is None:
@@ -1312,9 +1345,21 @@ async def fetch_hero_icon(url, session=None):
         async with session.get(url) as resp:
             if resp.status == 200:
                 data = await resp.read()
-                bio = io.BytesIO(data)
-                bio.name = url.split("/")[-1]
-                return bio
+                # Уменьшаем через Pillow
+                try:
+                    from PIL import Image
+                    img = Image.open(io.BytesIO(data))
+                    img = img.resize((size, size), Image.LANCZOS)
+                    bio = io.BytesIO()
+                    img.save(bio, format='PNG', optimize=True)
+                    bio.seek(0)
+                    bio.name = url.split("/")[-1]
+                    return bio
+                except ImportError:
+                    # Pillow не установлен — возвращаем оригинал
+                    bio = io.BytesIO(data)
+                    bio.name = url.split("/")[-1]
+                    return bio
     finally:
         if close_session:
             await session.close()
@@ -1445,40 +1490,24 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if event_roll < zeus_chance + multicast_chance:
             # 👹 МУЛЬТИКАСТ — гарантированно ×2, затем каскад до ×4 с анимацией
-            cascade_count = 2  # гарантированный ×2
+            cascade_count = 2
             
-            # Отправляем первое сообщение ×2
-            anim_msg = await context.bot.send_message(
-                chat_id=update.message.chat_id,
-                text=f"🎲 {display_username}\n\n👹⚡ Мультикаст ×2!",
-                parse_mode="HTML"
-            )
+            # Анимация ×2 со слотом
+            anim_msg = await send_multicast_anim(update.message.chat_id, display_username, 2, context.bot)
             set_last_bot_message(chat_id, user_obj.id, anim_msg.message_id)
-            await asyncio.sleep(0.7)
+            await asyncio.sleep(0.4)
             
             # Проверяем ×3
             if random.random() < MULTICAST_CASCADE[1]:  # 30%
                 cascade_count = 3
-                try:
-                    await anim_msg.edit_text(
-                        f"🎲 {display_username}\n\n👹⚡ Мультикаст ×3!",
-                        parse_mode="HTML"
-                    )
-                except Exception:
-                    pass
-                await asyncio.sleep(0.7)
+                await edit_multicast_anim(anim_msg, display_username, 3)
+                await asyncio.sleep(0.4)
                 
                 # Проверяем ×4
                 if random.random() < MULTICAST_CASCADE[2]:  # 15%
                     cascade_count = 4
-                    try:
-                        await anim_msg.edit_text(
-                            f"🎲 {display_username}\n\n👹⚡ Мультикаст ×4!!!",
-                            parse_mode="HTML"
-                        )
-                    except Exception:
-                        pass
-                    await asyncio.sleep(0.7)
+                    await edit_multicast_anim(anim_msg, display_username, 4)
+                    await asyncio.sleep(0.4)
             
             multicast_count = cascade_count
             roll = roll * cascade_count
@@ -2280,35 +2309,19 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 👹 МУЛЬТИКАСТ — гарантированно ×2, затем каскад до ×4 с анимацией
             cascade_count = 2
             
-            # Отправляем первое сообщение ×2
-            anim_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"🎲 {display_username}\n\n🧪 ТЕСТ\n👹⚡ Мультикаст ×2!",
-                parse_mode="HTML"
-            )
-            await asyncio.sleep(0.7)
+            # Анимация ×2 со слотом
+            anim_msg = await send_multicast_anim(chat_id, display_username, 2, context.bot, is_test=True)
+            await asyncio.sleep(0.4)
             
             if random.random() < MULTICAST_CASCADE[1]:  # 30%
                 cascade_count = 3
-                try:
-                    await anim_msg.edit_text(
-                        f"🎲 {display_username}\n\n🧪 ТЕСТ\n👹⚡ Мультикаст ×3!",
-                        parse_mode="HTML"
-                    )
-                except Exception:
-                    pass
-                await asyncio.sleep(0.7)
+                await edit_multicast_anim(anim_msg, display_username, 3, is_test=True)
+                await asyncio.sleep(0.4)
                 
                 if random.random() < MULTICAST_CASCADE[2]:  # 15%
                     cascade_count = 4
-                    try:
-                        await anim_msg.edit_text(
-                            f"🎲 {display_username}\n\n🧪 ТЕСТ\n👹⚡ Мультикаст ×4!!!",
-                            parse_mode="HTML"
-                        )
-                    except Exception:
-                        pass
-                    await asyncio.sleep(0.7)
+                    await edit_multicast_anim(anim_msg, display_username, 4, is_test=True)
+                    await asyncio.sleep(0.4)
             
             multicast_count = cascade_count
             roll = roll * cascade_count
