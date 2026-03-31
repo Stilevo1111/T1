@@ -345,7 +345,7 @@ async def morning_digest_job(context):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n👹 Мулькаст: {event_stats['multicast']} (x2: {event_stats['multicast_x2']}, x3: {event_stats['multicast_x3']}, x4: {event_stats['multicast_x4']})\n⚡ Зевс: {event_stats['zeus']}\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n⚡ Зевс: {event_stats['zeus']}\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
         
         bot = context.application.bot
         
@@ -452,7 +452,7 @@ async def refresh_digest_message(bot):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n👹 Мулькаст: {event_stats['multicast']} (x2: {event_stats['multicast_x2']}, x3: {event_stats['multicast_x3']}, x4: {event_stats['multicast_x4']})\n⚡ Зевс: {event_stats['zeus']}\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n⚡ Зевс: {event_stats['zeus']}\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
         
         last_message_id = get_config('daily_digest_message_id')
         if last_message_id:
