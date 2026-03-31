@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import io
 import random
 import time
 import asyncio
@@ -1495,19 +1496,19 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Анимация ×2 со слотом
             anim_msg = await send_multicast_anim(update.message.chat_id, display_username, 2, context.bot)
             set_last_bot_message(chat_id, user_obj.id, anim_msg.message_id)
-            await asyncio.sleep(0.4)
+            await asyncio.sleep(1.0)
             
             # Проверяем ×3
-            if random.random() < MULTICAST_CASCADE[1]:  # 30%
+            if random.random() < MULTICAST_CASCADE[1]:  # 50%
                 cascade_count = 3
                 await edit_multicast_anim(anim_msg, display_username, 3)
-                await asyncio.sleep(0.4)
+                await asyncio.sleep(1.0)
                 
                 # Проверяем ×4
-                if random.random() < MULTICAST_CASCADE[2]:  # 15%
+                if random.random() < MULTICAST_CASCADE[2]:  # 40%
                     cascade_count = 4
                     await edit_multicast_anim(anim_msg, display_username, 4)
-                    await asyncio.sleep(0.4)
+                    await asyncio.sleep(1.0)
             
             multicast_count = cascade_count
             roll = roll * cascade_count
@@ -1611,11 +1612,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Отправляем иконку героя при мулькасте
         if multicast_count > 1:
             try:
+                from dota_mmr import generate_event_icon
                 hero_url = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/ogre_magi.png"
-                hero_bytes = await fetch_hero_icon(hero_url)
-                if hero_bytes:
+                img_data = generate_event_icon(hero_url, "Multicast")
+                if img_data:
                     hero_msg = await context.bot.send_photo(
-                        chat_id=update.message.chat_id, photo=hero_bytes
+                        chat_id=update.message.chat_id, photo=io.BytesIO(img_data)
                     )
                     schedule_delete(context.bot, chat_id, hero_msg.message_id, 600, context.application.job_queue)
             except Exception as e:
@@ -1624,10 +1626,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Отправляем иконку Зевса при ударе молнии
         if zeus_triggered:
             try:
-                zeus_bytes = await fetch_hero_icon(ZEUS_ICON_URL)
-                if zeus_bytes:
+                from dota_mmr import generate_event_icon
+                img_data = generate_event_icon(ZEUS_ICON_URL, "Thundergod")
+                if img_data:
                     zeus_msg = await context.bot.send_photo(
-                        chat_id=update.message.chat_id, photo=zeus_bytes
+                        chat_id=update.message.chat_id, photo=io.BytesIO(img_data)
                     )
                     schedule_delete(context.bot, chat_id, zeus_msg.message_id, 600, context.application.job_queue)
             except Exception as e:
@@ -2311,17 +2314,17 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Анимация ×2 со слотом
             anim_msg = await send_multicast_anim(chat_id, display_username, 2, context.bot, is_test=True)
-            await asyncio.sleep(0.4)
+            await asyncio.sleep(1.0)
             
-            if random.random() < MULTICAST_CASCADE[1]:  # 30%
+            if random.random() < MULTICAST_CASCADE[1]:  # 50%
                 cascade_count = 3
                 await edit_multicast_anim(anim_msg, display_username, 3, is_test=True)
-                await asyncio.sleep(0.4)
+                await asyncio.sleep(1.0)
                 
-                if random.random() < MULTICAST_CASCADE[2]:  # 15%
+                if random.random() < MULTICAST_CASCADE[2]:  # 40%
                     cascade_count = 4
                     await edit_multicast_anim(anim_msg, display_username, 4, is_test=True)
-                    await asyncio.sleep(0.4)
+                    await asyncio.sleep(1.0)
             
             multicast_count = cascade_count
             roll = roll * cascade_count

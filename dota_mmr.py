@@ -124,6 +124,59 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
         return []
 
 
+def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
+    """Сгенерировать styled иконку героя (тёмный фон + синяя рамка + подпись)"""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        import io
+        import requests as req
+        
+        icon_size = 96
+        padding = 12
+        label_height = 24 if label else 0
+        width = icon_size + padding * 2
+        height = icon_size + padding * 2 + label_height
+        
+        img = Image.new("RGB", (width, height), color=(40, 55, 70))
+        draw = ImageDraw.Draw(img)
+        
+        # Загружаем иконку
+        try:
+            resp = req.get(hero_url, timeout=5)
+            if resp.status_code == 200:
+                icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
+                img.paste(icon, (padding, padding), icon)
+        except Exception:
+            draw.rectangle([padding, padding, padding + icon_size, padding + icon_size], fill=(80, 95, 110))
+        
+        # Синяя рамка
+        draw.rectangle(
+            [padding - 1, padding - 1, padding + icon_size, padding + icon_size],
+            outline=(120, 170, 210), width=2
+        )
+        
+        # Подпись
+        if label:
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 14)
+            except Exception:
+                font = ImageFont.load_default()
+            bbox = draw.textbbox((0, 0), label, font=font)
+            tw = bbox[2] - bbox[0]
+            tx = (width - tw) // 2
+            ty = icon_size + padding * 2 + 2
+            draw.text((tx, ty), label, fill=(200, 220, 240), font=font)
+        
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return buf.read()
+    except Exception as e:
+        logger.error(f"generate_event_icon error: {e}")
+        return None
+
+
 def generate_heroes_image(top_heroes: list) -> bytes | None:
     """Сгенерировать картинку с иконками топ-героев (горизонтально)"""
     try:
