@@ -1373,13 +1373,14 @@ def get_user_by_username(username):
     username = username.lstrip("@").lower()
     
     # Сначала ищем в кеше
-    all_users = user_cache.get_all_users()
-    for uid, udata in all_users.items():
+    all_keys = user_cache.get_all_users()
+    for uid in all_keys:
         if not isinstance(uid, int):
             continue
-        if not isinstance(udata, dict):
+        cached_user = user_cache.get(uid)
+        if not cached_user or not isinstance(cached_user, dict):
             continue
-        cached_name = udata.get('username', '')
+        cached_name = cached_user.get('username', '')
         if cached_name and cached_name.lower() == username:
             logger.info(f"get_user_by_username: found '{username}' in cache (tid={uid})")
             return get_user(uid)

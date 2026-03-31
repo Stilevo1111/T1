@@ -1635,7 +1635,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Подсказка как смотреть чужой профиль
         if not viewing_other:
-            text += "\n\n💡 <code>/profile ник</code> — чужой профиль"
+            text += "\n\n💡 <code>/profile ＠ник</code> — чужой профиль"
         
         result_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
@@ -1669,9 +1669,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not send hero icons: {e}")
         
     except Exception as e:
-        logger.error(f"Error in stats: {e}", exc_info=True)
+        import traceback
+        logger.error(f"Error in stats: {e}\n{traceback.format_exc()}")
         try:
-            await update.message.reply_text("❌ Ошибка получения статистики")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"❌ Ошибка: <code>{e}</code>",
+                parse_mode="HTML"
+            )
         except Exception:
             pass
 
