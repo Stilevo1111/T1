@@ -126,7 +126,7 @@ async def decrease_inactive_job(context):
 async def announce_weekly_mmr_winner(bot):
     """Отправляет поздравление победителю недельного топа MMR при смене недели."""
     try:
-        today_utc = datetime.datetime.utcnow()
+        today_utc = datetime.datetime.now(datetime.timezone.utc)
         monday_utc = today_utc - datetime.timedelta(days=today_utc.weekday())
         current_week_start = monday_utc.strftime("%Y-%m-%d")
 
@@ -1294,7 +1294,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Проверка на выходные по МСК (суббота = 5, воскресенье = 6)
     import datetime
-    msk_time = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+    msk_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)
     is_weekend = msk_time.weekday() in (5, 6)
     weekend_bonus = ""
     

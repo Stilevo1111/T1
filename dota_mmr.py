@@ -3,7 +3,7 @@ import re
 import time
 import requests
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from database import get_user, update_user_field
 
 logger = logging.getLogger(__name__)
@@ -426,7 +426,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         update_user_field(telegram_id, "wins", stats.get("wins", 0))
         update_user_field(telegram_id, "losses", stats.get("losses", 0))
         # Инициализируем дату начала недели
-        update_user_field(telegram_id, "week_start_date", datetime.utcnow().date().isoformat())
+        update_user_field(telegram_id, "week_start_date", datetime.now(timezone.utc).date().isoformat())
         
         # Обновляем недельную статистику сразу после привязки
         update_user_mmr(telegram_id)
@@ -467,9 +467,8 @@ def update_user_mmr(telegram_id: int) -> dict:
 
         # Получаем последние матчи для расчёта недельной статистики
         # Фиксированная неделя: с понедельника по воскресенье
-        from datetime import datetime, timedelta
-        # Используем UTC для расчёта начала недели, затем конвертируем в UTC для сравнения с timestamp
-        today_utc = datetime.utcnow()
+        # Используем UTC для расчёта начала недели
+        today_utc = datetime.now(timezone.utc)
         monday_utc = today_utc - timedelta(days=today_utc.weekday())
         week_start_utc = monday_utc.replace(hour=0, minute=0, second=0, microsecond=0)
         logger.info(f"topmmr: week start (UTC) = {week_start_utc} (Monday)")

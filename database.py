@@ -245,8 +245,13 @@ def update_dota_week_top_cache():
             'week_current_streak': user.get('week_current_streak', 0)
         })
     
-    # Сортируем по Байесовскому среднему: (wins + 4) / (games + 10), затем по week_wins DESC, затем по mmr DESC
-    top_users.sort(key=lambda x: (-((x['week_wins'] + 4) / (x['week_games'] + 10)), -x['week_wins'], -x['mmr']))
+    # Сортировка: сначала те у кого есть игры, потом по винрейту, потом по кол-ву побед
+    top_users.sort(key=lambda x: (
+        0 if x['week_games'] > 0 else 1,                               # без игр — в конец
+        -(x['week_wins'] / x['week_games']) if x['week_games'] > 0 else 0,  # винрейт DESC
+        -x['week_wins'],                                                # победы DESC
+        -x['mmr']                                                       # MMR DESC
+    ))
     
     # Сохраняем в кеш
     user_cache.set('dota_week_top', top_users)
@@ -1801,7 +1806,10 @@ def get_dota_week_top_from_db(limit=10):
                            COALESCE(week_current_streak, 0)
                     FROM users 
                     WHERE steam_id IS NOT NULL AND COALESCE(in_chat, TRUE) = TRUE
-                ORDER BY (week_wins::numeric + 4) / (week_games::numeric + 10) DESC, week_wins DESC, mmr DESC
+                ORDER BY 
+                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
+                    CASE WHEN week_games > 0 THEN week_wins::numeric / week_games::numeric ELSE 0 END DESC,
+                    week_wins DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
             users = cursor.fetchall()
@@ -1836,7 +1844,10 @@ def get_dota_week_top_from_db(limit=10):
                        COALESCE(week_current_streak, 0)
                 FROM users 
                 WHERE steam_id IS NOT NULL AND COALESCE(in_chat, 1) = 1
-                ORDER BY (week_wins + 4.0) / (week_games + 10.0) DESC, week_wins DESC, mmr DESC
+                ORDER BY 
+                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
+                    CASE WHEN week_games > 0 THEN week_wins * 1.0 / week_games ELSE 0 END DESC,
+                    week_wins DESC, mmr DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
