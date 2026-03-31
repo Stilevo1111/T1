@@ -2495,6 +2495,11 @@ async def main():
         web_app = web.Application()
         web_app.router.add_post('/webhook', handle_webhook)
         
+        # Root route for Render port detection
+        async def root_handler(request):
+            return web.Response(text="OK")
+        web_app.router.add_get('/', root_handler)
+        
         # Setup health check with bot access
         setup_health_check(app.bot)
         web_app.router.add_get('/health', health_check_handler)
