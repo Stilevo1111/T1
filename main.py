@@ -746,13 +746,6 @@ async def alternate_digest_job(context):
             return
         set_config('alternate_digest_last_run', str(now))
         
-        # Не показывать дайджест ночью (0:00 - 9:00 МСК)
-        import datetime
-        hour_msk = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)).hour
-        if hour_msk < 9:
-            logger.info(f"alternate_digest_job: пропуск (ночь {hour_msk}:00 МСК)")
-            return
-        
         logger.info("Запуск alternate_digest_job")
         
         # Получаем ID чата для дайджеста
