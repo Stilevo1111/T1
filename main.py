@@ -1542,10 +1542,15 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_last_message_id(user_obj.id, result_msg.message_id)
                   
     except Exception as e:
-        logger.error(f"Error in fissure: {e}", exc_info=True)
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"Error in fissure: {e}\n{tb}")
         try:
-            if update.message:
-                await update.message.reply_text("❌ Ошибка обработки запроса")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"❌ Ошибка обработки запроса\n<code>{e}</code>",
+                parse_mode="HTML"
+            )
         except Exception:
             pass
 
