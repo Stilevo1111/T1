@@ -2277,13 +2277,38 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.5)
         
         elif not is_fatal and event_roll < zeus_chance + multicast_chance:
-            # 👹 МУЛЬТИКАСТ — гарантированно ×2, затем каскад до ×4
+            # 👹 МУЛЬТИКАСТ — гарантированно ×2, затем каскад до ×4 с анимацией
             cascade_count = 2
+            
+            # Отправляем первое сообщение ×2
+            anim_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🎲 {display_username}\n\n🧪 ТЕСТ\n👹⚡ Мультикаст ×2!",
+                parse_mode="HTML"
+            )
+            await asyncio.sleep(0.7)
             
             if random.random() < MULTICAST_CASCADE[1]:  # 30%
                 cascade_count = 3
+                try:
+                    await anim_msg.edit_text(
+                        f"🎲 {display_username}\n\n🧪 ТЕСТ\n👹⚡ Мультикаст ×3!",
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    pass
+                await asyncio.sleep(0.7)
+                
                 if random.random() < MULTICAST_CASCADE[2]:  # 15%
                     cascade_count = 4
+                    try:
+                        await anim_msg.edit_text(
+                            f"🎲 {display_username}\n\n🧪 ТЕСТ\n👹⚡ Мультикаст ×4!!!",
+                            parse_mode="HTML"
+                        )
+                    except Exception:
+                        pass
+                    await asyncio.sleep(0.7)
             
             multicast_count = cascade_count
             roll = roll * cascade_count
@@ -2345,9 +2370,17 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if zeus_text:
             text = f"{text}\n{zeus_text}"
         
-        result_msg = await context.bot.send_message(
-            chat_id=chat_id, text=text, parse_mode="HTML"
-        )
+        # Пытаемся отредактировать anim_msg (мулькаст), иначе отправляем новое
+        try:
+            if anim_msg:
+                await anim_msg.edit_text(text=text, parse_mode="HTML")
+                result_msg = anim_msg
+            else:
+                raise Exception("no anim_msg")
+        except Exception:
+            result_msg = await context.bot.send_message(
+                chat_id=chat_id, text=text, parse_mode="HTML"
+            )
         
         # Иконки
         if multicast_count > 1:
