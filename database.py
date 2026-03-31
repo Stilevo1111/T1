@@ -1386,9 +1386,8 @@ def get_user_by_username(username):
             return get_user(uid)
     
     # Не нашли в кеше — ищем в БД
-    db = Database()
     try:
-        conn = db.get_connection()
+        conn = get_connection()
         cursor = conn.cursor()
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme

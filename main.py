@@ -1582,18 +1582,19 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target_user = None
         viewing_other = False
         
-        if context.args and context.args[0].startswith("@"):
-            # /profile @username — ищем другого пользователя
+        if context.args and context.args[0]:
+            # /profile @username или /profile username — ищем другого пользователя
             target_username = context.args[0].lstrip("@")
-            target_user = get_user_by_username(target_username)
-            if not target_user:
-                msg = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"❌ Игрок @{target_username} не найден"
-                )
-                schedule_delete(context.bot, chat_id, msg.message_id, 15, context.application.job_queue)
-                return
-            viewing_other = True
+            if target_username:
+                target_user = get_user_by_username(target_username)
+                if not target_user:
+                    msg = await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"❌ Игрок @{target_username} не найден"
+                    )
+                    schedule_delete(context.bot, chat_id, msg.message_id, 15, context.application.job_queue)
+                    return
+                viewing_other = True
         
         if not target_user:
             user_obj = update.effective_user
