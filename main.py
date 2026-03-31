@@ -1416,24 +1416,28 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(1.0)
         
         elif not is_fatal and event_roll < zeus_chance + multicast_chance:
-            # 👹 МУЛЬТИКАСТ (5%)
-            cascade_steps = list(check_multicast(user["fissure"]))
+            # 👹 МУЛЬТИКАСТ — умножает ролл на количество срабатываний
+            cascade_count = 1
+            for i, chance in enumerate(MULTICAST_CASCADE):
+                if random.random() < chance:
+                    cascade_count = i + 2  # 2, 3, 4
+                else:
+                    break
             
-            for step_num, extra_roll in cascade_steps:
-                multicast_count = step_num
-                if extra_roll > roll:
-                    roll = extra_roll
-                
-                dots = "." * (step_num - 1)
-                try:
-                    await anim_msg.edit_text(
-                        f"🎲 {display_username}\n\n"
-                        f"👹⚡ Мультикаст ×{step_num}!{dots}",
-                        parse_mode="HTML"
-                    )
-                except Exception:
-                    pass
-                await asyncio.sleep(0.7)
+            multicast_count = cascade_count
+            original_roll = roll
+            roll = roll * cascade_count  # умножаем!
+            
+            dots = "." * (cascade_count - 1)
+            try:
+                await anim_msg.edit_text(
+                    f"🎲 {display_username}\n\n"
+                    f"👹⚡ Мультикаст ×{cascade_count}!{dots}",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+            await asyncio.sleep(0.7)
             
             multicast_text = f"\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
             increment_stat("multicast")
@@ -2230,14 +2234,15 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.5)
         
         elif not is_fatal and event_roll < zeus_chance + multicast_chance:
-            # 👹 МУЛЬТИКАСТ
-            cascade_steps = list(check_multicast(current_fissure))
-            for step_num, extra_roll in cascade_steps:
-                multicast_count = step_num
-                if extra_roll > roll:
-                    roll = extra_roll
-                dots = "." * (step_num - 1)
-                await asyncio.sleep(0.5)
+            # 👹 МУЛЬТИКАСТ — умножает ролл на количество срабатываний
+            cascade_count = 1
+            for i, chance in enumerate(MULTICAST_CASCADE):
+                if random.random() < chance:
+                    cascade_count = i + 2
+                else:
+                    break
+            multicast_count = cascade_count
+            roll = roll * cascade_count
             multicast_text = f"\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
         
         # Защита
