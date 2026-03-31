@@ -345,7 +345,7 @@ async def morning_digest_job(context):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n⚡ Зевс: {event_stats['zeus']}\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
         
         bot = context.application.bot
         
@@ -452,7 +452,7 @@ async def refresh_digest_message(bot):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n⚡ Зевс: {event_stats['zeus']}\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
         
         last_message_id = get_config('daily_digest_message_id')
         if last_message_id:
@@ -1201,21 +1201,45 @@ def get_event_chances():
     except Exception:
         return MULTICAST_DEFAULT_CHANCE, ZEUS_DEFAULT_CHANCE
 
-# Счётчики событий (сбрасываются при перезапуске)
-event_stats = {"rolls": 0, "multicast": 0, "zeus": 0, "multicast_x2": 0, "multicast_x3": 0, "multicast_x4": 0}
+# Счётчики событий (persistent через bot_config)
+STATS_KEYS = ["rolls", "multicast", "zeus", "multicast_x2", "multicast_x3", "multicast_x4"]
+
+def _load_stats():
+    """Загрузить счётчики из bot_config"""
+    stats = {}
+    for key in STATS_KEYS:
+        try:
+            stats[key] = int(get_config(f"stat_{key}", 0))
+        except (ValueError, TypeError):
+            stats[key] = 0
+    return stats
+
+def _save_stat(key, value):
+    """Сохранить один счётчик в bot_config"""
+    set_config(f"stat_{key}", str(value))
+
+def increment_stat(key):
+    """Инкрементировать счётчик"""
+    if key in STATS_KEYS:
+        try:
+            val = int(get_config(f"stat_{key}", 0)) + 1
+        except (ValueError, TypeError):
+            val = 1
+        set_config(f"stat_{key}", str(val))
 
 def get_event_stats_text():
     """Текст со статистикой событий"""
-    total = event_stats["rolls"]
+    stats = _load_stats()
+    total = stats["rolls"]
     if total == 0:
         return ""
-    mc = event_stats["multicast"]
-    ze = event_stats["zeus"]
+    mc = stats["multicast"]
+    ze = stats["zeus"]
     mc_pct = mc / total * 100 if total else 0
     ze_pct = ze / total * 100 if total else 0
     return (
-        f"📊 События за сессию (всего бросков: {total}):\n"
-        f"  👹 Мулькаст: {mc} ({mc_pct:.1f}%) — x2: {event_stats['multicast_x2']}, x3: {event_stats['multicast_x3']}, x4: {event_stats['multicast_x4']}\n"
+        f"📊 События (всего бросков: {total}):\n"
+        f"  👹 Мулькаст: {mc} ({mc_pct:.1f}%) — x2: {stats['multicast_x2']}, x3: {stats['multicast_x3']}, x4: {stats['multicast_x4']}\n"
         f"  ⚡ Зевс: {ze} ({ze_pct:.1f}%)"
     )
 
@@ -1351,12 +1375,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Один рандом: что выпало?
         event_roll = random.random()
         multicast_chance, zeus_chance = get_event_chances()
-        event_stats["rolls"] += 1
+        increment_stat("rolls")
         
         if not is_fatal and event_roll < zeus_chance:
             # ⚡ ЗЕВС (5%)
             zeus_triggered = True
-            event_stats["zeus"] += 1
+            increment_stat("zeus")
             affected = zeus_strike()
             zeus_text = random.choice(ZEUS_TEXTS)
             zeus_text = f"\n\n{zeus_text}\n<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>"
@@ -1391,13 +1415,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await asyncio.sleep(0.7)
             
             multicast_text = f"\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
-            event_stats["multicast"] += 1
+            increment_stat("multicast")
             if multicast_count >= 4:
-                event_stats["multicast_x4"] += 1
+                increment_stat("multicast_x4")
             elif multicast_count >= 3:
-                event_stats["multicast_x3"] += 1
+                increment_stat("multicast_x3")
             elif multicast_count >= 2:
-                event_stats["multicast_x2"] += 1
+                increment_stat("multicast_x2")
         
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
