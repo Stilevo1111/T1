@@ -1344,13 +1344,22 @@ def get_user(telegram_id, username=None):
     
     # Сохраняем в кеш если пользователь найден
     if user:
-        # Добавляем недостающие поля с默认值
         user.setdefault('fissure', 0)
         user.setdefault('last_fissure', 0)
         user.setdefault('total_growth', 0)
         user.setdefault('total_rolls', 0)
         user.setdefault('best_streak', 0)
         user.setdefault('current_streak', 0)
+        user.setdefault('steam_id', None)
+        user.setdefault('steam_nickname', None)
+        user.setdefault('mmr', 0)
+        user.setdefault('rank_tier', 0)
+        user.setdefault('week_games', 0)
+        user.setdefault('week_wins', 0)
+        user.setdefault('week_best_streak', 0)
+        user.setdefault('week_current_streak', 0)
+        user.setdefault('dota_total_games', 0)
+        user.setdefault('dota_wins', 0)
         user_cache.set(telegram_id, user)
     
     return user
