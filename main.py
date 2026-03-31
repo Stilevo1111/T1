@@ -1450,28 +1450,16 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     break
             
             multicast_count = cascade_count
-            original_roll = roll
-            roll = roll * cascade_count  # умножаем!
-            
-            dots = "." * (cascade_count - 1)
-            try:
-                await anim_msg.edit_text(
-                    f"🎲 {display_username}\n\n"
-                    f"👹⚡ Мультикаст ×{cascade_count}!{dots}",
-                    parse_mode="HTML"
-                )
-            except Exception:
-                pass
-            await asyncio.sleep(0.7)
-            
-            multicast_text = f"\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
-            increment_stat("multicast")
-            if multicast_count >= 4:
-                increment_stat("multicast_x4")
-            elif multicast_count >= 3:
-                increment_stat("multicast_x3")
-            elif multicast_count >= 2:
-                increment_stat("multicast_x2")
+            if cascade_count > 1:
+                roll = roll * cascade_count
+                multicast_text = f"\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
+                increment_stat("multicast")
+                if multicast_count >= 4:
+                    increment_stat("multicast_x4")
+                elif multicast_count >= 3:
+                    increment_stat("multicast_x3")
+                elif multicast_count >= 2:
+                    increment_stat("multicast_x2")
         
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
@@ -2267,8 +2255,9 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     break
             multicast_count = cascade_count
-            roll = roll * cascade_count
-            multicast_text = f"\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
+            if cascade_count > 1:
+                roll = roll * cascade_count
+                multicast_text = f"\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
         
         # Защита
         roll, protection_msg = apply_fissure_protection(current_fissure, roll, is_fatal)
