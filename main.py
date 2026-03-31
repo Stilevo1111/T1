@@ -1474,11 +1474,15 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
             update_last_message_id(user_obj.id, result_msg.message_id)
             
-            # Иконка Зевса
+            # Иконка Зевса (styled)
             try:
-                zeus_bytes = await fetch_hero_icon(ZEUS_ICON_URL)
-                if zeus_bytes:
-                    zeus_msg = await context.bot.send_photo(chat_id=update.message.chat_id, photo=zeus_bytes)
+                from dota_mmr import generate_event_icon
+                img_data = generate_event_icon(ZEUS_ICON_URL, "Thundergod")
+                if img_data:
+                    zeus_msg = await context.bot.send_photo(
+                        chat_id=update.message.chat_id, photo=io.BytesIO(img_data)
+                    )
+                    schedule_delete(context.bot, chat_id, zeus_msg.message_id, 600, context.application.job_queue)
                     schedule_delete(context.bot, chat_id, zeus_msg.message_id, 600, context.application.job_queue)
             except Exception as e:
                 logger.debug(f"Could not send Zeus icon: {e}")
