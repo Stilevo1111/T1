@@ -1366,8 +1366,22 @@ def get_user(telegram_id, username=None):
 
 
 def get_user_by_username(username):
-    """Найти пользователя по username (без @)"""
+    """Найти пользователя по username (без @). Ищет сначала в кеше, потом в БД."""
     username = username.lstrip("@").lower()
+    
+    # Сначала ищем в кеше
+    all_users = user_cache.get_all_users()
+    for uid, udata in all_users.items():
+        if not isinstance(uid, int):
+            continue
+        if not isinstance(udata, dict):
+            continue
+        cached_name = udata.get('username', '')
+        if cached_name and cached_name.lower() == username:
+            logger.info(f"get_user_by_username: found '{username}' in cache (tid={uid})")
+            return get_user(uid)
+    
+    # Не нашли в кеше — ищем в БД
     db = Database()
     try:
         conn = db.get_connection()
@@ -1382,9 +1396,12 @@ def get_user_by_username(username):
         cursor.close()
         if result:
             tid = result[0] if not isinstance(result, dict) else result.get('telegram_id')
+            logger.info(f"get_user_by_username: found '{username}' in DB (tid={tid})")
             return get_user(tid)
     except Exception as e:
         logger.error(f"get_user_by_username error: {e}")
+    
+    logger.info(f"get_user_by_username: '{username}' not found in cache or DB")
     return None
 
 
