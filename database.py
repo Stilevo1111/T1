@@ -1579,6 +1579,37 @@ def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
         top_cache.clear()
     return result
 
+def zeus_strike(percent=0.05):
+    """Удар Зевса: уменьшить fissure ВСЕХ игроков на percent (5% = 0.05). Фиссуры < 5 см защищены."""
+    db = Database()
+    url = urlparse.urlparse(DATABASE_URL)
+    scheme = url.scheme
+    
+    try:
+        if "postgres" in scheme:
+            query = "UPDATE users SET fissure = GREATEST(0.1, fissure * %s) WHERE fissure >= 5"
+        else:
+            query = "UPDATE users SET fissure = MAX(0.1, fissure * ?) WHERE fissure >= 5"
+        
+        multiplier = 1.0 - percent
+        result = db.execute_query(query, (multiplier,))
+        affected = result if result is not None else 0
+        
+        # Обновляем кеш только затронутых пользователей
+        all_users = user_cache.get_all_users()
+        for uid, udata in all_users.items():
+            if isinstance(udata, dict) and udata.get('fissure', 0) >= 5:
+                udata['fissure'] = max(0.1, udata['fissure'] * multiplier)
+                user_cache.set(uid, udata)
+        
+        top_cache.clear()
+        user_cache.set('digest_stats', None)
+        logger.info(f"Zeus strike: {affected} users affected, -{int(percent*100)}% each")
+        return affected
+    except Exception as e:
+        logger.error(f"Zeus strike error: {e}")
+        return 0
+
 def get_config(key, default=None):
     """Получить значение конфигурации - из кеша"""
     # Пробуем получить из кеша

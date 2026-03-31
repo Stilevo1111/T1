@@ -9,7 +9,7 @@ import urllib.parse as urlparse
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike
 from aiohttp import web
 
 # Logging setup
@@ -345,7 +345,7 @@ async def morning_digest_job(context):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n👹 Мулькаст: {event_stats['multicast']} (x2: {event_stats['multicast_x2']}, x3: {event_stats['multicast_x3']}, x4: {event_stats['multicast_x4']})\n⚡ Зевс: {event_stats['zeus']}\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
         
         bot = context.application.bot
         
@@ -452,7 +452,7 @@ async def refresh_digest_message(bot):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n👹 Мулькаст: {event_stats['multicast']} (x2: {event_stats['multicast_x2']}, x3: {event_stats['multicast_x3']}, x4: {event_stats['multicast_x4']})\n⚡ Зевс: {event_stats['zeus']}\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
         
         last_message_id = get_config('daily_digest_message_id')
         if last_message_id:
@@ -1176,6 +1176,96 @@ def calculate_new_fissure(current_fissure, roll):
     return max(0.1, new_value)
 
 
+# ── Мультикаст (каскадный) ───────────────────────────────────────────
+# Шансы загружаются из bot_config, дефолты здесь
+MULTICAST_DEFAULT_CHANCE = 0.07
+MULTICAST_CASCADE = [0.75, 0.30, 0.15]
+
+ZEUS_DEFAULT_CHANCE = 0.03
+ZEUS_ICON_URL = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/zuus.png"
+
+# Кеш шансов (обновляется раз в минуту)
+_event_chances_cache = {"ts": 0, "multicast": MULTICAST_DEFAULT_CHANCE, "zeus": ZEUS_DEFAULT_CHANCE}
+
+def get_event_chances():
+    """Получить шансы событий из bot_config с кешированием"""
+    now = time.time()
+    if now - _event_chances_cache["ts"] < 60:
+        return _event_chances_cache["multicast"], _event_chances_cache["zeus"]
+    
+    try:
+        mc = float(get_config("multicast_chance", MULTICAST_DEFAULT_CHANCE))
+        ze = float(get_config("zeus_chance", ZEUS_DEFAULT_CHANCE))
+        _event_chances_cache.update({"ts": now, "multicast": mc, "zeus": ze})
+        return mc, ze
+    except Exception:
+        return MULTICAST_DEFAULT_CHANCE, ZEUS_DEFAULT_CHANCE
+
+# Счётчики событий (сбрасываются при перезапуске)
+event_stats = {"rolls": 0, "multicast": 0, "zeus": 0, "multicast_x2": 0, "multicast_x3": 0, "multicast_x4": 0}
+
+def get_event_stats_text():
+    """Текст со статистикой событий"""
+    total = event_stats["rolls"]
+    if total == 0:
+        return ""
+    mc = event_stats["multicast"]
+    ze = event_stats["zeus"]
+    mc_pct = mc / total * 100 if total else 0
+    ze_pct = ze / total * 100 if total else 0
+    return (
+        f"📊 События за сессию (всего бросков: {total}):\n"
+        f"  👹 Мулькаст: {mc} ({mc_pct:.1f}%) — x2: {event_stats['multicast_x2']}, x3: {event_stats['multicast_x3']}, x4: {event_stats['multicast_x4']}\n"
+        f"  ⚡ Зевс: {ze} ({ze_pct:.1f}%)"
+    )
+
+ZEUS_TEXTS = [
+    "⚡ <b>THUNDERGOD'S WRATH!</b>\n🗣️ Zeus <i>«Небеса рассвирепели!»</i>",
+    "⚡ <b>THUNDERGOD'S WRATH!</b>\n🗣️ Zeus <i>«Вы чувствовали это?»</i>",
+    "⚡ <b>THUNDERGOD'S WRATH!</b>\n🗣️ Zeus <i>«Ничто не укроется от моего гнева!»</i>",
+    "⚡ <b>THUNDERGOD'S WRATH!</b>\n🗣️ Zeus <i>«Я — молния, что разрывает небеса!»</i>",
+    "⚡ <b>THUNDERGOD'S WRATH!</b>\n🗣️ Zeus <i>«Гром и молния! Всё кончено!»</i>",
+    "⚡ <b>THUNDERGOD'S WRATH!</b>\n🗣️ Zeus <i>«Каждый из вас будет поражён!»</i>",
+    "⚡ <b>THUNDERGOD'S WRATH!</b>\n🗣️ Zeus <i>«Небесный гнев падёт на всех!»</i>",
+]
+
+
+def check_multicast(fissure_size):
+    """
+    Каскадный мультикаст (генератор).
+    Вызывается ТОЛЬКО когда мультикаст уже выбран.
+    Yields: (step_number, extra_roll) на каждом шаге каскада.
+    """
+    for i, chance in enumerate(MULTICAST_CASCADE):
+        if random.random() < chance:
+            extra_roll, _, is_fatal, _ = calculate_fissure_roll(fissure_size)
+            if not is_fatal:
+                yield i + 2, extra_roll
+        else:
+            break
+
+
+async def fetch_hero_icon(url, session=None):
+    """Скачать иконку героя через aiohttp (неблокирующий)"""
+    import io
+    close_session = False
+    if session is None:
+        import aiohttp
+        session = aiohttp.ClientSession()
+        close_session = True
+    try:
+        async with session.get(url) as resp:
+            if resp.status == 200:
+                data = await resp.read()
+                bio = io.BytesIO(data)
+                bio.name = url.split("/")[-1]
+                return bio
+    finally:
+        if close_session:
+            await session.close()
+    return None
+
+
 def main_menu():
     keyboard = [
         [KeyboardButton("📈 Увеличить фиссуру")],
@@ -1243,6 +1333,76 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
+        
+        multicast_count = 1
+        multicast_text = ""
+        zeus_triggered = False
+        zeus_text = ""
+        display_username = f"<a href=\"tg://user?id={user_obj.id}\">{username}</a>"
+        
+        # Отправляем начальное сообщение
+        anim_msg = await context.bot.send_message(
+            chat_id=update.message.chat_id,
+            text=f"🎲 {display_username}\n\n🌀 Бросаем кубик...",
+            parse_mode="HTML"
+        )
+        set_last_bot_message(chat_id, user_obj.id, anim_msg.message_id)
+        
+        # Один рандом: что выпало?
+        event_roll = random.random()
+        multicast_chance, zeus_chance = get_event_chances()
+        event_stats["rolls"] += 1
+        
+        if not is_fatal and event_roll < zeus_chance:
+            # ⚡ ЗЕВС (5%)
+            zeus_triggered = True
+            event_stats["zeus"] += 1
+            affected = zeus_strike()
+            zeus_text = random.choice(ZEUS_TEXTS)
+            zeus_text = f"\n\n{zeus_text}\n<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>"
+            
+            try:
+                await anim_msg.edit_text(
+                    f"🎲 {display_username}\n\n⚡ ГРОМ!!! Молния бьёт по всем фиссурам...",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+            await asyncio.sleep(1.0)
+        
+        elif not is_fatal and event_roll < zeus_chance + multicast_chance:
+            # 👹 МУЛЬТИКАСТ (5%)
+            cascade_steps = list(check_multicast(user["fissure"]))
+            
+            for step_num, extra_roll in cascade_steps:
+                multicast_count = step_num
+                if extra_roll > roll:
+                    roll = extra_roll
+                
+                dots = "." * (step_num - 1)
+                try:
+                    await anim_msg.edit_text(
+                        f"🎲 {display_username}\n\n"
+                        f"👹⚡ Мультикаст ×{step_num}!{dots}",
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    pass
+                await asyncio.sleep(0.7)
+            
+            multicast_text = f"\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
+            event_stats["multicast"] += 1
+            if multicast_count >= 4:
+                event_stats["multicast_x4"] += 1
+            elif multicast_count >= 3:
+                event_stats["multicast_x3"] += 1
+            elif multicast_count >= 2:
+                event_stats["multicast_x2"] += 1
+        
+        else:
+            # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
+            await asyncio.sleep(0.5)
+        
         roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
         
         # Бонус для выходных: увеличиваем положительный ролл
@@ -1251,7 +1411,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             roll = int(roll * bonus_multiplier)
             weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f}"
         
-        new_fissure = calculate_new_fissure(user["fissure"], roll)
+        # Считаем новую фиссуру: база - 5% Зевса + ролл (фиссуры < 5 защищены от Зевса)
+        if zeus_triggered and user["fissure"] >= 5:
+            base_fissure = user["fissure"] * 0.95
+        else:
+            base_fissure = user["fissure"]
+        base_fissure = max(0.1, base_fissure)
+        new_fissure = calculate_new_fissure(base_fissure, roll)
         growth = new_fissure - user["fissure"]
         update_fissure(user_obj.id, new_fissure, now, growth)
         
@@ -1284,30 +1450,68 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             extra_text = random.choice(CATEGORY_PHRASES[category])
         
-        user_id = user_obj.id
-        display_username = f"<a href=\"tg://user?id={user_id}\">{username}</a>"
-        
-        text = (
-            f"🎲 {display_username}\n\n"
-            f"{result_text}\n"
-            f"{extra_text}\n\n"
-            f"📏 Длина сейчас: {new_fissure:.1f} см"
-        )
+        if multicast_count > 1:
+            # Новый дизайн с мультикастом
+            text = (
+                f"🎲 {display_username}\n\n"
+                f"{extra_text}\n"
+                f"{result_text}\n\n"
+                f"{multicast_text}\n\n"
+                f"📏 {new_fissure:.1f} см"
+            )
+        else:
+            # Старый дизайн без мультикаста
+            text = (
+                f"🎲 {display_username}\n\n"
+                f"{result_text}\n"
+                f"{extra_text}\n\n"
+                f"📏 Длина сейчас: {new_fissure:.1f} см"
+            )
         
         if is_fatal and protection_msg:
-            text = f"{text}\n\n{protection_msg}"
+            text = f"{text}\n{protection_msg}"
         
         if weekend_bonus:
             text = f"{text}\n{weekend_bonus}"
         
+        if zeus_text:
+            text = f"{text}\n{zeus_text}"
+        
         logger.info(f"Sending result message to chat_id={update.message.chat_id}")
-        # Don't use reply_to_message_id because user message was already deleted
-        result_msg = await context.bot.send_message(
-            chat_id=update.message.chat_id,
-            text=text,
-            parse_mode="HTML",
-            reply_markup=main_menu()
-        )
+        try:
+            await anim_msg.edit_text(text=text, parse_mode="HTML", reply_markup=main_menu())
+            result_msg = anim_msg
+        except Exception:
+            result_msg = await context.bot.send_message(
+                chat_id=update.message.chat_id, text=text,
+                parse_mode="HTML", reply_markup=main_menu()
+            )
+        
+        # Отправляем иконку героя при мулькасте
+        if multicast_count > 1:
+            try:
+                hero_url = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/ogre_magi.png"
+                hero_bytes = await fetch_hero_icon(hero_url)
+                if hero_bytes:
+                    hero_msg = await context.bot.send_photo(
+                        chat_id=update.message.chat_id, photo=hero_bytes
+                    )
+                    schedule_delete(context.bot, chat_id, hero_msg.message_id, 600, context.application.job_queue)
+            except Exception as e:
+                logger.debug(f"Could not send hero icon: {e}")
+        
+        # Отправляем иконку Зевса при ударе молнии
+        if zeus_triggered:
+            try:
+                zeus_bytes = await fetch_hero_icon(ZEUS_ICON_URL)
+                if zeus_bytes:
+                    zeus_msg = await context.bot.send_photo(
+                        chat_id=update.message.chat_id, photo=zeus_bytes
+                    )
+                    schedule_delete(context.bot, chat_id, zeus_msg.message_id, 600, context.application.job_queue)
+            except Exception as e:
+                logger.debug(f"Could not send Zeus icon: {e}")
+        
         logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
