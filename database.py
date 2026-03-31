@@ -1079,27 +1079,27 @@ class Database:
             for u in users:
                 prev_pos = u["digest_position"]
                 cur_pos = current_pos_by_id.get(u["telegram_id"], 0)
-                # Показываем рост если есть текущая позиция
                 if cur_pos > 0:
                     moved_up = prev_pos - cur_pos if prev_pos > 0 else 0
                     if moved_up > top_growth_positions:
                         top_growth_positions = moved_up
-                        top_growth_user = u["username"] or str(u["telegram_id"])
+                        cached = user_cache.get(u["telegram_id"])
+                        top_growth_user = u["username"] or (cached.get("username") if cached else None) or str(u["telegram_id"])
                         top_growth_id = u["telegram_id"]
 
             # Падение: насколько см уменьшилась фиссура за сутки (current - digest)
             top_drop_user = None
-            top_drop_cm = 0.0  # negative
+            top_drop_cm = 0.0
             top_drop_id = None
             for u in users:
                 prev_f = u["digest_fissure"]
                 cur_f = u["fissure"]
-                # Показываем падение если есть digest_fissure
                 if prev_f is not None and prev_f > 0:
                     delta = cur_f - prev_f
                     if delta < top_drop_cm:
                         top_drop_cm = delta
-                        top_drop_user = u["username"] or str(u["telegram_id"])
+                        cached = user_cache.get(u["telegram_id"])
+                        top_drop_user = u["username"] or (cached.get("username") if cached else None) or str(u["telegram_id"])
                         top_drop_id = u["telegram_id"]
 
             # Стрик: текущая серия побед (current_streak)
@@ -1109,7 +1109,8 @@ class Database:
             for u in users:
                 if u["current_streak"] > top_streak:
                     top_streak = u["current_streak"]
-                    top_streak_user = u["username"] or str(u["telegram_id"])
+                    cached = user_cache.get(u["telegram_id"])
+                    top_streak_user = u["username"] or (cached.get("username") if cached else None) or str(u["telegram_id"])
                     top_streak_id = u["telegram_id"]
 
             return {
@@ -1249,7 +1250,8 @@ class Database:
             for u in users:
                 if u["weekly_growth"] > top_cm:
                     top_cm = u["weekly_growth"]
-                    top_cm_user = u["username"] or str(u["telegram_id"])
+                    cached = user_cache.get(u["telegram_id"])
+                    top_cm_user = u["username"] or (cached.get("username") if cached else None) or str(u["telegram_id"])
                     top_cm_id = u["telegram_id"]
 
             # Прорыв недели: кто поднялся на больше всего позиций в топе
@@ -1263,7 +1265,8 @@ class Database:
                     gain = prev - now_pos
                     if gain > breakthrough_pos:
                         breakthrough_pos = gain
-                        breakthrough_user = u["username"] or str(u["telegram_id"])
+                        cached = user_cache.get(u["telegram_id"])
+                        breakthrough_user = u["username"] or (cached.get("username") if cached else None) or str(u["telegram_id"])
                         breakthrough_id = u["telegram_id"]
 
             total_rolls_week = sum(u["weekly_rolls"] for u in users)
