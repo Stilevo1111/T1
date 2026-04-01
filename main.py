@@ -1159,9 +1159,10 @@ def calculate_fissure_roll(current_fissure):
             return bonus, "🍀 УДАЧНЫЙ РОЛЛ!", False, False
     
     # Единый баланс для всех:
-    # Выигрыш 65%, Проигрыш 30%, Ничья 5%
+    # Расширенный диапазон: от -10 до +50
     weighted_rolls = [
-        (-3, 15), (-1, 15), (0, 5), (1, 15), (3, 15), (5, 15), (10, 15), (20, 5)
+        (-10, 5), (-5, 10), (-3, 12), (-1, 13), (0, 5),
+        (1, 10), (3, 12), (5, 12), (10, 10), (20, 6), (30, 3), (50, 2)
     ]
     values, weights = zip(*weighted_rolls)
     roll = random.choices(values, weights=weights)[0]
