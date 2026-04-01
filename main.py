@@ -1640,7 +1640,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 sticker_msg = await context.bot.send_sticker(
                     chat_id=update.message.chat_id,
-                    sticker="CAACAgIAAxkBAAEWvX5pzS9z3hE084A3spUotHH7jiGi8gACM78AAuBq4EmcG4vqbNAKYjoE"
+                    sticker="CAACAgIAAxkBAAEWvYppzTlfymrgL-0imSPD-P-ho8_gTgACxpkAAhEHaUp7puLN1lPpnjoE"
                 )
                 schedule_delete(context.bot, chat_id, sticker_msg.message_id, 600, context.application.job_queue)
             except Exception as e:
@@ -2332,7 +2332,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await context.bot.send_sticker(
                     chat_id=chat_id,
-                    sticker="CAACAgIAAxkBAAEWvX5pzS9z3hE084A3spUotHH7jiGi8gACM78AAuBq4EmcG4vqbNAKYjoE"
+                    sticker="CAACAgIAAxkBAAEWvYppzTlfymrgL-0imSPD-P-ho8_gTgACxpkAAhEHaUp7puLN1lPpnjoE"
                 )
             except Exception as e:
                 logger.debug(f"Could not send Zeus sticker: {e}")
