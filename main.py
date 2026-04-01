@@ -2763,103 +2763,113 @@ async def main():
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
         webhook_url = os.getenv("WEBHOOK_URL")
-        if not webhook_url:
-            logger.error("WEBHOOK_URL not set!")
-            return
-            
+        use_polling = os.getenv("USE_POLLING", "false").lower() == "true"
+        
         # Сначала инициализируем application
         await app.initialize()
-        
-        # Запускаем application для активации job_queue
         await app.start()
-        # Запускаем job_queue для PTB v20+
         await job_queue.start()
         
-        # Устанавливаем webhook после инициализации (drop_pending_updates очищает старые обновления)
-        await app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+        if use_polling or not webhook_url:
+            # POLLING режим — бот активно опрашивает Telegram (для Render Free)
+            logger.info("Starting bot in POLLING mode")
+            await app.bot.delete_webhook(drop_pending_updates=True)
+            
+            # Запускаем web server только для health check (Render нужен открытый порт)
+            from aiohttp import web
+            async def health_handler(request):
+                return web.Response(text="Bot is polling", status=200)
+            web_app = web.Application()
+            web_app.router.add_get('/', health_handler)
+            web_app.router.add_get('/health', health_handler)
+            runner = web.AppRunner(web_app)
+            await runner.setup()
+            port = int(os.getenv('PORT', 10000))
+            site = web.TCPSite(runner, '0.0.0.0', port)
+            await site.start()
+            logger.info(f"Health server on port {port}")
+            
+            # Polling loop
+            offset = 0
+            while True:
+                try:
+                    updates = await app.bot.get_updates(offset=offset, timeout=30)
+                    for update in updates:
+                        offset = update.update_id + 1
+                        await app.process_update(update)
+                except Exception as e:
+                    logger.error(f"Polling error: {e}")
+                    await asyncio.sleep(5)
+        else:
+            # WEBHOOK режим — для платного Render или другого хостинга
+            logger.info("Starting bot in WEBHOOK mode")
+            
+            # Устанавливаем webhook после инициализации (drop_pending_updates очищает старые обновления)
+            await app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+            
+            logger.info("Telegram bot started in webhook mode")
+            logger.info(f"Webhook URL: {webhook_url}")
+            
+            from aiohttp import web
+            
+            async def handle_webhook(request):
+                """Handle incoming webhook requests"""
+                global last_update_time
+                try:
+                    update_data = await request.json()
+                    logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
+                    update = Update.de_json(update_data, app.bot)
+                    logger.info(f"Update parsed: {update}")
+                    await app.process_update(update)
+                    logger.info(f"Update processed")
+                    last_update_time = time.time()
+                    return web.Response(status=200)
+                except Exception as e:
+                    logger.error(f"Webhook error: {e}", exc_info=True)
+                    return web.Response(status=500)
+            
+            web_app = web.Application()
+            web_app.router.add_post('/webhook', handle_webhook)
+            
+            async def root_handler(request):
+                return web.Response(text="OK")
+            web_app.router.add_get('/', root_handler)
+            
+            setup_health_check(app.bot)
+            web_app.router.add_get('/health', health_check_handler)
+            
+            runner = web.AppRunner(web_app)
+            await runner.setup()
+            port = int(os.getenv('PORT', 10000))
+            site = web.TCPSite(runner, '0.0.0.0', port)
+            await site.start()
+            logger.info(f"Web server started on port {port}")
+            
+            # Пинг каждые 10 минут
+            async def keep_alive_ping():
+                import aiohttp
+                ping_url = webhook_url.rsplit('/webhook', 1)[0] + '/health'
+                while True:
+                    try:
+                        await asyncio.sleep(600)
+                        async with aiohttp.ClientSession() as session:
+                            await session.get(ping_url, timeout=aiohttp.ClientTimeout(total=30))
+                    except Exception as e:
+                        logger.error(f"Keep-alive ping error: {e}")
+            asyncio.create_task(keep_alive_ping())
         
-        logger.info("Telegram bot started in webhook mode")
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        from aiohttp import web
-        
-        async def handle_webhook(request):
-            """Handle incoming webhook requests"""
-            global last_update_time
-            try:
-                update_data = await request.json()
-                logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
-                update = Update.de_json(update_data, app.bot)
-                logger.info(f"Update parsed: {update}")
-                await app.process_update(update)
-                logger.info(f"Update processed")
-                # Обновляем время последнего апдейта
-                last_update_time = time.time()
-                return web.Response(status=200)
-            except Exception as e:
-                logger.error(f"Webhook error: {e}", exc_info=True)
-                return web.Response(status=500)
-        
-        web_app = web.Application()
-        web_app.router.add_post('/webhook', handle_webhook)
-        
-        # Root route for Render port detection
-        async def root_handler(request):
-            return web.Response(text="OK")
-        web_app.router.add_get('/', root_handler)
-        
-        # Setup health check with bot access
-        setup_health_check(app.bot)
-        web_app.router.add_get('/health', health_check_handler)
-        
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        port = int(os.getenv('PORT', 10000))
-        logger.info(f"Starting web server on port {port}")
-        site = web.TCPSite(runner, '0.0.0.0', port)
-        await site.start()
-        logger.info(f"Web server started on port {port}")
-        
-        # Запускаем задачу flush кеша в БД каждый день в полночь UTC
-        import asyncio
+        # Запускаем задачу flush кеша в БД каждый день (оба режима)
         async def daily_flush_cache():
-            """Сбрасывает кеш пользователей в БД раз в сутки"""
             from database import flush_users_cache
             while True:
                 try:
-                    await asyncio.sleep(86400)  # 24 часа
+                    await asyncio.sleep(86400)
                     logger.info("Daily flush cache job starting...")
                     flushed = flush_users_cache()
                     logger.info(f"Daily flush cache completed: {flushed} users")
                 except Exception as e:
                     logger.error(f"Daily flush cache error: {e}")
-        
         asyncio.create_task(daily_flush_cache())
-        logger.info("Daily flush cache task started")
-        
-        # Пингуем внешний URL каждые 10 минут чтобы Render не засыпал
-        async def keep_alive_ping():
-            """Пингует внешний URL чтобы Render не засыпал (localhost пинг не считается)"""
-            import aiohttp
-            webhook_url = os.getenv('WEBHOOK_URL', '')
-            # Извлекаем базовый URL из webhook (например https://xxx.onrender.com)
-            if webhook_url:
-                ping_url = webhook_url.rsplit('/webhook', 1)[0] + '/health'
-            else:
-                port = int(os.getenv('PORT', 10000))
-                ping_url = f'http://127.0.0.1:{port}/health'
-            logger.info(f"Keep-alive target: {ping_url}")
-            while True:
-                try:
-                    await asyncio.sleep(600)  # каждые 10 минут
-                    async with aiohttp.ClientSession() as session:
-                        await session.get(ping_url, timeout=aiohttp.ClientTimeout(total=30))
-                        logger.info(f"Keep-alive ping sent to {ping_url}")
-                except Exception as e:
-                    logger.error(f"Keep-alive ping error: {e}")
-        
-        asyncio.create_task(keep_alive_ping())
-        logger.info("Keep-alive task started - will ping every 10 minutes")
         
         while True:
             await asyncio.sleep(3600)
