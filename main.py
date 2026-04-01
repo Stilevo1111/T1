@@ -863,12 +863,20 @@ async def alternate_digest_job(context):
                     last_message_id = None
                 else:
                     logger.info(f"Не удалось редактировать: {e}")
-        
+
         # Переключаем тип (в памяти + в БД только при реальном изменении)
         _digest_state["type"] = next_type
         set_config('alternate_digest_type', next_type)  # пишем в БД один раз за переключение
-        
+
         if not edited:
+            # Проверяем, не создавали ли мы новое сообщение слишком недавно (антиспам)
+            last_created_str = get_config('alternate_digest_last_created')
+            last_created = float(last_created_str) if last_created_str else 0
+            time_since_last = time.time() - last_created
+            if time_since_last < 300:  # 5 минут
+                logger.info(f"Пропускаем создание нового дайджеста, прошло только {time_since_last:.0f} сек с последнего создания")
+                return  # Выходим без создания
+
             # Удаляем старое сообщение перед созданием нового
             if last_message_id:
                 try:
@@ -876,22 +884,23 @@ async def alternate_digest_job(context):
                     logger.info(f"Удалено старое alternate сообщение {last_message_id}")
                 except Exception as e:
                     logger.debug(f"Не удалось удалить старое alternate сообщение: {e}")
-            
+
             # Отправляем новое сообщение
             msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
             set_config('alternate_digest_message_id', msg.message_id)
+            set_config('alternate_digest_last_created', str(time.time()))
             logger.info(f"Создан новый alternate дайджест {msg.message_id}, type={next_type}")
-        
-        # Закрепляем дайджест (открепляем старый, закрепляем новый)
-        try:
-            await bot.unpin_chat_message(chat_id=digest_chat_id)
-        except Exception as e:
-            logger.debug(f"Не удалось открепить старый: {e}")
-        try:
-            await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
-            logger.info(f"Дайджест {msg.message_id} закреплён")
-        except Exception as e:
-            logger.debug(f"Не удалось закрепить: {e}")
+
+            # Закрепляем дайджест (открепляем старый, закрепляем новый)
+            try:
+                await bot.unpin_chat_message(chat_id=digest_chat_id)
+            except Exception as e:
+                logger.debug(f"Не удалось открепить старый: {e}")
+            try:
+                await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
+                logger.info(f"Дайджест {msg.message_id} закреплён")
+            except Exception as e:
+                logger.debug(f"Не удалось закрепить: {e}")
         
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
@@ -1675,7 +1684,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
+        if chat_type in ['group', 'supergroup', 'channel']:
+            if await bot_can_delete(context.bot, chat_id):
+                schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
+        else:
+            # In private chats, deletion might not be needed or possible
+            pass
         update_last_message_id(user_obj.id, result_msg.message_id)
         
         # Сохраняем счётчики в БД
