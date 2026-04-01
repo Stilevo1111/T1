@@ -1485,18 +1485,15 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
             update_last_message_id(user_obj.id, result_msg.message_id)
             
-            # Иконка Зевса (styled)
+            # Стикер Зевса
             try:
-                from dota_mmr import generate_event_icon
-                img_data = generate_event_icon(ZEUS_ICON_URL, "Thundergod")
-                if img_data:
-                    zeus_msg = await context.bot.send_photo(
-                        chat_id=update.message.chat_id, photo=io.BytesIO(img_data)
-                    )
-                    schedule_delete(context.bot, chat_id, zeus_msg.message_id, 600, context.application.job_queue)
-                    schedule_delete(context.bot, chat_id, zeus_msg.message_id, 600, context.application.job_queue)
+                zeus_sticker = await context.bot.send_sticker(
+                    chat_id=update.message.chat_id,
+                    sticker="CAACAgIAAxkBAAEWvYppzTlfymrgL-0imSPD-P-ho8_gTgACxpkAAhEHaUp7puLN1lPpnjoE"
+                )
+                schedule_delete(context.bot, chat_id, zeus_sticker.message_id, 600, context.application.job_queue)
             except Exception as e:
-                logger.debug(f"Could not send Zeus icon: {e}")
+                logger.debug(f"Could not send Zeus sticker: {e}")
             
             await refresh_digest_message(context.bot)
             return  # выходим — без ролла
@@ -2330,10 +2327,11 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Стикер Зевса
             try:
-                await context.bot.send_sticker(
+                zeus_sticker = await context.bot.send_sticker(
                     chat_id=chat_id,
                     sticker="CAACAgIAAxkBAAEWvYppzTlfymrgL-0imSPD-P-ho8_gTgACxpkAAhEHaUp7puLN1lPpnjoE"
                 )
+                schedule_delete(context.bot, chat_id, zeus_sticker.message_id, 600, context.application.job_queue)
             except Exception as e:
                 logger.debug(f"Could not send Zeus sticker: {e}")
             
@@ -2432,10 +2430,11 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Стикеры (мулькаст и Зевс)
         if multicast_count > 1:
             try:
-                await context.bot.send_sticker(
+                mc_sticker = await context.bot.send_sticker(
                     chat_id=chat_id,
                     sticker="CAACAgIAAxkBAAEWvXxpzS8YaDidp7I83w2Hmt9ikjGfFQACI6AAAiYeaEq2tdJUSWurpToE"
                 )
+                schedule_delete(context.bot, chat_id, mc_sticker.message_id, 600, context.application.job_queue)
             except Exception as e:
                 logger.debug(f"Could not send multicast sticker: {e}")
         
