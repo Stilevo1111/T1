@@ -2237,11 +2237,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
         )
         
-        # Путь к баннеру (загрузите файл на сервер и укажите путь)
+        # Проверяем есть ли баннер в конфиге
+        banner_file_id = get_config("start_banner_file_id")
         banner_path = "banner.jpg"
         
-        if os.path.exists(banner_path):
-            # Отправляем баннер с текстом как подпись
+        if banner_file_id:
+            # Отправляем баннер по file_id
+            result_msg = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=banner_file_id,
+                caption=text,
+                reply_markup=main_menu()
+            )
+        elif os.path.exists(banner_path):
+            # Отправляем баннер из файла
             with open(banner_path, 'rb') as photo:
                 result_msg = await context.bot.send_photo(
                     chat_id=chat_id,
@@ -2269,6 +2278,62 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logger.error(f"Error in start: {e}")
+
+
+async def setbanner(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Установить баннер для /start: отправьте фото боту с подписью /setbanner"""
+    try:
+        chat_id = update.message.chat_id
+        user_id = update.effective_user.id
+        
+        # Проверяем есть ли фото в сообщении
+        if update.message.photo:
+            # Берём фото наибольшего разрешения (последнее в списке)
+            photo = update.message.photo[-1]
+            file_id = photo.file_id
+            file_unique_id = photo.file_unique_id
+            
+            # Сохраняем file_id в конфиг
+            set_config("start_banner_file_id", file_id)
+            set_config("start_banner_unique_id", file_unique_id)
+            
+            # Удаляем сообщение пользователя с фото
+            if update.message.chat.type in ['group', 'supergroup', 'channel']:
+                try:
+                    await context.bot.delete_message(chat_id, update.message.message_id)
+                except Exception:
+                    pass
+            
+            msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"✅ Баннер установлен!\n"
+                     f"file_id: `{file_id}`\n"
+                     f"Теперь /start будет показывать этот баннер.",
+                parse_mode="Markdown"
+            )
+            
+            if update.message.chat.type in ['group', 'supergroup', 'channel']:
+                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+        else:
+            # Если нет фото — показываем текущий баннер или просим отправить
+            current_banner = get_config("start_banner_file_id")
+            if current_banner:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"📸 Текущий баннер установлен.\n"
+                         f"file_id: `{current_banner}`\n\n"
+                         f"Отправьте новое фото с подписью /setbanner чтобы заменить.",
+                    parse_mode="Markdown"
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="📸 Баннер не установлен.\n"
+                         "Отправьте фото с подписью /setbanner чтобы установить."
+                )
+    except Exception as e:
+        logger.error(f"Error in setbanner: {e}")
+        await context.bot.send_message(chat_id=update.message.chat_id, text="❌ Ошибка")
 
 
 async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3052,6 +3117,8 @@ async def main_polling():
         app.add_handler(CommandHandler("setchance", setchance))
         app.add_handler(CommandHandler("testfissure", testfissure))
         app.add_handler(CommandHandler("removeuser", removeuser))
+        app.add_handler(CommandHandler("setbanner", setbanner))
+        app.add_handler(MessageHandler(filters.PHOTO & filters.CaptionRegex(r'^/setbanner'), setbanner))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
