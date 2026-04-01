@@ -822,18 +822,18 @@ async def alternate_digest_job(context):
             
             if top_player and top_player != "None":
                 top_losses = top_games - top_wins
-                top_part = f"🎯{top_display} {top_wins}W/{top_losses}L•{top_winrate}%"
+                top_part = f"🎯{top_display}: {top_wins}W • {top_losses}L • {top_winrate}%"
             else:
                 top_part = "🎯—"
-            
+
             if bottom_player and bottom_player != "None":
                 bottom_losses = bottom_games - bottom_wins
-                bottom_part = f"💀{bottom_display} {bottom_wins}W/{bottom_losses}L•{bottom_winrate}%"
+                bottom_part = f"💀{bottom_display}: {bottom_wins}W • {bottom_losses}L • {bottom_winrate}%"
             else:
                 bottom_part = "💀—"
-            
+
             if streak_player and streak_player != "None":
-                streak_part = f"🔥{streak_display} - {streak_wins} Стрик"
+                streak_part = f"🔥{streak_display}: {streak_wins} Стрик"
             else:
                 streak_part = "🔥—"
             
