@@ -125,15 +125,15 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
 
 
 def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
-    """Сгенерировать styled иконку героя (тёмный фон + синяя рамка + подпись)"""
+    """Сгенерировать styled иконку героя (стиль как в профиле: 63×63, тёмный фон, синяя рамка)"""
     try:
         from PIL import Image, ImageDraw, ImageFont
         import io
         import requests as req
         
-        icon_size = 96
-        padding = 12
-        label_height = 24 if label else 0
+        icon_size = 63
+        padding = 10
+        label_height = 20 if label else 0
         width = icon_size + padding * 2
         height = icon_size + padding * 2 + label_height
         
@@ -150,16 +150,16 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
         except Exception:
             draw.rectangle([padding, padding, padding + icon_size, padding + icon_size], fill=(80, 95, 110))
         
-        # Синяя рамка
+        # Синяя рамка (как в профиле)
         draw.rectangle(
             [padding - 1, padding - 1, padding + icon_size, padding + icon_size],
-            outline=(120, 170, 210), width=2
+            outline=(120, 170, 210), width=1
         )
         
         # Подпись
         if label:
             try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 14)
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 12)
             except Exception:
                 font = ImageFont.load_default()
             bbox = draw.textbbox((0, 0), label, font=font)
