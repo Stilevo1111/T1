@@ -125,27 +125,20 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
 
 
 def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
-    """Сгенерировать styled иконку героя (маленькая, как эмодзи в сообщении)"""
+    """Сгенерировать иконку героя (стиль профиля: 63×63, тёмный фон, синяя рамка)"""
     try:
         from PIL import Image, ImageDraw, ImageFont
         import io
         import requests as req
         
-        icon_size = 48
-        padding = 50  # большой отступ чтобы иконка была маленькой
-        label_height = 18 if label else 0
+        icon_size = 63
+        padding = 5
+        label_height = 16 if label else 0
         width = icon_size + padding * 2
         height = icon_size + padding * 2 + label_height
         
-        img = Image.new("RGBA", (width, height), color=(0, 0, 0, 0))  # прозрачный фон
+        img = Image.new("RGB", (width, height), color=(40, 55, 70))
         draw = ImageDraw.Draw(img)
-        
-        # Тёмный фон под иконкой
-        bg_pad = 8
-        draw.rounded_rectangle(
-            [padding - bg_pad, padding - bg_pad, padding + icon_size + bg_pad, padding + icon_size + bg_pad],
-            radius=6, fill=(40, 55, 70, 220)
-        )
         
         # Загружаем иконку
         try:
@@ -155,32 +148,28 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
                 icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
                 img.paste(icon, (padding, padding), icon)
         except Exception:
-            draw.rectangle([padding, padding, padding + icon_size, padding + icon_size], fill=(80, 95, 110, 220))
+            draw.rectangle([padding, padding, padding + icon_size, padding + icon_size], fill=(80, 95, 110))
         
         # Синяя рамка
-        draw.rounded_rectangle(
-            [padding - bg_pad - 1, padding - bg_pad - 1, padding + icon_size + bg_pad, padding + icon_size + bg_pad],
-            radius=6, outline=(120, 170, 210, 200), width=1
+        draw.rectangle(
+            [padding - 1, padding - 1, padding + icon_size, padding + icon_size],
+            outline=(120, 170, 210), width=1
         )
         
         # Подпись
         if label:
             try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 11)
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 10)
             except Exception:
                 font = ImageFont.load_default()
             bbox = draw.textbbox((0, 0), label, font=font)
             tw = bbox[2] - bbox[0]
             tx = (width - tw) // 2
-            ty = icon_size + padding * 2 - 5
-            draw.text((tx, ty), label, fill=(180, 200, 220, 255), font=font)
-        
-        # Конвертируем в RGB для PNG
-        rgb_img = Image.new("RGB", img.size, (255, 255, 255))
-        rgb_img.paste(img, mask=img.split()[3] if img.mode == "RGBA" else None)
+            ty = icon_size + padding * 2
+            draw.text((tx, ty), label, fill=(200, 220, 240), font=font)
         
         buf = io.BytesIO()
-        rgb_img.save(buf, format="PNG", optimize=True)
+        img.save(buf, format="PNG")
         buf.seek(0)
         return buf.read()
         
