@@ -1619,32 +1619,27 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="HTML", reply_markup=main_menu()
             )
         
-        # Отправляем иконку героя при мулькасте
+        # Отправляем стикер при мулькасте
         if multicast_count > 1:
             try:
-                from dota_mmr import generate_event_icon
-                hero_url = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/ogre_magi.png"
-                img_data = generate_event_icon(hero_url, "Multicast")
-                if img_data:
-                    hero_msg = await context.bot.send_photo(
-                        chat_id=update.message.chat_id, photo=io.BytesIO(img_data)
-                    )
-                    schedule_delete(context.bot, chat_id, hero_msg.message_id, 600, context.application.job_queue)
+                sticker_msg = await context.bot.send_sticker(
+                    chat_id=update.message.chat_id,
+                    sticker="CAACAgIAAxkBAAEWvXxpzS8YaDidp7I83w2Hmt9ikjGfFQACI6AAAiYeaEq2tdJUSWurpToE"
+                )
+                schedule_delete(context.bot, chat_id, sticker_msg.message_id, 600, context.application.job_queue)
             except Exception as e:
-                logger.debug(f"Could not send hero icon: {e}")
+                logger.debug(f"Could not send multicast sticker: {e}")
         
-        # Отправляем иконку Зевса при ударе молнии
+        # Отправляем стикер при Зевсе
         if zeus_triggered:
             try:
-                from dota_mmr import generate_event_icon
-                img_data = generate_event_icon(ZEUS_ICON_URL, "Thundergod")
-                if img_data:
-                    zeus_msg = await context.bot.send_photo(
-                        chat_id=update.message.chat_id, photo=io.BytesIO(img_data)
-                    )
-                    schedule_delete(context.bot, chat_id, zeus_msg.message_id, 600, context.application.job_queue)
+                sticker_msg = await context.bot.send_sticker(
+                    chat_id=update.message.chat_id,
+                    sticker="CAACAgIAAxkBAAEWvX5pzS9z3hE084A3spUotHH7jiGi8gACM78AAuBq4EmcG4vqbNAKYjoE"
+                )
+                schedule_delete(context.bot, chat_id, sticker_msg.message_id, 600, context.application.job_queue)
             except Exception as e:
-                logger.debug(f"Could not send Zeus icon: {e}")
+                logger.debug(f"Could not send Zeus sticker: {e}")
         
         logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
@@ -2328,14 +2323,14 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=chat_id, text=text, parse_mode="HTML"
             )
             
-            # Styled иконка Зевса
+            # Стикер Зевса
             try:
-                from dota_mmr import generate_event_icon
-                img_data = generate_event_icon(ZEUS_ICON_URL, "Thundergod")
-                if img_data:
-                    await context.bot.send_photo(chat_id=chat_id, photo=io.BytesIO(img_data))
+                await context.bot.send_sticker(
+                    chat_id=chat_id,
+                    sticker="CAACAgIAAxkBAAEWvX5pzS9z3hE084A3spUotHH7jiGi8gACM78AAuBq4EmcG4vqbNAKYjoE"
+                )
             except Exception as e:
-                logger.debug(f"Could not send Zeus icon: {e}")
+                logger.debug(f"Could not send Zeus sticker: {e}")
             
             return  # выходим
         
@@ -2429,16 +2424,15 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=chat_id, text=text, parse_mode="HTML"
             )
         
-        # Иконки (styled как в профиле)
+        # Стикеры (мулькаст и Зевс)
         if multicast_count > 1:
             try:
-                from dota_mmr import generate_event_icon
-                hero_url = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/ogre_magi.png"
-                img_data = generate_event_icon(hero_url, "Multicast")
-                if img_data:
-                    await context.bot.send_photo(chat_id=chat_id, photo=io.BytesIO(img_data))
+                await context.bot.send_sticker(
+                    chat_id=chat_id,
+                    sticker="CAACAgIAAxkBAAEWvXxpzS8YaDidp7I83w2Hmt9ikjGfFQACI6AAAiYeaEq2tdJUSWurpToE"
+                )
             except Exception as e:
-                logger.debug(f"Could not send hero icon: {e}")
+                logger.debug(f"Could not send multicast sticker: {e}")
         
         # Зевс уже обработан выше с return, сюда не дойдёт
         
