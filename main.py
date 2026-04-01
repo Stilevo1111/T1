@@ -2304,15 +2304,14 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         event_roll = random.random()
         multicast_chance, zeus_chance = get_event_chances()
         
-        if not is_fatal and event_roll < zeus_chance:
-            # ⚡ ЗЕВС
+        if event_roll < zeus_chance:
+            # ⚡ ЗЕВС — standalone, без ролла
             zeus_triggered = True
             affected = zeus_strike()
             zeus_text = random.choice(ZEUS_TEXTS)
-            zeus_text = f"\n\n{zeus_text}\n<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>"
-            await asyncio.sleep(0.5)
+            zeus_text = f"{zeus_text}\n<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>"
         
-        elif not is_fatal and event_roll < zeus_chance + multicast_chance:
+        elif event_roll < zeus_chance + multicast_chance:
             # 👹 МУЛЬТИКАСТ — гарантированно ×2, затем каскад до ×4 с анимацией
             cascade_count = 2
             
@@ -2402,21 +2401,23 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=chat_id, text=text, parse_mode="HTML"
             )
         
-        # Иконки
+        # Иконки (styled как в профиле)
         if multicast_count > 1:
             try:
+                from dota_mmr import generate_event_icon
                 hero_url = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/ogre_magi.png"
-                hero_bytes = await fetch_hero_icon(hero_url)
-                if hero_bytes:
-                    await context.bot.send_photo(chat_id=chat_id, photo=hero_bytes)
+                img_data = generate_event_icon(hero_url, "Multicast")
+                if img_data:
+                    await context.bot.send_photo(chat_id=chat_id, photo=io.BytesIO(img_data))
             except Exception as e:
                 logger.debug(f"Could not send hero icon: {e}")
         
         if zeus_triggered:
             try:
-                zeus_bytes = await fetch_hero_icon(ZEUS_ICON_URL)
-                if zeus_bytes:
-                    await context.bot.send_photo(chat_id=chat_id, photo=zeus_bytes)
+                from dota_mmr import generate_event_icon
+                img_data = generate_event_icon(ZEUS_ICON_URL, "Thundergod")
+                if img_data:
+                    await context.bot.send_photo(chat_id=chat_id, photo=io.BytesIO(img_data))
             except Exception as e:
                 logger.debug(f"Could not send Zeus icon: {e}")
         
