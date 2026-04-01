@@ -1218,28 +1218,45 @@ def get_event_chances():
 # Счётчики событий (persistent через bot_config)
 STATS_KEYS = ["rolls", "multicast", "zeus", "multicast_x2", "multicast_x3", "multicast_x4"]
 
+# Буфер инкрементов — пишем в БД пачкой
+_stat_buffer = {}
+_stat_flush_timer = None
+
+
+def increment_stat(key):
+    """Инкрементировать счётчик в буфере (пишется в БД раз в 5 минут)"""
+    if key in STATS_KEYS:
+        _stat_buffer[key] = _stat_buffer.get(key, 0) + 1
+
+
+async def flush_stat_buffer():
+    """Записать накопленные счётчики в БД"""
+    if not _stat_buffer:
+        return
+    try:
+        for key, delta in _stat_buffer.items():
+            try:
+                val = int(get_config(f"stat_{key}", 0)) + delta
+            except (ValueError, TypeError):
+                val = delta
+            set_config(f"stat_{key}", str(val))
+        _stat_buffer.clear()
+    except Exception as e:
+        logger.error(f"flush_stat_buffer error: {e}")
+
+
 def _load_stats():
-    """Загрузить счётчики из bot_config"""
+    """Загрузить счётчики из буфера + БД"""
     stats = {}
     for key in STATS_KEYS:
         try:
-            stats[key] = int(get_config(f"stat_{key}", 0))
+            buf = _stat_buffer.get(key, 0)
+            db_val = int(get_config(f"stat_{key}", 0))
+            stats[key] = db_val + buf
         except (ValueError, TypeError):
-            stats[key] = 0
+            stats[key] = _stat_buffer.get(key, 0)
     return stats
 
-def _save_stat(key, value):
-    """Сохранить один счётчик в bot_config"""
-    set_config(f"stat_{key}", str(value))
-
-def increment_stat(key):
-    """Инкрементировать счётчик"""
-    if key in STATS_KEYS:
-        try:
-            val = int(get_config(f"stat_{key}", 0)) + 1
-        except (ValueError, TypeError):
-            val = 1
-        set_config(f"stat_{key}", str(val))
 
 def get_event_stats_text():
     """Текст со статистикой событий"""
@@ -1256,6 +1273,7 @@ def get_event_stats_text():
         f"  👹 Мулькаст: {mc} ({mc_pct:.1f}%) — x2: {stats['multicast_x2']}, x3: {stats['multicast_x3']}, x4: {stats['multicast_x4']}\n"
         f"  ⚡ Зевс: {ze} ({ze_pct:.1f}%)"
     )
+
 
 MULTICAST_TEXTS = {
     2: [
