@@ -1506,9 +1506,33 @@ def set_user_in_chat(telegram_id: int, in_chat: bool):
         conn.close()
         # Сбрасываем кеш топов
         top_cache.clear()
+        user_cache.delete('dota_digest_stats')  # Invalidate dota digest cache
         logger.info(f"set_user_in_chat: telegram_id={telegram_id}, in_chat={in_chat}")
     except Exception as e:
         logger.error(f"set_user_in_chat error: {e}")
+
+
+def delete_user(telegram_id: int):
+    """Удалить пользователя из базы данных"""
+    try:
+        conn = get_connection()
+        scheme = get_db_type()
+        cursor = conn.cursor()
+        if "postgres" in scheme:
+            cursor.execute("DELETE FROM users WHERE telegram_id = %s", (telegram_id,))
+        else:
+            cursor.execute("DELETE FROM users WHERE telegram_id = ?", (telegram_id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        # Сбрасываем кеши
+        top_cache.clear()
+        user_cache.delete('dota_digest_stats')
+        logger.info(f"delete_user: telegram_id={telegram_id}")
+        return True
+    except Exception as e:
+        logger.error(f"delete_user error: {e}")
+        return False
 
 
 def get_fissure_top(limit=10):

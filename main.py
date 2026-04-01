@@ -10,7 +10,7 @@ import urllib.parse as urlparse
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user
 from aiohttp import web
 
 # Logging setup
@@ -2331,6 +2331,53 @@ async def setchance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Ошибка")
 
 
+async def removeuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Удалить пользователя: /removeuser @username или /removeuser telegram_id"""
+    try:
+        user_obj = update.effective_user
+        # Only allow the bot owner (replace with your ID)
+        # You can set your telegram ID here for security
+        # BOT_OWNER_ID = 123456789
+        # if user_obj.id != BOT_OWNER_ID:
+        #     await update.message.reply_text("❌ Нет доступа")
+        #     return
+        
+        if not context.args:
+            await update.message.reply_text("Использование: /removeuser @username\nили: /removeuser <telegram_id>")
+            return
+        
+        target = context.args[0].strip()
+        
+        if target.startswith('@'):
+            # Search by username
+            target_user = get_user_by_username(target[1:])
+            if not target_user:
+                await update.message.reply_text(f"❌ Пользователь {target} не найден")
+                return
+            tid = target_user.get('telegram_id')
+            uname = target_user.get('username', 'Unknown')
+        else:
+            try:
+                tid = int(target)
+                user_data = get_user(tid, None)
+                uname = user_data.get('username', 'Unknown') if user_data else 'Unknown'
+            except ValueError:
+                await update.message.reply_text("❌ Неверный формат. Используй @username или числовой ID")
+                return
+        
+        if tid:
+            success = delete_user(tid)
+            if success:
+                await update.message.reply_text(f"✅ Пользователь {uname} (ID: {tid}) удалён из базы")
+            else:
+                await update.message.reply_text(f"❌ Ошибка при удалении {uname}")
+        else:
+            await update.message.reply_text("❌ Не удалось определить ID пользователя")
+    except Exception as e:
+        logger.error(f"Error in removeuser: {e}")
+        await update.message.reply_text("❌ Ошибка")
+
+
 async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Тест броска фиссуры без кулдауна — со всеми фичами"""
     try:
@@ -2977,6 +3024,7 @@ async def main_polling():
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(CommandHandler("setchance", setchance))
         app.add_handler(CommandHandler("testfissure", testfissure))
+        app.add_handler(CommandHandler("removeuser", removeuser))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
 
