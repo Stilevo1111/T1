@@ -2959,12 +2959,12 @@ async def main_polling():
             time=datetime.time(hour=6, minute=0),
             days=(0,)  # Monday only
         )
-        
+
         # Чередование утреннего и Dota дайджеста каждые 15 секунд
         job_queue.run_repeating(
             alternate_digest_job,
             interval=datetime.timedelta(seconds=15),
-            first=datetime.datetime.now()
+            first=datetime.datetime.now() + datetime.timedelta(seconds=15)
         )
 
         app.add_handler(CommandHandler("start", start))
