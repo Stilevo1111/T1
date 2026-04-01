@@ -2236,11 +2236,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = (
             "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
         )
-        result_msg = await context.bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=main_menu()
-        )
+        
+        # Путь к баннеру (загрузите файл на сервер и укажите путь)
+        banner_path = "banner.jpg"
+        
+        if os.path.exists(banner_path):
+            # Отправляем баннер с текстом как подпись
+            with open(banner_path, 'rb') as photo:
+                result_msg = await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo,
+                    caption=text,
+                    reply_markup=main_menu()
+                )
+        else:
+            # Если баннера нет — отправляем текст
+            result_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=main_menu()
+            )
         
         # Track this message for future deletion
         set_last_bot_message(chat_id, uid, result_msg.message_id)
