@@ -924,7 +924,11 @@ ROLL_TEXTS = {
     -5: ["😢 БОЛЬНО -5 см...", "💔 НЕУДАЧА -5 см", "💀 ПОПАЛ! -5 СМ...", "🎮 ГГ ВП... -5 СМ"],
     -6: ["💀 ПОПАЛ! -6 СМ...", "⬇️ УПАЛ! -6 СМ"],
     -9: ["😢 БОЛЬНО! -9 СМ...", "💀 КРИТИЧЕСКИЙ УРОН! -9 СМ"],
-    -10: ["💥 КАТАСТРОФА! -10 см!!!", "🌋 АПОКАЛИПСИС! -10 см!!!", "😵 СЕРВЕР УПАЛ! -10 СМ!!!", "💥 ДИСКОННЕКТ! -10 СМ!!!"]
+    -10: ["💥 КАТАСТРОФА! -10 см!!!", "🌋 АПОКАЛИПСИС! -10 см!!!", "😵 СЕРВЕР УПАЛ! -10 СМ!!!", "💥 ДИСКОННЕКТ! -10 СМ!!!"],
+    -15: ["💀 ФАТАЛЬНЫЙ УРОН! -15 СМ!!!", "🌋 КОНЕЦ! -15 СМ!!!", "☠️ ОТПРАВЛЕН В СТАРТ! -15 СМ!!!"],
+    7: ["👍 ЕСТЬ! +7 СМ!", "📈 НАРАЩИВАЕМ! +7 СМ!"],
+    15: ["🔥 МУЛЬТИБОНУС! +15 СМ!", "💥 ОТЛИЧНЫЙ РЕЗУЛЬТАТ! +15 СМ!", "🚀 РАСТИ! +15 СМ!"],
+    75: ["🏆 ЛЕГЕНДАРНЫЙ РОЛЛ!!! +75 СМ!!!", "💥 МЕГАДРОП!!! +75 СМ!!!", "🎯 ШОТ! +75 СМ!!!"]
 }
 
 ROLL_MEMES = {
@@ -1159,10 +1163,11 @@ def calculate_fissure_roll(current_fissure):
             return bonus, "🍀 УДАЧНЫЙ РОЛЛ!", False, False
     
     # Единый баланс для всех:
-    # Расширенный диапазон: от -10 до +50
+    # Расширенный диапазон: от -15 до +75
     weighted_rolls = [
-        (-10, 5), (-5, 10), (-3, 12), (-1, 13), (0, 5),
-        (1, 10), (3, 12), (5, 12), (10, 10), (20, 6), (30, 3), (50, 2)
+        (-15, 3), (-10, 5), (-7, 7), (-5, 8), (-3, 7), (-1, 5), (0, 5),
+        (1, 5), (3, 7), (5, 8), (7, 7), (10, 8), (15, 6), (20, 5),
+        (30, 4), (50, 2), (75, 1)
     ]
     values, weights = zip(*weighted_rolls)
     roll = random.choices(values, weights=weights)[0]
@@ -1187,10 +1192,10 @@ def calculate_new_fissure(current_fissure, roll):
 
 # ── Мультикаст (каскадный) ───────────────────────────────────────────
 # Шансы загружаются из bot_config, дефолты здесь
-MULTICAST_DEFAULT_CHANCE = 0.07
+MULTICAST_DEFAULT_CHANCE = 0.10
 MULTICAST_CASCADE = [0.75, 0.50, 0.40]  # [не используется, ×3 шанс, ×4 шанс]
 
-ZEUS_DEFAULT_CHANCE = 0.03
+ZEUS_DEFAULT_CHANCE = 0.05
 ZEUS_ICON_URL = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/zuus.png"
 
 # Кеш шансов (обновляется раз в минуту)
@@ -1558,8 +1563,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
 
-        roll_key = min(roll, 50)
-        roll_key = max(roll_key, -10)
+        roll_key = min(roll, 75)
+        roll_key = max(roll_key, -15)
         
         if roll_key in ROLL_TEXTS:
             result_text = random.choice(ROLL_TEXTS[roll_key])
@@ -2378,8 +2383,8 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_fissure = calculate_new_fissure(base_fissure, roll)
         
         # Формируем текст
-        roll_key = min(roll, 50)
-        roll_key = max(roll_key, -10)
+        roll_key = min(roll, 75)
+        roll_key = max(roll_key, -15)
         if roll_key in ROLL_TEXTS:
             result_text = random.choice(ROLL_TEXTS[roll_key])
         else:
