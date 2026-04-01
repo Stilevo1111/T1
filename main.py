@@ -2588,6 +2588,9 @@ async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
     try:
+        if not update.message or not update.message.text:
+            return
+        
         text = update.message.text.strip()
         
         menu_buttons = ["📈 Увеличить фиссуру", "👤 Профиль", "🏆 Топ Фиссур", "🏆 Топ MMR", "🔗 Привязать Steam"]
@@ -2598,23 +2601,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.message.chat_id
         chat_type = update.message.chat.type
         user_id = update.effective_user.id
-        logger.info(f"User {user_id} pressed button: {text}")
+        logger.info(f"User {user_id} pressed button: {text} in chat type: {chat_type}")
         
-        # Delete user's command only in groups/channels
+        # Delete user's message only in groups/channels (non-blocking, don't wait)
         if chat_type in ['group', 'supergroup', 'channel']:
-            if await bot_can_delete(context.bot, chat_id):
-                user_msg_id = update.message.message_id
-                try:
-                    await context.bot.delete_message(chat_id, user_msg_id)
-                    logger.info(f"Deleted user message: {user_msg_id}")
-                except Exception as e:
-                    logger.debug(f"Could not delete user message: {e}")
+            user_msg_id = update.message.message_id
+            asyncio.create_task(delete_user_message_safely(context.bot, chat_id, user_msg_id))
         
-        # Delete last bot message immediately
-        try:
-            await delete_last_bot_message(context.bot, chat_id, user_id)
-        except Exception as e:
-            logger.debug(f"Could not delete last bot message: {e}")
+        # Delete last bot message immediately (non-blocking)
+        asyncio.create_task(delete_last_bot_message_safe(context.bot, chat_id, user_id))
         
         # Call the appropriate function
         if text == "📈 Увеличить фиссуру":
@@ -2630,6 +2625,23 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}", exc_info=True)
+
+
+async def delete_user_message_safely(bot, chat_id, msg_id):
+    """Delete user message safely without blocking"""
+    try:
+        await bot.delete_message(chat_id, msg_id)
+        logger.info(f"Deleted user message: {msg_id}")
+    except Exception as e:
+        logger.debug(f"Could not delete user message {msg_id}: {e}")
+
+
+async def delete_last_bot_message_safe(bot, chat_id, user_id):
+    """Delete last bot message safely without blocking"""
+    try:
+        await delete_last_bot_message(bot, chat_id, user_id)
+    except Exception as e:
+        logger.debug(f"Could not delete last bot message for user {user_id}: {e}")
 
 
 async def health_check(request):
