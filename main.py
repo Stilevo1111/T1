@@ -2239,7 +2239,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Проверяем есть ли баннер в конфиге
         banner_file_id = get_config("start_banner_file_id")
-        banner_url = "https://i.ibb.co/z1fcFQb/Gemini-Generated-Image-j78phdj78phdj78p-1.png"
+        banner_url = "https://i.ibb.co/ZRpNT6HY/swqasa.png"
         banner_path = "banner.jpg"
         
         if banner_file_id:
