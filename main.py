@@ -1224,7 +1224,7 @@ _stat_flush_timer = None
 
 
 def increment_stat(key):
-    """Инкрементировать счётчик в буфере (пишется в БД раз в 5 минут)"""
+    """Инкрементировать счётчик в буфере (пишется в БД после броска)"""
     if key in STATS_KEYS:
         _stat_buffer[key] = _stat_buffer.get(key, 0) + 1
 
@@ -1665,6 +1665,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
         update_last_message_id(user_obj.id, result_msg.message_id)
+        
+        # Сохраняем счётчики в БД
+        await flush_stat_buffer()
                   
     except Exception as e:
         import traceback
