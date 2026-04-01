@@ -2309,7 +2309,29 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             zeus_triggered = True
             affected = zeus_strike()
             zeus_text = random.choice(ZEUS_TEXTS)
-            zeus_text = f"{zeus_text}\n<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>"
+            
+            text = (
+                f"🎲 {display_username}\n\n"
+                f"🧪 ТЕСТ (без записи в БД)\n\n"
+                f"{zeus_text}\n"
+                f"<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>\n\n"
+                f"📏 Длина сейчас: {current_fissure:.1f} см"
+            )
+            
+            result_msg = await context.bot.send_message(
+                chat_id=chat_id, text=text, parse_mode="HTML"
+            )
+            
+            # Styled иконка Зевса
+            try:
+                from dota_mmr import generate_event_icon
+                img_data = generate_event_icon(ZEUS_ICON_URL, "Thundergod")
+                if img_data:
+                    await context.bot.send_photo(chat_id=chat_id, photo=io.BytesIO(img_data))
+            except Exception as e:
+                logger.debug(f"Could not send Zeus icon: {e}")
+            
+            return  # выходим
         
         elif event_roll < zeus_chance + multicast_chance:
             # 👹 МУЛЬТИКАСТ — гарантированно ×2, затем каскад до ×4 с анимацией
@@ -2412,14 +2434,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not send hero icon: {e}")
         
-        if zeus_triggered:
-            try:
-                from dota_mmr import generate_event_icon
-                img_data = generate_event_icon(ZEUS_ICON_URL, "Thundergod")
-                if img_data:
-                    await context.bot.send_photo(chat_id=chat_id, photo=io.BytesIO(img_data))
-            except Exception as e:
-                logger.debug(f"Could not send Zeus icon: {e}")
+        # Зевс уже обработан выше с return, сюда не дойдёт
         
     except Exception as e:
         import traceback
