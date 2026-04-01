@@ -2239,6 +2239,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Проверяем есть ли баннер в конфиге
         banner_file_id = get_config("start_banner_file_id")
+        banner_url = "https://i.ibb.co/z1fcFQb/Gemini-Generated-Image-j78phdj78phdj78p-1.png"
         banner_path = "banner.jpg"
         
         if banner_file_id:
@@ -2246,6 +2247,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result_msg = await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=banner_file_id,
+                caption=text,
+                reply_markup=main_menu()
+            )
+        elif banner_url:
+            # Отправляем баннер по URL
+            result_msg = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=banner_url,
                 caption=text,
                 reply_markup=main_menu()
             )
