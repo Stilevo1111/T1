@@ -2079,9 +2079,9 @@ def get_dota_digest_stats():
             # Худший винрейт (взвешенная оценка: winrate * LOG(games + 1))
             cursor.execute("""
                 SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
-                FROM users 
+                FROM users
                 WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY (week_wins::numeric / week_games::numeric) * LN(week_games + 1) ASC
+                ORDER BY (week_wins::numeric / week_games::numeric) ASC
                 LIMIT 1
             """)
             bottom = cursor.fetchone()
@@ -2108,9 +2108,9 @@ def get_dota_digest_stats():
             
             cursor.execute("""
                 SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
-                FROM users 
+                FROM users
                 WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY (week_wins * 1.0 / week_games) * LOG(week_games + 1) ASC
+                ORDER BY (week_wins * 1.0 / week_games) ASC
                 LIMIT 1
             """)
             bottom = cursor.fetchone()
