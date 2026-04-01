@@ -1668,6 +1668,108 @@ def zeus_strike(percent=0.05):
         logger.error(f"Zeus strike error: {e}")
         return 0
 
+
+def batch_save_mmr(users_data: list):
+    """
+    Batch сохранение MMR данных всех пользователей одним запросом.
+    users_data: [{"telegram_id": int, "mmr": int, "steam_nickname": str, ...}, ...]
+    """
+    if not users_data:
+        return
+    try:
+        db = Database()
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        if "postgres" in scheme:
+            query = """
+                UPDATE users SET 
+                    mmr = COALESCE(%s, mmr),
+                    steam_nickname = COALESCE(%s, steam_nickname),
+                    rank_tier = COALESCE(%s, rank_tier),
+                    week_games = COALESCE(%s, week_games),
+                    week_wins = COALESCE(%s, week_wins),
+                    week_best_streak = COALESCE(%s, week_best_streak),
+                    week_current_streak = COALESCE(%s, week_current_streak),
+                    week_start_date = COALESCE(%s, week_start_date)
+                WHERE telegram_id = %s
+            """
+        else:
+            query = """
+                UPDATE users SET 
+                    mmr = COALESCE(?, mmr),
+                    steam_nickname = COALESCE(?, steam_nickname),
+                    rank_tier = COALESCE(?, rank_tier),
+                    week_games = COALESCE(?, week_games),
+                    week_wins = COALESCE(?, week_wins),
+                    week_best_streak = COALESCE(?, week_best_streak),
+                    week_current_streak = COALESCE(?, week_current_streak),
+                    week_start_date = COALESCE(?, week_start_date)
+                WHERE telegram_id = ?
+            """
+        
+        rows = []
+        for u in users_data:
+            rows.append((
+                u.get("mmr"), u.get("steam_nickname"), u.get("rank_tier"),
+                u.get("week_games"), u.get("week_wins"), u.get("week_best_streak"),
+                u.get("week_current_streak"), u.get("week_start_date"),
+                u["telegram_id"]
+            ))
+        
+        cursor.executemany(query, rows)
+        conn.commit()
+        cursor.close()
+        
+        # Обновляем кеш
+        for u in users_data:
+            cached = user_cache.get(u["telegram_id"])
+            if cached:
+                for k, v in u.items():
+                    if v is not None and k != "telegram_id":
+                        cached[k] = v
+                user_cache.set(u["telegram_id"], cached)
+        
+        top_cache.clear()
+        logger.info(f"batch_save_mmr: saved {len(users_data)} users in one transaction")
+    except Exception as e:
+        logger.error(f"batch_save_mmr error: {e}")
+
+
+def batch_increment_config(key: str, delta: int):
+    """Атомарный инкrement значения в bot_config (1 запрос вместо 2)"""
+    try:
+        db = Database()
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        if "postgres" in scheme:
+            cursor.execute("""
+                INSERT INTO bot_config (key, value) 
+                VALUES (%s, %s)
+                ON CONFLICT (key) DO UPDATE SET value = CAST(CAST(bot_config.value AS INTEGER) + %s AS TEXT)
+            """, (key, str(delta), delta))
+        else:
+            cursor.execute("""
+                INSERT INTO bot_config (key, value) 
+                VALUES (?, ?)
+                ON CONFLICT (key) DO UPDATE SET value = CAST(CAST(bot_config.value AS INTEGER) + ? AS TEXT)
+            """, (key, str(delta), delta))
+        
+        conn.commit()
+        cursor.close()
+        
+        # Чистим кеш
+        config_cache.delete(key)
+    except Exception as e:
+        logger.error(f"batch_increment_config error: {e}")
+
 def get_config(key, default=None):
     """Получить значение конфигурации - из кеша"""
     # Пробуем получить из кеша

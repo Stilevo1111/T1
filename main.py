@@ -738,19 +738,20 @@ async def dota_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов каждые 15 секунд"""
     try:
-        # Блокировка от параллельного запуска
         import time
-        last_run = get_config('alternate_digest_last_run')
         now = time.time()
-        if last_run and (now - float(last_run)) < 12:
-            logger.debug(f"alternate_digest_job: пропуск ({(now - float(last_run)):.1f}с назад)")
+        
+        # Блокировка от параллельного запуска (в памяти, без БД)
+        if now - _digest_state.get("last_run", 0) < 12:
             return
-        set_config('alternate_digest_last_run', str(now))
+        _digest_state["last_run"] = now
         
         logger.info("Запуск alternate_digest_job")
         
-        # Получаем ID чата для дайджеста
-        digest_chat_id = get_config('digest_chat_id')
+        # Получаем ID чата для дайджеста (из кеша, не БД)
+        digest_chat_id = _digest_state.get("chat_id") or get_config('digest_chat_id')
+        if digest_chat_id:
+            _digest_state["chat_id"] = digest_chat_id
         logger.info(f"alternate_digest_job: digest_chat_id = {digest_chat_id}")
         if not digest_chat_id:
             logger.info("Чат для дайджеста не настроен")
@@ -758,8 +759,11 @@ async def alternate_digest_job(context):
         
         bot = context.application.bot
         
-        # Получаем текущий тип дайджеста (0 = morning, 1 = dota)
-        current_type = get_config('alternate_digest_type')
+        # Получаем текущий тип дайджеста из памяти
+        current_type = _digest_state.get("type")
+        if current_type is None:
+            current_type = get_config('alternate_digest_type') or "0"
+            _digest_state["type"] = current_type
         logger.info(f"alternate_digest_job: current_type = {current_type}")
         if current_type is None:
             current_type = "0"
@@ -860,8 +864,9 @@ async def alternate_digest_job(context):
                 else:
                     logger.info(f"Не удалось редактировать: {e}")
         
-        # Переключаем тип ВСЕГДА
-        set_config('alternate_digest_type', next_type)
+        # Переключаем тип (в памяти + в БД только при реальном изменении)
+        _digest_state["type"] = next_type
+        set_config('alternate_digest_type', next_type)  # пишем в БД один раз за переключение
         
         if not edited:
             # Удаляем старое сообщение перед созданием нового
@@ -1220,6 +1225,7 @@ STATS_KEYS = ["rolls", "multicast", "zeus", "multicast_x2", "multicast_x3", "mul
 
 # Буфер инкрементов — пишем в БД пачкой
 _stat_buffer = {}
+_digest_state = {"last_run": 0, "type": None, "chat_id": None, "message_id": None}
 _stat_flush_timer = None
 
 
@@ -1230,16 +1236,22 @@ def increment_stat(key):
 
 
 async def flush_stat_buffer():
-    """Записать накопленные счётчики в БД"""
+    """Записать накопленные счётчики в БД атомарно"""
     if not _stat_buffer:
         return
     try:
         for key, delta in _stat_buffer.items():
+            # Атомарный инкремент: UPDATE value = value + delta (без read-modify-write)
             try:
-                val = int(get_config(f"stat_{key}", 0)) + delta
-            except (ValueError, TypeError):
-                val = delta
-            set_config(f"stat_{key}", str(val))
+                from database import batch_increment_config
+                batch_increment_config(f"stat_{key}", delta)
+            except ImportError:
+                # Fallback: обычный read-modify-write
+                try:
+                    val = int(get_config(f"stat_{key}", 0)) + delta
+                except (ValueError, TypeError):
+                    val = delta
+                set_config(f"stat_{key}", str(val))
         _stat_buffer.clear()
     except Exception as e:
         logger.error(f"flush_stat_buffer error: {e}")
