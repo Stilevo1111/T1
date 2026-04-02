@@ -10,7 +10,7 @@ import urllib.parse as urlparse
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache
 from aiohttp import web
 
 # Logging setup
@@ -745,6 +745,9 @@ async def alternate_digest_job(context):
         if now - _digest_state.get("last_run", 0) < 12:
             return
         _digest_state["last_run"] = now
+        
+        # Сбрасываем кеш статистики перед каждым запуском
+        top_cache.clear()
         
         logger.info("Запуск alternate_digest_job")
         
