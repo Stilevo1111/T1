@@ -2004,10 +2004,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.error(f"Error getting week rank: {e}")
         
         if not top_users:
-            text = "🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроках."
+            text = "Пока нет данных об MMR игроках."
         else:
-            # Build the top MMR text in the requested format
-            lines = ["🏆 Топ MMR за неделю\n\n"]
+            # Build the top MMR text in the requested format (without title)
+            lines = []
             
             for i, player in enumerate(top_users, 1):
                 username = player.get('steam_nickname') or player.get('username') or 'Unknown'
@@ -2069,6 +2069,9 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         lines.append("Не привязан")
             
             text = "".join(lines)
+        
+        # Add header to final text
+        text = f"🏆 Топ MMR за неделю\n\n{text}"
     
         # Delete previous bot message before sending new one
         try:
