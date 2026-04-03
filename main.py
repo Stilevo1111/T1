@@ -2631,6 +2631,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
     try:
         if not update.message or not update.message.text:
+            logger.debug("menu_handler: no message or text, skipping")
             return
         
         text = update.message.text.strip()
@@ -2638,6 +2639,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         menu_buttons = ["📈 Увеличить фиссуру", "👤 Профиль", "🏆 Топ Фиссур", "🏆 Топ MMR", "🔗 Привязать Steam"]
         
         if text not in menu_buttons:
+            logger.debug(f"menu_handler: text '{text}' not in menu_buttons, skipping")
             return
         
         chat_id = update.message.chat_id
