@@ -1897,8 +1897,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Add banner and send
         top_banner_url = "https://i.ibb.co/gLcnbBJ0/wx-Kwo.jpg"
         
-        if not text.startswith("🏆"):
-            text = f"🏆 Топ 10 Фиссур\n\n{text}"
+        text = f"{text}"
         
         result_msg = await context.bot.send_photo(
             chat_id=update.message.chat_id,
@@ -2276,7 +2275,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
         )
         
-        banner_url = "https://i.ibb.co/ZRpNT6HY/swqasa.png"
+        banner_url = "https://i.ibb.co/LXsGsfxZ/213.png"
         
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
