@@ -2172,15 +2172,19 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.debug(f"Could not delete last bot message: {e}")
     
-    result_msg = await context.bot.send_message(
+    link_banner_url = "https://i.ibb.co/s9L6mTtx/dsfcv23123.png"
+    link_text = "🦞 *Привязка Dota*\n\n"
+    "Отправьте `/link` и ваш Dota ID или ссылку на профиль.\n\n"
+    "*Примеры:*\n"
+    "`/link 76561198012345678`\n"
+    "`/link https://ru.dotabuff.com/players/347614699`\n\n"
+    "⚠️ Профиль должен быть открытым\n"
+    "📡 Статистика с OpenDota"
+    
+    result_msg = await context.bot.send_photo(
         chat_id=update.effective_chat.id,
-        text="🦞 *Привязка Dota*\n\n"
-        "Отправьте `/link` и ваш Dota ID или ссылку на профиль.\n\n"
-        "*Примеры:*\n"
-        "`/link 76561198012345678`\n"
-        "`/link https://ru.dotabuff.com/players/347614699`\n\n"
-        "⚠️ Профиль должен быть открытым\n"
-        "📡 Статистика с OpenDota",
+        photo=link_banner_url,
+        caption=link_text,
         parse_mode='Markdown'
     )
     # Track this message for future deletion
