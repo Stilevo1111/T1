@@ -2090,21 +2090,21 @@ def get_dota_digest_stats():
             return result
         
         if "postgres" in scheme:
-            # Лучший винрейт (взвешенная оценка: winrate * LOG(games + 1))
+            # Лучший винрейт (минимум 5 игр в неделю, взвешенная оценка)
             cursor.execute("""
                 SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
                 FROM users 
-                WHERE steam_id IS NOT NULL AND week_games > 0
+                WHERE steam_id IS NOT NULL AND week_games >= 5
                 ORDER BY (week_wins::numeric / week_games::numeric) * LN(week_games + 1) DESC
                 LIMIT 1
             """)
             top = cursor.fetchone()
             
-            # Худший винрейт (взвешенная оценка: winrate * LOG(games + 1))
+            # Худший винрейт (минимум 5 игр)
             cursor.execute("""
                 SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
                 FROM users
-                WHERE steam_id IS NOT NULL AND week_games > 0
+                WHERE steam_id IS NOT NULL AND week_games >= 5
                 ORDER BY (week_wins::numeric / week_games::numeric) ASC
                 LIMIT 1
             """)
@@ -2120,11 +2120,11 @@ def get_dota_digest_stats():
             """)
             streak = cursor.fetchone()
         else:
-            # SQLite (взвешенная оценка: winrate * LOG(games + 1))
+            # SQLite (минимум 5 игр)
             cursor.execute("""
                 SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
                 FROM users 
-                WHERE steam_id IS NOT NULL AND week_games > 0
+                WHERE steam_id IS NOT NULL AND week_games >= 5
                 ORDER BY (week_wins * 1.0 / week_games) * LOG(week_games + 1) DESC
                 LIMIT 1
             """)
@@ -2133,7 +2133,7 @@ def get_dota_digest_stats():
             cursor.execute("""
                 SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
                 FROM users
-                WHERE steam_id IS NOT NULL AND week_games > 0
+                WHERE steam_id IS NOT NULL AND week_games >= 5
                 ORDER BY (week_wins * 1.0 / week_games) ASC
                 LIMIT 1
             """)
