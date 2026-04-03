@@ -1901,7 +1901,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Add banner and send
         top_banner_url = "https://i.ibb.co/gLcnbBJ0/wx-Kwo.jpg"
         
-        text = f"🏆 Топ 10 Фиссур\n\n{text}"
+        text = f"{text}"
         
         result_msg = await context.bot.send_photo(
             chat_id=update.message.chat_id,
