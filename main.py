@@ -1801,9 +1801,13 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not viewing_other:
             text += "\n\n💡 <code>/profile ＠ник</code> — чужой профиль"
         
-        result_msg = await context.bot.send_message(
+        # Banner URL
+        profile_banner_url = "https://i.ibb.co/d0pcyNcM/image.png"
+        
+        result_msg = await context.bot.send_photo(
             chat_id=update.message.chat_id,
-            text=text,
+            photo=profile_banner_url,
+            caption=text,
             parse_mode="HTML",
             reply_markup=main_menu()
         )
