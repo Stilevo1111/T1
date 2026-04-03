@@ -2630,16 +2630,19 @@ async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
     try:
+        logger.info(f"menu_handler: received update from user {update.effective_user.id if update.effective_user else 'unknown'}")
+        
         if not update.message or not update.message.text:
-            logger.debug("menu_handler: no message or text, skipping")
+            logger.info("menu_handler: no message or text, skipping")
             return
         
         text = update.message.text.strip()
+        logger.info(f"menu_handler: received text: '{text}'")
         
         menu_buttons = ["📈 Увеличить фиссуру", "👤 Профиль", "🏆 Топ Фиссур", "🏆 Топ MMR", "🔗 Привязать Steam"]
         
         if text not in menu_buttons:
-            logger.debug(f"menu_handler: text '{text}' not in menu_buttons, skipping")
+            logger.info(f"menu_handler: text not in menu_buttons, skipping")
             return
         
         chat_id = update.message.chat_id
