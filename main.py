@@ -1875,7 +1875,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not top_users:
             text = "😶 Пока нет игроков. Будь первым!"
         else:
-            text = "🏆 Топ 10 Фиссур\n\n"
+            text = ""
             medals = {1: "🥇", 2: "🥈", 3: "🥉"}
             emoji_nums = {4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
             for i, user_top in enumerate(top_users, 1):
@@ -1891,13 +1891,19 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_fissure = user.get('fissure', 0) if user else 0
                 text += f"\n👤 Твоя позиция: #{user_rank} ({user_fissure:.1f} см)"
             else:
-                # Если пользователь не найден в топе, показываем его текущую длину
                 user_fissure = user.get('fissure', 0) if user else 0
                 text += f"\n👤 Твоя позиция: — ({user_fissure:.1f} см)"
         
-        result_msg = await context.bot.send_message(
+        # Add banner and send
+        top_banner_url = "https://i.ibb.co/gLcnbBJ0/wx-Kwo.jpg"
+        
+        if not text.startswith("🏆"):
+            text = f"🏆 Топ 10 Фиссур\n\n{text}"
+        
+        result_msg = await context.bot.send_photo(
             chat_id=update.message.chat_id,
-            text=text,
+            photo=top_banner_url,
+            caption=text,
             reply_markup=main_menu()
         )
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
