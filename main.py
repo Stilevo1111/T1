@@ -742,7 +742,7 @@ async def alternate_digest_job(context):
         now = time.time()
         
         # Блокировка от параллельного запуска (в памяти, без БД)
-        if now - _digest_state.get("last_run", 0) < 12:
+        if now - _digest_state.get("last_run", 0) < 20:
             return
         _digest_state["last_run"] = now
         
@@ -879,6 +879,15 @@ async def alternate_digest_job(context):
             if time_since_last < 300:  # 5 минут
                 logger.info(f"Пропускаем создание нового дайджеста, прошло только {time_since_last:.0f} сек с последнего создания")
                 return  # Выходим без создания
+            
+            # Проверяем, не запущен ли уже процесс создания
+            creating = get_config('alternate_digest_creating')
+            if creating and time.time() - float(creating) < 60:
+                logger.info(f"Уже идёт создание дайджеста, пропускаем")
+                return
+            
+            # помечаем что начинаем создавать
+            set_config('alternate_digest_creating', str(time.time()))
 
             # Удаляем старое сообщение перед созданием нового
             if last_message_id:
@@ -892,6 +901,7 @@ async def alternate_digest_job(context):
             msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
             set_config('alternate_digest_message_id', msg.message_id)
             set_config('alternate_digest_last_created', str(time.time()))
+            set_config('alternate_digest_creating', '')  # очищаем флаг создания
             logger.info(f"Создан новый alternate дайджест {msg.message_id}, type={next_type}")
 
             # Закрепляем дайджест (открепляем старый, закрепляем новый)
