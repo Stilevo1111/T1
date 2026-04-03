@@ -31,6 +31,8 @@ last_update_time = time.time()
 
 COOLDOWN = 86400  # 24 hours
 
+_user_processing = {}  # Spam protection: user_id -> timestamp
+
 
 async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
     """Удалить сообщение через delay секунд"""
@@ -1476,6 +1478,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.debug(f"Could not delete last bot message: {e}")
     
+    # Spam protection - ignore if already processing this user
+    if _user_processing.get(user_obj.id):
+        return
+    _user_processing[user_obj.id] = now
+    
     try:
         user = get_user(user_obj.id, username)
         logger.info(f"user data: {user}")
@@ -1703,9 +1710,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         update_last_message_id(user_obj.id, result_msg.message_id)
         
-        # Сохраняем счётчики в БД
         await flush_stat_buffer()
-                  
+                   
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
@@ -1718,6 +1724,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception:
             pass
+    finally:
+        _user_processing.pop(user_obj.id, None)
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2804,73 +2812,57 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def main():
-    """Start Telegram bot in webhook mode for Render"""
+    """Start Telegram bot - unified function for both polling and webhook modes"""
     if not TOKEN:
         logger.error("BOT_TOKEN not set! Bot cannot start.")
         return
     
     try:
         init_db()
-        # Запускаем миграции базы данных
         migrate_db()
-        
-        # Инициализируем снимок дайджеста при запуске (чтобы digest_position/digest_fissure не были 0)
         update_digest_snapshot()
         logger.info("Digest snapshot initialized on startup")
         
-        # ЗАГРУЖАЕМ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ В КЕШ ПРИ ЗАПУСКЕ
         from database import get_all_users_with_steam, user_cache
         all_users = get_all_users_with_steam()
         for u in all_users:
             user_cache.set(u['telegram_id'], u)
         logger.info(f"Loaded {len(all_users)} users with Steam into cache on startup")
         
-        # Создаём JobQueue и привязываем к application
         job_queue = JobQueue()
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
-        
-        # Инициализируем job_queue с application для PTB v20+
         job_queue.set_application(app)
         
-        # Daily job
         job_queue.run_daily(
             decrease_inactive_job,
             time=datetime.time(hour=0, minute=0),
             days=(0, 1, 2, 3, 4, 5, 6)
         )
         
-        # Утренний дайджест в 9:00 утра по МСК (6:00 UTC)
         job_queue.run_daily(
             morning_digest_job,
             time=datetime.time(hour=6, minute=0),
             days=(0, 1, 2, 3, 4, 5, 6)
         )
         
-        # Ежечасное обновление MMR всех пользователей с привязанным Steam
         job_queue.run_repeating(
             update_all_mmr_job,
             interval=datetime.timedelta(hours=1),
             first=datetime.datetime.now() + datetime.timedelta(minutes=1)
         )
         
-        logger.info("Done")
-        
-        # Утренний дайджест теперь live (обновляется после каждого броска)
-        
-        # Еженедельный дайджест по понедельникам
         job_queue.run_daily(
             weekly_digest_job,
             time=datetime.time(hour=6, minute=0),
             days=(0,)  # Monday only
         )
         
-        # Чередование утреннего и Dota дайджеста каждые 15 секунд
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(seconds=15),
-            first=datetime.datetime.now() + datetime.timedelta(seconds=15)
+            interval=datetime.timedelta(seconds=60),
+            first=datetime.datetime.now() + datetime.timedelta(seconds=20)
         )
-
+        
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("fissure", fissure))
         app.add_handler(CommandHandler("stats", stats))
@@ -2885,27 +2877,21 @@ async def main():
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(CommandHandler("setchance", setchance))
         app.add_handler(CommandHandler("testfissure", testfissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/start@DotaFull_bot$'), start))
-        app.add_handler(MessageHandler(filters.Regex(r'^/fissure@DotaFull_bot$'), fissure))
-        app.add_handler(MessageHandler(filters.Regex(r'^/stats@DotaFull_bot$'), stats))
-        app.add_handler(MessageHandler(filters.Regex(r'^/top@DotaFull_bot$'), top))
+        app.add_handler(CommandHandler("removeuser", removeuser))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
+        
         webhook_url = os.getenv("WEBHOOK_URL")
         use_polling = os.getenv("USE_POLLING", "false").lower() == "true"
         
-        # Сначала инициализируем application
         await app.initialize()
         await app.start()
         await job_queue.start()
         
         if use_polling or not webhook_url:
-            # POLLING режим — бот активно опрашивает Telegram (для Render Free)
             logger.info("Starting bot in POLLING mode")
             await app.bot.delete_webhook(drop_pending_updates=True)
             
-            # Запускаем web server только для health check (Render нужен открытый порт)
             from aiohttp import web
             async def health_handler(request):
                 return web.Response(text="Bot is polling", status=200)
@@ -2919,7 +2905,6 @@ async def main():
             await site.start()
             logger.info(f"Health server on port {port}")
             
-            # Polling loop
             offset = 0
             while True:
                 try:
@@ -2931,27 +2916,18 @@ async def main():
                     logger.error(f"Polling error: {e}")
                     await asyncio.sleep(5)
         else:
-            # WEBHOOK режим — для платного Render или другого хостинга
             logger.info("Starting bot in WEBHOOK mode")
-            
-            # Устанавливаем webhook после инициализации (drop_pending_updates очищает старые обновления)
             await app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
-            
-            logger.info("Telegram bot started in webhook mode")
             logger.info(f"Webhook URL: {webhook_url}")
             
             from aiohttp import web
             
             async def handle_webhook(request):
-                """Handle incoming webhook requests"""
                 global last_update_time
                 try:
                     update_data = await request.json()
-                    logger.info(f"Webhook received: {update_data.get('update_id', 'unknown')}")
                     update = Update.de_json(update_data, app.bot)
-                    logger.info(f"Update parsed: {update}")
                     await app.process_update(update)
-                    logger.info(f"Update processed")
                     last_update_time = time.time()
                     return web.Response(status=200)
                 except Exception as e:
@@ -2960,11 +2936,7 @@ async def main():
             
             web_app = web.Application()
             web_app.router.add_post('/webhook', handle_webhook)
-            
-            async def root_handler(request):
-                return web.Response(text="OK")
-            web_app.router.add_get('/', root_handler)
-            
+            web_app.router.add_get('/', lambda r: web.Response(text="OK"))
             setup_health_check(app.bot)
             web_app.router.add_get('/health', health_check_handler)
             
@@ -2975,7 +2947,6 @@ async def main():
             await site.start()
             logger.info(f"Web server started on port {port}")
             
-            # Пинг каждые 10 минут
             async def keep_alive_ping():
                 import aiohttp
                 ping_url = webhook_url.rsplit('/webhook', 1)[0] + '/health'
@@ -2988,15 +2959,13 @@ async def main():
                         logger.error(f"Keep-alive ping error: {e}")
             asyncio.create_task(keep_alive_ping())
         
-        # Запускаем задачу flush кеша в БД каждый день (оба режима)
         async def daily_flush_cache():
             from database import flush_users_cache
             while True:
                 try:
-                    await asyncio.sleep(86400)
-                    logger.info("Daily flush cache job starting...")
+                    await asyncio.sleep(3600)
                     flushed = flush_users_cache()
-                    logger.info(f"Daily flush cache completed: {flushed} users")
+                    logger.info(f"Hourly flush cache completed: {flushed} users")
                 except Exception as e:
                     logger.error(f"Daily flush cache error: {e}")
         asyncio.create_task(daily_flush_cache())
@@ -3016,111 +2985,8 @@ async def main():
             logger.error(f"Shutdown flush error: {flush_err}")
 
 
-async def main_polling():
-    """Start Telegram bot in polling mode for local testing"""
-    if not TOKEN:
-        logger.error("BOT_TOKEN not set!")
-        return
-    
-    try:
-        init_db()
-        # Запускаем миграции базы данных
-        migrate_db()
-        
-        # Инициализируем снимок дайджеста при запуске (чтобы digest_position/digest_fissure не были 0)
-        update_digest_snapshot()
-        logger.info("Digest snapshot initialized on startup")
-        
-        # ЗАГРУЖАЕМ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ В КЕШ ПРИ ЗАПУСКЕ
-        from database import get_all_users_with_steam, user_cache
-        all_users = get_all_users_with_steam()
-        for u in all_users:
-            user_cache.set(u['telegram_id'], u)
-        logger.info(f"Loaded {len(all_users)} users with Steam into cache on startup")
-        
-        # Создаём JobQueue и привязываем к application
-        job_queue = JobQueue()
-        app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
-        
-        # Инициализируем job_queue с application для PTB v20+
-        job_queue.set_application(app)
-        
-        # Daily job
-        job_queue.run_daily(
-            decrease_inactive_job,
-            time=datetime.time(hour=0, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
-        
-        # Утренний дайджест в 9:00 утра по МСК (6:00 UTC)
-        job_queue.run_daily(
-            morning_digest_job,
-            time=datetime.time(hour=6, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
-        
-        # Ежечасное обновление MMR всех пользователей с привязанным Steam
-        job_queue.run_repeating(
-            update_all_mmr_job,
-            interval=datetime.timedelta(hours=1),
-            first=datetime.datetime.now() + datetime.timedelta(minutes=1)
-        )
-        
-        logger.info("Done")
-        
-        # Утренний дайджест теперь live (обновляется после каждого броска)
-        # Еженедельный дайджест по понедельникам
-        job_queue.run_daily(
-            weekly_digest_job,
-            time=datetime.time(hour=6, minute=0),
-            days=(0,)  # Monday only
-        )
-
-        # Чередование утреннего и Dota дайджеста каждые 15 секунд
-        job_queue.run_repeating(
-            alternate_digest_job,
-            interval=datetime.timedelta(seconds=15),
-            first=datetime.datetime.now() + datetime.timedelta(seconds=15)
-        )
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CommandHandler("profile", stats))
-        app.add_handler(CommandHandler("top", top))
-        app.add_handler(CommandHandler("topmmr", topmmr))
-        app.add_handler(CommandHandler("link", link))
-        app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
-        app.add_handler(CommandHandler("setchance", setchance))
-        app.add_handler(CommandHandler("testfissure", testfissure))
-        app.add_handler(CommandHandler("removeuser", removeuser))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
-
-        logger.info("Telegram bot started in polling mode")
-        
-        # Запускаем job_queue для PTB v20+
-        await job_queue.start()
-        
-        await app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-    finally:
-        try:
-            from database import flush_users_cache
-            flushed = flush_users_cache()
-            logger.info(f"Shutdown: flushed {flushed} users to DB")
-        except Exception as flush_err:
-            logger.error(f"Shutdown flush error: {flush_err}")
-
-
 if __name__ == "__main__":
-    if os.getenv("WEBHOOK_URL"):
-        asyncio.run(main())
-    else:
-        asyncio.run(main_polling())
+    asyncio.run(main())
 
 
 
