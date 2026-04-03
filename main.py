@@ -1486,9 +1486,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             filled = int(elapsed / COOLDOWN * 10)
             bar = "🟩" * filled + "⬜" * (10 - filled)
             text = f"🧬 Восстанавливается. {format_time(wait)}\n{bar}"
-            result_msg = await context.bot.send_message(
+            cooldown_banner_url = "https://i.ibb.co/tMyxHtz1/dsadsadasdas.png"
+            result_msg = await context.bot.send_photo(
                 chat_id=update.message.chat_id,
-                text=text,
+                photo=cooldown_banner_url,
+                caption=text,
                 reply_markup=main_menu()
             )
             set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
