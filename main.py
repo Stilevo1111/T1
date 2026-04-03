@@ -1537,7 +1537,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not send Zeus sticker: {e}")
             
-            await refresh_digest_message(context.bot)
             return  # выходим — без ролла
         
         # Остальные события (обычный ролл или мулькаст)
@@ -1596,9 +1595,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_fissure = calculate_new_fissure(base_fissure, roll)
         growth = new_fissure - user["fissure"]
         update_fissure(user_obj.id, new_fissure, now, growth)
-        
-        # Обновляем дайджест после каждого броска
-        await refresh_digest_message(context.bot)
         
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
 
