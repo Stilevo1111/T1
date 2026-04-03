@@ -2010,7 +2010,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.error(f"Error getting week rank: {e}")
         
         if not top_users:
-            topmmr_banner_url = "https://i.ibb.co/N6zG4s2p/image.png"
             text = f"🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
             # Delete previous bot message before sending new one
             try:
@@ -2093,8 +2092,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = "".join(lines)
         
         # Add header to final text
-        topmmr_banner_url = "https://i.ibb.co/N6zG4s2p/image.png"
-        text = f"🏆 Топ MMR за неделю\n\n{text}"
+        topmmr_banner_url = "https://i.ibb.co/7Jy3hjsF/o-TVJg.jpg"
+        text = f"{text}"
         
         # Delete previous bot message before sending new one
         try:
