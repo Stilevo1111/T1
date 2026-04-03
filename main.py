@@ -2004,7 +2004,23 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.error(f"Error getting week rank: {e}")
         
         if not top_users:
-            text = "Пока нет данных об MMR игроках."
+            topmmr_banner_url = "https://i.ibb.co/N6zG4s2p/image.png"
+            text = f"🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
+            # Delete previous bot message before sending new one
+            try:
+                await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+            except Exception as e:
+                logger.debug(f"Could not delete last bot message: {e}")
+            
+            result_msg = await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=topmmr_banner_url,
+                caption=text,
+                parse_mode="HTML"
+            )
+            set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+            return
         else:
             # Build the top MMR text in the requested format (without title)
             lines = []
@@ -2071,15 +2087,21 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = "".join(lines)
         
         # Add header to final text
+        topmmr_banner_url = "https://i.ibb.co/N6zG4s2p/image.png"
         text = f"🏆 Топ MMR за неделю\n\n{text}"
-    
+        
         # Delete previous bot message before sending new one
         try:
             await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
         except Exception as e:
             logger.debug(f"Could not delete last bot message: {e}")
         
-        result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text=text, parse_mode="HTML")
+        result_msg = await context.bot.send_photo(
+            chat_id=update.effective_chat.id,
+            photo=topmmr_banner_url,
+            caption=text,
+            parse_mode="HTML"
+        )
         # Track this message for future deletion
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
