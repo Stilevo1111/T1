@@ -1490,8 +1490,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if now - user["last_fissure"] < COOLDOWN:
             wait = COOLDOWN - (now - user["last_fissure"])
             elapsed = COOLDOWN - wait
-            filled = int(elapsed / COOLDOWN * 10)
-            bar = "🟩" * filled + "⬜" * (10 - filled)
+            filled = int(elapsed / COOLDOWN * 12)
+            bar = "🟩" * filled + "⬜️" * (12 - filled)
             text = f"🧬 Восстанавливается. {format_time(wait)}\n{bar}"
             cooldown_banner_url = "https://i.ibb.co/tMyxHtz1/dsadsadasdas.png"
             result_msg = await context.bot.send_photo(
