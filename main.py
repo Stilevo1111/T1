@@ -1935,7 +1935,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     matches = get_recent_matches(steam_id, limit=10)
                     matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)[:10]
                     for match in matches:
-                        is_win = match.get('win', False)
+                        # OpenDota не возвращает 'win', вычисляем по player_slot и radiant_win
+                        player_slot = match.get('player_slot')
+                        radiant_win = match.get('radiant_win', False)
+                        if player_slot is not None:
+                            player_was_radiant = player_slot < 127
+                        else:
+                            player_was_radiant = True
+                        is_win = (radiant_win and player_was_radiant) or (not radiant_win and not player_was_radiant)
                         last_10_balls += "🟢" if is_win else "🔴"
                     # Добавляем zero-width joiner чтобы Telegram не переносил строку
                     if last_10_balls:
