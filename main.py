@@ -2806,16 +2806,32 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = update.message.text.strip()
         logger.info(f"menu_handler: received text: '{text}'")
         
-        menu_buttons = ["📈 Увеличить фиссуру", "👤 Профиль", "🏆 Топ Фиссур", "🏆 Топ MMR", "🔗 Привязать Steam"]
+        menu_buttons = {
+            "📈 Увеличить фиссуру": "📈 Увеличить фиссуру",
+            "👤 Профиль": "👤 Профиль",
+            "🏆 Топ Фиссур": "🏆 Топ Фиссур",
+            "🏆 Топ MMR": "🏆 Топ MMR",
+            "🔗 Привязать Steam": "🔗 Привязать Steam"
+        }
         
-        if text not in menu_buttons:
-            logger.info(f"menu_handler: text not in menu_buttons, skipping")
+        # Try exact match first
+        button_found = menu_buttons.get(text)
+        
+        # If not exact, try contains match (but require at least 3 chars to match)
+        if not button_found and len(text) >= 3:
+            for btn_key, btn_full in menu_buttons.items():
+                if btn_key in text or text in btn_full:
+                    button_found = btn_full
+                    break
+        
+        if not button_found:
+            logger.info(f"menu_handler: text not in menu_buttons, skipping: '{text}'")
             return
         
         chat_id = update.message.chat_id
         chat_type = update.message.chat.type
         user_id = update.effective_user.id
-        logger.info(f"User {user_id} pressed button: {text} in chat type: {chat_type}")
+        logger.info(f"User {user_id} pressed button: {button_found} in chat type: {chat_type}")
         
         # Delete user's message only in groups/channels (non-blocking, don't wait)
         if chat_type in ['group', 'supergroup', 'channel']:
@@ -2826,16 +2842,16 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         asyncio.create_task(delete_last_bot_message_safe(context.bot, chat_id, user_id))
         
         # Call the appropriate function
-        if text == "📈 Увеличить фиссуру":
+        if button_found == "📈 Увеличить фиссуру":
             await fissure(update, context)
-        elif text == "👤 Профиль":
+        elif button_found == "👤 Профиль":
             logger.info(f"menu_handler: calling stats for user {user_id}")
             await stats(update, context)
-        elif text == "🏆 Топ Фиссур":
+        elif button_found == "🏆 Топ Фиссур":
             await top(update, context)
-        elif text == "🏆 Топ MMR":
+        elif button_found == "🏆 Топ MMR":
             await topmmr(update, context)
-        elif text == "🔗 Привязать Steam":
+        elif button_found == "🔗 Привязать Steam":
             await link(update, context)
             
     except Exception as e:
