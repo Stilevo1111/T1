@@ -956,15 +956,16 @@ async def alternate_digest_job(context):
         if not edited:
             # Проверяем, не создавали ли мы новое сообщение слишком недавно (антиспам)
             last_created_str = get_config('alternate_digest_last_created')
-            last_created = float(last_created_str) if last_created_str else 0
+            last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
             time_since_last = time.time() - last_created
+            logger.info(f"alternate_digest_job: last_created={last_created}, time_since_last={time_since_last:.0f}sec")
             if time_since_last < 300:  # 5 минут
                 logger.info(f"Пропускаем создание нового дайджеста, прошло только {time_since_last:.0f} сек с последнего создания")
                 return  # Выходим без создания
             
             # Проверяем, не запущен ли уже процесс создания
             creating = get_config('alternate_digest_creating')
-            if creating and time.time() - float(creating) < 60:
+            if creating and creating.strip() and time.time() - float(creating) < 60:
                 logger.info(f"Уже идёт создание дайджеста, пропускаем")
                 return
             
