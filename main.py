@@ -645,13 +645,13 @@ async def dota_digest_job(context):
         
         # Формат аналогичен утреннему дайджесту
         if top_player and top_player != "None":
-            top_losses = top_games - top_wins
+            top_losses = max(0, top_games - top_wins)  # защита от отрицательных
             top_part = f"🎯{top_display} {top_wins}W/{top_losses}L•{top_winrate}%"
         else:
             top_part = "🎯—"
         
         if bottom_player and bottom_player != "None":
-            bottom_losses = bottom_games - bottom_wins
+            bottom_losses = max(0, bottom_games - bottom_wins)
             bottom_part = f"💀{bottom_display} {bottom_wins}W/{bottom_losses}L•{bottom_winrate}%"
         else:
             bottom_part = "💀—"
@@ -823,13 +823,13 @@ async def alternate_digest_job(context):
             streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" else "—"
             
             if top_player and top_player != "None":
-                top_losses = top_games - top_wins
+                top_losses = max(0, top_games - top_wins)
                 top_part = f"🎯{top_display}: {top_wins}W • {top_losses}L • {top_winrate}%"
             else:
                 top_part = "🎯—"
 
             if bottom_player and bottom_player != "None":
-                bottom_losses = bottom_games - bottom_wins
+                bottom_losses = max(0, bottom_games - bottom_wins)
                 bottom_part = f"💀{bottom_display}: {bottom_wins}W • {bottom_losses}L • {bottom_winrate}%"
             else:
                 bottom_part = "💀—"
