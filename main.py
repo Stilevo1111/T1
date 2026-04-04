@@ -3119,9 +3119,14 @@ async def main():
                 ping_url = webhook_url.rsplit('/webhook', 1)[0] + '/health'
                 while True:
                     try:
-                        await asyncio.sleep(600)
+                        await asyncio.sleep(300)  # Ping every 5 minutes to prevent Render sleep
                         async with aiohttp.ClientSession() as session:
+                            # Ping health endpoint
                             await session.get(ping_url, timeout=aiohttp.ClientTimeout(total=30))
+                            logger.info("Keep-alive ping sent")
+                            # Also ping root to keep web server awake
+                            root_url = webhook_url.rsplit('/webhook', 1)[0] + '/'
+                            await session.get(root_url, timeout=aiohttp.ClientTimeout(total=10))
                     except Exception as e:
                         logger.error(f"Keep-alive ping error: {e}")
             asyncio.create_task(keep_alive_ping())
