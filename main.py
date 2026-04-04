@@ -634,9 +634,22 @@ async def dota_digest_job(context):
         bottom_player, bottom_rank, bottom_games, bottom_wins, bottom_id = stats.get("bottom_winrate", ("None", 0, 0, 0, None))
         streak_player, streak_wins, streak_id = stats.get("top_streak", ("None", 0, None))
         
-        # Форматируем винрейт (с ограничением 0-100%)
-        top_winrate = min(round((top_wins / top_games * 100), 1), 100.0) if top_games > 0 else 0
-        bottom_winrate = min(round((bottom_wins / bottom_games * 100), 1), 100.0) if bottom_games > 0 else 0
+        # Форматируем винрейт (по реальным победам/поражениям, макс 100%)
+        if top_games > 0 and top_wins >= 0:
+            top_losses = max(0, top_games - top_wins)
+            top_total = top_wins + top_losses
+            top_winrate = min(round((top_wins / top_total * 100), 1), 100.0) if top_total > 0 else 0
+        else:
+            top_winrate = 0
+            top_losses = 0
+        
+        if bottom_games > 0 and bottom_wins >= 0:
+            bottom_losses = max(0, bottom_games - bottom_wins)
+            bottom_total = bottom_wins + bottom_losses
+            bottom_winrate = min(round((bottom_wins / bottom_total * 100), 1), 100.0) if bottom_total > 0 else 0
+        else:
+            bottom_winrate = 0
+            bottom_losses = 0
         
         # Используем make_clickable для никнеймов
         top_display = make_clickable(top_player, top_id) if top_player and top_player != "None" else "—"
@@ -814,9 +827,22 @@ async def alternate_digest_job(context):
             top_player, top_rank, top_games, top_wins, top_id = stats.get("top_winrate", ("None", 0, 0, 0, None))
             bottom_player, bottom_rank, bottom_games, bottom_wins, bottom_id = stats.get("bottom_winrate", ("None", 0, 0, 0, None))
             streak_player, streak_wins, streak_id = stats.get("top_streak", ("None", 0, None))
+            # Форматируем винрейт правильно
+            if top_games > 0 and top_wins >= 0:
+                top_losses = max(0, top_games - top_wins)
+                top_total = top_wins + top_losses
+                top_winrate = min(round((top_wins / top_total * 100), 1), 100.0) if top_total > 0 else 0
+            else:
+                top_winrate = 0
+                top_losses = 0
             
-            top_winrate = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
-            bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
+            if bottom_games > 0 and bottom_wins >= 0:
+                bottom_losses = max(0, bottom_games - bottom_wins)
+                bottom_total = bottom_wins + bottom_losses
+                bottom_winrate = min(round((bottom_wins / bottom_total * 100), 1), 100.0) if bottom_total > 0 else 0
+            else:
+                bottom_winrate = 0
+                bottom_losses = 0
             
             top_display = make_clickable(top_player, top_id) if top_player and top_player != "None" else "—"
             bottom_display = make_clickable(bottom_player, bottom_id) if bottom_player and bottom_player != "None" else "—"
