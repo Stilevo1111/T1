@@ -2804,7 +2804,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         text = update.message.text.strip()
-        logger.info(f"menu_handler: received text: '{text}'")
+        logger.info(f"menu_handler: received text: '{text}' (len={len(text)})")
         
         menu_buttons = {
             "📈 Увеличить фиссуру": "📈 Увеличить фиссуру",
@@ -2817,16 +2817,30 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Try exact match first
         button_found = menu_buttons.get(text)
         
-        # If not exact, try contains match (but require at least 3 chars to match)
-        if not button_found and len(text) >= 3:
+        # If not exact, try case-insensitive match
+        if not button_found:
+            text_lower = text.lower()
             for btn_key, btn_full in menu_buttons.items():
-                if btn_key in text or text in btn_full:
+                if btn_key.lower() == text_lower:
+                    button_found = btn_full
+                    break
+        
+        # If still not exact, try contains match (case-insensitive)
+        if not button_found and len(text) >= 3:
+            text_lower = text.lower()
+            for btn_key, btn_full in menu_buttons.items():
+                if btn_key.lower() in text_lower or text_lower in btn_key.lower():
                     button_found = btn_full
                     break
         
         if not button_found:
-            logger.info(f"menu_handler: text not in menu_buttons, skipping: '{text}'")
+            logger.info(f"menu_handler: text NOT recognized, skipping: '{text}' (len={len(text)})")
+            logger.info(f"menu_handler: available buttons: {list(menu_buttons.keys())}")
             return
+        
+        logger.info(f"menu_handler: MATCH FOUND - '{button_found}'")
+        
+        logger.info(f"menu_handler: MATCH FOUND - '{button_found}'")
         
         chat_id = update.message.chat_id
         chat_type = update.message.chat.type
