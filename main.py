@@ -129,20 +129,22 @@ async def decrease_inactive_job(context):
 async def announce_weekly_mmr_winner(bot):
     """Отправляет поздравление победителю недельного топа MMR при смене недели."""
     try:
-        today_utc = datetime.datetime.now(datetime.timezone.utc)
-        monday_utc = today_utc - datetime.timedelta(days=today_utc.weekday())
-        current_week_start = monday_utc.strftime("%Y-%m-%d")
+        from datetime import timezone, timedelta
+        MSK = timezone(timedelta(hours=3))
+        today_msk = datetime.datetime.now(MSK)
+        monday_msk = today_msk - datetime.timedelta(days=today_msk.weekday())
+        current_week_start = monday_msk.strftime("%Y-%m-%d")
 
         last_announced = get_config('mmr_week_top_announced')
         if last_announced == current_week_start:
             return
 
-        if today_utc.weekday() != 0:
+        if today_msk.weekday() != 0:
             return
 
-        # Объявляем только в первый час понедельника (00:00–01:00 UTC), чтобы не спамить при перезапуске
-        if today_utc.hour >= 1:
-            logger.info(f"announce_weekly_mmr_winner: пропуск, уже {today_utc.hour}:00 UTC — окно объявления прошло")
+        # Объявляем только в первый час понедельника (00:00–01:00 MSK), чтобы не спамить при перезапуске
+        if today_msk.hour >= 1:
+            logger.info(f"announce_weekly_mmr_winner: пропуск, уже {today_msk.hour}:00 MSK — окно объявления прошло")
             set_config('mmr_week_top_announced', current_week_start)
             return
 

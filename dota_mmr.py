@@ -526,11 +526,13 @@ def update_user_mmr(telegram_id: int) -> dict:
 
         # Получаем последние матчи для расчёта недельной статистики
         # Фиксированная неделя: с понедельника по воскресенье
-        # Используем UTC для расчёта начала недели
-        today_utc = datetime.now(timezone.utc)
-        monday_utc = today_utc - timedelta(days=today_utc.weekday())
-        week_start_utc = monday_utc.replace(hour=0, minute=0, second=0, microsecond=0)
-        logger.info(f"topmmr: week start (UTC) = {week_start_utc} (Monday)")
+        # Используем МСК (UTC+3) для расчёта начала недели
+        MSK = timezone(timedelta(hours=3))
+        today_msk = datetime.now(MSK)
+        monday_msk = today_msk - timedelta(days=today_msk.weekday())
+        week_start_msk = monday_msk.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start_utc = week_start_msk.astimezone(timezone.utc)
+        logger.info(f"topmmr: week start (MSK) = {week_start_msk} (Monday)")
         logger.info(f"topmmr: week start (UTC) = {week_start_utc} (Monday)")
         
         # Получаем последние 50 матчей
@@ -608,7 +610,7 @@ def update_user_mmr(telegram_id: int) -> dict:
         
         # Проверяем смену недели - если неделя изменилась, сбрасываем статистику
         user_week_start = user.get('week_start_date')
-        current_week_start = week_start_utc.strftime("%Y-%m-%d")
+        current_week_start = week_start_msk.strftime("%Y-%m-%d")
         
         if user_week_start and user_week_start != current_week_start:
             logger.info(f"Week changed for {telegram_id}: {user_week_start} -> {current_week_start}, resetting week stats")
