@@ -1870,7 +1870,25 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             week_wins = target_user.get('week_wins', 0)
             week_losses = week_games - week_wins
             winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
-            text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n🔥 Стрик: {week_streak}/{week_best}"
+            
+            # Получаем последние 10 игр для отображения
+            last_10_balls = ""
+            try:
+                from dota_mmr import get_recent_matches
+                steam_id = target_user.get('steam_id')
+                if steam_id:
+                    matches = get_recent_matches(steam_id, limit=10)
+                    matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)[:10]
+                    for match in matches:
+                        is_win = match.get('win', False)
+                        last_10_balls += "🟢" if is_win else "🔴"
+                    # Добавляем zero-width joiner чтобы Telegram не переносил строку
+                    if last_10_balls:
+                        last_10_balls = last_10_balls.replace("🟢", "🟢‍").replace("🔴", "🔴‍")
+            except Exception as e:
+                logger.debug(f"Could not get last 10 matches: {e}")
+            
+            text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n{last_10_balls}\n🔥 Стрик: {week_streak}/{week_best}"
         
         # Подсказка как смотреть чужой профиль
         if not viewing_other:
