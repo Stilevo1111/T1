@@ -4,7 +4,7 @@ import time
 import requests
 import logging
 from datetime import datetime, timedelta, timezone
-from database import get_user, update_user_field
+from database import get_user, update_user_fields_batch
 
 logger = logging.getLogger(__name__)
 
@@ -476,15 +476,16 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
             steam_id = data["steam_id"]
             stats = data
 
-        # сохраняем в БД
-        update_user_field(telegram_id, "steam_id", steam_id)
-        update_user_field(telegram_id, "steam_nickname", stats["nickname"])
-        update_user_field(telegram_id, "mmr", stats["mmr"])
-        update_user_field(telegram_id, "rank_tier", stats.get("rank_tier", 0))
-        update_user_field(telegram_id, "wins", stats.get("wins", 0))
-        update_user_field(telegram_id, "losses", stats.get("losses", 0))
-        # Инициализируем дату начала недели
-        update_user_field(telegram_id, "week_start_date", datetime.now(timezone.utc).date().isoformat())
+        # сохраняем все поля одним запросом
+        update_user_fields_batch(telegram_id, {
+            "steam_id": steam_id,
+            "steam_nickname": stats["nickname"],
+            "mmr": stats["mmr"],
+            "rank_tier": stats.get("rank_tier", 0),
+            "wins": stats.get("wins", 0),
+            "losses": stats.get("losses", 0),
+            "week_start_date": datetime.now(timezone.utc).date().isoformat()
+        })
         
         # Обновляем недельную статистику сразу после привязки
         update_user_mmr(telegram_id)
@@ -600,7 +601,7 @@ def update_user_mmr(telegram_id: int) -> dict:
                         else:
                             current_streak = 0
                             week_current_streak = 0
-                except:
+                except Exception:
                     pass
         
         logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}, week_streak={max_streak}")
@@ -611,40 +612,33 @@ def update_user_mmr(telegram_id: int) -> dict:
         
         if user_week_start and user_week_start != current_week_start:
             logger.info(f"Week changed for {telegram_id}: {user_week_start} -> {current_week_start}, resetting week stats")
-            update_user_field(telegram_id, "week_games", 0)
-            update_user_field(telegram_id, "week_wins", 0)
-            update_user_field(telegram_id, "week_best_streak", 0)
+            week_games = 0
+            week_wins = 0
+            max_streak = 0
         
-        # ВАЖНО: Всегда обновляем недельную статистику из матчей
-        # Даже если week_games = 0, все равно обновляем, чтобы сбросить старые данные
-        update_user_field(telegram_id, "week_games", week_games)
-        update_user_field(telegram_id, "week_wins", week_wins)
-        update_user_field(telegram_id, "week_best_streak", max_streak)
-        update_user_field(telegram_id, "week_current_streak", week_current_streak)
-        update_user_field(telegram_id, "week_start_date", current_week_start)
-        logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_streak={max_streak}, week_start={week_start_utc}")
-        
-        # Получаем общие данные
-        current_games = stats["total_games"]
-        current_wins = stats["wins"]
+        # Проверяем повышение ранга
         new_rank_tier = stats.get("rank_tier", 0)
         old_rank_tier = user.get("rank_tier", 0)
-        
         rank_up = None
         if new_rank_tier > old_rank_tier:
             logger.info(f"Rank UP for {telegram_id}: {old_rank_tier} -> {new_rank_tier}")
-            old_rank_str = rank_to_string(old_rank_tier)
-            new_rank_str = rank_to_string(new_rank_tier)
-            rank_up = {
-                "old_rank": old_rank_str,
-                "new_rank": new_rank_str
-            }
+            rank_up = {"old_rank": rank_to_string(old_rank_tier), "new_rank": rank_to_string(new_rank_tier)}
         
-        # Обновляем остальные поля
-        update_user_field(telegram_id, "rank_tier", new_rank_tier)
-        update_user_field(telegram_id, "wins", stats.get("wins", 0))
-        update_user_field(telegram_id, "losses", stats.get("losses", 0))
-        update_user_field(telegram_id, "mmr", stats["mmr"])
+        # ВАЖНО: Всегда обновляем недельную статистику из матчей
+        logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_streak={max_streak}, week_start={week_start_utc}")
+        
+        # Обновляем ВСЕ поля одним запросом
+        update_user_fields_batch(telegram_id, {
+            "week_games": week_games,
+            "week_wins": week_wins,
+            "week_best_streak": max_streak,
+            "week_current_streak": week_current_streak,
+            "week_start_date": current_week_start,
+            "rank_tier": new_rank_tier,
+            "wins": stats.get("wins", 0),
+            "losses": stats.get("losses", 0),
+            "mmr": stats["mmr"]
+        })
 
         return {"success": True, "rank_up": rank_up}
 

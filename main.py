@@ -10,7 +10,7 @@ import urllib.parse as urlparse
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch
 from aiohttp import web
 
 # Logging setup
@@ -240,12 +240,12 @@ async def announce_weekly_mmr_winner(bot):
 
 
 async def update_all_mmr_job(context):
-    """Ежедневное обновление MMR всех пользователей с привязанным Steam"""
+    """Ежечасовое обновление MMR всех пользователей с привязанным Steam"""
     try:
-        logger.info("Запуск ежедневного обновления MMR")
+        logger.info("Запуск ежечасного обновления MMR")
         await announce_weekly_mmr_winner(context.bot)
         from dota_mmr import update_user_mmr
-        from database import get_all_users_with_steam
+        from database import get_all_users_with_steam, update_user_fields_batch
         
         users = get_all_users_with_steam()
         if not users:
@@ -254,39 +254,36 @@ async def update_all_mmr_job(context):
         
         logger.info(f"Обновление MMR для {len(users)} пользователей")
         success_count = 0
+        rank_up_users = []  # собираем для batch
+        
         for user in users:
             try:
                 result = update_user_mmr(user['telegram_id'])
-                if result:
+                if result and result.get('success'):
                     success_count += 1
-                    # Уведомление о повышении ранга
                     if result.get('rank_up'):
-                        rank_info = result['rank_up']
-                        digest_chat_id = get_config('digest_chat_id')
-                        if digest_chat_id:
-                            try:
-                                username = user.get('steam_nickname') or user.get('username') or 'Игрок'
-                                telegram_id = user.get('telegram_id')
-                                if telegram_id:
-                                    name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>"
-                                else:
-                                    name_display = username
-                                text = (
-                                    f"🎉 РАНК АП! 🎉\n\n"
-                                    f"{name_display} повысил ранг!\n"
-                                    f"{rank_info['old_rank']} → {rank_info['new_rank']}"
-                                )
-                                await context.bot.send_message(
-                                    chat_id=digest_chat_id,
-                                    text=text,
-                                    parse_mode="HTML"
-                                )
-                            except Exception as notify_err:
-                                logger.error(f"Ошибка отправки уведомления о ранк-апе: {notify_err}")
+                        rank_up_users.append((user, result['rank_up']))
             except Exception as e:
                 logger.error(f"Ошибка обновления MMR для {user['telegram_id']}: {e}")
         
+        # Batch обновление кеша топа MMR (1 раз)
+        from database import update_dota_week_top_cache
+        update_dota_week_top_cache()
+        
         logger.info(f"MMR обновлён для {success_count}/{len(users)} пользователей")
+        
+        # Отправляем уведомления о ранк-апах
+        digest_chat_id = get_config('digest_chat_id')
+        if digest_chat_id and rank_up_users:
+            for user, rank_info in rank_up_users:
+                try:
+                    username = user.get('steam_nickname') or user.get('username') or 'Игрок'
+                    telegram_id = user.get('telegram_id')
+                    name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id else username
+                    text = f"🎉 РАНК АП! 🎉\n\n{name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
+                    await context.bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
+                except Exception as notify_err:
+                    logger.error(f"Ошибка отправки уведомления о ранк-апе: {notify_err}")
     except Exception as e:
         logger.error(f"Ошибка в update_all_mmr_job: {e}")
 
@@ -298,7 +295,7 @@ async def morning_digest_job(context):
         import time
         last_run = get_config('morning_digest_last_run')
         now = time.time()
-        if last_run and (now - float(last_run)) < 30:
+        if last_run and (now - float(last_run)) < JOB_COOLDOWN:
             logger.info(f"morning_digest_job: пропуск (запущен {(now - float(last_run)):.1f}с назад)")
             return
         set_config('morning_digest_last_run', str(now))
@@ -348,7 +345,7 @@ async def morning_digest_job(context):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n{MORNING_DIGEST_FOOTER}"
         
         bot = context.application.bot
         
@@ -455,7 +452,7 @@ async def refresh_digest_message(bot):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n{MORNING_DIGEST_FOOTER}"
         
         last_message_id = get_config('daily_digest_message_id')
         if last_message_id:
@@ -490,7 +487,7 @@ async def weekly_digest_job(context):
         import time
         last_run = get_config('weekly_digest_last_run')
         now = time.time()
-        if last_run and (now - float(last_run)) < 60:
+        if last_run and (now - float(last_run)) < WEEKLY_JOB_COOLDOWN:
             logger.info(f"weekly_digest_job: пропуск (запущен {(now - float(last_run)):.1f}с назад)")
             return
         set_config('weekly_digest_last_run', str(now))
@@ -504,7 +501,7 @@ async def weekly_digest_job(context):
         
         stats = get_weekly_digest_stats()
         
-        text = "🌅 ЕЖЕНЕДЕЛЬНЫЙ ДАЙДЖЕСТ\n\n"
+        text = f"{WEEKLY_DIGEST_HEADER}\n\n"
         
         # Больше всех вырос в см за неделю
         growth_player, growth_cm = stats.get("top_growth_cm", ("None", 0))
@@ -598,7 +595,7 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in digest_now: {e}", exc_info=True)
         try:
-            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось создать дайджест сейчас")
+            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось создать дайджест сейчас", reply_markup=main_menu())
             chat = update.effective_chat
             if chat and chat.type in ['group', 'supergroup', 'channel']:
                 schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
@@ -613,7 +610,7 @@ async def dota_digest_job(context):
         import time
         last_run = get_config('dota_digest_last_run')
         now = time.time()
-        if last_run and (now - float(last_run)) < 30:
+        if last_run and (now - float(last_run)) < JOB_COOLDOWN:
             logger.info(f"dota_digest_job: пропуск (запущен {(now - float(last_run)):.1f}с назад)")
             return
         set_config('dota_digest_last_run', str(now))
@@ -664,7 +661,7 @@ async def dota_digest_job(context):
         else:
             streak_part = "🔥—"
         
-        text = f"{top_part} ┃{bottom_part} ┃{streak_part}\n\n🎮 DOTA ДАЙДЖЕСТ 📊\n\n🎯 = лучший винрейт за неделю\n💀 = худший винрейт за неделю\n🔥 = больше всего побед за неделю"
+        text = f"{top_part} ┃{bottom_part} ┃{streak_part}\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
         
         bot = context.application.bot
         
@@ -842,7 +839,7 @@ async def alternate_digest_job(context):
             else:
                 streak_part = "🔥—"
             
-            text = f"{top_part} ┃{bottom_part} ┃{streak_part}\n\n🎮 DOTA ДАЙДЖЕСТ 📊\n\n🎯 = лучший винрейт за неделю\n💀 = худший винрейт за неделю\n🔥 = текущий стрик побед"
+            text = f"{top_part} ┃{bottom_part} ┃{streak_part}\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
             next_type = "0"
         
         # Пробуем отредактировать существующее сообщение
@@ -1219,6 +1216,18 @@ def calculate_new_fissure(current_fissure, roll):
     return max(0.1, new_value)
 
 
+def calculate_multicast(dice_value: int) -> tuple[int, str]:
+    """Вычисляет множитель и текст для multicast по значению dice (1-64)"""
+    if dice_value == 64:
+        return 4, "\n🎰🎰🎰 <b>ДЖЕКПОТ!!!</b>\n🗣️ Ogre Magi <i>«КАКОВЫ ШАНСЫ?!»</i>"
+    elif dice_value >= 48:  # 49-64
+        return 3, f"\n{random.choice(MULTICAST_TEXTS[3])}"
+    elif dice_value >= 16:  # 16-48
+        return 2, f"\n{random.choice(MULTICAST_TEXTS[2])}"
+    else:  # 1-15
+        return 2, f"\n{random.choice(MULTICAST_TEXTS[2])}"
+
+
 # ── Мультикаст (каскадный) ───────────────────────────────────────────
 # Шансы загружаются из bot_config, дефолты здесь
 MULTICAST_DEFAULT_CHANCE = 0.10
@@ -1227,8 +1236,35 @@ MULTICAST_CASCADE = [0.75, 0.50, 0.40]  # [не используется, ×3 ш
 ZEUS_DEFAULT_CHANCE = 0.05
 ZEUS_ICON_URL = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/zuus.png"
 
+# Выходной бонус
+WEEKEND_BONUS_MULTIPLIERS = [1.5, 2, 2.5]
+
+# Тексты дайджестов
+MORNING_DIGEST_HEADER = "🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК"
+MORNING_DIGEST_FOOTER = "📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+DOTA_DIGEST_HEADER = "🎮 DOTA ДАЙДЖЕСТ 📊"
+DOTA_DIGEST_FOOTER = "🎯 = лучший винрейт за неделю\n💀 = худший винрейт за неделю\n🔥 = текущий стрик побед"
+WEEKLY_DIGEST_HEADER = "🌅 ЕЖЕНЕДЕЛЬНЫЙ ДАЙДЖЕСТ"
+
+# Ожидание анимации dice
+DICE_ANIMATION_DELAY = 1.0
+
+# URL баннеров
+COOLDOWN_BANNER_URL = "https://i.ibb.co/tMyxHtz1/dsadsadasdas.png"
+PROFILE_BANNER_URL = "https://i.ibb.co/d0pcyNcM/image.png"
+TOP_BANNER_URL = "https://i.ibb.co/gLcnbBJ0/wx-Kwo.jpg"
+TOPMMR_BANNER_URL = "https://i.ibb.co/7Jy3hjsF/o-TVJg.jpg"
+LINK_BANNER_URL = "https://i.ibb.co/s9L6mTtx/dsfcv23123.png"
+SETDIGEST_BANNER_URL = "https://i.ibb.co/LXsGsfxZ/213.png"
+
 # Кеш шансов (обновляется раз в минуту)
 _event_chances_cache = {"ts": 0, "multicast": MULTICAST_DEFAULT_CHANCE, "zeus": ZEUS_DEFAULT_CHANCE}
+
+# Spam protection
+USER_PROCESSING_TTL = 30  # секунд
+BOT_CAN_DELETE_TTL = 3600  # 1 час
+JOB_COOLDOWN = 30  # секунд между запусками job
+WEEKLY_JOB_COOLDOWN = 60  # секунд между запусками weekly job
 
 def get_event_chances():
     """Получить шансы событий из bot_config с кешированием"""
@@ -1562,36 +1598,39 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
         
         if event_roll < zeus_chance + multicast_chance:
-            # 👹 МУЛЬТИКАСТ — гарантированно ×2, затем каскад до ×4 с анимацией
-            cascade_count = 2
-            
-            # Анимация ×2 со слотом
-            anim_msg = await send_multicast_anim(update.message.chat_id, display_username, 2, context.bot)
-            set_last_bot_message(chat_id, user_obj.id, anim_msg.message_id)
-            await asyncio.sleep(1.0)
-            
-            # Проверяем ×3
-            if random.random() < MULTICAST_CASCADE[1]:  # 50%
-                cascade_count = 3
-                await edit_multicast_anim(anim_msg, display_username, 3)
-                await asyncio.sleep(1.0)
+            # 🎰 МУЛЬТИКАСТ — отправляем реальный 🎰 dice от Telegram
+            try:
+                dice_msg = await context.bot.send_dice(
+                    chat_id=update.message.chat_id,
+                    emoji="🎰"
+                )
+                set_last_bot_message(chat_id, user_obj.id, dice_msg.message_id)
+                await asyncio.sleep(DICE_ANIMATION_DELAY)
                 
-                # Проверяем ×4
-                if random.random() < MULTICAST_CASCADE[2]:  # 40%
-                    cascade_count = 4
-                    await edit_multicast_anim(anim_msg, display_username, 4)
-                    await asyncio.sleep(1.0)
-            
-            multicast_count = cascade_count
-            roll = roll * cascade_count
-            multicast_text = f"\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
-            increment_stat("multicast")
-            if multicast_count >= 4:
-                increment_stat("multicast_x4")
-            elif multicast_count >= 3:
-                increment_stat("multicast_x3")
-            elif multicast_count >= 2:
-                increment_stat("multicast_x2")
+                # Получаем результат (1-64)
+                dice_value = dice_msg.dice.value
+                
+                # Вычисляем множитель по значению dice
+                cascade_count, multicast_text = calculate_multicast(dice_value)
+                
+                logger.info(f"Multicast dice roll: value={dice_value}, multiplier={cascade_count}")
+                
+                # Применяем множитель
+                roll = roll * cascade_count
+                increment_stat("multicast")
+                if cascade_count >= 4:
+                    increment_stat("multicast_x4")
+                elif cascade_count >= 3:
+                    increment_stat("multicast_x3")
+                elif cascade_count >= 2:
+                    increment_stat("multicast_x2")
+                    
+            except Exception as e:
+                logger.debug(f"Could not send dice: {e}")
+                # Fallback - старый метод
+                cascade_count = 2
+                roll = roll * 2
+                multicast_text = f"\n{random.choice(MULTICAST_TEXTS[2])}"
         
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
@@ -1601,7 +1640,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Бонус для выходных: увеличиваем положительный ролл
         if is_weekend and roll > 0 and not is_fatal:
-            bonus_multiplier = random.choice([1.5, 2, 2.5])
+            bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
             roll = int(roll * bonus_multiplier)
             weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f}"
         
@@ -1926,7 +1965,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in top: {e}", exc_info=True)
         try:
-            await update.message.reply_text("❌ Ошибка получения топа")
+            await update.message.reply_text("❌ Ошибка получения топа", reply_markup=main_menu())
         except Exception:
             pass
 
@@ -2034,7 +2073,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=update.effective_chat.id,
                 photo=topmmr_banner_url,
                 caption=text,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=main_menu()
             )
             set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
@@ -2118,7 +2158,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=update.effective_chat.id,
             photo=topmmr_banner_url,
             caption=text,
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=main_menu()
         )
         # Track this message for future deletion
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
@@ -2130,7 +2171,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
         except Exception:
             pass
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка получения топа MMR")
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка получения топа MMR", reply_markup=main_menu())
 
 
 async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2172,7 +2213,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         except Exception as e:
             logger.error(f"Error in link: {e}")
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Dota аккаунта")
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Dota аккаунта", reply_markup=main_menu())
         return
     
     # Если нет аргумента - отправляем инструкцию
@@ -2195,7 +2236,8 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=update.effective_chat.id,
         photo=link_banner_url,
         caption=link_text,
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=main_menu()
     )
     # Track this message for future deletion
     set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
@@ -2239,9 +2281,9 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"📊 Всего игр: {user['dota_total_games']}"
                 ))
             else:
-                result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось получить статистику")
+                result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось получить статистику", reply_markup=main_menu())
         else:
-            result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ У тебя не привязан Steam аккаунт. Используй /link")
+            result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ У тебя не привязан Steam аккаунт. Используй /link", reply_markup=main_menu())
         # Track this message for future deletion
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
@@ -2251,7 +2293,7 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
         except Exception:
             pass
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка обновления MMR")
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка обновления MMR", reply_markup=main_menu())
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2345,7 +2387,7 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in set_digest_chat: {e}", exc_info=True)
         try:
-            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось сохранить чат для дайджеста")
+            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось сохранить чат для дайджеста", reply_markup=main_menu())
             chat = update.effective_chat
             if chat and chat.type in ['group', 'supergroup', 'channel']:
                 schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
@@ -2492,37 +2534,33 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return  # выходим
         
         elif event_roll < zeus_chance + multicast_chance:
-            # 👹 МУЛЬТИКАСТ — гарантированно ×2, затем каскад до ×4 с анимацией
-            cascade_count = 2
-            
-            # Анимация ×2 со слотом
-            anim_msg = await send_multicast_anim(chat_id, display_username, 2, context.bot, is_test=True)
-            await asyncio.sleep(1.0)
-            
-            if random.random() < MULTICAST_CASCADE[1]:  # 50%
-                cascade_count = 3
-                await edit_multicast_anim(anim_msg, display_username, 3, is_test=True)
-                await asyncio.sleep(1.0)
+            # 🎰 МУЛЬТИКАСТ — отправляем реальный 🎰 dice от Telegram
+            try:
+                dice_msg = await context.bot.send_dice(
+                    chat_id=chat_id,
+                    emoji="🎰"
+                )
+                await asyncio.sleep(DICE_ANIMATION_DELAY)
                 
-                if random.random() < MULTICAST_CASCADE[2]:  # 40%
-                    cascade_count = 4
-                    await edit_multicast_anim(anim_msg, display_username, 4, is_test=True)
-                    await asyncio.sleep(1.0)
+                dice_value = dice_msg.dice.value
+                cascade_count, multicast_text = calculate_multicast(dice_value)
+                    
+            except Exception as e:
+                logger.debug(f"Could not send dice: {e}")
+                cascade_count = 2
+                multicast_text = f"\n{random.choice(MULTICAST_TEXTS[2])}"
             
-            multicast_count = cascade_count
             roll = roll * cascade_count
-            multicast_text = f"\n{random.choice(MULTICAST_TEXTS[multicast_count])}"
         
         # Защита
         roll, protection_msg = apply_fissure_protection(current_fissure, roll, is_fatal)
         
         # Выходной бонус
-        import datetime
         msk_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)
         is_weekend = msk_time.weekday() in (5, 6)
         weekend_bonus = ""
         if is_weekend and roll > 0 and not is_fatal:
-            bonus_multiplier = random.choice([1.5, 2, 2.5])
+            bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
             roll = int(roll * bonus_multiplier)
             weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f}"
         
@@ -2637,7 +2675,7 @@ async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in weekly_digest_now: {e}", exc_info=True)
         try:
-            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось создать дайджест сейчас")
+            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось создать дайджест сейчас", reply_markup=main_menu())
             chat = update.effective_chat
             if chat and chat.type in ['group', 'supergroup', 'channel']:
                 schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
@@ -2651,7 +2689,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"menu_handler: received update from user {update.effective_user.id if update.effective_user else 'unknown'}")
         
         if not update.message or not update.message.text:
-            logger.info("menu_handler: no message or text, skipping")
+            logger.info(f"menu_handler: no message or text, update={update}")
             return
         
         text = update.message.text.strip()
@@ -2680,6 +2718,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == "📈 Увеличить фиссуру":
             await fissure(update, context)
         elif text == "👤 Профиль":
+            logger.info(f"menu_handler: calling stats for user {user_id}")
             await stats(update, context)
         elif text == "🏆 Топ Фиссур":
             await top(update, context)
@@ -2790,19 +2829,20 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 name = new_member.user.first_name or "Unknown"
                 try:
                     set_user_in_chat(user_id, False)
-                    from database import update_user_field
-                    update_user_field(user_id, "steam_id", None)
-                    update_user_field(user_id, "steam_nickname", None)
-                    update_user_field(user_id, "mmr", 0)
-                    update_user_field(user_id, "rank_tier", 0)
-                    update_user_field(user_id, "week_games", 0)
-                    update_user_field(user_id, "week_wins", 0)
-                    update_user_field(user_id, "week_best_streak", 0)
-                    update_user_field(user_id, "week_current_streak", 0)
-                    update_user_field(user_id, "dota_total_games", 0)
-                    update_user_field(user_id, "dota_wins", 0)
-                    update_user_field(user_id, "wins", 0)
-                    update_user_field(user_id, "losses", 0)
+                    update_user_fields_batch(user_id, {
+                        "steam_id": None,
+                        "steam_nickname": None,
+                        "mmr": 0,
+                        "rank_tier": 0,
+                        "week_games": 0,
+                        "week_wins": 0,
+                        "week_best_streak": 0,
+                        "week_current_streak": 0,
+                        "dota_total_games": 0,
+                        "dota_wins": 0,
+                        "wins": 0,
+                        "losses": 0
+                    })
                     logger.info(f"User {name} ({user_id}) left chat, set in_chat=False and reset Steam data")
                 except Exception as e:
                     logger.debug(f"Could not process user leave for {user_id}: {e}")

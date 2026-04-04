@@ -321,7 +321,7 @@ def get_connection():
                 db_path = DATABASE_URL
             
             conn = sqlite3.connect(db_path)
-            print("⚠️ Подключено к SQLite (только для тестирования)")
+            # print("⚠️ Подключено к SQLite (только для тестирования)")
         
         # Сохраняем в пул
         _connection_pool[db_type] = conn
@@ -663,7 +663,7 @@ class Database:
                     RETURNING id
                 '''
                 result = self.execute_query(query, (user_id, username, 0.1, 0, 0, 0, 0), fetch="one")
-                return result[0] if result else None
+                return result[0] if result else user_id
             else:
                 query = '''
                     INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at)
@@ -1597,10 +1597,6 @@ def update_user_field(telegram_id, field, value):
         if field in steam_fields:
             _save_user_to_db_immediately(telegram_id, user)
         
-        # Обновляем кеш топа MMR если изменились соответствующие поля
-        if field in ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname']:
-            update_dota_week_top_cache()
-        
         # Сбрасываем кеши дайджестов при изменении данных пользователя
         user_cache.set('digest_stats', None)
         user_cache.set('weekly_digest_stats', None)
@@ -1610,6 +1606,36 @@ def update_user_field(telegram_id, field, value):
         
         return True
     return False
+
+
+def update_user_fields_batch(telegram_id: int, fields: dict):
+    """Массовое обновление полей - 1 запрос в БД, 1 обновление кеша"""
+    user = get_user(telegram_id)
+    if not user:
+        return False
+    
+    # Обновляем все поля в кеше
+    for field, value in fields.items():
+        user[field] = value
+    
+    user_cache.set(telegram_id, user)
+    user_cache.mark_dirty(telegram_id)
+    
+    # Один запрос в БД для всех Steam полей
+    _save_user_to_db_immediately(telegram_id, user)
+    
+    # Обновляем кеш топа MMR только 1 раз
+    dota_fields = ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname']
+    if any(f in dota_fields for f in fields):
+        update_dota_week_top_cache()
+    
+    # Сбрасываем кеши дайджестов
+    user_cache.set('digest_stats', None)
+    user_cache.set('weekly_digest_stats', None)
+    user_cache.set('dota_digest_stats', None)
+    top_cache.clear()
+    
+    return True
 
 
 def _save_user_to_db_immediately(telegram_id, user_data):
@@ -1666,16 +1692,21 @@ def zeus_strike(percent=0.05):
     db = Database()
     url = urlparse.urlparse(DATABASE_URL)
     scheme = url.scheme
+    multiplier = 1.0 - percent
     
     try:
         if "postgres" in scheme:
             query = "UPDATE users SET fissure = GREATEST(0.1, fissure * %s) WHERE fissure >= 5"
+            db.execute_query(query, (multiplier,))
+            count_query = "SELECT COUNT(*) FROM users WHERE fissure >= 5"
+            result = db.execute_query(count_query, fetch="one")
+            affected = result[0] if result else 0
         else:
             query = "UPDATE users SET fissure = MAX(0.1, fissure * ?) WHERE fissure >= 5"
-        
-        multiplier = 1.0 - percent
-        result = db.execute_query(query, (multiplier,))
-        affected = result if result is not None else 0
+            db.execute_query(query, (multiplier,))
+            count_query = "SELECT COUNT(*) FROM users WHERE fissure >= 5"
+            result = db.execute_query(count_query, fetch="one")
+            affected = result[0] if result else 0
         
         # Обновляем кеш только затронутых пользователей
         all_users = user_cache.get_all_users()
@@ -1702,7 +1733,7 @@ def batch_save_mmr(users_data: list):
         return
     try:
         db = Database()
-        conn = db.get_connection()
+        conn = db.connect()
         cursor = conn.cursor()
         
         url = urlparse.urlparse(DATABASE_URL)
@@ -1764,10 +1795,10 @@ def batch_save_mmr(users_data: list):
 
 
 def batch_increment_config(key: str, delta: int):
-    """Атомарный инкrement значения в bot_config (1 запрос вместо 2)"""
+    """Атомарный инкремент значения в bot_config (1 запрос вместо 2)"""
     try:
         db = Database()
-        conn = db.get_connection()
+        conn = db.connect()
         cursor = conn.cursor()
         
         url = urlparse.urlparse(DATABASE_URL)
@@ -2060,8 +2091,10 @@ def get_dota_digest_stats():
     """Получение статистики для Dota дайджеста - из кеша"""
     cached = user_cache.get('dota_digest_stats')
     if cached:
-        logger.info("get_dota_digest_stats: returning from cache")
+        logger.info(f"get_dota_digest_stats: returning from cache: {cached}")
         return cached
+    else:
+        logger.info("get_dota_digest_stats: cache miss or None, reading from DB")
     
     # Читаем из БД
     try:
@@ -2089,64 +2122,64 @@ def get_dota_digest_stats():
             user_cache.set('dota_digest_stats', result)
             return result
         
+        # ОПТИМИЗАЦИЯ: один запрос вместо трёх
         if "postgres" in scheme:
-            # Лучший винрейт (взвешенная оценка: winrate * LOG(games + 1))
+            # Один запрос: лучший винрейт, худший винрейт, лучший стрик
             cursor.execute("""
-                SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
-                FROM users 
-                WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY (week_wins::numeric / week_games::numeric) * LN(week_games + 1) DESC
-                LIMIT 1
+                WITH ranked AS (
+                    SELECT 
+                        steam_nickname, week_wins, week_games, rank_tier, telegram_id,
+                        week_current_streak,
+                        ROW_NUMBER() OVER (ORDER BY (week_wins::numeric / NULLIF(week_games, 0)) DESC) as rn_top,
+                        ROW_NUMBER() OVER (ORDER BY (week_wins::numeric / NULLIF(week_games, 0)) ASC) as rn_bottom,
+                        ROW_NUMBER() OVER (ORDER BY week_current_streak DESC) as rn_streak
+                    FROM users 
+                    WHERE steam_id IS NOT NULL AND week_games > 0
+                )
+                SELECT 
+                    MAX(CASE WHEN rn_top = 1 THEN steam_nickname END) as top_nickname,
+                    MAX(CASE WHEN rn_top = 1 THEN rank_tier END) as top_rank,
+                    MAX(CASE WHEN rn_top = 1 THEN week_games END) as top_games,
+                    MAX(CASE WHEN rn_top = 1 THEN week_wins END) as top_wins,
+                    MAX(CASE WHEN rn_top = 1 THEN telegram_id END) as top_id,
+                    MAX(CASE WHEN rn_bottom = 1 THEN steam_nickname END) as bottom_nickname,
+                    MAX(CASE WHEN rn_bottom = 1 THEN rank_tier END) as bottom_rank,
+                    MAX(CASE WHEN rn_bottom = 1 THEN week_games END) as bottom_games,
+                    MAX(CASE WHEN rn_bottom = 1 THEN week_wins END) as bottom_wins,
+                    MAX(CASE WHEN rn_bottom = 1 THEN telegram_id END) as bottom_id,
+                    MAX(CASE WHEN rn_streak = 1 AND week_current_streak > 0 THEN steam_nickname END) as streak_nickname,
+                    MAX(CASE WHEN rn_streak = 1 AND week_current_streak > 0 THEN week_current_streak END) as streak_val,
+                    MAX(CASE WHEN rn_streak = 1 AND week_current_streak > 0 THEN telegram_id END) as streak_id
+                FROM ranked
             """)
-            top = cursor.fetchone()
+            row = cursor.fetchone()
             
-            # Худший винрейт (взвешенная оценка: winrate * LOG(games + 1))
-            cursor.execute("""
-                SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
-                FROM users
-                WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY (week_wins::numeric / week_games::numeric) ASC
-                LIMIT 1
-            """)
-            bottom = cursor.fetchone()
-            
-            # Текущий стрик
-            cursor.execute("""
-                SELECT steam_nickname, week_current_streak, telegram_id
-                FROM users 
-                WHERE steam_id IS NOT NULL AND week_current_streak > 0
-                ORDER BY week_current_streak DESC
-                LIMIT 1
-            """)
-            streak = cursor.fetchone()
+            top = (row[0], row[1], row[2], row[3], row[4]) if row and row[0] else None
+            bottom = (row[5], row[6], row[7], row[8], row[9]) if row and row[5] else None
+            streak = (row[10], row[11], row[12]) if row and row[10] else None
         else:
-            # SQLite (взвешенная оценка: winrate * LOG(games + 1))
+            # SQLite: используем подзапросы
             cursor.execute("""
-                SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
-                FROM users 
-                WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY (week_wins * 1.0 / week_games) * LOG(week_games + 1) DESC
-                LIMIT 1
+                SELECT 
+                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) DESC LIMIT 1) as top_nickname,
+                    (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) DESC LIMIT 1) as top_rank,
+                    (SELECT week_games FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) DESC LIMIT 1) as top_games,
+                    (SELECT week_wins FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) DESC LIMIT 1) as top_wins,
+                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) DESC LIMIT 1) as top_id,
+                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) ASC LIMIT 1) as bottom_nickname,
+                    (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) ASC LIMIT 1) as bottom_rank,
+                    (SELECT week_games FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) ASC LIMIT 1) as bottom_games,
+                    (SELECT week_wins FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) ASC LIMIT 1) as bottom_wins,
+                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) ASC LIMIT 1) as bottom_id,
+                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 ORDER BY week_current_streak DESC LIMIT 1) as streak_nickname,
+                    (SELECT week_current_streak FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 ORDER BY week_current_streak DESC LIMIT 1) as streak_val,
+                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 ORDER BY week_current_streak DESC LIMIT 1) as streak_id
             """)
-            top = cursor.fetchone()
+            row = cursor.fetchone()
             
-            cursor.execute("""
-                SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
-                FROM users
-                WHERE steam_id IS NOT NULL AND week_games > 0
-                ORDER BY (week_wins * 1.0 / week_games) ASC
-                LIMIT 1
-            """)
-            bottom = cursor.fetchone()
-            
-            cursor.execute("""
-                SELECT steam_nickname, week_current_streak, telegram_id
-                FROM users 
-                WHERE steam_id IS NOT NULL AND week_current_streak > 0
-                ORDER BY week_current_streak DESC
-                LIMIT 1
-            """)
-            streak = cursor.fetchone()
+            top = (row[0], row[1], row[2], row[3], row[4]) if row and row[0] else None
+            bottom = (row[5], row[6], row[7], row[8], row[9]) if row and row[5] else None
+            streak = (row[10], row[11], row[12]) if row and row[10] else None
         
         cursor.close()
         conn.close()
@@ -2376,14 +2409,3 @@ def restore_database(backup_file):
     except Exception as e:
         logger.error(f"Ошибка восстановления базы данных: {e}")
         return False
-
-
-def get_db_type():
-    """Получить тип базы данных"""
-    url = urlparse.urlparse(DATABASE_URL)
-    scheme = url.scheme
-    
-    if "postgres" in scheme:
-        return "postgresql"
-    else:
-        return "sqlite"
