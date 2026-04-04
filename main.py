@@ -2226,7 +2226,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Build player entry - two lines per player
                 lines.append(f"{prefix} {username} — {rank_str}\n")
-                lines.append(f" └ {week_wins}W/{week_losses}L • WR {winrate}%{streak_text}\n\n")
+                if week_games > 0:
+                    lines.append(f" └ {week_wins}W/{week_losses}L • WR {winrate}%{streak_text}\n\n")
+                else:
+                    lines.append(f" └ 0W/0L • WR 0%\n\n")
             
             # Добавляем позицию пользователя только если пользователь НЕ в общем топе (избегаем дублирования)
             if not user_is_in_top:
