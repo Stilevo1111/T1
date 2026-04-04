@@ -342,7 +342,7 @@ async def morning_digest_job(context):
         else:
             drop_part = "💀—"
         
-        if streak_player and streak_player != "None":
+        if streak_player and streak_player != "None" and streak_len > 0:
             streak_part = f"🍀{streak_display} - Стрик {streak_len}"
         else:
             streak_part = "🍀—"
@@ -449,7 +449,7 @@ async def refresh_digest_message(bot):
         else:
             drop_part = "💀—"
         
-        if streak_player and streak_player != "None":
+        if streak_player and streak_player != "None" and streak_len > 0:
             streak_part = f"🍀{streak_display} - Стрик {streak_len}"
         else:
             streak_part = "🍀—"
@@ -645,8 +645,9 @@ async def dota_digest_job(context):
         top_by_wr = max(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
         # Худший винрейт
         bottom_by_wr = min(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
-        # Лучший стрик
-        top_streak_player = max(valid_players, key=lambda p: p.get('week_current_streak', 0))
+        # Лучший стрик - только игроки со стриком > 0
+        players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
+        top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
         
         top_player = top_by_wr.get('steam_nickname', 'None')
         top_rank = top_by_wr.get('rank_tier', 0)
@@ -660,9 +661,14 @@ async def dota_digest_job(context):
         bottom_wins = bottom_by_wr.get('week_wins', 0)
         bottom_id = bottom_by_wr.get('telegram_id')
         
-        streak_player = top_streak_player.get('steam_nickname', 'None')
-        streak_wins = top_streak_player.get('week_current_streak', 0)
-        streak_id = top_streak_player.get('telegram_id')
+        if top_streak_player:
+            streak_player = top_streak_player.get('steam_nickname', 'None')
+            streak_wins = top_streak_player.get('week_current_streak', 0)
+            streak_id = top_streak_player.get('telegram_id')
+        else:
+            streak_player = 'None'
+            streak_wins = 0
+            streak_id = None
         
         # Форматируем винрейт (по реальным победам/поражениям, макс 100%)
         if top_games > 0 and top_wins >= 0:
@@ -684,7 +690,7 @@ async def dota_digest_job(context):
         # Используем make_clickable для никнеймов
         top_display = make_clickable(top_player, top_id) if top_player and top_player != "None" else "—"
         bottom_display = make_clickable(bottom_player, bottom_id) if bottom_player and bottom_player != "None" else "—"
-        streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" else "—"
+        streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" and streak_wins > 0 else "—"
         
         # Формат: 🎯 Джумбет▲ 5/3 (62.5%)
         if top_player and top_player != "None":
@@ -699,7 +705,7 @@ async def dota_digest_job(context):
         else:
             bottom_part = "💀 —"
         
-        if streak_player and streak_player != "None":
+        if streak_player and streak_player != "None" and streak_wins > 0:
             streak_part = f"🔥 {streak_display}▸ +{streak_wins}"
         else:
             streak_part = "🔥 —"
@@ -843,7 +849,7 @@ async def alternate_digest_job(context):
             else:
                 drop_part = "💀—"
             
-            if streak_player and streak_player != "None":
+            if streak_player and streak_player != "None" and streak_len > 0:
                 streak_part = f"🍀{streak_display} - Стрик {streak_len}"
             else:
                 streak_part = "🍀—"
@@ -866,7 +872,8 @@ async def alternate_digest_job(context):
             
             top_by_wr = max(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
             bottom_by_wr = min(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
-            top_streak_player = max(valid_players, key=lambda p: p.get('week_current_streak', 0))
+            players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
+            top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
             
             top_player = top_by_wr.get('steam_nickname', 'None')
             top_rank = top_by_wr.get('rank_tier', 0)
@@ -880,9 +887,14 @@ async def alternate_digest_job(context):
             bottom_wins = bottom_by_wr.get('week_wins', 0)
             bottom_id = bottom_by_wr.get('telegram_id')
             
-            streak_player = top_streak_player.get('steam_nickname', 'None')
-            streak_wins = top_streak_player.get('week_current_streak', 0)
-            streak_id = top_streak_player.get('telegram_id')
+            if top_streak_player:
+                streak_player = top_streak_player.get('steam_nickname', 'None')
+                streak_wins = top_streak_player.get('week_current_streak', 0)
+                streak_id = top_streak_player.get('telegram_id')
+            else:
+                streak_player = 'None'
+                streak_wins = 0
+                streak_id = None
             
             # Форматируем винрейт правильно
             if top_games > 0 and top_wins >= 0:
@@ -903,7 +915,7 @@ async def alternate_digest_job(context):
             
             top_display = make_clickable(top_player, top_id) if top_player and top_player != "None" else "—"
             bottom_display = make_clickable(bottom_player, bottom_id) if bottom_player and bottom_player != "None" else "—"
-            streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" else "—"
+            streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" and streak_wins > 0 else "—"
             
             if top_player and top_player != "None":
                 top_losses = max(0, top_games - top_wins)
@@ -917,7 +929,7 @@ async def alternate_digest_job(context):
             else:
                 bottom_part = "💀 —"
 
-            if streak_player and streak_player != "None":
+            if streak_player and streak_player != "None" and streak_wins > 0:
                 streak_part = f"🔥 {streak_display}▸ +{streak_wins}"
             else:
                 streak_part = "🔥 —"
@@ -1195,7 +1207,20 @@ WELCOME_PHRASES = [
 def make_clickable(name, user_id):
     """Создать кликабельный никнейм для Telegram"""
     if name and name != "None" and user_id:
-        return f"<a href=\"tg://user?id={user_id}\">{name}</a>"
+        # Если name - это числовой ID ( telegram_id как строка), пробуем получить username из кэша
+        if name.isdigit():
+            try:
+                from database import user_cache
+                cached = user_cache.get(int(user_id))
+                if cached:
+                    display_name = cached.get('username') or cached.get('steam_nickname') or name
+                else:
+                    display_name = name
+            except:
+                display_name = name
+        else:
+            display_name = name
+        return f"<a href=\"tg://user?id={user_id}\">{display_name}</a>"
     return name if name and name != "None" else "—"
 
 # Track last bot message per user per chat for cleanup
@@ -1954,6 +1979,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not get last 10 matches: {e}")
             
             text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n{last_10_balls}\n🔥 Стрик: {week_streak}/{week_best}"
+            
+            # Получаем топ-3 героя за последние 10 игр
+            top_heroes = get_top_heroes(steam_id, last_n=10, top_k=3)
+            if top_heroes:
+                heroes_names = ", ".join([h["localized_name"] for h in top_heroes])
+                text += f"\n🌟 Топ герои: {heroes_names}"
         
         # Подсказка как смотреть чужой профиль
         if not viewing_other:
@@ -1972,27 +2003,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
-        
-        # Отправляем топ-3 героя за последние 10 игр (если привязан Steam)
-        if target_user.get('steam_id'):
-            try:
-                from dota_mmr import get_top_heroes, generate_heroes_image
-                top_heroes = get_top_heroes(target_user['steam_id'], last_n=10, top_k=3)
-                if top_heroes:
-                    img_bytes = generate_heroes_image(top_heroes)
-                    if img_bytes:
-                        import io
-                        await context.bot.send_message(
-                            chat_id=update.message.chat_id,
-                            text="🌟 Любимые герои за 10 матчей:"
-                        )
-                        hero_msg = await context.bot.send_photo(
-                            chat_id=update.message.chat_id,
-                            photo=io.BytesIO(img_bytes)
-                        )
-                        schedule_delete(context.bot, chat_id, hero_msg.message_id, 30, context.application.job_queue)
-            except Exception as e:
-                logger.debug(f"Could not send hero icons: {e}")
         
     except Exception as e:
         import traceback
