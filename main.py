@@ -656,23 +656,23 @@ async def dota_digest_job(context):
         bottom_display = make_clickable(bottom_player, bottom_id) if bottom_player and bottom_player != "None" else "—"
         streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" else "—"
         
-        # Формат аналогичен утреннему дайджесту
+        # Формат: 🎯 Джумбет▲ 5/3 (62.5%)
         if top_player and top_player != "None":
-            top_losses = max(0, top_games - top_wins)  # защита от отрицательных
-            top_part = f"🎯{top_display} {top_wins}W • {top_losses}L • {top_winrate}%"
+            top_losses = max(0, top_games - top_wins)
+            top_part = f"🎯 {top_display}▲ {top_wins}/{top_losses} ({top_winrate}%)"
         else:
-            top_part = "🎯—"
+            top_part = "🎯 —"
         
         if bottom_player and bottom_player != "None":
             bottom_losses = max(0, bottom_games - bottom_wins)
-            bottom_part = f"💀{bottom_display} {bottom_wins}W • {bottom_losses}L • {bottom_winrate}%"
+            bottom_part = f"💀 {bottom_display}▼ {bottom_wins}/{bottom_losses} ({bottom_winrate}%)"
         else:
-            bottom_part = "💀—"
+            bottom_part = "💀 —"
         
         if streak_player and streak_player != "None":
-            streak_part = f"🔥{streak_display} - {streak_wins} Стрик"
+            streak_part = f"🔥 {streak_display}▸ +{streak_wins}"
         else:
-            streak_part = "🔥—"
+            streak_part = "🔥 —"
         
         text = f"{top_part} ┃{bottom_part} ┃{streak_part}\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
         
@@ -850,20 +850,20 @@ async def alternate_digest_job(context):
             
             if top_player and top_player != "None":
                 top_losses = max(0, top_games - top_wins)
-                top_part = f"🎯{top_display}: {top_wins}W • {top_losses}L • {top_winrate}%"
+                top_part = f"🎯 {top_display}▲ {top_wins}/{top_losses} ({top_winrate}%)"
             else:
-                top_part = "🎯—"
+                top_part = "🎯 —"
 
             if bottom_player and bottom_player != "None":
                 bottom_losses = max(0, bottom_games - bottom_wins)
-                bottom_part = f"💀{bottom_display}: {bottom_wins}W • {bottom_losses}L • {bottom_winrate}%"
+                bottom_part = f"💀 {bottom_display}▼ {bottom_wins}/{bottom_losses} ({bottom_winrate}%)"
             else:
-                bottom_part = "💀—"
+                bottom_part = "💀 —"
 
             if streak_player and streak_player != "None":
-                streak_part = f"🔥{streak_display}: {streak_wins} Стрик"
+                streak_part = f"🔥 {streak_display}▸ +{streak_wins}"
             else:
-                streak_part = "🔥—"
+                streak_part = "🔥 —"
             
             text = f"{top_part} ┃{bottom_part} ┃{streak_part}\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
             next_type = "0"
