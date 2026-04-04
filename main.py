@@ -10,7 +10,7 @@ import urllib.parse as urlparse
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top
 from aiohttp import web
 
 # Logging setup
@@ -623,16 +623,44 @@ async def dota_digest_job(context):
             logger.info("Чат для дайджеста не настроен")
             return
         
-        stats = get_dota_digest_stats()
+        mmr_top = get_dota_mmr_top(limit=10)
         
-        # Формируем сообщение
-        # top_winrate: (nickname, rank_tier, week_games, week_wins, telegram_id)
-        # bottom_winrate: (nickname, rank_tier, week_games, week_wins, telegram_id)
-        # top_streak: (nickname, week_wins, telegram_id)
+        if not mmr_top:
+            logger.info("Нет данных для Dota дайджеста")
+            return
         
-        top_player, top_rank, top_games, top_wins, top_id = stats.get("top_winrate", ("None", 0, 0, 0, None))
-        bottom_player, bottom_rank, bottom_games, bottom_wins, bottom_id = stats.get("bottom_winrate", ("None", 0, 0, 0, None))
-        streak_player, streak_wins, streak_id = stats.get("top_streak", ("None", 0, None))
+        # top_winrate - лучший по винрейту среди топ MMR (не менее 3 игр за неделю)
+        # bottom_winrate - худший по винрейту среди топ MMR
+        # top_streak - лучший стрик среди топ MMR
+        
+        valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
+        
+        if not valid_players:
+            logger.info("Нет игроков с 3+ играми для Dota дайджеста")
+            return
+        
+        # Лучший винрейт
+        top_by_wr = max(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
+        # Худший винрейт
+        bottom_by_wr = min(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
+        # Лучший стрик
+        top_streak_player = max(valid_players, key=lambda p: p.get('week_current_streak', 0))
+        
+        top_player = top_by_wr.get('steam_nickname', 'None')
+        top_rank = top_by_wr.get('rank_tier', 0)
+        top_games = top_by_wr.get('week_games', 0)
+        top_wins = top_by_wr.get('week_wins', 0)
+        top_id = top_by_wr.get('telegram_id')
+        
+        bottom_player = bottom_by_wr.get('steam_nickname', 'None')
+        bottom_rank = bottom_by_wr.get('rank_tier', 0)
+        bottom_games = bottom_by_wr.get('week_games', 0)
+        bottom_wins = bottom_by_wr.get('week_wins', 0)
+        bottom_id = bottom_by_wr.get('telegram_id')
+        
+        streak_player = top_streak_player.get('steam_nickname', 'None')
+        streak_wins = top_streak_player.get('week_current_streak', 0)
+        streak_id = top_streak_player.get('telegram_id')
         
         # Форматируем винрейт (по реальным победам/поражениям, макс 100%)
         if top_games > 0 and top_wins >= 0:
@@ -822,11 +850,38 @@ async def alternate_digest_job(context):
             next_type = "1"
         else:
             # Dota дайджест
-            stats = get_dota_digest_stats()
+            mmr_top = get_dota_mmr_top(limit=10)
             
-            top_player, top_rank, top_games, top_wins, top_id = stats.get("top_winrate", ("None", 0, 0, 0, None))
-            bottom_player, bottom_rank, bottom_games, bottom_wins, bottom_id = stats.get("bottom_winrate", ("None", 0, 0, 0, None))
-            streak_player, streak_wins, streak_id = stats.get("top_streak", ("None", 0, None))
+            if not mmr_top:
+                logger.info("Нет данных для Dota дайджеста")
+                return
+            
+            valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
+            
+            if not valid_players:
+                logger.info("Нет игроков с 3+ играми для Dota дайджеста")
+                return
+            
+            top_by_wr = max(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
+            bottom_by_wr = min(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
+            top_streak_player = max(valid_players, key=lambda p: p.get('week_current_streak', 0))
+            
+            top_player = top_by_wr.get('steam_nickname', 'None')
+            top_rank = top_by_wr.get('rank_tier', 0)
+            top_games = top_by_wr.get('week_games', 0)
+            top_wins = top_by_wr.get('week_wins', 0)
+            top_id = top_by_wr.get('telegram_id')
+            
+            bottom_player = bottom_by_wr.get('steam_nickname', 'None')
+            bottom_rank = bottom_by_wr.get('rank_tier', 0)
+            bottom_games = bottom_by_wr.get('week_games', 0)
+            bottom_wins = bottom_by_wr.get('week_wins', 0)
+            bottom_id = bottom_by_wr.get('telegram_id')
+            
+            streak_player = top_streak_player.get('steam_nickname', 'None')
+            streak_wins = top_streak_player.get('week_current_streak', 0)
+            streak_id = top_streak_player.get('telegram_id')
+            
             # Форматируем винрейт правильно
             if top_games > 0 and top_wins >= 0:
                 top_losses = max(0, top_games - top_wins)
