@@ -1856,8 +1856,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
-        # ВСЕГДА удаляем сообщение через 10 минут во всех чатах
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
+        # ВСЕГДА удаляем сообщение через 30 секунд во всех чатах
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(user_obj.id, result_msg.message_id)
         
         await flush_stat_buffer()
