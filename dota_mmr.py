@@ -192,14 +192,19 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         if not top_heroes:
             return None
         
-        icon_size = 63
-        padding = 10
+        icon_size = 192
+        padding = 30
         cell_width = icon_size + padding * 2
         height = icon_size + padding * 2
         width = cell_width * len(top_heroes) + padding
         
         img = Image.new("RGB", (width, height), color=(35, 25, 50))
         draw = ImageDraw.Draw(img)
+        
+        # Вертикальный градиент
+        for y in range(height):
+            c = tuple(min(255, int((35 + y/6, 25 + y/8, 50 + y/5)[i])) for i in range(3))
+            draw.line([(0, y), (width, y)], fill=c)
         
         for i, hero in enumerate(top_heroes):
             x = padding + i * cell_width
@@ -215,7 +220,7 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                 logger.debug(f"Could not load hero icon: {e}")
                 draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
             
-            draw.rectangle([x - 1, y - 1, x + icon_size, y + icon_size], outline=(215, 175, 85), width=1)
+            draw.rectangle([x - 2, y - 2, x + icon_size, y + icon_size], outline=(215, 175, 85), width=2)
         
         buf = io.BytesIO()
         img.save(buf, format="PNG")
