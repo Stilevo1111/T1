@@ -794,10 +794,13 @@ async def alternate_digest_job(context):
         import time
         now = time.time()
         
-        # Блокировка от параллельного запуска (в памяти, без БД)
-        if now - _digest_state.get("last_run", 0) < 20:
+        # Блокировка от параллельного запуска (В БД, а не в памяти! Работает при рестартах)
+        last_run_str = get_config('alternate_digest_last_run')
+        last_run = float(last_run_str) if last_run_str and last_run_str.strip() else 0
+        if now - last_run < 20:
+            logger.info(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
             return
-        _digest_state["last_run"] = now
+        set_config('alternate_digest_last_run', str(now))
         
         # Сбрасываем кеш статистики перед каждым запуском
         top_cache.clear()
@@ -966,10 +969,7 @@ async def alternate_digest_job(context):
                 else:
                     logger.info(f"Не удалось редактировать: {e}")
 
-        # Переключаем тип (в памяти + в БД только при реальном изменении)
-        _digest_state["type"] = next_type
-        set_config('alternate_digest_type', next_type)  # пишем в БД один раз за переключение
-
+        # Если не удалось редактировать - проверяем можем ли мы создать новое
         if not edited:
             # Удаляем старое сообщение ПЕРЕД проверкой времени
             if last_message_id:
@@ -998,23 +998,31 @@ async def alternate_digest_job(context):
             # помечаем что начинаем создавать
             set_config('alternate_digest_creating', str(time.time()))
 
-            # Отправляем новое сообщение
-            msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
-            set_config('alternate_digest_message_id', msg.message_id)
-            set_config('alternate_digest_last_created', str(time.time()))
-            set_config('alternate_digest_creating', '')  # очищаем флаг создания
-            logger.info(f"Создан новый alternate дайджест {msg.message_id}, type={next_type}")
+            try:
+                # Отправляем новое сообщение
+                msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
+                # СОХРАНЯЕМ СРАЗУ ПОСЛЕ ОТПРАВКИ
+                set_config('alternate_digest_message_id', msg.message_id)
+                set_config('alternate_digest_last_created', str(time.time()))
+                logger.info(f"Создан новый alternate дайджест {msg.message_id}, type={next_type}")
+                
+                # ТОЛЬКО ПОСЛЕ УСПЕШНОГО СОЗДАНИЯ ПЕРЕКЛЮЧАЕМ ТИП
+                _digest_state["type"] = next_type
+                set_config('alternate_digest_type', next_type)  # пишем в БД один раз за переключение
 
-            # Закрепляем дайджест (открепляем старый, закрепляем новый)
-            try:
-                await bot.unpin_chat_message(chat_id=digest_chat_id)
-            except Exception as e:
-                logger.debug(f"Не удалось открепить старый: {e}")
-            try:
-                await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
-                logger.info(f"Дайджест {msg.message_id} закреплён")
-            except Exception as e:
-                logger.debug(f"Не удалось закрепить: {e}")
+                # Закрепляем дайджест (открепляем старый, закрепляем новый)
+                try:
+                    await bot.unpin_chat_message(chat_id=digest_chat_id)
+                except Exception as e:
+                    logger.debug(f"Не удалось открепить старый: {e}")
+                try:
+                    await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
+                    logger.info(f"Дайджест {msg.message_id} закреплён")
+                except Exception as e:
+                    logger.debug(f"Не удалось закрепить: {e}")
+            finally:
+                # ВСЕГДА очищаем флаг создания, даже если упало исключение
+                set_config('alternate_digest_creating', '')  # очищаем флаг создания
         
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
