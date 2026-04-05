@@ -99,12 +99,17 @@ async def bot_can_delete(bot, chat_id):
 def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
     """Запланировать удаление сообщения через delay секунд"""
     if job_queue:
-        job_queue.run_once(
-            delete_message_job,
-            delay,
-            data={'chat_id': chat_id, 'msg_id': msg_id},  # data для PTB
-            name=f"delete_{chat_id}_{msg_id}"
-        )
+        try:
+            job_queue.run_once(
+                delete_message_job,
+                delay,
+                data={'chat_id': chat_id, 'msg_id': msg_id},
+                name=f"delete_{chat_id}_{msg_id}"
+            )
+            logger.info(f"Scheduled delete for msg {msg_id} in {delay}s via job_queue")
+        except Exception as e:
+            logger.warning(f"JobQueue failed, using asyncio fallback: {e}")
+            asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay, None))
     else:
         # Fallback если job_queue не передан
         asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay, job_queue))
