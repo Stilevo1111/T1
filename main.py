@@ -1979,10 +1979,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not get last 10 matches: {e}")
             
             text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n{last_10_balls}\n🔥 Стрик: {week_streak}/{week_best}"
-        
-        # Подсказка как смотреть чужой профиль
-        if not viewing_other:
-            text += "\n\n💡 <code>/profile ＠ник</code> — чужой профиль"
+            text += "\n\n🌟 Любимые герои за 10 матчей:"
+        else:
+            text += "\n\n💡 /profile ＠ник — чужой профиль"
         
         # Banner URL
         profile_banner_url = "https://i.ibb.co/d0pcyNcM/image.png"
@@ -2007,10 +2006,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     img_bytes = generate_heroes_image(top_heroes)
                     if img_bytes:
                         import io
-                        await context.bot.send_message(
-                            chat_id=update.message.chat_id,
-                            text="🌟 Любимые герои за 10 матчей:"
-                        )
                         hero_msg = await context.bot.send_photo(
                             chat_id=update.message.chat_id,
                             photo=io.BytesIO(img_bytes)
