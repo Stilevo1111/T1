@@ -1279,6 +1279,11 @@ def add_bot_message(chat_id, user_id, message_id):
     else:
         # Конвертируем старый формат в список
         last_bot_message[chat_id][user_id] = [message_id]
+    
+    # Cleanup memory: ограничить размер словаря чтобы не было утечки памяти
+    if len(last_bot_message) > 500:
+        last_bot_message.clear()
+        logger.warning("Cleared last_bot_message cache (exceeded 500 entries)")
 
 
 def calculate_fissure_roll(current_fissure):
