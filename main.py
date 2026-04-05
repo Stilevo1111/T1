@@ -1979,12 +1979,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not get last 10 matches: {e}")
             
             text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n{last_10_balls}\n🔥 Стрик: {week_streak}/{week_best}"
-            
-            # Получаем топ-3 героя за последние 10 игр
-            top_heroes = get_top_heroes(steam_id, last_n=10, top_k=3)
-            if top_heroes:
-                heroes_names = ", ".join([h["localized_name"] for h in top_heroes])
-                text += f"\n🌟 Топ герои: {heroes_names}"
         
         # Подсказка как смотреть чужой профиль
         if not viewing_other:
@@ -2003,6 +1997,27 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
+        
+        # Отправляем топ-3 героя за последние 10 игр (если привязан Steam)
+        if target_user.get('steam_id'):
+            try:
+                from dota_mmr import get_top_heroes, generate_heroes_image
+                top_heroes = get_top_heroes(target_user['steam_id'], last_n=10, top_k=3)
+                if top_heroes:
+                    img_bytes = generate_heroes_image(top_heroes)
+                    if img_bytes:
+                        import io
+                        await context.bot.send_message(
+                            chat_id=update.message.chat_id,
+                            text="🌟 Любимые герои за 10 матчей:"
+                        )
+                        hero_msg = await context.bot.send_photo(
+                            chat_id=update.message.chat_id,
+                            photo=io.BytesIO(img_bytes)
+                        )
+                        schedule_delete(context.bot, chat_id, hero_msg.message_id, 30, context.application.job_queue)
+            except Exception as e:
+                logger.debug(f"Could not send hero icons: {e}")
         
     except Exception as e:
         import traceback
