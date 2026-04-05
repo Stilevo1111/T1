@@ -1966,7 +1966,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 from dota_mmr import get_recent_matches
                 steam_id = target_user.get('steam_id')
                 if steam_id:
-                    matches = get_recent_matches(steam_id, limit=10)
+                    matches = get_recent_matches(steam_id, limit=50)
                     matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)[:10]
                     for match in matches:
                         # OpenDota не возвращает 'win', вычисляем по player_slot и radiant_win
@@ -1985,7 +1985,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not get last 10 matches: {e}")
             
             text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n{last_10_balls}\n🔥 Стрик: {week_streak}/{week_best}"
-            text += "\n\n🌟 Любимые герои за 10 матчей:"
+            text += "\n\n🌟 Любимые герои за 50 матчей:"
         else:
             text += "\n\n💡 /profile ＠ник — чужой профиль"
         
@@ -2007,7 +2007,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if target_user.get('steam_id'):
             try:
                 from dota_mmr import get_top_heroes, generate_heroes_image
-                top_heroes = get_top_heroes(target_user['steam_id'], last_n=10, top_k=5)
+                top_heroes = get_top_heroes(target_user['steam_id'], last_n=50, top_k=5)
                 if top_heroes:
                     img_bytes = generate_heroes_image(top_heroes)
                     if img_bytes:
