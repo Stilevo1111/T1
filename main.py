@@ -1862,19 +1862,24 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         roll_banner_url = "https://ibb.co/N22wB4RD"
         
         try:
-            banner_msg = await context.bot.send_photo(chat_id=update.message.chat_id, photo=roll_banner_url)
-            add_bot_message(chat_id, user_obj.id, banner_msg.message_id)
+            result_msg = await context.bot.send_photo(
+                chat_id=update.message.chat_id,
+                photo=roll_banner_url,
+                caption=text,
+                parse_mode="HTML",
+                reply_markup=main_menu()
+            )
+            add_bot_message(chat_id, user_obj.id, result_msg.message_id)
         except Exception as e:
             logger.debug(f"Could not send roll banner: {e}")
-        
-        try:
-            await anim_msg.edit_text(text=text, parse_mode="HTML", reply_markup=main_menu())
-            result_msg = anim_msg
-        except Exception:
-            result_msg = await context.bot.send_message(
-                chat_id=update.message.chat_id, text=text,
-                parse_mode="HTML", reply_markup=main_menu()
-            )
+            try:
+                await anim_msg.edit_text(text=text, parse_mode="HTML", reply_markup=main_menu())
+                result_msg = anim_msg
+            except Exception:
+                result_msg = await context.bot.send_message(
+                    chat_id=update.message.chat_id, text=text,
+                    parse_mode="HTML", reply_markup=main_menu()
+                )
         
         # Отправляем стикер при мулькасте
         if multicast_count > 1:
@@ -2793,21 +2798,25 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         roll_banner_url = "https://ibb.co/N22wB4RD"
         
         try:
-            banner_msg = await context.bot.send_photo(chat_id=chat_id, photo=roll_banner_url)
-            add_bot_message(chat_id, user_obj.id, banner_msg.message_id)
+            result_msg = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=roll_banner_url,
+                caption=text,
+                parse_mode="HTML"
+            )
+            add_bot_message(chat_id, user_obj.id, result_msg.message_id)
         except Exception as e:
             logger.debug(f"Could not send roll banner: {e}")
-        
-        try:
-            if anim_msg:
-                await anim_msg.edit_text(text=text, parse_mode="HTML")
-                result_msg = anim_msg
-            else:
-                raise Exception("no anim_msg")
-        except Exception:
-            result_msg = await context.bot.send_message(
-                chat_id=chat_id, text=text, parse_mode="HTML"
-            )
+            try:
+                if anim_msg:
+                    await anim_msg.edit_text(text=text, parse_mode="HTML")
+                    result_msg = anim_msg
+                else:
+                    raise Exception("no anim_msg")
+            except Exception:
+                result_msg = await context.bot.send_message(
+                    chat_id=chat_id, text=text, parse_mode="HTML"
+                )
         
         # Стикеры (мулькаст и Зевс)
         if multicast_count > 1:
