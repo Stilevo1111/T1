@@ -2790,6 +2790,14 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = f"{text}\n{zeus_text}"
         
         # Пытаемся отредактировать anim_msg (мулькаст), иначе отправляем новое
+        roll_banner_url = "https://ibb.co/N22wB4RD"
+        
+        try:
+            banner_msg = await context.bot.send_photo(chat_id=chat_id, photo=roll_banner_url)
+            add_bot_message(chat_id, user_obj.id, banner_msg.message_id)
+        except Exception as e:
+            logger.debug(f"Could not send roll banner: {e}")
+        
         try:
             if anim_msg:
                 await anim_msg.edit_text(text=text, parse_mode="HTML")
