@@ -966,6 +966,15 @@ async def alternate_digest_job(context):
         set_config('alternate_digest_type', next_type)  # пишем в БД один раз за переключение
 
         if not edited:
+            # Удаляем старое сообщение ПЕРЕД проверкой времени
+            if last_message_id:
+                try:
+                    await bot.delete_message(chat_id=digest_chat_id, message_id=int(last_message_id))
+                    logger.info(f"Удалено старое alternate сообщение {last_message_id}")
+                except Exception as e:
+                    logger.debug(f"Не удалось удалить старое alternate сообщение: {e}")
+            set_config('alternate_digest_message_id', None)  # сбрасываем сразу после удаления
+
             # Проверяем, не создавали ли мы новое сообщение слишком недавно (антиспам)
             last_created_str = get_config('alternate_digest_last_created')
             last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
@@ -983,14 +992,6 @@ async def alternate_digest_job(context):
             
             # помечаем что начинаем создавать
             set_config('alternate_digest_creating', str(time.time()))
-
-            # Удаляем старое сообщение перед созданием нового
-            if last_message_id:
-                try:
-                    await bot.delete_message(chat_id=digest_chat_id, message_id=int(last_message_id))
-                    logger.info(f"Удалено старое alternate сообщение {last_message_id}")
-                except Exception as e:
-                    logger.debug(f"Не удалось удалить старое alternate сообщение: {e}")
 
             # Отправляем новое сообщение
             msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
