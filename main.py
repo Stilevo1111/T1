@@ -290,8 +290,9 @@ async def update_all_mmr_job(context):
                     username = user.get('steam_nickname') or user.get('username') or 'Игрок'
                     telegram_id = user.get('telegram_id')
                     name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id else username
-                    text = f"🎉 РАНК АП! 🎉\n\n{name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
-                    await context.bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
+                    text = f"{name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
+                    rank_up_banner_url = "https://ibb.co/wNK6B6qb"
+                    await context.bot.send_photo(chat_id=digest_chat_id, photo=rank_up_banner_url, caption=text, parse_mode="HTML")
                 except Exception as notify_err:
                     logger.error(f"Ошибка отправки уведомления о ранк-апе: {notify_err}")
     except Exception as e:
