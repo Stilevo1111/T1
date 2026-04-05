@@ -198,7 +198,7 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         height = icon_size + padding * 2
         width = cell_width * len(top_heroes) + padding
         
-        img = Image.new("RGB", (width, height), color=(40, 55, 70))
+        img = Image.new("RGB", (width, height), color=(35, 25, 50))
         draw = ImageDraw.Draw(img)
         
         for i, hero in enumerate(top_heroes):
@@ -213,9 +213,9 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                     img.paste(icon, (x, y), icon)
             except Exception as e:
                 logger.debug(f"Could not load hero icon: {e}")
-                draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(80, 95, 110))
+                draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
             
-            draw.rectangle([x - 1, y - 1, x + icon_size, y + icon_size], outline=(120, 170, 210), width=1)
+            draw.rectangle([x - 1, y - 1, x + icon_size, y + icon_size], outline=(215, 175, 85), width=1)
         
         buf = io.BytesIO()
         img.save(buf, format="PNG")
