@@ -226,17 +226,20 @@ async def announce_weekly_mmr_winner(bot):
         streak_text = f"\n🔥 Текущий стрик: {streak} побед" if streak > 0 else ""
 
         text = (
-            f"🏆 ПОЗДРАВЛЯЕМ ПОБЕДИТЕЛЯ НЕДЕЛИ 🏆\n\n"
-            f"🥇 {name_display}\n"
+            f"\n🥇 {name_display}\n"
             f"📊 {rank_str} • {mmr} MMR\n\n"
             f"📈 Результат за неделю:\n"
             f" └ {week_wins}W / {week_losses}L • WR {winrate}%{streak_text}\n\n"
             f"Этот игрок показал лучший результат в топе MMR за неделю!"
         )
 
-        await bot.send_message(
+        # Banner URL для победителя недели
+        winner_banner_url = "https://ibb.co/B2ny57Hz"
+        
+        await bot.send_photo(
             chat_id=digest_chat_id,
-            text=text,
+            photo=winner_banner_url,
+            caption=text,
             parse_mode="HTML"
         )
         set_config('mmr_week_top_announced', current_week_start)
