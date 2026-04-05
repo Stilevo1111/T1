@@ -1965,9 +1965,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 from dota_mmr import get_recent_matches
                 steam_id = target_user.get('steam_id')
-                if steam_id:
+                if steam_id and week_games > 0:
                     matches = get_recent_matches(steam_id, limit=50)
-                    matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)[:10]
+                    matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)
+                    # Берём только сыгранные за неделю игры (максимум week_games)
+                    week_match_count = min(len(matches), week_games)
+                    matches = matches[:week_match_count]
                     for match in matches:
                         # OpenDota не возвращает 'win', вычисляем по player_slot и radiant_win
                         player_slot = match.get('player_slot')
@@ -1982,7 +1985,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if last_10_balls:
                         last_10_balls = last_10_balls.replace("🟢", "🟢‍").replace("🔴", "🔴‍")
             except Exception as e:
-                logger.debug(f"Could not get last 10 matches: {e}")
+                logger.debug(f"Could not get last matches: {e}")
             
             text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n{last_10_balls}\n🔥 Стрик: {week_streak}/{week_best}"
             text += "\n\n🌟 Любимые герои за 50 матчей:"
