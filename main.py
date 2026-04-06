@@ -822,9 +822,14 @@ async def alternate_digest_job(context):
         # Получаем текущий тип дайджеста из памяти
         current_type = _digest_state.get("type")
         if current_type is None:
-            current_type = get_config('alternate_digest_type') or "0"
+            # Ensure string type - convert from int if needed
+            raw_type = get_config('alternate_digest_type')
+            if raw_type is not None:
+                current_type = str(raw_type)
+            else:
+                current_type = "0"
             _digest_state["type"] = current_type
-        logger.info(f"alternate_digest_job: current_type = {current_type}")
+        logger.info(f"alternate_digest_job: current_type = {current_type} (type={type(current_type).__name__}), _digest_state = {_digest_state}")
         if current_type is None:
             current_type = "0"
         
@@ -960,6 +965,11 @@ async def alternate_digest_job(context):
                 )
                 logger.info(f"Обновлён alternate дайджест {last_message_id}")
                 edited = True
+                
+                # Переключаем тип даже при успешном редактировании
+                next_type = "0" if current_type == "1" else "1"
+                _digest_state["type"] = next_type
+                set_config('alternate_digest_type', next_type)
             except Exception as e:
                 error_str = str(e)
                 logger.info(f"Ошибка редактирования: {e}")
@@ -970,6 +980,12 @@ async def alternate_digest_job(context):
                 elif "Message is not modified" in error_str:
                     logger.info(f"Сообщение не изменилось, пропускаем удаление и создание")
                     edited = True  # Считаем что отредактировано успешно
+                    
+                    # Переключаем тип даже если сообщение не изменилось
+                    next_type = "0" if current_type == "1" else "1"
+                    logger.info(f"Switching type: {current_type} -> {next_type}")
+                    _digest_state["type"] = next_type
+                    set_config('alternate_digest_type', next_type)
                 else:
                     logger.info(f"Не удалось редактировать: {e}")
 
@@ -1725,7 +1741,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🎲 {display_username}\n\n"
                 f"{zeus_text}\n"
                 f"<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>\n\n"
-                f"📏 Длина сейчас: {new_fissure:.1f} см"
+                f"📏 {current_fissure:.1f} см"
             )
             
             logger.info(f"User {user_obj.id} triggered Zeus. No roll.")
@@ -1759,7 +1775,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             multicast_text = ""
             cascade_count = 1
             
-            # Первый спин - 75% шанс
+            # Первый спин
             slots = []
             for _ in range(3):
                 if random.random() < 0.75:
@@ -1769,14 +1785,14 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await context.bot.send_message(
                 chat_id=update.message.chat_id,
-                text=f"🎰 {' | '.join(slots)} | x2: 75%"
+                text=f"🎰 {' | '.join(slots)} | x2"
             )
             await asyncio.sleep(1)
             
             # Проверяем совпадение (минимум 2)
             if len(set(slots)) <= 2:
                 cascade_count = 2
-                # Второй спин - 30% шанс
+                # Второй спин
                 slots = []
                 for _ in range(3):
                     if random.random() < 0.30:
@@ -1786,14 +1802,14 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 await context.bot.send_message(
                     chat_id=update.message.chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x3: 30%"
+                    text=f"🎰 {' | '.join(slots)} | x3"
                 )
                 await asyncio.sleep(1)
                 
                 # Проверяем совпадение
                 if len(set(slots)) <= 2:
                     cascade_count = 3
-                    # Третий спин - 15% шанс
+                    # Третий спин
                     slots = []
                     for _ in range(3):
                         if random.random() < 0.15:
@@ -1803,7 +1819,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     await context.bot.send_message(
                         chat_id=update.message.chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x4: 15%"
+                        text=f"🎰 {' | '.join(slots)} | x4"
                     )
                     await asyncio.sleep(1)
                     
@@ -1876,7 +1892,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{extra_text}\n"
                 f"{result_text}\n\n"
                 f"{multicast_text}\n\n"
-                f"📏 {new_fissure:.1f} см"
+                f"📏 15.0 см → {new_fissure:.1f} см"
             )
         else:
             # Старый дизайн без мультикаста
@@ -1884,7 +1900,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n"
                 f"{extra_text}\n\n"
-                f"📏 Длина сейчас: {new_fissure:.1f} см"
+                f"📏 15.0 см → {new_fissure:.1f} см"
             )
         
         if is_fatal and protection_msg:
@@ -2032,7 +2048,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             target_name = user_obj.username or user_obj.first_name
             display_username = f"<a href=\"tg://user?id={target_id}\">{target_name}</a>"
         
-        text = f"👑 {display_username}\n\n🍆 Фиссура:\n📏 {target_user['fissure']:.1f} см • 🎲 Броски: {target_user.get('total_rolls', 0)}\n🔥 Стрик: {target_user.get('current_streak', 0)}/{target_user.get('best_streak', 0)}"
+        text = f"👑 {display_username}\n\n🍆 Фиссура: {target_user['fissure']:.1f} см\n🎲 Броски: {target_user.get('total_rolls', 0)} 🍀Стрик: {target_user.get('current_streak', 0)}/{target_user.get('best_streak', 0)}"
 
         # Добавляем стрик Dota если привязан Steam
         if target_user.get('steam_id'):
@@ -2070,7 +2086,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not get last matches: {e}")
             
-            text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n{last_10_balls}\n🔥 Стрик: {week_streak}/{week_best}"
+            text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n🔥 Стрик: {week_streak}/{week_best}"
             text += "\n\n🌟 Любимые герои за 50 матчей:"
         else:
             text += "\n\n💡 /profile ＠ник — чужой профиль"
@@ -2739,7 +2755,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🧪 ТЕСТ (без записи в БД)\n\n"
                 f"{zeus_text}\n"
                 f"<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>\n\n"
-                f"📏 Длина сейчас: {current_fissure:.1f} см"
+                f"📏 {current_fissure:.1f} см"
             )
             
             result_msg = await context.bot.send_message(
@@ -2764,7 +2780,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             multicast_text = ""
             cascade_count = 1
             
-            # Первый спин - 75% шанс
+            # Первый спин
             slots = []
             for _ in range(3):
                 if random.random() < 0.75:
@@ -2774,14 +2790,14 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"🎰 {' | '.join(slots)} | x2: 75%"
+                text=f"🎰 {' | '.join(slots)} | x2"
             )
             await asyncio.sleep(1)
             
             # Проверяем совпадение (минимум 2)
             if len(set(slots)) <= 2:
                 cascade_count = 2
-                # Второй спин - 30% шанс
+                # Второй спин
                 slots = []
                 for _ in range(3):
                     if random.random() < 0.30:
@@ -2791,14 +2807,14 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x3: 30%"
+                    text=f"🎰 {' | '.join(slots)} | x3"
                 )
                 await asyncio.sleep(1)
                 
                 # Проверяем совпадение
                 if len(set(slots)) <= 2:
                     cascade_count = 3
-                    # Третий спин - 15% шанс
+                    # Третий спин
                     slots = []
                     for _ in range(3):
                         if random.random() < 0.15:
@@ -2808,7 +2824,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x4: 15%"
+                        text=f"🎰 {' | '.join(slots)} | x4"
                     )
                     await asyncio.sleep(1)
                     
@@ -2856,7 +2872,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{extra_text}\n"
                 f"{result_text}\n\n"
                 f"{multicast_text}\n\n"
-                f"📏 {new_fissure:.1f} см"
+                f"📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
             )
         else:
             text = (
@@ -2864,7 +2880,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🧪 ТЕСТ (без записи в БД)\n"
                 f"{result_text}\n"
                 f"{extra_text}\n\n"
-                f"📏 Длина сейчас: {new_fissure:.1f} см"
+                f"📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
             )
         
         if is_fatal and protection_msg:
