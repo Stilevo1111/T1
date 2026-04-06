@@ -846,24 +846,24 @@ async def alternate_digest_job(context):
             streak_display = make_clickable(streak_player, streak_id)
             
             if growth_player and growth_player != "None":
-                growth_part = f"📈{growth_display} +{growth_pos}⬆️"
+                growth_part = f"🔺{growth_display} +{growth_pos}"
             else:
-                growth_part = "📈—"
+                growth_part = "🔺—"
             
             if drop_player and drop_player != "None":
                 if drop_cm < 0:
-                    drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
+                    drop_part = f"🔻{drop_display} {drop_cm:.0f} СМ"
                 else:
-                    drop_part = f"💀{drop_display} +{drop_cm:.0f} СМ"
+                    drop_part = f"🔻{drop_display} +{drop_cm:.0f} СМ"
             else:
-                drop_part = "💀—"
+                drop_part = "🔻—"
             
             if streak_player and streak_player != "None" and streak_len > 0:
-                streak_part = f"🍀{streak_display} - Стрик {streak_len}"
+                streak_part = f" 🍀{streak_display}: {streak_len}"
             else:
-                streak_part = "🍀—"
+                streak_part = " 🍀—"
             
-            text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК\n\n📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+            text = f"<b>{growth_part} {drop_part} {streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
             next_type = "1"
         else:
             # Dota дайджест
@@ -1391,8 +1391,8 @@ ZEUS_ICON_URL = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_r
 WEEKEND_BONUS_MULTIPLIERS = [1.5, 2, 2.5]
 
 # Тексты дайджестов
-MORNING_DIGEST_HEADER = "🌅УТРЕНИЙ ДАЙДЖЕСТ 🔄 9:00 МСК"
-MORNING_DIGEST_FOOTER = "📈 = рост позиций в топе\n💀 = топ падение\n🍀 = текущий стрик побед"
+MORNING_DIGEST_HEADER = "🌅ФИССУРА ДАЙДЖЕСТ"
+MORNING_DIGEST_FOOTER = "🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
 DOTA_DIGEST_HEADER = "🎮 DOTA ДАЙДЖЕСТ 📊"
 DOTA_DIGEST_FOOTER = "🔺 = лучший винрейт за неделю\n🔻 = худший винрейт за неделю\n🔸 = текущий стрик побед"
 WEEKLY_DIGEST_HEADER = "🌅 ЕЖЕНЕДЕЛЬНЫЙ ДАЙДЖЕСТ"
