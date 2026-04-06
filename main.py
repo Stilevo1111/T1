@@ -801,13 +801,10 @@ async def alternate_digest_job(context):
         # Блокировка от параллельного запуска (В БД, а не в памяти! Работает при рестартах)
         last_run_str = get_config('alternate_digest_last_run')
         last_run = float(last_run_str) if last_run_str and last_run_str.strip() else 0
-        if now - last_run < 300:
+        if now - last_run < 10:
             logger.info(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
             return
         set_config('alternate_digest_last_run', str(now))
-        
-        # Сбрасываем кеш статистики перед каждым запуском
-        top_cache.clear()
         
         logger.info("Запуск alternate_digest_job")
         
@@ -992,7 +989,7 @@ async def alternate_digest_job(context):
             last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
             time_since_last = time.time() - last_created
             logger.info(f"alternate_digest_job: last_created={last_created}, time_since_last={time_since_last:.0f}sec")
-            if time_since_last < 300:  # 5 минут
+            if time_since_last < 60:  # 1 минута
                 logger.info(f"Пропускаем создание нового дайджеста, прошло только {time_since_last:.0f} сек с последнего создания")
                 return  # Выходим без создания
             
@@ -3131,7 +3128,7 @@ async def main():
         
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(hours=1),
+            interval=datetime.timedelta(seconds=15),
             first=datetime.datetime.now() + datetime.timedelta(seconds=20)
         )
         
