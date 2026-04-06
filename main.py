@@ -970,6 +970,9 @@ async def alternate_digest_job(context):
                     logger.info(f"Старое сообщение {last_message_id} удалено, создаём новое")
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
+                elif "Message is not modified" in error_str:
+                    logger.info(f"Сообщение не изменилось, пропускаем удаление и создание")
+                    edited = True  # Считаем что отредактировано успешно
                 else:
                     logger.info(f"Не удалось редактировать: {e}")
 
