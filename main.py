@@ -1754,39 +1754,72 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
         
         if event_roll < zeus_chance + multicast_chance:
-            # 🎰 МУЛЬТИКАСТ — отправляем реальный 🎰 dice от Telegram
-            try:
-                dice_msg = await context.bot.send_dice(
-                    chat_id=update.message.chat_id,
-                    emoji="🎰"
-                )
-                set_last_bot_message(chat_id, user_obj.id, dice_msg.message_id)
-                await asyncio.sleep(DICE_ANIMATION_DELAY)
-                
-                # Получаем результат (1-64)
-                dice_value = dice_msg.dice.value
-                
-                # Вычисляем множитель по значению dice
-                cascade_count, multicast_text = calculate_multicast(dice_value)
-                
-                logger.info(f"Multicast dice roll: value={dice_value}, multiplier={cascade_count}")
-                
-                # Применяем множитель
-                roll = roll * cascade_count
-                increment_stat("multicast")
-                if cascade_count >= 4:
-                    increment_stat("multicast_x4")
-                elif cascade_count >= 3:
-                    increment_stat("multicast_x3")
-                elif cascade_count >= 2:
-                    increment_stat("multicast_x2")
-                    
-            except Exception as e:
-                logger.debug(f"Could not send dice: {e}")
-                # Fallback - старый метод
+            # 🎰 МУЛЬТИКАСТ — слоты как в казино
+            slot_emojis = ["🍒", "🍋", "🍇", "🔔", "💎"]
+            multicast_text = ""
+            cascade_count = 1
+            
+            # Первый спин - 75% шанс
+            slots = []
+            for _ in range(3):
+                if random.random() < 0.75:
+                    slots.append(random.choice(slot_emojis))
+                else:
+                    slots.append(random.choice(slot_emojis))
+            
+            await context.bot.send_message(
+                chat_id=update.message.chat_id,
+                text=f"🎰 {' | '.join(slots)} | x2: 75%"
+            )
+            await asyncio.sleep(1)
+            
+            # Проверяем совпадение (минимум 2)
+            if len(set(slots)) <= 2:
                 cascade_count = 2
-                roll = roll * 2
-                multicast_text = f"\n{random.choice(MULTICAST_TEXTS[2])}"
+                # Второй спин - 30% шанс
+                slots = []
+                for _ in range(3):
+                    if random.random() < 0.30:
+                        slots.append(slots[0] if slots else random.choice(slot_emojis))
+                    else:
+                        slots.append(random.choice(slot_emojis))
+                
+                await context.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text=f"🎰 {' | '.join(slots)} | x3: 30%"
+                )
+                await asyncio.sleep(1)
+                
+                # Проверяем совпадение
+                if len(set(slots)) <= 2:
+                    cascade_count = 3
+                    # Третий спин - 15% шанс
+                    slots = []
+                    for _ in range(3):
+                        if random.random() < 0.15:
+                            slots.append(slots[0] if slots else random.choice(slot_emojis))
+                        else:
+                            slots.append(random.choice(slot_emojis))
+                    
+                    await context.bot.send_message(
+                        chat_id=update.message.chat_id,
+                        text=f"🎰 {' | '.join(slots)} | x4: 15%"
+                    )
+                    await asyncio.sleep(1)
+                    
+                    if len(set(slots)) <= 2:
+                        cascade_count = 4
+            
+            roll = roll * cascade_count
+            increment_stat("multicast")
+            if cascade_count >= 4:
+                increment_stat("multicast_x4")
+            elif cascade_count >= 3:
+                increment_stat("multicast_x3")
+            elif cascade_count >= 2:
+                increment_stat("multicast_x2")
+            if cascade_count > 1:
+                multicast_text = f"\n{random.choice(MULTICAST_TEXTS[cascade_count])}"
         
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
@@ -2726,23 +2759,65 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return  # выходим
         
         elif event_roll < zeus_chance + multicast_chance:
-            # 🎰 МУЛЬТИКАСТ — отправляем реальный 🎰 dice от Telegram
-            try:
-                dice_msg = await context.bot.send_dice(
-                    chat_id=chat_id,
-                    emoji="🎰"
-                )
-                await asyncio.sleep(DICE_ANIMATION_DELAY)
-                
-                dice_value = dice_msg.dice.value
-                cascade_count, multicast_text = calculate_multicast(dice_value)
-                    
-            except Exception as e:
-                logger.debug(f"Could not send dice: {e}")
+            # 🎰 МУЛЬТИКАСТ — слоты как в казино
+            slot_emojis = ["🍒", "🍋", "🍇", "🔔", "💎"]
+            multicast_text = ""
+            cascade_count = 1
+            
+            # Первый спин - 75% шанс
+            slots = []
+            for _ in range(3):
+                if random.random() < 0.75:
+                    slots.append(random.choice(slot_emojis))
+                else:
+                    slots.append(random.choice(slot_emojis))
+            
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🎰 {' | '.join(slots)} | x2: 75%"
+            )
+            await asyncio.sleep(1)
+            
+            # Проверяем совпадение (минимум 2)
+            if len(set(slots)) <= 2:
                 cascade_count = 2
-                multicast_text = f"\n{random.choice(MULTICAST_TEXTS[2])}"
+                # Второй спин - 30% шанс
+                slots = []
+                for _ in range(3):
+                    if random.random() < 0.30:
+                        slots.append(slots[0] if slots else random.choice(slot_emojis))
+                    else:
+                        slots.append(random.choice(slot_emojis))
+                
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"🎰 {' | '.join(slots)} | x3: 30%"
+                )
+                await asyncio.sleep(1)
+                
+                # Проверяем совпадение
+                if len(set(slots)) <= 2:
+                    cascade_count = 3
+                    # Третий спин - 15% шанс
+                    slots = []
+                    for _ in range(3):
+                        if random.random() < 0.15:
+                            slots.append(slots[0] if slots else random.choice(slot_emojis))
+                        else:
+                            slots.append(random.choice(slot_emojis))
+                    
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"🎰 {' | '.join(slots)} | x4: 15%"
+                    )
+                    await asyncio.sleep(1)
+                    
+                    if len(set(slots)) <= 2:
+                        cascade_count = 4
             
             roll = roll * cascade_count
+            if cascade_count > 1:
+                multicast_text = f"\n{random.choice(MULTICAST_TEXTS[cascade_count])}"
         
         # Защита
         roll, protection_msg = apply_fissure_protection(current_fissure, roll, is_fatal)
