@@ -719,7 +719,7 @@ async def dota_digest_job(context):
         else:
             streak_part = "🔸—"
         
-        text = f"{top_part} ┃{bottom_part} ┃{streak_part}\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
+        text = f"{top_part} | {bottom_part} | {streak_part}\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
         
         bot = context.application.bot
         
@@ -946,7 +946,7 @@ async def alternate_digest_job(context):
             else:
                 streak_part = "🔸—"
             
-            text = f"{top_part} ┃{bottom_part} ┃{streak_part}\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
+            text = f"{top_part} | {bottom_part} | {streak_part}\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
             next_type = "0"
         
         # Пробуем отредактировать существующее сообщение
