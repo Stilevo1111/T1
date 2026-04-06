@@ -634,7 +634,7 @@ async def dota_digest_job(context):
             logger.info("Чат для дайджеста не настроен")
             return
         
-        mmr_top = get_dota_mmr_top(limit=10)
+        mmr_top = get_dota_week_top(limit=10)
         
         if not mmr_top:
             logger.info("Нет данных для Dota дайджеста")
