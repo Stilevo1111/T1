@@ -801,7 +801,7 @@ async def alternate_digest_job(context):
         # Блокировка от параллельного запуска (В БД, а не в памяти! Работает при рестартах)
         last_run_str = get_config('alternate_digest_last_run')
         last_run = float(last_run_str) if last_run_str and last_run_str.strip() else 0
-        if now - last_run < 20:
+        if now - last_run < 300:
             logger.info(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
             return
         set_config('alternate_digest_last_run', str(now))
@@ -3131,7 +3131,7 @@ async def main():
         
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(seconds=300),
+            interval=datetime.timedelta(hours=1),
             first=datetime.datetime.now() + datetime.timedelta(seconds=20)
         )
         
