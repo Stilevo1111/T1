@@ -715,11 +715,11 @@ async def dota_digest_job(context):
             bottom_part = "🔻—"
         
         if streak_player and streak_player != "None" and streak_wins > 0:
-            streak_part = f"🔸{streak_display}: {streak_wins}"
+            streak_part = f" 🔸{streak_display}: {streak_wins}"
         else:
-            streak_part = "🔸—"
+            streak_part = " 🔸—"
         
-        text = f"<b>{top_part} | {bottom_part} | {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
+        text = f"<b>{top_part} {bottom_part} {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
         
         bot = context.application.bot
         
@@ -942,11 +942,11 @@ async def alternate_digest_job(context):
                 bottom_part = "🔻—"
 
             if streak_player and streak_player != "None" and streak_wins > 0:
-                streak_part = f"🔸{streak_display}: {streak_wins}"
+                streak_part = f" 🔸{streak_display}: {streak_wins}"
             else:
-                streak_part = "🔸—"
+                streak_part = " 🔸—"
             
-            text = f"<b>{top_part} | {bottom_part} | {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
+            text = f"<b>{top_part} {bottom_part} {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
             next_type = "0"
         
         # Пробуем отредактировать существующее сообщение
