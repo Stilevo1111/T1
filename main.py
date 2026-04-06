@@ -1787,6 +1787,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=update.message.chat_id,
                 text=f"🎰 {' | '.join(slots)} | x2"
             )
+            msg_x2 = await context.bot.send_message(
+                chat_id=update.message.chat_id,
+                text=f"🎰 {' | '.join(slots)} | x2"
+            )
+            schedule_delete(context.bot, chat_id, msg_x2.message_id, 30, context.application.job_queue)
             await asyncio.sleep(1)
             
             # Проверяем совпадение (минимум 2)
@@ -1804,6 +1809,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=update.message.chat_id,
                     text=f"🎰 {' | '.join(slots)} | x3"
                 )
+                msg_x3 = await context.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text=f"🎰 {' | '.join(slots)} | x3"
+                )
+                schedule_delete(context.bot, chat_id, msg_x3.message_id, 30, context.application.job_queue)
                 await asyncio.sleep(1)
                 
                 # Проверяем совпадение
@@ -1821,6 +1831,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         chat_id=update.message.chat_id,
                         text=f"🎰 {' | '.join(slots)} | x4"
                     )
+                    msg_x4 = await context.bot.send_message(
+                        chat_id=update.message.chat_id,
+                        text=f"🎰 {' | '.join(slots)} | x4"
+                    )
+                    schedule_delete(context.bot, chat_id, msg_x4.message_id, 30, context.application.job_queue)
                     await asyncio.sleep(1)
                     
                     if len(set(slots)) <= 2:
@@ -2792,6 +2807,11 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=chat_id,
                 text=f"🎰 {' | '.join(slots)} | x2"
             )
+            msg_x2 = await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🎰 {' | '.join(slots)} | x2"
+            )
+            schedule_delete(context.bot, chat_id, msg_x2.message_id, 30, context.application.job_queue)
             await asyncio.sleep(1)
             
             # Проверяем совпадение (минимум 2)
@@ -2809,6 +2829,11 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=chat_id,
                     text=f"🎰 {' | '.join(slots)} | x3"
                 )
+                msg_x3 = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"🎰 {' | '.join(slots)} | x3"
+                )
+                schedule_delete(context.bot, chat_id, msg_x3.message_id, 30, context.application.job_queue)
                 await asyncio.sleep(1)
                 
                 # Проверяем совпадение
@@ -2826,6 +2851,11 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         chat_id=chat_id,
                         text=f"🎰 {' | '.join(slots)} | x4"
                     )
+                    msg_x4 = await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"🎰 {' | '.join(slots)} | x4"
+                    )
+                    schedule_delete(context.bot, chat_id, msg_x4.message_id, 30, context.application.job_queue)
                     await asyncio.sleep(1)
                     
                     if len(set(slots)) <= 2:
