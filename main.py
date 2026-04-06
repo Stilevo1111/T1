@@ -1222,7 +1222,7 @@ WELCOME_PHRASES = [
 # 🔧 УТИЛИТЫ
 # =====================
 
-def make_clickable(name, user_id):
+def make_clickable(name, user_id, max_length=12):
     """Создать кликабельный никнейм для Telegram"""
     if name and name != "None" and user_id:
         # Если name - это числовой ID ( telegram_id как строка), пробуем получить username из кэша
@@ -1238,6 +1238,11 @@ def make_clickable(name, user_id):
                 display_name = name
         else:
             display_name = name
+        
+        # Обрезаем длинные ники
+        if len(display_name) > max_length:
+            display_name = display_name[:max_length-2] + "…"
+        
         return f"<a href=\"tg://user?id={user_id}\">{display_name}</a>"
     return name if name and name != "None" else "—"
 
