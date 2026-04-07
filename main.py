@@ -1817,29 +1817,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             chat_id=update.message.chat_id,
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
-                        await asyncio.sleep(1)
-                    else:
-                        # Не попали в x4 - показываем 3 разных и стоп на x3
-                        slots = random.sample(slot_emojis, 3)
-                        await context.bot.send_message(
-                            chat_id=update.message.chat_id,
-                            text=f"🎰 {' | '.join(slots)} | x3"
-                        )
-                else:
-                    # Не попали в x3 - показываем 3 разных и стоп на x2
-                    slots = random.sample(slot_emojis, 3)
-                    await context.bot.send_message(
-                        chat_id=update.message.chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x2"
-                    )
             else:
-                # Не попали в x2 - сразу x1
+                # Не попали в x2 - сразу x1 (проигрыш)
                 cascade_count = 1
-                slots = random.sample(slot_emojis, 3)
-                await context.bot.send_message(
-                    chat_id=update.message.chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x1"
-                )
             
             roll = roll * cascade_count
             original_roll = roll // cascade_count  # сохраняем для текста
@@ -2785,7 +2765,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             multicast_text = ""
             cascade_count = 1
             
-            # Первый спин - всегда случайные символы
+            # Первый спин - случайные символы
             slots = random.sample(slot_emojis, 3)
             
             await context.bot.send_message(
@@ -2831,29 +2811,9 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             chat_id=chat_id,
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
-                        await asyncio.sleep(1)
-                    else:
-                        # Не попали в x4 - показываем 3 разных и стоп на x3
-                        slots = random.sample(slot_emojis, 3)
-                        await context.bot.send_message(
-                            chat_id=chat_id,
-                            text=f"🎰 {' | '.join(slots)} | x3"
-                        )
-                else:
-                    # Не попали в x3 - показываем 3 разных и стоп на x2
-                    slots = random.sample(slot_emojis, 3)
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x2"
-                    )
             else:
-                # Не попали в x2 - сразу x1
+                # Не попали в x2 - сразу x1 (проигрыш)
                 cascade_count = 1
-                slots = random.sample(slot_emojis, 3)
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x1"
-                )
             
             roll = roll * cascade_count
             if cascade_count > 1:
