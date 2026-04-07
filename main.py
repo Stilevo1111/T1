@@ -1831,6 +1831,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return  # выходим из мультикаста, делаем обычный ролл
             
             roll = roll * cascade_count
+            logger.info(f"fissure multicast: roll after multiply={roll}, cascade_count={cascade_count}")
             original_roll = roll // cascade_count  # сохраняем для текста
             increment_stat("multicast")
             if cascade_count >= 4:
@@ -2833,6 +2834,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return  # выходим из мультикаста, делаем обычный ролл
             
             roll = roll * cascade_count
+            logger.info(f"testfissure multicast: roll after multiply={roll}, cascade_count={cascade_count}")
             if cascade_count > 1:
                 multicast_text = f"\n{random.choice(MULTICAST_TEXTS[cascade_count])}"
         
