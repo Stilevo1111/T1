@@ -2,7 +2,7 @@ import os
 import sqlite3
 import psycopg2
 import time
-from psycopg2.extras import RealDictCursor
+import psycopg2.extras
 import logging
 import urllib.parse as urlparse
 import threading
@@ -70,6 +70,10 @@ class UserCache:
         with self._lock:
             self._cache.pop(telegram_id, None)
             self._dirty.pop(telegram_id, None)
+            
+    def delete(self, telegram_id):
+        """Псевдоним для remove для обратной совместимости"""
+        self.remove(telegram_id)
 
 
 # Глобальный экземпляр кеша
@@ -263,9 +267,15 @@ _connection_pool = {}
 _pool_lock = threading.Lock()
 def get_db_type():
     """Получить тип базы данных"""
+    if DATABASE_URL is None:
+        return "sqlite"
     url = urlparse.urlparse(DATABASE_URL)
     scheme = url.scheme
-    return "postgresql" if "postgres" in scheme else "sqlite"
+    # Явно преобразуем scheme в строку для избежания проблем с типами
+    if scheme is None:
+        return "sqlite"
+    scheme_str = str(scheme)
+    return "postgresql" if "postgres" in scheme_str else "sqlite"
 
 def get_connection():
     """Получение соединения с базой данных с пулом"""
@@ -277,10 +287,9 @@ def get_connection():
             conn = _connection_pool[db_type]
             try:
                 # Проверяем соединение
-                if db_type == "postgresql":
-                    conn.cursor().execute("SELECT 1")
-                else:
-                    conn.cursor().execute("SELECT 1")
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.close()
                 return conn
             except:
                 # Соединение неактивно, удаляем из пула
@@ -294,7 +303,7 @@ def get_connection():
         if db_type == "postgresql":
             try:
                 url = urlparse.urlparse(DATABASE_URL)
-                dbname = url.path[1:]
+                dbname = url.path[1:] if url.path else ""
                 user = url.username
                 password = url.password
                 host = url.hostname
@@ -313,7 +322,9 @@ def get_connection():
                 print(f"❌ PostgreSQL connection failed: {e}")
                 raise
         else:
-            if DATABASE_URL.startswith("sqlite:///"):
+            if DATABASE_URL is None:
+                db_path = "fissure_bot.db"
+            elif DATABASE_URL.startswith("sqlite:///"):
                 db_path = DATABASE_URL[10:]
             elif DATABASE_URL.startswith("sqlite://"):
                 db_path = DATABASE_URL[9:]
@@ -600,9 +611,17 @@ def migrate_db():
 
 class Database:
     """Класс для работы с базой данных с улучшенным управлением соединениями"""
+    _instance = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Database, cls).__new__(cls)
+            cls._instance.conn = None
+        return cls._instance
     
     def __init__(self):
-        self.conn = None
+        # Singleton - инициализация только один раз
+        pass
     
     def connect(self):
         """Устанавливаем соединение"""
@@ -610,15 +629,19 @@ class Database:
             self.conn = get_connection()
         return self.conn
     
-    def execute_query(self, query, params=None, fetch=False):
+    def execute_query(self, query, params=None, fetch=None):
         """Унифицированный метод выполнения запросов"""
         try:
             conn = self.connect()
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             
-            if "postgres" in scheme:
-                cursor = conn.cursor(cursor_factory=RealDictCursor)
+            if get_db_type() == "postgresql":
+                cursor = conn.cursor()
+                # Преобразуем обычный курсор в словарный для совместимости
+                def dict_factory(cursor, row):
+                    return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+                cursor.row_factory = dict_factory
             else:
                 cursor = conn.cursor()
             
@@ -819,7 +842,7 @@ class Database:
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             
-            if "postgres" in scheme:
+            if get_db_type() == "postgresql":
                 query = "SELECT telegram_id, username, fissure FROM users WHERE in_chat = TRUE ORDER BY fissure DESC LIMIT %s"
                 users = self.execute_query(query, (limit,), fetch="all")
                 return [{"telegram_id": u["telegram_id"], "username": u["username"], "fissure": u["fissure"]} for u in users]
@@ -832,14 +855,11 @@ class Database:
             return []
     
     def get_user_rank(self, telegram_id):
-        """Получение позиции игрока в топе по MMR"""
+        """Получить позицию игрока в топе по MMR"""
         logger.info(f"DEBUG: get_user_rank called for {telegram_id}")
         try:
             # Используем execute_query для безопасного выполнения
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
-            
-            if "postgres" in scheme:
+            if get_db_type() == "postgresql":
                 query = """
                     SELECT COUNT(*) + 1 as rank FROM users WHERE mmr > (
                         SELECT mmr FROM users WHERE telegram_id = %s
@@ -873,14 +893,11 @@ class Database:
         """Получение позиции игрока в топе по fissure"""
         logger.info(f"DEBUG: get_fissure_rank called for {telegram_id}")
         try:
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
-            
-            if "postgres" in scheme:
+            if get_db_type() == "postgresql":
                 query = """
                     SELECT COUNT(*) + 1 as rank FROM users 
                     WHERE fissure IS NOT NULL 
-                    AND fissure > COALESCE((
+                    AND fissure > COALESCE(
                         SELECT fissure FROM users WHERE telegram_id = %s
                     ), -1)
                 """
@@ -894,10 +911,19 @@ class Database:
                 query = """
                     SELECT COUNT(*) + 1 FROM users 
                     WHERE fissure IS NOT NULL 
-                    AND fissure > COALESCE((
+                    AND fissure > COALESS(
                         SELECT fissure FROM users WHERE telegram_id = ?
                     ), -1)
                 """
+                result = self.execute_query(query, (telegram_id,), fetch="one")
+                logger.info(f"get_fissure_rank result: {result}, type={type(result)}")
+                if result and result[0] is not None:
+                    rank = int(result[0])
+                    return rank if rank > 0 else 1
+                return None
+        except Exception as e:
+            logger.error(f"Error getting fissure rank: {e}", exc_info=True)
+            return None
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 logger.info(f"get_fissure_rank result: {result}, type={type(result)}")
                 if result and result[0] is not None:
@@ -995,7 +1021,7 @@ class Database:
             if value is None:
                 url = urlparse.urlparse(DATABASE_URL)
                 scheme = url.scheme
-                if "postgres" in scheme:
+                if "postgres" in str(scheme) if scheme is not None else "":
                     self.execute_query("DELETE FROM bot_config WHERE key = %s", (key,))
                 else:
                     self.execute_query("DELETE FROM bot_config WHERE key = ?", (key,))
@@ -1007,7 +1033,7 @@ class Database:
             scheme = url.scheme
             logger.debug(f"set_config: key={key}, value={value}, scheme={scheme}")
             
-            if "postgres" in scheme:
+            if get_db_type() == "postgresql":
                 query = """
                     INSERT INTO bot_config (key, value) VALUES (%s, %s)
                     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
@@ -1033,7 +1059,7 @@ class Database:
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             
-            if "postgres" in scheme:
+            if get_db_type() == "postgresql":
                 query = """
                     SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak, total_growth
                     FROM users
@@ -1129,10 +1155,7 @@ class Database:
         """Обновить текущие позиции игроков (по fissure DESC)"""
         try:
             # Используем execute_query для безопасного выполнения
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
-            
-            if "postgres" in scheme:
+            if get_db_type() == "postgresql":
                 query = """
                     UPDATE users SET current_position = subquery.pos
                     FROM (SELECT telegram_id, ROW_NUMBER() OVER (ORDER BY fissure DESC) as pos FROM users) subquery
@@ -1157,10 +1180,7 @@ class Database:
         """Обновить 'снимок' (позиция/фиссура) после отправки дайджеста"""
         try:
             # Используем execute_query для безопасного выполнения
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
-            
-            if "postgres" in scheme:
+            if get_db_type() == "postgresql":
                 query = """
                     UPDATE users SET 
                         current_position = subquery.pos,
@@ -1199,10 +1219,7 @@ class Database:
         """Статистика для еженедельного дайджеста: рост в см, прорыв по позициям, броски, новички, общий рост."""
         try:
             # Используем execute_query для безопасного выполнения
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
-            
-            if "postgres" in scheme:
+            if get_db_type() == "postgresql":
                 query = """
                     SELECT telegram_id, username, fissure, current_position, weekly_digest_position,
                            weekly_growth, weekly_rolls, created_at
