@@ -1788,16 +1788,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Проверяем совпадение (минимум 2)
             if len(set(slots)) <= 2:
                 cascade_count = 2
-                # Второй спин - связан с первым (высокий шанс использовать выигрышный символ)
-                winning_symbol = slots[0]  # берём первый символ из предыдущего
-                slots = []
-                for i in range(3):
-                    if i == 0:
-                        slots.append(winning_symbol)  # первый всегда тот же
-                    elif random.random() < 0.80:  # 80% шанс использовать выигрышный
-                        slots.append(winning_symbol)
-                    else:
-                        slots.append(random.choice(slot_emojis))
+                # Второй спин - новый независимый
+                slots = [random.choice(slot_emojis) for _ in range(3)]
                 
                 await context.bot.send_message(
                     chat_id=update.message.chat_id,
@@ -1808,16 +1800,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Проверяем совпадение
                 if len(set(slots)) <= 2:
                     cascade_count = 3
-                    # Третий спин - связан с вторым
-                    winning_symbol = slots[0]
-                    slots = []
-                    for i in range(3):
-                        if i == 0:
-                            slots.append(winning_symbol)
-                        elif random.random() < 0.80:  # 80% шанс
-                            slots.append(winning_symbol)
-                        else:
-                            slots.append(random.choice(slot_emojis))
+                    # Третий спин - новый независимый
+                    slots = [random.choice(slot_emojis) for _ in range(3)]
                     
                     await context.bot.send_message(
                         chat_id=update.message.chat_id,
@@ -2809,16 +2793,8 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Проверяем совпадение
                 if len(set(slots)) <= 2:
                     cascade_count = 3
-                    # Третий спин - связан с вторым
-                    winning_symbol = slots[0]
-                    slots = []
-                    for i in range(3):
-                        if i == 0:
-                            slots.append(winning_symbol)
-                        elif random.random() < 0.80:
-                            slots.append(winning_symbol)
-                        else:
-                            slots.append(random.choice(slot_emojis))
+                    # Третий спин - новый независимый
+                    slots = [random.choice(slot_emojis) for _ in range(3)]
                     
                     await context.bot.send_message(
                         chat_id=chat_id,
