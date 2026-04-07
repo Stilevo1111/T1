@@ -1760,16 +1760,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
             update_last_message_id(user_obj.id, result_msg.message_id)
             
-            # Стикер Зевса
-            try:
-                zeus_sticker = await context.bot.send_sticker(
-                    chat_id=update.message.chat_id,
-                    sticker="CAACAgIAAxkBAAEWvYppzTlfymrgL-0imSPD-P-ho8_gTgACxpkAAhEHaUp7puLN1lPpnjoE"
-                )
-                schedule_delete(context.bot, chat_id, zeus_sticker.message_id, 600, context.application.job_queue)
-            except Exception as e:
-                logger.debug(f"Could not send Zeus sticker: {e}")
-            
             return  # выходим — без ролла
         
         # Остальные события (обычный ролл или мулькаст)
@@ -1958,28 +1948,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=update.message.chat_id, text=text,
                     parse_mode="HTML", reply_markup=main_menu()
                 )
-        
-        # Отправляем стикер при мулькасте
-        if multicast_count > 1:
-            try:
-                sticker_msg = await context.bot.send_sticker(
-                    chat_id=update.message.chat_id,
-                    sticker="CAACAgIAAxkBAAEWvXxpzS8YaDidp7I83w2Hmt9ikjGfFQACI6AAAiYeaEq2tdJUSWurpToE"
-                )
-                schedule_delete(context.bot, chat_id, sticker_msg.message_id, 600, context.application.job_queue)
-            except Exception as e:
-                logger.debug(f"Could not send multicast sticker: {e}")
-        
-        # Отправляем стикер при Зевсе
-        if zeus_triggered:
-            try:
-                sticker_msg = await context.bot.send_sticker(
-                    chat_id=update.message.chat_id,
-                    sticker="CAACAgIAAxkBAAEWvYppzTlfymrgL-0imSPD-P-ho8_gTgACxpkAAhEHaUp7puLN1lPpnjoE"
-                )
-                schedule_delete(context.bot, chat_id, sticker_msg.message_id, 600, context.application.job_queue)
-            except Exception as e:
-                logger.debug(f"Could not send Zeus sticker: {e}")
         
         logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
@@ -2790,16 +2758,6 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="HTML"
             )
             
-            # Стикер Зевса
-            try:
-                zeus_sticker = await context.bot.send_sticker(
-                    chat_id=chat_id,
-                    sticker="CAACAgIAAxkBAAEWvYppzTlfymrgL-0imSPD-P-ho8_gTgACxpkAAhEHaUp7puLN1lPpnjoE"
-                )
-                schedule_delete(context.bot, chat_id, zeus_sticker.message_id, 600, context.application.job_queue)
-            except Exception as e:
-                logger.debug(f"Could not send Zeus sticker: {e}")
-            
             return  # выходим
         
         elif event_roll < zeus_chance + multicast_chance:
@@ -2966,19 +2924,6 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 result_msg = await context.bot.send_message(
                     chat_id=chat_id, text=text, parse_mode="HTML"
                 )
-        
-        # Стикеры (мулькаст и Зевс)
-        if multicast_count > 1:
-            try:
-                mc_sticker = await context.bot.send_sticker(
-                    chat_id=chat_id,
-                    sticker="CAACAgIAAxkBAAEWvXxpzS8YaDidp7I83w2Hmt9ikjGfFQACI6AAAiYeaEq2tdJUSWurpToE"
-                )
-                schedule_delete(context.bot, chat_id, mc_sticker.message_id, 600, context.application.job_queue)
-            except Exception as e:
-                logger.debug(f"Could not send multicast sticker: {e}")
-        
-        # Зевс уже обработан выше с return, сюда не дойдёт
         
     except Exception as e:
         import traceback
