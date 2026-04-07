@@ -1820,9 +1820,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         # Не попали в x4 - финиш на x3
                         cascade_count = 3
+                else:
+                    # Не попали в x3 - финиш на x2
+                    cascade_count = 2
             else:
-                # Не попали в x2 - x1
+                # Не попали в x2 - обычный ролл (не мультикаст)
                 cascade_count = 1
+                return  # выходим из мультикаста, делаем обычный ролл
             
             roll = roll * cascade_count
             original_roll = roll // cascade_count  # сохраняем для текста
@@ -2821,8 +2825,9 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Не попали в x3 - финиш на x2
                     cascade_count = 2
             else:
-                # Не попали в x2 - x1
+                # Не попали в x2 - обычный ролл (не мультикаст)
                 cascade_count = 1
+                return  # выходим из мультикаста, делаем обычный ролл
             
             roll = roll * cascade_count
             if cascade_count > 1:
