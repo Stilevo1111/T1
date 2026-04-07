@@ -1897,7 +1897,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             extra_text = random.choice(CATEGORY_PHRASES[category])
         
         if cascade_count > 1 and original_roll is not None:
-            roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
+            roll_display = f"+{roll}" if roll > 0 else str(roll)
             text = (
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n\n"
@@ -2877,7 +2877,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"testfissure: cascade_count={cascade_count}, multicast_text={multicast_text}")
         
         if cascade_count > 1:
-            roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
+            roll_display = f"+{roll}" if roll > 0 else str(roll)
             text = (
                 f"🎲 {display_username}\n\n"
                 f"🧪 ТЕСТ (без записи в БД)\n"
