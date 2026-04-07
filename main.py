@@ -1771,13 +1771,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             multicast_text = ""
             cascade_count = 1
             
-            # Первый спин
-            slots = []
-            for _ in range(3):
-                if random.random() < 0.75:
-                    slots.append(random.choice(slot_emojis))
-                else:
-                    slots.append(random.choice(slot_emojis))
+            # Первый спин - всегда случайные символы
+            slots = random.sample(slot_emojis, 3)
             
             await context.bot.send_message(
                 chat_id=update.message.chat_id,
@@ -2777,13 +2772,8 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             multicast_text = ""
             cascade_count = 1
             
-            # Первый спин
-            slots = []
-            for _ in range(3):
-                if random.random() < 0.75:
-                    slots.append(random.choice(slot_emojis))
-                else:
-                    slots.append(random.choice(slot_emojis))
+            # Первый спин - всегда случайные символы
+            slots = random.sample(slot_emojis, 3)
             
             await context.bot.send_message(
                 chat_id=chat_id,
