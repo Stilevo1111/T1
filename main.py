@@ -1422,8 +1422,8 @@ WEEKLY_DIGEST_HEADER = "🌅 ЕЖЕНЕДЕЛЬНЫЙ ДАЙДЖЕСТ"
 DICE_ANIMATION_DELAY = 1.0
 
 # URL баннеров
-COOLDOWN_BANNER_URL = "https://i.ibb.co/tMyxHtz1/dsadsadasdas.png"
-PROFILE_BANNER_URL = "https://i.ibb.co/d0pcyNcM/image.png"
+COOLDOWN_BANNER_URL = "https://i.ibb.co/kVFSSXKB/2v-Eh7-1.jpg"
+PROFILE_BANNER_URL = "https://i.ibb.co/zTfF02C3/W0o-Gg.jpg"
 TOP_BANNER_URL = "https://i.ibb.co/gLcnbBJ0/wx-Kwo.jpg"
 TOPMMR_BANNER_URL = "https://i.ibb.co/7Jy3hjsF/o-TVJg.jpg"
 LINK_BANNER_URL = "https://i.ibb.co/s9L6mTtx/dsfcv23123.png"
