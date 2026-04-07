@@ -1810,10 +1810,20 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
                     else:
-                        # Не попали в x4 - финиш на x3
+                        # Не попали в x4 - показываем проигрышный спин и финиш на x3
+                        slots = random.sample(slot_emojis, 3)
+                        await context.bot.send_message(
+                            chat_id=update.message.chat_id,
+                            text=f"🎰 {' | '.join(slots)} | x3"
+                        )
                         cascade_count = 3
                 else:
-                    # Не попали в x3 - финиш на x2
+                    # Не попали в x3 - показываем проигрышный спин и финиш на x2
+                    slots = random.sample(slot_emojis, 3)
+                    await context.bot.send_message(
+                        chat_id=update.message.chat_id,
+                        text=f"🎰 {' | '.join(slots)} | x2"
+                    )
                     cascade_count = 2
             else:
                 # Не попали в x2 - обычный ролл (не мультикаст)
@@ -2802,10 +2812,20 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
                     else:
-                        # Не попали в x4 - финиш на x3
+                        # Не попали в x4 - показываем проигрышный спин и финиш на x3
+                        slots = random.sample(slot_emojis, 3)
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=f"🎰 {' | '.join(slots)} | x3"
+                        )
                         cascade_count = 3
                 else:
-                    # Не попали в x3 - финиш на x2
+                    # Не попали в x3 - показываем проигрышный спин и финиш на x2
+                    slots = random.sample(slot_emojis, 3)
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"🎰 {' | '.join(slots)} | x2"
+                    )
                     cascade_count = 2
             else:
                 # Не попали в x2 - обычный ролл (не мультикаст)
