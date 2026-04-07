@@ -1814,7 +1814,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         slots = random.sample(slot_emojis, 3)
                         await context.bot.send_message(
                             chat_id=update.message.chat_id,
-                            text=f"🎰 {' | '.join(slots)} | x3"
+                            text=f"🎰 {' | '.join(slots)} | x4"
                         )
                         cascade_count = 3
                 else:
@@ -1822,7 +1822,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     slots = random.sample(slot_emojis, 3)
                     await context.bot.send_message(
                         chat_id=update.message.chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x2"
+                        text=f"🎰 {' | '.join(slots)} | x3"
                     )
                     cascade_count = 2
             else:
@@ -1897,10 +1897,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             extra_text = random.choice(CATEGORY_PHRASES[category])
         
         if cascade_count > 1 and original_roll is not None:
+            roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
             text = (
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n\n"
-                f"{multicast_text}\n\n"
+                f"{multicast_text} {roll_display}CM\n\n"
                 f"📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
             )
         else:
@@ -2817,7 +2818,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         slots = random.sample(slot_emojis, 3)
                         await context.bot.send_message(
                             chat_id=chat_id,
-                            text=f"🎰 {' | '.join(slots)} | x3"
+                            text=f"🎰 {' | '.join(slots)} | x4"
                         )
                         cascade_count = 3
                 else:
@@ -2825,7 +2826,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     slots = random.sample(slot_emojis, 3)
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x2"
+                        text=f"🎰 {' | '.join(slots)} | x3"
                     )
                     cascade_count = 2
             else:
@@ -2836,7 +2837,12 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             roll = roll * cascade_count
             logger.info(f"testfissure multicast: roll after multiply={roll}, cascade_count={cascade_count}")
             if cascade_count > 1:
+                original_roll = roll // cascade_count
                 multicast_text = f"\n{random.choice(MULTICAST_TEXTS[cascade_count])}"
+        
+        # Сохраняем original_roll для мультикаста (до защиты)
+        if cascade_count > 1 and 'original_roll' not in locals():
+            original_roll = roll // cascade_count
         
         # Защита
         roll, protection_msg = apply_fissure_protection(current_fissure, roll, is_fatal)
@@ -2871,12 +2877,13 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"testfissure: cascade_count={cascade_count}, multicast_text={multicast_text}")
         
         if cascade_count > 1:
+            roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
             text = (
                 f"🎲 {display_username}\n\n"
                 f"🧪 ТЕСТ (без записи в БД)\n"
                 f"{result_text}\n"
                 f"{extra_text}\n\n"
-                f"{multicast_text}\n\n"
+                f"{multicast_text} {roll_display}CM\n\n"
                 f"📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
             )
         else:
