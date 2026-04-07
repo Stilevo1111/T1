@@ -234,7 +234,7 @@ async def announce_weekly_mmr_winner(bot):
         )
 
         # Banner URL для победителя недели
-        winner_banner_url = "https://ibb.co/B2ny57Hz"
+        winner_banner_url = "https://i.ibb.co/Jj3vwbWB/ANQkz.jpg"
         
         await bot.send_photo(
             chat_id=digest_chat_id,
@@ -291,7 +291,7 @@ async def update_all_mmr_job(context):
                     telegram_id = user.get('telegram_id')
                     name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id else username
                     text = f"{name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
-                    rank_up_banner_url = "https://ibb.co/zTFLFfvk"
+                    rank_up_banner_url = "https://i.ibb.co/8LbRb8Zh/dsadasdas23323.png"
                     await context.bot.send_photo(chat_id=digest_chat_id, photo=rank_up_banner_url, caption=text, parse_mode="HTML")
                 except Exception as notify_err:
                     logger.error(f"Ошибка отправки уведомления о ранк-апе: {notify_err}")
@@ -1749,7 +1749,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"User {user_obj.id} triggered Zeus. No roll.")
             
             # Отправляем результат с шапкой
-            zeus_banner_url = "https://ibb.co/SXhkHh11"
+            zeus_banner_url = "https://i.ibb.co/0jg01gWW/Gemini-Generated-Image-wyz68gwyz68gwyz6-1.png"
             result_msg = await context.bot.send_photo(
                 chat_id=update.message.chat_id,
                 photo=zeus_banner_url,
@@ -1924,9 +1924,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Шапка: старая для обычных, новая для мультикаста
         if cascade_count > 1:
-            roll_banner_url = "https://ibb.co/nqmpQ8ZK"
+            roll_banner_url = "https://i.ibb.co/vCq9LvgM/dsad23.png"
         else:
-            roll_banner_url = "https://ibb.co/N22wB4RD"
+            roll_banner_url = "https://i.ibb.co/4RRBrQkv/9k-Rlz.jpg"
         
         try:
             if roll_banner_url:
@@ -2758,7 +2758,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📏 {current_fissure:.1f} см"
             )
             
-            zeus_banner_url = "https://ibb.co/SXhkHh11"
+            zeus_banner_url = "https://i.ibb.co/0jg01gWW/Gemini-Generated-Image-wyz68gwyz68gwyz6-1.png"
             result_msg = await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=zeus_banner_url,
@@ -2893,9 +2893,9 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Шапка: старая для обычных, новая для мультикаста
         if cascade_count > 1:
-            roll_banner_url = "https://ibb.co/nqmpQ8ZK"
+            roll_banner_url = "https://i.ibb.co/vCq9LvgM/dsad23.png"
         else:
-            roll_banner_url = "https://ibb.co/N22wB4RD"
+            roll_banner_url = "https://i.ibb.co/4RRBrQkv/9k-Rlz.jpg"
         
         try:
             if roll_banner_url:
