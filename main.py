@@ -1715,6 +1715,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         multicast_count = 1
         multicast_text = ""
+        original_roll = None
         zeus_triggered = False
         zeus_text = ""
         display_username = f"<a href=\"tg://user?id={user_obj.id}\">{username}</a>"
@@ -1746,9 +1747,14 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             logger.info(f"User {user_obj.id} triggered Zeus. No roll.")
             
-            # Отправляем результат
-            result_msg = await context.bot.send_message(
-                chat_id=update.message.chat_id, text=text, parse_mode="HTML", reply_markup=main_menu()
+            # Отправляем результат с шапкой
+            zeus_banner_url = "https://ibb.co/SXhkHh11"
+            result_msg = await context.bot.send_photo(
+                chat_id=update.message.chat_id,
+                photo=zeus_banner_url,
+                caption=text,
+                parse_mode="HTML",
+                reply_markup=main_menu()
             )
             set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
             schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
@@ -1787,11 +1793,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=update.message.chat_id,
                 text=f"🎰 {' | '.join(slots)} | x2"
             )
-            msg_x2 = await context.bot.send_message(
-                chat_id=update.message.chat_id,
-                text=f"🎰 {' | '.join(slots)} | x2"
-            )
-            schedule_delete(context.bot, chat_id, msg_x2.message_id, 30, context.application.job_queue)
             await asyncio.sleep(1)
             
             # Проверяем совпадение (минимум 2)
@@ -1809,11 +1810,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=update.message.chat_id,
                     text=f"🎰 {' | '.join(slots)} | x3"
                 )
-                msg_x3 = await context.bot.send_message(
-                    chat_id=update.message.chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x3"
-                )
-                schedule_delete(context.bot, chat_id, msg_x3.message_id, 30, context.application.job_queue)
                 await asyncio.sleep(1)
                 
                 # Проверяем совпадение
@@ -1831,17 +1827,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         chat_id=update.message.chat_id,
                         text=f"🎰 {' | '.join(slots)} | x4"
                     )
-                    msg_x4 = await context.bot.send_message(
-                        chat_id=update.message.chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x4"
-                    )
-                    schedule_delete(context.bot, chat_id, msg_x4.message_id, 30, context.application.job_queue)
                     await asyncio.sleep(1)
                     
                     if len(set(slots)) <= 2:
                         cascade_count = 4
             
             roll = roll * cascade_count
+            original_roll = roll // cascade_count  # сохраняем для текста
             increment_stat("multicast")
             if cascade_count >= 4:
                 increment_stat("multicast_x4")
@@ -1850,6 +1842,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif cascade_count >= 2:
                 increment_stat("multicast_x2")
             if cascade_count > 1:
+                original_roll = roll  # сохраняем оригинальное значение до умножения
                 multicast_text = f"\n{random.choice(MULTICAST_TEXTS[cascade_count])}"
         
         else:
@@ -1858,11 +1851,16 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
         
+        # Сохраняем original_roll для отображения в мультикасте (до бонусов)
+        display_roll = roll
+        
         # Бонус для выходных: увеличиваем положительный ролл
         if is_weekend and roll > 0 and not is_fatal:
             bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
             roll = int(roll * bonus_multiplier)
             weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f}"
+        
+        old_fissure = user["fissure"]
         
         # Считаем новую фиссуру: база - 5% Зевса + ролл (фиссуры < 5 защищены от Зевса)
         if zeus_triggered and user["fissure"] >= 5:
@@ -1871,7 +1869,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             base_fissure = user["fissure"]
         base_fissure = max(0.1, base_fissure)
         new_fissure = calculate_new_fissure(base_fissure, roll)
-        growth = new_fissure - user["fissure"]
+        growth = new_fissure - old_fissure
         update_fissure(user_obj.id, new_fissure, now, growth)
         
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
@@ -1900,14 +1898,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             extra_text = random.choice(CATEGORY_PHRASES[category])
         
-        if multicast_count > 1:
-            # Новый дизайн с мультикастом
+        if multicast_count > 1 and original_roll is not None:
             text = (
                 f"🎲 {display_username}\n\n"
-                f"{extra_text}\n"
                 f"{result_text}\n\n"
                 f"{multicast_text}\n\n"
-                f"📏 15.0 см → {new_fissure:.1f} см"
+                f"📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
             )
         else:
             # Старый дизайн без мультикаста
@@ -1915,7 +1911,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n"
                 f"{extra_text}\n\n"
-                f"📏 15.0 см → {new_fissure:.1f} см"
+                f"📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
             )
         
         if is_fatal and protection_msg:
@@ -1928,16 +1924,29 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = f"{text}\n{zeus_text}"
         
         logger.info(f"Sending result message to chat_id={update.message.chat_id}")
-        roll_banner_url = "https://ibb.co/N22wB4RD"
+        
+        # Шапка: старая для обычных, новая для мультикаста
+        if multicast_count > 1:
+            roll_banner_url = "https://ibb.co/nqmpQ8ZK"
+        else:
+            roll_banner_url = "https://ibb.co/N22wB4RD"
         
         try:
-            result_msg = await context.bot.send_photo(
-                chat_id=update.message.chat_id,
-                photo=roll_banner_url,
-                caption=text,
-                parse_mode="HTML",
-                reply_markup=main_menu()
-            )
+            if roll_banner_url:
+                result_msg = await context.bot.send_photo(
+                    chat_id=update.message.chat_id,
+                    photo=roll_banner_url,
+                    caption=text,
+                    parse_mode="HTML",
+                    reply_markup=main_menu()
+                )
+            else:
+                result_msg = await context.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=main_menu()
+                )
             add_bot_message(chat_id, user_obj.id, result_msg.message_id)
         except Exception as e:
             logger.debug(f"Could not send roll banner: {e}")
@@ -2773,8 +2782,12 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📏 {current_fissure:.1f} см"
             )
             
-            result_msg = await context.bot.send_message(
-                chat_id=chat_id, text=text, parse_mode="HTML"
+            zeus_banner_url = "https://ibb.co/SXhkHh11"
+            result_msg = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=zeus_banner_url,
+                caption=text,
+                parse_mode="HTML"
             )
             
             # Стикер Зевса
@@ -2920,16 +2933,26 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if zeus_text:
             text = f"{text}\n{zeus_text}"
         
-        # Пытаемся отредактировать anim_msg (мулькаст), иначе отправляем новое
-        roll_banner_url = "https://ibb.co/N22wB4RD"
+        # Шапка: старая для обычных, новая для мультикаста
+        if multicast_count > 1:
+            roll_banner_url = "https://ibb.co/nqmpQ8ZK"
+        else:
+            roll_banner_url = "https://ibb.co/N22wB4RD"
         
         try:
-            result_msg = await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=roll_banner_url,
-                caption=text,
-                parse_mode="HTML"
-            )
+            if roll_banner_url:
+                result_msg = await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=roll_banner_url,
+                    caption=text,
+                    parse_mode="HTML"
+                )
+            else:
+                result_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    parse_mode="HTML"
+                )
             add_bot_message(chat_id, user_obj.id, result_msg.message_id)
         except Exception as e:
             logger.debug(f"Could not send roll banner: {e}")
