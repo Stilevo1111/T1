@@ -2866,12 +2866,14 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         extra_text = random.choice(CATEGORY_PHRASES.get("up" if roll > 0 else ("down" if roll < 0 else "same"), [""]))
         
+        logger.info(f"testfissure: cascade_count={cascade_count}, multicast_text={multicast_text}")
+        
         if cascade_count > 1:
             text = (
                 f"🎲 {display_username}\n\n"
                 f"🧪 ТЕСТ (без записи в БД)\n"
-                f"{extra_text}\n"
-                f"{result_text}\n\n"
+                f"{result_text}\n"
+                f"{extra_text}\n\n"
                 f"{multicast_text}\n\n"
                 f"📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
             )
