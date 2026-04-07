@@ -1771,19 +1771,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             multicast_text = ""
             cascade_count = 1
             
-            # Первый спин - случайные символы
-            slots = random.sample(slot_emojis, 3)
-            
-            await context.bot.send_message(
-                chat_id=update.message.chat_id,
-                text=f"🎰 {' | '.join(slots)} | x2"
-            )
-            await asyncio.sleep(1)
-            
             # Проверяем переход на x2 (скрытый рандом 75%)
             if random.random() < 0.75:
                 cascade_count = 2
-                # Показываем джекпот (3 одинаковых)
+                # Показываем джекпот (3 одинаковых) - это и есть анимация x2
                 jackpot_symbol = random.choice(slot_emojis)
                 slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
                 
@@ -1796,7 +1787,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Проверяем переход на x3 (скрытый рандом 25%)
                 if random.random() < 0.25:
                     cascade_count = 3
-                    # Показываем джекпот
+                    # Показываем джекпот - анимация x3
                     jackpot_symbol = random.choice(slot_emojis)
                     slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
                     
@@ -1809,7 +1800,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Проверяем переход на x4 (скрытый рандом 15%)
                     if random.random() < 0.15:
                         cascade_count = 4
-                        # Показываем джекпот
+                        # Показываем джекпот - анимация x4
                         jackpot_symbol = random.choice(slot_emojis)
                         slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
                         
@@ -2772,19 +2763,10 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             multicast_text = ""
             cascade_count = 1
             
-            # Первый спин - случайные символы
-            slots = random.sample(slot_emojis, 3)
-            
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"🎰 {' | '.join(slots)} | x2"
-            )
-            await asyncio.sleep(1)
-            
             # Проверяем переход на x2 (скрытый рандом 75%)
             if random.random() < 0.75:
                 cascade_count = 2
-                # Показываем джекпот (3 одинаковых)
+                # Показываем джекпот (3 одинаковых) - анимация x2
                 jackpot_symbol = random.choice(slot_emojis)
                 slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
                 
@@ -2797,7 +2779,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Проверяем переход на x3 (скрытый рандом 25%)
                 if random.random() < 0.25:
                     cascade_count = 3
-                    # Показываем джекпот
+                    # Показываем джекпот - анимация x3
                     jackpot_symbol = random.choice(slot_emojis)
                     slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
                     
@@ -2810,7 +2792,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Проверяем переход на x4 (скрытый рандом 15%)
                     if random.random() < 0.15:
                         cascade_count = 4
-                        # Показываем джекпот
+                        # Показываем джекпот - анимация x4
                         jackpot_symbol = random.choice(slot_emojis)
                         slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
                         
