@@ -1785,11 +1785,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await asyncio.sleep(1)
             
-            # Проверяем совпадение (только 3 одинаковых = джекпот)
-            if len(set(slots)) == 1:
+            # Проверяем переход на x2 (скрытый рандом 75%)
+            if random.random() < 0.75:
                 cascade_count = 2
-                # Второй спин - новый независимый
-                slots = [random.choice(slot_emojis) for _ in range(3)]
+                # Показываем джекпот (3 одинаковых)
+                jackpot_symbol = random.choice(slot_emojis)
+                slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
                 
                 await context.bot.send_message(
                     chat_id=update.message.chat_id,
@@ -1797,11 +1798,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 await asyncio.sleep(1)
                 
-                # Проверяем совпадение (только 3 одинаковых)
-                if len(set(slots)) == 1:
+                # Проверяем переход на x3 (скрытый рандом 25%)
+                if random.random() < 0.25:
                     cascade_count = 3
-                    # Третий спин - новый независимый
-                    slots = [random.choice(slot_emojis) for _ in range(3)]
+                    # Показываем джекпот
+                    jackpot_symbol = random.choice(slot_emojis)
+                    slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
                     
                     await context.bot.send_message(
                         chat_id=update.message.chat_id,
@@ -1809,8 +1811,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     await asyncio.sleep(1)
                     
-                    if len(set(slots)) == 1:
+                    # Проверяем переход на x4 (скрытый рандом 15%)
+                    if random.random() < 0.15:
                         cascade_count = 4
+                        # Показываем джекпот
+                        jackpot_symbol = random.choice(slot_emojis)
+                        slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
             
             roll = roll * cascade_count
             original_roll = roll // cascade_count  # сохраняем для текста
@@ -2776,26 +2782,31 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Второй спин - новый независимый
                 slots = [random.choice(slot_emojis) for _ in range(3)]
                 
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🎰 {' | '.join(slots)} | x3"
+            )
+            await asyncio.sleep(1)
+            
+            # Проверяем переход на x3 (скрытый рандом 25%)
+            if random.random() < 0.25:
+                cascade_count = 3
+                # Показываем джекпот
+                jackpot_symbol = random.choice(slot_emojis)
+                slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
+                
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x3"
+                    text=f"🎰 {' | '.join(slots)} | x4"
                 )
                 await asyncio.sleep(1)
                 
-                # Проверяем совпадение (только 3 одинаковых)
-                if len(set(slots)) == 1:
-                    cascade_count = 3
-                    # Третий спин - новый независимый
-                    slots = [random.choice(slot_emojis) for _ in range(3)]
-                    
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x4"
-                    )
-                    await asyncio.sleep(1)
-                    
-                    if len(set(slots)) == 1:
-                        cascade_count = 4
+                # Проверяем переход на x4 (скрытый рандом 15%)
+                if random.random() < 0.15:
+                    cascade_count = 4
+                    # Показываем джекпот
+                    jackpot_symbol = random.choice(slot_emojis)
+                    slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
             
             roll = roll * cascade_count
             if cascade_count > 1:
