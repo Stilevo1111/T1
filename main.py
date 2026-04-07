@@ -2866,7 +2866,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         extra_text = random.choice(CATEGORY_PHRASES.get("up" if roll > 0 else ("down" if roll < 0 else "same"), [""]))
         
-        if multicast_count > 1:
+        if cascade_count > 1:
             text = (
                 f"🎲 {display_username}\n\n"
                 f"🧪 ТЕСТ (без записи в БД)\n"
