@@ -1817,8 +1817,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             chat_id=update.message.chat_id,
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
+                    else:
+                        # Не попали в x4 - финиш на x3
+                        cascade_count = 3
             else:
-                # Не попали в x2 - сразу x1 (проигрыш)
+                # Не попали в x2 - x1
                 cascade_count = 1
             
             roll = roll * cascade_count
@@ -2811,8 +2814,14 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             chat_id=chat_id,
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
+                    else:
+                        # Не попали в x4 - финиш на x3
+                        cascade_count = 3
+                else:
+                    # Не попали в x3 - финиш на x2
+                    cascade_count = 2
             else:
-                # Не попали в x2 - сразу x1 (проигрыш)
+                # Не попали в x2 - x1
                 cascade_count = 1
             
             roll = roll * cascade_count
