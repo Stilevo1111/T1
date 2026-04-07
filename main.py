@@ -1900,7 +1900,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             roll_display = f"+{roll}" if roll > 0 else str(roll)
             text = (
                 f"🎲 {display_username}\n\n"
-                f"{result_text}\n\n"
                 f"{multicast_text} {roll_display}CM\n\n"
                 f"📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
             )
@@ -2880,9 +2879,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             roll_display = f"+{roll}" if roll > 0 else str(roll)
             text = (
                 f"🎲 {display_username}\n\n"
-                f"🧪 ТЕСТ (без записи в БД)\n"
-                f"{result_text}\n"
-                f"{extra_text}\n\n"
+                f"🧪 ТЕСТ (без записи в БД)\n\n"
                 f"{multicast_text} {roll_display}CM\n\n"
                 f"📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
             )
