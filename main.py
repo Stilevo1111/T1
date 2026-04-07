@@ -1718,6 +1718,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         original_roll = None
         zeus_triggered = False
         zeus_text = ""
+        cascade_count = 1
         display_username = f"<a href=\"tg://user?id={user_obj.id}\">{username}</a>"
         
         # Один рандом: что выпало?
@@ -1816,7 +1817,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     cascade_count = 2
             else:
                 # Не попали в x2 - обычный ролл (не мультикаст)
-                cascade_count = 1
+                multicast_count = 1
                 return  # выходим из мультикаста, делаем обычный ролл
             
             roll = roll * cascade_count
@@ -1829,7 +1830,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif cascade_count >= 2:
                 increment_stat("multicast_x2")
             if cascade_count > 1:
-                original_roll = roll  # сохраняем оригинальное значение до умножения
                 multicast_text = f"\n{random.choice(MULTICAST_TEXTS[cascade_count])}"
         
         else:
@@ -1885,7 +1885,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             extra_text = random.choice(CATEGORY_PHRASES[category])
         
-        if multicast_count > 1 and original_roll is not None:
+        if cascade_count > 1 and original_roll is not None:
             text = (
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n\n"
@@ -1913,7 +1913,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"Sending result message to chat_id={update.message.chat_id}")
         
         # Шапка: старая для обычных, новая для мультикаста
-        if multicast_count > 1:
+        if cascade_count > 1:
             roll_banner_url = "https://ibb.co/nqmpQ8ZK"
         else:
             roll_banner_url = "https://ibb.co/N22wB4RD"
@@ -2728,6 +2728,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         multicast_text = ""
         zeus_triggered = False
         zeus_text = ""
+        cascade_count = 1
         
         # Один рандом: что выпало?
         event_roll = random.random()
@@ -2871,7 +2872,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = f"{text}\n{zeus_text}"
         
         # Шапка: старая для обычных, новая для мультикаста
-        if multicast_count > 1:
+        if cascade_count > 1:
             roll_banner_url = "https://ibb.co/nqmpQ8ZK"
         else:
             roll_banner_url = "https://ibb.co/N22wB4RD"
