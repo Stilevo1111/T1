@@ -1785,8 +1785,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await asyncio.sleep(1)
             
-            # Проверяем совпадение (минимум 2)
-            if len(set(slots)) <= 2:
+            # Проверяем совпадение (только 3 одинаковых = джекпот)
+            if len(set(slots)) == 1:
                 cascade_count = 2
                 # Второй спин - новый независимый
                 slots = [random.choice(slot_emojis) for _ in range(3)]
@@ -1797,8 +1797,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 await asyncio.sleep(1)
                 
-                # Проверяем совпадение
-                if len(set(slots)) <= 2:
+                # Проверяем совпадение (только 3 одинаковых)
+                if len(set(slots)) == 1:
                     cascade_count = 3
                     # Третий спин - новый независимый
                     slots = [random.choice(slot_emojis) for _ in range(3)]
@@ -1809,7 +1809,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     await asyncio.sleep(1)
                     
-                    if len(set(slots)) <= 2:
+                    if len(set(slots)) == 1:
                         cascade_count = 4
             
             roll = roll * cascade_count
@@ -2770,19 +2770,11 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await asyncio.sleep(1)
             
-            # Проверяем совпадение (минимум 2)
-            if len(set(slots)) <= 2:
+            # Проверяем совпадение (только 3 одинаковых = джекпот)
+            if len(set(slots)) == 1:
                 cascade_count = 2
-                # Второй спин - связан с первым
-                winning_symbol = slots[0]
-                slots = []
-                for i in range(3):
-                    if i == 0:
-                        slots.append(winning_symbol)
-                    elif random.random() < 0.80:
-                        slots.append(winning_symbol)
-                    else:
-                        slots.append(random.choice(slot_emojis))
+                # Второй спин - новый независимый
+                slots = [random.choice(slot_emojis) for _ in range(3)]
                 
                 await context.bot.send_message(
                     chat_id=chat_id,
@@ -2790,8 +2782,8 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 await asyncio.sleep(1)
                 
-                # Проверяем совпадение
-                if len(set(slots)) <= 2:
+                # Проверяем совпадение (только 3 одинаковых)
+                if len(set(slots)) == 1:
                     cascade_count = 3
                     # Третий спин - новый независимый
                     slots = [random.choice(slot_emojis) for _ in range(3)]
@@ -2802,7 +2794,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     await asyncio.sleep(1)
                     
-                    if len(set(slots)) <= 2:
+                    if len(set(slots)) == 1:
                         cascade_count = 4
             
             roll = roll * cascade_count
