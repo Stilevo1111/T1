@@ -1794,7 +1794,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 await context.bot.send_message(
                     chat_id=update.message.chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x3"
+                    text=f"🎰 {' | '.join(slots)} | x2"
                 )
                 await asyncio.sleep(1)
                 
@@ -1807,7 +1807,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     await context.bot.send_message(
                         chat_id=update.message.chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x4"
+                        text=f"🎰 {' | '.join(slots)} | x3"
                     )
                     await asyncio.sleep(1)
                     
@@ -1817,12 +1817,21 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         # Показываем джекпот
                         jackpot_symbol = random.choice(slot_emojis)
                         slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-                else:
-                    # Не попали в x3 - показываем 3 разных и выходим
-                    slots = random.sample(slot_emojis, 3)
+                        
+                        await context.bot.send_message(
+                            chat_id=update.message.chat_id,
+                            text=f"🎰 {' | '.join(slots)} | x4"
+                        )
+                        await asyncio.sleep(1)
             else:
-                # Не попали в x2 - показываем 3 разных и выходим (x1)
+                # Не попали в x2 - сразу x1
+                cascade_count = 1
+                # Показываем 3 разных символа
                 slots = random.sample(slot_emojis, 3)
+                await context.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text=f"🎰 {' | '.join(slots)} | x1"
+                )
             
             roll = roll * cascade_count
             original_roll = roll // cascade_count  # сохраняем для текста
@@ -2791,7 +2800,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x3"
+                    text=f"🎰 {' | '.join(slots)} | x2"
                 )
                 await asyncio.sleep(1)
                 
@@ -2804,7 +2813,7 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x4"
+                        text=f"🎰 {' | '.join(slots)} | x3"
                     )
                     await asyncio.sleep(1)
                     
@@ -2814,12 +2823,21 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         # Показываем джекпот
                         jackpot_symbol = random.choice(slot_emojis)
                         slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-                else:
-                    # Не попали в x3 - показываем 3 разных и выходим
-                    slots = random.sample(slot_emojis, 3)
+                        
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=f"🎰 {' | '.join(slots)} | x4"
+                        )
+                        await asyncio.sleep(1)
             else:
-                # Не попали в x2 - показываем 3 разных и выходим (x1)
+                # Не попали в x2 - сразу x1
+                cascade_count = 1
+                # Показываем 3 разных символа
                 slots = random.sample(slot_emojis, 3)
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"🎰 {' | '.join(slots)} | x1"
+                )
             
             roll = roll * cascade_count
             if cascade_count > 1:
