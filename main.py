@@ -3303,15 +3303,21 @@ async def main():
                 global last_update_time
                 try:
                     update_data = await request.json()
-                    update = Update.de_json(update_data, app.bot)
-                    await app.process_update(update)
+                    logger.info(f"Webhook received update: {update_data.get('message', {}).get('text', 'unknown')}")
+                    update = Update.de_json(update_data, request.app.bot)
+                    await request.app.process_update(update)
                     last_update_time = time.time()
                     return web.Response(status=200)
                 except Exception as e:
                     logger.error(f"Webhook error: {e}", exc_info=True)
                     return web.Response(status=500)
             
-            web_app = web.Application()
+            @web.middleware
+            async def app_middleware(request, handler):
+                request.app = app
+                return await handler(request)
+            
+            web_app = web.Application(middlewares=[app_middleware])
             web_app.router.add_post('/webhook', handle_webhook)
             web_app.router.add_get('/', lambda r: web.Response(text="OK"))
             setup_health_check(app.bot)
