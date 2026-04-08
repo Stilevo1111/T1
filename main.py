@@ -2690,6 +2690,62 @@ async def setchance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Ошибка")
 
 
+async def settitle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Установить тег (титул) администратору группы"""
+    try:
+        chat = update.effective_chat
+        user = update.effective_user
+        
+        if not context.args:
+            await context.bot.send_message(chat_id=chat.id, text="Использование: /settitle @username [тег]\nПример: /settitle @username Герой")
+            return
+        
+        # Разбираем аргументы: или @username тег, или username тег
+        first_arg = context.args[0]
+        if first_arg.startswith('@'):
+            username = first_arg[1:]
+            title = " ".join(context.args[1:]) if len(context.args) > 1 else ""
+        else:
+            username = first_arg
+            title = " ".join(context.args[1:]) if len(context.args) > 1 else ""
+        
+        if not username:
+            await context.bot.send_message(chat_id=chat.id, text="Укажите username пользователя")
+            return
+        
+        # Получаем chat member по username
+        try:
+            member = await context.bot.get_chat_member(chat.id, f"@{username}")
+        except Exception as e:
+            await context.bot.send_message(chat_id=chat.id, text=f"Не удалось найти пользователя @{username}: {e}")
+            return
+        
+        if member.status not in ('administrator', 'creator'):
+            await context.bot.send_message(chat_id=chat.id, text="Пользователь не является администратором группы")
+            return
+        
+        # Устанавливаем титул
+        try:
+            await context.bot.set_chat_administrator_custom_title(
+                chat_id=chat.id,
+                user_id=member.user.id,
+                custom_title=title if title else "Участник"
+            )
+            await context.bot.send_message(
+                chat_id=chat.id, 
+                text=f"✅ Тег установлен для @{username}: {title if title else 'Участник'}"
+            )
+        except Exception as e:
+            await context.bot.send_message(chat_id=chat.id, text=f"Ошибка: {e}")
+            
+    except Exception as e:
+        logger.error(f"Error in settitle: {e}")
+        try:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Ошибка: {e}")
+        except:
+            pass
+
+
 async def removeuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Удалить пользователя: /removeuser @username или /removeuser telegram_id"""
     try:
@@ -3267,6 +3323,7 @@ async def main():
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(CommandHandler("setchance", setchance))
         app.add_handler(CommandHandler("testfissure", testfissure))
+        app.add_handler(CommandHandler("settitle", settitle))
         app.add_handler(CommandHandler("removeuser", removeuser))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
@@ -3317,20 +3374,16 @@ async def main():
                 try:
                     update_data = await request.json()
                     logger.info(f"Webhook received update: {update_data.get('message', {}).get('text', 'unknown')}")
-                    update = Update.de_json(update_data, request.app.bot)
-                    await request.app.process_update(update)
+                    update = Update.de_json(update_data, request.app['bot_app'].bot)
+                    await request.app['bot_app'].process_update(update)
                     last_update_time = time.time()
                     return web.Response(status=200)
                 except Exception as e:
                     logger.error(f"Webhook error: {e}", exc_info=True)
                     return web.Response(status=500)
             
-            @web.middleware
-            async def app_middleware(request, handler):
-                request.app = app
-                return await handler(request)
-            
-            web_app = web.Application(middlewares=[app_middleware])
+            web_app = web.Application()
+            web_app['bot_app'] = app
             web_app.router.add_post('/webhook', handle_webhook)
             web_app.router.add_get('/', lambda r: web.Response(text="OK"))
             setup_health_check(app.bot)
