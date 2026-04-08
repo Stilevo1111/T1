@@ -637,11 +637,8 @@ class Database:
             scheme = url.scheme
             
             if get_db_type() == "postgresql":
-                cursor = conn.cursor()
-                # Преобразуем обычный курсор в словарный для совместимости
-                def dict_factory(cursor, row):
-                    return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
-                cursor.row_factory = dict_factory
+                # Для PostgreSQL используем RealDictCursor для доступа по ключу
+                cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             else:
                 cursor = conn.cursor()
             
