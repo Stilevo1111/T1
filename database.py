@@ -13,6 +13,9 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Force redeploy to clear any cached bytecode
+REDEPLOY_MARKER = "2026-04-08-21-05-00-final-fix"
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     print("⚠️ DATABASE_URL не задан! Используем SQLite для локального тестирования.")
@@ -629,9 +632,18 @@ class Database:
         pass
     
     def connect(self):
-        """Устанавливаем соединение"""
+        """Устанавливаем соединение с проверкой активности"""
         if not self.conn:
             self.conn = get_connection()
+        else:
+            # Проверяем, что соединение всё ещё активно
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.close()
+            except:
+                # Соединение мертво, создаём новое
+                self.conn = get_connection()
         return self.conn
     
     def execute_query(self, query, params=None, fetch=None):
