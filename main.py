@@ -3360,8 +3360,8 @@ async def main():
         
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(seconds=60),
-            first=datetime.datetime.now() + datetime.timedelta(seconds=20)
+            interval=datetime.timedelta(minutes=15),
+            first=datetime.datetime.now() + datetime.timedelta(minutes=1)
         )
         
         app.add_handler(CommandHandler("start", start))
