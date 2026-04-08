@@ -556,6 +556,8 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN week_current_streak INTEGER DEFAULT 0")
             if 'in_chat' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN in_chat INTEGER DEFAULT 1")
+            if 'weekly_mvp_count' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN weekly_mvp_count INTEGER DEFAULT 0")
         
         # Создаём таблицу для настроек бота (чат для дайджестов)
         cursor.execute("""

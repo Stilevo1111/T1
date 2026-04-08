@@ -205,6 +205,51 @@ async def announce_weekly_mmr_winner(bot):
         telegram_id = winner.get('telegram_id')
         streak = winner.get('week_current_streak', 0)
 
+        # Получаем прошлого победителя и забираем тег
+        prev_winner_tg_id = get_config('current_mvp_telegram_id')
+        prev_winner_tag = get_config('current_mvp_tag')
+        if prev_winner_tg_id and prev_winner_tag:
+            try:
+                prev_member = await bot.get_chat_member(digest_chat_id, prev_winner_tg_id)
+                if prev_member.status in ('administrator', 'creator'):
+                    await bot.set_chat_administrator_custom_title(
+                        chat_id=digest_chat_id,
+                        user_id=prev_winner_tg_id,
+                        custom_title=""
+                    )
+                    logger.info(f"Забран тег у прошлого победителя {prev_winner_tg_id}")
+            except Exception as e:
+                logger.warning(f"Не удалось забрать тег у прошлого победителя: {e}")
+
+        # Устанавливаем тег новому победителю
+        mvp_tag = "MVP недели"
+        tag_set = False
+        if telegram_id:
+            try:
+                member = await bot.get_chat_member(digest_chat_id, telegram_id)
+                if member.status in ('administrator', 'creator'):
+                    await bot.set_chat_administrator_custom_title(
+                        chat_id=digest_chat_id,
+                        user_id=telegram_id,
+                        custom_title=mvp_tag
+                    )
+                    tag_set = True
+                    logger.info(f"Установлен тег {mvp_tag} для победителя {telegram_id}")
+            except Exception as e:
+                logger.warning(f"Не удалось установить тег победителю: {e}")
+
+        # Увеличиваем счётчик MVP для победителя
+        if telegram_id:
+            from database import update_user_fields_batch
+            user = get_user(telegram_id)
+            if user:
+                current_mvp_count = user.get('weekly_mvp_count', 0)
+                update_user_fields_batch(telegram_id, {'weekly_mvp_count': current_mvp_count + 1})
+
+        # Сохраняем текущего победителя для следующей недели
+        set_config('current_mvp_telegram_id', str(telegram_id) if telegram_id else "")
+        set_config('current_mvp_tag', mvp_tag)
+
         if rank_tier:
             ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
             tier = min(rank_tier // 10, 8)
@@ -224,13 +269,17 @@ async def announce_weekly_mmr_winner(bot):
             name_display = username
 
         streak_text = f"\n🔥 Текущий стрик: {streak} побед" if streak > 0 else ""
+        
+        mvp_info = ""
+        if tag_set:
+            mvp_info = f"\n\n🏆 Ему присвоен титул \"{mvp_tag}\" и добавлена медалька в профиль!"
 
         text = (
             f"\n🥇 {name_display}\n"
             f"📊 {rank_str} • {mmr} MMR\n\n"
             f"📈 Результат за неделю:\n"
             f" └ {week_wins}W / {week_losses}L • WR {winrate}%{streak_text}\n\n"
-            f"Этот игрок показал лучший результат в топе MMR за неделю!"
+            f"Этот игрок показал лучший результат в топе MMR за неделю!{mvp_info}"
         )
 
         # Banner URL для победителя недели
@@ -2103,6 +2152,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not get last matches: {e}")
             
             text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n🔥 Стрик: {week_streak}/{week_best}"
+            
+            # Добавляем количество MVP недель
+            weekly_mvp = target_user.get('weekly_mvp_count', 0)
+            if weekly_mvp > 0:
+                text += f"\n🏆 MVP недели: {weekly_mvp}×"
+            
             text += "\n\n🌟 Любимые герои за 50 матчей:"
         else:
             text += "\n\n💡 /profile ＠ник — чужой профиль"
