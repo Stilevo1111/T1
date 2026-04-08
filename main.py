@@ -3360,7 +3360,7 @@ async def main():
         
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(seconds=15),
+            interval=datetime.timedelta(seconds=60),
             first=datetime.datetime.now() + datetime.timedelta(seconds=20)
         )
         
