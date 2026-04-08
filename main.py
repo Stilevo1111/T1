@@ -1773,16 +1773,18 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             cascade_count = 1
             
             # Проверяем переход на x2 (скрытый рандом 75%)
+            slot_msg_ids = []
             if random.random() < 0.75:
                 cascade_count = 2
                 # Показываем джекпот (3 одинаковых) - это и есть анимация x2
                 jackpot_symbol = random.choice(slot_emojis)
                 slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
                 
-                await context.bot.send_message(
+                msg = await context.bot.send_message(
                     chat_id=update.message.chat_id,
                     text=f"🎰 {' | '.join(slots)} | x2"
                 )
+                slot_msg_ids.append(msg.message_id)
                 await asyncio.sleep(1)
                 
                 # Проверяем переход на x3 (скрытый рандом 25%)
@@ -1792,10 +1794,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     jackpot_symbol = random.choice(slot_emojis)
                     slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
                     
-                    await context.bot.send_message(
+                    msg = await context.bot.send_message(
                         chat_id=update.message.chat_id,
                         text=f"🎰 {' | '.join(slots)} | x3"
                     )
+                    slot_msg_ids.append(msg.message_id)
                     await asyncio.sleep(1)
                     
                     # Проверяем переход на x4 (скрытый рандом 15%)
@@ -1805,25 +1808,28 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         jackpot_symbol = random.choice(slot_emojis)
                         slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
                         
-                        await context.bot.send_message(
+                        msg = await context.bot.send_message(
                             chat_id=update.message.chat_id,
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
+                        slot_msg_ids.append(msg.message_id)
                     else:
                         # Не попали в x4 - показываем проигрышный спин и финиш на x3
                         slots = random.sample(slot_emojis, 3)
-                        await context.bot.send_message(
+                        msg = await context.bot.send_message(
                             chat_id=update.message.chat_id,
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
+                        slot_msg_ids.append(msg.message_id)
                         cascade_count = 3
                 else:
                     # Не попали в x3 - показываем проигрышный спин и финиш на x2
                     slots = random.sample(slot_emojis, 3)
-                    await context.bot.send_message(
+                    msg = await context.bot.send_message(
                         chat_id=update.message.chat_id,
                         text=f"🎰 {' | '.join(slots)} | x3"
                     )
+                    slot_msg_ids.append(msg.message_id)
                     cascade_count = 2
             else:
                 # Не попали в x2 - обычный ролл (не мультикаст)
@@ -1965,6 +1971,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
         # ВСЕГДА удаляем сообщение через 30 секунд во всех чатах
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+        
+        # Удаляем анимационные сообщения слотов
+        if slot_msg_ids:
+            for msg_id in slot_msg_ids:
+                schedule_delete(context.bot, chat_id, msg_id, 30, context.application.job_queue)
+        
         update_last_message_id(user_obj.id, result_msg.message_id)
         
         await flush_stat_buffer()
