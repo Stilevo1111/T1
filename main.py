@@ -1898,9 +1898,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if cascade_count > 1 and original_roll is not None:
             roll_display = f"+{roll}" if roll > 0 else str(roll)
+            mc_level = f"×{cascade_count}"
             text = (
                 f"🎲 {display_username}\n\n"
-                f"{multicast_text} {roll_display}CM\n\n"
+                f"{extra_text}\n"
+                f"{multicast_text}\n\n"
+                f"⚡ МУЛЬТИКАСТ{mc_level}  {roll_display} CM\n\n"
                 f"📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
             )
         else:
@@ -2877,10 +2880,13 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if cascade_count > 1:
             roll_display = f"+{roll}" if roll > 0 else str(roll)
+            mc_level = f"×{cascade_count}"
             text = (
                 f"🎲 {display_username}\n\n"
                 f"🧪 ТЕСТ (без записи в БД)\n\n"
-                f"{multicast_text} {roll_display}CM\n\n"
+                f"{extra_text}\n"
+                f"{multicast_text}\n\n"
+                f"⚡ МУЛЬТИКАСТ{mc_level}  {roll_display} CM\n\n"
                 f"📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
             )
         else:
