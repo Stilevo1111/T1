@@ -302,12 +302,12 @@ async def announce_weekly_mmr_winner(bot):
 
 
 async def update_all_mmr_job(context):
-    """Ежечасовое обновление MMR всех пользователей с привязанным Steam"""
+    """Ежечасовое обновление MMR всех пользователей с привязанным Steam (только в кеш)"""
     try:
         logger.info("Запуск ежечасного обновления MMR")
         await announce_weekly_mmr_winner(context.bot)
         from dota_mmr import update_user_mmr
-        from database import get_all_users_with_steam, update_user_fields_batch
+        from database import get_all_users_with_steam, user_cache
         
         users = get_all_users_with_steam()
         if not users:
@@ -316,19 +316,26 @@ async def update_all_mmr_job(context):
         
         logger.info(f"Обновление MMR для {len(users)} пользователей")
         success_count = 0
-        rank_up_users = []  # собираем для batch
+        rank_up_users = []  # собираем для уведомлений
         
         for user in users:
             try:
                 result = update_user_mmr(user['telegram_id'])
                 if result and result.get('success'):
                     success_count += 1
+                    # Обновляем ТОЛЬКО в кеше, не в БД
+                    user = user_cache.get(user['telegram_id'])
+                    if user:
+                        user['mmr'] = result.get('mmr', user.get('mmr', 0))
+                        user['rank_tier'] = result.get('rank_tier', user.get('rank_tier', 0))
+                        user_cache.set(user['telegram_id'], user)
+                    
                     if result.get('rank_up'):
                         rank_up_users.append((user, result['rank_up']))
             except Exception as e:
                 logger.error(f"Ошибка обновления MMR для {user['telegram_id']}: {e}")
         
-        # Batch обновление кеша топа MMR (1 раз)
+        # Обновляем кеш топа MMR (только в памяти, без записи в БД)
         from database import update_dota_week_top_cache
         update_dota_week_top_cache()
         

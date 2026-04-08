@@ -1618,8 +1618,8 @@ def update_user_field(telegram_id, field, value):
     return False
 
 
-def update_user_fields_batch(telegram_id: int, fields: dict):
-    """Массовое обновление полей - 1 запрос в БД, 1 обновление кеша"""
+def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = True):
+    """Массовое обновление полей - обновление кеша + опционально БД"""
     user = get_user(telegram_id)
     if not user:
         return False
@@ -1631,8 +1631,9 @@ def update_user_fields_batch(telegram_id: int, fields: dict):
     user_cache.set(telegram_id, user)
     user_cache.mark_dirty(telegram_id)
     
-    # Один запрос в БД для всех Steam полей
-    _save_user_to_db_immediately(telegram_id, user)
+    # Сохраняем в БД только если нужно (по умолчанию да)
+    if save_to_db:
+        _save_user_to_db_immediately(telegram_id, user)
     
     # Обновляем кеш топа MMR только 1 раз
     dota_fields = ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname']
