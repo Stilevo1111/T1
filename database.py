@@ -320,8 +320,7 @@ def get_connection():
                     host=host,
                     port=port,
                     sslmode='require',
-                    connect_timeout=10,
-                    options="-c statement_timeout=30000"
+                    connect_timeout=10
                 )
                 print("✅ Подключено к PostgreSQL")
             except Exception as e:
