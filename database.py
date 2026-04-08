@@ -2018,7 +2018,9 @@ def get_dota_week_top_from_db(limit=10):
                     WHERE steam_id IS NOT NULL AND COALESCE(in_chat, TRUE) = TRUE
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CASE WHEN week_games > 0 THEN week_wins::numeric / week_games::numeric ELSE 0 END DESC,
+                    CASE WHEN week_games > 0 
+                         THEN (week_wins::numeric / week_games::numeric) * SQRT(week_games::numeric)
+                         ELSE 0 END DESC,
                     week_wins DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
@@ -2056,7 +2058,9 @@ def get_dota_week_top_from_db(limit=10):
                 WHERE steam_id IS NOT NULL AND COALESCE(in_chat, 1) = 1
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CASE WHEN week_games > 0 THEN week_wins * 1.0 / week_games ELSE 0 END DESC,
+                    CASE WHEN week_games > 0 
+                         THEN (week_wins * 1.0 / week_games) * POWER(week_games, 0.5)
+                         ELSE 0 END DESC,
                     week_wins DESC, mmr DESC
                 LIMIT ?
             """, (limit,))
