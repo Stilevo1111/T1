@@ -33,6 +33,9 @@ COOLDOWN = 86400  # 24 hours
 
 _user_processing = {}  # Spam protection: user_id -> timestamp
 
+_digest_state = {"type": None, "chat_id": None, "last_data_update": 0}
+DIGEST_DATA_REFRESH_INTERVAL = 3600  # 1 час - обновление данных из БД
+
 
 async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
     """Удалить сообщение через delay секунд"""
@@ -855,6 +858,18 @@ async def alternate_digest_job(context):
             return
         set_config('alternate_digest_last_run', str(now))
         
+        # Проверяем, нужно ли обновить данные из БД (раз в час)
+        if now - _digest_state.get("last_data_update", 0) >= DIGEST_DATA_REFRESH_INTERVAL:
+            logger.info("alternate_digest_job: обновляем данные из БД")
+            # Сбрасываем кеш в database.py чтобы получить свежие данные
+            from database import user_cache
+            user_cache.set('digest_stats', None)
+            user_cache.set('dota_digest_stats', None)
+            # Очищаем локальный кеш дайджестов
+            _digest_state["digest_data"] = None
+            _digest_state["dota_data"] = None
+            _digest_state["last_data_update"] = now
+        
         logger.info("Запуск alternate_digest_job")
         
         # Получаем ID чата для дайджеста (из кеша, не БД)
@@ -885,7 +900,12 @@ async def alternate_digest_job(context):
         # Формируем текст в зависимости от типа
         if current_type == "0":
             # Утренний дайджест
-            stats = get_digest_stats()
+            # Используем закэшированные данные если есть
+            if _digest_state.get("digest_data") is None:
+                stats = get_digest_stats()
+                _digest_state["digest_data"] = stats
+            else:
+                stats = _digest_state["digest_data"]
             
             growth_player, growth_pos = stats.get("top_growth", ("None", 0))
             drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
@@ -921,8 +941,12 @@ async def alternate_digest_job(context):
             next_type = "1"
         else:
             # Dota дайджест
-            mmr_top = get_dota_week_top(limit=10)
-            
+            # Используем закэшированные данные если есть
+            if _digest_state.get("dota_data") is None:
+                mmr_top = get_dota_week_top(limit=10)
+                _digest_state["dota_data"] = mmr_top
+            else:
+                mmr_top = _digest_state["dota_data"]
             if not mmr_top:
                 logger.info("Нет данных для Dota дайджеста")
                 return
@@ -931,6 +955,8 @@ async def alternate_digest_job(context):
             
             if not valid_players:
                 logger.info("Нет игроков с 3+ играми для Dota дайджеста")
+                # Сохраняем пустой dota_data чтобы не делать запрос повторно до обновления
+                _digest_state["dota_data"] = []
                 return
             
             top_by_wr = max(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
@@ -3360,8 +3386,8 @@ async def main():
         
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(minutes=15),
-            first=datetime.datetime.now() + datetime.timedelta(minutes=1)
+            interval=datetime.timedelta(seconds=15),
+            first=datetime.datetime.now() + datetime.timedelta(seconds=20)
         )
         
         app.add_handler(CommandHandler("start", start))
