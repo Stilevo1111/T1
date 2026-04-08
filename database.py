@@ -280,6 +280,7 @@ def get_db_type():
 def get_connection():
     """Получение соединения с базой данных с пулом"""
     db_type = get_db_type()
+    print(f"[DB] Getting connection, type: {db_type}")
     
     with _pool_lock:
         # Проверяем активное соединение в пуле
@@ -290,8 +291,10 @@ def get_connection():
                 cursor = conn.cursor()
                 cursor.execute("SELECT 1")
                 cursor.close()
+                print(f"[DB] Reusing existing connection")
                 return conn
-            except:
+            except Exception as e:
+                print(f"[DB] Existing connection failed: {e}")
                 # Соединение неактивно, удаляем из пула
                 try:
                     conn.close()
@@ -300,6 +303,7 @@ def get_connection():
                 del _connection_pool[db_type]
         
         # Создаем новое соединение
+        print(f"[DB] Creating new connection for {db_type}")
         if db_type == "postgresql":
             try:
                 url = urlparse.urlparse(DATABASE_URL)
@@ -315,7 +319,9 @@ def get_connection():
                     password=password,
                     host=host,
                     port=port,
-                    sslmode='require'
+                    sslmode='require',
+                    connect_timeout=10,
+                    options="-c statement_timeout=30000"
                 )
                 print("✅ Подключено к PostgreSQL")
             except Exception as e:
@@ -331,8 +337,8 @@ def get_connection():
             else:
                 db_path = DATABASE_URL
             
-            conn = sqlite3.connect(db_path)
-            # print("⚠️ Подключено к SQLite (только для тестирования)")
+            conn = sqlite3.connect(db_path, timeout=10)
+            print("✅ Подключено к SQLite")
         
         # Сохраняем в пул
         _connection_pool[db_type] = conn
