@@ -211,33 +211,29 @@ async def announce_weekly_mmr_winner(bot):
         # Получаем прошлого победителя и забираем тег
         prev_winner_tg_id = get_config('current_mvp_telegram_id')
         prev_winner_tag = get_config('current_mvp_tag')
-        if prev_winner_tg_id and prev_winner_tag:
+        if prev_winner_tg_id and prev_winner_tag and digest_chat_id:
             try:
-                prev_member = await bot.get_chat_member(digest_chat_id, prev_winner_tg_id)
-                if prev_member.status in ('administrator', 'creator'):
-                    await bot.set_chat_administrator_custom_title(
-                        chat_id=digest_chat_id,
-                        user_id=prev_winner_tg_id,
-                        custom_title=""
-                    )
-                    logger.info(f"Забран тег у прошлого победителя {prev_winner_tg_id}")
+                await bot.set_chat_administrator_custom_title(
+                    chat_id=digest_chat_id,
+                    user_id=prev_winner_tg_id,
+                    custom_title=""
+                )
+                logger.info(f"Забран тег у прошлого победителя {prev_winner_tg_id}")
             except Exception as e:
                 logger.warning(f"Не удалось забрать тег у прошлого победителя: {e}")
 
-        # Устанавливаем тег новому победителю
+        # Устанавливаем тег новому победителю (любому участнику группы)
         mvp_tag = "MVP недели"
         tag_set = False
-        if telegram_id:
+        if telegram_id and digest_chat_id:
             try:
-                member = await bot.get_chat_member(digest_chat_id, telegram_id)
-                if member.status in ('administrator', 'creator'):
-                    await bot.set_chat_administrator_custom_title(
-                        chat_id=digest_chat_id,
-                        user_id=telegram_id,
-                        custom_title=mvp_tag
-                    )
-                    tag_set = True
-                    logger.info(f"Установлен тег {mvp_tag} для победителя {telegram_id}")
+                await bot.set_chat_administrator_custom_title(
+                    chat_id=digest_chat_id,
+                    user_id=telegram_id,
+                    custom_title=mvp_tag
+                )
+                tag_set = True
+                logger.info(f"Установлен тег {mvp_tag} для победителя {telegram_id}")
             except Exception as e:
                 logger.warning(f"Не удалось установить тег победителю: {e}")
 
