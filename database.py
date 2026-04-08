@@ -575,6 +575,16 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN week_current_streak INTEGER DEFAULT 0")
             if 'in_chat' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN in_chat INTEGER DEFAULT 1")
+            if 'weekly_mvp_count' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN weekly_mvp_count INTEGER DEFAULT 0")
+            
+            # Создаём индексы для часто используемых полей (улучшение производительности)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_mmr ON users(mmr DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_steam_id ON users(steam_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_week_games ON users(week_games DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_current_position ON users(current_position)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_rank_tier ON users(rank_tier DESC)")
         
         # Создаём таблицу для настроек бота (чат для дайджестов)
         cursor.execute("""
@@ -1626,8 +1636,8 @@ def update_user_field(telegram_id, field, value):
     return False
 
 
-def update_user_fields_batch(telegram_id: int, fields: dict):
-    """Массовое обновление полей - 1 запрос в БД, 1 обновление кеша"""
+def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = True):
+    """Массовое обновление полей - обновление кеша + опционально БД"""
     user = get_user(telegram_id)
     if not user:
         return False
@@ -1639,8 +1649,9 @@ def update_user_fields_batch(telegram_id: int, fields: dict):
     user_cache.set(telegram_id, user)
     user_cache.mark_dirty(telegram_id)
     
-    # Один запрос в БД для всех Steam полей
-    _save_user_to_db_immediately(telegram_id, user)
+    # Сохраняем в БД только если нужно (по умолчанию да)
+    if save_to_db:
+        _save_user_to_db_immediately(telegram_id, user)
     
     # Обновляем кеш топа MMR только 1 раз
     dota_fields = ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname']
@@ -2036,7 +2047,9 @@ def get_dota_week_top_from_db(limit=10):
                     WHERE steam_id IS NOT NULL AND COALESCE(in_chat, TRUE) = TRUE
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CASE WHEN week_games > 0 THEN week_wins::numeric / week_games::numeric ELSE 0 END DESC,
+                    CASE WHEN week_games > 0 
+                         THEN (week_wins::numeric / week_games::numeric) * SQRT(week_games::numeric)
+                         ELSE 0 END DESC,
                     week_wins DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
@@ -2074,7 +2087,9 @@ def get_dota_week_top_from_db(limit=10):
                 WHERE steam_id IS NOT NULL AND COALESCE(in_chat, 1) = 1
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CASE WHEN week_games > 0 THEN week_wins * 1.0 / week_games ELSE 0 END DESC,
+                    CASE WHEN week_games > 0 
+                         THEN (week_wins * 1.0 / week_games) * POWER(week_games, 0.5)
+                         ELSE 0 END DESC,
                     week_wins DESC, mmr DESC
                 LIMIT ?
             """, (limit,))
