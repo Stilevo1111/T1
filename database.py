@@ -558,6 +558,14 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN in_chat INTEGER DEFAULT 1")
             if 'weekly_mvp_count' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN weekly_mvp_count INTEGER DEFAULT 0")
+            
+            # Создаём индексы для часто используемых полей (улучшение производительности)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_mmr ON users(mmr DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_steam_id ON users(steam_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_week_games ON users(week_games DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_current_position ON users(current_position)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_rank_tier ON users(rank_tier DESC)")
         
         # Создаём таблицу для настроек бота (чат для дайджестов)
         cursor.execute("""
