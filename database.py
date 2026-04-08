@@ -924,24 +924,11 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting fissure rank: {e}", exc_info=True)
             return None
-                result = self.execute_query(query, (telegram_id,), fetch="one")
-                logger.info(f"get_fissure_rank result: {result}, type={type(result)}")
-                if result and result[0] is not None:
-                    rank = int(result[0])
-                    return rank if rank > 0 else 1
-                return None
-        except Exception as e:
-            logger.error(f"Error getting fissure rank: {e}", exc_info=True)
-            return None
     
     def decrease_inactive_fissure(self, days_inactive=1, decrease_amount=1.0):
         """Уменьшить fissure для неактивных игроков"""
         try:
-            # Используем execute_query для безопасного выполнения
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
-            
-            if "postgres" in scheme:
+            if get_db_type() == "postgresql":
                 query = """
                     UPDATE users 
                     SET fissure = GREATEST(0.1, fissure - %s)
