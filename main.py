@@ -2461,6 +2461,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 streak = player.get('week_current_streak', 0)
                 streak_text = f" • 🔥{streak}" if streak > 0 else ""
                 
+                # Truncate long nicknames
+                if len(username) > 15:
+                    username = username[:15] + "..."
+                
                 # Build player entry - two lines per player
                 lines.append(f"{prefix} {username} — {rank_str}\n")
                 if week_games > 0:
