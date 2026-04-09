@@ -1843,6 +1843,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Остальные события (обычный ролл или мулькаст)
         roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
         
+        slot_msg_ids = []
+        
         if event_roll < zeus_chance + multicast_chance:
             # 🎰 МУЛЬТИКАСТ — слоты как в казино
             slot_emojis = ["🍒", "🍋", "🍇", "🔔", "💎"]
