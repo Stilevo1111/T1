@@ -1950,10 +1950,16 @@ def get_dota_mmr_top(limit=10):
             cursor.execute("""
                 SELECT telegram_id, username, steam_nickname, mmr, 
                        dota_total_games, dota_wins, week_games, week_wins,
-                       rank_tier, wins, losses
+                       rank_tier, wins, losses,
+                       CASE WHEN week_games > 0 
+                            THEN ROUND((week_wins::numeric / week_games::numeric) * SQRT(week_games::numeric), 2) 
+                            ELSE 0 END as score
                 FROM users 
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
-                ORDER BY rank_tier DESC
+                ORDER BY 
+                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
+                    score DESC,
+                    week_wins DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
             users = cursor.fetchall()
@@ -1966,10 +1972,16 @@ def get_dota_mmr_top(limit=10):
             cursor.execute("""
                 SELECT telegram_id, username, steam_nickname, mmr, 
                        dota_total_games, dota_wins, week_games, week_wins,
-                       rank_tier, wins, losses
+                       rank_tier, wins, losses,
+                       CASE WHEN week_games > 0 
+                            THEN ROUND(week_wins * 1.0 / week_games * SQRT(week_games), 2) 
+                            ELSE 0 END as score
                 FROM users 
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
-                ORDER BY rank_tier DESC
+                ORDER BY 
+                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
+                    score DESC,
+                    week_wins DESC, mmr DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
