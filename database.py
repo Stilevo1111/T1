@@ -254,12 +254,12 @@ def update_dota_week_top_cache():
     
     # Сортировка: сначала те у кого есть игры, потом по винрейт × √игр
     import math
-    MIN_GAMES = 3  # минимум 3 игры для топ-10
     top_users.sort(key=lambda x: (
-        0 if x['week_games'] >= MIN_GAMES else 1,  # меньше 3 игр — в конец
+        0 if x['week_games'] > 0 else 1,  # без игр — в конец
         -(x['week_wins'] / x['week_games']) if x['week_games'] > 0 else 0,  # чистый винрейт DESC
         -x['week_games'],  # больше игр при равном винрейте
         -x['week_wins'],  # победы DESC
+        -x['rank_tier'], # ранг DESC
         -x['mmr']       # MMR DESC
     ))
     
@@ -1960,7 +1960,7 @@ CASE WHEN week_games > 0
                 FROM users 
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
                 ORDER BY 
-                    CASE WHEN week_games >= 3 THEN 0 ELSE 1 END,
+                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
                     (week_wins::numeric / NULLIF(week_games, 0)) DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
@@ -2063,7 +2063,7 @@ def get_dota_week_top_from_db(limit=10):
                     FROM users 
                     WHERE steam_id IS NOT NULL AND COALESCE(in_chat, TRUE) = TRUE
 ORDER BY 
-                    CASE WHEN week_games >= 3 THEN 0 ELSE 1 END,
+                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
                     (week_wins::numeric / NULLIF(week_games, 0)) DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
