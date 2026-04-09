@@ -252,12 +252,13 @@ def update_dota_week_top_cache():
             'week_current_streak': user.get('week_current_streak', 0)
         })
     
-    # Сортировка: сначала те у кого есть игры, потом по винрейту, потом по кол-ву побед
+    # Сортировка: сначала те у кого есть игры, потом по винрейт × √игр
+    import math
     top_users.sort(key=lambda x: (
-        0 if x['week_games'] > 0 else 1,                               # без игр — в конец
-        -(x['week_wins'] / x['week_games']) if x['week_games'] > 0 else 0,  # винрейт DESC
-        -x['week_wins'],                                                # победы DESC
-        -x['mmr']                                                       # MMR DESC
+        0 if x['week_games'] > 0 else 1,  # без игр — в конец
+        -((x['week_wins'] / x['week_games']) * math.sqrt(x['week_games'])) if x['week_games'] > 0 else 0,  # винрейт × √игр DESC
+        -x['week_wins'],  # победы DESC
+        -x['mmr']       # MMR DESC
     ))
     
     # Сохраняем в кеш
