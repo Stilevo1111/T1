@@ -33,7 +33,7 @@ COOLDOWN = 86400  # 24 hours
 
 _user_processing = {}  # Spam protection: user_id -> timestamp
 
-_digest_state = {"type": None, "chat_id": None, "last_data_update": 0}
+_digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run": 0}
 DIGEST_DATA_REFRESH_INTERVAL = 3600  # 1 час - обновление данных из БД
 
 
@@ -853,13 +853,12 @@ async def alternate_digest_job(context):
         import time
         now = time.time()
         
-        # Блокировка от параллельного запуска (В БД, а не в памяти! Работает при рестартах)
-        last_run_str = get_config('alternate_digest_last_run')
-        last_run = float(last_run_str) if last_run_str and last_run_str.strip() else 0
+        # Блокировка от параллельного запуска (в памяти)
+        last_run = _digest_state.get('last_run', 0)
         if now - last_run < 10:
             logger.info(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
             return
-        set_config('alternate_digest_last_run', str(now))
+        _digest_state['last_run'] = now
         
         # Проверяем, нужно ли обновить данные из БД (раз в час)
         if now - _digest_state.get("last_data_update", 0) >= DIGEST_DATA_REFRESH_INTERVAL:
