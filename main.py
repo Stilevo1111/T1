@@ -3148,14 +3148,20 @@ async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
     try:
-        logger.info(f"menu_handler: received update from user {update.effective_user.id if update.effective_user else 'unknown'}")
+        user_id = update.effective_user.id if update.effective_user else "unknown"
+        chat_id = update.message.chat_id if update.message else "unknown"
+        logger.info(f"menu_handler: user={user_id}, chat={chat_id}")
         
-        if not update.message or not update.message.text:
-            logger.info(f"menu_handler: no message or text, update={update}")
+        if not update.message:
+            logger.warning(f"menu_handler: no message in update")
+            return
+        
+        if not update.message.text:
+            logger.warning(f"menu_handler: no text in message, msg={update.message}")
             return
         
         text = update.message.text.strip()
-        logger.info(f"menu_handler: received text: '{text}' (len={len(text)})")
+        logger.info(f"menu_handler: text='{text}' (len={len(text)})")
         
         menu_buttons = {
             "📈 Увеличить фиссуру": "📈 Увеличить фиссуру",
