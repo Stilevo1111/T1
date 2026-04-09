@@ -1599,30 +1599,30 @@ def get_event_stats_text():
 
 MULTICAST_TEXTS = {
     2: [
-        "⚡ МУЛЬТИКАСТ×2\n🗣️ Ogre Magi <i>«Чистое мастерство!»</i>",
-        "⚡ МУЛЬТИКАСТ×2\n🗣️ Ogre Magi <i>«Тупая удача!»</i>",
-        "⚡ МУЛЬТИКАСТ×2\n🗣️ Ogre Magi <i>«Не могу поверить, что сработало!»</i>",
-        "⚡ МУЛЬТИКАСТ×2\n🗣️ Ogre Magi <i>«Две головы лучше одной!»</i>",
-        "⚡ МУЛЬТИКАСТ×2\n🗣️ Ogre Magi <i>«Это был НАШ план с самого начала!»</i>",
-        "⚡ МУЛЬТИКАСТ×2\n🗣️ Ogre Magi <i>«Дауби, дауби!»</i>",
+        "🗣️ Ogre Magi <i>«Чистое мастерство!»</i>",
+        "🗣️ Ogre Magi <i>«Тупая удача!»</i>",
+        "🗣️ Ogre Magi <i>«Не могу поверить, что сработало!»</i>",
+        "🗣️ Ogre Magi <i>«Две головы лучше одной!»</i>",
+        "🗣️ Ogre Magi <i>«Это был НАШ план с самого начала!»</i>",
+        "🗣️ Ogre Magi <i>«Дауби, дауби!»</i>",
     ],
     3: [
-        "⚡ МУЛЬТИКАСТ×3\n🗣️ Ogre Magi <i>«Видел?! ВИДЕЛ?!»</i>",
-        "⚡ МУЛЬТИКАСТ×3\n🗣️ Ogre Magi <i>«Считаем... плюс три...»</i>",
-        "⚡ МУЛЬТИКАСТ×3\n🗣️ Ogre Magi <i>«Мы умнее, чем выглядим!»</i>",
-        "⚡ МУЛЬТИКАСТ×3\n🗣️ Ogre Magi <i>«Повезло, повезло, повезло!»</i>",
-        "⚡ МУЛЬТИКАСТ×3\n🗣️ Ogre Magi <i>«Дауби, дауби! Повезло!»</i>",
-        "⚡ МУЛЬТИКАСТ×3\n🗣️ Ogre Magi <i>«WW! Тройной мультикаст!»</i>",
-        "⚡ МУЛЬТИКАСТ×3\n🗣️ Ogre Magi <i>«Каковы шансы? Неважно!»</i>",
+        "🗣️ Ogre Magi <i>«Видел?! ВИДЕЛ?!»</i>",
+        "🗣️ Ogre Magi <i>«Считаем... плюс три...»</i>",
+        "🗣️ Ogre Magi <i>«Мы умнее, чем выглядим!»</i>",
+        "🗣️ Ogre Magi <i>«Повезло, повезло, повезло!»</i>",
+        "🗣️ Ogre Magi <i>«Дауби, дауби! Повезло!»</i>",
+        "🗣️ Ogre Magi <i>«WW! Тройной мультикаст!»</i>",
+        "🗣️ Ogre Magi <i>«Каковы шансы? Неважно!»</i>",
     ],
     4: [
-        "⚡ МУЛЬТИКАСТ×4\n🗣️ Ogre Magi <i>«БАБАХ!!! Оглушим их ещё раз!»</i>",
-        "⚡ МУЛЬТИКАСТ×4\n🗣️ Ogre Magi <i>«Зачем мозги, когда есть удача?!»</i>",
-        "⚡ МУЛЬТИКАСТ×4\n🗣️ Ogre Magi <i>«Ум? Нам и так везёт!»</i>",
-        "⚡ МУЛЬТИКАСТ×4\n🗣️ Ogre Magi <i>«КАКОВЫ ШАНСЫ? 100% ВОТ КАКОВЫ!!!»</i>",
-        "⚡ МУЛЬТИКАСТ×4\n🗣️ Ogre Magi <i>«Две головы? Нет, ЧЕТЫРЕ УДАРА!!!»</i>",
-        "⚡ МУЛЬТИКАСТ×4\n🗣️ Ogre Magi <i>«Дауби, дауби, дауби, дауби!!!»</i>",
-        "⚡ МУЛЬТИКАСТ×4\n🗣️ Ogre Magi <i>«WW! ЧЕТВЕРНОЙ!!!»</i>",
+        "🗣️ Ogre Magi <i>«БАБАХ!!! Оглушим их ещё раз!»</i>",
+        "🗣️ Ogre Magi <i>«Зачем мозги, когда есть удача?!»</i>",
+        "🗣️ Ogre Magi <i>«Ум? Нам и так везёт!»</i>",
+        "🗣️ Ogre Magi <i>«КАКОВЫ ШАНСЫ? 100% ВОТ КАКОВЫ!!!»</i>",
+        "🗣️ Ogre Magi <i>«Две головы? Нет, ЧЕТЫРЕ УДАРА!!!»</i>",
+        "🗣️ Ogre Magi <i>«Дауби, дауби, дауби, дауби!!!»</i>",
+        "🗣️ Ogre Magi <i>«WW! ЧЕТВЕРНОЙ!!!»</i>",
     ],
 }
 
@@ -1981,14 +1981,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             extra_text = random.choice(CATEGORY_PHRASES[category])
         
         if cascade_count > 1 and original_roll is not None:
-            roll_display = f"+{roll}" if roll > 0 else str(roll)
-            original_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
+            roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
             mc_level = f"×{cascade_count}"
             text = (
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n"
                 f"{multicast_text}\n\n"
-                f"⚡ МУЛЬТИКАСТ{mc_level}  {roll_display} CM\n\n"
+                f"⚡ МУЛЬТИКАСТ{mc_level}  {roll} CM\n\n"
                 f"📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
             )
         else:
