@@ -253,14 +253,12 @@ def update_dota_week_top_cache():
         })
     
     # Сортировка: сначала те у кого есть игры, потом по винрейт × √игр
-    MIN_GAMES_FOR_TOP = 3  # минимум 3 игры для участия в топе
     import math
     top_users.sort(key=lambda x: (
-        0 if x['week_games'] >= MIN_GAMES_FOR_TOP else 1,  # меньше 3 игр — в конец
-        -(x['week_wins'] / x['week_games']) if x['week_games'] > 0 else 0,  # винрейт DESC
-        -x['week_games'],  # больше игр выше при равном винрейте
-        -x['week_wins'],   # победы DESC
-        -x['mmr']        # MMR DESC
+        0 if x['week_games'] > 0 else 1,  # без игр — в конец
+        -((x['week_wins'] / x['week_games']) + x['week_games'] / 20.0) if x['week_games'] > 0 else 0,  # винрейт + игры/20 DESC
+        -x['week_wins'],  # победы DESC
+        -x['mmr']       # MMR DESC
     ))
     
     # Сохраняем в кеш
@@ -1960,9 +1958,8 @@ CASE WHEN week_games > 0
                 FROM users 
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
                 ORDER BY 
-                    CASE WHEN week_games >= 3 THEN 0 ELSE 1 END,
-                    (week_wins::numeric / NULLIF(week_games, 0)) DESC,
-                    week_games DESC,
+                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
+                    (week_wins::numeric / NULLIF(week_games, 0)) + week_games::numeric / 20.0 DESC,
                     week_wins DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
@@ -1983,9 +1980,8 @@ CASE WHEN week_games > 0
                 FROM users 
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
                 ORDER BY 
-                    CASE WHEN week_games >= 3 THEN 0 ELSE 1 END,
-                    week_wins * 1.0 / NULLIF(week_games, 0) DESC,
-                    week_games DESC,
+                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
+                    week_wins * 1.0 / NULLIF(week_games, 0) + week_games / 20.0 DESC,
                     week_wins DESC, mmr DESC
                 LIMIT ?
             """, (limit,))
@@ -2062,10 +2058,9 @@ def get_dota_week_top_from_db(limit=10):
                            COALESCE(week_current_streak, 0)
                     FROM users 
                     WHERE steam_id IS NOT NULL AND COALESCE(in_chat, TRUE) = TRUE
-                ORDER BY 
-                    CASE WHEN week_games >= 3 THEN 0 ELSE 1 END,
-                    (week_wins::numeric / NULLIF(week_games, 0)) DESC,
-                    week_games DESC,
+ORDER BY 
+                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
+                    (week_wins::numeric / NULLIF(week_games, 0)) + week_games::numeric / 20.0 DESC,
                     week_wins DESC, mmr DESC
                 LIMIT %s
             """, (limit,))
@@ -2102,9 +2097,8 @@ def get_dota_week_top_from_db(limit=10):
                 FROM users 
                 WHERE steam_id IS NOT NULL AND COALESCE(in_chat, 1) = 1
                 ORDER BY 
-                    CASE WHEN week_games >= 3 THEN 0 ELSE 1 END,
-                    week_wins * 1.0 / NULLIF(week_games, 0) DESC,
-                    week_games DESC,
+                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
+week_wins * 1.0 / NULLIF(week_games, 0) + week_games / 20.0 DESC,
                     week_wins DESC, mmr DESC
                 LIMIT ?
             """, (limit,))
