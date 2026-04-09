@@ -11,13 +11,47 @@ logger = logging.getLogger(__name__)
 OPENDOTA_API_URL = "https://api.opendota.com/api"
 STEAM_OFFSET = 76561197960265728
 
+# Rate limiting для OpenDota API
+_api_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
+API_RATE_LIMIT = 20  # максимум запросов в минуту (OpenDota允许30/мин)
+API_RATE_WINDOW = 60  # окно в секундах
+API_MIN_INTERVAL = 3  # минимум 3 секунды между запросами
+
 # Простой кеш для запросов (5 минут)
 _cache = {}
 CACHE_TTL = 300  # 5 минут
+CACHE_MAX_SIZE = 100  # максимальное количество записей в кеше
+
+
+def _check_rate_limit():
+    """Проверить и обновить rate limiting"""
+    import time
+    now = time.time()
+    
+    # Сброс окна если прошла минута
+    if now - _api_rate_limit["window_start"] >= API_RATE_WINDOW:
+        _api_rate_limit["window_start"] = now
+        _api_rate_limit["requests_count"] = 0
+    
+    # Проверка лимита
+    if _api_rate_limit["requests_count"] >= API_RATE_LIMIT:
+        wait_time = API_RATE_WINDOW - (now - _api_rate_limit["window_start"])
+        if wait_time > 0:
+            time.sleep(wait_time)
+            _api_rate_limit["window_start"] = time.time()
+            _api_rate_limit["requests_count"] = 0
+    
+    # Минимальный интервал между запросами
+    time_since_last = now - _api_rate_limit["last_request"]
+    if time_since_last < API_MIN_INTERVAL:
+        time.sleep(API_MIN_INTERVAL - time_since_last)
+    
+    _api_rate_limit["requests_count"] += 1
+    _api_rate_limit["last_request"] = time.time()
 
 
 def _get_cached(key):
-    """Получить значение из кеша"""
+    """Получить значение из кеша с ограничением размера"""
     if key in _cache:
         value, timestamp = _cache[key]
         if time.time() - timestamp < CACHE_TTL:
@@ -27,16 +61,34 @@ def _get_cached(key):
 
 
 def _set_cached(key, value):
-    """Сохранить значение в кеш"""
+    """Сохранить значение в кеш с ограничением размера"""
+    # Очистка старых записей если кеш переполнен
+    if len(_cache) >= CACHE_MAX_SIZE:
+        # Удаляем 20% самых старых записей
+        sorted_cache = sorted(_cache.items(), key=lambda x: x[1][1])
+        for key_to_remove in sorted_cache[:CACHE_MAX_SIZE // 5]:
+            del _cache[key_to_remove[0]]
+    
     _cache[key] = (value, time.time())
+
+
+def _clear_cache():
+    """Очистить весь кеш (для освобождения памяти)"""
+    global _cache
+    _cache = {}
 
 
 def _api_get(url: str, params: dict = None) -> dict:
     """Универсальная функция для API-запросов с обработкой ошибок и кешем"""
+    _check_rate_limit()  # Применяем rate limiting
     try:
         r = requests.get(url, params=params or {}, timeout=10)
         if r.status_code == 200:
             return r.json()
+        elif r.status_code == 429:
+            logger.warning(f"Rate limited by OpenDota API, waiting...")
+            time.sleep(60)  # Ждём минуту при 429
+            return None
         return None
     except Exception as e:
         logger.error(f"API request error: {e}", exc_info=True)
@@ -167,11 +219,6 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
             tx = (width - tw) // 2
             ty = icon_size + padding * 2
             draw.text((tx, ty), label, fill=(200, 220, 240), font=font)
-        
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        return buf.read()
         
         buf = io.BytesIO()
         img.save(buf, format="PNG")
