@@ -889,8 +889,8 @@ class Database:
             if get_db_type() == "postgresql":
                 query = """
                     SELECT COUNT(*) + 1 as rank FROM users WHERE mmr > (
-                        SELECT mmr FROM users WHERE telegram_id = %s
-                    ) AND steam_id IS NOT NULL
+                        SELECT mmr FROM users WHERE telegram_id = %s LIMIT 1
+                    ) AND steam_id IS NOT NULL AND in_chat = TRUE
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 # Если пользователь первый (нет тех, у кого больше MMR), возвращаем 1
@@ -902,8 +902,8 @@ class Database:
             else:
                 query = """
                     SELECT COUNT(*) + 1 FROM users WHERE mmr > (
-                        SELECT mmr FROM users WHERE telegram_id = ?
-                    ) AND steam_id IS NOT NULL
+                        SELECT mmr FROM users WHERE telegram_id = ? LIMIT 1
+                    ) AND steam_id IS NOT NULL AND in_chat = 1
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 # Если пользователь первый (нет тех, у кого больше MMR), возвращаем 1
@@ -923,10 +923,9 @@ class Database:
             if get_db_type() == "postgresql":
                 query = """
                     SELECT COUNT(*) + 1 as rank FROM users 
-                    WHERE fissure IS NOT NULL 
+                    WHERE in_chat = TRUE 
                     AND fissure > COALESCE(
-                        SELECT fissure FROM users WHERE telegram_id = %s
-                    ), -1)
+                        (SELECT fissure FROM users WHERE telegram_id = %s LIMIT 1), -1)
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 logger.info(f"get_fissure_rank result: {result}, type={type(result)}")
@@ -937,10 +936,9 @@ class Database:
             else:
                 query = """
                     SELECT COUNT(*) + 1 FROM users 
-                    WHERE fissure IS NOT NULL 
-                    AND fissure > COALESS(
-                        SELECT fissure FROM users WHERE telegram_id = ?
-                    ), -1)
+                    WHERE in_chat = 1 
+                    AND fissure > COALESCE(
+                        (SELECT fissure FROM users WHERE telegram_id = ? LIMIT 1), -1)
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 logger.info(f"get_fissure_rank result: {result}, type={type(result)}")
@@ -1602,9 +1600,21 @@ def get_user_rank(telegram_id):
     return result
 
 def get_fissure_rank(telegram_id):
-    """Получить позицию игрока в топе по fissure"""
+    """Получить позицию игрока в топе по fissure - из кеша"""
+    cache_key = f'fissure_rank_{telegram_id}'
+    cached = top_cache.get(cache_key)
+    if cached is not None:
+        logger.info(f"get_fissure_rank: returning from cache for {telegram_id}")
+        return cached
+    
+    # Нет в кеше - читаем из БД
     db = Database()
     result = db.get_fissure_rank(telegram_id)
+    
+    # Сохраняем в кеш (если результат не None)
+    if result is not None:
+        top_cache.set(cache_key, result)
+    
     return result
 
 def update_last_message_id(telegram_id, message_id):

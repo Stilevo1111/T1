@@ -2284,7 +2284,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             medals = {1: "🥇", 2: "🥈", 3: "🥉"}
             emoji_nums = {4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
             for i, user_top in enumerate(top_users, 1):
-                name = (user_top.get('username') or 'Unknown')[:15]
+                name = (user_top.get('username') or 'Unknown')[:12] + "…"
                 medal = medals.get(i)
                 if medal:
                     text += f"{medal} {name}: {user_top['fissure']:.1f} см\n"
@@ -2477,9 +2477,9 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 streak = player.get('week_current_streak', 0)
                 streak_text = f" • 🔥{streak}" if streak > 0 else ""
                 
-                # Truncate long nicknames
-                if len(username) > 15:
-                    username = username[:15] + "..."
+                # Truncate long nicknames (12 chars max for table stability)
+                if username and len(username) > 12:
+                    username = username[:12] + "…"
                 
                 # Build player entry - two lines per player
                 lines.append(f"{prefix} {username} — {rank_str}\n")
