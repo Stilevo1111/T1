@@ -2490,13 +2490,13 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Добавляем позицию пользователя только если пользователь НЕ в общем топе (избегаем дублирования)
             if not user_is_in_top:
-                lines.append("\n👤 Твоя позиция")
+                lines.append("\n👤 Твоя позиция: ")
                 if user_pos:
-                    lines.append(f"\n#{user_pos} — {user_rank_str}\n")
+                    lines.append(f"#{user_pos} — {user_rank_str}\n")
                     lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
                 else:
                     if user and user.get('steam_id'):
-                        lines.append(f"\n{user_rank_str}\n")
+                        lines.append(f"{user_rank_str}\n")
                         lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
                     else:
                         lines.append("Не привязан")
