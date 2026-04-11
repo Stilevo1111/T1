@@ -276,9 +276,17 @@ def update_dota_week_top_cache():
         if g == 0:
             return (1, 0, 0)
         wr = w / g
-        # Группировка по 10% диапазонам (80-89%, 70-79%, 60-69% и т.д.)
-        wr_group = (int(wr * 100) // 10) * 10  # простой: 83%→80, 75%→70, 55%→50
-        wr_score = wr * math.sqrt(g)
+        wr_int = int(wr * 100)
+        # Группировка по 10% с учётом штрафа для середнячков
+        if wr_int >= 60:
+            wr_group = (wr_int // 10) * 10  # 60+ : 60, 70, 80
+            wr_score = wr * math.sqrt(g)
+        elif wr_int >= 50:
+            wr_group = (wr_int // 10) * 10 - 10  # 50-59% -> штраф вниз
+            wr_score = wr * math.sqrt(g) * 0.7  # штраф 30%
+        else:
+            wr_group = (wr_int // 10) * 10 - 20  # <50% -> ещё ниже
+            wr_score = wr * math.sqrt(g) * 0.5
         return (0, wr_group, wr_score)
     
     top_users.sort(key=lambda x: get_sort_key(x))
