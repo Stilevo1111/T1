@@ -2038,43 +2038,73 @@ CASE WHEN week_games > 0
 
 
 def get_dota_week_top(limit=10, force_refresh=False):
-    """Получение топа игроков Dota 2 за неделю - из кеша с принудительной пересортировкой"""
-    from database import user_cache
+    """Получение топа игроков Dota 2 за неделю - напрямую из БД"""
+    import math
+    
+    all_users = user_cache.get_all_users()
+    
+    # Если кеш пустой или force_refresh - загружаем из БД
+    if not all_users or force_refresh:
+        logger.info("get_dota_week_top: loading users from DB")
+        try:
+            db_users = get_all_users_with_steam()
+            for u in db_users:
+                user_cache.set(u['telegram_id'], u)
+            all_users = user_cache.get_all_users()
+            logger.info(f"get_dota_week_top: loaded {len(all_users)} users from DB")
+        except Exception as e:
+            logger.error(f"get_dota_week_top: error loading users: {e}")
+            return []
 
-    if force_refresh:
-        logger.info("get_dota_week_top: forcing refresh from OpenDota cache")
-        user_cache.delete_key('dota_week_top')
-        from database import update_dota_week_top_cache
-        update_dota_week_top_cache()
+    if not all_users:
+        return []
+    
+    # Формируем топ из ВСЕХ пользователей с steam_id
+    top_users = []
+    for telegram_id in all_users:
+        if not isinstance(telegram_id, int):
+            continue
+        
+        user = user_cache.get(telegram_id)
+        if not user or not user.get('steam_id'):
+            continue
+        
+        week_games = user.get('week_games', 0)
+        week_wins = user.get('week_wins', 0)
+        winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
+        
+        top_users.append({
+            'telegram_id': telegram_id,
+            'username': user.get('username'),
+            'steam_nickname': user.get('steam_nickname'),
+            'mmr': user.get('mmr', 0),
+            'week_games': week_games,
+            'week_wins': week_wins,
+            'rank_tier': user.get('rank_tier', 0),
+            'winrate': winrate,
+            'week_current_streak': user.get('week_current_streak', 0)
+        })
+    
+    # Сохраняем в кеш
+    user_cache.set('dota_week_top', top_users)
+    
+    # Сортируем по формуле
+    def get_sort_key(x):
+        g = x.get('week_games', 0)
+        w = x.get('week_wins', 0)
+        if g == 0:
+            return (1, 0, 0)
+        wr = w / g
+        wr_int = int(wr * 100)
+        if wr_int >= 60:
+            return (0, -wr_int, -(wr * math.sqrt(g) + math.sqrt(g) * 0.05), -g)
+        elif wr_int >= 50:
+            return (1, -wr_int, -wr, -g)
+        else:
+            return (2, -wr_int, -(wr * math.sqrt(g) * 0.5), -g)
 
-    cached_top = user_cache.get('dota_week_top')
-
-    # Всегда пересортировываем - это быстрее чем SQL запрос
-    if cached_top and len(cached_top) > 0:
-        import math
-        def get_sort_key(x):
-            g = x.get('week_games', 0)
-            w = x.get('week_wins', 0)
-            if g == 0:
-                return (1, 0, 0)
-            wr = w / g
-            wr_int = int(wr * 100)
-            if wr_int >= 60:
-                return (0, -wr_int, -(wr * math.sqrt(g) + math.sqrt(g) * 0.05), -g)
-            elif wr_int >= 50:
-                return (1, -wr_int, -wr, -g)
-            else:
-                return (2, -wr_int, -(wr * math.sqrt(g) * 0.5), -g)
-
-        cached_top.sort(key=get_sort_key)
-        return cached_top[:limit]
-
-    # Кеш пустой - обновляем из БД
-    logger.info("get_dota_week_top: cache empty, refreshing from DB")
-    from database import update_dota_week_top_cache
-    update_dota_week_top_cache()
-    cached_top = user_cache.get('dota_week_top')
-    return cached_top[:limit] if cached_top else []
+    top_users.sort(key=get_sort_key)
+    return top_users[:limit]
 
 
 def get_dota_week_top_from_db(limit=10):
