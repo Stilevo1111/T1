@@ -478,10 +478,9 @@ async def check_activity_job(context, config_func=None):
     # Сброс флагов в полночь (00:00)
     if msk_hour == 0:
         sent_morning_greeting[chat_id] = False
+        sent_night_message[chat_id] = False
     
     # Сброс флага ночи в 09:00 (чтобы не зависло)
-    if msk_hour == 9:
-        sent_night_message[chat_id] = False
     
     if msk_hour >= 0 and msk_hour < 8:
         sent_morning_greeting[chat_id] = False
