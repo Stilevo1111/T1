@@ -374,8 +374,8 @@ def release_connection(conn):
     """Вернуть соединение в пул"""
     if conn is None:
         return
+    db_type = get_db_type()  # Получаем тип вне блокировки
     with _pool_lock:
-        db_type = get_db_type()
         if db_type not in _pool:
             _pool[db_type] = []
         if len(_pool[db_type]) < _max_connections:
