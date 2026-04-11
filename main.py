@@ -1833,7 +1833,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🎲 {display_username}\n\n"
                 f"{zeus_text}\n"
                 f"<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>\n\n"
-                f"📏 {current_fissure:.1f} см"
+                f"📏 {new_fissure:.1f} см"
             )
             
             logger.info(f"User {user_obj.id} triggered Zeus. No roll.")
