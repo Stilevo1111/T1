@@ -2478,15 +2478,16 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     lines.append(f" └ Нет игр за неделю\n\n")
             
-            # Если пользователь НЕ в топе - показываем его внизу
+            # Если пользователь НЕ в топе - показываем его внизу с позицией
             if not user_is_in_top:
-                if user and user.get('steam_id'):
+                if user and user.get('steam_id') and user_pos:
                     username = user.get('steam_nickname') or user.get('username') or 'Unknown'
                     if username and len(username) > 12:
                         username = username[:12] + "…"
                     user_tg_id = user.get('telegram_id')
                     clickable_name = f'<b><a href="tg://user?id={user_tg_id}">{username}</a></b>'
-                    lines.append(f"\n{clickable_name} — {user_rank_str}\n")
+                    prefix = f"#{user_pos} "
+                    lines.append(f"\n{prefix}{clickable_name} — {user_rank_str}\n")
                     if user_week_games > 0:
                         lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
                     else:
