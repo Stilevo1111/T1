@@ -252,31 +252,29 @@ def update_dota_week_top_cache():
             'week_current_streak': user.get('week_current_streak', 0)
         })
     
-    # Сортировка: сначала те у кого есть игры, потом по новой формуле
-    # WR > 60%: score × 1.2, WR 50-60%: score × 0.7, WR < 50%: score × 0.5
+    # Сортировка: сначала те у кого есть игры, потом по целому WR%, потом WR×√игр
     import math
     def calc_score(user):
         g = user.get('week_games', 0)
         w = user.get('week_wins', 0)
         if g == 0:
-            return 0
+            return (0, 0)
         wr = w / g
-        base = wr * math.sqrt(g)
-        if wr > 0.6:
-            return base * 1.2
-        elif wr >= 0.5:
-            return base * 0.7
-        else:
-            return base * 0.5
+        wr_int = int(wr * 100)  # целый винрейт
+        wr_score = wr * math.sqrt(g)  # WR × √игр
+        return (wr_int, wr_score)
     
-    top_users.sort(key=lambda x: (
-        0 if x['week_games'] > 0 else 1,  # без игр — в конец
-        -calc_score(x),  # новая формула DESC
-        -x['week_games'],
-        -x['week_wins'],
-        -x['rank_tier'],
-        -x['mmr']
-    ))
+    def get_sort_key(x):
+        g = x.get('week_games', 0)
+        w = x.get('week_wins', 0)
+        if g == 0:
+            return (1, 0, 0)
+        wr = w / g
+        wr_int = int(wr * 100)
+        wr_score = wr * math.sqrt(g)
+        return (0, wr_int, wr_score)
+    
+    top_users.sort(key=lambda x: get_sort_key(x))
     
     # Сохраняем в кеш
     user_cache.set('dota_week_top', top_users)
@@ -1986,11 +1984,8 @@ CASE WHEN week_games > 0
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CASE 
-                        WHEN week_wins::numeric / NULLIF(week_games, 0) > 0.6 THEN week_wins::numeric / NULLIF(week_games, 0) * SQRT(week_games) * 1.2
-                        WHEN week_wins::numeric / NULLIF(week_games, 0) >= 0.5 THEN week_wins::numeric / NULLIF(week_games, 0) * SQRT(week_games) * 0.7
-                        ELSE week_wins::numeric / NULLIF(week_games, 0) * SQRT(week_games) * 0.5
-                    END DESC,
+                    CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) DESC,
+                    (week_wins * 1.0 / NULLIF(week_games, 0)) * SQRT(week_games) DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
                 LIMIT %s
@@ -2013,11 +2008,8 @@ CASE WHEN week_games > 0
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CASE 
-                        WHEN week_wins * 1.0 / NULLIF(week_games, 0) > 0.6 THEN week_wins * 1.0 / NULLIF(week_games, 0) * SQRT(week_games) * 1.2
-                        WHEN week_wins * 1.0 / NULLIF(week_games, 0) >= 0.5 THEN week_wins * 1.0 / NULLIF(week_games, 0) * SQRT(week_games) * 0.7
-                        ELSE week_wins * 1.0 / NULLIF(week_games, 0) * SQRT(week_games) * 0.5
-                    END DESC,
+                    CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) DESC,
+                    (week_wins * 1.0 / NULLIF(week_games, 0)) * SQRT(week_games) DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
                 LIMIT ?
@@ -2097,7 +2089,8 @@ def get_dota_week_top_from_db(limit=10):
                     WHERE steam_id IS NOT NULL AND COALESCE(in_chat, TRUE) = TRUE
 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    (week_wins::numeric / NULLIF(week_games, 0)) DESC,
+                    CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) DESC,
+                    (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
                 LIMIT %s
@@ -2136,11 +2129,8 @@ FROM users
                 WHERE steam_id IS NOT NULL AND COALESCE(in_chat, 1) = 1
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CASE 
-                        WHEN week_wins * 1.0 / NULLIF(week_games, 0) > 0.6 THEN week_wins * 1.0 / NULLIF(week_games, 0) * SQRT(week_games) * 1.2
-                        WHEN week_wins * 1.0 / NULLIF(week_games, 0) >= 0.5 THEN week_wins * 1.0 / NULLIF(week_games, 0) * SQRT(week_games) * 0.7
-                        ELSE week_wins * 1.0 / NULLIF(week_games, 0) * SQRT(week_games) * 0.5
-                    END DESC,
+                    CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) DESC,
+                    (week_wins * 1.0 / NULLIF(week_games, 0)) * SQRT(week_games) DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
                 LIMIT ?
@@ -2215,24 +2205,14 @@ def get_dota_digest_stats():
                     SELECT 
                         steam_nickname, week_wins, week_games, rank_tier, telegram_id,
                         week_current_streak,
-                        CASE 
-                            WHEN week_wins::numeric / NULLIF(week_games, 0) > 0.6 THEN (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 1.2
-                            WHEN week_wins::numeric / NULLIF(week_games, 0) >= 0.5 THEN (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 0.7
-                            ELSE (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 0.5
-                        END as score,
+                        (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) as score,
                         ROW_NUMBER() OVER (ORDER BY 
-                            CASE 
-                                WHEN week_wins::numeric / NULLIF(week_games, 0) > 0.6 THEN (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 1.2
-                                WHEN week_wins::numeric / NULLIF(week_games, 0) >= 0.5 THEN (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 0.7
-                                ELSE (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 0.5
-                            END DESC
+                            CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) DESC,
+                            (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) DESC
                         ) as rn_top,
                         ROW_NUMBER() OVER (ORDER BY 
-                            CASE 
-                                WHEN week_wins::numeric / NULLIF(week_games, 0) > 0.6 THEN (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 1.2
-                                WHEN week_wins::numeric / NULLIF(week_games, 0) >= 0.5 THEN (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 0.7
-                                ELSE (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 0.5
-                            END ASC
+                            CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) ASC,
+                            (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) ASC
                         ) as rn_bottom,
                         ROW_NUMBER() OVER (ORDER BY week_current_streak DESC) as rn_streak
                     FROM users 
