@@ -447,6 +447,34 @@ async def check_activity_job(context, config_func=None):
     msk_hour = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)).hour
     time_since_last_message = now - last_activity
     
+    # === УТРЕННЕЕ СООБЩЕНИЕ В 09:00 ===
+    if msk_hour == 9:
+        morning_sent = sent_morning_greeting.get(chat_id, False)
+        if not morning_sent and now - last_bot_msg_time >= 60:
+            text = random.choice(ACTIVITY_MORNING)
+            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            last_bot_message_time[chat_id] = now
+            sent_morning_greeting[chat_id] = True
+        return
+    
+    # === ВЕЧЕРНЕЕ СООБЩЕНИЕ В 23:00 ===
+    if msk_hour == 23:
+        night_sent = sent_night_message.get(chat_id, False)
+        if not night_sent and now - last_bot_msg_time >= 60:
+            text = random.choice(ACTIVITY_NIGHT)
+            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            last_bot_message_time[chat_id] = now
+            sent_night_message[chat_id] = True
+        return
+    
+    # Сброс флагов в полночь (00:00)
+    if msk_hour == 0:
+        sent_morning_greeting[chat_id] = False
+    
+    # Сброс флага ночи в 09:00 (чтобы не зависло)
+    if msk_hour == 9:
+        sent_night_message[chat_id] = False
+    
     if msk_hour >= 0 and msk_hour < 8:
         sent_morning_greeting[chat_id] = False
         sent_provocation_1[chat_id] = False
@@ -460,18 +488,6 @@ async def check_activity_job(context, config_func=None):
                 await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
                 last_bot_message_time[chat_id] = now
                 sent_night_message[chat_id] = True
-        return
-    
-    if msk_hour >= 8 and msk_hour < 10:
-        night_sent = sent_night_message.get(chat_id, False)
-        morning_sent = sent_morning_greeting.get(chat_id, False)
-        if night_sent and not morning_sent:
-            if now - last_bot_msg_time >= 60:
-                text = random.choice(ACTIVITY_MORNING)
-                await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
-                last_bot_message_time[chat_id] = now
-                sent_morning_greeting[chat_id] = True
-                sent_night_message[chat_id] = False
         return
     
     if msk_hour >= 10:
