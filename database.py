@@ -13,9 +13,6 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Force redeploy to clear any cached bytecode
-REDEPLOY_MARKER = "2026-04-08-21-05-00-final-fix"
-
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     print("⚠️ DATABASE_URL не задан! Используем SQLite для локального тестирования.")
@@ -280,6 +277,61 @@ def get_db_type():
     scheme_str = str(scheme)
     return "postgresql" if "postgres" in scheme_str else "sqlite"
 
+
+def backup_database(backup_dir=None):
+    """Создание резервной копии базы данных"""
+    if backup_dir is None:
+        backup_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    db_type = get_db_type()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        if db_type == "postgresql":
+            backup_file = os.path.join(backup_dir, f"fissure_bot_backup_{timestamp}.sql")
+            with open(backup_file, "w") as f:
+                cursor.copy_to(f, "users", sep="|")
+            cursor.close()
+            conn.close()
+            return backup_file
+        else:
+            backup_file = os.path.join(backup_dir, f"fissure_bot_backup_{timestamp}.db")
+            src_db = DATABASE_URL.replace("sqlite:///", "")
+            import shutil
+            shutil.copy2(src_db, backup_file)
+            return backup_file
+    except Exception as e:
+        logger.error(f"Backup error: {e}")
+        return None
+
+
+def restore_database(restore_file):
+    """Восстановление базы данных из резервной копии"""
+    db_type = get_db_type()
+    
+    try:
+        if db_type == "postgresql":
+            conn = get_connection()
+            cursor = conn.cursor()
+            with open(restore_file, "r") as f:
+                cursor.copy_from(f, "users", sep="|")
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return True
+        else:
+            import shutil
+            dest_db = DATABASE_URL.replace("sqlite:///", "")
+            shutil.copy2(restore_file, dest_db)
+            return True
+    except Exception as e:
+        logger.error(f"Restore error: {e}")
+        return False
+
+
 def get_connection():
     """Получение соединения с базой данных с пулом"""
     db_type = get_db_type()
@@ -458,9 +510,6 @@ def init_db():
             """)
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_dota_wins INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP
             """)
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr_updated_at TIMESTAMP
@@ -755,21 +804,15 @@ class Database:
                         "steam_nickname": user.get("steam_nickname"),
                         "mmr": user.get("mmr", 0),
                         "rank_tier": user.get("rank_tier", 0),
-                        "dota_total_games": user.get("dota_total_games", 0),
+"dota_total_games": user.get("dota_total_games", 0),
                         "dota_wins": user.get("dota_wins", 0),
                         "week_games": user.get("week_games", 0),
                         "week_wins": user.get("week_wins", 0),
                         "week_best_streak": user.get("week_best_streak", 0),
                         "week_current_streak": user.get("week_current_streak", 0),
-                        "week_updated_at": user.get("week_updated_at"),
                         "mmr_updated_at": user.get("mmr_updated_at"),
-                        "last_dota_games": user.get("last_dota_games", 0),
-                        "last_dota_wins": user.get("last_dota_wins", 0),
-                        "week_start_date": user.get("week_start_date")
-                    }
-                else:
-                    self.add_user(telegram_id, username, None, None)
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "week_updated_at": None, "mmr_updated_at": None}
+                    })
+            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "mmr_updated_at": None}
             else:
                 query = "SELECT * FROM users WHERE telegram_id = ?"
                 user = self.execute_query(query, (telegram_id,), fetch="one")
@@ -795,12 +838,11 @@ class Database:
                         "week_wins": user[26] if len(user) > 26 else 0,
                         "week_best_streak": user[29] if len(user) > 29 else 0,
                         "week_current_streak": user[30] if len(user) > 30 else 0,
-                        "week_updated_at": user[27] if len(user) > 27 else None,
-                        "mmr_updated_at": user[28] if len(user) > 28 else None
+                        "mmr_updated_at": user[28] if len(user) > 28 else None,
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "week_updated_at": None, "mmr_updated_at": None}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "mmr_updated_at": None}
         except Exception as e:
             logger.error(f"Error getting user: {e}")
             return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "week_current_streak": 0}
