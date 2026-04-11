@@ -804,7 +804,7 @@ class Database:
                         "steam_nickname": user.get("steam_nickname"),
                         "mmr": user.get("mmr", 0),
                         "rank_tier": user.get("rank_tier", 0),
-"dota_total_games": user.get("dota_total_games", 0),
+                        "dota_total_games": user.get("dota_total_games", 0),
                         "dota_wins": user.get("dota_wins", 0),
                         "week_games": user.get("week_games", 0),
                         "week_wins": user.get("week_wins", 0),
