@@ -2342,7 +2342,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(update.effective_user.id)
         
         # Получаем топ напрямую из БД (force refresh для актуальных данных)
-        top_users = get_week_top(15, force_refresh=True)
+        top_users = get_week_top(10, force_refresh=True)
         logger.info(f"topmmr: top_users = {top_users}")
         
         # Initialize user position variables
