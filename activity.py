@@ -398,6 +398,14 @@ async def activity_send_and_delete(bot, chat_id, text, delete_after=15):
         logger.debug(f"Error in activity_send_and_delete: {e}")
 
 
+async def activity_send_permanent(bot, chat_id, text):
+    """Отправляет сообщение которое не удаляется"""
+    try:
+        await bot.send_message(chat_id=chat_id, text=text)
+    except Exception as e:
+        logger.debug(f"Error in activity_send_permanent: {e}")
+
+
 async def check_activity_job(context, config_func=None):
     global chat_last_activity, last_bot_message_time, last_auuu_message_time, last_60min_message_time
     global bot_is_away, bot_return_time
@@ -452,7 +460,7 @@ async def check_activity_job(context, config_func=None):
         morning_sent = sent_morning_greeting.get(chat_id, False)
         if not morning_sent and now - last_bot_msg_time >= 60:
             text = random.choice(ACTIVITY_MORNING)
-            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            await activity_send_permanent(context.bot, chat_id, text)
             last_bot_message_time[chat_id] = now
             sent_morning_greeting[chat_id] = True
         return
@@ -462,7 +470,7 @@ async def check_activity_job(context, config_func=None):
         night_sent = sent_night_message.get(chat_id, False)
         if not night_sent and now - last_bot_msg_time >= 60:
             text = random.choice(ACTIVITY_NIGHT)
-            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            await activity_send_permanent(context.bot, chat_id, text)
             last_bot_message_time[chat_id] = now
             sent_night_message[chat_id] = True
         return
