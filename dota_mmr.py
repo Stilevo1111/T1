@@ -710,9 +710,9 @@ def get_mmr_top(limit=10):
     return get_dota_mmr_top(limit)
 
 
-def get_week_top(limit=10):
+def get_week_top(limit=10, force_refresh=False):
     from database import get_dota_week_top
-    return get_dota_week_top(limit)
+    return get_dota_week_top(limit, force_refresh)
 
 
 # ========================

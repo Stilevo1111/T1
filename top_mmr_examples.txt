@@ -1,0 +1,71 @@
+=== TOP MMR - REAL DATA ===
+
+================================================================
+FORMULA 1: BY WINRATE (current)
+================================================================
+ 1. stilEvo        7W/8L    [=======      ] 46.7%
+ 2. Farf           10W/0L   [==========   ] 100.0%
+ 3. Gachi          3W/2L    [=====        ] 60.0%
+ 4. Player4        2W/6L    [===          ] 25.0%
+ 5. Player5        1W/1L    [=====        ] 50.0%
+
+================================================================
+FORMULA 2: BY WINS
+================================================================
+ 1. Farf           10W/0L   [==========   ] 100.0%
+ 2. stilEvo        7W/8L    [=======      ] 46.7%
+ 3. Player10       9W/9L    [=========    ] 50.0%
+ 4. Player9        8W/7L    [=========    ] 53.3%
+ 5. Gachi          3W/2L    [=====        ] 60.0%
+
+================================================================
+FORMULA 3: HYBRID - winrate x SQRT(games)
+================================================================
+ 1. Farf           10W/0L   WR:100%  Score: 316.2
+ 2. stilEvo        7W/8L   WR:46.7% Score: 180.9
+ 3. Player10       9W/9L   WR:50.0% Score: 212.1
+ 4. Player9        8W/7L   WR:53.3% Score: 184.7
+ 5. Gachi          3W/2L   WR:60.0%  Score: 134.2
+
+================================================================
+FORMULA 4: MIN 5 games + WINRATE
+================================================================
+ 1. Farf           10W/0L   [==========   ] 100.0%
+ 2. Gachi          3W/2L    [=====        ] 60.0%
+ 3. stilEvo        7W/8L    [=======      ] 46.7%
+ 4. Player9        8W/7L    [=========    ] 53.3%
+ 5. Player10       9W/9L    [=========    ] 50.0%
+ *** Player5 (1W/1L) and Player7 (4W/0L) filtered out (<5 games) ***
+
+================================================================
+FORMULA 5: HYBRID - winrate x LOG(games)
+================================================================
+ 1. Farf           10W/0L   WR:100%  Score: 230.3
+ 2. stilEvo        7W/8L   WR:46.7% Score: 167.9
+ 3. Player10       9W/9L   WR:50.0% Score: 193.6
+ 4. Player9        8W/7L   WR:53.3% Score: 170.5
+ 5. Gachi          3W/2L   WR:60.0%  Score: 107.1
+
+
+=== COMPARISON ===
+
+Player: stilEvo (7W/8L = 46.7% in 15 games)
+  Formula 1 (WR):        #1 (46.7%)
+  Formula 2 (Wins):      #2 (7 wins)
+  Formula 3 (WR*sqrt):  #2 (180.9)
+  Formula 4 (min5+WR):   #3 (46.7%)
+  Formula 5 (WR*log):    #2 (167.9)
+
+Player: Farf (10W/0L = 100% in 10 games)
+  Formula 1 (WR):        #1 (100%)
+  Formula 2 (Wins):      #1 (10 wins)
+  Formula 3 (WR*sqrt):    #1 (316.2)
+  Formula 4 (min5+WR):   #1 (100%)
+  Formula 5 (WR*log):    #1 (230.3)
+
+Player: Gachi (3W/2L = 60% in 5 games)
+  Formula 1 (WR):        #3 (60%)
+  Formula 2 (Wins):      #5 (3 wins)
+  Formula 3 (WR*sqrt):   #5 (134.2)
+  Formula 4 (min5+WR):   #2 (60%)
+  Formula 5 (WR*log):    #5 (107.1)
