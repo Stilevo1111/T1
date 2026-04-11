@@ -2093,7 +2093,7 @@ def get_dota_week_top(limit=10, force_refresh=False):
         g = x.get('week_games', 0)
         w = x.get('week_wins', 0)
         if g == 0:
-            return (1, 0, 0)
+            return (3, 0, 0)  # Игроки без игр - в САМЫЙ КОНЕЦ (приоритет 3)
         wr = w / g
         wr_int = int(wr * 100)
         if wr_int >= 60:
