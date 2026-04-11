@@ -2283,20 +2283,25 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             medals = {1: "🥇", 2: "🥈", 3: "🥉"}
             emoji_nums = {4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
             for i, user_top in enumerate(top_users, 1):
-                name = (user_top.get('username') or 'Unknown')[:12] + "…"
+                name = (user_top.get('username') or 'Unknown')
+                if len(name) > 12:
+                    name = name[:12] + "…"
+                telegram_id = user_top.get('telegram_id')
+                clickable_name = f'<b><a href="tg://user?id={telegram_id}">{name}</a></b>'
+                fissure = user_top.get('fissure', 0)
                 medal = medals.get(i)
                 if medal:
-                    text += f"{medal} {name}: {user_top['fissure']:.1f} см\n"
+                    text += f"{medal} {clickable_name}: {fissure:.1f} см\n"
                 else:
-                    text += f"{emoji_nums.get(i, f'{i}.')} {name}: {user_top['fissure']:.1f} см\n"
+                    text += f"{emoji_nums.get(i, f'{i}.')} {clickable_name}: {fissure:.1f} см\n"
             
             # Всегда показываем позицию пользователя, даже если он не в топе
             if user_rank:
                 user_fissure = user.get('fissure', 0) if user else 0
-                text += f"\n👤 Твоя позиция: #{user_rank} ({user_fissure:.1f} см)"
+                text += f"\n<b>👤 Твоя позиция: #{user_rank} ({user_fissure:.1f} см)</b>"
             else:
                 user_fissure = user.get('fissure', 0) if user else 0
-                text += f"\n👤 Твоя позиция: — ({user_fissure:.1f} см)"
+                text += f"\n<b>👤 Твоя позиция: — ({user_fissure:.1f} см)</b>"
         
         # Add banner and send
         top_banner_url = "https://i.ibb.co/gLcnbBJ0/wx-Kwo.jpg"
@@ -2307,6 +2312,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=update.message.chat_id,
             photo=top_banner_url,
             caption=text,
+            parse_mode="HTML",
             reply_markup=main_menu()
         )
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
@@ -2465,7 +2471,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Build player entry - two lines per player
                 # Если пользователь в топе - показываем только 7 игроков, его позицию добавим в конце
                 telegram_id = player.get('telegram_id')
-                clickable_name = f'<a href="tg://user?id={telegram_id}">{username}</a>'
+                clickable_name = f'<b><a href="tg://user?id={telegram_id}">{username}</a></b>'
                 lines.append(f"{prefix} {clickable_name} — {rank_str}\n")
                 if week_games > 0:
                     lines.append(f" └ {week_wins}W/{week_losses}L • WR {winrate}%{streak_text}\n\n")
@@ -2475,13 +2481,13 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Если пользователь в топе - добавляем его позицию в конце
             if user_is_in_top and user_pos:
                 user_tg_id = user.get('telegram_id')
-                clickable_user = f'<a href="tg://user?id={user_tg_id}">Твоя поз</a>'
+                clickable_user = f'<b><a href="tg://user?id={user_tg_id}">Твоя поз</a></b>'
                 lines.append(f"👤 {clickable_user}: {user_pos} — {user_rank_str}\n")
                 lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
             elif not user_is_in_top:
-                lines.append("\n👤 Твоя позиция: ")
+                lines.append("\n<b>👤 Твоя позиция: </b>")
                 if user_pos:
-                    lines.append(f"#{user_pos} — {user_rank_str}\n")
+                    lines.append(f"<b>#{user_pos}</b> — {user_rank_str}\n")
                     lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
                 else:
                     if user and user.get('steam_id'):
