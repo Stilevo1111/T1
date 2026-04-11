@@ -2342,6 +2342,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(update.effective_user.id)
         
         # Получаем топ напрямую из БД (force refresh для актуальных данных)
+        # Показываем 7 игроков + позиция пользователя (если в топе)
         top_users = get_week_top(8, force_refresh=True)
         logger.info(f"topmmr: top_users = {top_users}")
         
@@ -2470,14 +2471,18 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     username = username[:12] + "…"
                 
                 # Build player entry - two lines per player
+                # Если пользователь в топе - показываем только 7 игроков, его позицию добавим в конце
                 lines.append(f"{prefix} {username} — {rank_str}\n")
                 if week_games > 0:
                     lines.append(f" └ {week_wins}W/{week_losses}L • WR {winrate}%{streak_text}\n\n")
                 else:
                     lines.append(f" └ Нет игр за неделю\n\n")
             
-            # Показываем позицию пользователя внизу ТОЛЬКО если его нет в топе
-            if not user_is_in_top:
+            # Если пользователь в топе - добавляем его позицию в конце
+            if user_is_in_top and user_pos:
+                lines.append(f"👤 Твоя поз: {user_pos} — {user_rank_str}\n")
+                lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
+            elif not user_is_in_top:
                 lines.append("\n👤 Твоя позиция: ")
                 if user_pos:
                     lines.append(f"#{user_pos} — {user_rank_str}\n")
