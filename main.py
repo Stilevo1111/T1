@@ -2482,10 +2482,12 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user_is_in_top and user_pos:
                 user_tg_id = user.get('telegram_id')
                 clickable_user = f'<b><a href="tg://user?id={user_tg_id}">Твоя поз</a></b>'
+                lines.append(f"\n────────────────────\n")
                 lines.append(f"👤 {clickable_user}: {user_pos} — {user_rank_str}\n")
                 lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
             elif not user_is_in_top:
-                lines.append("\n<b>👤 Твоя позиция: </b>")
+                lines.append(f"\n────────────────────\n")
+                lines.append("<b>👤 Твоя позиция: </b>")
                 if user_pos:
                     lines.append(f"<b>#{user_pos}</b> — {user_rank_str}\n")
                     lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
