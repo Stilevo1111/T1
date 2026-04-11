@@ -3386,6 +3386,10 @@ async def main():
             user_cache.set(u['telegram_id'], u)
         logger.info(f"Loaded {len(all_users)} users with Steam into cache on startup")
         
+        from database import update_dota_week_top_cache
+        update_dota_week_top_cache()
+        logger.info("Dota week top cache initialized on startup")
+        
         job_queue = JobQueue()
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
         job_queue.set_application(app)

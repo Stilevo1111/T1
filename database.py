@@ -244,6 +244,8 @@ def update_dota_week_top_cache():
         
         week_games = user.get('week_games', 0)
         week_wins = user.get('week_wins', 0)
+        
+        # Включаем ВСЕХ игроков с привязанным Steam (даже без игр за неделю)
         winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
         
         top_users.append({
@@ -257,38 +259,8 @@ def update_dota_week_top_cache():
             'winrate': winrate,
             'week_current_streak': user.get('week_current_streak', 0)
         })
-    
-    # Сортировка: используем get_sort_key
-    import math
-    def get_sort_key(x):
-        g = x.get('week_games', 0)
-        w = x.get('week_wins', 0)
-        if g == 0:
-            return (1, 0, 0)
-        wr = w / g
-        wr_int = int(wr * 100)
-        # Группировка по 10% с учётом штрафа для середнячков
-        if wr_int >= 60:
-            wr_group = (wr_int + 5) // 10 * 10  # round UP: 75->80, 65->70
-            wr_score = wr * math.sqrt(g) + math.sqrt(g) * 0.05  # small bonus for games
-        elif wr_int >= 50:
-            wr_group = (wr_int // 10) * 10 - 10  # 50-59% -> штраф вниз
-            wr_score = wr  # для середнячков - сначала WR, потом игры
-        else:
-            wr_group = (wr_int // 10) * 10 - 20  # <50% -> ещё ниже
-            wr_score = wr * math.sqrt(g) * 0.5
-        logger.info(f"get_sort_key: {x.get('steam_nickname')} WR={wr_int}% group={wr_group} score={wr_score}")
-        return (0, wr_group, wr_score)
-    
-    logger.info("===== UPDATE DOTA WEEK TOP: STARTING SORT =====")
-    top_users.sort(key=lambda x: get_sort_key(x), reverse=True)
-    
-    logger.info("===== TOP USERS AFTER SORT =====")
-    for i, u in enumerate(top_users):
-        logger.info(f"  POS{i+1}. {u.get('steam_nickname')}: {u.get('week_wins')}W/{u.get('week_games')}L, WR={u.get('winrate')}%")
-    logger.info("===== END SORT =====")
-    
-    # Сохраняем в кеш
+
+    # Сохраняем в кеш - сортировка происходит при каждом запросе
     user_cache.set('dota_week_top', top_users)
     logger.info(f"update_dota_week_top_cache: cached {len(top_users)} users")
 
