@@ -2340,8 +2340,12 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         from dota_mmr import get_week_top
-        from database import get_user, get_connection, DATABASE_URL
+        from database import get_user, get_connection, DATABASE_URL, user_cache
         user = get_user(update.effective_user.id)
+        
+        # Очищаем кеш топа перед запросом
+        user_cache.delete_key('dota_week_top')
+        
         top_users = get_week_top(10)
         logger.info(f"topmmr: top_users = {top_users}")
         

@@ -77,6 +77,12 @@ class UserCache:
     def delete(self, telegram_id):
         """Псевдоним для remove для обратной совместимости"""
         self.remove(telegram_id)
+    
+    def delete_key(self, key):
+        """Удалить конкретный ключ из кеша"""
+        with self._lock:
+            if key in self._cache:
+                del self._cache[key]
 
 
 # Глобальный экземпляр кеша
@@ -2026,13 +2032,21 @@ CASE WHEN week_games > 0
         return []
 
 
-def get_dota_week_top(limit=10):
+def get_dota_week_top(limit=10, force_refresh=False):
     """Получение топа игроков Dota 2 за неделю - сначала из кеша, потом из БД"""
-    # Пробуем получить из кеша
     from database import user_cache
-    cached_top = user_cache.get('dota_week_top')
     
-    # Проверяем есть ли данные в кеше
+    # Всегда обновляем кеш при force_refresh или если данных мало
+    if force_refresh:
+        logger.info("get_dota_week_top: forcing refresh from DB")
+        from database import update_dota_week_top_cache
+        update_dota_week_top_cache()
+        cached_top = user_cache.get('dota_week_top')
+        if cached_top:
+            return cached_top[:limit]
+    
+    # Иначе пробуем получить из кеша
+    cached_top = user_cache.get('dota_week_top')
     all_users = user_cache.get_all_users()
     
     if cached_top and len(cached_top) > 0 and len(all_users) > 0:
