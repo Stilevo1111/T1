@@ -287,6 +287,7 @@ def update_dota_week_top_cache():
         else:
             wr_group = (wr_int // 10) * 10 - 20  # <50% -> ещё ниже
             wr_score = wr * math.sqrt(g) * 0.5
+        logger.info(f"get_sort_key: {x.get('steam_nickname')} WR={wr_int}% group={wr_group} score={wr_score}")
         return (0, wr_group, wr_score)
     
     top_users.sort(key=lambda x: get_sort_key(x))
