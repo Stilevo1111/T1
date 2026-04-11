@@ -1331,19 +1331,19 @@ WELCOME_PHRASES = [
 def make_clickable(name, user_id, max_length=12):
     """Создать кликабельный никнейм для Telegram"""
     if name and name != "None" and user_id:
-        # Если name - это числовой ID ( telegram_id как строка), пробуем получить username из кэша
-        if name.isdigit():
-            try:
-                from database import user_cache
-                cached = user_cache.get(int(user_id))
-                if cached:
-                    display_name = cached.get('username') or cached.get('steam_nickname') or name
-                else:
-                    display_name = name
-            except:
+        try:
+            from database import user_cache
+            cached = user_cache.get(int(user_id))
+            if cached:
+                display_name = cached.get('username') or cached.get('steam_nickname') or name
+            else:
                 display_name = name
-        else:
+        except:
             display_name = name
+        
+        # Если получилось все равно число - показываем как есть
+        if display_name.isdigit() and cached:
+            display_name = f"Игрок {display_name}"
         
         # Обрезаем длинные ники
         if len(display_name) > max_length:
@@ -1953,8 +1953,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Бонус для выходных: увеличиваем положительный ролл
         if is_weekend and roll > 0 and not is_fatal:
             bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
+            # Показываем точное значение в сообщении, но сохраняем как целое для расчета
+            bonus_amount = roll * bonus_multiplier
             roll = int(roll * bonus_multiplier)
-            weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f}"
+            weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {bonus_amount:.1f} СМ"
         
         old_fissure = user["fissure"]
         
@@ -2001,23 +2003,24 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n"
                 f"{multicast_text}\n\n"
-                f"⚡ МУЛЬТИКАСТ{mc_level}  {roll} CM\n\n"
-                f"📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
+                f"⚡ МУЛЬТИКАСТ{mc_level}  {roll} CM"
             )
         else:
             # Старый дизайн без мультикаста
             text = (
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n"
-                f"{extra_text}\n\n"
-                f"📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
+                f"{extra_text}"
             )
-        
+
         if is_fatal and protection_msg:
             text = f"{text}\n{protection_msg}"
-        
+
         if weekend_bonus:
             text = f"{text}\n{weekend_bonus}"
+            
+        # Строчка с изменением фиссуры - ВСЕГДА В САМОМ КОНЦЕ
+        text = f"{text}\n\n📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
         
         if zeus_text:
             text = f"{text}\n{zeus_text}"
@@ -3019,8 +3022,10 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         weekend_bonus = ""
         if is_weekend and roll > 0 and not is_fatal:
             bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
+            # Показываем точное значение в сообщении, но сохраняем как целое для расчета
+            bonus_amount = roll * bonus_multiplier
             roll = int(roll * bonus_multiplier)
-            weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f}"
+            weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {bonus_amount:.1f} СМ"
         
         # Новая фиссура (Зевс не влияет на тест — только показываем)
         if zeus_triggered and current_fissure >= 5:
