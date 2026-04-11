@@ -251,7 +251,7 @@ async def announce_weekly_mmr_winner(bot):
         set_config('current_mvp_tag', mvp_tag)
 
         if rank_tier:
-            ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
+            ranks = ["🌱 Рекрут", "🔰 Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
             tier = min(rank_tier // 10, 8)
             star = rank_tier % 10
             if tier < 1 or tier > 8:
@@ -2298,10 +2298,10 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Всегда показываем позицию пользователя, даже если он не в топе
             if user_rank:
                 user_fissure = user.get('fissure', 0) if user else 0
-                text += f"\n<b>👤 Твоя позиция: #{user_rank} ({user_fissure:.1f} см)</b>"
+                text += f"\n\n<b>👤 Твоя позиция: #{user_rank} ({user_fissure:.1f} см)</b>"
             else:
                 user_fissure = user.get('fissure', 0) if user else 0
-                text += f"\n<b>👤 Твоя позиция: — ({user_fissure:.1f} см)</b>"
+                text += f"\n\n<b>👤 Твоя позиция: — ({user_fissure:.1f} см)</b>"
         
         # Add banner and send
         top_banner_url = "https://i.ibb.co/gLcnbBJ0/wx-Kwo.jpg"
@@ -2369,7 +2369,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Convert user rank tier to string
             if user_rank_tier:
-                ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
+                ranks = ["Рекрут", "Страж", "Рыцарь", "Герой", "Легенда", "Властелин", "Божество", "Титан"]
                 tier = min(user_rank_tier // 10, 8)
                 star = user_rank_tier % 10
                 
@@ -2431,7 +2431,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Format rank
                 if rank_tier:
-                    ranks = ["🌱 Рекрут", "🛡️ Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
+                    ranks = ["Рекрут", "Страж", "Рыцарь", "Герой", "Легенда", "Властелин", "Божество", "Титан"]
                     tier = min(rank_tier // 10, 8)
                     star = rank_tier % 10
                     
@@ -2464,15 +2464,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 streak = player.get('week_current_streak', 0)
                 streak_text = f" • 🔥{streak}" if streak > 0 else ""
                 
-                # Truncate long nicknames (10 chars max for table stability)
-                if username and len(username) > 10:
-                    username = username[:10] + "…"
+                if username and len(username) > 25:
+                    username = username[:25] + "."
                 
                 # Build player entry - two lines per player
                 # Если пользователь в топе - показываем только 7 игроков, его позицию добавим в конце
                 telegram_id = player.get('telegram_id')
                 clickable_name = f'<b><a href="tg://user?id={telegram_id}">{username}</a></b>'
-                lines.append(f"{prefix} {clickable_name} — {rank_str}\n")
+                lines.append(f"{prefix} {clickable_name} - {rank_str}\n")
                 if week_games > 0:
                     lines.append(f" └ {week_wins}W/{week_losses}L • WR {winrate}%{streak_text}\n\n")
                 else:
@@ -2481,18 +2480,19 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Если пользователь НЕ в топе - показываем его внизу с позицией
             if not user_is_in_top:
                 if user and user.get('steam_id') and user_pos:
+                    lines.append("\n")  # Extra line before user position
                     username = user.get('steam_nickname') or user.get('username') or 'Unknown'
-                    if username and len(username) > 10:
-                        username = username[:10] + "…"
+                    if username and len(username) > 25:
+                        username = username[:25] + "."
                     user_tg_id = user.get('telegram_id')
                     clickable_name = f'<b><a href="tg://user?id={user_tg_id}">{username}</a></b>'
                     emoji_nums = {1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
                     prefix = f"{emoji_nums.get(user_pos, '#' + str(user_pos))} "
-                    lines.append(f"\n{prefix}{clickable_name} — {user_rank_str}\n")
+                    lines.append(f"\n{prefix}{clickable_name} - {user_rank_str}\n")
                     if user_week_games > 0:
-                        lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
+                        lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%\n\n")
                     else:
-                        lines.append(f" └ Нет игр за неделю")
+                        lines.append(f" └ Нет игр за неделю\n\n")
             
             text = "".join(lines)
         

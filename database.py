@@ -294,15 +294,16 @@ def update_dota_week_top_cache():
 
 
 # Connection pool management
-_connection_pool = {}
 _pool_lock = threading.Lock()
+_pool = {}  # db_type -> list of connections
+_max_connections = 5  # Max connections per DB type
+
 def get_db_type():
     """Получить тип базы данных"""
     if DATABASE_URL is None:
         return "sqlite"
     url = urlparse.urlparse(DATABASE_URL)
     scheme = url.scheme
-    # Явно преобразуем scheme в строку для избежания проблем с типами
     if scheme is None:
         return "sqlite"
     scheme_str = str(scheme)
@@ -314,24 +315,21 @@ def get_connection():
     print(f"[DB] Getting connection, type: {db_type}")
     
     with _pool_lock:
-        # Проверяем активное соединение в пуле
-        if db_type in _connection_pool:
-            conn = _connection_pool[db_type]
+        # Проверяем доступные соединения в пуле
+        if db_type in _pool and _pool[db_type]:
+            conn = _pool[db_type].pop()
             try:
-                # Проверяем соединение
                 cursor = conn.cursor()
                 cursor.execute("SELECT 1")
                 cursor.close()
-                print(f"[DB] Reusing existing connection")
+                print(f"[DB] Reusing connection from pool")
                 return conn
             except Exception as e:
-                print(f"[DB] Existing connection failed: {e}")
-                # Соединение неактивно, удаляем из пула
+                print(f"[DB] Connection failed: {e}")
                 try:
                     conn.close()
                 except:
                     pass
-                del _connection_pool[db_type]
         
         # Создаем новое соединение
         print(f"[DB] Creating new connection for {db_type}")
@@ -370,9 +368,23 @@ def get_connection():
             conn = sqlite3.connect(db_path, timeout=10)
             print("✅ Подключено к SQLite")
         
-        # Сохраняем в пул
-        _connection_pool[db_type] = conn
         return conn
+
+def release_connection(conn):
+    """Вернуть соединение в пул"""
+    if conn is None:
+        return
+    with _pool_lock:
+        db_type = get_db_type()
+        if db_type not in _pool:
+            _pool[db_type] = []
+        if len(_pool[db_type]) < _max_connections:
+            _pool[db_type].append(conn)
+        else:
+            try:
+                conn.close()
+            except:
+                pass
 
 @contextmanager
 def get_db_connection():
@@ -388,11 +400,11 @@ def get_db_connection():
         logger.error(f"Database transaction failed: {e}")
         raise
     finally:
-        # Соединение остается в пуле, не закрываем его
-        pass
+        release_connection(conn)
 
 def init_db():
     """Initialize database tables and add missing columns."""
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -623,10 +635,11 @@ def init_db():
         """)
         
         conn.commit()
-        conn.close()
         logger.info("✅ База данных инициализирована")
     except Exception as e:
         logger.error(f"❌ Ошибка инициализации БД: {e}")
+    finally:
+        release_connection(conn)
 
 def migrate_db():
     """Run database migrations using Alembic"""
@@ -1464,12 +1477,10 @@ def get_user_by_username(username):
 
 
 def update_fissure(telegram_id, fissure, last_fissure, growth=0):
-    """Обновление fissure - пишем в кеш и сразу в БД"""
-    # Получаем текущие данные пользователя
+    """Обновление fissure - пишем только в кеш, сброс в БД через flush_users_cache"""
     user = get_user(telegram_id)
     
     if user:
-        # Обновляем данные в кеше
         user['fissure'] = fissure
         user['last_fissure'] = last_fissure
         user['total_growth'] = user.get('total_growth', 0) + growth
@@ -1483,42 +1494,6 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
         
         user_cache.set(telegram_id, user)
         user_cache.mark_dirty(telegram_id)
-        
-        # Пишем в БД сразу чтобы не потерять при перезапуске
-        try:
-            conn = get_connection()
-            scheme = get_db_type()
-            cursor = conn.cursor()
-            if scheme == "postgresql":
-                cursor.execute("""
-                    UPDATE users SET 
-                        fissure = %s, last_fissure = %s,
-                        total_growth = total_growth + %s,
-                        total_rolls = total_rolls + 1,
-                        weekly_rolls = weekly_rolls + 1,
-                        weekly_growth = weekly_growth + %s,
-                        current_streak = CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END,
-                        best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END),
-                        last_activity = CURRENT_TIMESTAMP
-                    WHERE telegram_id = %s
-                """, (fissure, last_fissure, growth, max(0, growth), win, win, telegram_id))
-            else:
-                cursor.execute("""
-                    UPDATE users SET 
-                        fissure = ?, last_fissure = ?,
-                        total_growth = total_growth + ?,
-                        total_rolls = total_rolls + 1,
-                        weekly_rolls = weekly_rolls + 1,
-                        weekly_growth = weekly_growth + ?,
-                        current_streak = CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END,
-                        best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END),
-                        last_activity = CURRENT_TIMESTAMP
-                    WHERE telegram_id = ?
-                """, (fissure, last_fissure, growth, max(0, growth), win, win, telegram_id))
-            conn.commit()
-            cursor.close()
-        except Exception as e:
-            logger.error(f"update_fissure: DB write error: {e}")
         
         # Сбрасываем кеши дайджестов при изменении fissure
         user_cache.set('digest_stats', None)
@@ -1547,6 +1522,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
 
 def set_user_in_chat(telegram_id: int, in_chat: bool):
     """Установить статус нахождения пользователя в чате"""
+    conn = None
     try:
         conn = get_connection()
         scheme = get_db_type()
@@ -1557,17 +1533,19 @@ def set_user_in_chat(telegram_id: int, in_chat: bool):
             cursor.execute("UPDATE users SET in_chat = ? WHERE telegram_id = ?", (1 if in_chat else 0, telegram_id))
         conn.commit()
         cursor.close()
-        conn.close()
         # Сбрасываем кеш топов
         top_cache.clear()
         user_cache.delete('dota_digest_stats')  # Invalidate dota digest cache
         logger.info(f"set_user_in_chat: telegram_id={telegram_id}, in_chat={in_chat}")
     except Exception as e:
         logger.error(f"set_user_in_chat error: {e}")
+    finally:
+        release_connection(conn)
 
 
 def delete_user(telegram_id: int):
     """Удалить пользователя из базы данных"""
+    conn = None
     try:
         conn = get_connection()
         scheme = get_db_type()
@@ -1578,7 +1556,6 @@ def delete_user(telegram_id: int):
             cursor.execute("DELETE FROM users WHERE telegram_id = ?", (telegram_id,))
         conn.commit()
         cursor.close()
-        conn.close()
         # Сбрасываем кеши
         top_cache.clear()
         user_cache.delete('dota_digest_stats')
@@ -1587,6 +1564,8 @@ def delete_user(telegram_id: int):
     except Exception as e:
         logger.error(f"delete_user error: {e}")
         return False
+    finally:
+        release_connection(conn)
 
 
 def get_fissure_top(limit=10):
@@ -1755,30 +1734,42 @@ def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
     return result
 
 def zeus_strike(percent=0.05):
-    """Удар Зевса: уменьшить fissure ВСЕХ игроков на percent (5% = 0.05). Фиссуры < 5 см защищены."""
+    """Удар Зевса: уменьшить fissure ВСЕХ игроков на percent (5% = 0.05). Минимум 0.1 см."""
     db = Database()
     url = urlparse.urlparse(DATABASE_URL)
     scheme = url.scheme
     multiplier = 1.0 - percent
     
+    logger.info(f"zeus_strike: starting with percent={percent}")
+    
     try:
+        # Проверим сколько всего игроков в БД
+        total_count = db.execute_query("SELECT COUNT(*) as cnt FROM users", fetch="one")
+        tc = total_count['count'] if total_count and 'count' in total_count else (total_count[0] if total_count else 0)
+        logger.info(f"zeus_strike: total users: {tc}")
+        
+        # Проверим сколько игроков с fissure > 0.1
+        eligible_count = db.execute_query("SELECT COUNT(*) as cnt FROM users WHERE fissure > 0.1", fetch="one")
+        ec = eligible_count['count'] if eligible_count and 'count' in eligible_count else (eligible_count[0] if eligible_count else 0)
+        logger.info(f"zeus_strike: users with fissure > 0.1: {ec}")
+        
         if "postgres" in scheme:
-            query = "UPDATE users SET fissure = GREATEST(0.1, fissure * %s) WHERE fissure >= 5"
+            query = "UPDATE users SET fissure = GREATEST(0.1, fissure * %s) WHERE fissure > 0.1"
             db.execute_query(query, (multiplier,))
-            count_query = "SELECT COUNT(*) FROM users WHERE fissure >= 5"
+            count_query = "SELECT COUNT(*) FROM users WHERE fissure > 0.1"
             result = db.execute_query(count_query, fetch="one")
-            affected = result[0] if result else 0
+            affected = result['count'] if result and 'count' in result else (result['cnt'] if result and 'cnt' in result else (result[0] if result else 0))
         else:
-            query = "UPDATE users SET fissure = MAX(0.1, fissure * ?) WHERE fissure >= 5"
+            query = "UPDATE users SET fissure = MAX(0.1, fissure * ?) WHERE fissure > 0.1"
             db.execute_query(query, (multiplier,))
-            count_query = "SELECT COUNT(*) FROM users WHERE fissure >= 5"
+            count_query = "SELECT COUNT(*) FROM users WHERE fissure > 0.1"
             result = db.execute_query(count_query, fetch="one")
-            affected = result[0] if result else 0
+            affected = result['count'] if result and 'count' in result else (result['cnt'] if result and 'cnt' in result else (result[0] if result else 0))
         
         # Обновляем кеш только затронутых пользователей
         all_users = user_cache.get_all_users()
         for uid, udata in all_users.items():
-            if isinstance(udata, dict) and udata.get('fissure', 0) >= 5:
+            if isinstance(udata, dict) and udata.get('fissure', 0) > 0.1:
                 udata['fissure'] = max(0.1, udata['fissure'] * multiplier)
                 user_cache.set(uid, udata)
         
@@ -2258,7 +2249,7 @@ def get_dota_digest_stats():
     else:
         logger.info("get_dota_digest_stats: cache miss or None, reading from DB")
     
-    # Читаем из БД
+    conn = None
     try:
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
@@ -2266,7 +2257,6 @@ def get_dota_digest_stats():
         
         cursor = conn.cursor()
         
-        # Проверяем есть ли пользователи с играми за неделю
         cursor.execute("""
             SELECT COUNT(*) FROM users 
             WHERE steam_id IS NOT NULL AND week_games > 0
@@ -2275,7 +2265,6 @@ def get_dota_digest_stats():
         
         if count == 0:
             cursor.close()
-            conn.close()
             result = {
                 "top_winrate": ("None", 0, 0, 0, None),
                 "bottom_winrate": ("None", 0, 0, 0, None),
@@ -2399,9 +2388,7 @@ def get_dota_digest_stats():
             streak = (row[10], row[11], row[12]) if row and row[10] else None
         
         cursor.close()
-        conn.close()
         
-        # SQL: SELECT steam_nickname, week_wins, week_games, rank_tier, telegram_id
         result = {
             # (steam_nickname, rank_tier, week_games, week_wins, telegram_id)
             "top_winrate": (top[0], top[3], top[2], top[1], top[4]) if top else ("None", 0, 0, 0, None),
@@ -2421,10 +2408,13 @@ def get_dota_digest_stats():
             "bottom_winrate": ("None", 0, 0, 0, None),
             "top_streak": ("None", 0, None)
         }
+    finally:
+        release_connection(conn)
 
 
 def get_all_users_with_steam():
     """Получение всех пользователей с привязанным Steam (полные данные)"""
+    conn = None
     try:
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
@@ -2473,6 +2463,8 @@ def get_all_users_with_steam():
     except Exception as e:
         logger.error(f"Ошибка get_all_users_with_steam: {e}")
         return []
+    finally:
+        release_connection(conn)
 
 
 def reset_weekly_stats():
