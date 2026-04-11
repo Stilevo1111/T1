@@ -277,7 +277,7 @@ def update_dota_week_top_cache():
             return (1, 0, 0)
         wr = w / g
         # Группировка по 10% диапазонам (80-89%, 70-79%, 60-69% и т.д.)
-        wr_group = round(wr * 100, -1) // 10 * 10  # round to nearest 10, then group
+        wr_group = (int(wr * 100) // 10) * 10  # простой: 83%→80, 75%→70, 55%→50
         wr_score = wr * math.sqrt(g)
         return (0, wr_group, wr_score)
     
