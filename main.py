@@ -2478,25 +2478,19 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     lines.append(f" └ Нет игр за неделю\n\n")
             
-            # Если пользователь в топе - добавляем его позицию в конце
-            if user_is_in_top and user_pos:
-                user_tg_id = user.get('telegram_id')
-                clickable_user = f'<b><a href="tg://user?id={user_tg_id}">Твоя поз</a></b>'
-                lines.append(f"\n────────────────────\n")
-                lines.append(f"👤 {clickable_user}: {user_pos} — {user_rank_str}\n")
-                lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
-            elif not user_is_in_top:
-                lines.append(f"\n────────────────────\n")
-                lines.append("<b>👤 Твоя позиция: </b>")
-                if user_pos:
-                    lines.append(f"<b>#{user_pos}</b> — {user_rank_str}\n")
-                    lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
-                else:
-                    if user and user.get('steam_id'):
-                        lines.append(f"{user_rank_str}\n")
+            # Если пользователь НЕ в топе - показываем его внизу
+            if not user_is_in_top:
+                if user and user.get('steam_id'):
+                    username = user.get('steam_nickname') or user.get('username') or 'Unknown'
+                    if username and len(username) > 12:
+                        username = username[:12] + "…"
+                    user_tg_id = user.get('telegram_id')
+                    clickable_name = f'<b><a href="tg://user?id={user_tg_id}">{username}</a></b>'
+                    lines.append(f"\n{clickable_name} — {user_rank_str}\n")
+                    if user_week_games > 0:
                         lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
                     else:
-                        lines.append("Не привязан")
+                        lines.append(f" └ Нет игр за неделю")
             
             text = "".join(lines)
         
