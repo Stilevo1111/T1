@@ -11,6 +11,7 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top
+from activity import check_activity_job
 from aiohttp import web
 
 # Logging setup
@@ -3415,6 +3416,12 @@ async def main():
             alternate_digest_job,
             interval=datetime.timedelta(seconds=15),
             first=datetime.datetime.now() + datetime.timedelta(seconds=20)
+        )
+
+        job_queue.run_repeating(
+            check_activity_job,
+            interval=datetime.timedelta(minutes=1),
+            first=datetime.datetime.now() + datetime.timedelta(seconds=30)
         )
         
         app.add_handler(CommandHandler("start", start))
