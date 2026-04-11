@@ -2009,7 +2009,7 @@ CASE WHEN week_games > 0
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) DESC,
+                    CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) / 10 * 10 DESC,
                     (week_wins * 1.0 / NULLIF(week_games, 0)) * SQRT(week_games) DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
@@ -2128,7 +2128,7 @@ ORDER BY
                        COALESCE(week_current_streak, 0)
 FROM users 
                 WHERE steam_id IS NOT NULL AND COALESCE(in_chat, 1) = 1
-                ORDER BY 
+ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
                     CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) / 10 * 10 DESC,
                     (week_wins * 1.0 / NULLIF(week_games, 0)) * SQRT(week_games) DESC,
