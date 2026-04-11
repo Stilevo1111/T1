@@ -2437,7 +2437,7 @@ def get_all_users_with_steam():
                 SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
                        total_growth, total_rolls, best_streak, current_streak,
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
-                       week_games, week_wins, week_best_streak, last_dota_games, last_dota_wins
+                       week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins
                 FROM users WHERE steam_id IS NOT NULL
             """)
             users = cursor.fetchall()
@@ -2448,15 +2448,15 @@ def get_all_users_with_steam():
                 "best_streak": u[7], "current_streak": u[8], "steam_id": u[9],
                 "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
                 "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
-                "week_wins": u[16], "week_best_streak": u[17], "last_dota_games": u[18],
-                "last_dota_wins": u[19]
+                "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18], "last_dota_games": u[19],
+                "last_dota_wins": u[20]
             } for u in users]
         else:
             cursor.execute("""
                 SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
                        total_growth, total_rolls, best_streak, current_streak,
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
-                       week_games, week_wins, week_best_streak, last_dota_games, last_dota_wins
+                       week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins
                 FROM users WHERE steam_id IS NOT NULL
             """)
             users = cursor.fetchall()
@@ -2467,8 +2467,8 @@ def get_all_users_with_steam():
                 "best_streak": u[7], "current_streak": u[8], "steam_id": u[9],
                 "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
                 "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
-                "week_wins": u[16], "week_best_streak": u[17], "last_dota_games": u[18],
-                "last_dota_wins": u[19]
+                "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18], "last_dota_games": u[19],
+                "last_dota_wins": u[20]
             } for u in users]
     except Exception as e:
         logger.error(f"Ошибка get_all_users_with_steam: {e}")
