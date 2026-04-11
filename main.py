@@ -2393,14 +2393,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if player.get('telegram_id') == user.get('telegram_id'):
                         user_pos = i
                         break
-            
-            # Also check if user in cache for stats
-            cached_user = user_cache.get(user.get('telegram_id')) if user else None
-            if cached_user:
-                user_week_games = cached_user.get('week_games', 0)
-                user_week_wins = cached_user.get('week_wins', 0)
-                user_week_losses = user_week_games - user_week_wins
-                user_winrate = round((user_week_wins / user_week_games * 100), 1) if user_week_games > 0 else 0
         
         if not top_users:
             text = f"🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
