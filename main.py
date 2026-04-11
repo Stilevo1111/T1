@@ -2486,7 +2486,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         username = username[:12] + "…"
                     user_tg_id = user.get('telegram_id')
                     clickable_name = f'<b><a href="tg://user?id={user_tg_id}">{username}</a></b>'
-                    prefix = f"#{user_pos} "
+                    emoji_nums = {1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
+                    prefix = f"{emoji_nums.get(user_pos, '#' + str(user_pos))} "
                     lines.append(f"\n{prefix}{clickable_name} — {user_rank_str}\n")
                     if user_week_games > 0:
                         lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
