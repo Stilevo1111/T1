@@ -13,6 +13,9 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Force redeploy to clear any cached bytecode
+REDEPLOY_MARKER = "2026-04-08-21-05-00-final-fix"
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     print("⚠️ DATABASE_URL не задан! Используем SQLite для локального тестирования.")
@@ -241,8 +244,6 @@ def update_dota_week_top_cache():
         
         week_games = user.get('week_games', 0)
         week_wins = user.get('week_wins', 0)
-        
-        # Включаем ВСЕХ игроков с привязанным Steam (даже без игр за неделю)
         winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
         
         top_users.append({
@@ -256,8 +257,38 @@ def update_dota_week_top_cache():
             'winrate': winrate,
             'week_current_streak': user.get('week_current_streak', 0)
         })
-
-    # Сохраняем в кеш - сортировка происходит при каждом запросе
+    
+    # Сортировка: используем get_sort_key
+    import math
+    def get_sort_key(x):
+        g = x.get('week_games', 0)
+        w = x.get('week_wins', 0)
+        if g == 0:
+            return (1, 0, 0)
+        wr = w / g
+        wr_int = int(wr * 100)
+        # Группировка по 10% с учётом штрафа для середнячков
+        if wr_int >= 60:
+            wr_group = (wr_int + 5) // 10 * 10  # round UP: 75->80, 65->70
+            wr_score = wr * math.sqrt(g) + math.sqrt(g) * 0.05  # small bonus for games
+        elif wr_int >= 50:
+            wr_group = (wr_int // 10) * 10 - 10  # 50-59% -> штраф вниз
+            wr_score = wr  # для середнячков - сначала WR, потом игры
+        else:
+            wr_group = (wr_int // 10) * 10 - 20  # <50% -> ещё ниже
+            wr_score = wr * math.sqrt(g) * 0.5
+        logger.info(f"get_sort_key: {x.get('steam_nickname')} WR={wr_int}% group={wr_group} score={wr_score}")
+        return (0, wr_group, wr_score)
+    
+    logger.info("===== UPDATE DOTA WEEK TOP: STARTING SORT =====")
+    top_users.sort(key=lambda x: get_sort_key(x), reverse=True)
+    
+    logger.info("===== TOP USERS AFTER SORT =====")
+    for i, u in enumerate(top_users):
+        logger.info(f"  POS{i+1}. {u.get('steam_nickname')}: {u.get('week_wins')}W/{u.get('week_games')}L, WR={u.get('winrate')}%")
+    logger.info("===== END SORT =====")
+    
+    # Сохраняем в кеш
     user_cache.set('dota_week_top', top_users)
     logger.info(f"update_dota_week_top_cache: cached {len(top_users)} users")
 
@@ -276,61 +307,6 @@ def get_db_type():
         return "sqlite"
     scheme_str = str(scheme)
     return "postgresql" if "postgres" in scheme_str else "sqlite"
-
-
-def backup_database(backup_dir=None):
-    """Создание резервной копии базы данных"""
-    if backup_dir is None:
-        backup_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    db_type = get_db_type()
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        if db_type == "postgresql":
-            backup_file = os.path.join(backup_dir, f"fissure_bot_backup_{timestamp}.sql")
-            with open(backup_file, "w") as f:
-                cursor.copy_to(f, "users", sep="|")
-            cursor.close()
-            conn.close()
-            return backup_file
-        else:
-            backup_file = os.path.join(backup_dir, f"fissure_bot_backup_{timestamp}.db")
-            src_db = DATABASE_URL.replace("sqlite:///", "")
-            import shutil
-            shutil.copy2(src_db, backup_file)
-            return backup_file
-    except Exception as e:
-        logger.error(f"Backup error: {e}")
-        return None
-
-
-def restore_database(restore_file):
-    """Восстановление базы данных из резервной копии"""
-    db_type = get_db_type()
-    
-    try:
-        if db_type == "postgresql":
-            conn = get_connection()
-            cursor = conn.cursor()
-            with open(restore_file, "r") as f:
-                cursor.copy_from(f, "users", sep="|")
-            conn.commit()
-            cursor.close()
-            conn.close()
-            return True
-        else:
-            import shutil
-            dest_db = DATABASE_URL.replace("sqlite:///", "")
-            shutil.copy2(restore_file, dest_db)
-            return True
-    except Exception as e:
-        logger.error(f"Restore error: {e}")
-        return False
-
 
 def get_connection():
     """Получение соединения с базой данных с пулом"""
@@ -510,6 +486,9 @@ def init_db():
             """)
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_dota_wins INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP
             """)
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr_updated_at TIMESTAMP
@@ -810,9 +789,15 @@ class Database:
                         "week_wins": user.get("week_wins", 0),
                         "week_best_streak": user.get("week_best_streak", 0),
                         "week_current_streak": user.get("week_current_streak", 0),
+                        "week_updated_at": user.get("week_updated_at"),
                         "mmr_updated_at": user.get("mmr_updated_at"),
-                    })
-            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "mmr_updated_at": None}
+                        "last_dota_games": user.get("last_dota_games", 0),
+                        "last_dota_wins": user.get("last_dota_wins", 0),
+                        "week_start_date": user.get("week_start_date")
+                    }
+                else:
+                    self.add_user(telegram_id, username, None, None)
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "week_updated_at": None, "mmr_updated_at": None}
             else:
                 query = "SELECT * FROM users WHERE telegram_id = ?"
                 user = self.execute_query(query, (telegram_id,), fetch="one")
@@ -838,11 +823,12 @@ class Database:
                         "week_wins": user[26] if len(user) > 26 else 0,
                         "week_best_streak": user[29] if len(user) > 29 else 0,
                         "week_current_streak": user[30] if len(user) > 30 else 0,
-                        "mmr_updated_at": user[28] if len(user) > 28 else None,
+                        "week_updated_at": user[27] if len(user) > 27 else None,
+                        "mmr_updated_at": user[28] if len(user) > 28 else None
                     }
                 else:
                     self.add_user(telegram_id, username, None, None)
-                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "mmr_updated_at": None}
+                    return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "week_updated_at": None, "mmr_updated_at": None}
         except Exception as e:
             logger.error(f"Error getting user: {e}")
             return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "week_current_streak": 0}
