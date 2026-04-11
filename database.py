@@ -252,15 +252,30 @@ def update_dota_week_top_cache():
             'week_current_streak': user.get('week_current_streak', 0)
         })
     
-    # Сортировка: сначала те у кого есть игры, потом по винрейт × √игр
+    # Сортировка: сначала те у кого есть игры, потом по новой формуле
+    # WR > 60%: score × 1.2, WR 50-60%: score × 0.7, WR < 50%: score × 0.5
     import math
+    def calc_score(user):
+        g = user.get('week_games', 0)
+        w = user.get('week_wins', 0)
+        if g == 0:
+            return 0
+        wr = w / g
+        base = wr * math.sqrt(g)
+        if wr > 0.6:
+            return base * 1.2
+        elif wr >= 0.5:
+            return base * 0.7
+        else:
+            return base * 0.5
+    
     top_users.sort(key=lambda x: (
         0 if x['week_games'] > 0 else 1,  # без игр — в конец
-        -(x['week_wins'] / x['week_games']) if x['week_games'] > 0 else 0,  # чистый винрейт DESC
-        -x['week_games'],  # больше игр при равном винрейте
-        -x['week_wins'],  # победы DESC
-        -x['rank_tier'], # ранг DESC
-        -x['mmr']       # MMR DESC
+        -calc_score(x),  # новая формула DESC
+        -x['week_games'],
+        -x['week_wins'],
+        -x['rank_tier'],
+        -x['mmr']
     ))
     
     # Сохраняем в кеш
@@ -1994,7 +2009,11 @@ CASE WHEN week_games > 0
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    week_wins * 1.0 / NULLIF(week_games, 0) DESC,
+                    CASE 
+                        WHEN week_wins * 1.0 / NULLIF(week_games, 0) > 0.6 THEN week_wins * 1.0 / NULLIF(week_games, 0) * SQRT(week_games) * 1.2
+                        WHEN week_wins * 1.0 / NULLIF(week_games, 0) >= 0.5 THEN week_wins * 1.0 / NULLIF(week_games, 0) * SQRT(week_games) * 0.7
+                        ELSE week_wins * 1.0 / NULLIF(week_games, 0) * SQRT(week_games) * 0.5
+                    END DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
                 LIMIT ?
@@ -2109,11 +2128,15 @@ ORDER BY
                             THEN ROUND(week_wins * 100.0 / week_games, 1) 
                             ELSE 0 END as winrate,
                        COALESCE(week_current_streak, 0)
-                FROM users 
+FROM users 
                 WHERE steam_id IS NOT NULL AND COALESCE(in_chat, 1) = 1
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-week_wins * 1.0 / NULLIF(week_games, 0) DESC,
+                    CASE 
+                        WHEN week_wins * 1.0 / NULLIF(week_games, 0) > 0.6 THEN week_wins * 1.0 / NULLIF(week_games, 0) * SQRT(week_games) * 1.2
+                        WHEN week_wins * 1.0 / NULLIF(week_games, 0) >= 0.5 THEN week_wins * 1.0 / NULLIF(week_games, 0) * SQRT(week_games) * 0.7
+                        ELSE week_wins * 1.0 / NULLIF(week_games, 0) * SQRT(week_games) * 0.5
+                    END DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
                 LIMIT ?
@@ -2182,14 +2205,31 @@ def get_dota_digest_stats():
         
         # ОПТИМИЗАЦИЯ: один запрос вместо трёх
         if "postgres" in scheme:
-            # Один запрос: лучший винрейт, худший винрейт, лучший стрик
+            # Один запрос: лучший винрейт, худший винрейт, лучший стрик (по новой формуле)
             cursor.execute("""
                 WITH ranked AS (
                     SELECT 
                         steam_nickname, week_wins, week_games, rank_tier, telegram_id,
                         week_current_streak,
-                        ROW_NUMBER() OVER (ORDER BY (week_wins::numeric / NULLIF(week_games, 0)) DESC) as rn_top,
-                        ROW_NUMBER() OVER (ORDER BY (week_wins::numeric / NULLIF(week_games, 0)) ASC) as rn_bottom,
+                        CASE 
+                            WHEN week_wins::numeric / NULLIF(week_games, 0) > 0.6 THEN (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 1.2
+                            WHEN week_wins::numeric / NULLIF(week_games, 0) >= 0.5 THEN (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 0.7
+                            ELSE (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 0.5
+                        END as score,
+                        ROW_NUMBER() OVER (ORDER BY 
+                            CASE 
+                                WHEN week_wins::numeric / NULLIF(week_games, 0) > 0.6 THEN (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 1.2
+                                WHEN week_wins::numeric / NULLIF(week_games, 0) >= 0.5 THEN (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 0.7
+                                ELSE (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 0.5
+                            END DESC
+                        ) as rn_top,
+                        ROW_NUMBER() OVER (ORDER BY 
+                            CASE 
+                                WHEN week_wins::numeric / NULLIF(week_games, 0) > 0.6 THEN (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 1.2
+                                WHEN week_wins::numeric / NULLIF(week_games, 0) >= 0.5 THEN (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 0.7
+                                ELSE (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) * 0.5
+                            END ASC
+                        ) as rn_bottom,
                         ROW_NUMBER() OVER (ORDER BY week_current_streak DESC) as rn_streak
                     FROM users 
                     WHERE steam_id IS NOT NULL AND week_games > 0
@@ -2216,19 +2256,70 @@ def get_dota_digest_stats():
             bottom = (row[5], row[6], row[7], row[8], row[9]) if row and row[5] else None
             streak = (row[10], row[11], row[12]) if row and row[10] else None
         else:
-            # SQLite: используем подзапросы
+            # SQLite: используем подзапросы (новая формула)
+            # score = WR * sqrt(games) * multiplier (1.2 if >60%, 0.7 if 50-60%, 0.5 if <50%)
             cursor.execute("""
                 SELECT 
-                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) DESC LIMIT 1) as top_nickname,
-                    (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) DESC LIMIT 1) as top_rank,
-                    (SELECT week_games FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) DESC LIMIT 1) as top_games,
-                    (SELECT week_wins FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) DESC LIMIT 1) as top_wins,
-                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) DESC LIMIT 1) as top_id,
-                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) ASC LIMIT 1) as bottom_nickname,
-                    (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) ASC LIMIT 1) as bottom_rank,
-                    (SELECT week_games FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) ASC LIMIT 1) as bottom_games,
-                    (SELECT week_wins FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) ASC LIMIT 1) as bottom_wins,
-                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_games > 0 ORDER BY (week_wins * 1.0 / week_games) ASC LIMIT 1) as bottom_id,
+                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                     ORDER BY CASE 
+                        WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
+                        WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
+                        ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
+                     END DESC LIMIT 1) as top_nickname,
+                    (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                     ORDER BY CASE 
+                        WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
+                        WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
+                        ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
+                     END DESC LIMIT 1) as top_rank,
+                    (SELECT week_games FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                     ORDER BY CASE 
+                        WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
+                        WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
+                        ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
+                     END DESC LIMIT 1) as top_games,
+                    (SELECT week_wins FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                     ORDER BY CASE 
+                        WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
+                        WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
+                        ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
+                     END DESC LIMIT 1) as top_wins,
+                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                     ORDER BY CASE 
+                        WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
+                        WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
+                        ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
+                     END DESC LIMIT 1) as top_id,
+                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                     ORDER BY CASE 
+                        WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
+                        WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
+                        ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
+                     END ASC LIMIT 1) as bottom_nickname,
+                    (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                     ORDER BY CASE 
+                        WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
+                        WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
+                        ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
+                     END ASC LIMIT 1) as bottom_rank,
+                    (SELECT week_games FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                     ORDER BY CASE 
+                        WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
+                        WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
+                        ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
+                     END ASC LIMIT 1) as bottom_games,
+                    (SELECT week_wins FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                     ORDER BY CASE 
+                        WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
+                        WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
+                        ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
+                     END ASC LIMIT 1) as bottom_wins,
+                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                     ORDER BY CASE 
+                        WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
+                        WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
+                        ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
+                     END ASC LIMIT 1) as bottom_id,
                     (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 ORDER BY week_current_streak DESC LIMIT 1) as streak_nickname,
                     (SELECT week_current_streak FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 ORDER BY week_current_streak DESC LIMIT 1) as streak_val,
                     (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 ORDER BY week_current_streak DESC LIMIT 1) as streak_id
