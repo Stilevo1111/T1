@@ -270,9 +270,10 @@ def update_dota_week_top_cache():
         if g == 0:
             return (1, 0, 0)
         wr = w / g
-        wr_int = int(wr * 100)
+        # Группировка по 10% диапазонам (80-89%, 70-79%, 60-69% и т.д.)
+        wr_group = int(wr * 100) // 10 * 10  # 80, 70, 60, 50...
         wr_score = wr * math.sqrt(g)
-        return (0, wr_int, wr_score)
+        return (0, wr_group, wr_score)
     
     top_users.sort(key=lambda x: get_sort_key(x))
     
@@ -2129,7 +2130,7 @@ FROM users
                 WHERE steam_id IS NOT NULL AND COALESCE(in_chat, 1) = 1
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) DESC,
+                    CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) / 10 * 10 DESC,
                     (week_wins * 1.0 / NULLIF(week_games, 0)) * SQRT(week_games) DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
