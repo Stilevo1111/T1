@@ -2208,11 +2208,11 @@ def get_dota_digest_stats():
                         week_current_streak,
                         (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) as score,
                         ROW_NUMBER() OVER (ORDER BY 
-                            CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) DESC,
+                            (CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) / 10 * 10) DESC,
                             (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) DESC
                         ) as rn_top,
                         ROW_NUMBER() OVER (ORDER BY 
-                            CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) ASC,
+                            (CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) / 10 * 10) ASC,
                             (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) ASC
                         ) as rn_bottom,
                         ROW_NUMBER() OVER (ORDER BY week_current_streak DESC) as rn_streak
@@ -2246,11 +2246,8 @@ def get_dota_digest_stats():
             cursor.execute("""
                 SELECT 
                     (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
-                     ORDER BY CASE 
-                        WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
-                        WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
-                        ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
-                     END DESC LIMIT 1) as top_nickname,
+                     ORDER BY CAST(week_wins * 100.0 / week_games / 10 * 10 AS INTEGER) DESC,
+                          (week_wins * 1.0 / week_games) * SQRT(week_games) DESC LIMIT 1) as top_nickname,
                     (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
                      ORDER BY CASE 
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
