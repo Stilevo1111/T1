@@ -271,7 +271,7 @@ def update_dota_week_top_cache():
             return (1, 0, 0)
         wr = w / g
         # Группировка по 10% диапазонам (80-89%, 70-79%, 60-69% и т.д.)
-        wr_group = int(wr * 100) // 10 * 10  # 80, 70, 60, 50...
+        wr_group = round(wr * 100, -1) // 10 * 10  # round to nearest 10, then group
         wr_score = wr * math.sqrt(g)
         return (0, wr_group, wr_score)
     
@@ -2009,7 +2009,7 @@ CASE WHEN week_games > 0
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) / 10 * 10 DESC,
+                    CAST(ROUND(week_wins * 100.0 / NULLIF(week_games, 0), -1) / 10 * 10 AS INTEGER) DESC,
                     (week_wins * 1.0 / NULLIF(week_games, 0)) * SQRT(week_games) DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
@@ -2130,7 +2130,7 @@ FROM users
                 WHERE steam_id IS NOT NULL AND COALESCE(in_chat, 1) = 1
 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) / 10 * 10 DESC,
+                    CAST(ROUND(week_wins * 100.0 / NULLIF(week_games, 0), -1) / 10 * 10 AS INTEGER) DESC,
                     (week_wins * 1.0 / NULLIF(week_games, 0)) * SQRT(week_games) DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
@@ -2208,7 +2208,7 @@ def get_dota_digest_stats():
                         week_current_streak,
                         (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) as score,
                         ROW_NUMBER() OVER (ORDER BY 
-                            (CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) / 10 * 10) DESC,
+                            (CAST(ROUND(week_wins::numeric * 100 / NULLIF(week_games, 0), -1) / 10 * 10 AS INTEGER) DESC,
                             (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) DESC
                         ) as rn_top,
                         ROW_NUMBER() OVER (ORDER BY 
@@ -2246,7 +2246,7 @@ def get_dota_digest_stats():
             cursor.execute("""
                 SELECT 
                     (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
-                     ORDER BY CAST(week_wins * 100.0 / week_games / 10 * 10 AS INTEGER) DESC,
+                     ORDER BY CAST(ROUND(week_wins * 100.0 / week_games, -1) / 10 * 10 AS INTEGER) DESC,
                           (week_wins * 1.0 / week_games) * SQRT(week_games) DESC LIMIT 1) as top_nickname,
                     (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
                      ORDER BY CASE 
