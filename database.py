@@ -1984,9 +1984,13 @@ CASE WHEN week_games > 0
                              ELSE 0 END as winrate
                 FROM users 
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
-                ORDER BY 
+ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    (week_wins::numeric / NULLIF(week_games, 0)) DESC,
+                    CASE 
+                        WHEN week_wins::numeric / NULLIF(week_games, 0) > 0.6 THEN week_wins::numeric / NULLIF(week_games, 0) * SQRT(week_games) * 1.2
+                        WHEN week_wins::numeric / NULLIF(week_games, 0) >= 0.5 THEN week_wins::numeric / NULLIF(week_games, 0) * SQRT(week_games) * 0.7
+                        ELSE week_wins::numeric / NULLIF(week_games, 0) * SQRT(week_games) * 0.5
+                    END DESC,
                     week_games DESC,
                     week_wins DESC, mmr DESC
                 LIMIT %s
