@@ -3202,19 +3202,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         logger.info(f"menu_handler: MATCH FOUND - '{button_found}'")
         
-        logger.info(f"menu_handler: MATCH FOUND - '{button_found}'")
-        
         chat_id = update.message.chat_id
         chat_type = update.message.chat.type
         user_id = update.effective_user.id
+        
+        logger.info(f"User {user_id} pressed button: {button_found} in chat type: {chat_type}")
         
         # Обновляем активность чата для модуля "Актив"
         from database import get_config
         digest_chat = get_config('digest_chat_id')
         if digest_chat and str(chat_id) == str(digest_chat):
             update_chat_activity(chat_id)
-        
-        logger.info(f"User {user_id} pressed button: {button_found} in chat type: {chat_type}")
         
         # Delete user's message only in groups/channels (non-blocking, don't wait)
         if chat_type in ['group', 'supergroup', 'channel']:
