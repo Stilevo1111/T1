@@ -283,7 +283,7 @@ def update_dota_week_top_cache():
             wr_score = wr * math.sqrt(g) + math.sqrt(g) * 0.05  # small bonus for games
         elif wr_int >= 50:
             wr_group = (wr_int // 10) * 10 - 10  # 50-59% -> штраф вниз
-            wr_score = wr * math.sqrt(g)
+            wr_score = wr  # для середнячков - сначала WR, потом игры
         else:
             wr_group = (wr_int // 10) * 10 - 20  # <50% -> ещё ниже
             wr_score = wr * math.sqrt(g) * 0.5
