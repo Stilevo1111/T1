@@ -2464,9 +2464,9 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 streak = player.get('week_current_streak', 0)
                 streak_text = f" • 🔥{streak}" if streak > 0 else ""
                 
-                # Truncate long nicknames (12 chars max for table stability)
-                if username and len(username) > 12:
-                    username = username[:12] + "…"
+                # Truncate long nicknames (10 chars max for table stability)
+                if username and len(username) > 10:
+                    username = username[:10] + "…"
                 
                 # Build player entry - two lines per player
                 # Если пользователь в топе - показываем только 7 игроков, его позицию добавим в конце
@@ -2482,8 +2482,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not user_is_in_top:
                 if user and user.get('steam_id') and user_pos:
                     username = user.get('steam_nickname') or user.get('username') or 'Unknown'
-                    if username and len(username) > 12:
-                        username = username[:12] + "…"
+                    if username and len(username) > 10:
+                        username = username[:10] + "…"
                     user_tg_id = user.get('telegram_id')
                     clickable_name = f'<b><a href="tg://user?id={user_tg_id}">{username}</a></b>'
                     emoji_nums = {1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
