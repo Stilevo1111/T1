@@ -258,18 +258,8 @@ def update_dota_week_top_cache():
             'week_current_streak': user.get('week_current_streak', 0)
         })
     
-    # Сортировка: сначала те у кого есть игры, потом по целому WR%, потом WR×√игр
+    # Сортировка: используем get_sort_key
     import math
-    def calc_score(user):
-        g = user.get('week_games', 0)
-        w = user.get('week_wins', 0)
-        if g == 0:
-            return (0, 0)
-        wr = w / g
-        wr_int = int(wr * 100)  # целый винрейт
-        wr_score = wr * math.sqrt(g)  # WR × √игр
-        return (wr_int, wr_score)
-    
     def get_sort_key(x):
         g = x.get('week_games', 0)
         w = x.get('week_wins', 0)
@@ -290,7 +280,13 @@ def update_dota_week_top_cache():
         logger.info(f"get_sort_key: {x.get('steam_nickname')} WR={wr_int}% group={wr_group} score={wr_score}")
         return (0, wr_group, wr_score)
     
-    top_users.sort(key=lambda x: get_sort_key(x))
+    logger.info("===== UPDATE DOTA WEEK TOP: STARTING SORT =====")
+    top_users.sort(key=lambda x: get_sort_key(x), reverse=True)
+    
+    logger.info("===== TOP USERS AFTER SORT =====")
+    for i, u in enumerate(top_users):
+        logger.info(f"  POS{i+1}. {u.get('steam_nickname')}: {u.get('week_wins')}W/{u.get('week_games')}L, WR={u.get('winrate')}%")
+    logger.info("===== END SORT =====")
     
     # Сохраняем в кеш
     user_cache.set('dota_week_top', top_users)
@@ -2042,41 +2038,43 @@ CASE WHEN week_games > 0
 
 
 def get_dota_week_top(limit=10, force_refresh=False):
-    """Получение топа игроков Dota 2 за неделю - сначала из кеша, потом из БД"""
+    """Получение топа игроков Dota 2 за неделю - из кеша с принудительной пересортировкой"""
     from database import user_cache
-    
-    # Всегда обновляем кеш при force_refresh или если данных мало
+
     if force_refresh:
         logger.info("get_dota_week_top: forcing refresh from OpenDota cache")
-        # Очищаем кеш пользователей чтобы загрузить свежие данные
         user_cache.delete_key('dota_week_top')
-        # Обновляем кеш - он перечитает из OpenDota и применит новую сортировку
         from database import update_dota_week_top_cache
         update_dota_week_top_cache()
-        cached_top = user_cache.get('dota_week_top')
-        if cached_top:
-            return cached_top[:limit]
-    
-    # Иначе пробуем получить из кеша
+
     cached_top = user_cache.get('dota_week_top')
-    all_users = user_cache.get_all_users()
-    
-    if cached_top and len(cached_top) > 0 and len(all_users) > 0:
-        logger.info(f"get_dota_week_top: returning from cache ({len(cached_top)} users)")
+
+    # Всегда пересортировываем - это быстрее чем SQL запрос
+    if cached_top and len(cached_top) > 0:
+        import math
+        def get_sort_key(x):
+            g = x.get('week_games', 0)
+            w = x.get('week_wins', 0)
+            if g == 0:
+                return (1, 0, 0)
+            wr = w / g
+            wr_int = int(wr * 100)
+            if wr_int >= 60:
+                return (0, -wr_int, -(wr * math.sqrt(g) + math.sqrt(g) * 0.05), -g)
+            elif wr_int >= 50:
+                return (1, -wr_int, -wr, -g)
+            else:
+                return (2, -wr_int, -(wr * math.sqrt(g) * 0.5), -g)
+
+        cached_top.sort(key=get_sort_key)
         return cached_top[:limit]
-    
-    # Кеш пустой - обновляем его из БД
+
+    # Кеш пустой - обновляем из БД
     logger.info("get_dota_week_top: cache empty, refreshing from DB")
     from database import update_dota_week_top_cache
     update_dota_week_top_cache()
-    
-    # Теперь получаем из кеша
     cached_top = user_cache.get('dota_week_top')
-    if cached_top:
-        return cached_top[:limit]
-    
-    # Если всё ещё нет - читаем напрямую
-    return get_dota_week_top_from_db(limit)
+    return cached_top[:limit] if cached_top else []
 
 
 def get_dota_week_top_from_db(limit=10):
@@ -2104,24 +2102,42 @@ def get_dota_week_top_from_db(limit=10):
         
         # Если есть пользователи с steam_id, выполняем запрос
         if total_with_steam > 0:
+            # Новая формула сортировки:
+            # WR >= 60%: группа round UP, сортировка по WR * √игр + бонус
+            # WR 50-59%: группа 40 (штраф), сортировка по WR
+            # WR < 50%: группа 20 или ниже, сортировка по WR * √игр * 0.5
             if "postgres" in scheme:
                 cursor.execute("""
+                    WITH wr_calc AS (
+                        SELECT telegram_id, username, steam_nickname, mmr, 
+                               week_games, week_wins, rank_tier,
+                               CASE WHEN week_games > 0 
+                                    THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
+                                    ELSE 0 END as winrate,
+                               COALESCE(week_current_streak, 0) as week_current_streak,
+                               CASE WHEN week_games > 0 THEN week_wins::numeric / NULLIF(week_games, 0) ELSE 0 END as wr,
+                               CASE WHEN week_games > 0 THEN CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) ELSE 0 END as wr_int
+                        FROM users 
+                        WHERE steam_id IS NOT NULL AND COALESCE(in_chat, TRUE) = TRUE
+                    )
                     SELECT telegram_id, username, steam_nickname, mmr, 
-                           week_games, week_wins, rank_tier,
-                           CASE WHEN week_games > 0 
-                                THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
-                                ELSE 0 END as winrate,
-                           COALESCE(week_current_streak, 0)
-                    FROM users 
-                    WHERE steam_id IS NOT NULL AND COALESCE(in_chat, TRUE) = TRUE
-ORDER BY 
-                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) DESC,
-                    (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) DESC,
-                    week_games DESC,
-                    week_wins DESC, mmr DESC
-                LIMIT %s
-            """, (limit,))
+                           week_games, week_wins, rank_tier, winrate, week_current_streak
+                    FROM wr_calc
+                    ORDER BY 
+                        CASE WHEN week_games = 0 THEN 1 ELSE 0 END,
+                        CASE 
+                            WHEN wr_int >= 60 THEN 0
+                            WHEN wr_int >= 50 THEN 1
+                            ELSE 2
+                        END,
+                        CASE 
+                            WHEN wr_int >= 60 THEN wr * SQRT(week_games) + SQRT(week_games) * 0.05
+                            WHEN wr_int >= 50 THEN wr
+                            ELSE wr * SQRT(week_games) * 0.5
+                        END DESC,
+                        week_games DESC
+                    LIMIT %s
+                """, (limit,))
             users = cursor.fetchall()
             logger.info(f"get_dota_week_top: postgres users={users}")
             cursor.close()
@@ -2145,21 +2161,35 @@ ORDER BY
             
             return result
         else:
+            # Новая формула сортировки для SQLite
             cursor.execute("""
+                WITH wr_calc AS (
+                    SELECT telegram_id, username, steam_nickname, mmr, 
+                           week_games, week_wins, rank_tier,
+                           CASE WHEN week_games > 0 
+                                THEN ROUND(week_wins * 100.0 / week_games, 1) 
+                                ELSE 0 END as winrate,
+                           COALESCE(week_current_streak, 0) as week_current_streak,
+                           CASE WHEN week_games > 0 THEN CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) ELSE 0 END as wr_int
+                    FROM users 
+                    WHERE steam_id IS NOT NULL AND COALESCE(in_chat, 1) = 1
+                )
                 SELECT telegram_id, username, steam_nickname, mmr, 
-                       week_games, week_wins, rank_tier,
-                       CASE WHEN week_games > 0 
-                            THEN ROUND(week_wins * 100.0 / week_games, 1) 
-                            ELSE 0 END as winrate,
-                       COALESCE(week_current_streak, 0)
-FROM users 
-                WHERE steam_id IS NOT NULL AND COALESCE(in_chat, 1) = 1
-ORDER BY 
-                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CAST(ROUND(week_wins * 100.0 / NULLIF(week_games, 0), -1) / 10 * 10 AS INTEGER) DESC,
-                    (week_wins * 1.0 / NULLIF(week_games, 0)) * SQRT(week_games) DESC,
-                    week_games DESC,
-                    week_wins DESC, mmr DESC
+                       week_games, week_wins, rank_tier, winrate, week_current_streak
+                FROM wr_calc
+                ORDER BY 
+                    CASE WHEN week_games = 0 THEN 1 ELSE 0 END,
+                    CASE 
+                        WHEN wr_int >= 60 THEN 0
+                        WHEN wr_int >= 50 THEN 1
+                        ELSE 2
+                    END,
+                    CASE 
+                        WHEN wr_int >= 60 THEN (CAST(week_wins AS REAL) / NULLIF(week_games, 0)) * SQRT(week_games) + SQRT(week_games) * 0.05
+                        WHEN wr_int >= 50 THEN CAST(week_wins AS REAL) / NULLIF(week_games, 0)
+                        ELSE (CAST(week_wins AS REAL) / NULLIF(week_games, 0)) * SQRT(week_games) * 0.5
+                    END DESC,
+                    week_games DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
