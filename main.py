@@ -2385,8 +2385,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         user_is_in_top = True
                         break
             
-            # Calculate user's position in the weekly top by winrate (if they have steam_id and week games > 0)
-            if user and user.get('steam_id') and user_week_games > 0 and user_week_wins > 0:
+            # Calculate user's position in the weekly top by winrate (for ALL with steam_id)
+            if user and user.get('steam_id'):
                 try:
                     conn = get_connection()
                     cursor = conn.cursor()
@@ -2396,13 +2396,13 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if 'postgres' in scheme:
                         cursor.execute("""
                             SELECT COUNT(*) + 1 as rank FROM users 
-                            WHERE (week_wins::numeric / NULLIF(week_games, 0) * 100) > %s 
+                            WHERE (week_wins::numeric / NULLIF(week_games, 0) * 100) > COALESCE(%s, 0) 
                             AND steam_id IS NOT NULL AND week_games > 0
                         """, (user_winrate,))
                     else:
                         cursor.execute("""
                             SELECT COUNT(*) + 1 FROM users 
-                            WHERE (week_wins * 100.0 / NULLIF(week_games, 0)) > ? 
+                            WHERE (week_wins * 100.0 / NULLIF(week_games, 0)) > COALESCE(?, 0)
                             AND steam_id IS NOT NULL AND week_games > 0
                         """, (user_winrate,))
                     
@@ -2489,18 +2489,17 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     lines.append(f" └ Нет игр за неделю\n\n")
             
-            # Добавляем позицию пользователя только если пользователь НЕ в общем топе (избегаем дублирования)
-            if not user_is_in_top:
-                lines.append("\n👤 Твоя позиция: ")
-                if user_pos:
-                    lines.append(f"#{user_pos} — {user_rank_str}\n")
+            # Всегда показываем позицию пользователя внизу
+            lines.append("\n👤 Твоя позиция: ")
+            if user_pos:
+                lines.append(f"#{user_pos} — {user_rank_str}\n")
+                lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
+            else:
+                if user and user.get('steam_id'):
+                    lines.append(f"{user_rank_str}\n")
                     lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
                 else:
-                    if user and user.get('steam_id'):
-                        lines.append(f"{user_rank_str}\n")
-                        lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
-                    else:
-                        lines.append("Не привязан")
+                    lines.append("Не привязан")
             
             text = "".join(lines)
         
