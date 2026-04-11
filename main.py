@@ -2385,34 +2385,21 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         user_is_in_top = True
                         break
             
-            # Calculate user's position in the weekly top by winrate (for ALL with steam_id)
-            if user and user.get('steam_id'):
-                try:
-                    conn = get_connection()
-                    cursor = conn.cursor()
-                    url = urlparse.urlparse(DATABASE_URL)
-                    scheme = url.scheme
-                    
-                    if 'postgres' in scheme:
-                        cursor.execute("""
-                            SELECT COUNT(*) + 1 as rank FROM users 
-                            WHERE (week_wins::numeric / NULLIF(week_games, 0) * 100) > COALESCE(%s, 0) 
-                            AND steam_id IS NOT NULL AND week_games > 0
-                        """, (user_winrate,))
-                    else:
-                        cursor.execute("""
-                            SELECT COUNT(*) + 1 FROM users 
-                            WHERE (week_wins * 100.0 / NULLIF(week_games, 0)) > COALESCE(?, 0)
-                            AND steam_id IS NOT NULL AND week_games > 0
-                        """, (user_winrate,))
-                    
-                    result = cursor.fetchone()
-                    if result:
-                        user_pos = result[0] if not isinstance(result, dict) else result.get('rank')
-                    cursor.close()
-                    conn.close()
-                except Exception as e:
-                    logger.error(f"Error getting week rank: {e}")
+            # Find user's REAL position in the sorted top list
+            user_pos = None
+            if user and user.get('telegram_id'):
+                for i, player in enumerate(top_users, 1):
+                    if player.get('telegram_id') == user.get('telegram_id'):
+                        user_pos = i
+                        break
+            
+            # Also check if user in cache for stats
+            cached_user = user_cache.get(user.get('telegram_id')) if user else None
+            if cached_user:
+                user_week_games = cached_user.get('week_games', 0)
+                user_week_wins = cached_user.get('week_wins', 0)
+                user_week_losses = user_week_games - user_week_wins
+                user_winrate = round((user_week_wins / user_week_games * 100), 1) if user_week_games > 0 else 0
         
         if not top_users:
             text = f"🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
@@ -2489,17 +2476,18 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     lines.append(f" └ Нет игр за неделю\n\n")
             
-            # Всегда показываем позицию пользователя внизу
-            lines.append("\n👤 Твоя позиция: ")
-            if user_pos:
-                lines.append(f"#{user_pos} — {user_rank_str}\n")
-                lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
-            else:
-                if user and user.get('steam_id'):
-                    lines.append(f"{user_rank_str}\n")
+            # Показываем позицию пользователя внизу ТОЛЬКО если его нет в топе
+            if not user_is_in_top:
+                lines.append("\n👤 Твоя позиция: ")
+                if user_pos:
+                    lines.append(f"#{user_pos} — {user_rank_str}\n")
                     lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
                 else:
-                    lines.append("Не привязан")
+                    if user and user.get('steam_id'):
+                        lines.append(f"{user_rank_str}\n")
+                        lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%")
+                    else:
+                        lines.append("Не привязан")
             
             text = "".join(lines)
         
