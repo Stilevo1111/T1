@@ -2038,14 +2038,9 @@ def get_dota_week_top(limit=10, force_refresh=False):
     
     # Всегда обновляем кеш при force_refresh или если данных мало
     if force_refresh:
-        logger.info("get_dota_week_top: forcing refresh from DB")
-        # Очищаем кеш топа перед обновлением
-        user_cache.delete_key('dota_week_top')
-        from database import update_dota_week_top_cache
-        update_dota_week_top_cache()
-        cached_top = user_cache.get('dota_week_top')
-        if cached_top:
-            return cached_top[:limit]
+        logger.info("get_dota_week_top: forcing fresh data from DB")
+        # Получаем данные напрямую из БД
+        return get_dota_week_top_from_db(limit)
     
     # Иначе пробуем получить из кеша
     cached_top = user_cache.get('dota_week_top')
