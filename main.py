@@ -3103,12 +3103,11 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ручной запуск еженедельного дайджеста в этот чат"""
+    """Еженедельный дайджест отключён"""
     try:
         chat = update.effective_chat
         chat_id = chat.id
         
-        # В группах удаляем сообщение пользователя с командой
         if chat.type in ['group', 'supergroup', 'channel']:
             if await bot_can_delete(context.bot, chat_id):
                 try:
@@ -3116,31 +3115,11 @@ async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     logger.debug(f"Could not delete user message: {e}")
         
-        # Сохраняем этот чат как чат для дайджеста и сбрасываем message_id
-        set_config("digest_chat_id", chat_id)
-        set_config("weekly_digest_message_id", None)
-        
-        # Создаём контекст для ручного вызова дайджеста
-        class ManualContext:
-            def __init__(self, app, bot):
-                self.application = app
-                self.bot = bot
-        
-        manual_context = ManualContext(context.application, context.bot)
-        await weekly_digest_job(manual_context)
-        
-        msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ Еженедельный дайджест для этого чата создан/обновлён.")
+        msg = await context.bot.send_message(chat_id=chat_id, text="ℹ️ Еженедельный дайджест отключён.")
         if chat.type in ['group', 'supergroup', 'channel']:
             schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
     except Exception as e:
         logger.error(f"Error in weekly_digest_now: {e}", exc_info=True)
-        try:
-            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось создать дайджест сейчас", reply_markup=main_menu())
-            chat = update.effective_chat
-            if chat and chat.type in ['group', 'supergroup', 'channel']:
-                schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
-        except Exception:
-            pass
 
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3392,12 +3371,6 @@ async def main():
             first=datetime.datetime.now() + datetime.timedelta(minutes=1)
         )
         
-        job_queue.run_daily(
-            weekly_digest_job,
-            time=datetime.time(hour=6, minute=0),
-            days=(0,)  # Monday only
-        )
-        
         job_queue.run_repeating(
             alternate_digest_job,
             interval=datetime.timedelta(seconds=15),
@@ -3420,7 +3393,7 @@ async def main():
         app.add_handler(CommandHandler("refresh", refresh))
         app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("dotadigestnow", dota_digest_now))
-        app.add_handler(CommandHandler("weeklydigest", weekly_digest_now))
+        
         app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
         app.add_handler(CommandHandler("setchance", setchance))
         app.add_handler(CommandHandler("testfissure", testfissure))
