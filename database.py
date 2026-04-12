@@ -1767,10 +1767,11 @@ def zeus_strike(percent=0.05):
             query = "UPDATE users SET fissure = MAX(0.1, fissure * ?) WHERE fissure > 0.1"
             db.execute_query(query, (multiplier,))
         
-        # Обновляем кеш только затронутых пользователей
-        all_users = user_cache.get_all_users()
-        for uid, udata in all_users.items():
-            if isinstance(udata, dict) and udata.get('fissure', 0) > 0.1:
+        # Обновляем кеш всех пользователей
+        all_user_ids = user_cache.get_all_users()
+        for uid in all_user_ids:
+            udata = user_cache.get(uid)
+            if udata and isinstance(udata, dict) and udata.get('fissure', 0) > 0.1:
                 udata['fissure'] = max(0.1, udata['fissure'] * multiplier)
                 user_cache.set(uid, udata)
         
