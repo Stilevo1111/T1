@@ -10,7 +10,7 @@ import urllib.parse as urlparse
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, get_weekly_digest_stats, update_weekly_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top
 from activity import check_activity_job, update_chat_activity
 from aiohttp import web
 
@@ -3100,26 +3100,6 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=f"❌ Ошибка: <code>{e}</code>",
             parse_mode="HTML"
         )
-
-
-async def weekly_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Еженедельный дайджест отключён"""
-    try:
-        chat = update.effective_chat
-        chat_id = chat.id
-        
-        if chat.type in ['group', 'supergroup', 'channel']:
-            if await bot_can_delete(context.bot, chat_id):
-                try:
-                    await context.bot.delete_message(chat_id, update.message.message_id)
-                except Exception as e:
-                    logger.debug(f"Could not delete user message: {e}")
-        
-        msg = await context.bot.send_message(chat_id=chat_id, text="ℹ️ Еженедельный дайджест отключён.")
-        if chat.type in ['group', 'supergroup', 'channel']:
-            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
-    except Exception as e:
-        logger.error(f"Error in weekly_digest_now: {e}", exc_info=True)
 
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
