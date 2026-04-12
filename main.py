@@ -1504,6 +1504,7 @@ WEEKEND_BONUS_MULTIPLIERS = [1.5, 2, 2.5]
 # Счётчик бонусной фиссуры за сутки
 BONUS_FISSURE_GOAL = 10  # сколько бросков нужно для бонуса
 daily_fissure_rolls = 0  # счётчик бросков сегодня
+bonus_ready_users = {}  # {telegram_id: True} - кто может использовать бонус без кулдауна
 
 # Тексты дайджестов
 MORNING_DIGEST_HEADER = "🌅ФИССУРА ДАЙДЖЕСТ"
@@ -1789,7 +1790,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(user_obj.id, username)
         logger.info(f"user data: {user}")
         
-        if now - user["last_fissure"] < COOLDOWN:
+        # Проверяем кулдаун или бонус
+        has_bonus = bonus_ready_users.get(user_obj.id, False)
+        if has_bonus:
+            # Бонус - пропускаем кулдаун
+            del bonus_ready_users[user_obj.id]
+        elif now - user["last_fissure"] < COOLDOWN:
             wait = COOLDOWN - (now - user["last_fissure"])
             elapsed = COOLDOWN - wait
             filled = int(elapsed / COOLDOWN * 10)
@@ -1862,13 +1868,20 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Инкремент счётчика для бонусной фиссуры
         global daily_fissure_rolls
-        bonus_triggered = False
+        bonus_available = False
         daily_fissure_rolls += 1
         
-        # Проверяем достигли цели - даём дополнительный бросок
+        # Проверяем достигли цели - бонус будет на следующий бросок
         if daily_fissure_rolls >= BONUS_FISSURE_GOAL:
-            bonus_triggered = True
-            daily_fissure_rolls = 0  # сбрасываем после бонуса
+            # Сохраняем бонус для пользователя
+            bonus_ready_users[user_obj.id] = True
+            daily_fissure_rolls = 0
+            # Отправляем оповещение в чат
+            bonus_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🎁 {display_username} накопил 10 бросков за день! Может крутить ещё раз БЕЗ кулдауна!"
+            )
+            schedule_delete(context.bot, chat_id, bonus_msg.message_id, 30, context.application.job_queue)
         
         slot_msg_ids = []
         
@@ -1964,11 +1977,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Сохраняем original_roll для отображения в мультикасте (до бонусов)
         display_roll = roll
         
-        # Бонус за 10 бросков в день - даём дополнительный бросок
-        if bonus_triggered:
-            # Делаем второй бросок и берём лучший результат или просто добавляем ещё один
-            roll2, _, _, _ = calculate_fissure_roll(user["fissure"])
-            roll = roll + roll2  # суммируем оба броска
+        # Бонус за 10 бросков - добавляем сообщение
+        if has_bonus:
             extra_text = "\n🎁 БОНУС! +ЕЩЁ РАЗ!"
         else:
             extra_text = ""
