@@ -548,7 +548,9 @@ async def refresh_digest_message(bot):
 
 
 async def weekly_digest_job(context):
-    """Еженедельный дайджест (по расписанию)"""
+    """Еженедельный дайджест (по расписанию) - ОТКЛЮЧЕН"""
+    return  # Отключено
+    
     try:
         # Блокировка от параллельного запуска
         import time
@@ -1511,7 +1513,7 @@ MORNING_DIGEST_HEADER = "🌅ФИССУРА ДАЙДЖЕСТ"
 MORNING_DIGEST_FOOTER = "🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
 DOTA_DIGEST_HEADER = "🎮 DOTA ДАЙДЖЕСТ 📊"
 DOTA_DIGEST_FOOTER = "🔺 = лучший винрейт за неделю\n🔻 = худший винрейт за неделю\n🔸 = текущий стрик побед"
-WEEKLY_DIGEST_HEADER = "🌅 ЕЖЕНЕДЕЛЬНЫЙ ДАЙДЖЕСТ"
+# WEEKLY_DIGEST_HEADER = "🌅 ЕЖЕНЕДЕЛЬНЫЙ ДАЙДЖЕСТ"
 
 # Ожидание анимации dice
 DICE_ANIMATION_DELAY = 1.0
