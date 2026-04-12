@@ -3,6 +3,7 @@ import re
 import time
 import requests
 import logging
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from database import get_user, update_user_fields_batch
 
@@ -107,6 +108,37 @@ HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota
 HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
 
 
+def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None:
+    """Get hero icon with caching"""
+    try:
+        from image_cache import get_cached_hero_icon
+        return get_cached_hero_icon(hero_short_name)
+    except ImportError:
+        pass
+    
+    cache_file = Path(__file__).parent / "hero_cache" / f"{hero_short_name}.png"
+    if cache_file.exists():
+        try:
+            return cache_file.read_bytes()
+        except Exception:
+            pass
+    
+    try:
+        url = f"{HERO_ICON_BASE}/{hero_short_name}.png"
+        resp = requests.get(url, timeout=timeout)
+        if resp.status_code == 200:
+            data = resp.content
+            try:
+                cache_file.parent.mkdir(exist_ok=True)
+                cache_file.write_bytes(data)
+            except Exception:
+                pass
+            return data
+    except Exception:
+        pass
+    return None
+
+
 def get_heroes_data() -> dict:
     """Получить данные всех героев из OpenDota (с кешированием)"""
     cached = _get_cached("heroes_data")
@@ -165,6 +197,7 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
                 result.append({
                     "id": hero_id,
                     "name": hero_info["name"],
+                    "short_name": hero_info.get("short_name", ""),
                     "image_url": hero_info["image_url"],
                     "icon_url": hero_info["icon_url"],
                     "picks": count,
@@ -194,7 +227,7 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
         
         # Загружаем иконку
         try:
-            resp = req.get(hero_url, timeout=5)
+            resp = requests.get(hero_url, timeout=5)
             if resp.status_code == 200:
                 icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
                 icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
@@ -257,14 +290,20 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             x = padding + i * cell_width
             y = padding
             
-            try:
-                resp = req.get(hero["icon_url"], timeout=5)
-                if resp.status_code == 200:
-                    icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
+            icon_data = None
+            hero_short = hero.get("short_name", "")
+            if hero_short:
+                icon_data = get_hero_icon_cached(hero_short)
+            
+            if icon_data:
+                try:
+                    icon = Image.open(io.BytesIO(icon_data)).convert("RGBA")
+                    icon = icon.resize((icon_size, icon_size), Image.Resampling.LANCZOS)
                     img.paste(icon, (x, y), icon)
-            except Exception as e:
-                logger.debug(f"Could not load hero icon: {e}")
+                except Exception as e:
+                    logger.debug(f"Could not load hero icon: {e}")
+                    draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
+            else:
                 draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
             
             draw.rectangle([x - 2, y - 2, x + icon_size, y + icon_size], outline=(215, 175, 85), width=2)

@@ -3247,6 +3247,16 @@ async def main():
 
 
 if __name__ == "__main__":
+    try:
+        from dota_mmr import get_heroes_data
+        from image_cache import preload_heroes
+        heroes = get_heroes_data()
+        if heroes:
+            preload_heroes(heroes)
+            logger.info("Hero icons preloaded in background")
+    except Exception as e:
+        logger.debug(f"Could not preload heroes: {e}")
+    
     asyncio.run(main())
 
 
