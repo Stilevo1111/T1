@@ -1754,18 +1754,18 @@ def zeus_strike(percent=0.05):
         logger.info(f"zeus_strike: users with fissure > 0.1: {ec}")
         
         if "postgres" in scheme:
+            count_query = "SELECT COUNT(*) as cnt FROM users WHERE fissure > 0.1"
+            before_result = db.execute_query(count_query, fetch="one")
+            logger.info(f"zeus_strike: count_query result = {before_result}, type = {type(before_result)}")
+            affected = before_result['cnt'] if before_result and 'cnt' in before_result else (before_result[0] if before_result else 0)
             query = "UPDATE users SET fissure = GREATEST(0.1, fissure * %s) WHERE fissure > 0.1"
             db.execute_query(query, (multiplier,))
-            count_query = "SELECT COUNT(*) as cnt FROM users WHERE fissure > 0.1"
-            result = db.execute_query(count_query, fetch="one")
-            logger.info(f"zeus_strike: count_query result = {result}, type = {type(result)}")
-            affected = result['cnt'] if result and 'cnt' in result else (result[0] if result else 0)
         else:
+            count_query = "SELECT COUNT(*) as cnt FROM users WHERE fissure > 0.1"
+            before_result = db.execute_query(count_query, fetch="one")
+            affected = before_result['cnt'] if before_result and 'cnt' in before_result else (before_result[0] if before_result else 0)
             query = "UPDATE users SET fissure = MAX(0.1, fissure * ?) WHERE fissure > 0.1"
             db.execute_query(query, (multiplier,))
-            count_query = "SELECT COUNT(*) as cnt FROM users WHERE fissure > 0.1"
-            result = db.execute_query(count_query, fetch="one")
-            affected = result['cnt'] if result and 'cnt' in result else (result[0] if result else 0)
         
         # Обновляем кеш только затронутых пользователей
         all_users = user_cache.get_all_users()
