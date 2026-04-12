@@ -3020,20 +3020,43 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_fissure = calculate_new_fissure(base_fissure, roll)
         
         # Формируем текст
-        roll_key = min(roll, 75)
-        roll_key = max(roll_key, -15)
-        if roll_key in ROLL_TEXTS:
-            result_text = random.choice(ROLL_TEXTS[roll_key])
+        if cascade_count > 1:
+            # Для мультикаста показываем базовый ролл в тексте, итоговый в мультикасте
+            base_roll = roll // cascade_count
+            roll_key = min(base_roll, 75)
+            roll_key = max(roll_key, -15)
+            if roll_key in ROLL_TEXTS:
+                result_text = random.choice(ROLL_TEXTS[roll_key])
+            else:
+                result_text = f"{'+' if base_roll > 0 else ''}{base_roll} см"
+
+            extra_text = random.choice(CATEGORY_PHRASES.get("up" if base_roll > 0 else ("down" if base_roll < 0 else "same"), [""]))
+            roll_display = f"+{base_roll}×{cascade_count} = +{roll}" if roll > 0 else f"{base_roll}×{cascade_count} = {roll}"
+            mc_level = f"×{cascade_count}"
+            text = (
+                f"🎲 {display_username}\n\n"
+                f"{result_text}\n"
+                f"{extra_text}\n"
+                f"{multicast_text}\n\n"
+                f"⚡ МУЛЬТИКАСТ{mc_level}  {roll_display} CM\n\n"
+                f"📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
+            )
         else:
-            result_text = f"{'+' if roll > 0 else ''}{roll} см"
+            # Обычный ролл
+            roll_key = min(roll, 75)
+            roll_key = max(roll_key, -15)
+            if roll_key in ROLL_TEXTS:
+                result_text = random.choice(ROLL_TEXTS[roll_key])
+            else:
+                result_text = f"{'+' if roll > 0 else ''}{roll} см"
 
-        extra_text = random.choice(CATEGORY_PHRASES.get("up" if roll > 0 else ("down" if roll < 0 else "same"), [""]))
-
-        text = (
-            f"🎲 {display_username}\n\n"
-            f"{result_text}\n"
-            f"{extra_text}"
-        )
+            extra_text = random.choice(CATEGORY_PHRASES.get("up" if roll > 0 else ("down" if roll < 0 else "same"), [""]))
+            text = (
+                f"🎲 {display_username}\n\n"
+                f"{result_text}\n"
+                f"{extra_text}\n\n"
+                f"📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
+            )
 
         if is_fatal and protection_msg:
             text = f"{text}\n{protection_msg}"
