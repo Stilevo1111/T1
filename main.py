@@ -2870,14 +2870,101 @@ async def removeuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Ошибка")
 
 
-async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Тест броска фиссуры без кулдауна — со всеми фичами"""
+async def test_all_scenarios(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать все возможные сценарии теста по очереди"""
     try:
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
         display_username = f"<a href=\"tg://user?id={user_obj.id}\">{username}</a>"
         chat_id = update.message.chat_id
-        
+
+        # Берём реальную фиссуру пользователя
+        user = get_user(user_obj.id, username)
+        current_fissure = user["fissure"]
+
+        scenarios = [
+            ("Обычный ролл", "normal"),
+            ("Защита (маленькая фиссура)", "protection"),
+            ("Мультикаст ×2", "multicast_x2"),
+            ("Мультикаст ×3", "multicast_x3"),
+            ("Мультикаст ×4", "multicast_x4"),
+            ("Выходной бонус", "weekend"),
+            ("Зевс", "zeus")
+        ]
+
+        for scenario_name, scenario_type in scenarios:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🧪 <b>Тест сценария: {scenario_name}</b>",
+                parse_mode="HTML"
+            )
+
+            # Имитируем сценарий
+            if scenario_type == "normal":
+                roll, _, _, _ = calculate_fissure_roll(current_fissure)
+                text = f"🎲 {display_username}\n\n🧪 ТЕСТ\n\n📈 НАРАЩИВАЕМ! +{roll} СМ!\n\n📏 {current_fissure:.1f} см → {current_fissure + roll:.1f} см"
+
+            elif scenario_type == "protection":
+                # Имитируем маленькую фиссуру
+                small_fissure = 3.0
+                roll, _, is_fatal, _ = calculate_fissure_roll(small_fissure)
+                roll, protection_msg = apply_fissure_protection(small_fissure, roll, is_fatal)
+                text = f"🎲 {display_username}\n\n🧪 ТЕСТ\n\n💥 КРИТИЧЕСКИЙ УРОН! -{abs(roll)} СМ!\n{protection_msg}\n\n📏 {small_fissure:.1f} см → {small_fissure + roll:.1f} см"
+
+            elif scenario_type.startswith("multicast"):
+                level = int(scenario_type.split("_")[1])
+                base_roll = 10  # фиксированный базовый ролл для теста
+                roll = base_roll * level
+                multicast_text = f"\n{random.choice(MULTICAST_TEXTS[level])}"
+                text = f"🎲 {display_username}\n\n🧪 ТЕСТ\n\n🚀 ВЗРЫВНОЙ РОСТ! +{base_roll} СМ!\n{multicast_text}\n\n⚡ МУЛЬТИКАСТ×{level}  = +{roll} CM\n\n📏 {current_fissure:.1f} см → {current_fissure + roll:.1f} см"
+
+            elif scenario_type == "weekend":
+                roll = 15  # фиксированный ролл
+                bonus_roll = int(roll * 2.0)  # выходной ×2
+                text = f"🎲 {display_username}\n\n🧪 ТЕСТ\n\n📈 НАРАЩИВАЕМ! +{roll} СМ!\n\n🎉 ВЫХОДНОЙ! x2.0 = {bonus_roll}.0 СМ\n\n📏 {current_fissure:.1f} см → {current_fissure + bonus_roll:.1f} см"
+
+            elif scenario_type == "zeus":
+                affected = zeus_strike()
+                zeus_text = random.choice(ZEUS_TEXTS)
+                text = f"🎲 {display_username}\n\n🧪 ТЕСТ\n\n{zeus_text}\n<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>\n\n📏 {current_fissure:.1f} см"
+
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode="HTML"
+            )
+            await asyncio.sleep(2)  # задержка между сценариями
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="✅ <b>Все сценарии протестированы!</b>",
+            parse_mode="HTML"
+        )
+
+    except Exception as e:
+        logger.error(f"Error in test_all_scenarios: {e}", exc_info=True)
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❌ Ошибка в тесте всех сценариев"
+        )
+
+
+async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Тест броска фиссуры без кулдауна — со всеми фичами
+    /testfissure - обычный тест
+    /testfissure all - показать все сценарии по очереди"""
+    try:
+        user_obj = update.effective_user
+        username = user_obj.username or user_obj.first_name
+        display_username = f"<a href=\"tg://user?id={user_obj.id}\">{username}</a>"
+        chat_id = update.message.chat_id
+
+        # Проверяем параметр "all" - показать все сценарии
+        args = context.args
+        if args and args[0].lower() == "all":
+            await test_all_scenarios(update, context)
+            return
+
         # Берём реальную фиссуру пользователя
         user = get_user(user_obj.id, username)
         current_fissure = user["fissure"]
