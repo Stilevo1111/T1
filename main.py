@@ -1865,7 +1865,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bonus_triggered = False
         daily_fissure_rolls += 1
         
-        # Проверяем достигли цели
+        # Проверяем достигли цели - даём дополнительный бросок
         if daily_fissure_rolls >= BONUS_FISSURE_GOAL:
             bonus_triggered = True
             daily_fissure_rolls = 0  # сбрасываем после бонуса
@@ -1964,10 +1964,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Сохраняем original_roll для отображения в мультикасте (до бонусов)
         display_roll = roll
         
-        # Бонус за 10 бросков в день - даём удвоенный ролл
+        # Бонус за 10 бросков в день - даём дополнительный бросок
         if bonus_triggered:
-            roll = roll * 2
-            extra_text = "\n🎁 СУПЕР БОНУС! х2"
+            # Делаем второй бросок и берём лучший результат или просто добавляем ещё один
+            roll2, _, _, _ = calculate_fissure_roll(user["fissure"])
+            roll = roll + roll2  # суммируем оба броска
+            extra_text = "\n🎁 БОНУС! +ЕЩЁ РАЗ!"
         else:
             extra_text = ""
         
@@ -2019,7 +2021,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Добавляем бонус за 10 бросков
         if bonus_triggered:
-            extra_text = extra_text + "\n🎁 СУПЕР БОНУС! х2"
+            extra_text = extra_text  # уже добавлено выше
         
         if cascade_count > 1 and original_roll is not None:
             roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
