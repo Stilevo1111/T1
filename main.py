@@ -1554,31 +1554,26 @@ def get_event_stats_text():
 
 MULTICAST_TEXTS = {
     2: [
-        "🗣️ Ogre Magi <i>«Чистое мастерство!»</i>",
-        "🗣️ Ogre Magi <i>«Тупая удача!»</i>",
-        "🗣️ Ogre Magi <i>«Не могу поверить, что сработало!»</i>",
-        "🗣️ Ogre Magi <i>«Две головы лучше одной!»</i>",
-        "🗣️ Ogre Magi <i>«Это был НАШ план с самого начала!»</i>",
-        "🗣️ Ogre Magi <i>«Дауби, дауби!»</i>",
+        "🧙‍♂️ ОГР МАГ: \"Ignorant fool! Double the magic!\"",
+        "🧙‍♂️ ОГР МАГ: \"You have got to be kidding me! Double power!\"",
+        "🧙‍♂️ ОГР МАГ: \"This is an outrage! Double spell!\"",
+        "🧙‍♂️ ОГР МАГ: \"How dare you? Double strength!\"",
+        "🧙‍♂️ ОГР МАГ: \"Pathetic! But double magic!\""
     ],
     3: [
-        "🗣️ Ogre Magi <i>«Видел?! ВИДЕЛ?!»</i>",
-        "🗣️ Ogre Magi <i>«Считаем... плюс три...»</i>",
-        "🗣️ Ogre Magi <i>«Мы умнее, чем выглядим!»</i>",
-        "🗣️ Ogre Magi <i>«Повезло, повезло, повезло!»</i>",
-        "🗣️ Ogre Magi <i>«Дауби, дауби! Повезло!»</i>",
-        "🗣️ Ogre Magi <i>«WW! Тройной мультикаст!»</i>",
-        "🗣️ Ogre Magi <i>«Каковы шансы? Неважно!»</i>",
+        "🧙‍♂️ ОГР МАГ: \"Triple threat! I am the greatest!\"",
+        "🧙‍♂️ ОГР МАГ: \"You have got to be kidding me! Triple power!\"",
+        "🧙‍♂️ ОГР МАГ: \"This is an outrage! Triple spell!\"",
+        "🧙‍♂️ ОГР МАГ: \"How dare you? Triple strength!\"",
+        "🧙‍♂️ ОГР МАГ: \"Triple magic! Unbelievable!\""
     ],
     4: [
-        "🗣️ Ogre Magi <i>«БАБАХ!!! Оглушим их ещё раз!»</i>",
-        "🗣️ Ogre Magi <i>«Зачем мозги, когда есть удача?!»</i>",
-        "🗣️ Ogre Magi <i>«Ум? Нам и так везёт!»</i>",
-        "🗣️ Ogre Magi <i>«КАКОВЫ ШАНСЫ? 100% ВОТ КАКОВЫ!!!»</i>",
-        "🗣️ Ogre Magi <i>«Две головы? Нет, ЧЕТЫРЕ УДАРА!!!»</i>",
-        "🗣️ Ogre Magi <i>«Дауби, дауби, дауби, дауби!!!»</i>",
-        "🗣️ Ogre Magi <i>«WW! ЧЕТВЕРНОЙ!!!»</i>",
-    ],
+        "🧙‍♂️ ОГР МАГ: \"Quadruple power! I am the greatest!\"",
+        "🧙‍♂️ ОГР МАГ: \"You have got to be kidding me! Quadruple magic!\"",
+        "🧙‍♂️ ОГР МАГ: \"This is an outrage! Quadruple spell!\"",
+        "🧙‍♂️ ОГР МАГ: \"How dare you? Quadruple strength!\"",
+        "🧙‍♂️ ОГР МАГ: \"Quadruple threat! Legendary!\""
+    ]
 }
 
 ZEUS_TEXTS = [
