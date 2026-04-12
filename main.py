@@ -857,7 +857,7 @@ async def alternate_digest_job(context):
             else:
                 streak_part = " 🍀—"
             
-            text = f"<b>{growth_part} {drop_part} {streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
+            text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅ФИССУРА ДАЙДЖЕСТ\n⚡ Зевс: {_load_stats()['zeus']}\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
             next_type = "1"
         else:
             # Dota дайджест
@@ -3363,11 +3363,7 @@ async def main():
             days=(0, 1, 2, 3, 4, 5, 6)
         )
         
-        job_queue.run_daily(
-            morning_digest_job,
-            time=datetime.time(hour=6, minute=0),
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
+        # morning_digest_job удалён
         
         job_queue.run_repeating(
             update_all_mmr_job,
@@ -3381,7 +3377,11 @@ async def main():
             days=(0,)  # Monday only
         )
         
-# alternate_digest_job удалён
+        job_queue.run_repeating(
+            alternate_digest_job,
+            interval=datetime.timedelta(seconds=15),
+            first=datetime.datetime.now() + datetime.timedelta(seconds=20)
+        )
         
         job_queue.run_repeating(
             check_activity_job,
