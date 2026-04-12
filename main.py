@@ -412,7 +412,7 @@ async def morning_digest_job(context):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n{MORNING_DIGEST_FOOTER}"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n🎁 Бонус: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n{MORNING_DIGEST_FOOTER}"
         
         bot = context.application.bot
         
@@ -519,7 +519,7 @@ async def refresh_digest_message(bot):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n{MORNING_DIGEST_FOOTER}"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n🎁 Бонус: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n{MORNING_DIGEST_FOOTER}"
         
         last_message_id = get_config('daily_digest_message_id')
         if last_message_id:
@@ -1501,6 +1501,10 @@ ZEUS_ICON_URL = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_r
 # Выходной бонус
 WEEKEND_BONUS_MULTIPLIERS = [1.5, 2, 2.5]
 
+# Счётчик бонусной фиссуры за сутки
+BONUS_FISSURE_GOAL = 10  # сколько бросков нужно для бонуса
+daily_fissure_rolls = 0  # счётчик бросков сегодня
+
 # Тексты дайджестов
 MORNING_DIGEST_HEADER = "🌅ФИССУРА ДАЙДЖЕСТ"
 MORNING_DIGEST_FOOTER = "🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
@@ -1855,6 +1859,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Остальные события (обычный ролл или мулькаст)
         roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
+        
+        # Инкремент счётчика для бонусной фиссуры
+        global daily_fissure_rolls
+        daily_fissure_rolls += 1
         
         slot_msg_ids = []
         
