@@ -1504,7 +1504,7 @@ WEEKEND_BONUS_MULTIPLIERS = [1.5, 2, 2.5]
 # Счётчик бонусной фиссуры за сутки
 BONUS_FISSURE_GOAL = 10  # сколько бросков нужно для бонуса
 daily_fissure_rolls = 0  # счётчик бросков сегодня
-bonus_ready_users = {}  # {telegram_id: True} - кто может использовать бонус без кулдауна
+bonus_ready_users = {}  # {telegram_id: timestamp} - когда выдан бонус
 
 # Тексты дайджестов
 MORNING_DIGEST_HEADER = "🌅ФИССУРА ДАЙДЖЕСТ"
@@ -1791,10 +1791,19 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"user data: {user}")
         
         # Проверяем кулдаун или бонус
-        has_bonus = bonus_ready_users.get(user_obj.id, False)
+        bonus_time = bonus_ready_users.get(user_obj.id, 0)
+        # Бонус сгорает через 5 часов если не использован
+        BONUS_EXPIRE = 5 * 3600  # 5 часов
+        if bonus_time > 0 and (now - bonus_time) > BONUS_EXPIRE:
+            # Бонус протух - удаляем
+            bonus_ready_users.pop(user_obj.id, None)
+            bonus_time = 0
+        
+        has_bonus = (bonus_time > 0)
+        
         if has_bonus:
             # Бонус - пропускаем кулдаун
-            del bonus_ready_users[user_obj.id]
+            bonus_ready_users.pop(user_obj.id, None)
         elif now - user["last_fissure"] < COOLDOWN:
             wait = COOLDOWN - (now - user["last_fissure"])
             elapsed = COOLDOWN - wait
@@ -1873,8 +1882,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Проверяем достигли цели - бонус будет на следующий бросок
         if daily_fissure_rolls >= BONUS_FISSURE_GOAL:
-            # Сохраняем бонус для пользователя
-            bonus_ready_users[user_obj.id] = True
+            # Сохраняем бонус для пользователя с timestamp
+            bonus_ready_users[user_obj.id] = now
             daily_fissure_rolls = 0
             # Отправляем оповещение в чат
             bonus_msg = await context.bot.send_message(
