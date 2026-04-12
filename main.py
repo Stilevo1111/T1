@@ -136,166 +136,151 @@ async def decrease_inactive_job(context):
 
 
 async def announce_weekly_mmr_winner(bot):
-    """Отправляет поздравление победителю недельного топа MMR при смене недели."""
-    try:
-        from datetime import timezone, timedelta
-        MSK = timezone(timedelta(hours=3))
-        today_msk = datetime.datetime.now(MSK)
-        monday_msk = today_msk - datetime.timedelta(days=today_msk.weekday())
-        current_week_start = monday_msk.strftime("%Y-%m-%d")
+    """Отправляет поздра��ление победителю недельного топа MMR при смене недели."""
+    from datetime import timezone, timedelta
+    MSK = timezone(timedelta(hours=3))
+    today_msk = datetime.datetime.now(MSK)
+    monday_msk = today_msk - datetime.timedelta(days=today_msk.weekday())
+    current_week_start = monday_msk.strftime("%Y-%m-%d")
 
-        last_announced = get_config('mmr_week_top_announced')
-        if last_announced == current_week_start:
-            return
+    last_announced = get_config('mmr_week_top_announced')
+    if last_announced == current_week_start:
+        return
 
-        if today_msk.weekday() != 0:
-            return
+    if today_msk.weekday() != 0:
+        return
 
-        # Объявляем только в первый час понедельника (00:00–01:00 MSK), чтобы не спамить при перезапуске
-        if today_msk.hour >= 1:
-            logger.info(f"announce_weekly_mmr_winner: пропуск, уже {today_msk.hour}:00 MSK — окно объявления прошло")
-            set_config('mmr_week_top_announced', current_week_start)
-            return
-
-        # Проверяем: есть ли пользователи с данными ПРОШЛОЙ недели (ещё не сброшены)
-        # Если week_start_date == current_week_start, данные уже обновлены — объявлять поздно
-        from database import get_connection, DATABASE_URL
-        conn = get_connection()
-        cursor = conn.cursor()
-        url = urlparse.urlparse(DATABASE_URL)
-        scheme = url.scheme
-        if "postgres" in scheme:
-            cursor.execute(
-                "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND (week_start_date IS NULL OR week_start_date::text != %s)",
-                (current_week_start,)
-            )
-        else:
-            cursor.execute(
-                "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND (week_start_date IS NULL OR week_start_date != ?)",
-                (current_week_start,)
-            )
-        stale_count = cursor.fetchone()[0]
-        cursor.close()
-
-        if stale_count == 0:
-            logger.info("announce_weekly_mmr_winner: все пользователи уже обновлены на новую неделю, пропуск")
-            set_config('mmr_week_top_announced', current_week_start)
-            return
-
-        digest_chat_id = get_config('digest_chat_id')
-        if not digest_chat_id:
-            logger.info("announce_weekly_mmr_winner: чат для дайджеста не настроен")
-            return
-
-        from database import get_dota_week_top_from_db
-        top_users = get_dota_week_top_from_db(5)
-        if not top_users or all(u.get('week_games', 0) == 0 for u in top_users):
-            logger.info("announce_weekly_mmr_winner: нет данных для топа MMR (никто не играл)")
-            set_config('mmr_week_top_announced', current_week_start)
-            return
-
-        # Берём первого с week_games > 0
-        winner = next((u for u in top_users if u.get('week_games', 0) > 0), top_users[0])
-        if winner.get('week_games', 0) == 0:
-            set_config('mmr_week_top_announced', current_week_start)
-            return
-        username = winner.get('steam_nickname') or winner.get('username') or 'Игрок'
-        week_wins = winner.get('week_wins', 0)
-        week_games = winner.get('week_games', 0)
-        week_losses = week_games - week_wins
-        winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
-        rank_tier = winner.get('rank_tier', 0)
-        mmr = winner.get('mmr', 0)
-        telegram_id = winner.get('telegram_id')
-        streak = winner.get('week_current_streak', 0)
-
-        # Получаем прошлого победителя и забираем тег
-        prev_winner_tg_id = get_config('current_mvp_telegram_id')
-        prev_winner_tag = get_config('current_mvp_tag')
-        if prev_winner_tg_id and prev_winner_tag and digest_chat_id:
-            try:
-                await bot.set_chat_administrator_custom_title(
-                    chat_id=digest_chat_id,
-                    user_id=prev_winner_tg_id,
-                    custom_title=""
-                )
-                logger.info(f"Забран тег у прошлого победителя {prev_winner_tg_id}")
-            except Exception as e:
-                logger.warning(f"Не удалось забрать тег у прошлого победителя: {e}")
-
-        # Устанавливаем тег новому победителю (любому участнику группы)
-        mvp_tag = "MVP недели"
-        tag_set = False
-        if telegram_id and digest_chat_id:
-            try:
-                await bot.set_chat_administrator_custom_title(
-                    chat_id=digest_chat_id,
-                    user_id=telegram_id,
-                    custom_title=mvp_tag
-                )
-                tag_set = True
-                logger.info(f"Установлен тег {mvp_tag} для победителя {telegram_id}")
-            except Exception as e:
-                logger.warning(f"Не удалось установить тег победителю: {e}")
-
-        # Увеличиваем счётчик MVP для победителя
-        if telegram_id:
-            from database import update_user_fields_batch
-            user = get_user(telegram_id)
-            if user:
-                current_mvp_count = user.get('weekly_mvp_count', 0)
-                update_user_fields_batch(telegram_id, {'weekly_mvp_count': current_mvp_count + 1})
-
-        # Сохраняем текущего победителя для следующей недели
-        set_config('current_mvp_telegram_id', str(telegram_id) if telegram_id else "")
-        set_config('current_mvp_tag', mvp_tag)
-
-        if rank_tier:
-            ranks = ["🌱 Рекрут", "🔰 Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
-            tier = min(rank_tier // 10, 8)
-            star = rank_tier % 10
-            if tier < 1 or tier > 8:
-                rank_str = "Без ранга"
-            elif tier == 8:
-                rank_str = ranks[tier - 1]
-            else:
-                rank_str = f"{ranks[tier - 1]} {star}"
-        else:
-            rank_str = "Без ранга"
-
-        if telegram_id:
-            name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>"
-        else:
-            name_display = username
-
-        streak_text = f"\n🔥 Текущий стрик: {streak} побед" if streak > 0 else ""
-        
-        mvp_info = ""
-        if tag_set:
-            mvp_info = f"\n\n🏆 Ему присвоен титул \"{mvp_tag}\" и добавлена медалька в профиль!"
-
-        text = (
-            f"\n🥇 {name_display}\n"
-            f"📊 {rank_str} • {mmr} MMR\n\n"
-            f"📈 Результат за неделю:\n"
-            f" └ {week_wins}W / {week_losses}L • WR {winrate}%{streak_text}\n\n"
-            f"Этот игрок показал лучший результат в топе MMR за неделю!{mvp_info}"
-        )
-
-        # Banner URL для победителя недели
-        winner_banner_url = "https://i.ibb.co/Jj3vwbWB/ANQkz.jpg"
-        
-        await bot.send_photo(
-            chat_id=digest_chat_id,
-            photo=winner_banner_url,
-            caption=text,
-            parse_mode="HTML"
-        )
+    if today_msk.hour >= 1:
+        logger.info(f"announce_weekly_mmr_winner: пропуск, уже {today_msk.hour}:00 MSK — окно объявления прошло")
         set_config('mmr_week_top_announced', current_week_start)
-        logger.info(f"announce_weekly_mmr_winner: отправлено поздравление для {username} (неделя {current_week_start})")
+        return
 
-    except Exception as e:
-        logger.error(f"Ошибка в announce_weekly_mmr_winner: {e}", exc_info=True)
+    from database import get_connection, DATABASE_URL
+    conn = get_connection()
+    cursor = conn.cursor()
+    url = urlparse.urlparse(DATABASE_URL)
+    scheme = url.scheme
+    if "postgres" in scheme:
+        cursor.execute(
+            "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND (week_start_date IS NULL OR week_start_date::text != %s)",
+            (current_week_start,)
+        )
+    else:
+        cursor.execute(
+            "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND (week_start_date IS NULL OR week_start_date != ?)",
+            (current_week_start,)
+        )
+    stale_count = cursor.fetchone()[0]
+    cursor.close()
+
+    if stale_count == 0:
+        logger.info("announce_weekly_mmr_winner: все пользователи уже обновлены на новую неделю, пропуск")
+        set_config('mmr_week_top_announced', current_week_start)
+        return
+
+    digest_chat_id = get_config('digest_chat_id')
+    if not digest_chat_id:
+        logger.info("announce_weekly_mmr_winner: чат для дайджеста не настроен")
+        return
+
+    from database import get_dota_week_top_from_db
+    top_users = get_dota_week_top_from_db(5)
+    if not top_users or all(u.get('week_games', 0) == 0 for u in top_users):
+        logger.info("announce_weekly_mmr_winner: нет данных для топа MMR (никто не играл)")
+        set_config('mmr_week_top_announced', current_week_start)
+        return
+
+    active_users = [u for u in top_users if u.get('week_games', 0) > 0]
+    if not active_users:
+        set_config('mmr_week_top_announced', current_week_start)
+        return
+
+    winner = active_users[0]
+    username = winner.get('steam_nickname') or winner.get('username') or 'Игрок'
+    week_wins = winner.get('week_wins', 0)
+    week_games = winner.get('week_games', 0)
+    week_losses = week_games - week_wins
+    winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
+    rank_tier = winner.get('rank_tier', 0)
+    mmr = winner.get('mmr', 0)
+    telegram_id = winner.get('telegram_id')
+    streak = winner.get('week_current_streak', 0)
+
+    prev_winner_tg_id = get_config('current_mvp_telegram_id')
+    prev_winner_tag = get_config('current_mvp_tag')
+    if prev_winner_tg_id and prev_winner_tag and digest_chat_id:
+        try:
+            await bot.set_chat_administrator_custom_title(
+                chat_id=digest_chat_id,
+                user_id=prev_winner_tg_id,
+                custom_title=""
+            )
+            logger.info(f"Забран тег у прошлого победителя {prev_winner_tg_id}")
+        except Exception as e:
+            logger.warning(f"Не удалось забрать тег у прошлого победителя: {e}")
+
+    mvp_tag = "MVP недели"
+    tag_set = False
+    if telegram_id and digest_chat_id:
+        try:
+            await bot.set_chat_administrator_custom_title(
+                chat_id=digest_chat_id,
+                user_id=telegram_id,
+                custom_title=mvp_tag
+            )
+            tag_set = True
+            logger.info(f"Установлен тег {mvp_tag} для победителя {telegram_id}")
+        except Exception as e:
+            logger.warning(f"Не удалось установить тег победителю: {e}")
+
+    if telegram_id:
+        from database import update_user_fields_batch, get_user
+        user = get_user(telegram_id)
+        if user:
+            current_mvp_count = user.get('weekly_mvp_count', 0)
+            update_user_fields_batch(telegram_id, {'weekly_mvp_count': current_mvp_count + 1})
+
+    set_config('current_mvp_telegram_id', str(telegram_id) if telegram_id else "")
+    set_config('current_mvp_tag', mvp_tag)
+
+    ranks = ["🌱 Рекрут", "🔰 Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
+    if rank_tier:
+        tier = min(rank_tier // 10, 8)
+        star = rank_tier % 10
+        if tier < 1 or tier > 8:
+            rank_str = "Без ранга"
+        elif tier == 8:
+            rank_str = ranks[tier - 1]
+        else:
+            rank_str = f"{ranks[tier - 1]} {star}"
+    else:
+        rank_str = "Без ранга"
+
+    name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id else username
+    streak_text = f"\n🔥 Текущий стрик: {streak} побед" if streak > 0 else ""
+    
+    tag_info = ""
+    if tag_set:
+        tag_info = f"\n👤 Ему присвоен титул \"{mvp_tag}\" и добавлена медалька в профиль!"
+
+    text = (
+        f"\n🥇 {name_display}\n"
+        f"📊 {rank_str} • {mmr} MMR\n\n"
+        f"📈 Результат за неделю:\n"
+        f" └ {week_wins}W / {week_losses}L • WR {winrate}%{streak_text}\n\n"
+        f"🏆Этот игрок показал лучший результат в топе MMR за неделю!{tag_info}"
+    )
+
+    winner_banner_url = "https://i.ibb.co/Jj3vwbWB/ANQkz.jpg"
+    
+    await bot.send_photo(
+        chat_id=digest_chat_id,
+        photo=winner_banner_url,
+        caption=text,
+        parse_mode="HTML"
+    )
+    set_config('mmr_week_top_announced', current_week_start)
+    logger.info(f"announce_weekly_mmr_winner: отправлено поздравление для {username} (неделя {current_week_start})")
 
 
 async def update_all_mmr_job(context):
@@ -2172,10 +2157,16 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n🔥 Стрик: {week_streak}/{week_best}"
             
-            # Добавляем количество MVP недель
+            # Добавляем количество медалей за топ-3 недели
             weekly_mvp = target_user.get('weekly_mvp_count', 0)
-            if weekly_mvp > 0:
-                text += f"\n🏆 MVP недели: {weekly_mvp}×"
+            weekly_top2 = target_user.get('weekly_top2_count', 0)
+            weekly_top3 = target_user.get('weekly_top3_count', 0)
+            medals = []
+            if weekly_mvp: medals.append(f"🥇{weekly_mvp}")
+            if weekly_top2: medals.append(f"🥈{weekly_top2}")
+            if weekly_top3: medals.append(f"🥉{weekly_top3}")
+            if medals:
+                text += " " + " ".join(medals)
             
             text += "\n\n🌟 Любимые герои за 50 матчей:"
         else:

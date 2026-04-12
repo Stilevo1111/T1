@@ -617,6 +617,10 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN in_chat INTEGER DEFAULT 1")
             if 'weekly_mvp_count' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN weekly_mvp_count INTEGER DEFAULT 0")
+            if 'weekly_top2_count' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN weekly_top2_count INTEGER DEFAULT 0")
+            if 'weekly_top3_count' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN weekly_top3_count INTEGER DEFAULT 0")
             
             # Создаём индексы для часто используемых полей (улучшение производительности)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)")
