@@ -1862,7 +1862,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Инкремент счётчика для бонусной фиссуры
         global daily_fissure_rolls
+        bonus_triggered = False
         daily_fissure_rolls += 1
+        
+        # Проверяем достигли цели
+        if daily_fissure_rolls >= BONUS_FISSURE_GOAL:
+            bonus_triggered = True
+            daily_fissure_rolls = 0  # сбрасываем после бонуса
         
         slot_msg_ids = []
         
@@ -1958,6 +1964,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Сохраняем original_roll для отображения в мультикасте (до бонусов)
         display_roll = roll
         
+        # Бонус за 10 бросков в день - даём удвоенный ролл
+        if bonus_triggered:
+            roll = roll * 2
+            extra_text = "\n🎁 СУПЕР БОНУС! х2"
+        else:
+            extra_text = ""
+        
         # Бонус для выходных: увеличиваем положительный ролл
         if is_weekend and roll > 0 and not is_fatal:
             bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
@@ -2003,6 +2016,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             extra_text = random.choice(ROLL_MEMES[roll_key])
         else:
             extra_text = random.choice(CATEGORY_PHRASES[category])
+        
+        # Добавляем бонус за 10 бросков
+        if bonus_triggered:
+            extra_text = extra_text + "\n🎁 СУПЕР БОНУС! х2"
         
         if cascade_count > 1 and original_roll is not None:
             roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
