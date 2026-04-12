@@ -1430,7 +1430,7 @@ def calculate_multicast(dice_value: int) -> tuple[int, str]:
 
 # ── Мультикаст (каскадный) ───────────────────────────────────────────
 # Шансы загружаются из bot_config, дефолты здесь
-MULTICAST_DEFAULT_CHANCE = 0.10
+MULTICAST_DEFAULT_CHANCE = 0.15
 MULTICAST_CASCADE = [0.75, 0.50, 0.40]  # [не используется, ×3 шанс, ×4 шанс]
 
 ZEUS_DEFAULT_CHANCE = 0.05
