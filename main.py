@@ -1554,25 +1554,25 @@ def get_event_stats_text():
 
 MULTICAST_TEXTS = {
     2: [
-        "🧙‍♂️ ОГР МАГ: \"Ignorant fool! Double the magic!\"",
-        "🧙‍♂️ ОГР МАГ: \"You have got to be kidding me! Double power!\"",
-        "🧙‍♂️ ОГР МАГ: \"This is an outrage! Double spell!\"",
-        "🧙‍♂️ ОГР МАГ: \"How dare you? Double strength!\"",
-        "🧙‍♂️ ОГР МАГ: \"Pathetic! But double magic!\""
+        "🧙‍♂️ ОГР МАГ: \"You have got to be kidding me!\"",
+        "🧙‍♂️ ОГР МАГ: \"Ignorant fool!\"",
+        "🧙‍♂️ ОГР МАГ: \"This is an outrage!\"",
+        "🧙‍♂️ ОГР МАГ: \"How dare you?\"",
+        "🧙‍♂️ ОГР МАГ: \"Pathetic!\""
     ],
     3: [
-        "🧙‍♂️ ОГР МАГ: \"Triple threat! I am the greatest!\"",
-        "🧙‍♂️ ОГР МАГ: \"You have got to be kidding me! Triple power!\"",
-        "🧙‍♂️ ОГР МАГ: \"This is an outrage! Triple spell!\"",
-        "🧙‍♂️ ОГР МАГ: \"How dare you? Triple strength!\"",
-        "🧙‍♂️ ОГР МАГ: \"Triple magic! Unbelievable!\""
+        "🧙‍♂️ ОГР МАГ: \"I am the greatest!\"",
+        "🧙‍♂️ ОГР МАГ: \"You have got to be kidding me!\"",
+        "🧙‍♂️ ОГР МАГ: \"This is an outrage!\"",
+        "🧙‍♂️ ОГР МАГ: \"How dare you?\"",
+        "🧙‍♂️ ОГР МАГ: \"Unbelievable!\""
     ],
     4: [
-        "🧙‍♂️ ОГР МАГ: \"Quadruple power! I am the greatest!\"",
-        "🧙‍♂️ ОГР МАГ: \"You have got to be kidding me! Quadruple magic!\"",
-        "🧙‍♂️ ОГР МАГ: \"This is an outrage! Quadruple spell!\"",
-        "🧙‍♂️ ОГР МАГ: \"How dare you? Quadruple strength!\"",
-        "🧙‍♂️ ОГР МАГ: \"Quadruple threat! Legendary!\""
+        "🧙‍♂️ ОГР МАГ: \"I am the greatest!\"",
+        "🧙‍♂️ ОГР МАГ: \"You have got to be kidding me!\"",
+        "🧙‍♂️ ОГР МАГ: \"This is an outrage!\"",
+        "🧙‍♂️ ОГР МАГ: \"How dare you?\"",
+        "🧙‍♂️ ОГР МАГ: \"Legendary!\""
     ]
 }
 
