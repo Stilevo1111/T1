@@ -412,7 +412,7 @@ async def morning_digest_job(context):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n🎁 Бонус: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n{MORNING_DIGEST_FOOTER}"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n{MORNING_DIGEST_FOOTER}"
         
         bot = context.application.bot
         
@@ -519,7 +519,7 @@ async def refresh_digest_message(bot):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n🎁 Бонус: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n{MORNING_DIGEST_FOOTER}"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n{MORNING_DIGEST_FOOTER}"
         
         last_message_id = get_config('daily_digest_message_id')
         if last_message_id:
