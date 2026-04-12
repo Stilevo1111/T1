@@ -1971,7 +1971,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             extra_text = random.choice(CATEGORY_PHRASES[category])
         
-        # Добавляем бонус за 10 бросков
+        # Добавляем бонус за 10 бросков (если бонус доступен)
+        bonus_triggered = bonus_time > 0 and (now - bonus_time) < BONUS_EXPIRE
         if bonus_triggered:
             extra_text = extra_text  # уже добавлено выше
         
