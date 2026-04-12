@@ -571,9 +571,9 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 self.manual = True
 
         manual_context = ManualContext(context.application, context.bot)
-        await morning_digest_job(manual_context)
+        await alternate_digest_job(manual_context)
 
-        msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ Утренний дайджест для этого чата создан/обновлён.")
+        msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ Фиссура дайджест обновлён!")
         if chat.type in ['group', 'supergroup', 'channel']:
             schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
     except Exception as e:
