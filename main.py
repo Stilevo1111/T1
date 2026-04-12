@@ -1737,8 +1737,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if has_bonus:
             # Бонус - пропускаем кулдаун
             bonus_ready_users.pop("all", None)
-        elif now - user["last_fissure"] < COOLDOWN:
-            wait = COOLDOWN - (now - user["last_fissure"])
+        elif now - (user.get("last_fissure") or 0) < COOLDOWN:
+            wait = COOLDOWN - (now - (user.get("last_fissure") or 0))
             elapsed = COOLDOWN - wait
             filled = int(elapsed / COOLDOWN * 10)
             bar = "🟩" * filled + "⬜️" * (10 - filled)
