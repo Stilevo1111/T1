@@ -547,91 +547,6 @@ async def refresh_digest_message(bot):
         logger.error(f"Ошибка в refresh_digest_message: {e}", exc_info=True)
 
 
-async def weekly_digest_job(context):
-    """Еженедельный дайджест (по расписанию) - ОТКЛЮЧЕН"""
-    return  # Отключено
-    
-    try:
-        # Блокировка от параллельного запуска
-        import time
-        last_run = get_config('weekly_digest_last_run')
-        now = time.time()
-        if last_run and (now - float(last_run)) < WEEKLY_JOB_COOLDOWN:
-            logger.info(f"weekly_digest_job: пропуск (запущен {(now - float(last_run)):.1f}с назад)")
-            return
-        set_config('weekly_digest_last_run', str(now))
-        
-        logger.info("Запуск еженедельного дайджеста")
-        
-        digest_chat_id = get_config('digest_chat_id')
-        if not digest_chat_id:
-            logger.info("Чат для дайджеста не настроен")
-            return
-        
-        stats = get_weekly_digest_stats()
-        
-        text = f"{WEEKLY_DIGEST_HEADER}\n\n"
-        
-        # Больше всех вырос в см за неделю
-        growth_player, growth_cm = stats.get("top_growth_cm", ("None", 0))
-        growth_id = stats.get("top_growth_cm_id")
-        
-        def make_clickable_weekly(name, user_id):
-            if name and name != "None" and user_id:
-                return f"<a href=\"tg://user?id={user_id}\">{name}</a>"
-            return name if name and name != "None" else "—"
-        
-        growth_display = make_clickable_weekly(growth_player, growth_id)
-        if growth_player and growth_player != "None":
-            text += f"🍆 Больше всех вырос: {growth_display} (+{growth_cm:.0f} см)\n"
-        
-        # Прорыв недели: кто поднялся на больше всего позиций в топе
-        breakthrough_player, breakthrough_pos = stats.get("breakthrough", ("None", 0))
-        breakthrough_id = stats.get("breakthrough_id")
-        breakthrough_display = make_clickable_weekly(breakthrough_player, breakthrough_id)
-        if breakthrough_player and breakthrough_player != "None":
-            text += f"🔥 Прорыв недели: {breakthrough_display} (+{breakthrough_pos} позиций)\n"
-        
-        total_rolls = stats.get("total_rolls_week", 0)
-        new_players = stats.get("new_players_week", 0)
-        total_growth = stats.get("total_growth_week", 0)
-        
-        text += f"\n📊 Статистика недели:\n"
-        text += f"• Всего бросков: {total_rolls}\n"
-        text += f"• Новых игроков: {new_players}\n"
-        text += f"• Общий рост: +{total_growth:.0f} см\n"
-        
-        bot = context.application.bot
-        
-        last_message_id = get_config('weekly_digest_message_id')
-        if last_message_id and last_message_id != "None":
-            try:
-                await bot.edit_message_text(
-                    chat_id=digest_chat_id,
-                    message_id=int(last_message_id),
-                    text=text,
-                    parse_mode="HTML"
-                )
-                update_weekly_digest_snapshot()
-                return
-            except Exception as e:
-                logger.info(f"Не удалось отредактировать еженедельный дайджест: {e}")
-                # Удаляем старое сообщение перед созданием нового, чтобы не дублировать
-                set_config('weekly_digest_message_id', None)
-                try:
-                    await bot.delete_message(chat_id=digest_chat_id, message_id=int(last_message_id))
-                    logger.info(f"Старое сообщение дайджеста {last_message_id} удалено")
-                except Exception as del_err:
-                    logger.debug(f"Не удалось удалить старое сообщение {last_message_id}: {del_err}")
-        
-        msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
-        set_config('weekly_digest_message_id', msg.message_id)
-        update_weekly_digest_snapshot()
-        
-    except Exception as e:
-        logger.error(f"Ошибка в weekly_digest_job: {e}", exc_info=True)
-
-
 async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ручной запуск утреннего дайджеста в этот чат"""
     try:
@@ -1513,7 +1428,7 @@ MORNING_DIGEST_HEADER = "🌅ФИССУРА ДАЙДЖЕСТ"
 MORNING_DIGEST_FOOTER = "🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
 DOTA_DIGEST_HEADER = "🎮 DOTA ДАЙДЖЕСТ 📊"
 DOTA_DIGEST_FOOTER = "🔺 = лучший винрейт за неделю\n🔻 = худший винрейт за неделю\n🔸 = текущий стрик побед"
-# WEEKLY_DIGEST_HEADER = "🌅 ЕЖЕНЕДЕЛЬНЫЙ ДАЙДЖЕСТ"
+# # WEEKLY_DIGEST_HEADER удалён
 
 # Ожидание анимации dice
 DICE_ANIMATION_DELAY = 1.0
