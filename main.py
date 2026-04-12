@@ -1879,7 +1879,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Отправляем оповещение в чат
             bonus_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"🎁 {display_username} накопил 10 бросков за день! Может крутить ещё раз БЕЗ кулдауна!"
+                text=f"🎁 Игроки выполнили задание на 10 бросков в день! Может крутить фиссуру ещё раз БЕЗ кулдауна!"
             )
             schedule_delete(context.bot, chat_id, bonus_msg.message_id, 30, context.application.job_queue)
         

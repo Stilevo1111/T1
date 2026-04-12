@@ -479,9 +479,10 @@ async def check_activity_job(context, config_func=None):
     if msk_hour == 0:
         sent_morning_greeting[chat_id] = False
         sent_night_message[chat_id] = False
-        # Сброс счётчика бонусной фиссуры
-        from main import daily_fissure_rolls
+        # Сброс счётчика бонусной фиссуры и бонусов игроков
+        from main import daily_fissure_rolls, bonus_ready_users
         daily_fissure_rolls = 0
+        bonus_ready_users = {}  # сгорают бонусы
     
     # Сброс флага ночи в 09:00 (чтобы не зависло)
     
