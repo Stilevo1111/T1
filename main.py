@@ -3026,35 +3026,22 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result_text = random.choice(ROLL_TEXTS[roll_key])
         else:
             result_text = f"{'+' if roll > 0 else ''}{roll} см"
-        
+
         extra_text = random.choice(CATEGORY_PHRASES.get("up" if roll > 0 else ("down" if roll < 0 else "same"), [""]))
-        
-        logger.info(f"testfissure: cascade_count={cascade_count}, multicast_text={multicast_text}")
-        
-        if cascade_count > 1:
-            roll_display = f"+{roll}" if roll > 0 else str(roll)
-            mc_level = f"×{cascade_count}"
-            text = (
-                f"🎲 {display_username}\n\n"
-                f"🧪 ТЕСТ (без записи в БД)\n\n"
-                f"{extra_text}\n"
-                f"{multicast_text}\n\n"
-                f"⚡ МУЛЬТИКАСТ{mc_level}  {roll_display} CM\n\n"
-                f"📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
-            )
-        else:
-            text = (
-                f"🎲 {display_username}\n\n"
-                f"🧪 ТЕСТ (без записи в БД)\n"
-                f"{result_text}\n"
-                f"{extra_text}\n\n"
-                f"📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
-            )
-        
+
+        text = (
+            f"🎲 {display_username}\n\n"
+            f"{result_text}\n"
+            f"{extra_text}"
+        )
+
         if is_fatal and protection_msg:
             text = f"{text}\n{protection_msg}"
         if weekend_bonus:
             text = f"{text}\n{weekend_bonus}"
+
+        # Изменение фиссуры всегда в самом низу
+        text = f"{text}\n\n📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
         if zeus_text:
             text = f"{text}\n{zeus_text}"
         
