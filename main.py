@@ -1051,13 +1051,18 @@ async def alternate_digest_job(context):
                     await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
                     logger.info(f"Дайджест {msg.message_id} закреплён")
                     
-                    # Удаляем системное сообщение о закрепе (старое, НЕ новое)
-                    if old_pinned_id and old_pinned_id != msg.message_id:
-                        try:
-                            await bot.delete_message(chat_id=digest_chat_id, message_id=old_pinned_id)
-                            logger.debug(f"Удалено системное сообщение о закрепе {old_pinned_id}")
-                        except Exception as e:
-                            logger.debug(f"Не удалось удалить системное сообщение: {e}")
+                    # Удаляем системное сообщение о закрепе - это сообщение ДО дайджеста
+                    try:
+                        # Получаем последние сообщения чтобы найти системное
+                        messages = await bot.get_chat_history(chat_id=digest_chat_id, limit=2)
+                        for m in messages:
+                            # Системное сообщение о закрепе обычно содержит "закрепил"
+                            if m.message_id != msg.message_id and hasattr(m, 'text') and m.text and 'закрепил' in m.text.lower():
+                                await bot.delete_message(chat_id=digest_chat_id, message_id=m.message_id)
+                                logger.debug(f"Удалено системное сообщение о закрепе {m.message_id}")
+                                break
+                    except Exception as e:
+                        logger.debug(f"Не удалось удалить системное сообщение: {e}")
                 except Exception as e:
                     logger.debug(f"Не удалось закрепить: {e}")
             finally:
