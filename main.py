@@ -1043,22 +1043,13 @@ async def alternate_digest_job(context):
                     pinned_msg = getattr(chat_info, 'pinned_message', None)
                     if pinned_msg:
                         old_pinned_id = pinned_msg.message_id
-                        await bot.unpin_chat_message(chat_id=digest_chat_id)
+                    await bot.unpin_chat_message(chat_id=digest_chat_id)
                 except Exception as e:
                     logger.debug(f"Не удалось открепить старый: {e}")
                 
                 try:
                     await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
                     logger.info(f"Дайджест {msg.message_id} закреплён")
-                    
-                    # Удаляем системное сообщение о закрепе (только если был старый закреп)
-                    if old_pinned_id:
-                        try:
-                            # Удаляем старое системное сообщение о закрепе (если оно ещё существует)
-                            # Но НЕ удаляем новый дайджест!
-                            pass  # Старая логика удаляла не то что нужно
-                        except Exception as e:
-                            logger.debug(f"Не удалось удалить системное сообщение: {e}")
                 except Exception as e:
                     logger.debug(f"Не удалось закрепить: {e}")
             finally:
