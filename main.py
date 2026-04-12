@@ -1554,25 +1554,25 @@ def get_event_stats_text():
 
 MULTICAST_TEXTS = {
     2: [
-        "🧙‍♂️ ОГР МАГ: \"You have got to be kidding me!\"",
-        "🧙‍♂️ ОГР МАГ: \"Ignorant fool!\"",
-        "🧙‍♂️ ОГР МАГ: \"This is an outrage!\"",
-        "🧙‍♂️ ОГР МАГ: \"How dare you?\"",
-        "🧙‍♂️ ОГР МАГ: \"Pathetic!\""
+        "🧙‍♂️ ОГР МАГ: \"Ты шутишь что ли?!\"",
+        "🧙‍♂️ ОГР МАГ: \"Глупый дурак!\"",
+        "🧙‍♂️ ОГР МАГ: \"Это возмутительно!\"",
+        "🧙‍♂️ ОГР МАГ: \"Как ты посмел?!\"",
+        "🧙‍♂️ ОГР МАГ: \"Жалкий!\""
     ],
     3: [
-        "🧙‍♂️ ОГР МАГ: \"I am the greatest!\"",
-        "🧙‍♂️ ОГР МАГ: \"You have got to be kidding me!\"",
-        "🧙‍♂️ ОГР МАГ: \"This is an outrage!\"",
-        "🧙‍♂️ ОГР МАГ: \"How dare you?\"",
-        "🧙‍♂️ ОГР МАГ: \"Unbelievable!\""
+        "🧙‍♂️ ОГР МАГ: \"Я величайший!\"",
+        "🧙‍♂️ ОГР МАГ: \"Ты шутишь что ли?!\"",
+        "🧙‍♂️ ОГР МАГ: \"Это возмутительно!\"",
+        "🧙‍♂️ ОГР МАГ: \"Как ты посмел?!\"",
+        "🧙‍♂️ ОГР МАГ: \"Невероятно!\""
     ],
     4: [
-        "🧙‍♂️ ОГР МАГ: \"I am the greatest!\"",
-        "🧙‍♂️ ОГР МАГ: \"You have got to be kidding me!\"",
-        "🧙‍♂️ ОГР МАГ: \"This is an outrage!\"",
-        "🧙‍♂️ ОГР МАГ: \"How dare you?\"",
-        "🧙‍♂️ ОГР МАГ: \"Legendary!\""
+        "🧙‍♂️ ОГР МАГ: \"Я величайший!\"",
+        "🧙‍♂️ ОГР МАГ: \"Ты шутишь что ли?!\"",
+        "🧙‍♂️ ОГР МАГ: \"Это возмутительно!\"",
+        "🧙‍♂️ ОГР МАГ: \"Как ты посмел?!\"",
+        "🧙‍♂️ ОГР МАГ: \"Легендарно!\""
     ]
 }
 
@@ -2923,65 +2923,72 @@ async def testfissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             slot_emojis = ["🍒", "🍋", "🍇", "🔔", "💎"]
             multicast_text = ""
             cascade_count = 1
-            
+
             # Проверяем переход на x2 (скрытый рандом 75%)
             if random.random() < 0.75:
                 cascade_count = 2
                 # Показываем джекпот (3 одинаковых) - анимация x2
                 jackpot_symbol = random.choice(slot_emojis)
                 slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-                
-                await context.bot.send_message(
+
+                slot_msg = await context.bot.send_message(
                     chat_id=chat_id,
                     text=f"🎰 {' | '.join(slots)} | x2"
                 )
                 await asyncio.sleep(1)
-                
+
                 # Проверяем переход на x3 (скрытый рандом 25%)
                 if random.random() < 0.25:
                     cascade_count = 3
                     # Показываем джекпот - анимация x3
                     jackpot_symbol = random.choice(slot_emojis)
                     slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-                    
-                    await context.bot.send_message(
+
+                    await context.bot.edit_message_text(
                         chat_id=chat_id,
+                        message_id=slot_msg.message_id,
                         text=f"🎰 {' | '.join(slots)} | x3"
                     )
                     await asyncio.sleep(1)
-                    
+
                     # Проверяем переход на x4 (скрытый рандом 15%)
                     if random.random() < 0.15:
                         cascade_count = 4
                         # Показываем джекпот - анимация x4
                         jackpot_symbol = random.choice(slot_emojis)
                         slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-                        
-                        await context.bot.send_message(
+
+                        await context.bot.edit_message_text(
                             chat_id=chat_id,
+                            message_id=slot_msg.message_id,
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
                     else:
                         # Не попали в x4 - показываем проигрышный спин и финиш на x3
                         slots = random.sample(slot_emojis, 3)
-                        await context.bot.send_message(
+                        await context.bot.edit_message_text(
                             chat_id=chat_id,
+                            message_id=slot_msg.message_id,
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
                         cascade_count = 3
                 else:
                     # Не попали в x3 - показываем проигрышный спин и финиш на x2
                     slots = random.sample(slot_emojis, 3)
-                    await context.bot.send_message(
+                    await context.bot.edit_message_text(
                         chat_id=chat_id,
+                        message_id=slot_msg.message_id,
                         text=f"🎰 {' | '.join(slots)} | x3"
                     )
                     cascade_count = 2
+
+                # Удаляем сообщение со слотами через 3 секунды
+                schedule_delete(context.bot, chat_id, slot_msg.message_id, 3, context.application.job_queue)
             else:
                 # Не попали в x2 - обычный ролл (не мультикаст)
                 cascade_count = 1
                 return  # выходим из мультикаста, делаем обычный ролл
-            
+
             roll = roll * cascade_count
             logger.info(f"testfissure multicast: roll after multiply={roll}, cascade_count={cascade_count}")
             if cascade_count > 1:
