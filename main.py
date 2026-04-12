@@ -1111,77 +1111,215 @@ ROLL_TEXTS = {
 
 ROLL_MEMES = {
     50: [
-        "💪 Ваша фиссура больше, чем чья-то самооценка!",
-        "🔍 Прохожий: 'А что это за большая штука?'",
-        "📺 Теперь можно создавать OnlyFissures канал!"
+        "💀 TIDEHUNTER ULT! Полная карта в стане!",
+        "🌀 MYTHIC! Это как Refresher на 2-х героях!",
+        "🎯 SKYWRATH MAGE: 'ППЦ ДАУН!'",
+        "🧙‍♂️ DARK SEER: 'WALL OF REVERB!'",
+        "⚡ Вжух - и +50! Как Syllabear с Aghanim's!"
     ],
     30: [
-        "🎁 Это как найти 1000 рублей в старых джинсах!",
-        "🛋️ Теперь можно достать пульт не вставая!",
-        "💵 Поздравления в рублях, долларах и см!"
+        "🔥 EARTHSHAKER ULT! Полная станка!",
+        "🎰 GAMBIT! -50% шанс, 100% импакт!",
+        "🛡 INVOKER: 'КУБ!' и +30см!",
+        "🌪️ VAIPER: 'NITRO BOOST!'",
+        "⚔️ SLARDAR: 'ПОДВОДНАЯ! +30 СМ!'"
     ],
     20: [
-        "📈 Ваша фиссура выросла больше, чем акции Теслы!",
-        "🎤 Это уже не фиссура, а ФИССУУУРА!",
-        "📏 Размер имеет значение! (оказалось, что да)"
+        "🎯 AXE: 'COME GET SOME!' +20!",
+        "💪 JUGG: 'MOTHER OF GOD!' +20!",
+        "⚔️ PA: 'ЧИТАЙ НИК!' - а, не, +20!",
+        "🗡️ SPECTRE: 'HAUNTING!' +20!",
+        "🦴 SKELETON KING: 'REVENANT!' +20!"
+    ],
+    15: [
+        "🪄 PUCK: 'SHIFT STAY!' +15!",
+        "👻 WRAITH KING: 'VAMPIRES!' +15!",
+        "🌙 LUNA: 'MOON GLAIVE!' +15!",
+        "🔥 BRISTLEBACK: 'WARDEN!' +15!",
+        "🦅 HAWK: 'ZOOM!' +15!"
     ],
     10: [
-        "🎰 Это как получить бонус в понедельник!",
-        "🌱 Фиссура: 'Я расту!'",
-        "🏠 Теперь вы на 10 см ближе к потолку!"
+        "👶 MEDUSA: 'STONE GAZE!' +10!",
+        "🕷️ VENOMANCER: 'VENOM!' +10!",
+        "🐺 LYCAN: 'SUMMON!' +10!",
+        "⚗️ TINKER: 'LASER!' +10!",
+        "🦊 PHOENIX: 'SUPERNOVA!' +10!"
+    ],
+    9: [
+        "💨 DROW: 'PRECISION!' +9!",
+        "🦇 BATRIDER: 'STICKY!' +9!",
+        "🐛 CENTAUR: 'HOOF!' +9!",
+        "🌕 ECLIPSE! +9!",
+        "🐺 WOLF: 'CHOMP!' +9!"
+    ],
+    8: [
+        "👻 SNY: 'MIGHT!' +8!",
+        "🪨 PANGOLIER: 'ROLL!' +8!",
+        "🦴 BONE: 'CLANG!' +8!",
+        "⚔️ TUSK: 'SNOWBALL!' +8!",
+        "💀 UNDERLORD: 'ATROPHY!' +8!"
+    ],
+    7: [
+        "🐊 CROC: 'CHOMP!' +7!",
+        "🎪 PUGNA: 'NETHERS!' +7!",
+        "⚡ LISMANDER: 'ULTIMATE!' +7!",
+        "👻 GHOUL: 'FEAR!' +7!",
+        "🧟 WRAITH: 'TERROR!' +7!"
+    ],
+    6: [
+        "💧 TIDE: 'RAVAGE!' +6!",
+        "👺 URSAS: 'ROAR!' +6!",
+        "🦊 KUNKA: 'DOCKS!' +6!",
+        "🪓 TIMBER: 'CHAINSAW!' +6!",
+        "🦴 SKELETON: 'SASHA!' +6!"
     ],
     5: [
-        "💰 Это как найти 500 рублей в кармане!",
-        "😄 Среднестатистический русский доволен!",
-        "📐 Можно мерить икеевской линейкой!"
+        "🧠 PUDGE: 'MEAT HOOK!' +5!",
+        "🎯 SLARK: 'PITCH!' +5!",
+        "🕷️ WEAVER: 'TIME!' +5!",
+        "👻 PHANTOM: 'RARITY!' +5!",
+        "🐺 WOLF: 'HOWL!' +5!"
+    ],
+    4: [
+        "🛡️ BAHAMUT: 'SIEGE!' +4!",
+        "🔔 MECH: 'MECH!' +4!",
+        "🎪 CM: 'FROST!' +4!",
+        "🐛 BROOD: 'SPIDER!' +4!",
+        "👺 ORACLE: 'FORTUNE!' +4!"
     ],
     3: [
-        "🎊 Три сантиметра счастья!",
-        "💵 Как три рубля в кошельке - мелочь, но приятно!",
-        "🐢 Медленно, но верно!"
+        "💨 WIND: 'RUN!' +3!",
+        "🎲 DICE: '3!' +3!",
+        "🦋 BUTTERFLY: 'FLAP!' +3!",
+        "🪰 BOTTLE: 'FLY!' +3!",
+        "🌱 TREANT: 'GROW!' +3!"
+    ],
+    2: [
+        "👣 TINY: 'TOSS!' +2!",
+        "🐦 HOOT: 'TWEET!' +2!",
+        "🪲 BUG: 'CRAWL!' +2!",
+        "🐝 BEE: 'BUZZ!' +2!",
+        "🌿 GRASS: 'GROW!' +2!"
     ],
     1: [
-        "💪 Маленький, но гордый!",
-        "✅ Один см лучше, чем ноль см!",
-        "🙏 Фиссура сказала: 'Я стараюсь!'",
-        "🌱 Будет и на вашей улице праздник!"
+        "🤏 MICRO! +1!",
+        "🪙 COIN: 'HEADS!' +1!",
+        "🎲 REROLL: '1!' +1!",
+        "⚡ STATIC: 'ZAP!' +1!",
+        "🕯️ CANDLE: 'FLICKER!' +1!"
     ],
     0: [
-        "🛡️ Стабильность - признак мастерства!",
-        "😴 Фиссура решила отдохнуть!",
-        "➡️ Ни уменьшилось, ни увеличилось!"
+        "🧘 MEDITATE: 'ОММММ...' 0!",
+        "🕐 AFK: 'BRB...' 0!",
+        "❄️ FROZEN: 'СТОП!' 0!",
+        "🏕️ CAMP: 'LAG...' 0!",
+        "💤 SLEEP: 'ZZZ...' 0!"
     ],
     -1: [
-        "🥗 Фиссура на диете!",
-        "👣 Один маленький шаг назад для большого прыжка вперёд!",
-        "🔥 Один сантиметр сгорел... как спичка!"
+        "💀 COUPLE: 'ПАДАЕТ!' -1!",
+        "🔪 SLITHER: 'GASH!' -1!",
+        "📉 DOWN: '1 CM!' -1!",
+        "⬇️ WARD: 'DEWARD!' -1!",
+        "😵 BKB: 'BREAK!' -1!"
+    ],
+    -2: [
+        "💀 SKELETON: 'DIE!' -2!",
+        "🔻 BACK: 'TWO!' -2!",
+        "🦴 BONE: 'CRACK!' -2!",
+        "🪦 GRAVE: 'SLEEP!' -2!",
+        "💔 HEART: 'LOSS!' -2!"
     ],
     -3: [
-        "📉 Три сантиметра в никуда!",
-        "😤 Фиссура чихнула!",
-        "⚖️ Гравитация побеждает в этом раунде!",
-        "😤 Ганкнули на ровном месте!"
+        "☠️ DEMON: 'KILL!' -3!",
+        "🩸 PUDGE: 'ROT!' -3!",
+        "💀 SKELETON: 'DEAD!' -3!",
+        "⚰️ COFFIN: 'ВЫРОВНЯЛ!' -3!",
+        "🌑 LUNA: 'ECLIPSE!' -3!"
+    ],
+    -4: [
+        "💀 WRAITH: '4!' -4!",
+        "🦇 VAMPIRE: 'DRAIN!' -4!",
+        "🔪 PANGOLIER: 'SWORD!' -4!",
+        "🗡️ ASSASSIN: 'STAB!' -4!",
+        "⚔️ DUEL: 'LOSE!' -4!"
     ],
     -5: [
-        "😢 Это временно, не переживай!",
-        "🔄 Завтра будет лучше!"
+        "💀 RAPTOR: 'FEED!' -5!",
+        "☠️ PANDARE: 'ULT!' -5!",
+        "🧟 NECRO: 'REAPER!' -5!",
+        "💀 MORTS: 'LIFE!' -5!",
+        "👻 GHOST: 'POOF!' -5!"
+    ],
+    -6: [
+        "💥 BLAST: 'BOOM!' -6!",
+        "🔥 FIRE: 'BURN!' -6!",
+        "💣 BOMB: 'BOOM!' -6!",
+        "🌋 ERUPT: 'CRATER!' -6!",
+        "⚡ SHOCK: 'ZAP!' -6!"
     ],
     -7: [
-        "😢 Семёрка не встала!",
-        "💔 Больно, но не критично!"
+        "💀 PIT: 'INFERNAL!' -7!",
+        "☠️ ABYSS: 'DEEP!' -7!",
+        "🕳️ VOID: '黑洞!' -7!",
+        "🌑 SHADOW: 'DARK!' -7!",
+        "👺 DEMON: 'EVIL!' -7!"
     ],
     -8: [
-        "😬 Восемь причин плакать!",
-        "💀 Кошелёк опустел на 8 см!"
+        "💥 MEGA: 'PUSH!' -8!",
+        "🗡️ SNIPER: 'HEADSHOT!' -8!",
+        "⚔️ RAMPAGE: 'ВЫНЕС!' -8!",
+        "💀 WIPE: 'СМЕРТЬ!' -8!",
+        "🔥 MOLODOV: 'ОГОНЬ!' -8!"
+    ],
+    -9: [
+        "💀 BLACK: 'HOLE!' -9!",
+        "🕳️ SPHERE: 'VOID!' -9!",
+        "⚡ SHUKU: 'MEGA!' -9!",
+        "👻 PHANTOM: 'DEAD!' -9!",
+        "☠️ PLAGUE: 'DEATH!' -9!"
     ],
     -10: [
-        "💥 Десять причин не играть!",
-        "🌋 Вулкан из слёз!"
+        "💀 ULTIMATE: 'NOOOO!' -10!",
+        "☠️ DEATH: 'RIP!' -10!",
+        "💥 ARMAGEDDON: 'ТУТА!' -10!",
+        "🔥 HELL: 'FIRE!' -10!",
+        "⚰️ GRAVEYARD: 'ВСЕ!' -10!"
+    ],
+    -11: [
+        "💀 MEGA: 'WIPE!' -11!",
+        "☠️ SAY: 'GEG!' -11!",
+        "🧟 PLAGUE: 'ALL!' -11!",
+        "💀 RAPTOR: 'FEED!' -11!",
+        "🌋 SUPERNOVA: 'BOOM!' -11!"
+    ],
+    -12: [
+        "⚔️ SIEGE: 'LOST!' -12!",
+        "💥 PUSH: 'FAILED!' -12!",
+        "🗡️ CRIT: 'DEAD!' -12!",
+        "🛡️ TOWER: 'FALL!' -12!",
+        "💀 GAME: 'OVER!' -12!"
+    ],
+    -13: [
+        "☠️ ANNIHILATION! -13!",
+        "💀 TOTAL WIPE! -13!",
+        "🧟 ARMY: 'DEAD!' -13!",
+        "💥 MEGA: 'THROW!' -13!",
+        "🔥 RAGE: 'FEED!' -13!"
+    ],
+    -14: [
+        "💀 FATAL: 'ERROR!' -14!",
+        "☠️ PERMA: 'DEATH!' -14!",
+        "⚔️ GG: 'WP!' -14!",
+        "💥 BUG: 'CRASH!' -14!",
+        "🧟 ZOMBIES: 'EAT!' -14!"
     ],
     -15: [
-        "💀 Полный нокаут!",
-        "🌋 Мама, я упал!"
-    ]
+        "💀 TRASH: 'BIN!' -15!",
+        "☠️ PANDEMONIUM! -15!",
+        "💥 CATACLYSM! -15!",
+        "🧟 APOCALYPSE! -15!",
+        "⚰️ НЕКРОПОСТ: 'ВЫНЕСЕН!' -15!"
+    ],
 }
 
 CATEGORY_PHRASES = {
