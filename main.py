@@ -1110,215 +1110,75 @@ ROLL_TEXTS = {
 }
 
 ROLL_MEMES = {
+    75: [
+        "👁️ «Я ВИДЕЛ БУДУЩЕЕ — ТЕБЯ ТАМ НЕТ» (Войд)",
+        "⚔️ «ЗА НАЙТСИЛЬВЕР!» (Мирана)",
+        "🌑 «ИЗ МРАКА!» (НС)"
+    ],
     50: [
-        "💀 TIDE: 'RAVAGE!' +50!",
-        "🌀 EARTHSHAKER: 'FIDDLER!' +50!",
-        "🎯 ENIGMA: 'BLACK HOLE!' +50!",
-        "⚡ MAG: 'REPEL!' +50!",
-        "💥 SAND KING: 'ULT!' +50!"
+        "💥 «ХАОС ДАНК!» (СиКей)",
+        "🩹 «РАЗЛОМ ИСЦЕЛЯЕТСЯ!» (СК)",
+        "🩸 «ЦАРСТВО КРОВИ!» (Блад)"
     ],
     30: [
-        "🔥 BKB! +30!",
-        "🛡️Linken's Sphere! +30!",
-        "🎰 OMNI: 'RIGHTEOUS!' +30!",
-        "🗡️ JUGG: 'OMNI!' +30!",
-        "💪 SVEN: 'STORM!' +30!"
+        "🔥 «ДУХАМИ ЗАКЛИНАЮ!» (Эмбер)",
+        "🛡️ «ЗА МОЙ НАРОД!» (Свен)",
+        "⚜️ «КЛЯТВА ПРИНЕСЕНА!» (Омни)"
     ],
     20: [
-        "🎯 Sniper: 'HEADSHOT!' +20!",
-        "⚔️ PA: 'COUPLE!' +20!",
-        "💪 URSA: 'ROAR!' +20!",
-        "🗡️ RIKI: 'BACKSTAB!' +20!",
-        "🦴 SK: 'EPICENTER!' +20!"
+        "🌹 «ПРОКЛЯТИЕ РОЗЫ!» (КоП)",
+        "🔨 «Я НЕСУ МОЛОТ!» (Омни)",
+        "🗡️ «ОДИН КЛИНОК — ОДНА ЦЕЛЬ» (Джагг)"
     ],
     15: [
-        "🔥 STORM: 'SPIRIT!' +15!",
-        "⚡ ZEUS: 'ULT!' +15!",
-        "🌀 PUCK: 'ORB!' +15!",
-        "💨 VOID: 'TIME!' +15!",
-        "🎯 CLOCK: 'COG!' +15!"
+        "✨ «Я — СВЕТ!» (КотЛ)",
+        "🏹 «СТРАННИЦА ВОЗВРАЩАЕТСЯ» (ВР)",
+        "😈 «ПЛАЧЬ ЕЩЁ!» (ЛЦ)"
     ],
     10: [
-        "👶 MIRANA: 'ARROW!' +10!",
-        "🕷️ BK: 'POISON!' +10!",
-        "🐺 WOLF: 'HOWL!' +10!",
-        "💀 LICH: 'ULT!' +10!",
-        "👻 NIGHTSTALKER: 'VOID!' +10!"
+        "🚫 «МАГИЯ — ОТСТОЙ!» (АМ)",
+        "👑 «ЗА ПОСЛЕДНЕГО КОРОЛЯ!» (ВК)",
+        "🕳️ «БЕЗДНА ЗОВЁТ» (Войд)"
     ],
     9: [
-        "💨 DROW: 'STACK!' +9!",
-        "⚔️ CK: 'CHAOS!' +9!",
-        "🗡️ BA: 'SLASH!' +9!",
-        "🔥 PHOENIX: 'EGG!' +9!",
-        "🌙 LUNA: 'BEAM!' +9!"
-    ],
-    8: [
-        "💧 TIDE: 'ANCHOR!' +8!",
-        "👺 OGRE: 'FIRE!' +8!",
-        "🦊 KUNKA: 'X!' +8!",
-        "🪓 TIMBER: 'WHIRL!' +8!",
-        "⚔️ MAG: 'PULSE!' +8!"
-    ],
-    7: [
-        "🦴 SKELETON: 'SMASH!' +7!",
-        "💀 NECRO: 'REAP!' +7!",
-        "👻 SPECTRE: 'HAUNT!' +7!",
-        "🧟 PUGNA: 'ULT!' +7!",
-        "⚡ THUNDER: 'WRATH!' +7!"
-    ],
-    6: [
-        "💪 SAND: 'EPIC!' +6!",
-        "⚔️ CENT: 'GANK!' +6!",
-        "👺 CYCLOPS: 'FLIP!' +6!",
-        "🗡️ PANGO: 'SWORD!' +6!",
-        "💨 WIND: 'GUST!' +6!"
+        "👻 «ЗА ТВОЕЙ СПИНОЙ!» (Рики)",
+        "🧈 «МЯГКИЙ, КАК МАСЛО» (ПА)",
+        "🕷️ «ГНЕЗДО ЖДЁТ» (Бруд)"
     ],
     5: [
-        "🧠 PUDGE: 'MEAT!' +5!",
-        "🎯 SLARK: 'DARK!' +5!",
-        "🕷️ WEAVER: 'LINK!' +5!",
-        "👻 PHANTOM: 'DAGGER!' +5!",
-        "💀 WRATH: 'SMITE!' +5!"
-    ],
-    4: [
-        "🛡️ STEEL: 'MELT!' +4!",
-        "🔔 CENT: 'MALT!' +4!",
-        "⚔️ SWIFT: 'STRIKE!' +4!",
-        "💨 AERO: 'FLIGHT!' +4!",
-        "🦴 BONE: 'CLASH!' +4!"
-    ],
-    3: [
-        "💨 BREEZE: 'GUST!' +3!",
-        "🎲 DICE: 'ROLL!' +3!",
-        "🪰 FLY: 'FLOAT!' +3!",
-        "🌱 GROW: 'SPROUT!' +3!",
-        "⚡ SPARK: 'ZAP!' +3!"
-    ],
-    2: [
-        "👣 STEP: 'WALK!' +2!",
-        "🐛 CRAWL: 'CREEP!' +2!",
-        "🦋 FLAP: 'WING!' +2!",
-        "🐝 BUZZ: 'HUMM!' +2!",
-        "💧 DRIP: 'DROP!' +2!"
+        "🍖 «СВЕЖЕЕ МЯСО!» (Падж)",
+        "🐟 «ОХОТА НАЧИНАЕТСЯ» (Сларк)",
+        "🐻 «КАЛЕЧИТЬ! УБИВАТЬ!» (Урса)"
     ],
     1: [
-        "🤏 TINY: 'TOSS!' +1!",
-        "🪙 COIN: 'FLIP!' +1!",
-        "🎲 ROLL: 'ONE!' +1!",
-        "⚡ BOLT: 'ZING!' +1!",
-        "🕯️ WAX: 'GLOW!' +1!"
+        "🪨 «БРОСАЙ МЕНЯ!» (Тайни)",
+        "🪙 «ВЕЗУЧАЯ МОНЕТКА» (Гамблер)",
+        "🧪 «МАЛЫЕ НАЧАЛА» (Мипо)"
     ],
     0: [
-        "🧘 MEDITATE: 'OOM!' 0!",
-        "🕐 AFK: 'BRB!' 0!",
-        "❄️ FROST: 'NULL!' 0!",
-        "⛺ CAMP: 'WAIT!' 0!",
-        "💤 REST: 'Zzz!' 0!"
+        "💤 «Я ОТДОХНУ ТЕПЕРЬ» (Висп)",
+        "⏳ «ДРЕВНИЕ ЖДУТ» (Аганим)",
+        "🧘 «СОЗЕРЦАНИЕ» (Элдер Т)"
     ],
     -1: [
-        "💀 FEED: 'DEAD!' -1!",
-        "🔪 GANK: 'DIED!' -1!",
-        "📉 DROP: 'TIDE!' -1!",
-        "🛡️ MISS: 'BLOCK!' -1!",
-        "💔 MISS: 'FAIL!' -1!"
-    ],
-    -2: [
-        "🦴 BREAK: 'SMASH!' -2!",
-        "💀 FALL: 'BACK!' -2!",
-        "⚔️ LOSS: 'DEFEAT!' -2!",
-        "🪦 BURIAL: 'GRAVE!' -2!",
-        "💔 PAIN: 'HURT!' -2!"
-    ],
-    -3: [
-        "☠️ DIE: 'RIP!' -3!",
-        "🩸 BLEED: 'WOUND!' -3!",
-        "💀 DEAD: 'GONE!' -3!",
-        "⚰️ COFFIN: '6 FT!' -3!",
-        "💥 SMASH: 'CRUSH!' -3!"
-    ],
-    -4: [
-        "💀 FEED: '4!' -4!",
-        "🔥 BURN: 'FIRE!' -4!",
-        "💣 BLAST: 'BOOM!' -4!",
-        "🗡️ STAB: 'PAIN!' -4!",
-        "⚔️ FIGHT: 'LOSE!' -4!"
+        "😔 «Я ПОДВЁЛ» (Свен)",
+        "😩 «НЕ ТАК» (Зевс)",
+        "🌫️ «ВИДЕНИЕ ТУСКНЕЕТ» (Войд)"
     ],
     -5: [
-        "💀 FEED: 'GAME!' -5!",
-        "☠️ DEAD: 'NEXT!' -5!",
-        "🧟 ROT: 'SPOIL!' -5!",
-        "💥 CRIT: 'SUPER!' -5!",
-        "⚡ BACK: 'WICKED!' -5!"
-    ],
-    -6: [
-        "💥 BLAST: 'BOOM!' -6!",
-        "🔥 BURN: 'FLAME!' -6!",
-        "💣 BOMB: 'KABOOM!' -6!",
-        "⚡ SHOCK: 'ZAP!' -6!",
-        "🧨 POWDER: 'KABOOM!' -6!"
-    ],
-    -7: [
-        "💀 PIT: 'ABYSS!' -7!",
-        "🕳️ HOLE: 'VOID!' -7!",
-        "🌑 DARK: 'BLACK!' -7!",
-        "☠️ EVIL: 'DEMON!' -7!",
-        "🌋 LAVA: 'MELT!' -7!"
-    ],
-    -8: [
-        "💥 WRECK: 'SMASH!' -8!",
-        "🗡️ PIERCE: 'DEEP!' -8!",
-        "🔥 RAGE: 'WRATH!' -8!",
-        "💀 WIPE: 'CLEAN!' -8!",
-        "⚔️ CRUSH: 'SMASH!' -8!"
-    ],
-    -9: [
-        "🕳️ VOID: 'NULL!' -9!",
-        "💀 BLACK: 'HOLE!' -9!",
-        "☠️ DEATH: 'FINAL!' -9!",
-        "🧟 PLAGUE: 'DEADLY!' -9!",
-        "💥 ANNIHIL: 'TOTAL!' -9!"
+        "🥶 «ПЛАМЯ ПОГАСЛО» (Лина)",
+        "😖 «Я... СПОТКНУЛСЯ» (Эмбер)",
+        "💔 «МОЯ ЧЕСТЬ... РАЗБИТА» (ЛЦ)"
     ],
     -10: [
-        "💀 GG: 'EZ!' -10!",
-        "☠️ FEED: 'WTF!' -10!",
-        "💥 END: 'GAME!' -10!",
-        "⚰️ GRAVE: 'DEEP!' -10!",
-        "🔥 AF: 'GGWP!' -10!"
-    ],
-    -11: [
-        "🧟 HORDE: 'SWARM!' -11!",
-        "💀 MASS: 'DEAD!' -11!",
-        "☠️ APOCALYPSE! -11!",
-        "💥 TOTAL: 'WIPE!' -11!",
-        "🔥 RAGE: 'QUIT!' -11!"
-    ],
-    -12: [
-        "💀 NEXUS: 'DESTROY!' -12!",
-        "⚔️ BASE: 'RUSH!' -12!",
-        "🗡️ TOWER: 'PUSH!' -12!",
-        "💥 MEGA: 'CREEP!' -12!",
-        "💀 GG: 'REPORT!' -12!"
-    ],
-    -13: [
-        "☠️ ANNIHIL: 'GAME!' -13!",
-        "💀 TOTAL: 'WIPE!' -13!",
-        "💥 OVERTURN: 'MASSIVE!' -13!",
-        "🧟 HORDE: 'UNSTOPPABLE!' -13!",
-        "🔥 RAGE: 'AFK!' -13!"
-    ],
-    -14: [
-        "💀 TRASH: 'GG!' -14!",
-        "☠️ PERMA: 'BAN!' -14!",
-        "💥 CRASH: 'BUG!' -14!",
-        "⚔️ SURRENDER: 'FF!' -14!",
-        "🔥 AF: 'MINUS!' -14!"
+        "🚨 «ДРЕВНИЙ АТАКУЮТ» (диктор)",
+        "🏃‍♂️💨 «КОМАНДА ТЕБЯ БРОСИЛА» (игра)",
+        "🌚 «ПОБЕДА ТЬМЫ» (Тьма)"
     ],
     -15: [
-        "💀 GG: 'FINISH!' -15!",
-        "☠️ NEXT: 'QUEUE!' -15!",
-        "💥 THROW: 'GAME!' -15!",
-        "🧟 FEED: 'TROLOL!' -15!",
-        "⚰️ COFFIN: 'READY!' -15!"
+        "😭 «СВЕТ ПОВЕРЖЕН» (диктор)",
+        "🎭 «ТВОЙ ММР — ЛОЖЬ» (Crownfall)",
+        "🕳️ «ОБРАТНО В РАЗЛОМ» (СК)"
     ],
 }
 
