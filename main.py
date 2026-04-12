@@ -3107,14 +3107,14 @@ async def main():
         
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(seconds=15),
-            first=datetime.datetime.now() + datetime.timedelta(seconds=20)
+            interval=datetime.timedelta(minutes=30),
+            first=datetime.datetime.now() + datetime.timedelta(minutes=5)
         )
         
         job_queue.run_repeating(
             check_activity_job,
-            interval=datetime.timedelta(minutes=1),
-            first=datetime.datetime.now() + datetime.timedelta(seconds=30)
+            interval=datetime.timedelta(minutes=5),
+            first=datetime.datetime.now() + datetime.timedelta(minutes=1)
         )
         
         app.add_handler(CommandHandler("start", start))

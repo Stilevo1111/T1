@@ -1,0 +1,7 @@
+ERROR:database:\u274c Ошибка инициализации БД: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>
+Using DATABASE_URL: postgresql://postgre...
+[DB] Getting connection, type: postgresql
+[DB] Creating new connection for postgresql
+[DB] Getting connection, type: postgresql
+[DB] Creating new connection for postgresql
+Error: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>
