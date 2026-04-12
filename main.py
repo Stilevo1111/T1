@@ -1790,20 +1790,20 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(user_obj.id, username)
         logger.info(f"user data: {user}")
         
-        # Проверяем кулдаун или бонус
-        bonus_time = bonus_ready_users.get(user_obj.id, 0)
+        # Проверяем кулдаун или бонус (для всех игроков)
+        bonus_time = bonus_ready_users.get("all", 0)
         # Бонус сгорает через 5 часов если не использован
         BONUS_EXPIRE = 5 * 3600  # 5 часов
         if bonus_time > 0 and (now - bonus_time) > BONUS_EXPIRE:
             # Бонус протух - удаляем
-            bonus_ready_users.pop(user_obj.id, None)
+            bonus_ready_users.pop("all", None)
             bonus_time = 0
         
         has_bonus = (bonus_time > 0)
         
         if has_bonus:
             # Бонус - пропускаем кулдаун
-            bonus_ready_users.pop(user_obj.id, None)
+            bonus_ready_users.pop("all", None)
         elif now - user["last_fissure"] < COOLDOWN:
             wait = COOLDOWN - (now - user["last_fissure"])
             elapsed = COOLDOWN - wait
@@ -1882,13 +1882,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Проверяем достигли цели - бонус будет на следующий бросок
         if daily_fissure_rolls >= BONUS_FISSURE_GOAL:
-            # Сохраняем бонус для пользователя с timestamp
-            bonus_ready_users[user_obj.id] = now
+            # Бонус для ВСЕХ игроков - сохраняем с timestamp
+            bonus_ready_users["all"] = now
             daily_fissure_rolls = 0
-            # Отправляем оповещение в чат
+            # Отправляем оповещение в чат - бонус для ВСЕХ
             bonus_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"🎁 Игроки выполнили задание на 10 бросков в день! Может крутить фиссуру ещё раз БЕЗ кулдауна!"
+                text=f"🎁 ВНИМАНИЕ! Игроки накопили 10 бросков! Теперь ВСЕ могут крутить фиссуру БЕЗ кулдауна!"
             )
             schedule_delete(context.bot, chat_id, bonus_msg.message_id, 30, context.application.job_queue)
         
