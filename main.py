@@ -3381,12 +3381,8 @@ async def main():
             days=(0,)  # Monday only
         )
         
-        job_queue.run_repeating(
-            alternate_digest_job,
-            interval=datetime.timedelta(seconds=15),
-            first=datetime.datetime.now() + datetime.timedelta(seconds=20)
-        )
-
+# alternate_digest_job удалён
+        
         job_queue.run_repeating(
             check_activity_job,
             interval=datetime.timedelta(minutes=1),
