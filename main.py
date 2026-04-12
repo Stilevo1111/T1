@@ -464,6 +464,16 @@ async def morning_digest_job(context):
         try:
             await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
             logger.info(f"Дайджест {msg.message_id} закреплён")
+            
+            # Удаляем системное сообщение о закрепе
+            try:
+                chat_info = await bot.get_chat(chat_id=digest_chat_id)
+                pinned_msg = getattr(chat_info, 'pinned_message', None)
+                if pinned_msg:
+                    await bot.delete_message(chat_id=digest_chat_id, message_id=pinned_msg.message_id)
+                    logger.debug(f"Удалено системное сообщение о закрепе {pinned_msg.message_id}")
+            except Exception as e:
+                logger.debug(f"Не удалось удалить системное сообщение о закрепе: {e}")
         except Exception as e:
             logger.debug(f"Не удалось закрепить дайджест: {e}")
         
@@ -1030,9 +1040,20 @@ async def alternate_digest_job(context):
                     await bot.unpin_chat_message(chat_id=digest_chat_id)
                 except Exception as e:
                     logger.debug(f"Не удалось открепить старый: {e}")
+                
                 try:
                     await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
                     logger.info(f"Дайджест {msg.message_id} закреплён")
+                    
+                    # Удаляем системное сообщение о закрепе
+                    try:
+                        chat_info = await bot.get_chat(chat_id=digest_chat_id)
+                        pinned_msg = getattr(chat_info, 'pinned_message', None)
+                        if pinned_msg:
+                            await bot.delete_message(chat_id=digest_chat_id, message_id=pinned_msg.message_id)
+                            logger.debug(f"Удалено системное сообщение о закрепе {pinned_msg.message_id}")
+                    except Exception as e:
+                        logger.debug(f"Не удалось удалить системное сообщение о закрепе: {e}")
                 except Exception as e:
                     logger.debug(f"Не удалось закрепить: {e}")
             finally:
