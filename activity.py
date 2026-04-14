@@ -527,7 +527,7 @@ async def check_activity_job(context, config_func=None):
         min60_sent = sent_60min_message.get(chat_id, False)
         if not min60_sent and now - last_bot_msg_time >= 60:
             text = random.choice(ACTIVITY_PHRASES_60)
-            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            await activity_send_permanent(context.bot, chat_id, text)
             last_bot_message_time[chat_id] = now
             last_60min_message_time[chat_id] = now
             sent_60min_message[chat_id] = True
@@ -536,7 +536,7 @@ async def check_activity_job(context, config_func=None):
         min75_sent = sent_75min_message.get(chat_id, False)
         if not min75_sent and now - last_bot_msg_time >= 60:
             text = random.choice(ACTIVITY_PHRASES_75)
-            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            await activity_send_permanent(context.bot, chat_id, text)
             last_bot_message_time[chat_id] = now
             last_auuu_message_time[chat_id] = now
             sent_75min_message[chat_id] = True
@@ -545,7 +545,7 @@ async def check_activity_job(context, config_func=None):
         min80_sent = sent_80min_message.get(chat_id, False)
         if not min80_sent and now - last_bot_msg_time >= 60:
             text = random.choice(ACTIVITY_PHRASES_80)
-            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            await activity_send_permanent(context.bot, chat_id, text)
             last_bot_message_time[chat_id] = now
             bot_is_away[chat_id] = True
             bot_return_time[chat_id] = now + 300
@@ -556,7 +556,7 @@ async def check_activity_job(context, config_func=None):
         is_away_now = bot_is_away.get(chat_id, False)
         if not min85_sent and not is_away_now and now - last_bot_msg_time >= 60:
             text = random.choice(ACTIVITY_PHRASES_85)
-            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            await activity_send_permanent(context.bot, chat_id, text)
             last_bot_message_time[chat_id] = now
             sent_85min_message[chat_id] = True
     
@@ -568,7 +568,7 @@ async def check_activity_job(context, config_func=None):
         echo_sent = sent_echo_reply.get(chat_id, False)
         if not echo_sent and now - last_bot_msg_time >= 60:
             text = random.choice(ACTIVITY_ECHO_REPLY)
-            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            await activity_send_permanent(context.bot, chat_id, text)
             last_bot_message_time[chat_id] = now
             last_auuu_message_time[chat_id] = 0
             sent_echo_reply[chat_id] = True
@@ -581,7 +581,7 @@ async def check_activity_job(context, config_func=None):
           not bot_is_away.get(chat_id, False)):
         if not sent_self_reply.get(chat_id, False) and now - last_bot_msg_time >= 60:
             text = random.choice(ACTIVITY_SELF_REPLY)
-            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            await activity_send_permanent(context.bot, chat_id, text)
             last_bot_message_time[chat_id] = now
             sent_self_reply[chat_id] = True
     
@@ -589,7 +589,7 @@ async def check_activity_job(context, config_func=None):
         prov1_sent = sent_provocation_1.get(chat_id, False)
         if not prov1_sent and now - last_bot_msg_time >= 60:
             text = random.choice(ACTIVITY_PROVOCATION_1)
-            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            await activity_send_permanent(context.bot, chat_id, text)
             last_bot_message_time[chat_id] = now
             sent_provocation_1[chat_id] = True
             provocation_1_sent_time[chat_id] = now
@@ -600,7 +600,7 @@ async def check_activity_job(context, config_func=None):
             prov1_replied = sent_provocation_1_replied.get(chat_id, False)
             if not prov1_replied:
                 text = random.choice(ACTIVITY_PROVOCATION_1_REPLY)
-                await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+                await activity_send_permanent(context.bot, chat_id, text)
                 last_bot_message_time[chat_id] = now
                 provocation_1_sent_time.pop(chat_id, None)
     
@@ -608,7 +608,7 @@ async def check_activity_job(context, config_func=None):
         prov2_sent = sent_provocation_2.get(chat_id, False)
         if not prov2_sent and now - last_bot_msg_time >= 60:
             text = random.choice(ACTIVITY_PROVOCATION_2)
-            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            await activity_send_permanent(context.bot, chat_id, text)
             last_bot_message_time[chat_id] = now
             sent_provocation_2[chat_id] = True
     
@@ -616,7 +616,7 @@ async def check_activity_job(context, config_func=None):
         prov3_sent = sent_provocation_3.get(chat_id, False)
         if not prov3_sent and now - last_bot_msg_time >= 60:
             text = random.choice(ACTIVITY_PROVOCATION_3)
-            await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+            await activity_send_permanent(context.bot, chat_id, text)
             last_bot_message_time[chat_id] = now
             sent_provocation_3[chat_id] = True
 
@@ -641,7 +641,7 @@ async def on_user_message(context, username, telegram_id=None, config_func=None)
                 provocation_1_sent_time.pop(chat_id, None)
     
     text = random.choice(ACTIVITY_USER_REPLY).format(username=username)
-    await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+    await activity_send_permanent(context.bot, chat_id, text)
 
 
 def increment_message_count(chat_id, telegram_id):
