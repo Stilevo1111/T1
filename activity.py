@@ -498,7 +498,7 @@ async def check_activity_job(context, config_func=None):
             night_sent = sent_night_message.get(chat_id, False)
             if not night_sent and now - last_bot_msg_time >= 60:
                 text = random.choice(ACTIVITY_NIGHT)
-                await activity_send_and_delete(context.bot, chat_id, text, delete_after=15)
+                await activity_send_permanent(context.bot, chat_id, text)
                 last_bot_message_time[chat_id] = now
                 sent_night_message[chat_id] = True
         return
