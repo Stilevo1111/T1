@@ -397,7 +397,7 @@ async def morning_digest_job(context):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n\n{MORNING_DIGEST_FOOTER}"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n{MORNING_DIGEST_FOOTER}"
         
         bot = context.application.bot
         
@@ -514,7 +514,7 @@ async def refresh_digest_message(bot):
         else:
             streak_part = "🍀—"
         
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n\n⚡ Зевс: {_load_stats()['zeus']}\n\n\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n\n{MORNING_DIGEST_FOOTER}"
+        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n{MORNING_DIGEST_FOOTER}"
         
         last_message_id = get_config('daily_digest_message_id')
         if last_message_id:
@@ -852,7 +852,7 @@ async def alternate_digest_job(context):
             else:
                 streak_part = " 🍀—"
             
-            text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅ФИССУРА ДАЙДЖЕСТ\n⚡ Зевс: {_load_stats()['zeus']}\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
+            text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅ФИССУРА ДАЙДЖЕСТ\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
             next_type = "1"
         else:
             # Dota дайджест
