@@ -272,23 +272,27 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         if not top_heroes:
             return None
         
-        icon_size = 192
+        # Фиксированный размер 1920x660
+        target_width = 1920
+        target_height = 660
+        icon_size = 200
         padding = 30
-        cell_width = icon_size + padding * 2
-        height = icon_size + padding * 2
-        width = cell_width * len(top_heroes) + padding
         
-        img = Image.new("RGB", (width, height), color=(35, 25, 50))
+        img = Image.new("RGB", (target_width, target_height), color=(35, 25, 50))
         draw = ImageDraw.Draw(img)
         
         # Вертикальный градиент
-        for y in range(height):
-            c = tuple(min(255, int((35 + y/6, 25 + y/8, 50 + y/5)[i])) for i in range(3))
-            draw.line([(0, y), (width, y)], fill=c)
+        for y in range(target_height):
+            c = tuple(min(255, int((35 + y/10, 25 + y/13, 50 + y/8)[i])) for i in range(3))
+            draw.line([(0, y), (target_width, y)], fill=c)
+        
+        # Распределяем героев по всей ширине
+        cells = len(top_heroes)
+        cell_width = (target_width - padding * 2) // max(cells, 1)
         
         for i, hero in enumerate(top_heroes):
-            x = padding + i * cell_width
-            y = padding
+            x = padding + i * cell_width + (cell_width - icon_size) // 2
+            y = (target_height - icon_size) // 2
             
             icon_data = None
             hero_short = hero.get("short_name", "")
