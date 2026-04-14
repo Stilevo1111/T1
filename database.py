@@ -28,6 +28,8 @@ else:
 class UserCache:
     """Кеш данных пользователей в памяти с записью в БД раз в сутки"""
     
+    MAX_CACHE_SIZE = 500  # Максимум пользователей в кеше
+    
     def __init__(self):
         self._cache = {}  # telegram_id -> user_data
         self._dirty = {}  # telegram_id -> True
@@ -42,6 +44,9 @@ class UserCache:
         """Установить данные пользователя в кеш"""
         with self._lock:
             self._cache[telegram_id] = data
+            # Проверяем лимит при каждой записи
+            if len(self._cache) > self.MAX_CACHE_SIZE:
+                self.enforce_limit()
     
     def mark_dirty(self, telegram_id):
         """Пометить пользователя как изменённого"""
@@ -83,6 +88,16 @@ class UserCache:
         with self._lock:
             if key in self._cache:
                 del self._cache[key]
+    
+    def enforce_limit(self):
+        """Ограничить размер кеша - удалить старые записи если превышен лимит"""
+        with self._lock:
+            if len(self._cache) > self.MAX_CACHE_SIZE:
+                # Удаляем старые записи (первые N / 2)
+                keys_to_remove = list(self._cache.keys())[:len(self._cache) // 2]
+                for key in keys_to_remove:
+                    self._cache.pop(key, None)
+                    self._dirty.pop(key, None)
 
 
 # Глобальный экземпляр кеша
