@@ -523,6 +523,11 @@ async def check_activity_job(context, config_func=None):
         sent_provocation_2[chat_id] = False
         sent_provocation_3[chat_id] = False
     
+    # Защита от спама - не отправлять сообщения активности чаще чем раз в 30 минут
+    last_activity_msg_time = last_bot_message_time.get(chat_id, 0)
+    if now - last_activity_msg_time < 1800:  # 30 минут
+        return
+    
     if time_since_last_message >= 3600 and time_since_last_message < 4500:
         min60_sent = sent_60min_message.get(chat_id, False)
         if not min60_sent and now - last_bot_msg_time >= 60:
