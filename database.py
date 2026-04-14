@@ -1115,7 +1115,7 @@ class Database:
             
             if get_db_type() == "postgresql":
                 query = """
-                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak, total_growth
+                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, total_growth
                     FROM users
                 """
                 rows = self.execute_query(query, fetch="all")
@@ -1124,6 +1124,7 @@ class Database:
                     users.append({
                         "telegram_id": r["telegram_id"],
                         "username": r["username"],
+                        "steam_nickname": r["steam_nickname"],
                         "fissure": float(r["fissure"] or 0.0),
                         "digest_position": int(r["digest_position"] or 0),
                         "digest_fissure": float(r["digest_fissure"] or 0.0),
@@ -1132,7 +1133,7 @@ class Database:
                     })
             else:
                 query = """
-                    SELECT telegram_id, username, fissure, digest_position, digest_fissure, current_streak, total_growth
+                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, total_growth
                     FROM users
                 """
                 rows = self.execute_query(query, fetch="all")
@@ -1141,11 +1142,12 @@ class Database:
                     users.append({
                         "telegram_id": r[0],
                         "username": r[1],
-                        "fissure": float(r[2] or 0.0),
-                        "digest_position": int(r[3] or 0),
-                        "digest_fissure": float(r[4] or 0.0),
-                        "current_streak": int(r[5] or 0),
-                        "total_growth": float(r[6] or 0.0),
+                        "steam_nickname": r[2],
+                        "fissure": float(r[3] or 0.0),
+                        "digest_position": int(r[4] or 0),
+                        "digest_fissure": float(r[5] or 0.0),
+                        "current_streak": int(r[6] or 0),
+                        "total_growth": float(r[7] or 0.0),
                     })
 
             # Текущие позиции по текущей фиссуре
@@ -1164,7 +1166,12 @@ class Database:
                     if moved_up > top_growth_positions:
                         top_growth_positions = moved_up
                         cached = user_cache.get(u["telegram_id"])
-                        top_growth_user = u["username"] or (cached.get("username") if cached else None) or str(u["telegram_id"])
+                        if cached:
+                            top_growth_user = cached.get('steam_nickname') or cached.get('username') or u.get("steam_nickname") or u["username"]
+                        else:
+                            top_growth_user = u.get("steam_nickname") or u["username"]
+                        if not top_growth_user:
+                            top_growth_user = str(u["telegram_id"])
                         top_growth_id = u["telegram_id"]
 
             # Падение: насколько см уменьшилась фиссура за сутки (current - digest)
@@ -1179,7 +1186,12 @@ class Database:
                     if delta < top_drop_cm:
                         top_drop_cm = delta
                         cached = user_cache.get(u["telegram_id"])
-                        top_drop_user = u["username"] or (cached.get("username") if cached else None) or str(u["telegram_id"])
+                        if cached:
+                            top_drop_user = cached.get('steam_nickname') or cached.get('username') or u.get("steam_nickname") or u["username"]
+                        else:
+                            top_drop_user = u.get("steam_nickname") or u["username"]
+                        if not top_drop_user:
+                            top_drop_user = str(u["telegram_id"])
                         top_drop_id = u["telegram_id"]
 
             # Стрик: текущая серия побед (current_streak)
@@ -1190,7 +1202,12 @@ class Database:
                 if u["current_streak"] > top_streak:
                     top_streak = u["current_streak"]
                     cached = user_cache.get(u["telegram_id"])
-                    top_streak_user = u["username"] or (cached.get("username") if cached else None) or str(u["telegram_id"])
+                    if cached:
+                        top_streak_user = cached.get('steam_nickname') or cached.get('username') or u.get("steam_nickname") or u["username"]
+                    else:
+                        top_streak_user = u.get("steam_nickname") or u["username"]
+                    if not top_streak_user:
+                        top_streak_user = str(u["telegram_id"])
                     top_streak_id = u["telegram_id"]
 
             return {

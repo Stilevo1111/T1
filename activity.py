@@ -480,9 +480,11 @@ async def check_activity_job(context, config_func=None):
         sent_morning_greeting[chat_id] = False
         sent_night_message[chat_id] = False
         # Сброс счётчика бонусной фиссуры и бонусов игроков
-        from main import daily_fissure_rolls, bonus_ready_users
+        from main import daily_fissure_rolls, bonus_ready_users, _save_daily_fissure_rolls, _save_bonus_ready_users
         daily_fissure_rolls = 0
-        bonus_ready_users = {}  # сгорают бонусы
+        bonus_ready_users = {}
+        _save_daily_fissure_rolls(0)
+        _save_bonus_ready_users({})
     
     # Сброс флага ночи в 09:00 (чтобы не зависло)
     

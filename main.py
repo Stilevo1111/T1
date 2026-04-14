@@ -1252,7 +1252,7 @@ def make_clickable(name, user_id, max_length=12):
             from database import user_cache
             cached = user_cache.get(int(user_id))
             if cached:
-                display_name = cached.get('username') or cached.get('steam_nickname') or name
+                display_name = cached.get('steam_nickname') or cached.get('username') or name
             else:
                 display_name = name
         except:
@@ -1264,7 +1264,7 @@ def make_clickable(name, user_id, max_length=12):
         
         # Обрезаем длинные ники
         if len(display_name) > max_length:
-            display_name = display_name[:max_length-2] + "…"
+            display_name = display_name[:max_length-1] + "."
         
         return f"<a href=\"tg://user?id={user_id}\">{display_name}</a>"
     return name if name and name != "None" else "—"
@@ -1418,10 +1418,41 @@ ZEUS_ICON_URL = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_r
 # Выходной бонус
 WEEKEND_BONUS_MULTIPLIERS = [1.5, 2, 2.5]
 
-# Счётчик бонусной фиссуры за сутки
+# Счётчик бонусной фистуры за сутки
 BONUS_FISSURE_GOAL = 10  # сколько бросков нужно для бонуса
-daily_fissure_rolls = 0  # счётчик бросков сегодня
-bonus_ready_users = {}  # {telegram_id: timestamp} - когда выдан бонус
+
+
+def _load_daily_fissure_rolls():
+    """Загрузить счётчик бросков из БД"""
+    try:
+        return int(get_config("daily_fissure_rolls", 0))
+    except (ValueError, TypeError):
+        return 0
+
+
+def _save_daily_fissure_rolls(value):
+    """Сохранить счётчик бросков в БД"""
+    set_config("daily_fissure_rolls", str(value))
+
+
+def _load_bonus_ready_users():
+    """Загрузить бонусы из БД"""
+    try:
+        import json
+        data = get_config("bonus_ready_users", "{}")
+        return json.loads(data) if data else {}
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return {}
+
+
+def _save_bonus_ready_users(users):
+    """Сохранить бонусы в БД"""
+    import json
+    set_config("bonus_ready_users", json.dumps(users))
+
+
+daily_fissure_rolls = _load_daily_fissure_rolls()
+bonus_ready_users = _load_bonus_ready_users()
 
 # Тексты дайджестов
 MORNING_DIGEST_HEADER = "🌅ФИССУРА ДАЙДЖЕСТ"
@@ -1709,6 +1740,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if bonus_time > 0 and (now - bonus_time) > BONUS_EXPIRE:
             # Бонус протух - удаляем
             bonus_ready_users.pop("all", None)
+            _save_bonus_ready_users(bonus_ready_users)
             bonus_time = 0
         
         has_bonus = (bonus_time > 0)
@@ -1716,6 +1748,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if has_bonus:
             # Бонус - пропускаем кулдаун
             bonus_ready_users.pop("all", None)
+            _save_bonus_ready_users(bonus_ready_users)
         elif now - (user.get("last_fissure") or 0) < COOLDOWN:
             wait = COOLDOWN - (now - (user.get("last_fissure") or 0))
             elapsed = COOLDOWN - wait
@@ -1791,16 +1824,19 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         global daily_fissure_rolls
         bonus_available = False
         daily_fissure_rolls += 1
+        _save_daily_fissure_rolls(daily_fissure_rolls)
         
         # Проверяем достигли цели - бонус будет на следующий бросок
         if daily_fissure_rolls >= BONUS_FISSURE_GOAL:
             # Бонус для ВСЕХ игроков - сохраняем с timestamp
             bonus_ready_users["all"] = now
             daily_fissure_rolls = 0
+            _save_daily_fissure_rolls(0)
+            _save_bonus_ready_users(bonus_ready_users)
             # Отправляем оповещение в чат - бонус для ВСЕХ
             bonus_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"🎁 ВНИМАНИЕ! Игроки накопили 10 бросков! Теперь ВСЕ могут крутить фиссуру БЕЗ кулдауна!"
+                text=f"✅ ЗАДАНОЕ ВЫПОЛНЕНО: 🎁 10/10! +1 ФИССУРА!"
             )
             schedule_delete(context.bot, chat_id, bonus_msg.message_id, 30, context.application.job_queue)
         
