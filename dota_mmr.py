@@ -272,18 +272,18 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         if not top_heroes:
             return None
         
-        # Фиксированный размер 1920x660
-        target_width = 1920
-        target_height = 660
-        icon_size = 200
-        padding = 30
+        # Фиксированный размер 1744x592
+        target_width = 1744
+        target_height = 592
+        icon_size = 220
+        padding = 100
         
         img = Image.new("RGB", (target_width, target_height), color=(35, 25, 50))
         draw = ImageDraw.Draw(img)
         
         # Вертикальный градиент
         for y in range(target_height):
-            c = tuple(min(255, int((35 + y/10, 25 + y/13, 50 + y/8)[i])) for i in range(3))
+            c = tuple(min(255, int((35 + y/9, 25 + y/12, 50 + y/7)[i])) for i in range(3))
             draw.line([(0, y), (target_width, y)], fill=c)
         
         # Распределяем героев по всей ширине
