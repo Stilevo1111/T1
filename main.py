@@ -1972,6 +1972,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
                         slot_msg_ids.append(msg.message_id)
+                        await asyncio.sleep(0.5)
                     else:
                         # Не попали в x4 - показываем проигрышный спин и финиш на x3
                         slots = random.sample(slot_emojis, 3)
@@ -1980,6 +1981,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
                         slot_msg_ids.append(msg.message_id)
+                        await asyncio.sleep(0.5)
                         cascade_count = 3
                 else:
                     # Не попали в x3 - показываем проигрышный спин и финиш на x2
@@ -1989,6 +1991,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         text=f"🎰 {' | '.join(slots)} | x3"
                     )
                     slot_msg_ids.append(msg.message_id)
+                    await asyncio.sleep(0.5)
                     cascade_count = 2
             else:
                 # Не попали в x2 - обычный ролл (не мультикаст)
@@ -2010,7 +2013,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.3)
+        
+        # Даем время slot сообщениям отправиться перед итоговым
+        await asyncio.sleep(0.3)
         
         roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
         
