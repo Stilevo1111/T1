@@ -368,7 +368,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 _heroes_image_cache = {}
-_heroes_image_cache_ttl = 3600
+_heroes_image_cache_ttl = 86400
 
 
 def _fetch_hero_portrait(hero_short: str) -> tuple[str, bytes | None]:
