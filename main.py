@@ -2748,10 +2748,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = query.from_user
     
     if data == "link":
-        logger.info(f"Button callback received: link from user {user.id}")
-        await query.answer("Нажми /link в чате для привязки Steam", show_alert=True)
+        await query.edit_message_text(
+            text="Выполняю /link..."
+        )
     elif data == "start":
-        await query.answer("Нажми /start в чате", show_alert=True)
+        await start(update, context)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
