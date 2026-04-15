@@ -1759,7 +1759,7 @@ async def fetch_hero_icon(url, session=None, size=96):
 def main_menu():
     keyboard = [
         [KeyboardButton("⚡Ролл фиссуры"), KeyboardButton("🦸Досье")],
-        [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
+        [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏅 Лидерборд ММР")],
         [KeyboardButton("🔑 Привязать Steam")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
@@ -2476,7 +2476,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         break
         
         if not top_users:
-            text = f"🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
+            text = f"🏅 Лидерборд ММР за неделю\n\nПока нет данных об MMR игроков."
             # Delete previous bot message before sending new one
             try:
                 await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
@@ -2985,7 +2985,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚡Ролл фиссуры": "⚡Ролл фиссуры",
             "🦸 Досье": "🦸 Досье",
             "🏆 Топ Фиссур": "🏆 Топ Фиссур",
-            "🏆 Топ MMR": "🏆 Топ MMR",
+            "🏅 Лидерборд ММР": "🏅 Лидерборд ММР",
             "🔗 Привязать Steam": "🔗 Привязать Steam"
         }
         
@@ -3043,7 +3043,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await stats(update, context)
         elif button_found == "🏆 Топ Фиссур":
             await top(update, context)
-        elif button_found == "🏆 Топ MMR":
+        elif button_found == "🏅 Лидерборд ММР":
             await topmmr(update, context)
         elif button_found == "🔗 Привязать Steam":
             await link(update, context)
