@@ -19,8 +19,8 @@ def get_cached_hero_icon(hero_short_name: str, timeout: int = 3) -> bytes | None
     
     if hero_short_name in _hero_cache:
         cached_time, cached_data = _hero_cache[hero_short_name]
-        if current_time - cached_time < 21600:
-            return cached_data
+        # Бесконечный кеш — герои не меняются
+        return cached_data
     
     cache_file = _cache_dir / f"{hero_short_name}.png"
     if cache_file.exists():
