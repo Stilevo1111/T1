@@ -2822,8 +2822,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Always send welcome message
         text = (
-            "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно.\n\n"
-            "👆 Жми /start"
+            "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
         )
         
         banner_url = "https://i.ibb.co/LXsGsfxZ/213.png"
