@@ -2845,6 +2845,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup
         )
         
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="📋 Главное меню:",
+            reply_markup=main_menu()
+        )
+        
         # Track this message for future deletion
         set_last_bot_message(chat_id, uid, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
