@@ -2435,14 +2435,12 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
     try:
-        from dota_mmr import get_week_top
-        from database import get_user, get_connection, DATABASE_URL
+        from database import get_dota_week_top_from_db
+        from database import get_user
         user = get_user(update.effective_user.id)
         
-        # Получаем топ напрямую из БД (force refresh для актуальных данных)
-        # Показываем 7 игроков + позиция пользователя (если в топе)
-        top_users = get_week_top(8)
-        logger.info(f"topmmr: top_users = {top_users}")
+        # Получаем топ напрямую из БД для актуальных данных
+        top_users = get_dota_week_top_from_db(8)
         
         # Initialize user position variables
         user_is_in_top = False
