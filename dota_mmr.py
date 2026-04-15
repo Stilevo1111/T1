@@ -106,6 +106,10 @@ def _api_get(url: str, params: dict = None) -> dict:
 
 HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes"
 HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
+# Фон полоски «любимые герои» (стата): страница https://ibb.co/kgCqy6cL
+# Полноразмер 1744×592 — i.ibb.co/.../image.png с id из «Full image», не превью 180×180.
+HEROES_STRIP_BG_URL = "https://i.ibb.co/4Zr4fgNb/image.png"
+HEROES_STRIP_BG_CACHE = "heroes_strip_stat_1744.png"
 
 
 def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None:
@@ -137,6 +141,104 @@ def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None
     except Exception:
         pass
     return None
+
+
+def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | None:
+    """Портрет героя (dota_react/heroes/*.png) — выше разрешение, чем icons/*.png."""
+    if not hero_short_name:
+        return None
+    cache_dir = Path(__file__).parent / "hero_cache" / "portraits"
+    cache_file = cache_dir / f"{hero_short_name}.png"
+    if cache_file.exists():
+        try:
+            return cache_file.read_bytes()
+        except Exception:
+            pass
+    try:
+        url = f"{HERO_IMAGE_BASE}/{hero_short_name}.png"
+        resp = requests.get(url, timeout=timeout)
+        if resp.status_code == 200:
+            data = resp.content
+            try:
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                cache_file.write_bytes(data)
+            except Exception:
+                pass
+            return data
+    except Exception:
+        pass
+    return None
+
+
+def _heroes_strip_gradient(canvas_width: int, canvas_height: int):
+    """Запасной градиент под полоску героев."""
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", (canvas_width, canvas_height), color=(35, 25, 50))
+    draw = ImageDraw.Draw(img)
+    for y in range(canvas_height):
+        c = tuple(min(255, int((35 + y / 9, 25 + y / 12, 50 + y / 7)[i])) for i in range(3))
+        draw.line([(0, y), (canvas_width, y)], fill=c)
+    return img
+
+
+def _compose_heroes_strip_background(canvas_width: int, canvas_height: int):
+    """
+    Холст фиксированный (иконки как раньше). Фон ImgBB — оригинальные пиксели, без resize.
+    Совпадение с холстом — один в один; больше — центр-обрезка; меньше — центр на градиенте.
+    """
+    from PIL import Image
+    import io
+
+    data = None
+    cache_file = Path(__file__).parent / "hero_cache" / HEROES_STRIP_BG_CACHE
+    try:
+        if cache_file.exists():
+            try:
+                data = cache_file.read_bytes()
+            except Exception:
+                pass
+        if not data:
+            resp = requests.get(HEROES_STRIP_BG_URL, timeout=12)
+            if resp.status_code == 200 and resp.content:
+                data = resp.content
+                try:
+                    cache_file.parent.mkdir(parents=True, exist_ok=True)
+                    cache_file.write_bytes(data)
+                except Exception:
+                    pass
+        if not data:
+            return _heroes_strip_gradient(canvas_width, canvas_height)
+
+        nat = Image.open(io.BytesIO(data)).convert("RGB")
+        w, h = nat.size
+
+        if w == canvas_width and h == canvas_height:
+            return nat.copy()
+
+        if w >= canvas_width and h >= canvas_height:
+            left = (w - canvas_width) // 2
+            top = (h - canvas_height) // 2
+            return nat.crop((left, top, left + canvas_width, top + canvas_height))
+
+        img = nat
+        w, h = img.size
+        while w > canvas_width:
+            left = (w - canvas_width) // 2
+            img = img.crop((left, 0, left + canvas_width, h))
+            w, h = img.size
+        while h > canvas_height:
+            top = (h - canvas_height) // 2
+            img = img.crop((0, top, w, top + canvas_height))
+            w, h = img.size
+
+        canvas = _heroes_strip_gradient(canvas_width, canvas_height)
+        w, h = img.size
+        canvas.paste(img, ((canvas_width - w) // 2, (canvas_height - h) // 2))
+        return canvas
+    except Exception as e:
+        logger.debug(f"heroes strip background: {e}")
+        return _heroes_strip_gradient(canvas_width, canvas_height)
 
 
 def get_heroes_data() -> dict:
@@ -263,7 +365,7 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
 
 
 def generate_heroes_image(top_heroes: list) -> bytes | None:
-    """Сгенерировать картинку с иконками топ-героев (горизонтально)"""
+    """Сгенерировать картинку с иконками топ-героев: центральный крупнее, к краям меньше."""
     try:
         from PIL import Image, ImageDraw, ImageFont
         import io
@@ -272,36 +374,56 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         if not top_heroes:
             return None
         
-        # Фиксированный размер 1744x592
+        # Фиксированный холст — как раньше; фон ImgBB вписываем без масштабирования
         target_width = 1744
         target_height = 592
-        icon_size = 220
+        img = _compose_heroes_strip_background(target_width, target_height)
         padding = 100
+        gap = 18
+        min_side, max_side = 210, 368
         
-        img = Image.new("RGB", (target_width, target_height), color=(35, 25, 50))
+        n = len(top_heroes)
+        center = (n - 1) / 2.0
+        max_dist = max(abs(i - center) for i in range(n))
+        if max_dist < 1e-9:
+            max_dist = 1.0
+        sizes = []
+        for i in range(n):
+            dist = abs(i - center)
+            ratio = 1.0 - (dist / max_dist)
+            sz = int(round(min_side + (max_side - min_side) * ratio))
+            sizes.append(max(96, sz))
+        
+        available = target_width - 2 * padding
+        total_w = sum(sizes) + gap * max(0, n - 1)
+        if total_w > available > 0:
+            scale = available / total_w
+            sizes = [max(88, int(round(s * scale))) for s in sizes]
+            gap = max(8, int(round(gap * scale)))
+            total_w = sum(sizes) + gap * max(0, n - 1)
+        
+        start_x = max(padding, (target_width - total_w) // 2)
+        
         draw = ImageDraw.Draw(img)
         
-        # Вертикальный градиент
-        for y in range(target_height):
-            c = tuple(min(255, int((35 + y/9, 25 + y/12, 50 + y/7)[i])) for i in range(3))
-            draw.line([(0, y), (target_width, y)], fill=c)
-        
-        # Распределяем героев по всей ширине
-        cells = len(top_heroes)
-        cell_width = (target_width - padding * 2) // max(cells, 1)
-        
+        x = start_x
         for i, hero in enumerate(top_heroes):
-            x = padding + i * cell_width + (cell_width - icon_size) // 2
+            icon_size = sizes[i]
             y = (target_height - icon_size) // 2
             
             icon_data = None
             hero_short = hero.get("short_name", "")
             if hero_short:
-                icon_data = get_hero_icon_cached(hero_short)
+                icon_data = get_hero_portrait_cached(hero_short) or get_hero_icon_cached(hero_short)
             
             if icon_data:
                 try:
                     icon = Image.open(io.BytesIO(icon_data)).convert("RGBA")
+                    w, h = icon.size
+                    side = min(w, h)
+                    left = (w - side) // 2
+                    top = (h - side) // 2
+                    icon = icon.crop((left, top, left + side, top + side))
                     icon = icon.resize((icon_size, icon_size), Image.Resampling.LANCZOS)
                     img.paste(icon, (x, y), icon)
                 except Exception as e:
@@ -311,6 +433,7 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                 draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
             
             draw.rectangle([x - 2, y - 2, x + icon_size, y + icon_size], outline=(215, 175, 85), width=2)
+            x += icon_size + gap
         
         buf = io.BytesIO()
         img.save(buf, format="PNG")
