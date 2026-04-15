@@ -2746,11 +2746,34 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     data = query.data
     user = query.from_user
+    chat = query.message.chat if query.message else None
     
-    if data == "link":
+    if data == "link" and chat:
         await query.edit_message_text(
             text="Выполняю /link..."
         )
+        
+        from telegram import Message
+        from datetime import datetime
+        
+        fake_message = Message(
+            message_id=query.message.message_id if query.message else 0,
+            date=datetime.now(),
+            chat=chat,
+            from_user=user,
+            text="/link"
+        )
+        
+        update.message = fake_message
+        context.args = []
+        
+        try:
+            await link(update, context)
+        except Exception as e:
+            logger.error(f"Error in button_callback link: {e}")
+            await query.edit_message_text(
+                text=f"❌ Ошибка: {e}"
+            )
     elif data == "start":
         await start(update, context)
 
