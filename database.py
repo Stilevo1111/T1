@@ -2230,7 +2230,20 @@ def get_dota_week_top(limit=10, force_refresh=False):
 
 
 def get_dota_week_top_from_db(limit=10):
-    """Получение топа игроков Dota 2 за неделю напрямую из БД"""
+    """Получение топа игроков Dota 2 за неделю напрямую из БД с кешем 1 час"""
+    import time
+    
+    _TTL = 3600  # 1 час
+    
+    # Простой кеш в памяти
+    if not hasattr(get_dota_week_top_from_db, '_cache'):
+        get_dota_week_top_from_db._cache = (None, 0)
+    
+    cached_data, cached_time = get_dota_week_top_from_db._cache
+    if cached_data and (time.time() - cached_time) < _TTL:
+        logger.info(f"get_dota_week_top_from_db: returning cached top ({len(cached_data)} users)")
+        return cached_data[:limit]
+    
     try:
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
@@ -2364,6 +2377,9 @@ def get_dota_week_top_from_db(limit=10):
             logger.info(f"get_dota_week_top: returning {len(result)} users")
             for r in result:
                 logger.info(f"  - {r['steam_nickname']}: {r['week_wins']}W / {r['week_games']}G")
+            
+            # Сохраняем в кеш
+            get_dota_week_top_from_db._cache = (result, time.time())
             
             return result
     except Exception as e:
