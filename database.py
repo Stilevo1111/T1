@@ -28,7 +28,7 @@ else:
 class UserCache:
     """Кеш данных пользователей в памяти с записью в БД раз в сутки"""
     
-    MAX_CACHE_SIZE = 500  # Максимум пользователей в кеше
+    MAX_CACHE_SIZE = 3000  # Максимум пользователей в кеше
     
     def __init__(self):
         self._cache = {}  # telegram_id -> user_data
