@@ -383,6 +383,10 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         min_side, max_side = 210, 368
         
         n = len(top_heroes)
+        
+        # Сортируем по убыванию picks: самый частый герой в центре
+        top_heroes = sorted(top_heroes, key=lambda h: h.get("picks", 0), reverse=True)
+        
         center = (n - 1) / 2.0
         max_dist = max(abs(i - center) for i in range(n))
         if max_dist < 1e-9:
