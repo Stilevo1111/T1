@@ -2226,7 +2226,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if target_user.get('steam_id'):
             try:
                 from dota_mmr import get_top_heroes, generate_heroes_image
-                top_heroes = get_top_heroes(target_user['steam_id'], last_n=10, top_k=5)
+                top_heroes = get_top_heroes(target_user['steam_id'], last_n=50, top_k=5)
                 if top_heroes:
                     img_bytes = generate_heroes_image(top_heroes)
                     if img_bytes:
