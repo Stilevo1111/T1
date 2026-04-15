@@ -7,8 +7,8 @@ import asyncio
 import logging
 import datetime
 import urllib.parse as urlparse
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, CallbackQuery
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, BACKUP_DATABASE_URL
 from activity import check_activity_job, update_chat_activity
@@ -2734,13 +2734,6 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка обновления MMR", reply_markup=main_menu())
 
 
-async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle inline button callback"""
-    query = update.callback_query
-    await query.answer()
-    await start(update, context)
-
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
     logger.info(f"New user {update.effective_user.id}")
@@ -2777,20 +2770,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Always send welcome message
         text = (
-            "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
+            "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно.\n\n"
+            "👆 Жми /start"
         )
         
         banner_url = "https://i.ibb.co/LXsGsfxZ/213.png"
-        
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        inline_keyboard = [[InlineKeyboardButton("👆 Жми /start", callback_data="start")]]
-        reply_markup = InlineKeyboardMarkup(inline_keyboard)
         
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
             photo=banner_url,
             caption=text,
-            reply_markup=reply_markup
+            reply_markup=main_menu()
         )
         
         # Track this message for future deletion
@@ -3154,17 +3144,12 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     logger.debug(f"Could not set in_chat=True for {user_id}: {e}")
                 
                 # Формируем приветственное сообщение с кликабельным ником
-                welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}"
-
-                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-                inline_keyboard = [[InlineKeyboardButton("👆 Жми /start", callback_data="start")]]
-                reply_markup = InlineKeyboardMarkup(inline_keyboard)
+                welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}\n\n👆 Жми /start"
                 
                 result_msg = await context.bot.send_message(
                     chat_id=chat_id,
                     text=welcome_text,
-                    parse_mode="HTML",
-                    reply_markup=reply_markup
+                    parse_mode="HTML"
                 )
                 logger.info(f"Welcome sent for {name}")
                 # Удаляем приветственное сообщение через час
@@ -3259,7 +3244,6 @@ async def main():
             )
         
         app.add_handler(CommandHandler("start", start))
-        app.add_handler(CallbackQueryHandler(start_callback))
         app.add_handler(CommandHandler("fissure", fissure))
         app.add_handler(CommandHandler("stats", stats))
         app.add_handler(CommandHandler("profile", stats))
