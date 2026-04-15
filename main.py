@@ -1759,7 +1759,7 @@ async def fetch_hero_icon(url, session=None, size=96):
 def main_menu():
     keyboard = [
         [KeyboardButton("🎲 Ролл Фиссуры"), KeyboardButton("👤 Профиль")],
-        [KeyboardButton("👑 Король Фиссур"), KeyboardButton("🏅 Лидерборд ММР")],
+        [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
         [KeyboardButton("🔑 Привязать Steam")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
@@ -2476,7 +2476,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         break
         
         if not top_users:
-            text = f"🏅 Лидерборд ММР за неделю\n\nПока нет данных об MMR игроков."
+            text = f"🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
             # Delete previous bot message before sending new one
             try:
                 await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
@@ -2984,8 +2984,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         menu_buttons = {
             "🎲 Ролл Фиссуры": "🎲 Ролл Фиссуры",
             "👤 Профиль": "👤 Профиль",
-            "👑 Король Фиссур": "👑 Король Фиссур",
-            "🏅 Лидерборд ММР": "🏅 Лидерборд ММР",
+            "🏆 Топ Фиссур": "🏆 Топ Фиссур",
+            "🏆 Топ MMR": "🏆 Топ MMR",
             "🔗 Привязать Steam": "🔗 Привязать Steam"
         }
         
@@ -3041,9 +3041,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif button_found == "👤 Профиль":
             logger.info(f"menu_handler: calling stats for user {user_id}")
             await stats(update, context)
-        elif button_found == "👑 Король Фиссур":
+        elif button_found == "🏆 Топ Фиссур":
             await top(update, context)
-        elif button_found == "🏅 Лидерборд ММР":
+        elif button_found == "🏆 Топ MMR":
             await topmmr(update, context)
         elif button_found == "🔗 Привязать Steam":
             await link(update, context)
