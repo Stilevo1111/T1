@@ -1305,24 +1305,24 @@ CATEGORY_PHRASES = {
 }
 
 WELCOME_PHRASES = [
-    "Присоединился! Падж облизнулся на тебя, свежее мясо🍖 Жми /start",
-    "Добро пожаловать! Свен хлопнул тебя по плечу👏 Жми /start",
-    "Не зевай! Сларк шепчет тебе на ухо🤫 Жми /start",
-    "Заходи! Бруда раскинула сеть для тебя🕸️ Жми /start",
-    "Открой рундук! Джагернаут, дал тебе клинок⚔️ Жми /start",
-    "Привет! Zeus сверкнул молнией⚡ Жми /start",
-    "Погнали! Spirit Breaker тебя прокатит🚕 Жми /start",
-    "Здарова! Tusk дал тебе в плечо кулачищем🐧 Жми /start",
-    "Ой, а ты кто? Axe почесал тебе затылок секирой🪓 Жми /start",
-    "Ой, а ты кто? Morphling умыл тебе лицо💧 Жми /start",
-    "Не зевай! Phantom Assassin хочет пересчитать твой ребра💀 Жми /start",
-    "Здарова! Slardar брызнул слюной🐟 Жми /start",
-    "Чего уставился? Clinkz натянул тебе тетиву🏹 Жми /start",
-    "Привет! Faceless Void остановил время на секунду🕰️ Жми /start",
-    "Будь как дома! Wisp засветился у тебя за спиной💫 Жми /start",
-    "Не зевай! Techies Три, две, одна — улыбнись🧨 Жми /start",
-    "Чего встал? Primal Beast топнул — пол треснул🦍 Жми /start",
-    "Сладкий! Queen of Pain услышала твой голос👑 Жми /start",
+    "Присоединился! Падж облизнулся на тебя, свежее мясо🍖",
+    "Добро пожаловать! Свен хлопнул тебя по плечу👏",
+    "Не зевай! Сларк шепчет тебе на ухо🤫",
+    "Заходи! Бруда раскинула сеть для тебя🕸️",
+    "Открой рундук! Джагернаут, дал тебе клинок⚔️",
+    "Привет! Zeus сверкнул молнией⚡",
+    "Погнали! Spirit Breaker тебя прокатит🚕",
+    "Здарова! Tusk дал тебе в плечо кулачищем🐧",
+    "Ой, а ты кто? Axe почесал тебе затылок секирой🪓",
+    "Ой, а ты кто? Morphling умыл тебе лицо💧",
+    "Не зевай! Phantom Assassin хочет пересчитать твой ребра💀",
+    "Здарова! Slardar брызнул слюной🐟",
+    "Чего уставился? Clinkz натянул тебе тетиву🏹",
+    "Привет! Faceless Void остановил время на секунду🕰️",
+    "Будь как дома! Wisp засветился у тебя за спиной💫",
+    "Не зевай! Techies Три, две, одна — улыбнись🧨",
+    "Чего встал? Primal Beast топнул — пол треснул🦍",
+    "Сладкий! Queen of Pain услышала твой голос👑",
 ]
 
 
@@ -3199,12 +3199,16 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     logger.debug(f"Could not set in_chat=True for {user_id}: {e}")
                 
                 # Формируем приветственное сообщение с кликабельным ником
-                welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}\n\n👆 Жми /start"
+                welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}"
+                
+                keyboard = [[InlineKeyboardButton("🔑 Привязать Steam", callback_data="link")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 result_msg = await context.bot.send_message(
                     chat_id=chat_id,
                     text=welcome_text,
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
                 )
                 logger.info(f"Welcome sent for {name}")
                 # Удаляем приветственное сообщение через час
