@@ -283,13 +283,91 @@ async def announce_weekly_mmr_winner(bot):
     logger.info(f"announce_weekly_mmr_winner: отправлено поздравление для {username} (неделя {current_week_start})")
 
 
+async def backup_database_job(context):
+    """Копирование данных в backup БД каждый час"""
+    try:
+        from database import BACKUP_DATABASE_URL, get_all_users_with_steam
+        if not BACKUP_DATABASE_URL:
+            return
+        
+        logger.info("Запуск копирования в backup БД")
+        
+        users = get_all_users_with_steam()
+        if not users:
+            logger.info("Нет пользователей для копирования")
+            return
+        
+        import psycopg2
+        from urllib.parse import urlparse
+        
+        backup_url = urlparse(BACKUP_DATABASE_URL)
+        conn = psycopg2.connect(
+            host=backup_url.hostname,
+            port=backup_url.port or 5432,
+            dbname=backup_url.path[1:],
+            user=backup_url.username,
+            password=backup_url.password
+        )
+        conn.autocommit = True
+        cursor = conn.cursor()
+        
+        for user in users:
+            try:
+                cursor.execute("""
+                    INSERT INTO users (telegram_id, username, steam_id, steam_nickname, mmr, rank_tier, 
+                                      dota_total_games, dota_wins, week_games, week_wins, 
+                                      week_best_streak, week_current_streak, week_start_date, 
+                                      mmr_updated_at, rank_tier_updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (telegram_id) DO UPDATE SET
+                        steam_id = EXCLUDED.steam_id,
+                        steam_nickname = EXCLUDED.steam_nickname,
+                        mmr = EXCLUDED.mmr,
+                        rank_tier = EXCLUDED.rank_tier,
+                        dota_total_games = EXCLUDED.dota_total_games,
+                        dota_wins = EXCLUDED.dota_wins,
+                        week_games = EXCLUDED.week_games,
+                        week_wins = EXCLUDED.week_wins,
+                        week_best_streak = EXCLUDED.week_best_streak,
+                        week_current_streak = EXCLUDED.week_current_streak,
+                        week_start_date = EXCLUDED.week_start_date,
+                        mmr_updated_at = EXCLUDED.mmr_updated_at,
+                        rank_tier_updated_at = EXCLUDED.rank_tier_updated_at
+                """, (
+                    user.get('telegram_id'),
+                    user.get('username'),
+                    user.get('steam_id'),
+                    user.get('steam_nickname'),
+                    user.get('mmr', 0),
+                    user.get('rank_tier', 0),
+                    user.get('dota_total_games', 0),
+                    user.get('dota_wins', 0),
+                    user.get('week_games', 0),
+                    user.get('week_wins', 0),
+                    user.get('week_best_streak', 0),
+                    user.get('week_current_streak', 0),
+                    user.get('week_start_date'),
+                    user.get('mmr_updated_at'),
+                    user.get('rank_tier_updated_at')
+                ))
+            except Exception as e:
+                logger.debug(f"Error copying user {user.get('telegram_id')}: {e}")
+        
+        cursor.close()
+        conn.close()
+        logger.info(f"Скопировано {len(users)} пользователей в backup БД")
+        
+    except Exception as e:
+        logger.error(f"Backup job error: {e}")
+
+
 async def update_all_mmr_job(context):
     """Ежечасовое обновление MMR всех пользователей с привязанным Steam (только в кеш)"""
     try:
         logger.info("Запуск ежечасного обновления MMR")
         await announce_weekly_mmr_winner(context.bot)
         from dota_mmr import update_user_mmr
-        from database import get_all_users_with_steam, user_cache
+        from database import get_all_users_with_steam, user_cache, BACKUP_DATABASE_URL
         
         users = get_all_users_with_steam()
         if not users:
@@ -3152,6 +3230,14 @@ async def main():
             interval=datetime.timedelta(minutes=1),
             first=datetime.datetime.now() + datetime.timedelta(seconds=30)
         )
+        
+        # Копия в backup БД каждый час
+        if BACKUP_DATABASE_URL:
+            job_queue.run_repeating(
+                backup_database_job,
+                interval=datetime.timedelta(hours=1),
+                first=datetime.datetime.now() + datetime.timedelta(minutes=5)
+            )
         
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("fissure", fissure))

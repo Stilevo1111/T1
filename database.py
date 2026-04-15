@@ -24,6 +24,8 @@ if not DATABASE_URL:
 else:
     print(f"Using DATABASE_URL: {DATABASE_URL[:20]}...")
 
+BACKUP_DATABASE_URL = os.getenv("BACKUP_DATABASE_URL")
+
 
 class UserCache:
     """Кеш данных пользователей в памяти с записью в БД раз в сутки"""
