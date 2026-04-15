@@ -1707,9 +1707,14 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
         _save_user_to_db_immediately(telegram_id, user)
     
     # Обновляем кеш топа MMR только 1 раз
-    dota_fields = ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname']
+    dota_fields = ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname', 'steam_id']
     if any(f in dota_fields for f in fields):
         update_dota_week_top_cache()
+    
+    # Сбрасываем кеш топа недели при новом steam_id
+    if 'steam_id' in fields and fields['steam_id']:
+        user_cache.delete('dota_week_top')
+        user_cache.delete('dota_week_top_ts')
     
     # Сбрасываем кеши дайджестов
     user_cache.set('digest_stats', None)
@@ -2067,8 +2072,21 @@ CASE WHEN week_games > 0
 
 
 def get_dota_week_top(limit=10, force_refresh=False):
-    """Получение топа игроков Dota 2 за неделю - напрямую из БД"""
+    """Получение топа игроков Dota 2 за неделю - с TTL 4 часа"""
     import math
+    import time
+    
+    _TOP_CACHE_TTL = 14400  # 4 часа
+    
+    # Проверяем кеш топа
+    cached_top = user_cache.get('dota_week_top')
+    cached_time = user_cache.get('dota_week_top_ts')
+    current_time = time.time()
+    
+    if cached_top and cached_time and not force_refresh:
+        if current_time - cached_time < _TOP_CACHE_TTL:
+            logger.info(f"get_dota_week_top: returning cached top ({len(cached_top)} users)")
+            return cached_top[:limit]
     
     all_users = user_cache.get_all_users()
     
@@ -2114,8 +2132,9 @@ def get_dota_week_top(limit=10, force_refresh=False):
             'week_current_streak': user.get('week_current_streak', 0)
         })
     
-    # Сохраняем в кеш
+    # Сохраняем в кеш с timestamp
     user_cache.set('dota_week_top', top_users)
+    user_cache.set('dota_week_top_ts', current_time)
     
     # Сортируем по формуле
     def get_sort_key(x):

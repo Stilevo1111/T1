@@ -2353,7 +2353,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Получаем топ напрямую из БД (force refresh для актуальных данных)
         # Показываем 7 игроков + позиция пользователя (если в топе)
-        top_users = get_week_top(8, force_refresh=True)
+        top_users = get_week_top(8)
         logger.info(f"topmmr: top_users = {top_users}")
         
         # Initialize user position variables
