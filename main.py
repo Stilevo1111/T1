@@ -2090,11 +2090,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if cascade_count > 1 and original_roll is not None:
             roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
             mc_level = f"×{cascade_count}"
+            roll_final = original_roll * cascade_count
             text = (
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n"
                 f"{multicast_text}\n\n"
-                f"⚡ МУЛЬТИКАСТ{mc_level}  {roll} CM"
+                f"⚡ МУЛЬТИКАСТ{mc_level}  {roll_final} CM"
             )
         else:
             # Старый дизайн без мультикаста
