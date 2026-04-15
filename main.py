@@ -3145,11 +3145,15 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 # Формируем приветственное сообщение с кликабельным ником
                 welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}"
 
+                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                inline_keyboard = [[InlineKeyboardButton("👆 Жми /start", callback_data="start")]]
+                reply_markup = InlineKeyboardMarkup(inline_keyboard)
                 
                 result_msg = await context.bot.send_message(
                     chat_id=chat_id,
                     text=welcome_text,
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
                 )
                 logger.info(f"Welcome sent for {name}")
                 # Удаляем приветственное сообщение через час
