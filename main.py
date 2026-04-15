@@ -2745,30 +2745,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     data = query.data
+    user = query.from_user
+    chat_id = query.message.chat_id if query.message else None
+    
     if data == "link":
-        # Создаем фиктивное сообщение для link функции
-        from telegram import Message
-        fake_message = Message(
-            message_id=query.message.message_id,
-            date=query.message.date,
-            chat=query.message.chat,
-            from_user=query.from_user,
-            text="/link"
+        # Отправляем инструкцию для выполнения /link
+        await context.bot.send_message(
+            chat_id=user.id,
+            text="Для привязки Steam аккаунта отправь /link и следуй инструкциям.\n\nПример: /link 123456789\nИли: /link https://dotabuff.com/players/123456789"
         )
-        update.message = fake_message
-        context.args = []
-        await link(update, context)
     elif data == "start":
-        from telegram import Message
-        fake_message = Message(
-            message_id=query.message.message_id,
-            date=query.message.date,
-            chat=query.message.chat,
-            from_user=query.from_user,
-            text="/start"
+        await context.bot.send_message(
+            chat_id=user.id,
+            text="Отправь /start в группе для начала работы с ботом"
         )
-        update.message = fake_message
-        await start(update, context)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
