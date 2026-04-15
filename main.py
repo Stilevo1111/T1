@@ -2746,19 +2746,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     data = query.data
     user = query.from_user
-    chat_id = query.message.chat_id if query.message else None
     
     if data == "link":
-        # Отправляем инструкцию для выполнения /link
-        await context.bot.send_message(
-            chat_id=user.id,
-            text="Для привязки Steam аккаунта отправь /link и следуй инструкциям.\n\nПример: /link 123456789\nИли: /link https://dotabuff.com/players/123456789"
-        )
+        logger.info(f"Button callback received: link from user {user.id}")
+        await query.answer("Нажми /link в чате для привязки Steam", show_alert=True)
     elif data == "start":
-        await context.bot.send_message(
-            chat_id=user.id,
-            text="Отправь /start в группе для начала работы с ботом"
-        )
+        await query.answer("Нажми /start в чате", show_alert=True)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
