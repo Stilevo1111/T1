@@ -276,6 +276,17 @@ def get_heroes_data() -> dict:
 
 def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
     """Получить топ-{top_k} популярных героев за последние {last_n} игр"""
+    import time
+    
+    _TOP_HEROES_TTL = 3600  # 1 час
+    
+    cache_key = f"top_heroes_{steam_id}_{last_n}_{top_k}"
+    cached = _heroes_image_cache.get(cache_key)
+    if cached:
+        cached_data, cached_time = cached
+        if time.time() - cached_time < _TOP_HEROES_TTL:
+            return cached_data
+    
     try:
         matches = get_recent_matches(steam_id, limit=last_n)
         if not matches:
@@ -305,6 +316,7 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
                     "picks": count,
                 })
         
+        _heroes_image_cache[cache_key] = (result, time.time())
         return result
     except Exception as e:
         logger.error(f"get_top_heroes error: {e}", exc_info=True)
