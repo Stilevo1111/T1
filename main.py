@@ -2392,10 +2392,10 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Всегда показываем позицию пользователя, даже если он не в топе
             if user_rank:
                 user_fissure = user.get('fissure', 0) if user else 0
-                text += f"\n\n<b>👤 Твоя позиция: #{user_rank} ({user_fissure:.1f} см)</b>"
+                text += f"\n<b>👤 Твоя позиция: #{user_rank} ({user_fissure:.1f} см)</b>"
             else:
                 user_fissure = user.get('fissure', 0) if user else 0
-                text += f"\n\n<b>👤 Твоя позиция: — ({user_fissure:.1f} см)</b>"
+                text += f"\n<b>👤 Твоя позиция: — ({user_fissure:.1f} см)</b>"
         
         # Add banner and send
         top_banner_url = "https://i.ibb.co/gLcnbBJ0/wx-Kwo.jpg"
