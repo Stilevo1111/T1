@@ -2072,38 +2072,110 @@ CASE WHEN week_games > 0
 
 
 def get_dota_week_top(limit=10, force_refresh=False):
-    """Получение топа игроков Dota 2 за неделю - с TTL 4 часа"""
+    """Получение топа игроков Dota 2 за неделю - с TTL и блокировкой"""
     import math
     import time
     
     _TOP_CACHE_TTL = 14400  # 4 часа
     
-    # Проверяем кеш топа
-    cached_top = user_cache.get('dota_week_top')
-    cached_time = user_cache.get('dota_week_top_ts')
-    current_time = time.time()
+    # Блокировка от дубликатов - использовать threading.Lock
+    global _dota_week_top_lock
+    if not hasattr(get_dota_week_top, '_lock'):
+        get_dota_week_top._lock = threading.Lock()
+        get_dota_week_top._calculating = [False]
     
-    if cached_top and cached_time and not force_refresh:
-        if current_time - cached_time < _TOP_CACHE_TTL:
-            logger.info(f"get_dota_week_top: returning cached top ({len(cached_top)} users)")
+    if get_dota_week_top._calculating[0] and not force_refresh:
+        cached_top = user_cache.get('dota_week_top')
+        if cached_top:
             return cached_top[:limit]
     
-    all_users = user_cache.get_all_users()
-    
-    # Если кеш пустой или force_refresh - загружаем из БД
-    if not all_users or force_refresh:
-        logger.info("get_dota_week_top: loading users from DB")
+    with get_dota_week_top._lock:
+        get_dota_week_top._calculating[0] = True
         try:
-            db_users = get_all_users_with_steam()
-            for u in db_users:
-                user_cache.set(u['telegram_id'], u)
+            cached_top = user_cache.get('dota_week_top')
+            cached_time = user_cache.get('dota_week_top_ts')
+            current_time = time.time()
+            
+            if cached_top and cached_time and not force_refresh:
+                if current_time - cached_time < _TOP_CACHE_TTL:
+                    logger.info(f"get_dota_week_top: returning cached top ({len(cached_top)} users)")
+                    return cached_top[:limit]
+            
             all_users = user_cache.get_all_users()
-            logger.info(f"get_dota_week_top: loaded {len(all_users)} users from DB")
+            
+            # Если кеш пустой или force_refresh - загружаем из БД
+            if not all_users or force_refresh:
+                logger.info("get_dota_week_top: loading users from DB")
+                try:
+                    db_users = get_all_users_with_steam()
+                    for u in db_users:
+                        user_cache.set(u['telegram_id'], u)
+                    all_users = user_cache.get_all_users()
+                    logger.info(f"get_dota_week_top: loaded {len(all_users)} users from DB")
+                except Exception as e:
+                    logger.error(f"get_dota_week_top: error loading users: {e}")
+                    get_dota_week_top._calculating[0] = False
+                    return []
+            
+            if not all_users:
+                get_dota_week_top._calculating[0] = False
+                return []
+            
+            top_users = []
+            for telegram_id in all_users:
+                if not isinstance(telegram_id, int):
+                    continue
+                
+                user = user_cache.get(telegram_id)
+                if not user or not user.get('steam_id'):
+                    continue
+                
+                week_games = user.get('week_games', 0)
+                week_wins = user.get('week_wins', 0)
+                winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
+                
+                top_users.append({
+                    'telegram_id': telegram_id,
+                    'username': user.get('username'),
+                    'steam_nickname': user.get('steam_nickname'),
+                    'mmr': user.get('mmr', 0),
+                    'week_games': week_games,
+                    'week_wins': week_wins,
+                    'rank_tier': user.get('rank_tier', 0),
+                    'winrate': winrate,
+                    'week_current_streak': user.get('week_current_streak', 0)
+                })
+            
+            user_cache.set('dota_week_top', top_users)
+            user_cache.set('dota_week_top_ts', current_time)
+            
+            import math as math_module
+            def get_sort_key(x):
+                g = x.get('week_games', 0)
+                w = x.get('week_wins', 0)
+                if g == 0:
+                    return (3, 0, 0)
+                wr = w / g
+                wr_int = int(wr * 100)
+                if wr_int >= 60:
+                    return (0, -wr_int, -(wr * math_module.sqrt(g) + math_module.sqrt(g) * 0.05), -g)
+                elif wr_int >= 50:
+                    return (1, -wr_int, -wr, -g)
+                else:
+                    return (2, -wr_int, -(wr * math_module.sqrt(g) * 0.5), -g)
+            
+            top_users.sort(key=get_sort_key)
+            result = top_users[:limit]
+            
+            user_cache.set('dota_week_top', result)
+            user_cache.set('dota_week_top_ts', time.time())
+            
+            get_dota_week_top._calculating[0] = False
+            return result
         except Exception as e:
-            logger.error(f"get_dota_week_top: error loading users: {e}")
+            get_dota_week_top._calculating[0] = False
+            logger.error(f"get_dota_week_top error: {e}")
             return []
-
-    if not all_users:
         return []
     
     # Формируем топ из ВСЕХ пользователей с steam_id
