@@ -1326,18 +1326,23 @@ WELCOME_PHRASES = [
 def make_clickable(name, user_id, max_length=12):
     """Создать кликабельный никнейм для Telegram"""
     if name and name != "None" and user_id:
+        display_name = name
         try:
-            from database import user_cache
+            from database import user_cache, get_user
+            # Сначала пробуем из кеша
             cached = user_cache.get(int(user_id))
             if cached:
                 display_name = cached.get('steam_nickname') or cached.get('username') or name
             else:
-                display_name = name
+                # Пробуем из БД напрямую
+                db_user = get_user(int(user_id))
+                if db_user:
+                    display_name = db_user.get('steam_nickname') or db_user.get('username') or name
         except:
             display_name = name
         
         # Если получилось все равно число - показываем как есть
-        if display_name.isdigit() and cached:
+        if display_name.isdigit():
             display_name = f"Игрок {display_name}"
         
         # Обрезаем длинные ники
