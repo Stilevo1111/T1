@@ -1760,7 +1760,7 @@ def main_menu():
     keyboard = [
         [KeyboardButton("👤 Профиль"), KeyboardButton("📈 Увеличить фиссуру")],
         [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
-        [KeyboardButton("🔗 Привязать Steam")],
+        [KeyboardButton("🔑 Привязать Steam")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
