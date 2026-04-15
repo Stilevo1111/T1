@@ -356,7 +356,7 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
             draw.text((tx, ty), label, fill=(200, 220, 240), font=font)
         
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        img.save(buf, format="JPEG", quality=85)
         buf.seek(0)
         return buf.read()
     except Exception as e:
@@ -471,7 +471,8 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             x += icon_size + gap
         
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        img_rgb = img.convert("RGB")
+        img_rgb.save(buf, format="JPEG", quality=85)
         buf.seek(0)
         result = buf.read()
         
