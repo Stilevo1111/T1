@@ -1758,7 +1758,7 @@ async def fetch_hero_icon(url, session=None, size=96):
 
 def main_menu():
     keyboard = [
-        [KeyboardButton("⚡Ролл фиссуры"), KeyboardButton("🦸 Профиль")],
+        [KeyboardButton("⚡Ролл фиссуры"), KeyboardButton("📋 Досье")],
         [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
         [KeyboardButton("🔑 Привязать Steam")],
     ]
@@ -2983,7 +2983,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         menu_buttons = {
             "⚡Ролл фиссуры": "⚡Ролл фиссуры",
-            "🦸 Профиль": "🦸 Профиль",
+            "📋 Досье": "📋 Досье",
             "🏆 Топ Фиссур": "🏆 Топ Фиссур",
             "🏆 Топ MMR": "🏆 Топ MMR",
             "🔗 Привязать Steam": "🔗 Привязать Steam"
@@ -3038,7 +3038,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Call the appropriate function
         if button_found == "⚡Ролл фиссуры":
             await fissure(update, context)
-        elif button_found == "🦸 Профиль":
+        elif button_found == "📋 Досье":
             logger.info(f"menu_handler: calling stats for user {user_id}")
             await stats(update, context)
         elif button_found == "🏆 Топ Фиссур":
