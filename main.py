@@ -3199,6 +3199,8 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     logger.debug(f"Could not set in_chat=True for {user_id}: {e}")
                 
                 # Формируем приветственное сообщение с кликабельным ником
+                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                
                 welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}"
                 
                 keyboard = [[InlineKeyboardButton("🔑 Привязать Steam", callback_data="link")]]
