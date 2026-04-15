@@ -364,6 +364,15 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
         return None
 
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+def _fetch_hero_portrait(hero_short: str) -> tuple[str, bytes | None]:
+    """Загрузить портрет героя (для параллельной загрузки)"""
+    data = get_hero_portrait_cached(hero_short) or get_hero_icon_cached(hero_short)
+    return hero_short, data
+
+
 def generate_heroes_image(top_heroes: list) -> bytes | None:
     """Сгенерировать картинку с иконками топ-героев: центральный крупнее, к краям меньше."""
     try:
@@ -374,7 +383,6 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         if not top_heroes:
             return None
         
-        # Фиксированный холст — как раньше; фон ImgBB вписываем без масштабирования
         target_width = 1744
         target_height = 592
         img = _compose_heroes_strip_background(target_width, target_height)
@@ -384,7 +392,6 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         
         n = len(top_heroes)
         
-        # Сортируем по убыванию picks: самый частый герой в центре
         top_heroes = sorted(top_heroes, key=lambda h: h.get("picks", 0), reverse=True)
         
         center = (n - 1) / 2.0
@@ -410,15 +417,26 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         
         draw = ImageDraw.Draw(img)
         
+        hero_short_names = [h.get("short_name", "") for h in top_heroes]
+        icon_data_map = {}
+        
+        with ThreadPoolExecutor(max_workers=min(5, n)) as executor:
+            futures = {executor.submit(_fetch_hero_portrait, sh): sh for sh in hero_short_names if sh}
+            for future in as_completed(futures):
+                try:
+                    sh, data = future.result()
+                    if data:
+                        icon_data_map[sh] = data
+                except Exception:
+                    pass
+        
         x = start_x
         for i, hero in enumerate(top_heroes):
             icon_size = sizes[i]
             y = (target_height - icon_size) // 2
             
-            icon_data = None
             hero_short = hero.get("short_name", "")
-            if hero_short:
-                icon_data = get_hero_portrait_cached(hero_short) or get_hero_icon_cached(hero_short)
+            icon_data = icon_data_map.get(hero_short)
             
             if icon_data:
                 try:
