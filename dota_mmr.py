@@ -367,6 +367,10 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
+_heroes_image_cache = {}
+_heroes_image_cache_ttl = 300
+
+
 def _fetch_hero_portrait(hero_short: str) -> tuple[str, bytes | None]:
     """Загрузить портрет героя (для параллельной загрузки)"""
     data = get_hero_portrait_cached(hero_short) or get_hero_icon_cached(hero_short)
@@ -375,7 +379,16 @@ def _fetch_hero_portrait(hero_short: str) -> tuple[str, bytes | None]:
 
 def generate_heroes_image(top_heroes: list) -> bytes | None:
     """Сгенерировать картинку с иконками топ-героев: центральный крупнее, к краям меньше."""
+    global _heroes_image_cache
+    
     try:
+        import time
+        cache_key = ",".join(str(h.get("id", "")) for h in sorted(top_heroes, key=lambda x: x.get("id", "")))
+        if cache_key in _heroes_image_cache:
+            cached_data, cached_time = _heroes_image_cache[cache_key]
+            if time.time() - cached_time < _heroes_image_cache_ttl:
+                return cached_data
+        
         from PIL import Image, ImageDraw, ImageFont
         import io
         import requests as req
@@ -460,7 +473,10 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         buf.seek(0)
-        return buf.read()
+        result = buf.read()
+        
+        _heroes_image_cache[cache_key] = (result, time.time())
+        return result
     except Exception as e:
         logger.error(f"generate_heroes_image error: {e}", exc_info=True)
         return None
