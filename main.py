@@ -2286,8 +2286,19 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             text += "\n\n💡 /profile ＠ник — чужой профиль"
         
-        # Banner URL
+        # Banner URL - для Steam использовать картинку с героями
         profile_banner_url = "https://i.ibb.co/d0pcyNcM/image.png"
+        
+        if target_user.get('steam_id'):
+            try:
+                from dota_mmr import get_top_heroes, generate_heroes_image
+                top_heroes = get_top_heroes(target_user['steam_id'], last_n=20, top_k=5)
+                if top_heroes:
+                    img_bytes = generate_heroes_image(top_heroes)
+                    if img_bytes:
+                        profile_banner_url = io.BytesIO(img_bytes)
+            except Exception as e:
+                logger.debug(f"Could not generate heroes image: {e}")
         
         result_msg = await context.bot.send_photo(
             chat_id=update.message.chat_id,
@@ -2299,24 +2310,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
-        
-        # Отправляем топ-3 героя за последние 10 игр (если привязан Steam)
-        if target_user.get('steam_id'):
-            try:
-                from dota_mmr import get_top_heroes, generate_heroes_image
-                top_heroes = get_top_heroes(target_user['steam_id'], last_n=20, top_k=5)
-                if top_heroes:
-                    img_bytes = generate_heroes_image(top_heroes)
-                    if img_bytes:
-                        import io
-                        hero_msg = await context.bot.send_photo(
-                            chat_id=update.message.chat_id,
-                            photo=io.BytesIO(img_bytes)
-                        )
-                        add_bot_message(chat_id, update.effective_user.id, hero_msg.message_id)
-                        schedule_delete(context.bot, chat_id, hero_msg.message_id, 30, context.application.job_queue)
-            except Exception as e:
-                logger.debug(f"Could not send hero icons: {e}")
         
     except Exception as e:
         import traceback
