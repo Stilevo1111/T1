@@ -383,13 +383,20 @@ async def update_all_mmr_job(context):
                 result = update_user_mmr(user['telegram_id'])
                 if result and result.get('success'):
                     success_count += 1
-                    # Обновляем ТОЛЬКО в кеше, не в БД
-                    user = user_cache.get(user['telegram_id'])
-                    if user:
-                        user['mmr'] = result.get('mmr', user.get('mmr', 0))
-                        user['rank_tier'] = result.get('rank_tier', user.get('rank_tier', 0))
-                        user_cache.set(user['telegram_id'], user)
-                    
+                    logger.info(f"MMR updated for {user['telegram_id']}: {result.get('mmr')} MMR")
+
+                    # Sync week stats from DB after MMR update
+                    from database import get_user as get_db_user
+                    db_user = get_db_user(user['telegram_id'])
+                    if db_user:
+                        user_cache.set(user['telegram_id'], {
+                            **user_cache.get(user['telegram_id'], {}),
+                            'week_games': db_user.get('week_games', 0),
+                            'week_wins': db_user.get('week_wins', 0),
+                            'week_best_streak': db_user.get('week_best_streak', 0),
+                            'week_current_streak': db_user.get('week_current_streak', 0)
+                        })
+
                     if result.get('rank_up'):
                         rank_up_users.append((user, result['rank_up']))
             except Exception as e:
