@@ -2310,10 +2310,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if target_user.get('steam_id'):
             try:
                 from dota_mmr import get_top_heroes, generate_heroes_image
-                # Генерируем картинку но без ожидания - просто в фоне
-                # Для быстрого открытия профиля - пока без картинки
-                # TODO: добавить отправку картинки отдельным сообщением
-                pass
+                top_heroes = get_top_heroes(target_user['steam_id'], last_n=20, top_k=5)
+                if top_heroes:
+                    img_bytes = generate_heroes_image(top_heroes)
+                    if img_bytes:
+                        profile_banner_url = io.BytesIO(img_bytes)
             except Exception as e:
                 logger.debug(f"Could not generate heroes image: {e}")
         
