@@ -3274,11 +3274,12 @@ async def main():
         
         # morning_digest_job удалён
         
-        job_queue.run_repeating(
-            update_all_mmr_job,
-            interval=datetime.timedelta(hours=1),
-            first=datetime.datetime.now() + datetime.timedelta(minutes=1)
-        )
+         # Обновление MMR каждые 4 часа (экономия БД)
+         job_queue.run_repeating(
+             update_all_mmr_job,
+             interval=datetime.timedelta(hours=4),
+             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
+         )
         
         job_queue.run_repeating(
             alternate_digest_job,
