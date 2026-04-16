@@ -1493,8 +1493,8 @@ def calculate_multicast(dice_value: int) -> tuple[int, str]:
         return 3, f"\n{random.choice(MULTICAST_TEXTS[3])}"
     elif dice_value >= 16:  # 16-48
         return 2, f"\n{random.choice(MULTICAST_TEXTS[2])}"
-    else:  # 1-15
-        return 2, f"\n{random.choice(MULTICAST_TEXTS[2])}"
+    else:  # 1-15 - обычный ролл без мультикаста
+        return 1, ""
 
 
 # ── Мультикаст (каскадный) ───────────────────────────────────────────
