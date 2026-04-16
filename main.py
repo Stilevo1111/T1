@@ -1772,7 +1772,7 @@ def main_menu():
     keyboard = [
         [KeyboardButton("🎲 Ролл Фиссуры"), KeyboardButton("👤 Профиль")],
         [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
-        [KeyboardButton("🔑 Привязать Steam")],
+        [KeyboardButton("🔗 Привязать Steam")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
@@ -2840,7 +2840,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         banner_url = "https://i.ibb.co/LXsGsfxZ/213.png"
         
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        inline_keyboard = [[InlineKeyboardButton("🔑 Привязать Steam", callback_data="link")]]
+        inline_keyboard = [[InlineKeyboardButton("🔗 Привязать Steam", callback_data="link")]]
         reply_markup = InlineKeyboardMarkup(inline_keyboard)
         
         result_msg = await context.bot.send_photo(
@@ -3221,7 +3221,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 
                 welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}"
                 
-                keyboard = [[InlineKeyboardButton("🔑 Привязать Steam", callback_data="link")]]
+                keyboard = [[InlineKeyboardButton("🔗 Привязать Steam", callback_data="link")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 result_msg = await context.bot.send_message(
