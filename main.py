@@ -2831,7 +2831,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await context.bot.send_message(
             chat_id=chat_id,
-            text="",
+            text=None,
             reply_markup=main_menu()
         )
         
