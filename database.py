@@ -280,22 +280,12 @@ def update_dota_week_top_cache():
     def get_sort_key(x):
         g = x.get('week_games', 0)
         w = x.get('week_wins', 0)
+        l = g - w  # losses
         if g == 0:
             return (1, 0, 0)
-        wr = w / g
-        wr_int = int(wr * 100)
-        # Группировка по 10% с учётом штрафа для середнячков
-        if wr_int >= 60:
-            wr_group = (wr_int + 5) // 10 * 10  # round UP: 75->80, 65->70
-            wr_score = wr * math.sqrt(g) + math.sqrt(g) * 0.05  # small bonus for games
-        elif wr_int >= 50:
-            wr_group = (wr_int // 10) * 10 - 10  # 50-59% -> штраф вниз
-            wr_score = wr  # для середнячков - сначала WR, потом игры
-        else:
-            wr_group = (wr_int // 10) * 10 - 20  # <50% -> ещё ниже
-            wr_score = wr * math.sqrt(g) * 0.5
-        logger.info(f"get_sort_key: {x.get('steam_nickname')} WR={wr_int}% group={wr_group} score={wr_score}")
-        return (0, wr_group, wr_score)
+        score = w - l * 0.5  # Новая формула: победы - поражения * 0.5
+        logger.info(f"get_sort_key: {x.get('steam_nickname')} W={w} L={l} score={score}")
+        return (0, score, g)
     
     logger.info("===== UPDATE DOTA WEEK TOP: STARTING SORT =====")
     top_users.sort(key=lambda x: get_sort_key(x), reverse=True)
@@ -2025,17 +2015,16 @@ def get_dota_mmr_top(limit=10):
                 SELECT telegram_id, username, steam_nickname, mmr, 
                        dota_total_games, dota_wins, week_games, week_wins,
                        rank_tier, wins, losses,
-CASE WHEN week_games > 0 
-                             THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
-                             ELSE 0 END as winrate
+ CASE WHEN week_games > 0 
+                              THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
+                              ELSE 0 END as winrate
                 FROM users 
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) DESC,
-                    (week_wins * 1.0 / NULLIF(week_games, 0)) * SQRT(week_games) DESC,
+                    (wins - losses * 0.5) DESC,
                     week_games DESC,
-                    week_wins DESC, mmr DESC
+                    mmr DESC
                 LIMIT %s
             """, (limit,))
             users = cursor.fetchall()
@@ -2049,17 +2038,16 @@ ORDER BY
                 SELECT telegram_id, username, steam_nickname, mmr, 
                        dota_total_games, dota_wins, week_games, week_wins,
                        rank_tier, wins, losses,
-CASE WHEN week_games > 0 
-                             THEN ROUND(week_wins * 100.0 / week_games, 1) 
-                             ELSE 0 END as winrate
+ CASE WHEN week_games > 0 
+                              THEN ROUND(week_wins * 100.0 / week_games, 1) 
+                              ELSE 0 END as winrate
                 FROM users 
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    CAST(ROUND(week_wins * 100.0 / NULLIF(week_games, 0), -1) / 10 * 10 AS INTEGER) DESC,
-                    (week_wins * 1.0 / NULLIF(week_games, 0)) * SQRT(week_games) DESC,
+                    (wins - losses * 0.5) DESC,
                     week_games DESC,
-                    week_wins DESC, mmr DESC
+                    mmr DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
@@ -2155,16 +2143,11 @@ def get_dota_week_top(limit=10, force_refresh=False):
             def get_sort_key(x):
                 g = x.get('week_games', 0)
                 w = x.get('week_wins', 0)
+                l = g - w  # losses
                 if g == 0:
                     return (3, 0, 0)
-                wr = w / g
-                wr_int = int(wr * 100)
-                if wr_int >= 60:
-                    return (0, -wr_int, -(wr * math_module.sqrt(g) + math_module.sqrt(g) * 0.05), -g)
-                elif wr_int >= 50:
-                    return (1, -wr_int, -wr, -g)
-                else:
-                    return (2, -wr_int, -(wr * math_module.sqrt(g) * 0.5), -g)
+                score = w - l * 0.5  # Новая формула: победы - поражения * 0.5
+                return (0, -score, -g)
             
             top_users.sort(key=get_sort_key)
             result = top_users[:limit]
@@ -2214,16 +2197,11 @@ def get_dota_week_top(limit=10, force_refresh=False):
     def get_sort_key(x):
         g = x.get('week_games', 0)
         w = x.get('week_wins', 0)
+        l = g - w  # losses
         if g == 0:
             return (3, 0, 0)  # Игроки без игр - в САМЫЙ КОНЕЦ (приоритет 3)
-        wr = w / g
-        wr_int = int(wr * 100)
-        if wr_int >= 60:
-            return (0, -wr_int, -(wr * math.sqrt(g) + math.sqrt(g) * 0.05), -g)
-        elif wr_int >= 50:
-            return (1, -wr_int, -wr, -g)
-        else:
-            return (2, -wr_int, -(wr * math.sqrt(g) * 0.5), -g)
+        score = w - l * 0.5  # Новая формула: победы - поражения * 0.5
+        return (0, -score, -g)
 
     top_users.sort(key=get_sort_key)
     return top_users[:limit]
