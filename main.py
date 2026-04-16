@@ -11,7 +11,7 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, BACKUP_DATABASE_URL
-from activity import *
+
 from aiohttp import web
 
 # Logging setup
@@ -3085,12 +3085,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         logger.info(f"User {user_id} pressed button: {button_found} in chat type: {chat_type}")
         
-        # Обновляем активность чата для модуля "Актив"
-        from database import get_config
-        digest_chat = get_config('digest_chat_id')
-        if digest_chat and str(chat_id) == str(digest_chat):
-            update_chat_activity(chat_id)
-        
         # Delete user's message only in groups/channels (non-blocking, don't wait)
         if chat_type in ['group', 'supergroup', 'channel']:
             user_msg_id = update.message.message_id
@@ -3289,7 +3283,7 @@ async def main():
         )
         
         job_queue.run_repeating(
-            check_activity_job,
+            decrease_inactive_job,
             interval=datetime.timedelta(minutes=1),
             first=datetime.datetime.now() + datetime.timedelta(seconds=30)
         )
