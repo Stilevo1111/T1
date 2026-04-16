@@ -2622,12 +2622,16 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Привязка Steam аккаунта по нику или Steam ID"""
     logger.info(f"User {update.effective_user.id} called link")
     
-    chat_id = update.message.chat_id
-    chat_type = update.message.chat.type
+    chat_id = update.effective_chat.id
+    
+    # Try to get chat_type safely
+    chat_type = 'private'
+    if update.message and update.message.chat:
+        chat_type = update.message.chat.type
     
     # Delete user message only in groups/channels
     if chat_type in ['group', 'supergroup', 'channel']:
-        if await bot_can_delete(context.bot, chat_id):
+        if update.message and await bot_can_delete(context.bot, chat_id):
             try:
                 await context.bot.delete_message(chat_id, update.message.message_id)
             except Exception:
@@ -2751,25 +2755,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Открываю привязку...", show_alert=False)
         
         try:
-            chat = query.message.chat if query.message else query.message
-            chat_id = chat.id if chat else query.from_user.id
-            
-            link_banner_url = "https://i.ibb.co/s9L6mTtx/dsfcv23123.png"
-            link_text = ("🦞 *Привязка Dota*\n\n"
-            "Отправьте `/link` и ваш Dota ID или ссылку на профиль.\n\n"
-            "*Примеры:*\n"
-            "`/link 76561198012345678`\n"
-            "`/link https://ru.dotabuff.com/players/347614699`\n\n"
-            "⚠️ Профиль должен быть открытым\n"
-            "📡 Статистика с OpenDota")
-            
-            await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=link_banner_url,
-                caption=link_text,
-                parse_mode='Markdown',
-                reply_markup=main_menu()
-            )
+            await link(update, context)
         except Exception as e:
             logger.error(f"Error in button_callback link: {e}")
     elif data == "start":
