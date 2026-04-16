@@ -2264,10 +2264,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Получаем последние 10 игр для отображения
             last_10_balls = ""
             try:
-                from dota_mmr import get_recent_matches
+                from dota_mmr import get_recent_matches_async
                 steam_id = target_user.get('steam_id')
                 if steam_id and week_games > 0:
-                    matches = get_recent_matches(steam_id, limit=50)
+                    matches = await get_recent_matches_async(steam_id, limit=50)
                     matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)
                     # Берём только сыгранные за неделю игры (максимум week_games)
                     week_match_count = min(len(matches), week_games)
@@ -2310,8 +2310,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if target_user.get('steam_id'):
             try:
-                from dota_mmr import get_top_heroes, generate_heroes_image
-                top_heroes = get_top_heroes(target_user['steam_id'], last_n=20, top_k=5)
+                from dota_mmr import get_top_heroes_async, generate_heroes_image
+                top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
                 if top_heroes:
                     img_bytes = generate_heroes_image(top_heroes)
                     if img_bytes:

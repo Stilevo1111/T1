@@ -3,6 +3,7 @@ import re
 import time
 import requests
 import logging
+import aiohttp
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from database import get_user, update_user_fields_batch
@@ -91,6 +92,51 @@ def _api_get(url: str, params: dict = None) -> dict:
             time.sleep(60)  # Ждём минуту при 429
             return None
         return None
+    except Exception as e:
+        logger.error(f"API request error: {e}", exc_info=True)
+        return None
+
+
+_async_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
+
+async def _check_rate_limit_async():
+    """Async версия rate limiting"""
+    import asyncio
+    now = time.time()
+    
+    if now - _async_rate_limit["window_start"] >= API_RATE_WINDOW:
+        _async_rate_limit["window_start"] = now
+        _async_rate_limit["requests_count"] = 0
+    
+    if _async_rate_limit["requests_count"] >= API_RATE_LIMIT:
+        wait_time = API_RATE_WINDOW - (now - _async_rate_limit["window_start"])
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+            _async_rate_limit["window_start"] = time.time()
+            _async_rate_limit["requests_count"] = 0
+    
+    time_since_last = now - _async_rate_limit["last_request"]
+    if time_since_last < API_MIN_INTERVAL:
+        await asyncio.sleep(API_MIN_INTERVAL - time_since_last)
+    
+    _async_rate_limit["requests_count"] += 1
+    _async_rate_limit["last_request"] = time.time()
+
+
+async def _api_get_async(url: str, params: dict = None) -> dict:
+    """Асинхронная функция для API-запросов"""
+    await _check_rate_limit_async()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                elif resp.status == 429:
+                    logger.warning(f"Rate limited by OpenDota API, waiting...")
+                    import asyncio
+                    await asyncio.sleep(60)
+                    return None
+                return None
     except Exception as e:
         logger.error(f"API request error: {e}", exc_info=True)
         return None
@@ -320,6 +366,55 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
         return result
     except Exception as e:
         logger.error(f"get_top_heroes error: {e}", exc_info=True)
+        return []
+
+
+async def get_top_heroes_async(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
+    """Асинхронно получить топ-{top_k} популярных героев за последние {last_n} игр"""
+    import time
+    
+    _TOP_HEROES_TTL = 3600  # 1 час
+    
+    cache_key = f"top_heroes_{steam_id}_{last_n}_{top_k}"
+    cached = _heroes_image_cache.get(cache_key)
+    if cached:
+        cached_data, cached_time = cached
+        if time.time() - cached_time < _TOP_HEROES_TTL:
+            return cached_data
+    
+    try:
+        matches = await get_recent_matches_async(steam_id, limit=last_n)
+        if not matches:
+            return []
+        
+        heroes_data = get_heroes_data()
+        if not heroes_data:
+            return []
+        
+        from collections import Counter
+        hero_counts = Counter()
+        for match in matches:
+            hero_id = match.get("hero_id")
+            if hero_id:
+                hero_counts[hero_id] += 1
+        
+        result = []
+        for hero_id, count in hero_counts.most_common(top_k):
+            hero_info = heroes_data.get(hero_id)
+            if hero_info:
+                result.append({
+                    "id": hero_id,
+                    "name": hero_info["name"],
+                    "short_name": hero_info.get("short_name", ""),
+                    "image_url": hero_info["image_url"],
+                    "icon_url": hero_info["icon_url"],
+                    "picks": count,
+                })
+        
+        _heroes_image_cache[cache_key] = (result, time.time())
+        return result
+    except Exception as e:
+        logger.error(f"get_top_heroes_async error: {e}", exc_info=True)
         return []
 
 
@@ -621,6 +716,19 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
         return matches or []
     except Exception as e:
         logger.error(f"get_recent_matches error: {e}", exc_info=True)
+        return []
+
+
+async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
+    """Асинхронно получить последние матчи игрока"""
+    try:
+        account_id = steam64_to_account_id(steam_id)
+        url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
+        
+        matches = await _api_get_async(url, {"limit": limit, "sort": "start_time"})
+        return matches or []
+    except Exception as e:
+        logger.error(f"get_recent_matches_async error: {e}", exc_info=True)
         return []
 
 
