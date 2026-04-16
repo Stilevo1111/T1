@@ -2750,9 +2750,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = query.message.chat if query.message else None
     
     if data == "link" and chat:
-        await query.edit_message_text(
-            text="Выполняю /link..."
-        )
+        # Check if there's a message to edit
+        if query.message:
+            await query.edit_message_text(
+                text="Выполняю /link..."
+            )
+        else:
+            await query.answer("Запускаю /link...", show_alert=False)
         
         from telegram import Message
         from datetime import datetime
