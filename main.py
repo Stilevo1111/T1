@@ -2746,39 +2746,32 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     data = query.data
-    user = query.from_user
-    chat = query.message.chat if query.message else None
     
     if data == "link":
-        await query.answer("Запускаю /link...", show_alert=False)
-        
-        from telegram import Message
-        from datetime import datetime
-        
-        user = query.from_user
-        chat = query.message.chat if query.message else None
-        
-        if not chat:
-            return
-            
-        fake_message = Message(
-            message_id=query.message.message_id if query.message else 0,
-            date=datetime.now(),
-            chat=chat,
-            from_user=user,
-            text="/link"
-        )
-        
-        update.message = fake_message
-        context.args = []
+        await query.answer("Открываю привязку...", show_alert=False)
         
         try:
-            await link(update, context)
+            chat = query.message.chat if query.message else query.message
+            chat_id = chat.id if chat else query.from_user.id
+            
+            link_banner_url = "https://i.ibb.co/s9L6mTtx/dsfcv23123.png"
+            link_text = ("🦞 *Привязка Dota*\n\n"
+            "Отправьте `/link` и ваш Dota ID или ссылку на профиль.\n\n"
+            "*Примеры:*\n"
+            "`/link 76561198012345678`\n"
+            "`/link https://ru.dotabuff.com/players/347614699`\n\n"
+            "⚠️ Профиль должен быть открытым\n"
+            "📡 Статистика с OpenDota")
+            
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=link_banner_url,
+                caption=link_text,
+                parse_mode='Markdown',
+                reply_markup=main_menu()
+            )
         except Exception as e:
             logger.error(f"Error in button_callback link: {e}")
-            await query.edit_message_text(
-                text=f"❌ Ошибка: {e}"
-            )
     elif data == "start":
         await start(update, context)
 
