@@ -2127,7 +2127,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         try:
             if roll_banner_url:
-        result_msg = await context.bot.send_photo(
+                result_msg = await context.bot.send_photo(
                     chat_id=update.message.chat_id,
                     photo=roll_banner_url,
                     caption=text,
