@@ -3297,18 +3297,15 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             # User joined the chat (was not a member, now is member)
             if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator']:
                 
+                name = new_member.user.first_name or "Friend"
+                user_id = new_member.user.id
+                user_obj = new_member.user
+                
                 # Отмечаем пользователя как участника чата
                 try:
                     set_user_in_chat(user_id, True)
                 except Exception as e:
                     logger.debug(f"Could not set in_chat=True for {user_id}: {e}")
-                
-                # Формируем приветственное сообщение
-                from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity
-                
-                name = new_member.user.first_name or "Friend"
-                user_id = new_member.user.id
-                user_obj = new_member.user
                 
                 phrase = random.choice(WELCOME_PHRASES)
                 keyboard = [[InlineKeyboardButton("🔑 Привязать Аккаунт", callback_data="link")]]
