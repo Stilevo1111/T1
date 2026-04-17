@@ -3421,19 +3421,14 @@ async def main():
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
         job_queue.set_application(app)
         
-        # ✅ Утреннее приветствие 09:00 MSK
+        # ✅ Утреннее приветствие 09:00 MSK (одно сообщение в сутки)
         job_queue.run_daily(
             morning_greeting_job,
             time=datetime.time(hour=6, minute=0),  # 06:00 UTC = 09:00 MSK
             days=(0, 1, 2, 3, 4, 5, 6)
         )
         
-        # ✅ Ночное приветствие 23:00 MSK
-        job_queue.run_daily(
-            night_greeting_job,
-            time=datetime.time(hour=20, minute=0),  # 20:00 UTC = 23:00 MSK
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
+        # Удалено вечернее приветствие - оставлено только утреннее
         
         job_queue.run_daily(
             decrease_inactive_job,
