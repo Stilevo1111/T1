@@ -3464,7 +3464,6 @@ async def main():
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CallbackQueryHandler(button_callback))
         app.add_handler(CommandHandler("fissure", fissure))
-        app.add_handler(CommandHandler("stats", stats))
         app.add_handler(CommandHandler("profile", stats))
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
