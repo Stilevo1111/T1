@@ -136,13 +136,18 @@ async def decrease_inactive_job(context):
 
 
 async def morning_greeting_job(context):
-    """✅ Утреннее приветствие 09:00 MSK"""
+    """✅ Утреннее приветствие 09:00 MSK - 1 раз в чат"""
     from datetime import timezone, timedelta
-    from database import get_connection, DATABASE_URL
+    from database import get_config
     
     MSK = timezone(timedelta(hours=3))
     now_msk = datetime.datetime.now(MSK)
     today_str = now_msk.strftime("%Y-%m-%d")
+    
+    last_greeting = get_config('daily_greeting_sent')
+    if last_greeting == today_str:
+        logger.info("Утреннее приветствие уже отправлено сегодня")
+        return
     
     MORNING_GREETINGS = [
         "🦇 Утречко! Готовы к каточке? 🎮",
@@ -156,45 +161,34 @@ async def morning_greeting_job(context):
     try:
         logger.info(f"Запуск утреннего приветствия 09:00 MSK")
         
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT telegram_id FROM users WHERE last_greeting_date != %s AND telegram_id > 0",
-            (today_str,)
-        )
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            logger.info("Чат для дайджеста не настроен")
+            return
         
-        users_to_greet = cursor.fetchall()
         bot = context.application.bot
-        sent_count = 0
+        await bot.send_message(chat_id=digest_chat_id, text=greeting_text)
         
-        for user in users_to_greet:
-            user_id = user[0]
-            try:
-                await bot.send_message(chat_id=user_id, text=greeting_text)
-                sent_count += 1
-                cursor.execute(
-                    "UPDATE users SET last_greeting_date = %s WHERE telegram_id = %s",
-                    (today_str, user_id)
-                )
-                await asyncio.sleep(0.05)
-            except Exception as e:
-                logger.debug(f"Не удалось отправить утреннее приветствие {user_id}: {e}")
-                continue
-        
-        conn.commit()
-        logger.info(f"Утреннее приветствие отправлено {sent_count} пользователям")
+        set_config('daily_greeting_sent', today_str)
+        logger.info(f"Утреннее приветствие отправлено в чат {digest_chat_id}")
         
     except Exception as e:
         logger.error(f"Ошибка в morning_greeting_job: {e}")
 
 
 async def night_greeting_job(context):
-    """✅ Ночное приветствие 23:00 MSK"""
+    """✅ Вечернее приветствие 23:00 MSK - 1 раз в чат"""
     from datetime import timezone, timedelta
-    from database import get_connection, DATABASE_URL
+    from database import get_config
     
     MSK = timezone(timedelta(hours=3))
     now_msk = datetime.datetime.now(MSK)
+    today_str = now_msk.strftime("%Y-%m-%d")
+    
+    last_greeting = get_config('night_greeting_sent')
+    if last_greeting == today_str:
+        logger.info("Вечернее приветствие уже отправлено сегодня")
+        return
     
     NIGHT_GREETINGS = [
         "🦇 Спокойной ночи, дотеры. Если кто не спит — играйте тихо, я молчу.",
@@ -206,29 +200,18 @@ async def night_greeting_job(context):
     greeting_text = random.choice(NIGHT_GREETINGS)
     
     try:
-        logger.info(f"Запуск ночного приветствия 23:00 MSK")
+        logger.info(f"Запуск вечернего приветствия 23:00 MSK")
         
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT telegram_id FROM users WHERE telegram_id > 0"
-        )
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            logger.info("Чат для дайджеста не настроен")
+            return
         
-        users_to_greet = cursor.fetchall()
         bot = context.application.bot
-        sent_count = 0
+        await bot.send_message(chat_id=digest_chat_id, text=greeting_text)
         
-        for user in users_to_greet:
-            user_id = user[0]
-            try:
-                await bot.send_message(chat_id=user_id, text=greeting_text)
-                sent_count += 1
-                await asyncio.sleep(0.05)
-            except Exception as e:
-                logger.debug(f"Не удалось отправить ночное приветствие {user_id}: {e}")
-                continue
-        
-        logger.info(f"Ночное приветствие отправлено {sent_count} пользователям")
+        set_config('night_greeting_sent', today_str)
+        logger.info(f"Вечернее приветствие отправлено в чат {digest_chat_id}")
         
     except Exception as e:
         logger.error(f"Ошибка в night_greeting_job: {e}")
