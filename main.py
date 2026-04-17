@@ -2853,6 +2853,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    # ✅ УДАЛЯЕМ СТАРОЕ СООБЩЕНИЕ С ИНЛАЙН КНОПКАМИ СРАЗУ ПРИ НАЖАТИИ
+    chat_id = query.message.chat_id
+    user_id = query.from_user.id
+    message_id = query.message.message_id
+    
+    try:
+        await context.bot.delete_message(chat_id, message_id)
+    except Exception as e:
+        logger.debug(f"Не удалось удалить старое сообщение кнопки: {e}")
+    
     data = query.data
     
     if data == "link":
