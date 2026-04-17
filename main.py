@@ -2960,7 +2960,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
             photo=banner_url,
-            caption="🔑 Привязать Dota аккаунт",
+            caption="",
             reply_markup=reply_markup
         )
         
