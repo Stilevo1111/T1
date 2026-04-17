@@ -2325,7 +2325,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for attempt in range(max_retries):
             try:
                 if profile_banner_url:
-        result_msg = await context.bot.send_photo(
+                    result_msg = await context.bot.send_photo(
                         chat_id=update.message.chat_id,
                         photo=profile_banner_url,
                         caption=text,
