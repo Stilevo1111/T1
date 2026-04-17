@@ -3182,8 +3182,6 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             # User joined the chat (was not a member, now is member)
             if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator']:
-                name = new_member.user.first_name or "Friend"
-                user_id = new_member.user.id
                 
                 # Отмечаем пользователя как участника чата
                 try:
@@ -3191,20 +3189,41 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 except Exception as e:
                     logger.debug(f"Could not set in_chat=True for {user_id}: {e}")
                 
-                # Формируем приветственное сообщение с кликабельным ником
-                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                # Формируем приветственное сообщение
+                from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity
                 
-                welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {random.choice(WELCOME_PHRASES)}"
+                name = new_member.user.first_name or "Friend"
+                user_id = new_member.user.id
+                user_obj = new_member.user
                 
+                phrase = random.choice(WELCOME_PHRASES)
                 keyboard = [[InlineKeyboardButton("🔑 Привязать Аккаунт", callback_data="link")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                result_msg = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=welcome_text,
-                    parse_mode="HTML",
-                    reply_markup=reply_markup
-                )
+                # Используем text_mention если есть username
+                if user_obj.username:
+                    welcome_text = f"{name}, {phrase}"
+                    entities = [MessageEntity(
+                        type=MessageEntity.TEXT_MENTION,
+                        offset=0,
+                        length=len(name),
+                        user=user_obj
+                    )]
+                    result_msg = await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=welcome_text,
+                        entities=entities,
+                        reply_markup=reply_markup
+                    )
+                else:
+                    # Fallback для пользователей без username
+                    welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {phrase}"
+                    result_msg = await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=welcome_text,
+                        parse_mode="HTML",
+                        reply_markup=reply_markup
+                    )
                 logger.info(f"Welcome sent for {name}")
             
             # User left the chat (was member, now is left/kicked)
