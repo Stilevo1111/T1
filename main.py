@@ -2310,8 +2310,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if target_user.get('steam_id'):
             try:
-                from dota_mmr import get_top_heroes, generate_heroes_image
-                top_heroes = get_top_heroes(target_user['steam_id'], last_n=20, top_k=5)
+                from dota_mmr import get_top_heroes_async, generate_heroes_image
+                top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
                 if top_heroes:
                     img_bytes = generate_heroes_image(top_heroes)
                     if img_bytes:
@@ -2319,62 +2319,13 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not generate heroes image: {e}")
         
-        # Отправка фото с повторными попытками при таймауте
-        result_msg = None
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                if profile_banner_url:
-                    result_msg = await context.bot.send_photo(
-                        chat_id=update.message.chat_id,
-                        photo=profile_banner_url,
-                        caption=text,
-                        parse_mode="HTML",
-                        reply_markup=main_menu(),
-                        read_timeout=30,
-                        write_timeout=30,
-                        connect_timeout=20,
-                        pool_timeout=10
-                    )
-                else:
-                    # Если нет изображения отправляем просто текст
-                    result_msg = await context.bot.send_message(
-                        chat_id=update.message.chat_id,
-                        text=text,
-                        parse_mode="HTML",
-                        reply_markup=main_menu()
-                    )
-                break
-            except (telegram.error.TimedOut, httpx.ReadTimeout) as e:
-                logger.warning(f"Попытка {attempt+1}/{max_retries} отправки фото не удалась: {e}")
-                if attempt == max_retries - 1:
-                    # Последняя попытка провалилась, отправляем обычный текст как fallback
-                    logger.error(f"Не удалось отправить фото после {max_retries} попыток, отправляем текст")
-                    try:
-                        result_msg = await context.bot.send_message(
-                            chat_id=update.message.chat_id,
-                            text=text,
-                            parse_mode="HTML",
-                            reply_markup=main_menu()
-                        )
-                    except Exception as fallback_e:
-                        logger.error(f"Даже отправка текста не удалась: {fallback_e}")
-                        raise
-                await asyncio.sleep(1)
-            except Exception as e:
-                logger.error(f"Ошибка отправки фото: {e}")
-                # Для других ошибок пробуем отправить просто текст
-                try:
-                    result_msg = await context.bot.send_message(
-                        chat_id=update.message.chat_id,
-                        text=text,
-                        parse_mode="HTML",
-                        reply_markup=main_menu()
-                    )
-                except Exception as fallback_e:
-                    logger.error(f"Ошибка отправки fallback сообщения: {fallback_e}")
-                    raise
-                break
+        result_msg = await context.bot.send_photo(
+            chat_id=update.message.chat_id,
+            photo=profile_banner_url,
+            caption=text,
+            parse_mode="HTML",
+            reply_markup=main_menu()
+        )
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
@@ -2872,7 +2823,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
             photo=banner_url,
-            caption="",
+            caption="🔑 Привязать Аккаунт",
             reply_markup=reply_markup
         )
         
@@ -2882,8 +2833,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         
-        # Track this message for future deletion
-        set_last_bot_message(chat_id, uid, kb_msg.message_id)
+        # Track both messages for future deletion
+        set_last_bot_message(chat_id, uid, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         schedule_delete(context.bot, chat_id, kb_msg.message_id, 30, context.application.job_queue)
         
@@ -3321,10 +3272,6 @@ async def main():
         from database import update_dota_week_top_cache
         update_dota_week_top_cache()
         logger.info("Dota week top cache initialized on startup")
-        
-        from dota_mmr import warm_hero_portraits
-        warm_hero_portraits()
-        logger.info("Hero portraits pre-warming completed on startup")
         
         job_queue = JobQueue()
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
