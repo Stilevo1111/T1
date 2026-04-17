@@ -3206,8 +3206,6 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     reply_markup=reply_markup
                 )
                 logger.info(f"Welcome sent for {name}")
-                # Удаляем приветственное сообщение через час
-                schedule_delete(context.bot, chat_id, result_msg.message_id, 3600, context.application.job_queue)
             
             # User left the chat (was member, now is left/kicked)
             elif old_status in ['member', 'administrator'] and new_status in ['left', 'kicked']:
