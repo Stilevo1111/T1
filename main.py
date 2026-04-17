@@ -2941,7 +2941,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         
-        # ✅ ТОЛЬКО 1 СООБЩЕНИЕ — как во всех остальных командах
+        # ✅ РЕГИСТРИРУЕМ СООБЩЕНИЕ В ОБЩЕМ СИСТЕМЕ УДАЛЕНИЯ
+        # ✅ БУДЕТ УДАЛЯТЬСЯ ТОЧНО КАК И ВСЕ ДРУГИЕ КОМАНДЫ:
+        # ✅ 1. Автоматически через 30 секунд
+        # ✅ 2. СРАЗУ при нажатии любой кнопки меню
+        # ✅ 3. СРАЗУ при вызове любой другой команды
+        # ✅ 4. СРАЗУ при нажатии инлайн кнопки
         set_last_bot_message(chat_id, uid, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         
