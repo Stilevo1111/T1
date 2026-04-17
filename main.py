@@ -2868,6 +2868,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "link":
         await query.answer("Открываю привязку...", show_alert=False)
         
+        # Удаляем старые сообщения бота перед открытием link
+        try:
+            await delete_last_bot_message(context.bot, chat_id, user_id)
+        except Exception as e:
+            logger.debug(f"Could not delete old bot messages: {e}")
+        
         try:
             await link(update, context)
         except Exception as e:
@@ -2937,7 +2943,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
             photo=banner_url,
-            caption=""
+            caption="🔑 Привязать Dota аккаунт",
+            reply_markup=reply_markup
         )
         
         kb_msg = await context.bot.send_message(
@@ -2953,6 +2960,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ✅ 3. СРАЗУ при вызове любой другой команды
         # ✅ 4. СРАЗУ при нажатии инлайн кнопки
         set_last_bot_message(chat_id, uid, result_msg.message_id)
+        add_bot_message(chat_id, uid, result_msg.message_id)
         add_bot_message(chat_id, uid, kb_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         schedule_delete(context.bot, chat_id, kb_msg.message_id, 30, context.application.job_queue)
