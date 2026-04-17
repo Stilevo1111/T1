@@ -2927,21 +2927,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
             photo=banner_url,
-            caption="",
-            reply_markup=reply_markup
-        )
-        
-        kb_msg = await context.bot.send_message(
-            chat_id=chat_id,
-            text=text,
+            caption=text,
             reply_markup=main_menu()
         )
         
-        # Track both messages for future deletion
+        # ✅ ТОЛЬКО 1 СООБЩЕНИЕ — как во всех остальных командах
         set_last_bot_message(chat_id, uid, result_msg.message_id)
-        add_bot_message(chat_id, uid, kb_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
-        schedule_delete(context.bot, chat_id, kb_msg.message_id, 30, context.application.job_queue)
         
         # Try to update message ID in database (non-critical)
         try:
