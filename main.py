@@ -2869,7 +2869,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         inline_keyboard = [[InlineKeyboardButton("🔑 Привязать Аккаунт", callback_data="link")]]
         reply_markup = InlineKeyboardMarkup(inline_keyboard)
         
-result_msg = await context.bot.send_photo(
+        result_msg = await context.bot.send_photo(
             chat_id=chat_id,
             photo=banner_url,
             caption="",
