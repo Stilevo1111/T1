@@ -2310,10 +2310,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if target_user.get('steam_id'):
             try:
-                from dota_mmr import get_top_heroes_async, generate_heroes_image_async
-                top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
+                from dota_mmr import get_top_heroes, generate_heroes_image
+                top_heroes = get_top_heroes(target_user['steam_id'], last_n=20, top_k=5)
                 if top_heroes:
-                    img_bytes = await generate_heroes_image_async(top_heroes)
+                    img_bytes = generate_heroes_image(top_heroes)
                     if img_bytes:
                         profile_banner_url = io.BytesIO(img_bytes)
             except Exception as e:
