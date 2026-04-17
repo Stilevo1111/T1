@@ -2812,9 +2812,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning(f"Database error in start (non-fatal): {db_error}")
         
         # Always send welcome message
-        text = (
-            "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
-        )
+        text = "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
         
         banner_url = "https://i.ibb.co/LXsGsfxZ/213.png"
         
@@ -2825,13 +2823,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
             photo=banner_url,
-            caption=text,
+            caption="🔑 Привязать Аккаунт",
             reply_markup=reply_markup
         )
         
         await context.bot.send_message(
             chat_id=chat_id,
-            text="👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно.",
+            text=text,
             reply_markup=main_menu()
         )
         
