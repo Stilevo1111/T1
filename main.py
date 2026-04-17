@@ -2944,38 +2944,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         banner_url = "https://i.ibb.co/LXsGsfxZ/213.png"
         
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        inline_keyboard = [[InlineKeyboardButton("🔑 Привязать Аккаунт", callback_data="link")]]
-        reply_markup = InlineKeyboardMarkup(inline_keyboard)
-        
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
             photo=banner_url,
-            caption="",
-            reply_markup=reply_markup
-        )
-        
-        kb_msg = await context.bot.send_message(
-            chat_id=chat_id,
-            text=text,
+            caption=text,
             reply_markup=main_menu()
         )
         
-        # ✅ ДВА СООБЩЕНИЯ КАК И БЫЛО РАНЬШЕ, ОБА ПОЛНОСТЬЮ ИНТЕГРИРОВАНЫ В СИСТЕМУ УДАЛЕНИЯ
-        # ✅ ОБА БУДУТ УДАЛЯТЬСЯ ВСЕМИ СПОСОБАМИ:
-        # ✅ 1. Автоматически через 30 секунд
-        # ✅ 2. СРАЗУ при нажатии любой кнопки меню
-        # ✅ 3. СРАЗУ при вызове любой другой команды
-        # ✅ 4. СРАЗУ при нажатии инлайн кнопки
         set_last_bot_message(chat_id, uid, result_msg.message_id)
         add_bot_message(chat_id, uid, result_msg.message_id)
-        add_bot_message(chat_id, uid, kb_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
-        schedule_delete(context.bot, chat_id, kb_msg.message_id, 30, context.application.job_queue)
         
         # Try to update message ID in database (non-critical)
         try:
-            update_last_message_id(uid, kb_msg.message_id)
+            update_last_message_id(uid, result_msg.message_id)
         except Exception as e:
             logger.debug(f"Could not update last message id: {e}")
 
