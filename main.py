@@ -2319,13 +2319,62 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not generate heroes image: {e}")
         
-        result_msg = await context.bot.send_photo(
-            chat_id=update.message.chat_id,
-            photo=profile_banner_url,
-            caption=text,
-            parse_mode="HTML",
-            reply_markup=main_menu()
-        )
+        # Отправка фото с повторными попытками при таймауте
+        result_msg = None
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                if profile_banner_url:
+                    result_msg = await context.bot.send_photo(
+                        chat_id=update.message.chat_id,
+                        photo=profile_banner_url,
+                        caption=text,
+                        parse_mode="HTML",
+                        reply_markup=main_menu(),
+                        read_timeout=30,
+                        write_timeout=30,
+                        connect_timeout=20,
+                        pool_timeout=10
+                    )
+                else:
+                    # Если нет изображения отправляем просто текст
+                    result_msg = await context.bot.send_message(
+                        chat_id=update.message.chat_id,
+                        text=text,
+                        parse_mode="HTML",
+                        reply_markup=main_menu()
+                    )
+                break
+            except (telegram.error.TimedOut, httpx.ReadTimeout) as e:
+                logger.warning(f"Попытка {attempt+1}/{max_retries} отправки фото не удалась: {e}")
+                if attempt == max_retries - 1:
+                    # Последняя попытка провалилась, отправляем обычный текст как fallback
+                    logger.error(f"Не удалось отправить фото после {max_retries} попыток, отправляем текст")
+                    try:
+                        result_msg = await context.bot.send_message(
+                            chat_id=update.message.chat_id,
+                            text=text,
+                            parse_mode="HTML",
+                            reply_markup=main_menu()
+                        )
+                    except Exception as fallback_e:
+                        logger.error(f"Даже отправка текста не удалась: {fallback_e}")
+                        raise
+                await asyncio.sleep(1)
+            except Exception as e:
+                logger.error(f"Ошибка отправки фото: {e}")
+                # Для других ошибок пробуем отправить просто текст
+                try:
+                    result_msg = await context.bot.send_message(
+                        chat_id=update.message.chat_id,
+                        text=text,
+                        parse_mode="HTML",
+                        reply_markup=main_menu()
+                    )
+                except Exception as fallback_e:
+                    logger.error(f"Ошибка отправки fallback сообщения: {fallback_e}")
+                    raise
+                break
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
@@ -2827,19 +2876,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup
         )
         
-        await context.bot.send_message(
+        kb_msg = await context.bot.send_message(
             chat_id=chat_id,
             text=text,
             reply_markup=main_menu()
         )
         
         # Track this message for future deletion
-        set_last_bot_message(chat_id, uid, result_msg.message_id)
+        set_last_bot_message(chat_id, uid, kb_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+        schedule_delete(context.bot, chat_id, kb_msg.message_id, 30, context.application.job_queue)
         
         # Try to update message ID in database (non-critical)
         try:
-            update_last_message_id(uid, result_msg.message_id)
+            update_last_message_id(uid, kb_msg.message_id)
         except Exception as e:
             logger.debug(f"Could not update last message id: {e}")
 
