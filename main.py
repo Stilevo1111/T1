@@ -2424,12 +2424,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             logger.error(f"Failed to send photo: {e}")
-            result_msg = await context.bot.send_message(
-                chat_id=update.message.chat_id,
-                text=text,
-                parse_mode="HTML",
-                reply_markup=main_menu()
-            )
+            if loading_msg:
+                try:
+                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                except Exception:
+                    pass
+            return
         
         if loading_msg:
             try:
