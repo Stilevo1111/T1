@@ -135,6 +135,86 @@ async def decrease_inactive_job(context):
         logger.error(f"Ошибка в decrease_inactive_job: {e}")
 
 
+def _get_greeting_for_hour(hour):
+    """Вернуть приветствие в зависимости от часа (MSK)"""
+    if 6 <= hour < 12:
+        return "Доброе утро ☀️"
+    elif 12 <= hour < 18:
+        return "Добрый день 🌤️"
+    else:
+        return "Добрый вечер 🌙"
+
+
+async def greeting_job(context):
+    """Ежедневное задание: отправить приветствие пользователям (один раз в сутки)"""
+    from datetime import timezone, timedelta
+    from database import get_connection, DATABASE_URL
+    import urlparse
+    
+    MSK = timezone(timedelta(hours=3))
+    now_msk = datetime.datetime.now(MSK)
+    today_str = now_msk.strftime("%Y-%m-%d")
+    current_hour = now_msk.hour
+    greeting_text = _get_greeting_for_hour(current_hour)
+    
+    try:
+        logger.info(f"Запуск ежедневного приветствия на {today_str} в {current_hour}:00 MSK")
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        if "postgres" in scheme:
+            cursor.execute(
+                "SELECT telegram_id, username FROM users WHERE (last_greeting_date IS NULL OR last_greeting_date::text != %s) AND telegram_id > 0",
+                (today_str,)
+            )
+        else:
+            cursor.execute(
+                "SELECT telegram_id, username FROM users WHERE (last_greeting_date IS NULL OR last_greeting_date != ?) AND telegram_id > 0",
+                (today_str,)
+            )
+        
+        users_to_greet = cursor.fetchall()
+        
+        bot = context.application.bot
+        sent_count = 0
+        
+        for user in users_to_greet:
+            user_id, username = user[0], user[1] if len(user) > 1 else None
+            try:
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=greeting_text
+                )
+                sent_count += 1
+                
+                # Обновляем дату приветствия
+                if "postgres" in scheme:
+                    cursor.execute(
+                        "UPDATE users SET last_greeting_date = %s WHERE telegram_id = %s",
+                        (today_str, user_id)
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE users SET last_greeting_date = ? WHERE telegram_id = ?",
+                        (today_str, user_id)
+                    )
+                
+                # Small delay to avoid flooding
+                await asyncio.sleep(0.05)
+                
+            except Exception as e:
+                logger.debug(f"Не удалось отправить приветствие пользователю {user_id}: {e}")
+                continue
+        
+        conn.commit()
+        logger.info(f"Приветствие отправлено {sent_count} пользователям")
+        
+    except Exception as e:
+        logger.error(f"Ошибка в greeting_job: {e}")
+
+
 async def announce_weekly_mmr_winner(bot):
     """Отправляет поздра��ление победителю недельного топа MMR при смене недели."""
     from datetime import timezone, timedelta
@@ -3278,6 +3358,13 @@ async def main():
         job_queue = JobQueue()
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
         job_queue.set_application(app)
+        
+        # Ежедневное приветствие (утро/день/вечер) в 8:00 MSK
+        job_queue.run_daily(
+            greeting_job,
+            time=datetime.time(hour=5, minute=0),  # 05:00 UTC = 08:00 MSK
+            days=(0, 1, 2, 3, 4, 5, 6)
+        )
         
         job_queue.run_daily(
             decrease_inactive_job,
