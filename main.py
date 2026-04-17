@@ -3290,12 +3290,17 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 return
         
         # Handle user added to chat (chat_member)
-        if old_member and new_member and new_member.user.id != context.bot.id:
-            old_status = old_member.status
+        if new_member and new_member.user.id != context.bot.id:
             new_status = new_member.status
             
             # User joined the chat (was not a member, now is member)
-            if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator']:
+            # Handle both cases: with old_member (left/kicked) and first join (no old_member)
+            is_new_join = (new_status in ['member', 'administrator'])
+            
+            # Check if this is NOT a re-join (old_member doesn't exist or is not member)
+            is_not_rejoin = (old_member is None) or (old_member.status not in ['member', 'administrator'])
+            
+            if is_new_join and is_not_rejoin:
                 
                 name = new_member.user.first_name or "Friend"
                 user_id = new_member.user.id
@@ -3338,7 +3343,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 logger.info(f"Welcome sent for {name}")
             
             # User left the chat (was member, now is left/kicked)
-            elif old_status in ['member', 'administrator'] and new_status in ['left', 'kicked']:
+            elif old_member and new_status in ['left', 'kicked']:
                 user_id = new_member.user.id
                 name = new_member.user.first_name or "Unknown"
                 try:
