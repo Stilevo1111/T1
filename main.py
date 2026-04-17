@@ -2404,25 +2404,32 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Banner URL - для Steam использовать картинку с героями
         profile_banner_url = "https://i.ibb.co/d0pcyNcM/image.png"
         
-        if target_user.get('steam_id'):
-            try:
-                from dota_mmr import get_top_heroes_async, generate_heroes_image
-                # Параллельно: получаем героев (async) + генерируем картинку (sync в thread)
-                top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
-                if top_heroes:
-                    img_bytes = await asyncio.to_thread(generate_heroes_image, top_heroes)
-                    if img_bytes:
-                        profile_banner_url = io.BytesIO(img_bytes)
-            except Exception as e:
-                logger.debug(f"Could not generate heroes image: {e}")
+        try:
+            from dota_mmr import get_top_heroes_async, generate_heroes_image
+            top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
+            if top_heroes:
+                img_bytes = await asyncio.to_thread(generate_heroes_image, top_heroes)
+                if img_bytes:
+                    profile_banner_url = io.BytesIO(img_bytes)
+        except Exception as e:
+            logger.debug(f"Could not generate heroes image: {e}")
         
-        result_msg = await context.bot.send_photo(
-            chat_id=update.message.chat_id,
-            photo=profile_banner_url,
-            caption=text,
-            parse_mode="HTML",
-            reply_markup=main_menu()
-        )
+        try:
+            result_msg = await context.bot.send_photo(
+                chat_id=update.message.chat_id,
+                photo=profile_banner_url,
+                caption=text,
+                parse_mode="HTML",
+                reply_markup=main_menu()
+            )
+        except Exception as e:
+            logger.error(f"Failed to send photo: {e}")
+            result_msg = await context.bot.send_message(
+                chat_id=update.message.chat_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=main_menu()
+            )
         
         if loading_msg:
             try:
@@ -2792,8 +2799,9 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
     # Track this message for future deletion
-    set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-    schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+        add_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
 
 
 async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
