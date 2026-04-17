@@ -3322,6 +3322,10 @@ async def main():
         update_dota_week_top_cache()
         logger.info("Dota week top cache initialized on startup")
         
+        from dota_mmr import warm_hero_portraits
+        warm_hero_portraits()
+        logger.info("Hero portraits pre-warming completed on startup")
+        
         job_queue = JobQueue()
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
         job_queue.set_application(app)

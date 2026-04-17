@@ -13,6 +13,50 @@ logger = logging.getLogger(__name__)
 OPENDOTA_API_URL = "https://api.opendota.com/api"
 STEAM_OFFSET = 76561197960265728
 
+
+def warm_hero_portraits():
+    """Предзагрузка всех портретов героев при запуске бота"""
+    logger.info("Начинаем предзагрузку портретов героев...")
+    
+    try:
+        heroes = get_heroes_data()
+        if not heroes:
+            logger.warning("Не удалось получить данные героев, пропускаем предзагрузку")
+            return
+        
+        cache_dir = Path(__file__).parent / "hero_cache" / "portraits"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        loaded = 0
+        skipped = 0
+        
+        for hero_id, hero_info in heroes.items():
+            short_name = hero_info.get("short_name")
+            if not short_name:
+                continue
+                
+            cache_file = cache_dir / f"{short_name}.png"
+            
+            # Если уже есть — пропускаем
+            if cache_file.exists():
+                skipped += 1
+                continue
+            
+            try:
+                url = f"{HERO_IMAGE_BASE}/{short_name}.png"
+                resp = requests.get(url, timeout=10)
+                if resp.status_code == 200:
+                    cache_file.write_bytes(resp.content)
+                    loaded += 1
+                    if loaded % 20 == 0:
+                        logger.info(f"Загружено {loaded} портретов героев...")
+            except Exception:
+                pass
+        
+        logger.info(f"Предзагрузка завершена: загружено {loaded}, пропущено {skipped}")
+    except Exception as e:
+        logger.error(f"Ошибка предзагрузки портретов: {e}")
+
 # Rate limiting для OpenDota API
 _api_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
 API_RATE_LIMIT = 20  # максимум запросов в минуту (OpenDota允许30/мин)
