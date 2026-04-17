@@ -2835,6 +2835,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Track both messages for future deletion
         set_last_bot_message(chat_id, uid, result_msg.message_id)
+        add_bot_message(chat_id, uid, kb_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         schedule_delete(context.bot, chat_id, kb_msg.message_id, 30, context.application.job_queue)
         
