@@ -2831,11 +2831,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await context.bot.send_message(
             chat_id=chat_id,
-            text="Меню",
+            text="👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно.",
             reply_markup=main_menu()
         )
-        
-        await context.bot.delete_message(chat_id, result_msg.message_id + 1)
         
         # Track this message for future deletion
         set_last_bot_message(chat_id, uid, result_msg.message_id)
