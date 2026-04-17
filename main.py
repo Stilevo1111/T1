@@ -2408,6 +2408,16 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             text += "\n\n💡 /profile ＠ник — чужой профиль"
         
+        loading_msg = None
+        if target_user.get('steam_id'):
+            try:
+                loading_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="⏳ Загрузка профиля..."
+                )
+            except Exception:
+                pass
+        
         # Banner URL - для Steam использовать картинку с героями
         profile_banner_url = "https://i.ibb.co/d0pcyNcM/image.png"
         
@@ -2430,6 +2440,13 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML",
             reply_markup=main_menu()
         )
+        
+        if loading_msg:
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception:
+                pass
+        
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
