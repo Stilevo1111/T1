@@ -3493,10 +3493,11 @@ async def main():
             runner = web.AppRunner(web_app)
             await runner.setup()
             port = int(os.getenv('PORT', 10000))
+            logger.info(f"Starting TCP site on port {port}...")
             site = web.TCPSite(runner, '0.0.0.0', port)
             await site.start()
-            # Give kernel a moment to fully set up the listening socket
-            await asyncio.sleep(0.1)
+            logger.info(f"Site started, sleeping 3s for port detection...")
+            await asyncio.sleep(3)
             logger.info(f"Health server started on 0.0.0.0:{port}")
             
             offset = 0
