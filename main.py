@@ -2275,21 +2275,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         try:
             from dota_mmr import get_top_heroes_async, generate_heroes_image
-            import asyncio
-            try:
-                top_heroes = await asyncio.wait_for(
-                    get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5),
-                    timeout=5.0
-                )
-                if top_heroes:
-                    img_bytes = await asyncio.wait_for(
-                        asyncio.to_thread(generate_heroes_image, top_heroes),
-                        timeout=5.0
-                    )
-                    if img_bytes:
-                        profile_banner_url = io.BytesIO(img_bytes)
-            except asyncio.TimeoutError:
-                logger.debug("Heroes image generation timed out, using default banner")
+            top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
+            if top_heroes:
+                img_bytes = await asyncio.to_thread(generate_heroes_image, top_heroes)
+                if img_bytes:
+                    profile_banner_url = io.BytesIO(img_bytes)
         except Exception as e:
             logger.debug(f"Could not generate heroes image: {e}")
         
