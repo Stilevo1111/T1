@@ -1075,12 +1075,12 @@ def generate_start_card(
         
         # Фон и draw
         img = Image.new("RGB", (width, height), (15, 20, 35))
-        draw = ImageDraw.Draw(img)
+draw = ImageDraw.Draw(img)
         
-        # Аватарка - квадратная с обводкой
-        avatar_size = int(130 * scale)
-        avatar_x = int(20 * scale)
-        # Центрирование аватара по вертикали
+        avatar_x_offset = int(100 * scale)  # Shift avatar 100px right
+        
+        avatar_x = int(120 * scale) + avatar_x_offset  # 20 + 100 + offset
+        # Центрирование авататная
         avatar_y = int((height - avatar_size) // 2 - 10)
         
         if avatar_url:
@@ -1240,13 +1240,18 @@ def generate_start_card(
             msg_num_y = msg_label_y + int(28 * scale)
             draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
             
-            # Ранг - иконка по центру нижней линии аватарки
-            if rank_icon:
-                rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
-                rank_y = avatar_y + avatar_size - rank_icon_size // 2
-                img.paste(rank_icon, (rank_x, rank_y), rank_icon)
-            
-            buf = io.BytesIO()
+# Ранг - иконка по центру нижней линии аватарки
+              if rank_icon:
+                  # Shift rank icon right by 100px
+                  rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2 + avatar_x_offset
+                  rank_y = avatar_y + avatar_size - rank_icon_size // 2
+                  img.paste(rank_icon, (rank_x, rank_y), rank_icon)
+                  
+                  # Shift rank label right by 100px
+                  rank_label_y = avatar_y + avatar_size + int(5 * scale)
+                  draw.text((avatar_x + avatar_x_offset, rank_label_y), rank_str, fill=(215, 215, 215), font=font_small)
+             
+             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=90)
             buf.seek(0)
             return buf.read()
