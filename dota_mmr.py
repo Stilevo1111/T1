@@ -1061,33 +1061,42 @@ def generate_start_card(
         import io
         import requests as req
         
-        width = 400
+        width = 360
         height = 220
         
-        # Фон
-        img = Image.new("RGB", (width, height), color=(22, 33, 62))
+        # Фон - градиент как в HTML
+        img = Image.new("RGB", (width, height), color=(30, 42, 74))
         draw = ImageDraw.Draw(img)
         
-        # Градиент
+        # Градиент сверху вниз
         for y in range(height):
-            c = tuple(min(255, int((22 + y / 8, 33 + y / 10, 62 + y / 6)[i])) for i in range(3))
-            draw.line([(0, y), (width, y)], fill=c)
+            if y < height // 2:
+                # Верхняя половина - светлее
+                ratio = y / (height // 2)
+                r = int(30 + ratio * (22 - 30))
+                g = int(42 + ratio * (33 - 42))
+                b = int(74 + ratio * (62 - 74))
+            else:
+                # Нижняя половина - темнее
+                ratio = (y - height // 2) / (height // 2)
+                r = int(22 - ratio * (22 - 15))
+                g = int(33 - ratio * (33 - 40))
+                b = int(62 - ratio * (62 - 71))
+            draw.line([(0, y), (width, y)], fill=(r, g, b))
         
-        # Рамка
-        draw.rectangle([0, 0, width-1, height-1], outline=(42, 74, 122), width=2)
+        # Тонкая рамка
+        draw.rectangle([0, 0, width-1, height-1], outline=(42, 74, 102), width=1)
         
         # Аватарка
-        avatar_size = 100
-        avatar_x = 25
-        avatar_y = 35
+        avatar_size = 110
+        avatar_x = 24
+        avatar_y = 30
         
         # Загружаем аватар
         if avatar_url:
             try:
-                # Check if it's a file path (Telegram downloaded file) or HTTP URL
                 import os
                 if os.path.isfile(avatar_url):
-                    # Telegram file path - it's already downloaded locally
                     avatar = Image.open(avatar_url).convert("RGBA")
                     w, h = avatar.size
                     side = min(w, h)
@@ -1097,11 +1106,9 @@ def generate_start_card(
                     avatar = avatar.resize((avatar_size, avatar_size), Image.LANCZOS)
                     img.paste(avatar, (avatar_x, avatar_y), avatar)
                 else:
-                    # HTTP URL
                     resp = requests.get(avatar_url, timeout=8)
                     if resp.status_code == 200:
                         avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                        # Квадратная обрезка
                         w, h = avatar.size
                         side = min(w, h)
                         left = (w - side) // 2
@@ -1112,56 +1119,56 @@ def generate_start_card(
             except Exception:
                 pass
         
-        # Если аватар не загружен - заглушка
+        # Заглушка если нет аватара
         if not avatar_url:
             draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80))
-            draw.ellipse([avatar_x + 30, avatar_y + 25, avatar_x + 70, avatar_y + 50], fill=(80, 100, 130))
-            draw.ellipse([avatar_x + 20, avatar_y + 55, avatar_x + 80, avatar_y + 85], fill=(80, 100, 130))
         
-        # Синяя рамка вокруг аватара
-        draw.rectangle([avatar_x-1, avatar_y-1, avatar_x + avatar_size + 1, avatar_y + avatar_size + 1], outline=(100, 150, 220), width=2)
+        # Рамка вокруг аватара
+        draw.rectangle([avatar_x-1, avatar_y-1, avatar_x + avatar_size + 1, avatar_y + avatar_size + 1], outline=(100, 150, 220), width=3)
         
-        # Текст справа от аватара
+        # Текст
         try:
-            font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 16)
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
-            font_medal = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18)
+            font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 15)
+            font_rank = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 15)
+            font_medal = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
+            font_count = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 13)
         except Exception:
-            font_large = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+            font_text = ImageFont.load_default()
+            font_rank = ImageFont.load_default()
             font_medal = ImageFont.load_default()
+            font_count = ImageFont.load_default()
         
-        text_x = avatar_x + avatar_size + 25
+        text_x = avatar_x + avatar_size + 20
         
         # Сообщения
-        draw.text((text_x, 35), f"💬 {message_count} сообщений", fill=(232, 232, 236), font=font_small)
+        draw.text((text_x, 35), f"💬 {message_count} сообщений", fill=(232, 232, 236), font=font_text)
         
-        # Ранг (если есть Steam)
+        # Ранг
         if has_steam:
-            draw.text((text_x, 60), f"🔰 {rank}", fill=(138, 180, 248), font=font_small)
+            draw.text((text_x, 58), f"🔰 {rank}", fill=(109, 179, 242), font=font_rank)
         else:
-            draw.text((text_x, 60), "🔗 Привяжи Steam", fill=(180, 180, 180), font=font_small)
+            draw.text((text_x, 58), "🔗 Привяжи Steam", fill=(136, 136, 136), font=font_text)
         
         # Награды заголовок
-        draw.text((text_x, 90), "🏆 Награды", fill=(232, 232, 236), font=font_small)
+        draw.text((text_x, 84), "🏆 Награды", fill=(232, 232, 236), font=font_text)
+        
+        # Блок наград
+        rewards_y = 105
+        draw.rectangle([text_x - 5, rewards_y - 5, width - 20, rewards_y + 50], fill=(0, 0, 0, 60))
         
         # Медали
-        medals_y = 115
+        medal_y = rewards_y + 5
         medal_spacing = 50
         
-        # 🥇
-        draw.text((text_x, medals_y), "🥇", fill=(255, 215, 0), font=font_medal)
-        draw.text((text_x + 20, medals_y + 2), str(weekly_mvp), fill=(170, 170, 170), font=font_small)
+        draw.text((text_x + 5, medal_y), "🥇", fill=(255, 215, 0), font=font_medal)
+        draw.text((text_x + 25, medal_y + 5), str(weekly_mvp), fill=(153, 153, 153), font=font_count)
         
-        # 🥈
-        draw.text((text_x + medal_spacing, medals_y), "🥈", fill=(192, 192, 192), font=font_medal)
-        draw.text((text_x + medal_spacing + 20, medals_y + 2), str(weekly_top2), fill=(170, 170, 170), font=font_small)
+        draw.text((text_x + medal_spacing + 5, medal_y), "🥈", fill=(192, 192, 192), font=font_medal)
+        draw.text((text_x + medal_spacing + 25, medal_y + 5), str(weekly_top2), fill=(153, 153, 153), font=font_count)
         
-        # 🥉
-        draw.text((text_x + medal_spacing * 2, medals_y), "🥉", fill=(205, 127, 50), font=font_medal)
-        draw.text((text_x + medal_spacing * 2 + 20, medals_y + 2), str(weekly_top3), fill=(170, 170, 170), font=font_small)
+        draw.text((text_x + medal_spacing * 2 + 5, medal_y), "🥉", fill=(205, 127, 50), font=font_medal)
+        draw.text((text_x + medal_spacing * 2 + 25, medal_y + 5), str(weekly_top3), fill=(153, 153, 153), font=font_count)
         
-        # Сохраняем
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=85)
         buf.seek(0)
