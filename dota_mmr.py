@@ -1135,19 +1135,17 @@ def generate_start_card(
                 if resp.status_code == 200:
                     ic = Image.open(io.BytesIO(resp.content)).convert("RGBA")
                     icons[name] = ic.resize((icon_size, icon_size), Image.LANCZOS)
-            except:
+            except Exception:
                 pass
         
         # Генерируем медали программно (прозрачные PNG с цифрами)
         def create_medal_image(number, color, text_color):
             img = Image.new("RGBA", (icon_size, icon_size), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
-            # Круг
             draw.ellipse([4, 4, icon_size-4, icon_size-4], fill=color)
-            # Номер
             try:
                 font_medal = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
-            except:
+            except Exception:
                 font_medal = ImageFont.load_default()
             bbox = draw.textbbox((0, 0), str(number), font=font_medal)
             text_width = bbox[2] - bbox[0]
