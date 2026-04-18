@@ -135,6 +135,23 @@ async def decrease_inactive_job(context):
         logger.error(f"Ошибка в decrease_inactive_job: {e}")
 
 
+async def reset_daily_fissure_job(context):
+    """Сброс счётчика ежедневного сбора фиссур в полночь MSK"""
+    try:
+        from database import config_cache
+        # Сбросить счётчик
+        _reset_daily_fissure_rolls()
+        # Сбросить бонусы
+        global bonus_ready_users
+        bonus_ready_users = {}
+        _save_bonus_ready_users(bonus_ready_users)
+        # Сбросить кеш конфига
+        config_cache.clear()
+        logger.info("Daily fissure collection reset at midnight MSK")
+    except Exception as e:
+        logger.error(f"Ошибка в reset_daily_fissure_job: {e}")
+
+
 async def morning_greeting_job(context):
     """✅ Утреннее приветствие 09:00 MSK - 1 раз в чат"""
     from datetime import timezone, timedelta
@@ -1484,6 +1501,14 @@ def _save_daily_fissure_rolls(value):
     set_config("daily_fissure_rolls", str(value))
 
 
+def _reset_daily_fissure_rolls():
+    """Сбросить счётчик бросков (вызывается в полночь)"""
+    global daily_fissure_rolls
+    daily_fissure_rolls = 0
+    _save_daily_fissure_rolls(0)
+    logger.info("Daily fissure rolls counter reset")
+
+
 def _load_bonus_ready_users():
     """Загрузить бонусы из БД"""
     try:
@@ -1888,6 +1913,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text=f"✅ ЗАДАНОЕ ВЫПОЛНЕНО: 🎁 10/10! +1 ФИССУРА!"
             )
             schedule_delete(context.bot, chat_id, bonus_msg.message_id, 30, context.application.job_queue)
+            # Обновить дайджест для всех игроков
+            await refresh_digest_message(context.bot)
         
         slot_msg_ids = []
         
@@ -3425,6 +3452,13 @@ async def main():
         job_queue.run_daily(
             decrease_inactive_job,
             time=datetime.time(hour=0, minute=0),
+            days=(0, 1, 2, 3, 4, 5, 6)
+        )
+        
+        # Сброс счётчика ежедневного сбора фиссур в полночь MSK
+        job_queue.run_daily(
+            reset_daily_fissure_job,
+            time=datetime.time(hour=21, minute=0),  # 21:00 UTC = 00:00 MSK
             days=(0, 1, 2, 3, 4, 5, 6)
         )
         
