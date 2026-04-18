@@ -1240,21 +1240,21 @@ def generate_start_card(
                 except Exception:
                     pass
             
-            # Username/nickname - darker color for better visibility
+            # Username/nickname - white color
             username_y = info_y
             username_x_offset = 0  # No shift for text
             if steam_nickname:
-                draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(30, 150, 220), font=font_title)  # Darker blue
+                draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(255, 255, 255), font=font_title)  # White
             elif username:
-                draw.text((info_x + username_x_offset, username_y), f"@{username}", fill=(30, 120, 220), font=font_title)  # Darker blue
+                draw.text((info_x + username_x_offset, username_y), f"@{username}", fill=(255, 255, 255), font=font_title)  # White
             
-            # Messages label - darker color
+            # Messages label - white
             msg_label_y = username_y + int(50 * scale)
-            draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(150, 150, 170), font=font_small)
+            draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(255, 255, 255), font=font_small)
             
-            # Number - darker white
+            # Number - white
             msg_num_y = msg_label_y + int(28 * scale)
-            draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(220, 220, 220), font=font_title)
+            draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
             
             # Rank - icon centered exactly under avatar
             if rank_icon:
