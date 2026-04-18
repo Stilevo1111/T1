@@ -2915,9 +2915,36 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     pass
             
-            # Generate image card
+            # Generate image card with loading animation (same as /profile)
+            loading_msg = None
+            stop_animation = None
+            animation_task = None
             try:
                 from dota_mmr import generate_start_card
+                
+                # Show loading animation
+                loading_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="⏳ Загрузка профиля..."
+                )
+                stop_animation = asyncio.Event()
+                
+                async def animate_loading(msg, stop_event):
+                    i = 0
+                    while not stop_event.is_set():
+                        try:
+                            emoji = "⌛️" if i % 2 == 0 else "⏳"
+                            await msg.edit_text(text=f"{emoji} Загрузка профиля...")
+                        except Exception:
+                            pass
+                        try:
+                            await asyncio.sleep(0.5)
+                        except Exception:
+                            pass
+                        i += 1
+                
+                animation_task = asyncio.create_task(animate_loading(loading_msg, stop_animation))
+                
                 img_bytes = await asyncio.to_thread(
                     generate_start_card,
                     avatar_url=avatar_url or telegram_avatar_path,
@@ -2929,22 +2956,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     weekly_top2=weekly_top2,
                     weekly_top3=weekly_top3
                 )
-                if img_bytes:
-                    result_msg = await context.bot.send_photo(
-                        chat_id=chat_id,
-                        photo=io.BytesIO(img_bytes),
-                        reply_markup=main_menu()
-                    )
-                else:
-                    # Fallback to banner
-                    result_msg = await context.bot.send_photo(
-                        chat_id=chat_id,
-                        photo="https://i.ibb.co/fYNXwsjQ/sadfsadasdas.png",
-                        caption="👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно.",
-                        reply_markup=main_menu()
-                    )
             except Exception as e:
                 logger.debug(f"generate_start_card error: {e}")
+                img_bytes = None
+            finally:
+                # Stop animation and clean up
+                if stop_animation:
+                    stop_animation.set()
+                if animation_task:
+                    try:
+                        await animation_task
+                    except Exception:
+                        pass
+                if loading_msg:
+                    try:
+                        await context.bot.delete_message(chat_id=chat_id, message_id=loading_msg.message_id)
+                    except Exception:
+                        pass
+            
+            if img_bytes:
+                result_msg = await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=io.BytesIO(img_bytes),
+                    reply_markup=main_menu()
+                )
+            else:
                 # Fallback to banner
                 result_msg = await context.bot.send_photo(
                     chat_id=chat_id,
