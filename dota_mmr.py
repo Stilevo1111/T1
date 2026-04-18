@@ -1220,7 +1220,7 @@ def generate_start_card(
                 except Exception:
                     pass
         
-         # Messages - "Всего сообщений: 847" в одной строке
+        # Messages - "Всего сообщений: 847" в одной строке
          draw.text((info_x, info_y + 4), "Всего сообщений:", fill=(150, 150, 170), font=font_small)
          draw.text((info_x + int(160 * scale), info_y + 4), f"{message_count}", fill=(255, 255, 255), font=font_title)
          
