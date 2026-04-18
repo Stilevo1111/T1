@@ -2267,6 +2267,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=chat_id,
                     text="⏳ Загрузка профиля..."
                 )
+                for i in range(8):
+                    await asyncio.sleep(0.5)
+                    if loading_msg:
+                        try:
+                            emoji = "⌛️" if i % 2 == 0 else "⏳"
+                            await loading_msg.edit_text(text=f"{emoji} Загрузка профиля...")
+                        except Exception:
+                            pass
             except Exception:
                 pass
         
