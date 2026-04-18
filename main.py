@@ -3391,6 +3391,7 @@ async def main():
         
         # Auto import users from CSV if file exists
         if os.path.exists("users.csv"):
+            logger.info("Found users.csv, attempting auto-import...")
             try:
                 import import_users
                 imported = import_users.import_from_csv("users.csv")
@@ -3553,9 +3554,11 @@ async def main():
             port = int(os.getenv('PORT', 10000))
             site = web.TCPSite(runner, '0.0.0.0', port)
             await site.start()
-            # Give kernel a moment to fully set up the listening socket
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(1)
             logger.info(f"Web server started on 0.0.0.0:{port}")
+            
+            # Force sync to ensure port is ready
+            await asyncio.sleep(2)
             
             async def keep_alive_ping():
                 import aiohttp
