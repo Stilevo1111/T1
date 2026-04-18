@@ -1224,20 +1224,21 @@ def generate_start_card(
                 except Exception:
                     pass
             
-            # Messages - "Всего сообщений:" label, below it the number, below that username
-            msg_label_y = info_y
-            draw.text((info_x, msg_label_y), "Всего сообщений:", fill=(150, 150, 170), font=font_small)
-            
-            # Number below label
-            msg_num_y = msg_label_y + int(28 * scale)
-            draw.text((info_x, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
-            
-            # Username/nickname below number
-            username_y = msg_num_y + int(50 * scale)
+            # Username/nickname shifted right by 100px + more beautiful colors
+            username_y = info_y
+            username_x_offset = int(100 * scale)
             if steam_nickname:
-                draw.text((info_x, username_y), f"{steam_nickname}", fill=(100, 160, 240), font=font_title)
+                draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(64, 224, 255), font=font_title)  # Sky Blue / DeepSkyBlue1
             elif username:
-                draw.text((info_x, username_y), f"@{username}", fill=(100, 160, 240), font=font_title)
+                draw.text((info_x + username_x_offset, username_y), f"@{username}", fill=(30, 144, 255), font=font_title)  # DodgerBlue
+            
+            # Messages label shifted right by 100px, placed below username
+            msg_label_y = username_y + int(50 * scale)
+            draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(180, 180, 200), font=font_small)
+            
+            # Number shifted right by 100px, below label
+            msg_num_y = msg_label_y + int(28 * scale)
+            draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
             
             # Ранг - иконка по центру нижней линии аватарки
             if rank_icon:
