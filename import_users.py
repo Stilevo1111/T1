@@ -3,10 +3,7 @@ import os
 import psycopg2
 from datetime import datetime
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    print("DATABASE_URL not set!")
-    exit(1)
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://fissure_user:iFU8D0gPkyNzVnfJXZNpDXFEVSXoK1ko@dpg-d7fepdlckfvc73fe1u60-a/fissure")
 
 CSV_FILE = os.getenv("IMPORT_CSV_FILE", "users.csv")
 
