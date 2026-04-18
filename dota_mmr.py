@@ -1078,7 +1078,7 @@ def generate_start_card(
         draw = ImageDraw.Draw(img)
         
         avatar_x_offset = 100  # Shift avatar 100px right
-        
+        avatar_size = int(140 * scale)  # Avatar size
         avatar_x = int(120 * scale) + avatar_x_offset  # 20 + 100 + offset
         # Центрирование авататная
         avatar_y = int((height - avatar_size) // 2 - 10)
