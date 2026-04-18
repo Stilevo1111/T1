@@ -2831,27 +2831,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Check if user exists in database
         is_existing_user = user is not None
+        has_steam = bool(user and user.get('steam_id'))
         
         if is_existing_user:
-            # User has played before - show profile card
+            # User exists - show profile card
             from dota_mmr import rank_to_string
             import io
             
             # Get message count
             message_count = user.get('message_count', 0) if user else 0
             
-            # Get rank (from OpenDota)
+            # Get rank (only if Steam linked)
             rank_tier = user.get('rank_tier', 0) if user else 0
             rank_str = rank_to_string(rank_tier) if rank_tier else "Не калиброван"
             
-            # Get weekly rewards
+            # Get weekly rewards (only if Steam linked)
             weekly_mvp = user.get('weekly_mvp_count', 0) if user else 0
             weekly_top2 = user.get('weekly_top2_count', 0) if user else 0
             weekly_top3 = user.get('weekly_top3_count', 0) if user else 0
             
             # Get avatar - OpenDota if Steam linked, else Telegram
             avatar_url = None
-            if user and user.get('steam_id'):
+            if has_steam:
                 try:
                     from dota_mmr import get_player_stats
                     stats = get_player_stats(user['steam_id'], use_cache=True)
@@ -2890,7 +2891,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     weekly_mvp=weekly_mvp,
                     weekly_top2=weekly_top2,
                     weekly_top3=weekly_top3,
-                    has_steam=bool(user and user.get('steam_id'))
+                    has_steam=has_steam
                 )
                 if img_bytes:
                     result_msg = await context.bot.send_photo(
