@@ -721,6 +721,8 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
 
 async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
     """Асинхронно получить последние матчи игрока"""
+    if steam_id is None:
+        return []
     try:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
