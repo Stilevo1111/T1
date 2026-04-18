@@ -1515,7 +1515,7 @@ DICE_ANIMATION_DELAY = 1.0
 
 # URL баннеров
 COOLDOWN_BANNER_URL = "https://i.ibb.co/FkzCZxNG/m-Yqbu.jpg"
-PROFILE_BANNER_URL = "https://i.ibb.co/dsp14gFB/eqaeasea.png"
+PROFILE_BANNER_URL = "https://i.ibb.co/n8g8yQYt/dasdsadasdsadasdsad.png"
 TOP_BANNER_URL = "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
 TOPMMR_BANNER_URL = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
 LINK_BANNER_URL = "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"
@@ -2292,7 +2292,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         
         # Banner URL - для Steam использовать картинку с героями
-        profile_banner_url = "https://i.ibb.co/dsp14gFB/eqaeasea.png"
+        profile_banner_url = "https://i.ibb.co/n8g8yQYt/dasdsadasdsadasdsad.png"
         
         try:
             from dota_mmr import get_top_heroes_async, generate_heroes_image
