@@ -1083,11 +1083,13 @@ def generate_start_card(
                 # Resize and crop to fit the card dimensions
                 bg_image = bg_image.resize((width, height), Image.LANCZOS)
                 img = bg_image.convert("RGB")
+                logger.info("Background image loaded successfully")
             else:
                 # Fallback to the original color
+                logger.info(f"Background image HTTP error: {response.status_code}")
                 img = Image.new("RGB", (width, height), (15, 20, 35))
         except Exception as e:
-            logger.debug(f"Failed to load background image: {e}")
+            logger.error(f"Failed to load background image: {e}")
             img = Image.new("RGB", (width, height), (15, 20, 35))
         draw = ImageDraw.Draw(img)
         
