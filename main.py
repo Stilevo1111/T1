@@ -2829,8 +2829,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as db_error:
             logger.warning(f"Database error in start (non-fatal): {db_error}")
         
-        # Check if user exists and has played (has fissure or games)
-        is_existing_user = user and (user.get('fissure', 0) > 0 or user.get('total_rolls', 0) > 0 or user.get('week_games', 0) > 0)
+        # Check if user exists in database
+        is_existing_user = user is not None
         
         if is_existing_user:
             # User has played before - show profile card
