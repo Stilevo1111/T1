@@ -1074,7 +1074,21 @@ def generate_start_card(
         scale = 1.8  # коэффициент масштабирования
         
         # Фон и draw
-        img = Image.new("RGB", (width, height), (15, 20, 35))
+        try:
+            # Download the background image
+            bg_url = "https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png"
+            response = requests.get(bg_url, timeout=10)
+            if response.status_code == 200:
+                bg_image = Image.open(io.BytesIO(response.content))
+                # Resize and crop to fit the card dimensions
+                bg_image = bg_image.resize((width, height), Image.LANCZOS)
+                img = bg_image.convert("RGB")
+            else:
+                # Fallback to the original color
+                img = Image.new("RGB", (width, height), (15, 20, 35))
+        except Exception as e:
+            logger.debug(f"Failed to load background image: {e}")
+            img = Image.new("RGB", (width, height), (15, 20, 35))
         draw = ImageDraw.Draw(img)
         
         avatar_x_offset = -100  # Shift avatar 100px left
@@ -1240,9 +1254,13 @@ def generate_start_card(
             msg_num_y = msg_label_y + int(28 * scale)
             draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
             
-            # Ранг - иконка по центру нижней линии аватарки
-            # Removed rank icon and label per request
-           
+            # Rank - icon centered below avatar line (without text)
+            if rank_icon:
+                # Keep rank icon in original position (not shifted with avatar)
+                rank_x = (int(120 * scale)) + avatar_size // 2 - rank_icon_size // 2
+                rank_y = avatar_y + avatar_size - rank_icon_size // 2
+                img.paste(rank_icon, (rank_x, rank_y), rank_icon)
+            
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=90)
             buf.seek(0)
