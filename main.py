@@ -2925,7 +2925,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     username=user.get('username') if user else None,
                     steam_nickname=user.get('steam_nickname') if user else None,
                     rank_tier=user.get('rank_tier', 0) if user else 0,
-                    rank_str=rank_str,
                     weekly_mvp=weekly_mvp,
                     weekly_top2=weekly_top2,
                     weekly_top3=weekly_top3
