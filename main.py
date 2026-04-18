@@ -135,6 +135,17 @@ async def decrease_inactive_job(context):
         logger.error(f"Ошибка в decrease_inactive_job: {e}")
 
 
+async def flush_cache_job(context):
+    """Периодический сброс данных пользователей в БД"""
+    try:
+        from database import flush_users_cache
+        flushed = flush_users_cache()
+        if flushed > 0:
+            logger.info(f"flush_cache_job: saved {flushed} users to DB")
+    except Exception as e:
+        logger.error(f"Ошибка в flush_cache_job: {e}")
+
+
 async def morning_greeting_job(context):
     """✅ Утреннее приветствие 09:00 MSK - 1 раз в чат"""
     from datetime import timezone, timedelta
@@ -3429,6 +3440,13 @@ async def main():
         )
         
         # morning_digest_job удалён
+        
+        # Сброс данных в БД каждые 5 минут для сохранения данных при деплое
+        job_queue.run_repeating(
+            flush_cache_job,
+            interval=datetime.timedelta(minutes=5),
+            first=datetime.datetime.now() + datetime.timedelta(minutes=1)
+        )
         
         # Обновление MMR каждый час (актуальные данные)
         job_queue.run_repeating(

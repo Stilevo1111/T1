@@ -156,6 +156,8 @@ def flush_users_cache():
         logger.info("flush_users_cache: no dirty users")
         return 0
     
+    logger.info(f"flush_users_cache: found {len(dirty_users)} dirty users, saving to DB")
+    
     # Обновляем кеш топа перед сбросом
     update_dota_week_top_cache()
     
@@ -168,57 +170,113 @@ def flush_users_cache():
             continue
         
         try:
-            # Используем batch update для всех полей
-            query = """
-                UPDATE users SET 
-                    username = %s,
-                    fissure = %s,
-                    last_fissure = %s,
-                    total_growth = %s,
-                    total_rolls = %s,
-                    current_streak = %s,
-                    best_streak = %s,
-                    weekly_rolls = %s,
-                    weekly_growth = %s,
-                    steam_id = %s,
-                    steam_nickname = %s,
-                    mmr = %s,
-                    rank_tier = %s,
-                    dota_total_games = %s,
-                    dota_wins = %s,
-                    last_dota_games = %s,
-                    last_dota_wins = %s,
-                    week_games = %s,
-                    week_wins = %s,
-                    week_best_streak = %s,
-                    week_start_date = %s,
-                    last_activity = CURRENT_TIMESTAMP
-                WHERE telegram_id = %s
-            """
-            db.execute_query(query, (
-                user_data.get('username'),
-                user_data.get('fissure', 0),
-                user_data.get('last_fissure', 0),
-                user_data.get('total_growth', 0),
-                user_data.get('total_rolls', 0),
-                user_data.get('current_streak', 0),
-                user_data.get('best_streak', 0),
-                user_data.get('weekly_rolls', 0),
-                user_data.get('weekly_growth', 0),
-                user_data.get('steam_id'),
-                user_data.get('steam_nickname'),
-                user_data.get('mmr', 0),
-                user_data.get('rank_tier', 0),
-                user_data.get('dota_total_games', 0),
-                user_data.get('dota_wins', 0),
-                user_data.get('last_dota_games', 0),
-                user_data.get('last_dota_wins', 0),
-                user_data.get('week_games', 0),
-                user_data.get('week_wins', 0),
-                user_data.get('week_best_streak', 0),
-                user_data.get('week_start_date'),
-                telegram_id
-            ))
+            # Определяем тип БД для правильного синтаксиса запроса
+            db_type = get_db_type()
+            
+            if db_type == "postgresql":
+                # Используем batch update для PostgreSQL
+                query = """
+                    UPDATE users SET 
+                        username = %s,
+                        fissure = %s,
+                        last_fissure = %s,
+                        total_growth = %s,
+                        total_rolls = %s,
+                        current_streak = %s,
+                        best_streak = %s,
+                        weekly_rolls = %s,
+                        weekly_growth = %s,
+                        steam_id = %s,
+                        steam_nickname = %s,
+                        mmr = %s,
+                        rank_tier = %s,
+                        dota_total_games = %s,
+                        dota_wins = %s,
+                        last_dota_games = %s,
+                        last_dota_wins = %s,
+                        week_games = %s,
+                        week_wins = %s,
+                        week_best_streak = %s,
+                        week_start_date = %s,
+                        last_activity = CURRENT_TIMESTAMP
+                    WHERE telegram_id = %s
+                """
+                db.execute_query(query, (
+                    user_data.get('username'),
+                    user_data.get('fissure', 0),
+                    user_data.get('last_fissure', 0),
+                    user_data.get('total_growth', 0),
+                    user_data.get('total_rolls', 0),
+                    user_data.get('current_streak', 0),
+                    user_data.get('best_streak', 0),
+                    user_data.get('weekly_rolls', 0),
+                    user_data.get('weekly_growth', 0),
+                    user_data.get('steam_id'),
+                    user_data.get('steam_nickname'),
+                    user_data.get('mmr', 0),
+                    user_data.get('rank_tier', 0),
+                    user_data.get('dota_total_games', 0),
+                    user_data.get('dota_wins', 0),
+                    user_data.get('last_dota_games', 0),
+                    user_data.get('last_dota_wins', 0),
+                    user_data.get('week_games', 0),
+                    user_data.get('week_wins', 0),
+                    user_data.get('week_best_streak', 0),
+                    user_data.get('week_start_date'),
+                    telegram_id
+                ))
+            else:
+                # SQLite использует ? вместо %s
+                query = """
+                    UPDATE users SET 
+                        username = ?,
+                        fissure = ?,
+                        last_fissure = ?,
+                        total_growth = ?,
+                        total_rolls = ?,
+                        current_streak = ?,
+                        best_streak = ?,
+                        weekly_rolls = ?,
+                        weekly_growth = ?,
+                        steam_id = ?,
+                        steam_nickname = ?,
+                        mmr = ?,
+                        rank_tier = ?,
+                        dota_total_games = ?,
+                        dota_wins = ?,
+                        last_dota_games = ?,
+                        last_dota_wins = ?,
+                        week_games = ?,
+                        week_wins = ?,
+                        week_best_streak = ?,
+                        week_start_date = ?,
+                        last_activity = CURRENT_TIMESTAMP
+                    WHERE telegram_id = ?
+                """
+                db.execute_query(query, (
+                    user_data.get('username'),
+                    user_data.get('fissure', 0),
+                    user_data.get('last_fissure', 0),
+                    user_data.get('total_growth', 0),
+                    user_data.get('total_rolls', 0),
+                    user_data.get('current_streak', 0),
+                    user_data.get('best_streak', 0),
+                    user_data.get('weekly_rolls', 0),
+                    user_data.get('weekly_growth', 0),
+                    user_data.get('steam_id'),
+                    user_data.get('steam_nickname'),
+                    user_data.get('mmr', 0),
+                    user_data.get('rank_tier', 0),
+                    user_data.get('dota_total_games', 0),
+                    user_data.get('dota_wins', 0),
+                    user_data.get('last_dota_games', 0),
+                    user_data.get('last_dota_wins', 0),
+                    user_data.get('week_games', 0),
+                    user_data.get('week_wins', 0),
+                    user_data.get('week_best_streak', 0),
+                    user_data.get('week_start_date'),
+                    telegram_id
+                ))
             user_cache.clear_dirty(telegram_id)
             flushed += 1
         except Exception as e:
