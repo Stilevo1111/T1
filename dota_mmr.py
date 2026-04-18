@@ -1050,12 +1050,11 @@ def get_week_top(limit=10, force_refresh=False):
 def generate_start_card(
     avatar_url: str = None,
     message_count: int = 0,
-    rank: str = "Не калиброван",
+    username: str = None,
     rank_tier: int = 0,
     weekly_mvp: int = 0,
     weekly_top2: int = 0,
-    weekly_top3: int = 0,
-    has_steam: bool = False
+    weekly_top3: int = 0
 ) -> bytes | None:
     """Сгенерировать карточку для /start существующего пользователя"""
     try:
@@ -1065,7 +1064,7 @@ def generate_start_card(
         import os
 
         # Компактный размер
-        width = 600
+        width = 550
         height = 350
         
         # Фон - градиент
@@ -1081,9 +1080,9 @@ def generate_start_card(
         # Рамка
         draw.rectangle([0, 0, width-1, height-1], outline=(60, 90, 140), width=2)
         
-        # Аватарка - круглая с обводкой
-        avatar_size = 100
-        avatar_x = 30
+        # Аватарка - квадратная с обводкой
+        avatar_size = 130
+        avatar_x = 20
         avatar_y = 40
         
         if avatar_url:
@@ -1094,10 +1093,6 @@ def generate_start_card(
                     resp = requests.get(avatar_url, timeout=8)
                     avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA") if resp.status_code == 200 else None
                 if avatar:
-                    # Круглая маска
-                    mask = Image.new("L", (avatar_size, avatar_size), 0)
-                    draw_mask = ImageDraw.Draw(mask)
-                    draw_mask.ellipse([0, 0, avatar_size, avatar_size], fill=255)
                     # Resize and crop to square
                     w, h = avatar.size
                     side = min(w, h)
@@ -1105,45 +1100,32 @@ def generate_start_card(
                     top = (h - side) // 2
                     avatar = avatar.crop((left, top, left + side, top + side))
                     avatar = avatar.resize((avatar_size, avatar_size), Image.LANCZOS)
-                    # Обводка - круг
-                    draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(100, 150, 220), width=4)
-                    img.paste(avatar, (avatar_x, avatar_y), mask)
+                    # Обводка
+                    draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(100, 150, 220), width=4)
+                    img.paste(avatar, (avatar_x, avatar_y))
             except Exception:
                 pass
         
         if not avatar_url:
-            draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80))
-            draw.ellipse([avatar_x + 25, avatar_y + 20, avatar_x + 75, avatar_y + 50], fill=(80, 100, 130))
-            draw.ellipse([avatar_x + 20, avatar_y + 55, avatar_x + 80, avatar_y + 85], fill=(80, 100, 130))
-            draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(100, 150, 220), width=4)
+            draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(100, 150, 220), width=4)
+            # Default icon placeholder
+            draw.ellipse([avatar_x + 45, avatar_y + 35, avatar_x + 95, avatar_y + 105], fill=(80, 100, 130))
         
-        # Шрифты
+        # Шрифты - увеличенные и красивые
         try:
-            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
-            font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 26)
+            font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
         except Exception:
             font_title = font_text = font_small = ImageFont.load_default()
         
-        # Иконки
-        icon_size = 24
+# Иконки - открытые источники
+        icon_size = 32
         
-        # URLs для иконок (Google Noto Emoji)
         icon_urls = {
-            'msg': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f4ac.png',
-            'link': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f517.png',
-            'trophy': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f3c6.png',
-            'gold': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f947.png',
-            'silver': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f948.png',
-            'bronze': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f949.png',
+            'msg': 'https://upload.wikimedia.org/wikipedia/commons/8/83/Telegram_icon_%282021%29.svg',
+            'trophy': 'https://upload.wikimedia.org/wikipedia/commons/a/a2/Trophy_icon.svg',
         }
-        
-        # Dota 2 rank icon
-        rank_icon_url = None
-        if has_steam and rank_tier > 0:
-            tier = rank_tier // 10
-            if 1 <= tier <= 7:
-                rank_icon_url = f"https://cdn.dota2.com/apps/dota2/images/rank_icons/rank_icon_{tier}.png"
         
         icons = {}
         for name, url in icon_urls.items():
@@ -1155,67 +1137,116 @@ def generate_start_card(
             except:
                 pass
         
-        # Rank icon (Dota 2)
-        rank_icon = None
-        if rank_icon_url:
+        # Генерируем медали программно (прозрачные PNG с цифрами)
+        def create_medal_image(number, color, text_color):
+            img = Image.new("RGBA", (icon_size, icon_size), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            # Круг
+            draw.ellipse([4, 4, icon_size-4, icon_size-4], fill=color)
+            # Номер
             try:
-                resp = requests.get(rank_icon_url, timeout=4)
-                if resp.status_code == 200:
-                    rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    rank_icon = rank_icon.resize((36, 36), Image.LANCZOS)
+                font_medal = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
             except:
-                pass
+                font_medal = ImageFont.load_default()
+            bbox = draw.textbbox((0, 0), str(number), font=font_medal)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            x = (icon_size - text_width) // 2
+            y = (icon_size - text_height) // 2 - 2
+            draw.text((x, y), str(number), fill=text_color, font=font_medal)
+            return img
         
-        # Основной блок справа от аватара
-        info_x = avatar_x + avatar_size + 30
-        info_y = 45
+icons['gold'] = create_medal_image(1, (255, 215, 0, 255), (184, 134, 11, 255))
+        icons['silver'] = create_medal_image(2, (192, 192, 192, 255), (128, 128, 128, 255))
+        icons['bronze'] = create_medal_image(3, (205, 127, 50, 255), (139, 69, 19, 255))
         
-        # Сообщения
-        if 'msg' in icons:
-            img.paste(icons['msg'], (info_x, info_y), icons['msg'])
-        draw.text((info_x + icon_size + 8, info_y + 2), f"Сообщений: {message_count}", fill=(220, 220, 230), font=font_text)
+        # Dota 2 rank icon - прямые ссылки с gamepedia.cursecdn.com (работают)
+        rank_icon = None
+        rank_icon_size = 40
+        if rank_tier > 0:
+            tier = rank_tier // 10  # 1-7
+            star = rank_tier % 10   # 1-5 stars within tier
+            if star == 0:
+                star = 5
+            
+            # Прямые рабочие ссылки на иконки рангов
+            rank_urls = {
+                (1, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/85/SeasonalRank1-1.png/140px-SeasonalRank1-1.png?version=ce7c6eea36971495cdad1f06e7ef3709",
+                (1, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/e/ee/SeasonalRank1-2.png/140px-SeasonalRank1-2.png?version=094dc352040053ea02f1bbb82a4591f1",
+                (1, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/0/05/SeasonalRank1-3.png/140px-SeasonalRank1-3.png?version=529b1f8ac23899b14bb30b03036d277e",
+                (1, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/6/6d/SeasonalRank1-4.png/140px-SeasonalRank1-4.png?version=e5fa236efcfc108987fac807d890771d",
+                (1, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/2/2b/SeasonalRank1-5.png/140px-SeasonalRank1-5.png?version=c33004c635c667fa661fad0e2593869e",
+                
+                (2, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/c/c7/SeasonalRank2-1.png/140px-SeasonalRank2-1.png?version=832ba8a7042450ebf2cee3209e2cfac8",
+                (2, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/2/2c/SeasonalRank2-2.png/140px-SeasonalRank2-2.png?version=be558245d8ddcb6479204bd99ca177cc9",
+                (2, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/f/f5/SeasonalRank2-3.png/140px-SeasonalRank2-3.png?version=38233a7123c0b90df8872a6b9a04a87c",
+                (2, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/b/b4/SeasonalRank2-4.png/140px-SeasonalRank2-4.png?version=879bc97952e7acbbb4cb76df1618757a",
+                (2, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/3/32/SeasonalRank2-5.png/140px-SeasonalRank2-5.png?version=5b99be61ba7db96bfdc03a9fef6f1fb4",
+                
+                (3, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/82/SeasonalRank3-1.png/140px-SeasonalRank3-1.png?version=b9a19f0189fe0236ee00fb94cc97a693",
+                (3, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/6/6e/SeasonalRank3-2.png/140px-SeasonalRank3-2.png?version=8e03bbb7be665bcadcb0913eaecee2c0",
+                (3, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/6/67/SeasonalRank3-3.png/140px-SeasonalRank3-3.png?version=59df65f46dbfc05c7dcb5d877aa2f37c",
+                (3, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/87/SeasonalRank3-4.png/140px-SeasonalRank3-4.png?version=8582a808c060a4df95385c98844e666b",
+                (3, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/b/b1/SeasonalRank3-5.png/140px-SeasonalRank3-5.png?version=4f0db8503ae24ddd488374b6e5968daf",
+                
+                (4, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/7/76/SeasonalRank4-1.png/140px-SeasonalRank4-1.png?version=7a9db7f22e02de4a58923f40da38b9db",
+                (4, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/87/SeasonalRank4-2.png/140px-SeasonalRank4-2.png?version=358a9043ef264bcb2ea3424339ac671a",
+                (4, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/6/60/SeasonalRank4-3.png/140px-SeasonalRank4-3.png?version=3e5c81e69f244b6028ef27beb0fc3ec6",
+                (4, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/4/4a/SeasonalRank4-4.png/140px-SeasonalRank4-4.png?version=aacf3fb098fb8de1c514d73b7a0f63c7",
+                (4, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/a/a3/SeasonalRank4-5.png/140px-SeasonalRank4-5.png?version=7b207bd7de3fe423117f6ea7331dfc88",
+                
+                (5, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/7/79/SeasonalRank5-1.png/140px-SeasonalRank5-1.png?version=7742371d2571ee59b59c6ac14e5688fa",
+                (5, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/5/52/SeasonalRank5-2.png/140px-SeasonalRank5-2.png?version=204da548015c1947ce514c8ac81c99ea",
+                (5, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/88/SeasonalRank5-3.png/140px-SeasonalRank5-3.png?version=990f1323b00256eb84002ab050b9188b",
+                (5, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/2/25/SeasonalRank5-4.png/140px-SeasonalRank5-4.png?version=0248fc56651cc810ddceca901386322a",
+                (5, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/8e/SeasonalRank5-5.png/140px-SeasonalRank5-5.png?version=14dc5ce669daf93b178350a0b3ee27e1",
+                
+                (6, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/e/e0/SeasonalRank6-1.png/140px-SeasonalRank6-1.png?version=56f4415e7d8fc83168c03f374e7babbc",
+                (6, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/1/1c/SeasonalRank6-2.png/140px-SeasonalRank6-2.png?version=87515796db90be81886c62cad9faf87f",
+                (6, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/d/da/SeasonalRank6-3.png/140px-SeasonalRank6-3.png?version=190512e1572f037b0936f8b1a4bb55b6",
+                (6, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/d/db/SeasonalRank6-4.png/140px-SeasonalRank6-4.png?version=aba16fcff849cb2495f1ddc25bfefd74",
+                (6, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/4/47/SeasonalRank6-5.png/140px-SeasonalRank6-5.png?version=1ae82223757486aa55461a82fa09ac6a",
+                
+                (7, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/b/b7/SeasonalRank7-1.png/140px-SeasonalRank7-1.png?version=8cd74e57b63ceb730d7b36a8f6589b9f",
+                (7, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/8f/SeasonalRank7-2.png/140px-SeasonalRank7-2.png?version=59d74d77a554732a99debd54d1b1b641",
+                (7, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/f/fd/SeasonalRank7-3.png/140px-SeasonalRank7-3.png?version=12f7e65e8c858b1d39e2a4a17bc85522",
+                (7, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/1/13/SeasonalRank7-4.png/140px-SeasonalRank7-4.png?version=247aba452307e17cd6f647321450b8a5",
+                (7, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/3/33/SeasonalRank7-5.png/140px-SeasonalRank7-5.png?version=0db40597d94b70e3619c2a3e80317e94",
+            }
+            
+            rank_url = rank_urls.get((tier, star))
+            if rank_url:
+                try:
+                    resp = requests.get(rank_url, timeout=4)
+                    if resp.status_code == 200:
+                        rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                        rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
+                except:
+                    pass
         
-        # Звание
-        rank_y = info_y + 40
-        if has_steam:
-            if rank_icon:
-                img.paste(rank_icon, (width - 80, rank_y - 5), rank_icon)
-            draw.text((info_x, rank_y), f"Звание: {rank}", fill=(100, 160, 240), font=font_title)
-        else:
-            if 'link' in icons:
-                img.paste(icons['link'], (info_x, rank_y), icons['link'])
-            draw.text((info_x + icon_size + 8, rank_y + 2), "Привяжи Steam", fill=(140, 140, 140), font=font_text)
+# Основной блок справа от аватара
+        info_x = avatar_x + avatar_size + 25
+        info_y = 75
         
-        # Награды
-        rewards_y = rank_y + 45
-        if 'trophy' in icons:
-            img.paste(icons['trophy'], (info_x, rewards_y), icons['trophy'])
-        draw.text((info_x + icon_size + 8, rewards_y + 2), "Награды:", fill=(220, 220, 230), font=font_text)
+        # Messages - только число (надпись будет на фоне)
+        draw.text((info_x + 120, info_y + 4), f"{message_count}", fill=(255, 255, 255), font=font_text)
         
-        # Блок наград
-        medal_y = rewards_y + 30
-        draw.rectangle([info_x - 10, medal_y - 8, width - 30, medal_y + 45], fill=(0, 0, 0, 50), outline=(60, 90, 140), width=1)
+        # Ранг - иконка ранга + username
+        rank_y = info_y + 60
+        if rank_icon:
+            img.paste(rank_icon, (info_x, rank_y - 2), rank_icon)
+        # Показываем username рядом с рангом
+        if username:
+            draw.text((info_x + 50, rank_y + 4), f"@{username}", fill=(100, 160, 240), font=font_text)
         
-        # Медали
-        medal_spacing = 130
+# Медали - только числа (надписи будут на фоне)
+        rewards_y = rank_y + 60
+        medal_y = rewards_y + 60
+        medal_spacing = 120
         
-        if 'gold' in icons:
-            img.paste(icons['gold'], (info_x + 10, medal_y), icons['gold'])
-        draw.text((info_x + 40, medal_y + 5), str(weekly_mvp), fill=(255, 215, 0), font=font_text)
-        
-        if 'silver' in icons:
-            img.paste(icons['silver'], (info_x + medal_spacing + 10, medal_y), icons['silver'])
-        draw.text((info_x + medal_spacing + 40, medal_y + 5), str(weekly_top2), fill=(192, 192, 192), font=font_text)
-        
-        if 'bronze' in icons:
-            img.paste(icons['bronze'], (info_x + medal_spacing * 2 + 10, medal_y), icons['bronze'])
-        draw.text((info_x + medal_spacing * 2 + 40, medal_y + 5), str(weekly_top3), fill=(205, 127, 50), font=font_text)
-        
-        # Кнопка меню
-        menu_w, menu_h = 100, 35
-        menu_x, menu_y = 30, height - 60
-        draw.rectangle([menu_x, menu_y, menu_x + menu_w, menu_y + menu_h], fill=(50, 80, 150), outline=(100, 150, 220), width=2)
-        draw.text((menu_x + 20, menu_y + 8), "Меню", fill=(255, 255, 255), font=font_title)
+        draw.text((info_x, medal_y + 8), f"{weekly_mvp}", fill=(255, 215, 0), font=font_text)
+        draw.text((info_x + medal_spacing, medal_y + 8), f"{weekly_top2}", fill=(200, 200, 210), font=font_text)
+        draw.text((info_x + medal_spacing * 2, medal_y + 8), f"{weekly_top3}", fill=(205, 127, 50), font=font_text)
         
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=90)

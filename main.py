@@ -870,6 +870,7 @@ async def alternate_digest_job(context):
             growth_id = stats.get("top_growth_id")
             drop_id = stats.get("top_drop_id")
             streak_id = stats.get("top_streak_id")
+            streak_username = stats.get("streak_username")
             
             growth_display = make_clickable(growth_player, growth_id)
             drop_display = make_clickable(drop_player, drop_id)
@@ -888,12 +889,14 @@ async def alternate_digest_job(context):
             else:
                 drop_part = "🔻—"
             
-            if streak_player and streak_player != "None" and streak_len > 0:
+            if streak_username and streak_len > 0:
+                streak_part = f" 🍀<b>@{streak_username}</b>: {streak_len}"
+            elif streak_player and streak_player != "None" and streak_len > 0:
                 streak_part = f" 🍀{streak_display}: {streak_len}"
             else:
                 streak_part = " 🍀—"
             
-            text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n🌅ФИССУРА ДАЙДЖЕСТ\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
+            text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
             next_type = "1"
         else:
             # Dota дайджест
@@ -2886,12 +2889,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     generate_start_card,
                     avatar_url=avatar_url or telegram_avatar_path,
                     message_count=message_count,
-                    rank=rank_str,
-                    rank_tier=rank_tier,
+                    username=user.get('username') if user else None,
+                    rank_tier=user.get('rank_tier', 0) if user else 0,
                     weekly_mvp=weekly_mvp,
                     weekly_top2=weekly_top2,
-                    weekly_top3=weekly_top3,
-                    has_steam=has_steam
+                    weekly_top3=weekly_top3
                 )
                 if img_bytes:
                     result_msg = await context.bot.send_photo(
