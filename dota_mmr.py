@@ -1224,23 +1224,26 @@ def generate_start_card(
                 except Exception:
                     pass
             
-            # Messages - "Всего сообщений: 847" в одной строке, одинаковый размер шрифта
-            # Проверяем длину числа и уменьшаем шрифт если нужно
-            msg_text = f"Всего сообщений: {message_count}"
-            draw.text((info_x, info_y), msg_text, fill=(255, 255, 255), font=font_title)
+            # Messages - "Всего сообщений:" label, below it the number, below that username
+            msg_label_y = info_y
+            draw.text((info_x, msg_label_y), "Всего сообщений:", fill=(150, 150, 170), font=font_small)
+            
+            # Number below label
+            msg_num_y = msg_label_y + int(28 * scale)
+            draw.text((info_x, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
+            
+            # Username/nickname below number
+            username_y = msg_num_y + int(50 * scale)
+            if steam_nickname:
+                draw.text((info_x, username_y), f"{steam_nickname}", fill=(100, 160, 240), font=font_title)
+            elif username:
+                draw.text((info_x, username_y), f"@{username}", fill=(100, 160, 240), font=font_title)
             
             # Ранг - иконка по центру нижней линии аватарки
             if rank_icon:
                 rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
                 rank_y = avatar_y + avatar_size - rank_icon_size // 2
                 img.paste(rank_icon, (rank_x, rank_y), rank_icon)
-            
-            # Юзернейм / Никнейм - выравнен
-            text_y = info_y + int(50 * scale)
-            if steam_nickname:
-                draw.text((info_x, text_y), f"{steam_nickname}", fill=(100, 160, 240), font=font_title)
-            elif username:
-                draw.text((info_x, text_y), f"@{username}", fill=(100, 160, 240), font=font_title)
             
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=90)
