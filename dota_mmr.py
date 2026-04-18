@@ -1057,7 +1057,7 @@ def generate_start_card(
     weekly_top2: int = 0,
     weekly_top3: int = 0
 ) -> bytes | None:
-"""Сгенерировать карточку для /start существующего пользователя"""
+    """Сгенерировать карточку для /start существующего пользователя"""
     try:
         from PIL import Image, ImageDraw, ImageFont
         import io
