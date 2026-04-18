@@ -3502,8 +3502,21 @@ async def main():
                     await asyncio.sleep(5)
         else:
             logger.info("Starting bot in WEBHOOK mode")
-            await app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
-            logger.info(f"Webhook URL: {webhook_url}")
+            import telegram.error
+            
+            for attempt in range(3):
+                try:
+                    await app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+                    logger.info(f"Webhook URL: {webhook_url}")
+                    break
+                except telegram.error.RetryAfter as e:
+                    logger.warning(f"Webhook set failed (attempt {attempt+1}), retrying in {e.retry_after}s...")
+                    await asyncio.sleep(e.retry_after + 1)
+                except Exception as e:
+                    logger.warning(f"Webhook set failed: {e}, retrying in 5s...")
+                    await asyncio.sleep(5)
+            else:
+                logger.warning("All webhook attempts failed, continuing anyway...")
             
             from aiohttp import web
             
