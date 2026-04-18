@@ -1063,9 +1063,10 @@ def generate_start_card(
         import requests as req
         import os
 
-        # Компактный размер
-        width = 550
-        height = 350
+        # Компактный размер - увеличенный для Retina
+        width = 1024
+        height = 600
+        scale = 1.8  # коэффициент масштабирования
         
         # Фон - градиент
         img = Image.new("RGB", (width, height), (15, 20, 35))
@@ -1081,9 +1082,9 @@ def generate_start_card(
         draw.rectangle([0, 0, width-1, height-1], outline=(60, 90, 140), width=2)
         
         # Аватарка - квадратная с обводкой
-        avatar_size = 130
-        avatar_x = 20
-        avatar_y = 40
+        avatar_size = int(130 * scale)
+        avatar_x = int(20 * scale)
+        avatar_y = int(40 * scale)
         
         if avatar_url:
             try:
@@ -1107,20 +1108,20 @@ def generate_start_card(
                 pass
         
         if not avatar_url:
-            draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(100, 150, 220), width=4)
+            draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(100, 150, 220), width=int(4*scale))
             # Default icon placeholder
-            draw.ellipse([avatar_x + 45, avatar_y + 35, avatar_x + 95, avatar_y + 105], fill=(80, 100, 130))
+            draw.ellipse([avatar_x + int(45*scale), avatar_y + int(35*scale), avatar_x + int(95*scale), avatar_y + int(105*scale)], fill=(80, 100, 130))
         
-        # Шрифты - увеличенные и красивые
+# Шрифты - увеличенные для Retina
         try:
-            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 26)
-            font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(26*scale))
+            font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(22*scale))
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(18*scale))
         except Exception:
             font_title = font_text = font_small = ImageFont.load_default()
         
-# Иконки - открытые источники
-        icon_size = 32
+        # Иконки - открытые источники
+        icon_size = int(32 * scale)
         
         icon_urls = {
             'msg': 'https://upload.wikimedia.org/wikipedia/commons/8/83/Telegram_icon_%282021%29.svg',
@@ -1153,16 +1154,16 @@ def generate_start_card(
             text_height = bbox[3] - bbox[1]
             x = (icon_size - text_width) // 2
             y = (icon_size - text_height) // 2 - 2
-            draw.text((x, y), str(number), fill=text_color, font=font_medal)
+draw.text((x, y), str(number), fill=text_color, font=font_medal)
             return img
         
-icons['gold'] = create_medal_image(1, (255, 215, 0, 255), (184, 134, 11, 255))
+        icons['gold'] = create_medal_image(1, (255, 215, 0, 255), (184, 134, 11, 255))
         icons['silver'] = create_medal_image(2, (192, 192, 192, 255), (128, 128, 128, 255))
         icons['bronze'] = create_medal_image(3, (205, 127, 50, 255), (139, 69, 19, 255))
         
         # Dota 2 rank icon - прямые ссылки с gamepedia.cursecdn.com (работают)
         rank_icon = None
-        rank_icon_size = 40
+        rank_icon_size = int(40 * scale)
         if rank_tier > 0:
             tier = rank_tier // 10  # 1-7
             star = rank_tier % 10   # 1-5 stars within tier
@@ -1224,25 +1225,25 @@ icons['gold'] = create_medal_image(1, (255, 215, 0, 255), (184, 134, 11, 255))
                 except:
                     pass
         
-# Основной блок справа от аватара
-        info_x = avatar_x + avatar_size + 25
-        info_y = 75
+        # Основной блок справа от аватара
+        info_x = avatar_x + avatar_size + int(25 * scale)
+        info_y = int(75 * scale)
         
         # Messages - только число (надпись будет на фоне)
-        draw.text((info_x + 120, info_y + 4), f"{message_count}", fill=(255, 255, 255), font=font_text)
+        draw.text((info_x + int(120 * scale), info_y + 4), f"{message_count}", fill=(255, 255, 255), font=font_text)
         
         # Ранг - иконка ранга + username
-        rank_y = info_y + 60
+        rank_y = info_y + int(60 * scale)
         if rank_icon:
             img.paste(rank_icon, (info_x, rank_y - 2), rank_icon)
         # Показываем username рядом с рангом
         if username:
-            draw.text((info_x + 50, rank_y + 4), f"@{username}", fill=(100, 160, 240), font=font_text)
+            draw.text((info_x + int(50 * scale), rank_y + 4), f"@{username}", fill=(100, 160, 240), font=font_text)
         
-# Медали - только числа (надписи будут на фоне)
-        rewards_y = rank_y + 60
-        medal_y = rewards_y + 60
-        medal_spacing = 120
+        # Медали - только числа (надписи будут на фоне)
+        rewards_y = rank_y + int(60 * scale)
+        medal_y = rewards_y + int(60 * scale)
+        medal_spacing = int(120 * scale)
         
         draw.text((info_x, medal_y + 8), f"{weekly_mvp}", fill=(255, 215, 0), font=font_text)
         draw.text((info_x + medal_spacing, medal_y + 8), f"{weekly_top2}", fill=(200, 200, 210), font=font_text)
