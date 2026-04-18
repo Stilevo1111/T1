@@ -3488,7 +3488,9 @@ async def main():
             port = int(os.getenv('PORT', 10000))
             site = web.TCPSite(runner, '0.0.0.0', port)
             await site.start()
-            logger.info(f"Health server on port {port}")
+            # Give kernel a moment to fully set up the listening socket
+            await asyncio.sleep(0.1)
+            logger.info(f"Health server started on 0.0.0.0:{port}")
             
             offset = 0
             while True:
@@ -3545,7 +3547,9 @@ async def main():
             port = int(os.getenv('PORT', 10000))
             site = web.TCPSite(runner, '0.0.0.0', port)
             await site.start()
-            logger.info(f"Web server started on port {port}")
+            # Give kernel a moment to fully set up the listening socket
+            await asyncio.sleep(0.1)
+            logger.info(f"Web server started on 0.0.0.0:{port}")
             
             async def keep_alive_ping():
                 import aiohttp
