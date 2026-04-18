@@ -1064,30 +1064,16 @@ def generate_start_card(
         import requests as req
         import os
 
-        # Компактный размер - увеличенный для Retina
+# Компактный размер - увеличенный для Retina
         width = 1024
         height = 500
         scale = 1.8  # коэффициент масштабирования
         
-        # Центрирование аватара по вертикали
-        avatar_y = int((height - avatar_size) // 2 - 10)
-        
-        # Фон - градиент
-        img = Image.new("RGB", (width, height), (15, 20, 35))
-        draw = ImageDraw.Draw(img)
-        
-        for y in range(height):
-            r = int(15 + (25 - 15) * (y / height))
-            g = int(20 + (35 - 20) * (y / height))
-            b = int(35 + (55 - 35) * (y / height))
-            draw.line([(0, y), (width, y)], fill=(r, g, b))
-        
-        # Рамка - золотая как в профиле
-        draw.rectangle([0, 0, width-1, height-1], outline=(215, 175, 85), width=2)
-        
         # Аватарка - квадратная с обводкой
         avatar_size = int(130 * scale)
         avatar_x = int(20 * scale)
+        # Центрирование аватара по вертикали
+        avatar_y = int((height - avatar_size) // 2 - 10)
         
         if avatar_url:
             try:
