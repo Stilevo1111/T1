@@ -810,6 +810,7 @@ def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
 
         result = {
             "nickname": profile.get("personaname", "Unknown"),
+            "avatar": profile.get("avatarfull") or profile.get("avatar"),
             "mmr": mmr,
             "rank_tier": rank_tier,
             "total_games": total_games,

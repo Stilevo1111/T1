@@ -2853,10 +2853,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             avatar_url = None
             if user and user.get('steam_id'):
                 try:
-                    from dota_mmr import get_player_profile_async
-                    profile = await get_player_profile_async(user['steam_id'])
-                    if profile and profile.get('avatar'):
-                        avatar_url = profile['avatar']
+                    from dota_mmr import get_player_stats
+                    stats = get_player_stats(user['steam_id'], use_cache=True)
+                    if stats and stats.get('avatar'):
+                        avatar_url = stats['avatar']
                 except Exception:
                     pass
             
