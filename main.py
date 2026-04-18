@@ -3345,6 +3345,8 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 user_id = new_member.user.id
                 user_obj = new_member.user
                 
+                logger.info(f"New member joined: {name} (id={user_id}) in chat {chat_id}")
+                
                 # Отмечаем пользователя как участника чата
                 try:
                     set_user_in_chat(user_id, True)
