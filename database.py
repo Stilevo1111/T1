@@ -2542,8 +2542,8 @@ def get_dota_digest_stats():
         release_connection(conn)
 
 
-def get_all_users_with_steam():
-    """Получение всех пользователей с привязанным Steam (полные данные)"""
+def get_all_users_from_db():
+    """Получение всех пользователей из БД (полные данные)"""
     conn = None
     try:
         conn = get_connection()
@@ -2558,7 +2558,7 @@ def get_all_users_with_steam():
                        total_growth, total_rolls, best_streak, current_streak,
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
                        week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins
-                FROM users WHERE steam_id IS NOT NULL
+                FROM users
             """)
             users = cursor.fetchall()
             cursor.close()
