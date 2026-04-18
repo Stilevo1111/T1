@@ -378,70 +378,67 @@ async def backup_database_job(context):
         
         logger.info("Запуск копирования в backup БД")
         
-        users = get_all_users_from_db()
-        if not users:
-            logger.info("Нет пользователей для копирования")
-            return
-        
         import psycopg2
         from urllib.parse import urlparse
         
+        main_url = urlparse(DATABASE_URL)
         backup_url = urlparse(BACKUP_DATABASE_URL)
-        conn = psycopg2.connect(
+        
+        main_conn = psycopg2.connect(
+            host=main_url.hostname,
+            port=main_url.port or 5432,
+            dbname=main_url.path[1:],
+            user=main_url.username,
+            password=main_url.password
+        )
+        
+        backup_conn = psycopg2.connect(
             host=backup_url.hostname,
             port=backup_url.port or 5432,
             dbname=backup_url.path[1:],
             user=backup_url.username,
             password=backup_url.password
         )
-        conn.autocommit = True
-        cursor = conn.cursor()
         
-        for user in users:
+        main_cursor = main_conn.cursor()
+        backup_cursor = backup_conn.cursor()
+        
+        # Get all tables
+        main_cursor.execute("""
+            SELECT table_name FROM information_schema.tables 
+            WHERE table_schema = 'public'
+        """)
+        tables = [row[0] for row in main_cursor.fetchall()]
+        
+        total_copied = 0
+        for table in tables:
             try:
-                cursor.execute("""
-                    INSERT INTO users (telegram_id, username, steam_id, steam_nickname, mmr, rank_tier, 
-                                      dota_total_games, dota_wins, week_games, week_wins, 
-                                      week_best_streak, week_current_streak, week_start_date, 
-                                      mmr_updated_at, rank_tier_updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (telegram_id) DO UPDATE SET
-                        steam_id = EXCLUDED.steam_id,
-                        steam_nickname = EXCLUDED.steam_nickname,
-                        mmr = EXCLUDED.mmr,
-                        rank_tier = EXCLUDED.rank_tier,
-                        dota_total_games = EXCLUDED.dota_total_games,
-                        dota_wins = EXCLUDED.dota_wins,
-                        week_games = EXCLUDED.week_games,
-                        week_wins = EXCLUDED.week_wins,
-                        week_best_streak = EXCLUDED.week_best_streak,
-                        week_current_streak = EXCLUDED.week_current_streak,
-                        week_start_date = EXCLUDED.week_start_date,
-                        mmr_updated_at = EXCLUDED.mmr_updated_at,
-                        rank_tier_updated_at = EXCLUDED.rank_tier_updated_at
-                """, (
-                    user.get('telegram_id'),
-                    user.get('username'),
-                    user.get('steam_id'),
-                    user.get('steam_nickname'),
-                    user.get('mmr', 0),
-                    user.get('rank_tier', 0),
-                    user.get('dota_total_games', 0),
-                    user.get('dota_wins', 0),
-                    user.get('week_games', 0),
-                    user.get('week_wins', 0),
-                    user.get('week_best_streak', 0),
-                    user.get('week_current_streak', 0),
-                    user.get('week_start_date'),
-                    user.get('mmr_updated_at'),
-                    user.get('rank_tier_updated_at')
-                ))
+                # Get all data from table
+                main_cursor.execute(f"SELECT * FROM {table}")
+                rows = main_cursor.fetchall()
+                
+                if rows:
+                    # Get column names
+                    columns = [desc[0] for desc in main_cursor.description]
+                    placeholders = ','.join(['%s'] * len(columns))
+                    column_names = ','.join(columns)
+                    
+                    # Clear and insert (or use DELETE + INSERT)
+                    backup_cursor.execute(f"DELETE FROM {table}")
+                    
+                    for row in rows:
+                        backup_cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", row)
+                    
+                    total_copied += len(rows)
+                    logger.info(f"Table {table}: copied {len(rows)} rows")
             except Exception as e:
-                logger.debug(f"Error copying user {user.get('telegram_id')}: {e}")
+                logger.warning(f"Error copying table {table}: {e}")
         
-        cursor.close()
-        conn.close()
-        logger.info(f"Скопировано {len(users)} пользователей в backup БД")
+        main_cursor.close()
+        backup_cursor.close()
+        main_conn.close()
+        backup_conn.close()
+        logger.info(f"Скопировано {total_copied} записей в backup БД")
         
     except Exception as e:
         logger.error(f"Backup job error: {e}")
