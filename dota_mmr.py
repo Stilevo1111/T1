@@ -1208,17 +1208,17 @@ def generate_start_card(
                 (7, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/f/fd/SeasonalRank7-3.png/140px-SeasonalRank7-3.png?version=12f7e65e8c858b1d39e2a4a17bc85522",
                 (7, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/1/13/SeasonalRank7-4.png/140px-SeasonalRank7-4.png?version=247aba452307e17cd6f647321450b8a5",
                 (7, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/3/33/SeasonalRank7-5.png/140px-SeasonalRank7-5.png?version=0db40597d94b70e3619c2a3e80317e94",
-            }
+}
             
-             rank_url = rank_urls.get((tier, star))
-             if rank_url:
-                 try:
-                     resp = requests.get(rank_url, timeout=4)
-                     if resp.status_code == 200:
-                         rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                         rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
-                 except Exception:
-                     pass
+            rank_url = rank_urls.get((tier, star))
+            if rank_url:
+                try:
+                    resp = requests.get(rank_url, timeout=4)
+                    if resp.status_code == 200:
+                        rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                        rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
+                except Exception:
+                    pass
         
          # Messages - "Всего сообщений: 847" в одной строке
          draw.text((info_x, info_y + 4), "Всего сообщений:", fill=(150, 150, 170), font=font_small)
