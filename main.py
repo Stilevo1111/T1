@@ -3389,16 +3389,6 @@ async def main():
         update_dota_week_top_cache()
         logger.info("Dota week top cache initialized on startup")
         
-        # Auto import users from CSV if file exists
-        if os.path.exists("users.csv"):
-            logger.info("Found users.csv, attempting auto-import...")
-            try:
-                import import_users
-                imported = import_users.import_from_csv("users.csv")
-                logger.info(f"Auto-imported {imported} users from CSV")
-            except Exception as e:
-                logger.warning(f"Auto-import failed: {e}")
-        
         job_queue = JobQueue()
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
         job_queue.set_application(app)
