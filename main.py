@@ -372,7 +372,7 @@ async def announce_weekly_mmr_winner(bot):
 async def backup_database_job(context):
     """Копирование данных в backup БД каждый час"""
     try:
-        from database import BACKUP_DATABASE_URL, get_all_users_from_db
+        from database import BACKUP_DATABASE_URL
         if not BACKUP_DATABASE_URL:
             return
         
