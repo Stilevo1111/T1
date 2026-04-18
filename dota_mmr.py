@@ -1057,17 +1057,21 @@ def generate_start_card(
     weekly_top2: int = 0,
     weekly_top3: int = 0
 ) -> bytes | None:
-    """Сгенерировать карточку для /start существующего пользователя"""
+"""Сгенерировать карточку для /start существующего пользователя"""
     try:
         from PIL import Image, ImageDraw, ImageFont
         import io
         import requests as req
         import os
 
-# Компактный размер - увеличенный для Retina
+        # Компактный размер - увеличенный для Retina
         width = 1024
         height = 500
         scale = 1.8  # коэффициент масштабирования
+        
+        # Фон и draw
+        img = Image.new("RGB", (width, height), (15, 20, 35))
+        draw = ImageDraw.Draw(img)
         
         # Аватарка - квадратная с обводкой
         avatar_size = int(130 * scale)
