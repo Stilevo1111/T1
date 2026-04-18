@@ -644,16 +644,16 @@ def rank_to_mmr(rank_tier: int) -> int:
 
 
 def rank_to_string(rank_tier: int) -> str:
-    """Конвертировать rank_tier в читаемый вид (например: "Страж 3", "Архонт 5", "Бессмертный")"""
+    """Конвертировать rank_tier в читаемый вид (например: "Герой 2", "Титан")"""
     if not rank_tier:
-        return "Не откалиброван"
+        return "Uncalibrated"
     
-    ranks = ["🌱 Рекрут", "🔰 Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
+    ranks = ["Recruit", "Guardian", "Knight", "Hero", "Legend", "Lord", "Divine", "Titan"]
     tier = rank_tier // 10
     star = rank_tier % 10
     
     if tier < 1 or tier > 8:
-        return "Неизвестно"
+        return "Unknown"
     
     rank_name = ranks[tier - 1]
     
@@ -1050,7 +1050,8 @@ def get_week_top(limit=10, force_refresh=False):
 def generate_start_card(
     avatar_url: str = None,
     message_count: int = 0,
-    rank: str = "Не откалиброван",
+    rank: str = "Uncalibrated",
+    rank_tier: int = 0,
     weekly_mvp: int = 0,
     weekly_top2: int = 0,
     weekly_top3: int = 0,
@@ -1142,13 +1143,22 @@ def generate_start_card(
         # URLs для иконок (Twemoji)
         emoji_urls = {
             'message': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4ac.png',  # 💬
-            'star': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3c6.png',       # ⭐
             'link': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f517.png',       # 🔗
             'trophy': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3c6.png',    # 🏆
             'gold': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f947.png',      # 🥇
             'silver': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f948.png',    # 🥈
             'bronze': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f949.png',    # 🥉
         }
+        
+        # URL для rank иконки (OpenDota style)
+        rank_icon_url = None
+        if has_steam and rank_tier > 0:
+            # OpenDota rank icons: https://www.opendota.com/assets/images/rank_icons/rank_icon_0.png
+            # tier: 0=Recruit, 1=Guardian, 2=Knight, 3=Hero, 4=Legend, 5=Lord, 6=Divine, 7=Titan
+            tier = rank_tier // 10
+            stars = rank_tier % 10
+            if 1 <= tier <= 7:
+                rank_icon_url = f"https://www.opendota.com/assets/images/rank_icons/rank_icon_{tier}.png"
         
         emoji_cache = {}
         icon_size = 20
@@ -1164,6 +1174,17 @@ def generate_start_card(
             except Exception:
                 pass
         
+        # Загружаем rank иконку
+        rank_icon = None
+        if rank_icon_url:
+            try:
+                resp = requests.get(rank_icon_url, timeout=5)
+                if resp.status_code == 200:
+                    rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                    rank_icon = rank_icon.resize((icon_size, icon_size), Image.LANCZOS)
+            except Exception:
+                pass
+        
         # Рисуем иконки и текст
         icon_y_msg = 35
         draw.text((text_x + icon_size + 5, icon_y_msg), f"{message_count} msg", fill=(232, 232, 236), font=font_text)
@@ -1172,11 +1193,14 @@ def generate_start_card(
         
         icon_y_rank = 58
         if has_steam:
+            # Рисуем rank иконку + текст
+            if rank_icon:
+                img.paste(rank_icon, (text_x, icon_y_rank - 3), rank_icon)
             draw.text((text_x + icon_size + 5, icon_y_rank), rank, fill=(109, 179, 242), font=font_rank)
         else:
             draw.text((text_x + icon_size + 5, icon_y_rank), "Link Steam", fill=(136, 136, 136), font=font_text)
-        if 'star' in emoji_cache:
-            img.paste(emoji_cache['star'], (text_x, icon_y_rank - 3), emoji_cache['star'])
+            if 'link' in emoji_cache:
+                img.paste(emoji_cache['link'], (text_x, icon_y_rank - 3), emoji_cache['link'])
         
         icon_y_rewards = 84
         draw.text((text_x + icon_size + 5, icon_y_rewards), "Awards", fill=(232, 232, 236), font=font_text)

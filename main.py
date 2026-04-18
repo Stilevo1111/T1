@@ -2842,7 +2842,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Get rank (from OpenDota)
             rank_tier = user.get('rank_tier', 0) if user else 0
-            rank_str = rank_to_string(rank_tier) if rank_tier else "Не откалиброван"
+            rank_str = rank_to_string(rank_tier) if rank_tier else "Uncalibrated"
             
             # Get weekly rewards
             weekly_mvp = user.get('weekly_mvp_count', 0) if user else 0
@@ -2886,6 +2886,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     avatar_url=avatar_url or telegram_avatar_path,
                     message_count=message_count,
                     rank=rank_str,
+                    rank_tier=rank_tier,
                     weekly_mvp=weekly_mvp,
                     weekly_top2=weekly_top2,
                     weekly_top3=weekly_top3,
