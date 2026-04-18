@@ -7,7 +7,7 @@ import asyncio
 import logging
 import datetime
 import urllib.parse as urlparse
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, BACKUP_DATABASE_URL
@@ -503,7 +503,7 @@ async def update_all_mmr_job(context):
                     telegram_id = user.get('telegram_id')
                     name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id else username
                     text = f"{name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
-                    rank_up_banner_url = "https://i.ibb.co/8LbRb8Zh/dsadasdas23323.png"
+                    rank_up_banner_url = "https://i.ibb.co/HLF6JJTw/ji8hy.jpg"
                     await context.bot.send_photo(chat_id=digest_chat_id, photo=rank_up_banner_url, caption=text, parse_mode="HTML")
                 except Exception as notify_err:
                     logger.error(f"Ошибка отправки уведомления о ранк-апе: {notify_err}")
@@ -1641,11 +1641,11 @@ DOTA_DIGEST_FOOTER = "🔺 = лучший винрейт за неделю\n🔻
 DICE_ANIMATION_DELAY = 1.0
 
 # URL баннеров
-COOLDOWN_BANNER_URL = "https://i.ibb.co/kVFSSXKB/2v-Eh7-1.jpg"
-PROFILE_BANNER_URL = "https://i.ibb.co/zTfF02C3/W0o-Gg.jpg"
-TOP_BANNER_URL = "https://i.ibb.co/gLcnbBJ0/wx-Kwo.jpg"
-TOPMMR_BANNER_URL = "https://i.ibb.co/7Jy3hjsF/o-TVJg.jpg"
-LINK_BANNER_URL = "https://i.ibb.co/s9L6mTtx/dsfcv23123.png"
+COOLDOWN_BANNER_URL = "https://i.ibb.co/FkzCZxNG/m-Yqbu.jpg"
+PROFILE_BANNER_URL = "https://i.ibb.co/dsp14gFB/eqaeasea.png"
+TOP_BANNER_URL = "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
+TOPMMR_BANNER_URL = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
+LINK_BANNER_URL = "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"
 SETDIGEST_BANNER_URL = "https://i.ibb.co/LXsGsfxZ/213.png"
 
 # Кеш шансов (обновляется раз в минуту)
@@ -1931,7 +1931,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             filled = int(elapsed / COOLDOWN * 10)
             bar = "🟩" * filled + "⬜️" * (10 - filled)
             text = f"🧬 Восстанавливается. {format_time(wait)}\n{bar}"
-            cooldown_banner_url = "https://i.ibb.co/tMyxHtz1/dsadsadasdas.png"
+            cooldown_banner_url = "https://i.ibb.co/FkzCZxNG/m-Yqbu.jpg"
             result_msg = await context.bot.send_photo(
                 chat_id=update.message.chat_id,
                 photo=cooldown_banner_url,
@@ -2207,9 +2207,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Шапка: старая для обычных, новая для мультикаста
         if cascade_count > 1:
-            roll_banner_url = "https://i.ibb.co/vCq9LvgM/dsad23.png"
+            roll_banner_url = "https://i.ibb.co/Mk35C5PY/Hf-S7B.jpg"
         else:
-            roll_banner_url = "https://i.ibb.co/4RRBrQkv/9k-Rlz.jpg"
+            roll_banner_url = "https://i.ibb.co/Mk35C5PY/Hf-S7B.jpg"
         
         try:
             if roll_banner_url:
@@ -2402,7 +2402,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         
         # Banner URL - для Steam использовать картинку с героями
-        profile_banner_url = "https://i.ibb.co/d0pcyNcM/image.png"
+        profile_banner_url = "https://i.ibb.co/dsp14gFB/eqaeasea.png"
         
         try:
             from dota_mmr import get_top_heroes_async, generate_heroes_image
@@ -2509,7 +2509,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += f"\n<b>👤 Твоя позиция: — ({user_fissure:.1f} см)</b>"
         
         # Add banner and send
-        top_banner_url = "https://i.ibb.co/gLcnbBJ0/wx-Kwo.jpg"
+        top_banner_url = "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
         
         text = f"{text}"
         
@@ -2700,7 +2700,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = "".join(lines)
         
         # Add header to final text
-        topmmr_banner_url = "https://i.ibb.co/7Jy3hjsF/o-TVJg.jpg"
+        topmmr_banner_url = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
         text = f"{text}"
         
         # Delete previous bot message before sending new one
@@ -2782,7 +2782,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.debug(f"Could not delete last bot message: {e}")
     
-    link_banner_url = "https://i.ibb.co/s9L6mTtx/dsfcv23123.png"
+    link_banner_url = "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"
     link_text = ("🦞 *Привязка Dota*\n\n"
     "Отправьте `/link` и ваш Dota ID или ссылку на профиль.\n\n"
     "*Примеры:*\n"
@@ -2942,7 +2942,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Always send welcome message
         text = "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
         
-        banner_url = "https://i.ibb.co/LXsGsfxZ/213.png"
+        banner_url = "https://i.ibb.co/fYNXwsjQ/sadfsadasdas.png"
         
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
@@ -3473,6 +3473,7 @@ async def main():
         if use_polling or not webhook_url:
             logger.info("Starting bot in POLLING mode")
             await app.bot.delete_webhook(drop_pending_updates=True)
+            await app.bot.set_my_commands([])
             
             from aiohttp import web
             async def health_handler(request):
