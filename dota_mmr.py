@@ -1216,7 +1216,7 @@ def generate_start_card(
                 except:
                     pass
         
-# Messages - "Всего сообщений: 847" в одной строке
+         # Messages - "Всего сообщений: 847" в одной строке
          draw.text((info_x, info_y + 4), "Всего сообщений:", fill=(150, 150, 170), font=font_small)
          draw.text((info_x + int(160 * scale), info_y + 4), f"{message_count}", fill=(255, 255, 255), font=font_title)
          
@@ -1232,9 +1232,6 @@ def generate_start_card(
              draw.text((info_x, text_y), f"{steam_nickname}", fill=(100, 160, 240), font=font_title)
          elif username:
              draw.text((info_x, text_y), f"@{username}", fill=(100, 160, 240), font=font_title)
-         # Если нет Steam - имя пользователя
-         elif username:
-             draw.text((info_x, rank_y + 10), f"@{username}", fill=(100, 160, 240), font=font_title)
          
          buf = io.BytesIO()
          img.save(buf, format="JPEG", quality=90)
