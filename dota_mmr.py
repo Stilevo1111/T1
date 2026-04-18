@@ -1225,7 +1225,9 @@ def generate_start_card(
                     pass
             
             # Messages - "Всего сообщений: 847" в одной строке, одинаковый размер шрифта
-            draw.text((info_x, info_y), f"Всего сообщений: {message_count}", fill=(255, 255, 255), font=font_title)
+            # Проверяем длину числа и уменьшаем шрифт если нужно
+            msg_text = f"Всего сообщений: {message_count}"
+            draw.text((info_x, info_y), msg_text, fill=(255, 255, 255), font=font_title)
             
             # Ранг - иконка по центру нижней линии аватарки
             if rank_icon:
@@ -1239,14 +1241,6 @@ def generate_start_card(
                 draw.text((info_x, text_y), f"{steam_nickname}", fill=(100, 160, 240), font=font_title)
             elif username:
                 draw.text((info_x, text_y), f"@{username}", fill=(100, 160, 240), font=font_title)
-            
-            # Обводка по краям карточки как в /profile
-            border_padding = int(8 * scale)
-            draw.rectangle(
-                [border_padding, border_padding, width - border_padding, height - border_padding],
-                outline=(120, 170, 210),
-                width=2
-            )
             
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=90)
