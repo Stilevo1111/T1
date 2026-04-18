@@ -2822,28 +2822,121 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_obj = update.effective_user
         username = user_obj.username or user_obj.first_name
         
-        # Send welcome message - don't fail on DB errors
+        user = None
         try:
             user = get_user(uid, username)
             logger.info(f"start user data: {user}")
         except Exception as db_error:
             logger.warning(f"Database error in start (non-fatal): {db_error}")
         
-        # Always send welcome message
-        text = "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
+        # Check if user exists and has played (has fissure or games)
+        is_existing_user = user and (user.get('fissure', 0) > 0 or user.get('total_rolls', 0) > 0 or user.get('week_games', 0) > 0)
         
-        banner_url = "https://i.ibb.co/fYNXwsjQ/sadfsadasdas.png"
-        
-        result_msg = await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=banner_url,
-            caption=text,
-            reply_markup=main_menu()
-        )
+        if is_existing_user:
+            # User has played before - show profile card
+            from dota_mmr import rank_to_string
+            import io
+            
+            # Get message count
+            message_count = user.get('message_count', 0) if user else 0
+            
+            # Get rank (from OpenDota)
+            rank_tier = user.get('rank_tier', 0) if user else 0
+            rank_str = rank_to_string(rank_tier) if rank_tier else "Не откалиброван"
+            
+            # Get weekly rewards
+            weekly_mvp = user.get('weekly_mvp_count', 0) if user else 0
+            weekly_top2 = user.get('weekly_top2_count', 0) if user else 0
+            weekly_top3 = user.get('weekly_top3_count', 0) if user else 0
+            
+            # Get avatar - OpenDota if Steam linked, else Telegram
+            avatar_url = None
+            if user and user.get('steam_id'):
+                try:
+                    from dota_mmr import get_player_profile_async
+                    profile = await get_player_profile_async(user['steam_id'])
+                    if profile and profile.get('avatar'):
+                        avatar_url = profile['avatar']
+                except Exception:
+                    pass
+            
+            # If no Steam avatar, try to get Telegram avatar
+            telegram_avatar_path = None
+            if not avatar_url:
+                try:
+                    photos = await context.bot.get_user_profile_photos(user_obj.id, limit=1)
+                    if photos and photos.photos:
+                        file_id = photos.photos[0][-1].file_id
+                        file = await context.bot.get_file(file_id)
+                        # Download to temp file
+                        import tempfile
+                        import os
+                        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
+                        telegram_avatar_path = temp_file.name
+                        temp_file.close()
+                        await file.download_to_drive(telegram_avatar_path)
+                except Exception:
+                    pass
+            
+            # Generate image card
+            try:
+                from dota_mmr import generate_start_card
+                img_bytes = await asyncio.to_thread(
+                    generate_start_card,
+                    avatar_url=avatar_url or telegram_avatar_path,
+                    message_count=message_count,
+                    rank=rank_str,
+                    weekly_mvp=weekly_mvp,
+                    weekly_top2=weekly_top2,
+                    weekly_top3=weekly_top3,
+                    has_steam=bool(user and user.get('steam_id'))
+                )
+                if img_bytes:
+                    result_msg = await context.bot.send_photo(
+                        chat_id=chat_id,
+                        photo=io.BytesIO(img_bytes),
+                        reply_markup=main_menu()
+                    )
+                else:
+                    # Fallback to banner
+                    result_msg = await context.bot.send_photo(
+                        chat_id=chat_id,
+                        photo="https://i.ibb.co/fYNXwsjQ/sadfsadasdas.png",
+                        caption="👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно.",
+                        reply_markup=main_menu()
+                    )
+            except Exception as e:
+                logger.debug(f"generate_start_card error: {e}")
+                # Fallback to banner
+                result_msg = await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo="https://i.ibb.co/fYNXwsjQ/sadfsadasdas.png",
+                    caption="👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно.",
+                    reply_markup=main_menu()
+                )
+        else:
+            # New user or hasn't played - show welcome message
+            text = "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
+            banner_url = "https://i.ibb.co/fYNXwsjQ/sadfsadasdas.png"
+            
+            result_msg = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=banner_url,
+                caption=text,
+                reply_markup=main_menu()
+            )
         
         set_last_bot_message(chat_id, uid, result_msg.message_id)
         add_bot_message(chat_id, uid, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+        
+        # Cleanup temp avatar file
+        if telegram_avatar_path:
+            try:
+                import os
+                os.remove(telegram_avatar_path)
+            except Exception:
+                pass
         
         # Try to update message ID in database (non-critical)
         try:
@@ -3040,6 +3133,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.message.chat_id if update.message else "unknown"
         logger.info(f"menu_handler: user={user_id}, chat={chat_id}")
         
+        # Increment message count for any text message
+        try:
+            from database import get_user, update_user_fields_batch
+            db_user = get_user(user_id)
+            current_count = db_user.get('message_count', 0) if db_user else 0
+            update_user_fields_batch(user_id, {'message_count': current_count + 1})
+        except Exception:
+            pass
+        
         if not update.message:
             logger.warning(f"menu_handler: no message in update")
             return
@@ -3090,6 +3192,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         
         logger.info(f"User {user_id} pressed button: {button_found} in chat type: {chat_type}")
+        
+        # Increment message count
+        try:
+            from database import get_user, update_user_fields_batch
+            db_user = get_user(user_id)
+            current_count = db_user.get('message_count', 0) if db_user else 0
+            update_user_fields_batch(user_id, {'message_count': current_count + 1})
+        except Exception:
+            pass
         
         # Delete user's message only in groups/channels (non-blocking, don't wait)
         if chat_type in ['group', 'supergroup', 'channel']:

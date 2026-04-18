@@ -633,6 +633,8 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN weekly_top3_count INTEGER DEFAULT 0")
             if 'last_greeting_date' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN last_greeting_date DATE")
+            if 'message_count' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN message_count INTEGER DEFAULT 0")
             
             # Создаём индексы для часто используемых полей (улучшение производительности)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)")
