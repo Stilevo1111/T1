@@ -1082,8 +1082,8 @@ def generate_start_card(
             b = int(35 + (55 - 35) * (y / height))
             draw.line([(0, y), (width, y)], fill=(r, g, b))
         
-        # Рамка
-        draw.rectangle([0, 0, width-1, height-1], outline=(60, 90, 140), width=2)
+        # Рамка - золотая как в профиле
+        draw.rectangle([0, 0, width-1, height-1], outline=(215, 175, 85), width=2)
         
         # Аватарка - квадратная с обводкой
         avatar_size = int(130 * scale)
@@ -1104,14 +1104,14 @@ def generate_start_card(
                     top = (h - side) // 2
                     avatar = avatar.crop((left, top, left + side, top + side))
                     avatar = avatar.resize((avatar_size, avatar_size), Image.LANCZOS)
-                    # Обводка
-                    draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(100, 150, 220), width=4)
+                    # Обводка - золотая
+                    draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(215, 175, 85), width=int(4*scale))
                     img.paste(avatar, (avatar_x, avatar_y))
             except Exception:
                 pass
         
         if not avatar_url:
-            draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(100, 150, 220), width=int(4*scale))
+            draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(215, 175, 85), width=int(4*scale))
             # Default icon placeholder
             draw.ellipse([avatar_x + int(45*scale), avatar_y + int(35*scale), avatar_x + int(95*scale), avatar_y + int(105*scale)], fill=(80, 100, 130))
         
