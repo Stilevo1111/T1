@@ -8,7 +8,7 @@ if not DATABASE_URL:
     print("DATABASE_URL not set!")
     exit(1)
 
-CSV_FILE = "C:/Users/akado/Downloads/users.csv"
+CSV_FILE = os.getenv("IMPORT_CSV_FILE", "users.csv")
 
 conn = psycopg2.connect(DATABASE_URL)
 cursor = conn.cursor()
