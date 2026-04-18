@@ -1240,26 +1240,25 @@ def generate_start_card(
                 except Exception:
                     pass
             
-            # Username/nickname shifted right by 100px + more beautiful colors
-            username_y = info_y
+# Username/nickname - darker color for better visibility
             username_x_offset = 0  # No shift for text
             if steam_nickname:
-                draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(64, 224, 255), font=font_title)  # Sky Blue / DeepSkyBlue1
+                draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(30, 150, 220), font=font_title)  # Darker blue
             elif username:
-                draw.text((info_x + username_x_offset, username_y), f"@{username}", fill=(30, 144, 255), font=font_title)  # DodgerBlue
+                draw.text((info_x + username_x_offset, username_y), f"@{username}", fill=(30, 120, 220), font=font_title)  # Darker blue
             
-            # Messages label shifted right by 100px, placed below username
+            # Messages label - darker color
             msg_label_y = username_y + int(50 * scale)
-            draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(180, 180, 200), font=font_small)
+            draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(150, 150, 170), font=font_small)
             
-            # Number shifted right by 100px, below label
+            # Number - darker white
             msg_num_y = msg_label_y + int(28 * scale)
-            draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
+            draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(220, 220, 220), font=font_title)
             
-            # Rank - icon centered below avatar line (without text)
+            # Rank - icon centered exactly under avatar
             if rank_icon:
-                # Keep rank icon in original position (not shifted with avatar)
-                rank_x = (int(120 * scale)) + avatar_size // 2 - rank_icon_size // 2
+                # Center under avatar (avatar is shifted 100px left)
+                rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
                 rank_y = avatar_y + avatar_size - rank_icon_size // 2
                 img.paste(rank_icon, (rank_x, rank_y), rank_icon)
             
