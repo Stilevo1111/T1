@@ -1154,7 +1154,7 @@ def generate_start_card(
             text_height = bbox[3] - bbox[1]
             x = (icon_size - text_width) // 2
             y = (icon_size - text_height) // 2 - 2
-draw.text((x, y), str(number), fill=text_color, font=font_medal)
+            draw.text((x, y), str(number), fill=text_color, font=font_medal)
             return img
         
         icons['gold'] = create_medal_image(1, (255, 215, 0, 255), (184, 134, 11, 255))
