@@ -2260,21 +2260,30 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             text += "\n\n💡 /profile ＠ник — чужой профиль"
         
+        async def animate_loading(msg, stop_event):
+            i = 0
+            while not stop_event.is_set():
+                try:
+                    emoji = "⌛️" if i % 2 == 0 else "⏳"
+                    await msg.edit_text(text=f"{emoji} Загрузка профиля...")
+                except Exception:
+                    pass
+                try:
+                    await asyncio.sleep(0.5)
+                except Exception:
+                    pass
+                i += 1
+
         loading_msg = None
+        stop_animation = None
         if target_user.get('steam_id'):
             try:
                 loading_msg = await context.bot.send_message(
                     chat_id=chat_id,
                     text="⏳ Загрузка профиля..."
                 )
-                for i in range(8):
-                    await asyncio.sleep(0.5)
-                    if loading_msg:
-                        try:
-                            emoji = "⌛️" if i % 2 == 0 else "⏳"
-                            await loading_msg.edit_text(text=f"{emoji} Загрузка профиля...")
-                        except Exception:
-                            pass
+                stop_animation = asyncio.Event()
+                asyncio.create_task(animate_loading(loading_msg, stop_animation))
             except Exception:
                 pass
         
@@ -2290,6 +2299,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     profile_banner_url = io.BytesIO(img_bytes)
         except Exception as e:
             logger.debug(f"Could not generate heroes image: {e}")
+        
+        if stop_animation:
+            stop_animation.set()
         
         try:
             result_msg = await context.bot.send_photo(
