@@ -646,14 +646,14 @@ def rank_to_mmr(rank_tier: int) -> int:
 def rank_to_string(rank_tier: int) -> str:
     """Конвертировать rank_tier в читаемый вид (например: "Герой 2", "Титан")"""
     if not rank_tier:
-        return "Uncalibrated"
+        return "Не калиброван"
     
-    ranks = ["Recruit", "Guardian", "Knight", "Hero", "Legend", "Lord", "Divine", "Titan"]
+    ranks = ["Рекрут", "Страж", "Рыцарь", "Герой", "Легенда", "Властелин", "Божество", "Титан"]
     tier = rank_tier // 10
     star = rank_tier % 10
     
     if tier < 1 or tier > 8:
-        return "Unknown"
+        return "Неизвестно"
     
     rank_name = ranks[tier - 1]
     
@@ -1050,7 +1050,7 @@ def get_week_top(limit=10, force_refresh=False):
 def generate_start_card(
     avatar_url: str = None,
     message_count: int = 0,
-    rank: str = "Uncalibrated",
+    rank: str = "Не калиброван",
     rank_tier: int = 0,
     weekly_mvp: int = 0,
     weekly_top2: int = 0,
@@ -1062,42 +1062,32 @@ def generate_start_card(
         from PIL import Image, ImageDraw, ImageFont
         import io
         import requests as req
+        import os
+
+        width = 1920
+        height = 1080
         
-        width = 360
-        height = 220
-        
-        # Фон - градиент как в HTML
+        # Фон - градиент
         img = Image.new("RGB", (width, height), color=(30, 42, 74))
         draw = ImageDraw.Draw(img)
         
-        # Градиент сверху вниз
         for y in range(height):
-            if y < height // 2:
-                # Верхняя половина - светлее
-                ratio = y / (height // 2)
-                r = int(30 + ratio * (22 - 30))
-                g = int(42 + ratio * (33 - 42))
-                b = int(74 + ratio * (62 - 74))
-            else:
-                # Нижняя половина - темнее
-                ratio = (y - height // 2) / (height // 2)
-                r = int(22 - ratio * (22 - 15))
-                g = int(33 - ratio * (33 - 40))
-                b = int(62 - ratio * (62 - 71))
+            r = int(30 + (22 - 30) * (y / height))
+            g = int(42 + (33 - 42) * (y / height))
+            b = int(74 + (62 - 74) * (y / height))
             draw.line([(0, y), (width, y)], fill=(r, g, b))
         
-        # Тонкая рамка
+        # Рамка
         draw.rectangle([0, 0, width-1, height-1], outline=(42, 74, 102), width=1)
         
         # Аватарка
-        avatar_size = 110
-        avatar_x = 24
-        avatar_y = 30
+        avatar_size = 120
+        avatar_x = 10
+        avatar_y = 10
         
         # Загружаем аватар
         if avatar_url:
             try:
-                import os
                 if os.path.isfile(avatar_url):
                     avatar = Image.open(avatar_url).convert("RGBA")
                     w, h = avatar.size
@@ -1123,45 +1113,40 @@ def generate_start_card(
         
         # Заглушка если нет аватара
         if not avatar_url:
-            draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80))
+            draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80))
         
         # Рамка вокруг аватара
-        draw.rectangle([avatar_x-1, avatar_y-1, avatar_x + avatar_size + 1, avatar_y + avatar_size + 1], outline=(100, 150, 220), width=3)
+        draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(100, 150, 220), width=3)
         
-        # Текст и иконки из интернета (Twemoji)
+        # Шрифты
         try:
-            font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 15)
-            font_rank = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 15)
-            font_count = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 13)
+            font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
+            font_rank = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 38)
+            font_count = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
         except Exception:
             font_text = ImageFont.load_default()
             font_rank = ImageFont.load_default()
             font_count = ImageFont.load_default()
         
-        text_x = avatar_x + avatar_size + 20
-        
-        # URLs для иконок (Twemoji)
+        # URLs для иконок (Google Noto Emoji)
         emoji_urls = {
-            'message': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4ac.png',  # 💬
-            'link': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f517.png',       # 🔗
-            'trophy': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3c6.png',    # 🏆
-            'gold': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f947.png',      # 🥇
-            'silver': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f948.png',    # 🥈
-            'bronze': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f949.png',    # 🥉
+            'message': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f4ac.png',
+            'link': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f517.png',
+            'trophy': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f3c6.png',
+            'gold': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f947.png',
+            'silver': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f948.png',
+            'bronze': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f949.png',
         }
         
-        # URL для rank иконки (OpenDota style)
+        # URL для rank иконки (официальные Dota 2)
         rank_icon_url = None
         if has_steam and rank_tier > 0:
-            # OpenDota rank icons: https://www.opendota.com/assets/images/rank_icons/rank_icon_0.png
-            # tier: 0=Recruit, 1=Guardian, 2=Knight, 3=Hero, 4=Legend, 5=Lord, 6=Divine, 7=Titan
             tier = rank_tier // 10
-            stars = rank_tier % 10
             if 1 <= tier <= 7:
-                rank_icon_url = f"https://www.opendota.com/assets/images/rank_icons/rank_icon_{tier}.png"
+                rank_icon_url = f"https://cdn.dota2.com/apps/dota2/images/rank_icons/rank_icon_{tier}.png"
         
         emoji_cache = {}
-        icon_size = 20
+        icon_size = 40
         
         # Загружаем иконки
         for key, url in emoji_urls.items():
@@ -1181,57 +1166,61 @@ def generate_start_card(
                 resp = requests.get(rank_icon_url, timeout=5)
                 if resp.status_code == 200:
                     rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    rank_icon = rank_icon.resize((icon_size, icon_size), Image.LANCZOS)
+                    rank_icon = rank_icon.resize((56, 56), Image.LANCZOS)
             except Exception:
                 pass
         
-        # Рисуем иконки и текст
-        icon_y_msg = 35
-        draw.text((text_x + icon_size + 5, icon_y_msg), f"{message_count} msg", fill=(232, 232, 236), font=font_text)
+        text_x = 170
+        
+        # Сообщения
+        icon_y_msg = 20
+        draw.text((text_x + icon_size + 10, icon_y_msg), f"Сообщений: {message_count}", fill=(232, 232, 236), font=font_text)
         if 'message' in emoji_cache:
-            img.paste(emoji_cache['message'], (text_x, icon_y_msg - 3), emoji_cache['message'])
+            img.paste(emoji_cache['message'], (text_x, icon_y_msg - 5), emoji_cache['message'])
         
-        icon_y_rank = 58
+        # Звание
+        icon_y_rank = 60
         if has_steam:
-            # Рисуем rank иконку + текст
             if rank_icon:
-                img.paste(rank_icon, (text_x, icon_y_rank - 3), rank_icon)
-            draw.text((text_x + icon_size + 5, icon_y_rank), rank, fill=(109, 179, 242), font=font_rank)
+                img.paste(rank_icon, (width - 220, icon_y_rank - 10), rank_icon)
+            draw.text((text_x + icon_size + 10, icon_y_rank), f"Звание: {rank}", fill=(109, 179, 242), font=font_rank)
         else:
-            draw.text((text_x + icon_size + 5, icon_y_rank), "Link Steam", fill=(136, 136, 136), font=font_text)
+            draw.text((text_x + icon_size + 10, icon_y_rank), "Привяжи Steam", fill=(136, 136, 136), font=font_text)
             if 'link' in emoji_cache:
-                img.paste(emoji_cache['link'], (text_x, icon_y_rank - 3), emoji_cache['link'])
+                img.paste(emoji_cache['link'], (text_x, icon_y_rank - 5), emoji_cache['link'])
         
-        icon_y_rewards = 84
-        draw.text((text_x + icon_size + 5, icon_y_rewards), "Awards", fill=(232, 232, 236), font=font_text)
+        # Награды
+        icon_y_rewards = 110
+        draw.text((text_x + icon_size + 10, icon_y_rewards), "Награды:", fill=(232, 232, 236), font=font_text)
         if 'trophy' in emoji_cache:
-            img.paste(emoji_cache['trophy'], (text_x, icon_y_rewards - 3), emoji_cache['trophy'])
+            img.paste(emoji_cache['trophy'], (text_x, icon_y_rewards - 5), emoji_cache['trophy'])
         
         # Блок наград
-        rewards_y = 105
-        draw.rectangle([text_x - 5, rewards_y - 5, width - 20, rewards_y + 50], fill=(0, 0, 0, 60))
+        rewards_y = 160
+        draw.rectangle([text_x - 10, rewards_y - 10, width - 30, rewards_y + 60], fill=(0, 0, 0, 60))
         
         # Медали
-        medal_y = rewards_y + 5
-        medal_spacing = 50
+        medal_y = rewards_y
+        medal_spacing = 180
         
-        # Gold 1st
         if 'gold' in emoji_cache:
-            img.paste(emoji_cache['gold'], (text_x + 5, medal_y), emoji_cache['gold'])
-        draw.text((text_x + 28, medal_y + 2), str(weekly_mvp), fill=(153, 153, 153), font=font_count)
+            img.paste(emoji_cache['gold'], (text_x + 10, medal_y), emoji_cache['gold'])
+        draw.text((text_x + 60, medal_y + 10), str(weekly_mvp), fill=(200, 200, 200), font=font_count)
         
-        # Silver 2nd
         if 'silver' in emoji_cache:
-            img.paste(emoji_cache['silver'], (text_x + medal_spacing + 5, medal_y), emoji_cache['silver'])
-        draw.text((text_x + medal_spacing + 28, medal_y + 2), str(weekly_top2), fill=(153, 153, 153), font=font_count)
+            img.paste(emoji_cache['silver'], (text_x + medal_spacing + 10, medal_y), emoji_cache['silver'])
+        draw.text((text_x + medal_spacing + 60, medal_y + 10), str(weekly_top2), fill=(200, 200, 200), font=font_count)
         
-        # Bronze 3rd
         if 'bronze' in emoji_cache:
-            img.paste(emoji_cache['bronze'], (text_x + medal_spacing * 2 + 5, medal_y), emoji_cache['bronze'])
-        draw.text((text_x + medal_spacing * 2 + 28, medal_y + 2), str(weekly_top3), fill=(153, 153, 153), font=font_count)
+            img.paste(emoji_cache['bronze'], (text_x + medal_spacing * 2 + 10, medal_y), emoji_cache['bronze'])
+        draw.text((text_x + medal_spacing * 2 + 60, medal_y + 10), str(weekly_top3), fill=(200, 200, 200), font=font_count)
+        
+        # Меню
+        draw.rectangle([20, height - 60, 160, height - 20], fill=(64, 96, 160))
+        draw.text((30, height - 52), "Меню", fill=(232, 232, 236), font=font_rank)
         
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=85)
+        img.save(buf, format="JPEG", quality=90)
         buf.seek(0)
         return buf.read()
         
