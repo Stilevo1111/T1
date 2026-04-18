@@ -3207,12 +3207,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.message.chat_id if update.message else "unknown"
         logger.info(f"menu_handler: user={user_id}, chat={chat_id}")
         
-        # Increment message count for any text message
+        # Increment message count for any text message (only in cache, will be saved to DB later)
         try:
             from database import get_user, update_user_fields_batch
             db_user = get_user(user_id)
             current_count = db_user.get('message_count', 0) if db_user else 0
-            update_user_fields_batch(user_id, {'message_count': current_count + 1})
+            update_user_fields_batch(user_id, {'message_count': current_count + 1}, save_to_db=False)
         except Exception:
             pass
         
@@ -3267,12 +3267,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         logger.info(f"User {user_id} pressed button: {button_found} in chat type: {chat_type}")
         
-        # Increment message count
+        # Increment message count (only in cache, will be saved to DB later)
         try:
             from database import get_user, update_user_fields_batch
             db_user = get_user(user_id)
             current_count = db_user.get('message_count', 0) if db_user else 0
-            update_user_fields_batch(user_id, {'message_count': current_count + 1})
+            update_user_fields_batch(user_id, {'message_count': current_count + 1}, save_to_db=False)
         except Exception:
             pass
         

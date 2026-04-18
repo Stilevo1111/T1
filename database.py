@@ -1851,7 +1851,8 @@ def _save_user_to_db_immediately(telegram_id, user_data):
                 week_games = {placeholders}, week_wins = {placeholders}, 
                 week_best_streak = {placeholders}, week_current_streak = {placeholders}, dota_total_games = {placeholders},
                 dota_wins = {placeholders}, last_dota_games = {placeholders}, last_dota_wins = {placeholders},
-                wins = {placeholders}, losses = {placeholders}, week_start_date = {placeholders}
+                wins = {placeholders}, losses = {placeholders}, week_start_date = {placeholders},
+                message_count = {placeholders}
             WHERE telegram_id = {placeholders}
         """
         db.execute_query(query, (
@@ -1870,6 +1871,7 @@ def _save_user_to_db_immediately(telegram_id, user_data):
             user_data.get('wins', 0),
             user_data.get('losses', 0),
             user_data.get('week_start_date'),
+            user_data.get('message_count', 0),
             telegram_id
         ))
         logger.info(f"Saved user {telegram_id} Dota fields to DB immediately")
