@@ -1084,32 +1084,32 @@ def generate_start_card(
         avatar_y = int((height - avatar_size) // 2 - 10)
         
         if avatar_url:
-             try:
-                 if os.path.isfile(avatar_url):
-                     avatar = Image.open(avatar_url).convert("RGBA")
-                 else:
-                     resp = requests.get(avatar_url, timeout=8)
-                     avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA") if resp.status_code == 200 else None
-                 if avatar:
-                     # Resize and crop to square
-                     w, h = avatar.size
-                     side = min(w, h)
-                     left = (w - side) // 2
-                     top = (h - side) // 2
-                     avatar = avatar.crop((left, top, left + side, top + side))
-                     avatar = avatar.resize((avatar_size, avatar_size), Image.LANCZOS)
-                     # Gold border like /profil
-                     draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(215, 175, 85), width=int(4*scale))
-                     img.paste(avatar, (avatar_x, avatar_y))
-             except Exception:
-                 pass
+            try:
+                if os.path.isfile(avatar_url):
+                    avatar = Image.open(avatar_url).convert("RGBA")
+                else:
+                    resp = requests.get(avatar_url, timeout=8)
+                    avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA") if resp.status_code == 200 else None
+                if avatar:
+                    # Resize and crop to square
+                    w, h = avatar.size
+                    side = min(w, h)
+                    left = (w - side) // 2
+                    top = (h - side) // 2
+                    avatar = avatar.crop((left, top, left + side, top + side))
+                    avatar = avatar.resize((avatar_size, avatar_size), Image.LANCZOS)
+                    # Gold border like /profil
+                    draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(215, 175, 85), width=int(4*scale))
+                    img.paste(avatar, (avatar_x, avatar_y))
+            except Exception:
+                pass
         
         if not avatar_url:
             draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(215, 175, 85), width=int(4*scale))
             # Default icon placeholder
             draw.ellipse([avatar_x + int(45*scale), avatar_y + int(35*scale), avatar_x + int(95*scale), avatar_y + int(105*scale)], fill=(80, 100, 130))
         
-# Шрифты - увеличенные для Retina
+        # Шрифты - увеличенные для Retina
         try:
             font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
             font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(32 * scale))
@@ -1209,40 +1209,40 @@ def generate_start_card(
                 (7, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/1/13/SeasonalRank7-4.png/140px-SeasonalRank7-4.png?version=247aba452307e17cd6f647321450b8a5",
                 (7, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/3/33/SeasonalRank7-5.png/140px-SeasonalRank7-5.png?version=0db40597d94b70e3619c2a3e80317e94",
             }
-             
-             rank_url = rank_urls.get((tier, star))
-             if rank_url:
-                 try:
-                     resp = requests.get(rank_url, timeout=4)
-                     if resp.status_code == 200:
-                         rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                         rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
-                 except Exception:
-                     pass
-             
-             # Messages - "Всего сообщений: 847" в одной строке
-             draw.text((info_x, info_y + 4), "Всего сообщений:", fill=(150, 150, 170), font=font_small)
-             draw.text((info_x + int(160 * scale), info_y + 4), f"{message_count}", fill=(255, 255, 255), font=font_title)
-             
-             # Ранг - иконка перекрывает аватарку (половина на аватарке, половина под ней)
-             if rank_icon:
-                 rank_x = avatar_x + int(80 * scale)
-                 rank_y = avatar_y + avatar_size - int(rank_icon_size // 2)
-                 img.paste(rank_icon, (rank_x, rank_y), rank_icon)
-             
-             # Юзернейм / Никнейм - выравнен
-             text_y = info_y + int(60 * scale)
-             if steam_nickname:
-                 draw.text((info_x, text_y), f"{steam_nickname}", fill=(100, 160, 240), font=font_title)
-             elif username:
-                 draw.text((info_x, text_y), f"@{username}", fill=(100, 160, 240), font=font_title)
-             
-             buf = io.BytesIO()
-             img.save(buf, format="JPEG", quality=90)
-             buf.seek(0)
-             return buf.read()
-             
-         except Exception as e:
+            
+            rank_url = rank_urls.get((tier, star))
+            if rank_url:
+                try:
+                    resp = requests.get(rank_url, timeout=4)
+                    if resp.status_code == 200:
+                        rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                        rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
+                except Exception:
+                    pass
+            
+            # Messages - "Всего сообщений: 847" в одной строке
+            draw.text((info_x, info_y + 4), "Всего сообщений:", fill=(150, 150, 170), font=font_small)
+            draw.text((info_x + int(160 * scale), info_y + 4), f"{message_count}", fill=(255, 255, 255), font=font_title)
+            
+            # Ранг - иконка перекрывает аватарку (половина на аватарке, половина под ней)
+            if rank_icon:
+                rank_x = avatar_x + int(80 * scale)
+                rank_y = avatar_y + avatar_size - int(rank_icon_size // 2)
+                img.paste(rank_icon, (rank_x, rank_y), rank_icon)
+            
+            # Юзернейм / Никнейм - выравнен
+            text_y = info_y + int(60 * scale)
+            if steam_nickname:
+                draw.text((info_x, text_y), f"{steam_nickname}", fill=(100, 160, 240), font=font_title)
+            elif username:
+                draw.text((info_x, text_y), f"@{username}", fill=(100, 160, 240), font=font_title)
+            
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=90)
+            buf.seek(0)
+            return buf.read()
+    
+    except Exception as e:
              import logging
              logging.exception("generate_start_card error")
              return None
