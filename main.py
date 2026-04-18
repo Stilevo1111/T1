@@ -3470,6 +3470,8 @@ async def main():
         await app.start()
         await job_queue.start()
         
+        logger.info(f"use_polling={use_polling}, webhook_url={webhook_url}, PORT={os.getenv('PORT')}")
+        
         if use_polling or not webhook_url:
             logger.info("Starting bot in POLLING mode")
             await app.bot.delete_webhook(drop_pending_updates=True)
