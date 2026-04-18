@@ -1077,7 +1077,7 @@ def generate_start_card(
         img = Image.new("RGB", (width, height), (15, 20, 35))
         draw = ImageDraw.Draw(img)
         
-        avatar_x_offset = int(100 * scale)  # Shift avatar 100px right
+        avatar_x_offset = 100  # Shift avatar 100px right
         
         avatar_x = int(120 * scale) + avatar_x_offset  # 20 + 100 + offset
         # Центрирование авататная
@@ -1226,7 +1226,7 @@ def generate_start_card(
             
             # Username/nickname shifted right by 100px + more beautiful colors
             username_y = info_y
-            username_x_offset = int(100 * scale)
+            username_x_offset = 0  # No shift for text
             if steam_nickname:
                 draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(64, 224, 255), font=font_title)  # Sky Blue / DeepSkyBlue1
             elif username:
@@ -1243,13 +1243,13 @@ def generate_start_card(
             # Ранг - иконка по центру нижней линии аватарки
             if rank_icon:
                 # Shift rank icon right by 100px
-                rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2 + avatar_x_offset
+                rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
                 rank_y = avatar_y + avatar_size - rank_icon_size // 2
                 img.paste(rank_icon, (rank_x, rank_y), rank_icon)
                 
                 # Shift rank label right by 100px
                 rank_label_y = avatar_y + avatar_size + int(5 * scale)
-                draw.text((avatar_x + avatar_x_offset, rank_label_y), rank_str, fill=(215, 215, 215), font=font_small)
+                draw.text((avatar_x, rank_label_y), rank_str, fill=(215, 215, 215), font=font_small)
            
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=90)
