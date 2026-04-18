@@ -1596,7 +1596,7 @@ def get_user_by_username(username):
 
 
 def update_fissure(telegram_id, fissure, last_fissure, growth=0):
-    """Обновление fissure - пишем только в кеш, сброс в БД через flush_users_cache"""
+    """Обновление fissure - сразу пишем в БД"""
     user = get_user(telegram_id)
     
     if user:
@@ -1612,7 +1612,36 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
         user['best_streak'] = max(user.get('best_streak', 0), user['current_streak'])
         
         user_cache.set(telegram_id, user)
-        user_cache.mark_dirty(telegram_id)
+        
+        # Сразу сохраняем в БД
+        db = Database()
+        scheme = get_db_type()
+        if "postgres" in scheme:
+            query = """
+                UPDATE users SET fissure=%s, last_fissure=%s, 
+                total_growth = total_growth + %s,
+                total_rolls = total_rolls + 1,
+                weekly_rolls = weekly_rolls + 1,
+                weekly_growth = weekly_growth + %s,
+                last_activity = CURRENT_TIMESTAMP,
+                current_streak = CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END,
+                best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END)
+                WHERE telegram_id=%s
+            """
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, win, telegram_id))
+        else:
+            query = """
+                UPDATE users SET fissure=?, last_fissure=?, 
+                total_growth = total_growth + ?,
+                total_rolls = total_rolls + 1,
+                weekly_rolls = weekly_rolls + 1,
+                weekly_growth = weekly_growth + ?,
+                last_activity = CURRENT_TIMESTAMP,
+                current_streak = CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END,
+                best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END)
+                WHERE telegram_id=?
+            """
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, win, telegram_id))
         
         # Сбрасываем кеши дайджестов при изменении fissure
         user_cache.set('digest_stats', None)
@@ -1634,7 +1663,6 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
             user['current_streak'] = 1 if growth > 0 else 0
             user['best_streak'] = 1 if growth > 0 else 0
             user_cache.set(telegram_id, user)
-            user_cache.mark_dirty(telegram_id)
             # Сбрасываем кеш топа при создании нового пользователя
             top_cache.clear()
 
