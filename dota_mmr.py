@@ -1208,42 +1208,42 @@ def generate_start_card(
                 (7, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/f/fd/SeasonalRank7-3.png/140px-SeasonalRank7-3.png?version=12f7e65e8c858b1d39e2a4a17bc85522",
                 (7, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/1/13/SeasonalRank7-4.png/140px-SeasonalRank7-4.png?version=247aba452307e17cd6f647321450b8a5",
                 (7, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/3/33/SeasonalRank7-5.png/140px-SeasonalRank7-5.png?version=0db40597d94b70e3619c2a3e80317e94",
-}
-            
-            rank_url = rank_urls.get((tier, star))
-            if rank_url:
-                try:
-                    resp = requests.get(rank_url, timeout=4)
-                    if resp.status_code == 200:
-                        rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                        rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
-                except Exception:
-                    pass
-        
-# Messages - "Всего сообщений: 847" в одной строке
-        draw.text((info_x, info_y + 4), "Всего сообщений:", fill=(150, 150, 170), font=font_small)
-        draw.text((info_x + int(160 * scale), info_y + 4), f"{message_count}", fill=(255, 255, 255), font=font_title)
-        
-        # Ранг - иконка перекрывает аватарку (половина на аватарке, половина под ней)
-if rank_icon:
-            rank_x = avatar_x + int(80 * scale)
-            rank_y = avatar_y + avatar_size - int(rank_icon_size // 2)
-            img.paste(rank_icon, (rank_x, rank_y), rank_icon)
-        
-# Юзернейм / Никнейм - выравнен
-        text_y = info_y + int(60 * scale)
-        if steam_nickname:
-            draw.text((info_x, text_y), f"{steam_nickname}", fill=(100, 160, 240), font=font_title)
-        elif username:
-            draw.text((info_x, text_y), f"@{username}", fill=(100, 160, 240), font=font_title)
-        
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=90)
-        buf.seek(0)
-        return buf.read()
-        
-    except Exception as e:
-        import logging
-        logging.exception("generate_start_card error")
-        return None
+            }
+             
+             rank_url = rank_urls.get((tier, star))
+             if rank_url:
+                 try:
+                     resp = requests.get(rank_url, timeout=4)
+                     if resp.status_code == 200:
+                         rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                         rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
+                 except Exception:
+                     pass
+             
+             # Messages - "Всего сообщений: 847" в одной строке
+             draw.text((info_x, info_y + 4), "Всего сообщений:", fill=(150, 150, 170), font=font_small)
+             draw.text((info_x + int(160 * scale), info_y + 4), f"{message_count}", fill=(255, 255, 255), font=font_title)
+             
+             # Ранг - иконка перекрывает аватарку (половина на аватарке, половина под ней)
+             if rank_icon:
+                 rank_x = avatar_x + int(80 * scale)
+                 rank_y = avatar_y + avatar_size - int(rank_icon_size // 2)
+                 img.paste(rank_icon, (rank_x, rank_y), rank_icon)
+             
+             # Юзернейм / Никнейм - выравнен
+             text_y = info_y + int(60 * scale)
+             if steam_nickname:
+                 draw.text((info_x, text_y), f"{steam_nickname}", fill=(100, 160, 240), font=font_title)
+             elif username:
+                 draw.text((info_x, text_y), f"@{username}", fill=(100, 160, 240), font=font_title)
+             
+             buf = io.BytesIO()
+             img.save(buf, format="JPEG", quality=90)
+             buf.seek(0)
+             return buf.read()
+             
+         except Exception as e:
+             import logging
+             logging.exception("generate_start_card error")
+             return None
 
