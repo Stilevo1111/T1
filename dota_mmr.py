@@ -1127,55 +1127,84 @@ def generate_start_card(
         # Рамка вокруг аватара
         draw.rectangle([avatar_x-1, avatar_y-1, avatar_x + avatar_size + 1, avatar_y + avatar_size + 1], outline=(100, 150, 220), width=3)
         
-        # Текст - используем текст вместо эмодзи (PIL не поддерживает эмодзи)
+        # Текст и иконки из интернета (Twemoji)
         try:
             font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 15)
             font_rank = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 15)
-            # Для медалей попробуемDejaVuSans или fallback
-            try:
-                font_medal = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
-            except:
-                font_medal = font_text
             font_count = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 13)
         except Exception:
             font_text = ImageFont.load_default()
             font_rank = ImageFont.load_default()
-            font_medal = ImageFont.load_default()
             font_count = ImageFont.load_default()
         
         text_x = avatar_x + avatar_size + 20
         
-        # Сообщения (текст без эмодзи)
-        draw.text((text_x, 35), f"Messages: {message_count}", fill=(232, 232, 236), font=font_text)
+        # URLs для иконок (Twemoji)
+        emoji_urls = {
+            'message': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4ac.png',  # 💬
+            'star': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3c6.png',       # ⭐
+            'link': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f517.png',       # 🔗
+            'trophy': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3c6.png',    # 🏆
+            'gold': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f947.png',      # 🥇
+            'silver': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f948.png',    # 🥈
+            'bronze': 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f949.png',    # 🥉
+        }
         
-        # Ранг
+        emoji_cache = {}
+        icon_size = 20
+        
+        # Загружаем иконки
+        for key, url in emoji_urls.items():
+            try:
+                resp = requests.get(url, timeout=5)
+                if resp.status_code == 200:
+                    emoji_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                    emoji_img = emoji_img.resize((icon_size, icon_size), Image.LANCZOS)
+                    emoji_cache[key] = emoji_img
+            except Exception:
+                pass
+        
+        # Рисуем иконки и текст
+        icon_y_msg = 35
+        draw.text((text_x + icon_size + 5, icon_y_msg), f"{message_count} msg", fill=(232, 232, 236), font=font_text)
+        if 'message' in emoji_cache:
+            img.paste(emoji_cache['message'], (text_x, icon_y_msg - 3), emoji_cache['message'])
+        
+        icon_y_rank = 58
         if has_steam:
-            draw.text((text_x, 58), f"Rank: {rank}", fill=(109, 179, 242), font=font_rank)
+            draw.text((text_x + icon_size + 5, icon_y_rank), rank, fill=(109, 179, 242), font=font_rank)
         else:
-            draw.text((text_x, 58), "Link Steam", fill=(136, 136, 136), font=font_text)
+            draw.text((text_x + icon_size + 5, icon_y_rank), "Link Steam", fill=(136, 136, 136), font=font_text)
+        if 'star' in emoji_cache:
+            img.paste(emoji_cache['star'], (text_x, icon_y_rank - 3), emoji_cache['star'])
         
-        # Награды заголовок
-        draw.text((text_x, 84), "Rewards:", fill=(232, 232, 236), font=font_text)
+        icon_y_rewards = 84
+        draw.text((text_x + icon_size + 5, icon_y_rewards), "Awards", fill=(232, 232, 236), font=font_text)
+        if 'trophy' in emoji_cache:
+            img.paste(emoji_cache['trophy'], (text_x, icon_y_rewards - 3), emoji_cache['trophy'])
         
         # Блок наград
         rewards_y = 105
         draw.rectangle([text_x - 5, rewards_y - 5, width - 20, rewards_y + 50], fill=(0, 0, 0, 60))
         
-        # Медали - используем текстовые метки вместо эмодзи
+        # Медали
         medal_y = rewards_y + 5
         medal_spacing = 50
         
         # Gold 1st
-        draw.text((text_x + 5, medal_y), "[1st]", fill=(255, 215, 0), font=font_medal)
-        draw.text((text_x + 50, medal_y + 5), str(weekly_mvp), fill=(153, 153, 153), font=font_count)
+        if 'gold' in emoji_cache:
+            img.paste(emoji_cache['gold'], (text_x + 5, medal_y), emoji_cache['gold'])
+        draw.text((text_x + 28, medal_y + 2), str(weekly_mvp), fill=(153, 153, 153), font=font_count)
         
         # Silver 2nd
-        draw.text((text_x + medal_spacing + 5, medal_y), "[2nd]", fill=(192, 192, 192), font=font_medal)
-        draw.text((text_x + medal_spacing + 50, medal_y + 5), str(weekly_top2), fill=(153, 153, 153), font=font_count)
+        if 'silver' in emoji_cache:
+            img.paste(emoji_cache['silver'], (text_x + medal_spacing + 5, medal_y), emoji_cache['silver'])
+        draw.text((text_x + medal_spacing + 28, medal_y + 2), str(weekly_top2), fill=(153, 153, 153), font=font_count)
         
         # Bronze 3rd
-        draw.text((text_x + medal_spacing * 2 + 5, medal_y), "[3rd]", fill=(205, 127, 50), font=font_medal)
-        draw.text((text_x + medal_spacing * 2 + 50, medal_y + 5), str(weekly_top3), fill=(153, 153, 153), font=font_count)
+        if 'bronze' in emoji_cache:
+            img.paste(emoji_cache['bronze'], (text_x + medal_spacing * 2 + 5, medal_y), emoji_cache['bronze'])
+        draw.text((text_x + medal_spacing * 2 + 28, medal_y + 2), str(weekly_top3), fill=(153, 153, 153), font=font_count)
         
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=85)
