@@ -472,8 +472,9 @@ async def update_all_mmr_job(context):
                     from database import get_user as get_db_user
                     db_user = get_db_user(user['telegram_id'])
                     if db_user:
+                        existing = user_cache.get(user['telegram_id']) or {}
                         user_cache.set(user['telegram_id'], {
-                            **user_cache.get(user['telegram_id'], {}),
+                            **existing,
                             'week_games': db_user.get('week_games', 0),
                             'week_wins': db_user.get('week_wins', 0),
                             'week_best_streak': db_user.get('week_best_streak', 0),
