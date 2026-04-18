@@ -2664,7 +2664,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         except Exception as e:
-            logger.error(f"Error in link: {e}")
+            logger.error(f"Error in link: {e}", exc_info=True)
             await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Dota аккаунта", reply_markup=main_menu())
         return
     

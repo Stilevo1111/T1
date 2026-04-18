@@ -157,6 +157,10 @@ HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_
 HEROES_STRIP_BG_URL = "https://i.ibb.co/4Zr4fgNb/image.png"
 HEROES_STRIP_BG_CACHE = "heroes_strip_stat_1744.png"
 
+# Базовые URL для изображений героев (используются в get_heroes_data и fallback)
+HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
+HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes"
+
 
 def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None:
     """Get hero icon with caching"""
@@ -1213,8 +1217,8 @@ def generate_start_card(
                     if resp.status_code == 200:
                         rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
                         rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
-                except:
-                    pass
+            except Exception:
+                pass
         
          # Messages - "Всего сообщений: 847" в одной строке
          draw.text((info_x, info_y + 4), "Всего сообщений:", fill=(150, 150, 170), font=font_small)

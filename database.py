@@ -1224,6 +1224,23 @@ class Database:
                         top_streak_user = str(u["telegram_id"])
                     top_streak_id = u["telegram_id"]
 
+            def get_user_telegram_username(telegram_id):
+                """Получить Telegram username пользователя"""
+                cached = user_cache.get(telegram_id)
+                if cached:
+                    return cached.get('username')
+                conn = get_connection()
+                cursor = conn.cursor()
+                url = urlparse.urlparse(DATABASE_URL)
+                if "postgres" in url.scheme:
+                    cursor.execute("SELECT username FROM users WHERE telegram_id = %s", (telegram_id,))
+                else:
+                    cursor.execute("SELECT username FROM users WHERE telegram_id = ?", (telegram_id,))
+                result = cursor.fetchone()
+                return result[0] if result else None
+            
+            streak_username = get_user_telegram_username(top_streak_id) if top_streak_id else None
+            
             return {
                 "top_growth": (top_growth_user or "None", int(top_growth_positions)),
                 "top_drop": (top_drop_user or "None", float(top_drop_cm)),
@@ -1231,10 +1248,19 @@ class Database:
                 "top_growth_id": top_growth_id,
                 "top_drop_id": top_drop_id,
                 "top_streak_id": top_streak_id,
+                "streak_username": streak_username,
             }
         except Exception as e:
             logger.error(f"Error getting digest stats: {e}")
-            return {"top_growth": ("None", 0), "top_drop": ("None", 0.0), "top_streak": ("None", 0)}
+            return {
+                "top_growth": ("None", 0), 
+                "top_drop": ("None", 0.0), 
+                "top_streak": ("None", 0), 
+                "top_growth_id": None,
+                "top_drop_id": None,
+                "top_streak_id": None,
+                "streak_username": None
+            }
     
     def update_player_positions(self):
         """Обновить текущие позиции игроков (по fissure DESC)"""
