@@ -1064,73 +1064,73 @@ def generate_start_card(
         import requests as req
         import os
 
-        width = 1920
-        height = 1080
+        # Компактный размер
+        width = 600
+        height = 350
         
         # Фон - градиент
-        img = Image.new("RGB", (width, height), color=(30, 42, 74))
+        img = Image.new("RGB", (width, height), (15, 20, 35))
         draw = ImageDraw.Draw(img)
         
         for y in range(height):
-            r = int(30 + (22 - 30) * (y / height))
-            g = int(42 + (33 - 42) * (y / height))
-            b = int(74 + (62 - 74) * (y / height))
+            r = int(15 + (25 - 15) * (y / height))
+            g = int(20 + (35 - 20) * (y / height))
+            b = int(35 + (55 - 35) * (y / height))
             draw.line([(0, y), (width, y)], fill=(r, g, b))
         
         # Рамка
-        draw.rectangle([0, 0, width-1, height-1], outline=(42, 74, 102), width=1)
+        draw.rectangle([0, 0, width-1, height-1], outline=(60, 90, 140), width=2)
         
-        # Аватарка
-        avatar_size = 120
-        avatar_x = 10
-        avatar_y = 10
+        # Аватарка - круглая с обводкой
+        avatar_size = 100
+        avatar_x = 30
+        avatar_y = 40
         
-        # Загружаем аватар
         if avatar_url:
             try:
                 if os.path.isfile(avatar_url):
                     avatar = Image.open(avatar_url).convert("RGBA")
+                else:
+                    resp = requests.get(avatar_url, timeout=8)
+                    avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA") if resp.status_code == 200 else None
+                if avatar:
+                    # Круглая маска
+                    mask = Image.new("L", (avatar_size, avatar_size), 0)
+                    draw_mask = ImageDraw.Draw(mask)
+                    draw_mask.ellipse([0, 0, avatar_size, avatar_size], fill=255)
+                    # Resize and crop to square
                     w, h = avatar.size
                     side = min(w, h)
                     left = (w - side) // 2
                     top = (h - side) // 2
                     avatar = avatar.crop((left, top, left + side, top + side))
                     avatar = avatar.resize((avatar_size, avatar_size), Image.LANCZOS)
-                    img.paste(avatar, (avatar_x, avatar_y), avatar)
-                else:
-                    resp = requests.get(avatar_url, timeout=8)
-                    if resp.status_code == 200:
-                        avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                        w, h = avatar.size
-                        side = min(w, h)
-                        left = (w - side) // 2
-                        top = (h - side) // 2
-                        avatar = avatar.crop((left, top, left + side, top + side))
-                        avatar = avatar.resize((avatar_size, avatar_size), Image.LANCZOS)
-                        img.paste(avatar, (avatar_x, avatar_y), avatar)
+                    # Обводка - круг
+                    draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(100, 150, 220), width=4)
+                    img.paste(avatar, (avatar_x, avatar_y), mask)
             except Exception:
                 pass
         
-        # Заглушка если нет аватара
         if not avatar_url:
             draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80))
-        
-        # Рамка вокруг аватара
-        draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(100, 150, 220), width=3)
+            draw.ellipse([avatar_x + 25, avatar_y + 20, avatar_x + 75, avatar_y + 50], fill=(80, 100, 130))
+            draw.ellipse([avatar_x + 20, avatar_y + 55, avatar_x + 80, avatar_y + 85], fill=(80, 100, 130))
+            draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(100, 150, 220), width=4)
         
         # Шрифты
         try:
-            font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
-            font_rank = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 38)
-            font_count = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
+            font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
         except Exception:
-            font_text = ImageFont.load_default()
-            font_rank = ImageFont.load_default()
-            font_count = ImageFont.load_default()
+            font_title = font_text = font_small = ImageFont.load_default()
+        
+        # Иконки
+        icon_size = 24
         
         # URLs для иконок (Google Noto Emoji)
-        emoji_urls = {
-            'message': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f4ac.png',
+        icon_urls = {
+            'msg': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f4ac.png',
             'link': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f517.png',
             'trophy': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f3c6.png',
             'gold': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f947.png',
@@ -1138,86 +1138,84 @@ def generate_start_card(
             'bronze': 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/72/emoji_u1f949.png',
         }
         
-        # URL для rank иконки (официальные Dota 2)
+        # Dota 2 rank icon
         rank_icon_url = None
         if has_steam and rank_tier > 0:
             tier = rank_tier // 10
             if 1 <= tier <= 7:
                 rank_icon_url = f"https://cdn.dota2.com/apps/dota2/images/rank_icons/rank_icon_{tier}.png"
         
-        emoji_cache = {}
-        icon_size = 40
-        
-        # Загружаем иконки
-        for key, url in emoji_urls.items():
+        icons = {}
+        for name, url in icon_urls.items():
             try:
-                resp = requests.get(url, timeout=5)
+                resp = requests.get(url, timeout=4)
                 if resp.status_code == 200:
-                    emoji_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    emoji_img = emoji_img.resize((icon_size, icon_size), Image.LANCZOS)
-                    emoji_cache[key] = emoji_img
-            except Exception:
+                    ic = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                    icons[name] = ic.resize((icon_size, icon_size), Image.LANCZOS)
+            except:
                 pass
         
-        # Загружаем rank иконку
+        # Rank icon (Dota 2)
         rank_icon = None
         if rank_icon_url:
             try:
-                resp = requests.get(rank_icon_url, timeout=5)
+                resp = requests.get(rank_icon_url, timeout=4)
                 if resp.status_code == 200:
                     rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    rank_icon = rank_icon.resize((56, 56), Image.LANCZOS)
-            except Exception:
+                    rank_icon = rank_icon.resize((36, 36), Image.LANCZOS)
+            except:
                 pass
         
-        text_x = 170
+        # Основной блок справа от аватара
+        info_x = avatar_x + avatar_size + 30
+        info_y = 45
         
         # Сообщения
-        icon_y_msg = 20
-        draw.text((text_x + icon_size + 10, icon_y_msg), f"Сообщений: {message_count}", fill=(232, 232, 236), font=font_text)
-        if 'message' in emoji_cache:
-            img.paste(emoji_cache['message'], (text_x, icon_y_msg - 5), emoji_cache['message'])
+        if 'msg' in icons:
+            img.paste(icons['msg'], (info_x, info_y), icons['msg'])
+        draw.text((info_x + icon_size + 8, info_y + 2), f"Сообщений: {message_count}", fill=(220, 220, 230), font=font_text)
         
         # Звание
-        icon_y_rank = 60
+        rank_y = info_y + 40
         if has_steam:
             if rank_icon:
-                img.paste(rank_icon, (width - 220, icon_y_rank - 10), rank_icon)
-            draw.text((text_x + icon_size + 10, icon_y_rank), f"Звание: {rank}", fill=(109, 179, 242), font=font_rank)
+                img.paste(rank_icon, (width - 80, rank_y - 5), rank_icon)
+            draw.text((info_x, rank_y), f"Звание: {rank}", fill=(100, 160, 240), font=font_title)
         else:
-            draw.text((text_x + icon_size + 10, icon_y_rank), "Привяжи Steam", fill=(136, 136, 136), font=font_text)
-            if 'link' in emoji_cache:
-                img.paste(emoji_cache['link'], (text_x, icon_y_rank - 5), emoji_cache['link'])
+            if 'link' in icons:
+                img.paste(icons['link'], (info_x, rank_y), icons['link'])
+            draw.text((info_x + icon_size + 8, rank_y + 2), "Привяжи Steam", fill=(140, 140, 140), font=font_text)
         
         # Награды
-        icon_y_rewards = 110
-        draw.text((text_x + icon_size + 10, icon_y_rewards), "Награды:", fill=(232, 232, 236), font=font_text)
-        if 'trophy' in emoji_cache:
-            img.paste(emoji_cache['trophy'], (text_x, icon_y_rewards - 5), emoji_cache['trophy'])
+        rewards_y = rank_y + 45
+        if 'trophy' in icons:
+            img.paste(icons['trophy'], (info_x, rewards_y), icons['trophy'])
+        draw.text((info_x + icon_size + 8, rewards_y + 2), "Награды:", fill=(220, 220, 230), font=font_text)
         
         # Блок наград
-        rewards_y = 160
-        draw.rectangle([text_x - 10, rewards_y - 10, width - 30, rewards_y + 60], fill=(0, 0, 0, 60))
+        medal_y = rewards_y + 30
+        draw.rectangle([info_x - 10, medal_y - 8, width - 30, medal_y + 45], fill=(0, 0, 0, 50), outline=(60, 90, 140), width=1)
         
         # Медали
-        medal_y = rewards_y
-        medal_spacing = 180
+        medal_spacing = 130
         
-        if 'gold' in emoji_cache:
-            img.paste(emoji_cache['gold'], (text_x + 10, medal_y), emoji_cache['gold'])
-        draw.text((text_x + 60, medal_y + 10), str(weekly_mvp), fill=(200, 200, 200), font=font_count)
+        if 'gold' in icons:
+            img.paste(icons['gold'], (info_x + 10, medal_y), icons['gold'])
+        draw.text((info_x + 40, medal_y + 5), str(weekly_mvp), fill=(255, 215, 0), font=font_text)
         
-        if 'silver' in emoji_cache:
-            img.paste(emoji_cache['silver'], (text_x + medal_spacing + 10, medal_y), emoji_cache['silver'])
-        draw.text((text_x + medal_spacing + 60, medal_y + 10), str(weekly_top2), fill=(200, 200, 200), font=font_count)
+        if 'silver' in icons:
+            img.paste(icons['silver'], (info_x + medal_spacing + 10, medal_y), icons['silver'])
+        draw.text((info_x + medal_spacing + 40, medal_y + 5), str(weekly_top2), fill=(192, 192, 192), font=font_text)
         
-        if 'bronze' in emoji_cache:
-            img.paste(emoji_cache['bronze'], (text_x + medal_spacing * 2 + 10, medal_y), emoji_cache['bronze'])
-        draw.text((text_x + medal_spacing * 2 + 60, medal_y + 10), str(weekly_top3), fill=(200, 200, 200), font=font_count)
+        if 'bronze' in icons:
+            img.paste(icons['bronze'], (info_x + medal_spacing * 2 + 10, medal_y), icons['bronze'])
+        draw.text((info_x + medal_spacing * 2 + 40, medal_y + 5), str(weekly_top3), fill=(205, 127, 50), font=font_text)
         
-        # Меню
-        draw.rectangle([20, height - 60, 160, height - 20], fill=(64, 96, 160))
-        draw.text((30, height - 52), "Меню", fill=(232, 232, 236), font=font_rank)
+        # Кнопка меню
+        menu_w, menu_h = 100, 35
+        menu_x, menu_y = 30, height - 60
+        draw.rectangle([menu_x, menu_y, menu_x + menu_w, menu_y + menu_h], fill=(50, 80, 150), outline=(100, 150, 220), width=2)
+        draw.text((menu_x + 20, menu_y + 8), "Меню", fill=(255, 255, 255), font=font_title)
         
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=90)
@@ -1225,6 +1223,7 @@ def generate_start_card(
         return buf.read()
         
     except Exception as e:
-        logger.error(f"generate_start_card error: {e}")
+        import logging
+        logging.exception("generate_start_card error")
         return None
 
