@@ -1127,11 +1127,15 @@ def generate_start_card(
         # Рамка вокруг аватара
         draw.rectangle([avatar_x-1, avatar_y-1, avatar_x + avatar_size + 1, avatar_y + avatar_size + 1], outline=(100, 150, 220), width=3)
         
-        # Текст
+        # Текст - используем текст вместо эмодзи (PIL не поддерживает эмодзи)
         try:
             font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 15)
             font_rank = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 15)
-            font_medal = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
+            # Для медалей попробуемDejaVuSans или fallback
+            try:
+                font_medal = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
+            except:
+                font_medal = font_text
             font_count = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 13)
         except Exception:
             font_text = ImageFont.load_default()
@@ -1141,34 +1145,37 @@ def generate_start_card(
         
         text_x = avatar_x + avatar_size + 20
         
-        # Сообщения
-        draw.text((text_x, 35), f"💬 {message_count} сообщений", fill=(232, 232, 236), font=font_text)
+        # Сообщения (текст без эмодзи)
+        draw.text((text_x, 35), f"Messages: {message_count}", fill=(232, 232, 236), font=font_text)
         
         # Ранг
         if has_steam:
-            draw.text((text_x, 58), f"🔰 {rank}", fill=(109, 179, 242), font=font_rank)
+            draw.text((text_x, 58), f"Rank: {rank}", fill=(109, 179, 242), font=font_rank)
         else:
-            draw.text((text_x, 58), "🔗 Привяжи Steam", fill=(136, 136, 136), font=font_text)
+            draw.text((text_x, 58), "Link Steam", fill=(136, 136, 136), font=font_text)
         
         # Награды заголовок
-        draw.text((text_x, 84), "🏆 Награды", fill=(232, 232, 236), font=font_text)
+        draw.text((text_x, 84), "Rewards:", fill=(232, 232, 236), font=font_text)
         
         # Блок наград
         rewards_y = 105
         draw.rectangle([text_x - 5, rewards_y - 5, width - 20, rewards_y + 50], fill=(0, 0, 0, 60))
         
-        # Медали
+        # Медали - используем текстовые метки вместо эмодзи
         medal_y = rewards_y + 5
         medal_spacing = 50
         
-        draw.text((text_x + 5, medal_y), "🥇", fill=(255, 215, 0), font=font_medal)
-        draw.text((text_x + 25, medal_y + 5), str(weekly_mvp), fill=(153, 153, 153), font=font_count)
+        # Gold 1st
+        draw.text((text_x + 5, medal_y), "[1st]", fill=(255, 215, 0), font=font_medal)
+        draw.text((text_x + 50, medal_y + 5), str(weekly_mvp), fill=(153, 153, 153), font=font_count)
         
-        draw.text((text_x + medal_spacing + 5, medal_y), "🥈", fill=(192, 192, 192), font=font_medal)
-        draw.text((text_x + medal_spacing + 25, medal_y + 5), str(weekly_top2), fill=(153, 153, 153), font=font_count)
+        # Silver 2nd
+        draw.text((text_x + medal_spacing + 5, medal_y), "[2nd]", fill=(192, 192, 192), font=font_medal)
+        draw.text((text_x + medal_spacing + 50, medal_y + 5), str(weekly_top2), fill=(153, 153, 153), font=font_count)
         
-        draw.text((text_x + medal_spacing * 2 + 5, medal_y), "🥉", fill=(205, 127, 50), font=font_medal)
-        draw.text((text_x + medal_spacing * 2 + 25, medal_y + 5), str(weekly_top3), fill=(153, 153, 153), font=font_count)
+        # Bronze 3rd
+        draw.text((text_x + medal_spacing * 2 + 5, medal_y), "[3rd]", fill=(205, 127, 50), font=font_medal)
+        draw.text((text_x + medal_spacing * 2 + 50, medal_y + 5), str(weekly_top3), fill=(153, 153, 153), font=font_count)
         
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=85)
