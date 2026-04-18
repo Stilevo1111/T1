@@ -1240,7 +1240,8 @@ def generate_start_card(
                 except Exception:
                     pass
             
-# Username/nickname - darker color for better visibility
+            # Username/nickname - darker color for better visibility
+            username_y = info_y
             username_x_offset = 0  # No shift for text
             if steam_nickname:
                 draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(30, 150, 220), font=font_title)  # Darker blue
