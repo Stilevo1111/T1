@@ -1057,6 +1057,7 @@ def generate_start_card(
     username: str = None,
     steam_nickname: str = None,
     rank_tier: int = 0,
+    rank_str: str = "Не калиброван",
     weekly_mvp: int = 0,
     weekly_top2: int = 0,
     weekly_top3: int = 0
