@@ -1109,6 +1109,10 @@ def generate_start_card(
             # Default icon placeholder
             draw.ellipse([avatar_x + int(45*scale), avatar_y + int(35*scale), avatar_x + int(95*scale), avatar_y + int(105*scale)], fill=(80, 100, 130))
         
+        # Координаты для текстовой информации (справа от аватара)
+        info_x = avatar_x + avatar_size + int(30 * scale)
+        info_y = avatar_y + int(20 * scale)
+        
         # Шрифты - увеличенные для Retina
         try:
             font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
