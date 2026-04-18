@@ -1240,6 +1240,14 @@ def generate_start_card(
             elif username:
                 draw.text((info_x, text_y), f"@{username}", fill=(100, 160, 240), font=font_title)
             
+            # Обводка по краям карточки как в /profile
+            border_padding = int(8 * scale)
+            draw.rectangle(
+                [border_padding, border_padding, width - border_padding, height - border_padding],
+                outline=(120, 170, 210),
+                width=2
+            )
+            
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=90)
             buf.seek(0)
