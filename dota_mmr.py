@@ -1239,34 +1239,34 @@ def generate_start_card(
                         rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
                 except Exception:
                     pass
-            
-            # Username/nickname - white color
-            username_y = info_y
-            username_x_offset = 0  # No shift for text
-            if steam_nickname:
-                draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(255, 255, 255), font=font_title)  # White
-            elif username:
-                draw.text((info_x + username_x_offset, username_y), f"@{username}", fill=(255, 255, 255), font=font_title)  # White
-            
-            # Messages label - white
-            msg_label_y = username_y + int(50 * scale)
-            draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(255, 255, 255), font=font_small)
-            
-            # Number - white
-            msg_num_y = msg_label_y + int(28 * scale)
-            draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
-            
-            # Rank - icon centered exactly under avatar
-            if rank_icon:
-                # Center under avatar (avatar is shifted 100px left)
-                rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
-                rank_y = avatar_y + avatar_size - rank_icon_size // 2
-                img.paste(rank_icon, (rank_x, rank_y), rank_icon)
-            
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=90)
-            buf.seek(0)
-            return buf.read()
+        
+        # Username/nickname - white color (always show for all users)
+        username_y = info_y
+        username_x_offset = 0
+        if steam_nickname:
+            draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(255, 255, 255), font=font_title)
+        elif username:
+            draw.text((info_x + username_x_offset, username_y), f"@{username}", fill=(255, 255, 255), font=font_title)
+        
+        # Messages label - white
+        msg_label_y = username_y + int(50 * scale)
+        draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(255, 255, 255), font=font_small)
+        
+        # Number - white
+        msg_num_y = msg_label_y + int(28 * scale)
+        draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
+        
+# Rank icon - only show if rank_tier > 0
+        if rank_tier > 0 and rank_icon:
+            # Center under avatar (avatar is shifted 100px left)
+            rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
+            rank_y = avatar_y + avatar_size - rank_icon_size // 2
+            img.paste(rank_icon, (rank_x, rank_y), rank_icon)
+        
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=90)
+        buf.seek(0)
+        return buf.read()
     
     except Exception as e:
              import logging

@@ -2869,6 +2869,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_existing_user = user is not None
         has_steam = bool(user and user.get('steam_id'))
         
+        # Get Telegram avatar for all users (both new and existing)
+        telegram_avatar_path = None
+        try:
+            photos = await context.bot.get_user_profile_photos(user_obj.id, limit=1)
+            if photos and photos.photos:
+                file_id = photos.photos[0][-1].file_id
+                file = await context.bot.get_file(file_id)
+                import tempfile
+                import os
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
+                telegram_avatar_path = temp_file.name
+                temp_file.close()
+                await file.download_to_drive(telegram_avatar_path)
+        except Exception:
+            pass
+        
         if is_existing_user:
             # User exists - show profile card
             from dota_mmr import rank_to_string
@@ -2894,24 +2910,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     stats = get_player_stats(user['steam_id'], use_cache=True)
                     if stats and stats.get('avatar'):
                         avatar_url = stats['avatar']
-                except Exception:
-                    pass
-            
-            # If no Steam avatar, try to get Telegram avatar
-            telegram_avatar_path = None
-            if not avatar_url:
-                try:
-                    photos = await context.bot.get_user_profile_photos(user_obj.id, limit=1)
-                    if photos and photos.photos:
-                        file_id = photos.photos[0][-1].file_id
-                        file = await context.bot.get_file(file_id)
-                        # Download to temp file
-                        import tempfile
-                        import os
-                        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
-                        telegram_avatar_path = temp_file.name
-                        temp_file.close()
-                        await file.download_to_drive(telegram_avatar_path)
                 except Exception:
                     pass
             
@@ -2989,7 +2987,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=main_menu()
                 )
         else:
-            # New user or hasn't played - show welcome message
+            # New user or hasn't played - show welcome message (old banner)
             text = "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
             banner_url = "https://i.ibb.co/fYNXwsjQ/sadfsadasdas.png"
             
