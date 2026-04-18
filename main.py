@@ -372,7 +372,7 @@ async def announce_weekly_mmr_winner(bot):
 async def backup_database_job(context):
     """Копирование данных в backup БД каждый час"""
     try:
-        from database import BACKUP_DATABASE_URL
+        from database import BACKUP_DATABASE_URL, get_connection
         if not BACKUP_DATABASE_URL:
             return
         
@@ -506,134 +506,6 @@ async def update_all_mmr_job(context):
                     logger.error(f"Ошибка отправки уведомления о ранк-апе: {notify_err}")
     except Exception as e:
         logger.error(f"Ошибка в update_all_mmr_job: {e}")
-
-
-async def morning_digest_job(context):
-    """Утренний дайджест (9:00)"""
-    try:
-        # Блокировка от параллельного запуска
-        import time
-        last_run = get_config('morning_digest_last_run')
-        now = time.time()
-        if last_run and (now - float(last_run)) < JOB_COOLDOWN:
-            logger.info(f"morning_digest_job: пропуск (запущен {(now - float(last_run)):.1f}с назад)")
-            return
-        set_config('morning_digest_last_run', str(now))
-        
-        logger.info("Запуск утреннего дайджеста")
-        
-        # Получаем ID чата для дайджеста
-        digest_chat_id = get_config('digest_chat_id')
-        if not digest_chat_id:
-            logger.info("Чат для дайджеста не настроен")
-            return
-        
-        stats = get_digest_stats()
-        
-        # Формируем сообщение с кликабельными никнеймами
-        growth_player, growth_pos = stats.get("top_growth", ("None", 0))
-        drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
-        streak_player, streak_len = stats.get("top_streak", ("None", 0))
-        
-        # Получаем telegram_id для создания кликабельных ссылок
-        growth_id = stats.get("top_growth_id")
-        drop_id = stats.get("top_drop_id")
-        streak_id = stats.get("top_streak_id")
-        
-        # Используем глобальную функцию make_clickable
-        growth_display = make_clickable(growth_player, growth_id)
-        drop_display = make_clickable(drop_player, drop_id)
-        streak_display = make_clickable(streak_player, streak_id)
-        
-        # Формат: 📈stilevo +2⬆️ ┃💀None -X СМ┃🍀Wad1m1 - Стрик 1
-        # Всегда показываем данные если есть игрок
-        if growth_player and growth_player != "None":
-            growth_part = f"📈{growth_display} +{growth_pos}⬆️"
-        else:
-            growth_part = "📈—"
-        
-        if drop_player and drop_player != "None":
-            if drop_cm < 0:
-                drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
-            else:
-                drop_part = f"💀{drop_display} +{drop_cm:.0f} СМ"
-        else:
-            drop_part = "💀—"
-        
-        if streak_player and streak_player != "None" and streak_len > 0:
-            streak_part = f"🍀{streak_display} - Стрик {streak_len}"
-        else:
-            streak_part = "🍀—"
-        
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n{MORNING_DIGEST_FOOTER}"
-        
-        bot = context.application.bot
-        
-        # Пробуем отредактировать существующее сообщение
-        last_message_id = get_config('daily_digest_message_id')
-        if last_message_id:
-            try:
-                await bot.edit_message_text(
-                    chat_id=digest_chat_id,
-                    message_id=int(last_message_id),
-                    text=text,
-                    parse_mode="HTML"
-                )
-                logger.info(f"Обновлён существующий дайджест {last_message_id}")
-                # Для планового дайджеста (9:00) обновляем "снимок" на следующие сутки.
-                # Для ручного /digestnow snapshot НЕ трогаем, чтобы значение держалось до следующего 9:00.
-                if not getattr(context, "manual", False):
-                    update_digest_snapshot()
-                return
-            except Exception as e:
-                error_str = str(e)
-                # Если сообщение не найдено (удалено) - очищаем ID
-                if "Message to edit not found" in error_str or "message can't be edited" in error_str:
-                    logger.info(f"Старое сообщение {last_message_id} удалено или нельзя редактировать, создаём новое")
-                    set_config('daily_digest_message_id', None)
-                else:
-                    logger.info(f"Не удалось редактировать сообщение: {e}")
-        
-        # Удаляем старое сообщение дайджеста перед созданием нового
-        if last_message_id:
-            try:
-                await bot.delete_message(chat_id=digest_chat_id, message_id=int(last_message_id))
-                logger.info(f"Удалено старое сообщение дайджеста {last_message_id}")
-            except Exception as e:
-                logger.debug(f"Не удалось удалить старое сообщение дайджеста: {e}")
-        
-        # Отправляем новое сообщение
-        msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
-        set_config('daily_digest_message_id', msg.message_id)
-        logger.info(f"Создан новый утренний дайджест {msg.message_id}")
-        if not getattr(context, "manual", False):
-            update_digest_snapshot()
-        
-        # Закрепляем новый дайджест
-        try:
-            await bot.unpin_chat_message(chat_id=digest_chat_id)
-        except Exception as e:
-            logger.debug(f"Не удалось открепить старый дайджест: {e}")
-        try:
-            await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
-            logger.info(f"Дайджест {msg.message_id} закреплён")
-            
-            # Удаляем системное сообщение о закрепе
-            try:
-                chat_info = await bot.get_chat(chat_id=digest_chat_id)
-                pinned_msg = getattr(chat_info, 'pinned_message', None)
-                if pinned_msg:
-                    await bot.delete_message(chat_id=digest_chat_id, message_id=pinned_msg.message_id)
-                    logger.debug(f"Удалено системное сообщение о закрепе {pinned_msg.message_id}")
-            except Exception as e:
-                logger.debug(f"Не удалось удалить системное сообщение о закрепе: {e}")
-        except Exception as e:
-            logger.debug(f"Не удалось закрепить дайджест: {e}")
-        
-    except Exception as e:
-        logger.error(f"Ошибка в morning_digest_job: {e}", exc_info=True)
-
-
 
 
 async def refresh_digest_message(bot):
@@ -3457,8 +3329,8 @@ async def main():
         app.add_handler(CommandHandler("setchance", setchance))
         app.add_handler(CommandHandler("settitle", settitle))
         app.add_handler(CommandHandler("removeuser", removeuser))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         
         webhook_url = os.getenv("WEBHOOK_URL")
         use_polling = os.getenv("USE_POLLING", "false").lower() == "true"
@@ -3567,17 +3439,6 @@ async def main():
                     except Exception as e:
                         logger.error(f"Keep-alive ping error: {e}")
             asyncio.create_task(keep_alive_ping())
-        
-        async def daily_flush_cache():
-            from database import flush_users_cache
-            while True:
-                try:
-                    await asyncio.sleep(3600)
-                    flushed = flush_users_cache()
-                    logger.info(f"Hourly flush cache completed: {flushed} users")
-                except Exception as e:
-                    logger.error(f"Daily flush cache error: {e}")
-        asyncio.create_task(daily_flush_cache())
         
         while True:
             await asyncio.sleep(3600)
