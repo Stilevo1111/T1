@@ -2890,6 +2890,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     avatar_url=avatar_url or telegram_avatar_path,
                     message_count=message_count,
                     username=user.get('username') if user else None,
+                    steam_nickname=user.get('steam_nickname') if user else None,
                     rank_tier=user.get('rank_tier', 0) if user else 0,
                     weekly_mvp=weekly_mvp,
                     weekly_top2=weekly_top2,

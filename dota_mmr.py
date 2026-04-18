@@ -1051,6 +1051,7 @@ def generate_start_card(
     avatar_url: str = None,
     message_count: int = 0,
     username: str = None,
+    steam_nickname: str = None,
     rank_tier: int = 0,
     weekly_mvp: int = 0,
     weekly_top2: int = 0,
@@ -1065,8 +1066,11 @@ def generate_start_card(
 
         # Компактный размер - увеличенный для Retina
         width = 1024
-        height = 600
+        height = 500
         scale = 1.8  # коэффициент масштабирования
+        
+        # Центрирование аватара по вертикали
+        avatar_y = int((height - avatar_size) // 2 - 10)
         
         # Фон - градиент
         img = Image.new("RGB", (width, height), (15, 20, 35))
@@ -1084,7 +1088,6 @@ def generate_start_card(
         # Аватарка - квадратная с обводкой
         avatar_size = int(130 * scale)
         avatar_x = int(20 * scale)
-        avatar_y = int(40 * scale)
         
         if avatar_url:
             try:
@@ -1114,9 +1117,9 @@ def generate_start_card(
         
 # Шрифты - увеличенные для Retina
         try:
-            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(26*scale))
-            font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(22*scale))
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(18*scale))
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
+            font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(32 * scale))
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(24 * scale))
         except Exception:
             font_title = font_text = font_small = ImageFont.load_default()
         
@@ -1161,7 +1164,7 @@ def generate_start_card(
         
         # Dota 2 rank icon - прямые ссылки с gamepedia.cursecdn.com (работают)
         rank_icon = None
-        rank_icon_size = int(40 * scale)
+        rank_icon_size = int(80 * scale)  # увеличен в 2 раза
         if rank_tier > 0:
             tier = rank_tier // 10  # 1-7
             star = rank_tier % 10   # 1-5 stars within tier
@@ -1227,25 +1230,25 @@ def generate_start_card(
         info_x = avatar_x + avatar_size + int(25 * scale)
         info_y = int(75 * scale)
         
-        # Messages - только число (надпись будет на фоне)
-        draw.text((info_x + int(120 * scale), info_y + 4), f"{message_count}", fill=(255, 255, 255), font=font_text)
+        # Messages - только число, сдвинуто вправо
+        draw.text((info_x + int(200 * scale), info_y + 4), f"{message_count}", fill=(255, 255, 255), font=font_text)
         
-        # Ранг - иконка ранга + username
-        rank_y = info_y + int(60 * scale)
+        # Ранг - иконка ранга (увеличена в 2 раза) + никнейм Steam
+        rank_y = info_y + int(80 * scale)
         if rank_icon:
-            img.paste(rank_icon, (info_x, rank_y - 2), rank_icon)
-        # Показываем username рядом с рангом
-        if username:
-            draw.text((info_x + int(50 * scale), rank_y + 4), f"@{username}", fill=(100, 160, 240), font=font_text)
+            img.paste(rank_icon, (info_x, rank_y - 10), rank_icon)
+        # Показываем steam_nickname рядом с рангом
+        if steam_nickname:
+            draw.text((info_x + int(100 * scale), rank_y + 10), f"{steam_nickname}", fill=(100, 160, 240), font=font_title)
         
         # Медали - только числа (надписи будут на фоне)
-        rewards_y = rank_y + int(60 * scale)
+        rewards_y = rank_y + int(80 * scale)
         medal_y = rewards_y + int(60 * scale)
-        medal_spacing = int(120 * scale)
+        medal_spacing = int(140 * scale)
         
-        draw.text((info_x, medal_y + 8), f"{weekly_mvp}", fill=(255, 215, 0), font=font_text)
-        draw.text((info_x + medal_spacing, medal_y + 8), f"{weekly_top2}", fill=(200, 200, 210), font=font_text)
-        draw.text((info_x + medal_spacing * 2, medal_y + 8), f"{weekly_top3}", fill=(205, 127, 50), font=font_text)
+        draw.text((info_x, medal_y + 8), f"{weekly_mvp}", fill=(255, 215, 0), font=font_title)
+        draw.text((info_x + medal_spacing, medal_y + 8), f"{weekly_top2}", fill=(200, 200, 210), font=font_title)
+        draw.text((info_x + medal_spacing * 2, medal_y + 8), f"{weekly_top3}", fill=(205, 127, 50), font=font_title)
         
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=90)
