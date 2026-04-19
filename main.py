@@ -2709,13 +2709,13 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug(f"Could not delete last bot message: {e}")
     
     link_banner_url = "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"
-    link_text = ("🦞 *Привязка Dota*\n\n"
-    "Отправьте `/link` и ваш Dota ID или ссылку на профиль.\n\n"
-    "*Примеры:*\n"
-    "`/link 76561198012345678`\n"
+    link_text = ("🦞 *Привязать Аккаунт Dota 2*\n\n"
+    "Добавить в друзья → Ваш ID → копировать →\n"
+    "`/link 347614947`\n\n"
+    "Или ссылку на dotabuff →\n"
     "`/link https://ru.dotabuff.com/players/347614699`\n\n"
-    "⚠️ Профиль должен быть открытым\n"
-    "📡 Статистика с OpenDota")
+    "⚠️ в игре:\n"
+    "Настройки → расширенные → сообщество → общедоступная история матчей (вкл)")
     
     result_msg = await context.bot.send_photo(
         chat_id=update.effective_chat.id,
