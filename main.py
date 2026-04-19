@@ -1820,11 +1820,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         
         if steam_id and steam_nickname:
-            from dota_mmr import generate_start_card
+            from dota_mmr import generate_start_card, get_player_stats
             
             avatar_url = user.get("avatar")
             if not avatar_url:
+                # Get avatar from OpenDota API for users without it
+                stats = get_player_stats(steam_id)
+                if stats and stats.get("avatar"):
+                    avatar_url = stats["avatar"]
+                    update_user_fields_batch(user_id, {"avatar": avatar_url}, save_to_db=False)
+            
+            if not avatar_url:
                 avatar_url = await get_user_avatar_url(context.bot, user_id)
+            
             weekly_mvp, weekly_top2, weekly_top3 = 0, 0, 0
             
             card_data = generate_start_card(
