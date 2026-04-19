@@ -1598,6 +1598,46 @@ def get_user_by_username(username):
     return None
 
 
+def get_user_by_steam_id(steam_id: int):
+    """Найти пользователя по steam_id. Ищет сначала в кеше, потом в БД."""
+    if not steam_id:
+        return None
+    
+    # Сначала ищем в кеше
+    all_keys = user_cache.get_all_users()
+    for uid in all_keys:
+        if not isinstance(uid, int):
+            continue
+        cached_user = user_cache.get(uid)
+        if not cached_user or not isinstance(cached_user, dict):
+            continue
+        cached_steam_id = cached_user.get('steam_id')
+        if cached_steam_id == steam_id:
+            logger.info(f"get_user_by_steam_id: found {steam_id} in cache (tid={uid})")
+            return get_user(uid)
+    
+    # Не нашли в кеше — ищем в БД
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        if "postgres" in scheme:
+            cursor.execute("SELECT telegram_id, username, steam_nickname FROM users WHERE steam_id = %s LIMIT 1", (steam_id,))
+        else:
+            cursor.execute("SELECT telegram_id, username, steam_nickname FROM users WHERE steam_id = ? LIMIT 1", (steam_id,))
+        result = cursor.fetchone()
+        cursor.close()
+        if result:
+            tid = result[0] if not isinstance(result, dict) else result.get('telegram_id')
+            logger.info(f"get_user_by_steam_id: found {steam_id} in DB (tid={tid})")
+            return get_user(tid)
+    except Exception as e:
+        logger.error(f"get_user_by_steam_id error: {e}")
+    
+    return None
+
+
 def update_fissure(telegram_id, fissure, last_fissure, growth=0):
     """Обновление fissure - сразу пишем в БД"""
     user = get_user(telegram_id)

@@ -860,6 +860,13 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
             steam_id = data["steam_id"]
             stats = data
 
+        # Проверяем, не привязан ли уже этот steam_id к другому аккаунту
+        from database import get_user_by_steam_id
+        existing_user = get_user_by_steam_id(steam_id)
+        if existing_user and existing_user.get('telegram_id') != telegram_id:
+            existing_username = existing_user.get('username') or existing_user.get('steam_nickname') or 'другой игрок'
+            return {"success": False, "message": f"❌ Этот Steam аккаунт уже привязан к {existing_username}"}
+        
         # сохраняем все поля одним запросом
         update_user_fields_batch(telegram_id, {
             "steam_id": steam_id,
