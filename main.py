@@ -1764,8 +1764,60 @@ def format_time(seconds):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /start command"""
-    await menu_handler(update, context)
+    """Handle /start command - show profile card"""
+    try:
+        user_id = update.effective_user.id
+        username = update.effective_user.username or update.effective_user.first_name
+        
+        user = get_user(user_id, username)
+        
+        if not user:
+            await menu_handler(update, context)
+            return
+        
+        steam_id = user.get("steam_id")
+        steam_nickname = user.get("steam_nickname")
+        rank_tier = user.get("rank_tier", 0)
+        message_count = user.get("message_count", 0)
+        avatar_url = user.get("avatar")
+        
+        chat_id = update.effective_chat.id
+        user_msg_id = update.message.message_id if update.message else None
+        
+        if user_msg_id:
+            try:
+                await context.bot.delete_message(chat_id, user_msg_id)
+            except:
+                pass
+        
+        if steam_id and steam_nickname:
+            from dota_mmr import generate_start_card
+            weekly_mvp, weekly_top2, weekly_top3 = 0, 0, 0
+            
+            card_data = generate_start_card(
+                message_count=message_count,
+                username=username,
+                steam_nickname=steam_nickname,
+                rank_tier=rank_tier,
+                weekly_mvp=weekly_mvp,
+                weekly_top2=weekly_top2,
+                weekly_top3=weekly_top3
+            )
+            
+            if card_data:
+                await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=card_data,
+                    reply_markup=main_menu()
+                )
+            else:
+                await menu_handler(update, context)
+        else:
+            await menu_handler(update, context)
+    
+    except Exception as e:
+        logger.error(f"start command error: {e}")
+        await menu_handler(update, context)
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1774,8 +1826,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Set digest chat"""
-    await menu_handler(update, context)
+    """Set digest chat - установить текущий чат для дайджестов"""
+    try:
+        chat_id = update.effective_chat.id
+        set_config("digest_chat_id", str(chat_id))
+        set_config("daily_digest_message_id", None)
+        set_config("dota_digest_message_id", None)
+        
+        await update.message.reply_text(f"Чат {chat_id} установлен для дайджестов")
+    except Exception as e:
+        logger.error(f"set_digest_chat error: {e}")
+        await menu_handler(update, context)
 
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
