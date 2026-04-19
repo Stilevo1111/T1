@@ -1763,6 +1763,21 @@ def format_time(seconds):
     return f"{int(h)}ч {int(m)}м"
 
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /start command"""
+    await menu_handler(update, context)
+
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle button callbacks"""
+    await menu_handler(update, context)
+
+
+async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set digest chat"""
+    await menu_handler(update, context)
+
+
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Increase fissure"""
     logger.info(f"User {update.effective_user.id} called fissure")
