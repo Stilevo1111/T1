@@ -2233,15 +2233,23 @@ def get_dota_week_top(limit=10, force_refresh=False):
                 return []
             
             top_users = []
+            seen_ids = set()  # Убираем дубликаты по telegram_id
             for telegram_id in all_users:
                 if not isinstance(telegram_id, int):
                     continue
+                if telegram_id in seen_ids:  # Пропускаем дубликаты
+                    continue
+                seen_ids.add(telegram_id)
                 
                 user = user_cache.get(telegram_id)
                 if not user or not user.get('steam_id'):
                     continue
                 
                 week_games = user.get('week_games', 0)
+                # Пропускаем пользователей без игр за неделю
+                if week_games == 0:
+                    continue
+                
                 week_wins = user.get('week_wins', 0)
                 winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
                 
@@ -2286,15 +2294,23 @@ def get_dota_week_top(limit=10, force_refresh=False):
     
     # Формируем топ из ВСЕХ пользователей с steam_id
     top_users = []
+    seen_ids = set()  # Убираем дубликаты по telegram_id
     for telegram_id in all_users:
         if not isinstance(telegram_id, int):
             continue
+        if telegram_id in seen_ids:  # Пропускаем дубликаты
+            continue
+        seen_ids.add(telegram_id)
         
         user = user_cache.get(telegram_id)
         if not user or not user.get('steam_id'):
             continue
         
         week_games = user.get('week_games', 0)
+        # Пропускаем пользователей без игр за неделю
+        if week_games == 0:
+            continue
+        
         week_wins = user.get('week_wins', 0)
         winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
         
