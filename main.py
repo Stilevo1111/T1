@@ -2734,6 +2734,42 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
 
 
+async def unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отвязать Steam аккаунт"""
+    logger.info(f"User {update.effective_user.id} called unlink")
+    
+    chat_id = update.message.chat_id
+    chat_type = update.message.chat.type
+    
+    if chat_type in ['group', 'supergroup', 'channel']:
+        if await bot_can_delete(context.bot, chat_id):
+            try:
+                await context.bot.delete_message(chat_id, update.message.message_id)
+            except Exception:
+                pass
+    
+    try:
+        from database import get_user, delete_user
+        
+        user = get_user(update.effective_user.id)
+        if not user or not user.get('steam_id'):
+            await context.bot.send_message(chat_id=chat_id, text="❌ Steam не привязан")
+            return
+        
+        steam_nickname = user.get('steam_nickname') or 'None'
+        
+        # Удаляем привязку
+        delete_user(update.effective_user.id)
+        
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"✅ {steam_nickname} отвязан от аккаунта"
+        )
+    except Exception as e:
+        logger.error(f"Error in unlink: {e}")
+        await context.bot.send_message(chat_id=chat_id, text="❌ Ошибка")
+
+
 async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обновить MMR одного пользователя"""
     logger.info(f"User {update.effective_user.id} called refresh")
@@ -3538,6 +3574,7 @@ async def main():
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("link", link))
+        app.add_handler(CommandHandler("unlink", unlink))
         app.add_handler(CommandHandler("refresh", refresh))
         app.add_handler(CommandHandler("digestnow", digest_now))
         app.add_handler(CommandHandler("dotadigestnow", dota_digest_now))
