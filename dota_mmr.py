@@ -123,12 +123,14 @@ async def _check_rate_limit_async():
     _async_rate_limit["last_request"] = time.time()
 
 
-async def _api_get_async(url: str, params: dict = None) -> dict:
-    """Асинхронная функция для API-запросов"""
+async def _api_get_async(url: str, params: dict = None, use_session: bool = True) -> dict:
+    """Асинхронная функция для API-запросов с переиспользованием сессии"""
     await _check_rate_limit_async()
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+        if use_session:
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+            async with session.get(url, params=params or {}) as resp:
                 if resp.status == 200:
                     return await resp.json()
                 elif resp.status == 429:
@@ -137,6 +139,17 @@ async def _api_get_async(url: str, params: dict = None) -> dict:
                     await asyncio.sleep(60)
                     return None
                 return None
+        else:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        return await resp.json()
+                    elif resp.status == 429:
+                        logger.warning(f"Rate limited by OpenDota API, waiting...")
+                        import asyncio
+                        await asyncio.sleep(60)
+                        return None
+                    return None
     except Exception as e:
         logger.error(f"API request error: {e}", exc_info=True)
         return None
@@ -152,14 +165,8 @@ async def _api_get_async(url: str, params: dict = None) -> dict:
 
 HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes"
 HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
-# Фон полоски «любимые герои» (стата): страница https://ibb.co/kgCqy6cL
-# Полноразмер 1744×592 — i.ibb.co/.../image.png с id из «Full image», не превью 180×180.
 HEROES_STRIP_BG_URL = "https://i.ibb.co/4Zr4fgNb/image.png"
 HEROES_STRIP_BG_CACHE = "heroes_strip_stat_1744.png"
-
-# Базовые URL для изображений героев (используются в get_heroes_data и fallback)
-HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
-HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes"
 
 
 def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None:

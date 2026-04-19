@@ -1,4 +1,6 @@
-python-telegram-bot[webhooks,job-queue]==21.7
+python-telegram-bot==21.7
+httpx==0.28.1
+APScheduler==3.10.4
 psycopg2==2.9.11
 requests==2.31.0
 alembic==1.16.5

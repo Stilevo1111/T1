@@ -1,17 +1,24 @@
 # -*- coding: utf-8 -*-
 import os
 import io
+import json
 import random
 import time
 import asyncio
 import logging
 import datetime
+import traceback
 import urllib.parse as urlparse
+import psycopg2
+from datetime import timezone, timedelta
+from concurrent.futures import ThreadPoolExecutor
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, BACKUP_DATABASE_URL
-
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, BACKUP_DATABASE_URL, DATABASE_URL
+from dota_mmr import update_user_mmr
+from database import get_all_users_with_steam, user_cache, update_dota_week_top_cache
+import aiohttp
 from aiohttp import web
 
 # Logging setup
@@ -27,14 +34,12 @@ if not TOKEN:
 else:
     print("BOT_TOKEN found")
 
-# Глобальная переменная для отслеживания активности бота
-last_update_time = time.time()
-
 COOLDOWN = 86400  # 24 hours
 
 _user_processing = {}  # Spam protection: user_id -> timestamp
 
 _digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run": 0}
+_digest_state_lock = asyncio.Lock()  # Lock for thread-safe access to _digest_state
 DIGEST_DATA_REFRESH_INTERVAL = 3600  # 1 час - обновление данных из БД
 
 
@@ -79,16 +84,30 @@ async def delete_message_job(context):
             logger.warning(f"Failed to delete message {msg_id} in chat {chat_id}: {e}")
 
 
+class ManualContext:
+    """Контекст для ручного вызова jobs"""
+    def __init__(self, application, bot):
+        self.application = application
+        self.bot = bot
+        self.manual = True
+
 
 _bot_can_delete_cache = {}
 _bot_can_delete_ttl = 3600  # 1 час
+_BOT_CAN_DELETE_CACHE_MAX = 200
 
 async def bot_can_delete(bot, chat_id):
     """Проверить может ли бот удалять сообщения в чате"""
+    # Cleanup old entries if cache is too large
+    if len(_bot_can_delete_cache) > _BOT_CAN_DELETE_CACHE_MAX:
+        current_time = time.time()
+        _bot_can_delete_cache.clear()
+        logger.debug("Cleared bot_can_delete cache (exceeded limit)")
+    
     cached = _bot_can_delete_cache.get(chat_id)
     if cached is not None:
         cached_val, cached_time = cached
-        if time.time() - cached_time < _bot_can_delete_ttl:
+        if current_time - cached_time < _bot_can_delete_ttl:
             return cached_val
     try:
         me = await bot.get_me()
@@ -133,7 +152,8 @@ async def decrease_inactive_job(context):
     
     try:
         logger.info("Запуск ежедневного уменьшения fissure для неактивных игроков")
-        affected = decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0)
+        # Неактивные - более 7 дней без активности
+        affected = decrease_inactive_fissure(days_inactive=7, decrease_amount=1.0)
         if affected > 0:
             logger.info(f"Уменьшен fissure для {affected} неактивных игроков")
         else:
@@ -143,7 +163,6 @@ async def decrease_inactive_job(context):
         update_player_positions()
         
         # Запоминаем что выполнено сегодня
-        from datetime import datetime
         set_config('last_decrease_inactive_run', datetime.now().strftime("%Y-%m-%d"))
     except Exception as e:
         logger.error(f"Ошибка в decrease_inactive_job: {e}")
@@ -154,12 +173,11 @@ async def decrease_inactive_job(context):
 
 async def morning_greeting_job(context):
     """✅ Утреннее приветствие 09:00 MSK - 1 раз в чат"""
-    from datetime import timezone, timedelta
+    from datetime import datetime as dt, timezone, timedelta
     from database import get_config
     
     MSK = timezone(timedelta(hours=3))
-    now_msk = datetime.datetime.now(MSK)
-    today_str = now_msk.strftime("%Y-%m-%d")
+    today_str = dt.now(MSK).strftime("%Y-%m-%d")
     
     last_greeting = get_config('daily_greeting_sent')
     if last_greeting == today_str:
@@ -195,12 +213,11 @@ async def morning_greeting_job(context):
 
 async def night_greeting_job(context):
     """✅ Вечернее приветствие 23:00 MSK - 1 раз в чат"""
-    from datetime import timezone, timedelta
+    from datetime import datetime as dt, timezone, timedelta
     from database import get_config
     
     MSK = timezone(timedelta(hours=3))
-    now_msk = datetime.datetime.now(MSK)
-    today_str = now_msk.strftime("%Y-%m-%d")
+    today_str = dt.now(MSK).strftime("%Y-%m-%d")
     
     last_greeting = get_config('night_greeting_sent')
     if last_greeting == today_str:
@@ -239,10 +256,10 @@ async def night_greeting_job(context):
 
 
 async def announce_weekly_mmr_winner(bot):
-    """Отправляет поздра��ление победителю недельного топа MMR при смене недели."""
-    from datetime import timezone, timedelta
+    """Отправляет поздравление победителю недельного топа MMR при смене недели."""
+    from datetime import datetime as dt, timezone, timedelta
     MSK = timezone(timedelta(hours=3))
-    today_msk = datetime.datetime.now(MSK)
+    today_msk = dt.now(MSK)
     monday_msk = today_msk - datetime.timedelta(days=today_msk.weekday())
     current_week_start = monday_msk.strftime("%Y-%m-%d")
 
@@ -389,14 +406,10 @@ async def announce_weekly_mmr_winner(bot):
 async def backup_database_job(context):
     """Копирование данных в backup БД каждый час"""
     try:
-        from database import BACKUP_DATABASE_URL, get_connection
         if not BACKUP_DATABASE_URL:
             return
         
         logger.info("Запуск копирования в backup БД")
-        
-        import psycopg2
-        from urllib.parse import urlparse
         
         main_url = urlparse(DATABASE_URL)
         backup_url = urlparse(BACKUP_DATABASE_URL)
@@ -478,6 +491,9 @@ async def update_all_mmr_job(context):
         success_count = 0
         rank_up_users = []  # собираем для уведомлений
         
+        # Pre-fetch all user data in one query to avoid N queries
+        users_by_id = {u['telegram_id']: u for u in users}
+        
         for user in users:
             try:
                 result = update_user_mmr(user['telegram_id'])
@@ -485,9 +501,8 @@ async def update_all_mmr_job(context):
                     success_count += 1
                     logger.info(f"MMR updated for {user['telegram_id']}: {result.get('mmr')} MMR")
 
-                    # Sync week stats from DB after MMR update
-                    from database import get_user as get_db_user
-                    db_user = get_db_user(user['telegram_id'])
+                    # Sync week stats from pre-fetched data instead of individual DB query
+                    db_user = users_by_id.get(user['telegram_id'])
                     if db_user:
                         existing = user_cache.get(user['telegram_id']) or {}
                         user_cache.set(user['telegram_id'], {
@@ -616,13 +631,7 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_config("digest_chat_id", chat_id)
         set_config("daily_digest_message_id", None)
 
-        # Создаём контекст для ручного вызова дайджеста
-        class ManualContext:
-            def __init__(self, application, bot):
-                self.application = application
-                self.bot = bot
-                self.manual = True
-
+        # Используем общий класс ManualContext
         manual_context = ManualContext(context.application, context.bot)
         await alternate_digest_job(manual_context)
 
@@ -643,8 +652,6 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def dota_digest_job(context):
     """Dota дайджест - лучший/худший винрейт и стрик побед за неделю"""
     try:
-        # Блокировка от параллельного запуска
-        import time
         last_run = get_config('dota_digest_last_run')
         now = time.time()
         if last_run and (now - float(last_run)) < JOB_COOLDOWN:
@@ -794,13 +801,7 @@ async def dota_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_config("digest_chat_id", chat_id)
         set_config("dota_digest_message_id", None)
 
-        # Создаём контекст для ручного вызова дайджеста
-        class ManualContext:
-            def __init__(self, application, bot):
-                self.application = application
-                self.bot = bot
-                self.manual = True
-
+        # Используем общий класс ManualContext
         manual_context = ManualContext(context.application, context.bot)
         await dota_digest_job(manual_context)
 
@@ -821,15 +822,15 @@ async def dota_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов каждые 15 секунд"""
     try:
-        import time
         now = time.time()
         
-        # Блокировка от параллельного запуска (в памяти)
-        last_run = _digest_state.get('last_run', 0)
-        if now - last_run < 10:
-            logger.info(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
-            return
-        _digest_state['last_run'] = now
+        # Блокировка от параллельного запуска
+        async with _digest_state_lock:
+            last_run = _digest_state.get('last_run', 0)
+            if now - last_run < 10:
+                logger.info(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
+                return
+            _digest_state['last_run'] = now
         
         # Проверяем, нужно ли обновить данные из БД (раз в час)
         if now - _digest_state.get("last_data_update", 0) >= DIGEST_DATA_REFRESH_INTERVAL:
@@ -1512,7 +1513,6 @@ def _reset_daily_fissure_rolls():
 def _load_bonus_ready_users():
     """Загрузить бонусы из БД"""
     try:
-        import json
         data = get_config("bonus_ready_users", "{}")
         return json.loads(data) if data else {}
     except (ValueError, TypeError, json.JSONDecodeError):
@@ -1521,7 +1521,6 @@ def _load_bonus_ready_users():
 
 def _save_bonus_ready_users(users):
     """Сохранить бонусы в БД"""
-    import json
     set_config("bonus_ready_users", json.dumps(users))
 
 
@@ -1574,7 +1573,6 @@ STATS_KEYS = ["rolls", "multicast", "zeus", "multicast_x2", "multicast_x3", "mul
 
 # Буфер инкрементов — пишем в БД пачкой
 _stat_buffer = {}
-_digest_state = {"last_run": 0, "type": None, "chat_id": None, "message_id": None}
 _stat_flush_timer = None
 
 
@@ -1721,10 +1719,8 @@ def check_multicast(fissure_size):
 
 async def fetch_hero_icon(url, session=None, size=96):
     """Скачать и уменьшить иконку героя через aiohttp"""
-    import io
     close_session = False
     if session is None:
-        import aiohttp
         session = aiohttp.ClientSession()
         close_session = True
     try:
@@ -2154,7 +2150,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await flush_stat_buffer()
                    
     except Exception as e:
-        import traceback
         tb = traceback.format_exc()
         logger.error(f"Error in fissure: {e}\n{tb}")
         try:
@@ -2368,7 +2363,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_last_message_id(update.effective_user.id, result_msg.message_id)
         
     except Exception as e:
-        import traceback
         logger.error(f"Error in stats: {e}\n{traceback.format_exc()}")
         try:
             await context.bot.send_message(

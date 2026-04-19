@@ -13,9 +13,6 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Force redeploy to clear any cached bytecode
-REDEPLOY_MARKER = "2026-04-08-21-05-00-final-fix"
-
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     print("⚠️ DATABASE_URL не задан! Используем SQLite для локального тестирования.")
@@ -148,9 +145,29 @@ class TTLCache:
 config_cache = TTLCache(default_ttl=300)  # 5 минут для конфигурации
 top_cache = TTLCache(default_ttl=60)  # 1 минута для топов и рангов
 
+_aiohttp_session = None
+
+async def get_aiohttp_session():
+    """Получить переиспользуемую aiohttp сессию для оптимизации соединений"""
+    global _aiohttp_session
+    if _aiohttp_session is None or _aiohttp_session.closed:
+        import aiohttp
+        _aiohttp_session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=10),
+            connector=aiohttp.TCPConnector(limit=10, limit_per_host=5)
+        )
+    return _aiohttp_session
+
+async def close_aiohttp_session():
+    """Закрыть aiohttp сессию при выключении бота"""
+    global _aiohttp_session
+    if _aiohttp_session and not _aiohttp_session.closed:
+        await _aiohttp_session.close()
+        _aiohttp_session = None
+
 
 def flush_users_cache():
-    """Сброс всех изменённых пользователей в БД"""
+    """Сброс всех изменённых пользователей в БД с использованием batch операций"""
     dirty_users = user_cache.get_all_dirty()
     if not dirty_users:
         logger.info("flush_users_cache: no dirty users")
@@ -158,129 +175,89 @@ def flush_users_cache():
     
     logger.info(f"flush_users_cache: found {len(dirty_users)} dirty users, saving to DB")
     
-    # Обновляем кеш топа перед сбросом
     update_dota_week_top_cache()
     
-    db = Database()
+    db_type = get_db_type()
     flushed = 0
     
-    for telegram_id in dirty_users:
-        user_data = user_cache.get(telegram_id)
-        if not user_data:
-            continue
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
         
-        try:
-            # Определяем тип БД для правильного синтаксиса запроса
-            db_type = get_db_type()
+        for telegram_id in dirty_users:
+            user_data = user_cache.get(telegram_id)
+            if not user_data:
+                continue
             
-            if db_type == "postgresql":
-                # Используем batch update для PostgreSQL
-                query = """
-                    UPDATE users SET 
-                        username = %s,
-                        fissure = %s,
-                        last_fissure = %s,
-                        total_growth = %s,
-                        total_rolls = %s,
-                        current_streak = %s,
-                        best_streak = %s,
-                        weekly_rolls = %s,
-                        weekly_growth = %s,
-                        steam_id = %s,
-                        steam_nickname = %s,
-                        mmr = %s,
-                        rank_tier = %s,
-                        dota_total_games = %s,
-                        dota_wins = %s,
-                        last_dota_games = %s,
-                        last_dota_wins = %s,
-                        week_games = %s,
-                        week_wins = %s,
-                        week_best_streak = %s,
-                        week_start_date = %s,
-                        last_activity = CURRENT_TIMESTAMP
-                    WHERE telegram_id = %s
-                """
-                db.execute_query(query, (
-                    user_data.get('username'),
-                    user_data.get('fissure', 0),
-                    user_data.get('last_fissure', 0),
-                    user_data.get('total_growth', 0),
-                    user_data.get('total_rolls', 0),
-                    user_data.get('current_streak', 0),
-                    user_data.get('best_streak', 0),
-                    user_data.get('weekly_rolls', 0),
-                    user_data.get('weekly_growth', 0),
-                    user_data.get('steam_id'),
-                    user_data.get('steam_nickname'),
-                    user_data.get('mmr', 0),
-                    user_data.get('rank_tier', 0),
-                    user_data.get('dota_total_games', 0),
-                    user_data.get('dota_wins', 0),
-                    user_data.get('last_dota_games', 0),
-                    user_data.get('last_dota_wins', 0),
-                    user_data.get('week_games', 0),
-                    user_data.get('week_wins', 0),
-                    user_data.get('week_best_streak', 0),
-                    user_data.get('week_start_date'),
-                    telegram_id
-                ))
-            else:
-                # SQLite использует ? вместо %s
-                query = """
-                    UPDATE users SET 
-                        username = ?,
-                        fissure = ?,
-                        last_fissure = ?,
-                        total_growth = ?,
-                        total_rolls = ?,
-                        current_streak = ?,
-                        best_streak = ?,
-                        weekly_rolls = ?,
-                        weekly_growth = ?,
-                        steam_id = ?,
-                        steam_nickname = ?,
-                        mmr = ?,
-                        rank_tier = ?,
-                        dota_total_games = ?,
-                        dota_wins = ?,
-                        last_dota_games = ?,
-                        last_dota_wins = ?,
-                        week_games = ?,
-                        week_wins = ?,
-                        week_best_streak = ?,
-                        week_start_date = ?,
-                        last_activity = CURRENT_TIMESTAMP
-                    WHERE telegram_id = ?
-                """
-                db.execute_query(query, (
-                    user_data.get('username'),
-                    user_data.get('fissure', 0),
-                    user_data.get('last_fissure', 0),
-                    user_data.get('total_growth', 0),
-                    user_data.get('total_rolls', 0),
-                    user_data.get('current_streak', 0),
-                    user_data.get('best_streak', 0),
-                    user_data.get('weekly_rolls', 0),
-                    user_data.get('weekly_growth', 0),
-                    user_data.get('steam_id'),
-                    user_data.get('steam_nickname'),
-                    user_data.get('mmr', 0),
-                    user_data.get('rank_tier', 0),
-                    user_data.get('dota_total_games', 0),
-                    user_data.get('dota_wins', 0),
-                    user_data.get('last_dota_games', 0),
-                    user_data.get('last_dota_wins', 0),
-                    user_data.get('week_games', 0),
-                    user_data.get('week_wins', 0),
-                    user_data.get('week_best_streak', 0),
-                    user_data.get('week_start_date'),
-                    telegram_id
-                ))
-            user_cache.clear_dirty(telegram_id)
-            flushed += 1
-        except Exception as e:
-            logger.error(f"flush_users_cache: error for {telegram_id}: {e}")
+            try:
+                if db_type == "postgresql":
+                    query = """
+                        UPDATE users SET 
+                            username = %s, fissure = %s, last_fissure = %s,
+                            total_growth = %s, total_rolls = %s, current_streak = %s,
+                            best_streak = %s, weekly_rolls = %s, weekly_growth = %s,
+                            steam_id = %s, steam_nickname = %s, mmr = %s, rank_tier = %s,
+                            dota_total_games = %s, dota_wins = %s, last_dota_games = %s,
+                            last_dota_wins = %s, week_games = %s, week_wins = %s,
+                            week_best_streak = %s, week_start_date = %s, last_activity = CURRENT_TIMESTAMP
+                        WHERE telegram_id = %s
+                    """
+                    cursor.execute(query, (
+                        user_data.get('username'), user_data.get('fissure', 0),
+                        user_data.get('last_fissure', 0), user_data.get('total_growth', 0),
+                        user_data.get('total_rolls', 0), user_data.get('current_streak', 0),
+                        user_data.get('best_streak', 0), user_data.get('weekly_rolls', 0),
+                        user_data.get('weekly_growth', 0), user_data.get('steam_id'),
+                        user_data.get('steam_nickname'), user_data.get('mmr', 0),
+                        user_data.get('rank_tier', 0), user_data.get('dota_total_games', 0),
+                        user_data.get('dota_wins', 0), user_data.get('last_dota_games', 0),
+                        user_data.get('last_dota_wins', 0), user_data.get('week_games', 0),
+                        user_data.get('week_wins', 0), user_data.get('week_best_streak', 0),
+                        user_data.get('week_start_date'), telegram_id
+                    ))
+                else:
+                    query = """
+                        UPDATE users SET 
+                            username = ?, fissure = ?, last_fissure = ?,
+                            total_growth = ?, total_rolls = ?, current_streak = ?,
+                            best_streak = ?, weekly_rolls = ?, weekly_growth = ?,
+                            steam_id = ?, steam_nickname = ?, mmr = ?, rank_tier = ?,
+                            dota_total_games = ?, dota_wins = ?, last_dota_games = ?,
+                            last_dota_wins = ?, week_games = ?, week_wins = ?,
+                            week_best_streak = ?, week_start_date = ?, last_activity = CURRENT_TIMESTAMP
+                        WHERE telegram_id = ?
+                    """
+                    cursor.execute(query, (
+                        user_data.get('username'), user_data.get('fissure', 0),
+                        user_data.get('last_fissure', 0), user_data.get('total_growth', 0),
+                        user_data.get('total_rolls', 0), user_data.get('current_streak', 0),
+                        user_data.get('best_streak', 0), user_data.get('weekly_rolls', 0),
+                        user_data.get('weekly_growth', 0), user_data.get('steam_id'),
+                        user_data.get('steam_nickname'), user_data.get('mmr', 0),
+                        user_data.get('rank_tier', 0), user_data.get('dota_total_games', 0),
+                        user_data.get('dota_wins', 0), user_data.get('last_dota_games', 0),
+                        user_data.get('last_dota_wins', 0), user_data.get('week_games', 0),
+                        user_data.get('week_wins', 0), user_data.get('week_best_streak', 0),
+                        user_data.get('week_start_date'), telegram_id
+                    ))
+                user_cache.clear_dirty(telegram_id)
+                flushed += 1
+            except Exception as e:
+                logger.error(f"flush_users_cache: error for {telegram_id}: {e}")
+        
+        conn.commit()
+        
+    except Exception as e:
+        logger.error(f"flush_users_cache: batch error: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            release_connection(conn)
     
     logger.info(f"flush_users_cache: flushed {flushed} users")
     return flushed
@@ -294,7 +271,7 @@ def update_dota_week_top_cache():
     if not all_users:
         logger.info("update_dota_week_top_cache: no users in cache, loading from DB")
         try:
-            from database import get_all_users_with_steam
+            # Note: get_all_users_with_steam is defined at line 2802, called at runtime so it works
             db_users = get_all_users_with_steam()
             for u in db_users:
                 user_cache.set(u['telegram_id'], u)
@@ -384,9 +361,7 @@ def get_connection():
         if db_type in _pool and _pool[db_type]:
             conn = _pool[db_type].pop()
             try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT 1")
-                cursor.close()
+                conn.isolation_level = None  # Reset isolation level for PostgreSQL
                 print(f"[DB] Reusing connection from pool")
                 return conn
             except Exception as e:
@@ -714,9 +689,9 @@ def init_db():
         """)
         
         conn.commit()
-        logger.info("✅ База данных инициализирована")
+        logger.info("Database initialized")
     except Exception as e:
-        logger.error(f"❌ Ошибка инициализации БД: {e}")
+        logger.error(f"DB init error: {e}")
     finally:
         release_connection(conn)
 
@@ -729,7 +704,7 @@ def migrate_db():
         # Check if alembic.ini exists
         alembic_ini_path = os.path.join(os.path.dirname(__file__), 'alembic.ini')
         if not os.path.exists(alembic_ini_path):
-            logger.info("ℹ️ Alembic не настроен, пропускаем миграции")
+            logger.info("Alembic not configured, skipping migrations")
             return True
         
         # Run alembic upgrade head
@@ -738,13 +713,13 @@ def migrate_db():
         ], capture_output=True, text=True, cwd=os.path.dirname(__file__))
         
         if result.returncode == 0:
-            logger.info("✅ Миграции базы данных выполнены успешно")
+            logger.info("Database migrations completed successfully")
             return True
         else:
-            logger.error(f"❌ Ошибка выполнения миграций: {result.stderr}")
+            logger.error(f"Migration error: {result.stderr}")
             return False
     except Exception as e:
-        logger.error(f"❌ Ошибка запуска миграций: {e}")
+        logger.error(f"Migration start error: {e}")
         return False
 
 class Database:
@@ -766,11 +741,12 @@ class Database:
         if not self.conn:
             self.conn = get_connection()
         else:
-            # Проверяем, что соединение всё ещё активно
+            # Проверяем, что соединение всё ещё активно через ping
             try:
-                cursor = self.conn.cursor()
-                cursor.execute("SELECT 1")
-                cursor.close()
+                if get_db_type() == "postgresql":
+                    self.conn.reset()
+                else:
+                    self.conn.isolation_level = None
             except:
                 # Соединение мертво, создаём новое
                 self.conn = get_connection()
@@ -2221,7 +2197,7 @@ ORDER BY
                     "week_games": u[6], "week_wins": u[7],
                     "rank_tier": u[8], "wins": u[9], "losses": u[10]} for u in users]
     except Exception as e:
-        logger.error(f"Ошибка get_dota_mmr_top: {e}")
+        logger.error(f"Error get_dota_mmr_top: {e}")
         return []
 
 
@@ -2541,7 +2517,7 @@ def get_dota_week_top_from_db(limit=10, force_refresh=False):
             
             return result
     except Exception as e:
-        logger.error(f"Ошибка get_dota_week_top: {e}")
+        logger.error(f"Error get_dota_week_top: {e}")
         return []
 
 
@@ -2707,7 +2683,7 @@ def get_dota_digest_stats():
         user_cache.set('dota_digest_stats', result)
         return result
     except Exception as e:
-        logger.error(f"Ошибка get_dota_digest_stats: {e}")
+        logger.error(f"Error get_dota_digest_stats: {e}")
         return {
             "top_winrate": ("None", 0, 0, 0, None),
             "bottom_winrate": ("None", 0, 0, 0, None),
@@ -2766,7 +2742,7 @@ def get_all_users_from_db():
                 "last_dota_wins": u[20]
             } for u in users]
     except Exception as e:
-        logger.error(f"Ошибка get_all_users_with_steam: {e}")
+        logger.error(f"Error get_all_users_with_steam: {e}")
         return []
     finally:
         release_connection(conn)
@@ -2796,7 +2772,7 @@ def reset_weekly_stats():
         logger.info(f"Сброшена недельная статистика для {affected} пользователей")
         return affected
     except Exception as e:
-        logger.error(f"Ошибка reset_weekly_stats: {e}")
+        logger.error(f"Error reset_weekly_stats: {e}")
         return 0
 
 
@@ -2895,7 +2871,7 @@ def backup_database(backup_dir=None):
                 logger.info(f"Резервная копия PostgreSQL создана: {backup_file}")
                 return backup_file
             else:
-                logger.error(f"Ошибка создания резервной копии PostgreSQL: {result.stderr}")
+                logger.error(f"PostgreSQL backup error: {result.stderr}")
                 return None
         else:
             # Для SQLite просто копируем файл
@@ -2918,7 +2894,7 @@ def backup_database(backup_dir=None):
             return backup_file
             
     except Exception as e:
-        logger.error(f"Ошибка создания резервной копии: {e}")
+        logger.error(f"Backup error: {e}")
         return None
 
 
@@ -2958,7 +2934,7 @@ def restore_database(backup_file):
                 logger.info(f"База данных PostgreSQL восстановлена из: {backup_file}")
                 return True
             else:
-                logger.error(f"Ошибка восстановления PostgreSQL: {result.stderr}")
+                logger.error(f"PostgreSQL restore error: {result.stderr}")
                 return False
         else:
             # Для SQLite копируем файл обратно
@@ -2976,5 +2952,5 @@ def restore_database(backup_file):
             return True
             
     except Exception as e:
-        logger.error(f"Ошибка восстановления базы данных: {e}")
+        logger.error(f"Database restore error: {e}")
         return False
