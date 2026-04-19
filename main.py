@@ -2463,6 +2463,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {update.effective_user.id} called topmmr")
     
     chat_id = update.message.chat_id
+    logger.info(f"topmmr: chat_id = {chat_id}")
     chat_type = update.message.chat.type
     
     # Delete user message only in groups/channels
@@ -2478,24 +2479,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from database import get_user
         user = get_user(update.effective_user.id)
         
-        # Обновляем недельную статистику для ВСЕХ игроков с Steam через OpenDota
-        try:
-            from dota_mmr import update_user_mmr
-            from database import get_all_users_with_steam
-            all_users = get_all_users_with_steam()
-            
-            for u in all_users:
-                try:
-                    tg_id = u.get('telegram_id')
-                    if tg_id:
-                        update_user_mmr(tg_id)
-                except Exception as e:
-                    logger.debug(f"Failed to update week stats for {u.get('telegram_id')}: {e}")
-        except Exception as e:
-            logger.debug(f"Could not update week stats: {e}")
-        
-        # Получаем топ напрямую из БД для актуальных данных
+        # Только читаем топ из БД - данные уже должны быть обновлены в update_all_mmr_job
+        logger.info(f"topmmr: before get_dota_week_top_from_db")
         top_users = get_dota_week_top_from_db(8, force_refresh=True)
+        logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from DB")
         
         # Initialize user position variables
         user_is_in_top = False
@@ -2651,6 +2638,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.debug(f"Could not delete last bot message: {e}")
         
+        logger.info(f"topmmr: sending message, text length = {len(text) if text else 0}")
         result_msg = await context.bot.send_photo(
             chat_id=update.effective_chat.id,
             photo=topmmr_banner_url,
