@@ -1135,10 +1135,12 @@ def generate_start_card(
         
         if avatar_url:
             try:
+                logger.info(f"Loading avatar from: {avatar_url}")
                 if os.path.isfile(avatar_url):
                     avatar = Image.open(avatar_url).convert("RGBA")
                 else:
                     resp = requests.get(avatar_url, timeout=8)
+                    logger.info(f"Avatar request status: {resp.status_code}")
                     avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA") if resp.status_code == 200 else None
                 if avatar:
                     # Resize and crop to square
