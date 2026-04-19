@@ -1772,7 +1772,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(user_id, username)
         
         if not user:
-            await menu_handler(update, context)
+            chat_id = update.effective_chat.id
+            banner_url = "https://i.ibb.co/LXsGsfxZ/213.png"
+            text = "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
+            msg = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=banner_url,
+                caption=text,
+                reply_markup=main_menu()
+            )
+            set_last_bot_message(chat_id, user_id, msg.message_id)
+            update_last_message_id(user_id, msg.message_id)
             return
         
         steam_id = user.get("steam_id")
@@ -1824,14 +1834,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await menu_handler(update, context)
         else:
-            # No Steam - show card with Telegram avatar
+            # No Steam - show card with Telegram avatar, no message count
             from dota_mmr import generate_start_card
             
             avatar_url = update.effective_user.photo_url or user.get("avatar")
             
             card_data = generate_start_card(
                 avatar_url=avatar_url,
-                message_count=message_count,
+                message_count=0,
                 username=username,
                 steam_nickname=None,
                 rank_tier=0,
