@@ -2734,28 +2734,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
 
 
-async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Функция отключена"""
-    logger.info(f"User {update.effective_user.id} called refresh (disabled)")
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Эта функция отключена", reply_markup=main_menu())
 
-
-async def setchance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Функция отключена"""
-    logger.info(f"User {update.effective_user.id} called setchance (disabled)")
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Эта функция отключена", reply_markup=main_menu())
-
-
-async def settitle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Функция отключена"""
-    logger.info(f"User {update.effective_user.id} called settitle (disabled)")
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Эта функция отключена", reply_markup=main_menu())
-
-
-async def removeuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Функция отключена"""
-    logger.info(f"User {update.effective_user.id} called removeuser (disabled)")
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Эта функция отключена", reply_markup=main_menu())
 
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):

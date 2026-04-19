@@ -361,7 +361,7 @@ def update_dota_week_top_cache():
 # Connection pool management
 _pool_lock = threading.Lock()
 _pool = {}  # db_type -> list of connections
-_max_connections = 5  # Max connections per DB type
+_max_connections = 20  # Max connections per DB type
 
 def get_db_type():
     """Получить тип базы данных"""
