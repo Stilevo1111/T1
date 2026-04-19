@@ -1763,6 +1763,19 @@ def format_time(seconds):
     return f"{int(h)}ч {int(m)}м"
 
 
+async def get_user_avatar_url(bot, user_id: int) -> str | None:
+    """Get Telegram user profile photo URL"""
+    try:
+        photos = await bot.get_user_profile_photos(user_id, limit=1)
+        if photos and photos.photos:
+            photo = photos.photos[0][-1]  # Get biggest photo
+            file = await bot.get_file(photo.file_id)
+            return file.file_path
+    except Exception as e:
+        logger.debug(f"Could not get user avatar: {e}")
+    return None
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command - show profile card"""
     try:
@@ -1810,6 +1823,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from dota_mmr import generate_start_card
             
             avatar_url = user.get("avatar")
+            if not avatar_url:
+                avatar_url = await get_user_avatar_url(context.bot, user_id)
             weekly_mvp, weekly_top2, weekly_top3 = 0, 0, 0
             
             card_data = generate_start_card(
@@ -1837,7 +1852,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # No Steam - show card with Telegram avatar, no message count
             from dota_mmr import generate_start_card
             
-            avatar_url = update.effective_user.photo_url or user.get("avatar")
+            avatar_url = await get_user_avatar_url(context.bot, user_id)
             
             card_data = generate_start_card(
                 avatar_url=avatar_url,
