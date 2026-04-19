@@ -2146,7 +2146,7 @@ def get_dota_mmr_top(limit=10):
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    (wins - losses * 0.5) DESC,
+                    (wins - losses) DESC,
                     week_games DESC,
                     mmr DESC
                 LIMIT %s
@@ -2169,7 +2169,7 @@ ORDER BY
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    (wins - losses * 0.5) DESC,
+                    (wins - losses) DESC,
                     week_games DESC,
                     mmr DESC
                 LIMIT ?
@@ -2278,7 +2278,7 @@ def get_dota_week_top(limit=10, force_refresh=False):
                 l = g - w  # losses
                 if g == 0:
                     return (3, 0, 0)
-                score = w - l * 0.5  # Новая формула: победы - поражения * 0.5
+                score = w - l  # победы - поражения
                 return (0, -score, -g)
             
             top_users.sort(key=get_sort_key)
@@ -2340,7 +2340,7 @@ def get_dota_week_top(limit=10, force_refresh=False):
         l = g - w  # losses
         if g == 0:
             return (3, 0, 0)  # Игроки без игр - в САМЫЙ КОНЕЦ (приоритет 3)
-        score = w - l * 0.5  # Новая формула: победы - поражения * 0.5
+        score = w - l  # победы - поражения
         return (0, -score, -g)
 
     top_users.sort(key=get_sort_key)
