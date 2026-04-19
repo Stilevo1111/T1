@@ -1798,9 +1798,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if steam_id and steam_nickname:
             from dota_mmr import generate_start_card
+            
+            avatar_url = user.get("avatar")
             weekly_mvp, weekly_top2, weekly_top3 = 0, 0, 0
             
             card_data = generate_start_card(
+                avatar_url=avatar_url,
                 message_count=message_count,
                 username=username,
                 steam_nickname=steam_nickname,
