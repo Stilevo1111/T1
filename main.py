@@ -1797,12 +1797,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         
         if steam_id and steam_nickname:
-            from dota_mmr import generate_start_card, get_dota_week_top
-            
-            week_top = get_dota_week_top(limit=3) or []
-            weekly_mvp = 1 if week_top and week_top[0].get("telegram_id") == user_id else 0
-            weekly_top2 = 1 if len(week_top) > 1 and week_top[1].get("telegram_id") == user_id else 0
-            weekly_top3 = 1 if len(week_top) > 2 and week_top[2].get("telegram_id") == user_id else 0
+            from dota_mmr import generate_start_card
+            weekly_mvp, weekly_top2, weekly_top3 = 0, 0, 0
             
             card_data = generate_start_card(
                 message_count=message_count,
