@@ -900,6 +900,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         update_user_fields_batch(telegram_id, {
             "steam_id": steam_id,
             "steam_nickname": stats["nickname"],
+            "avatar": stats.get("avatar"),
             "mmr": stats["mmr"],
             "rank_tier": stats.get("rank_tier", 0),
             "wins": stats.get("wins", 0),
