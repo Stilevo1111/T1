@@ -1841,7 +1841,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             card_data = generate_start_card(
                 avatar_url=avatar_url,
-                message_count=0,
+                message_count=message_count,
                 username=username,
                 steam_nickname=None,
                 rank_tier=0,
