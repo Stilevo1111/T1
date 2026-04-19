@@ -597,6 +597,9 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_greeting_date DATE
             """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS message_count INTEGER DEFAULT 0
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
