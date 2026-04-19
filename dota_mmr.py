@@ -7,6 +7,28 @@ import aiohttp
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from database import get_user, update_user_fields_batch
+import io
+from PIL import Image
+
+# Cached background for start card to avoid repeated downloads
+_START_CARD_BACKGROUND_RESIZED = None
+_START_CARD_BACKGROUND_CACHED = False
+
+def _get_start_card_background():
+    global _START_CARD_BACKGROUND_RESIZED, _START_CARD_BACKGROUND_CACHED
+    if _START_CARD_BACKGROUND_CACHED:
+        return _START_CARD_BACKGROUND_RESIZED
+    try:
+        resp = requests.get("https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png", timeout=10)
+        if resp.status_code == 200:
+            bg_image = Image.open(io.BytesIO(resp.content)).convert("RGB")
+            bg_image = bg_image.resize((1024, 500), Image.LANCZOS)
+            _START_CARD_BACKGROUND_RESIZED = bg_image
+            _START_CARD_BACKGROUND_CACHED = True
+            return bg_image
+    except Exception as e:
+        logger.error(f"Failed to load start card background: {e}")
+    return None
 
 logger = logging.getLogger(__name__)
 
@@ -1089,19 +1111,17 @@ def generate_start_card(
         
         # Фон и draw
         try:
-            # Download the background image
-            bg_url = "https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png"
-            response = requests.get(bg_url, timeout=10)
-            if response.status_code == 200:
-                bg_image = Image.open(io.BytesIO(response.content))
-                # Resize and crop to fit the card dimensions
-                bg_image = bg_image.resize((width, height), Image.LANCZOS)
-                img = bg_image.convert("RGB")
-                logger.info("Background image loaded successfully")
+            bg_image = _get_start_card_background()
+            if bg_image is not None:
+                img = bg_image.copy()
+                logger.info("Background image loaded successfully (cached)")
             else:
                 # Fallback to the original color
-                logger.info(f"Background image HTTP error: {response.status_code}")
+                logger.info("Background image HTTP error: using fallback")
                 img = Image.new("RGB", (width, height), (15, 20, 35))
+        except Exception as e:
+            logger.error(f"Failed to load background image: {e}")
+            img = Image.new("RGB", (width, height), (15, 20, 35))
         except Exception as e:
             logger.error(f"Failed to load background image: {e}")
             img = Image.new("RGB", (width, height), (15, 20, 35))
