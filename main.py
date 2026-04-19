@@ -120,7 +120,17 @@ def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
 
 
 async def decrease_inactive_job(context):
-    """Ежедневное задание: уменьшить fissure неактивным игрокам"""
+    """Ежедневное задание: уменьшить fissure неактивным игрокам (с кешем)"""
+    from datetime import datetime
+    
+    # Проверяем когда последний раз выполнялось (кешируем в памяти)
+    last_run = get_config('last_decrease_inactive_run')
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    if last_run == today:
+        logger.info("decrease_inactive_job: уже выполнено сегодня, пропуск")
+        return
+    
     try:
         logger.info("Запуск ежедневного уменьшения fissure для неактивных игроков")
         affected = decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0)
@@ -131,25 +141,15 @@ async def decrease_inactive_job(context):
         
         # Обновляем позиции игроков
         update_player_positions()
+        
+        # Запоминаем что выполнено сегодня
+        from datetime import datetime
+        set_config('last_decrease_inactive_run', datetime.now().strftime("%Y-%m-%d"))
     except Exception as e:
         logger.error(f"Ошибка в decrease_inactive_job: {e}")
 
 
-async def reset_daily_fissure_job(context):
-    """Сброс счётчика ежедневного сбора фиссур в полночь MSK"""
-    try:
-        from database import config_cache
-        # Сбросить счётчик
-        _reset_daily_fissure_rolls()
-        # Сбросить бонусы
-        global bonus_ready_users
-        bonus_ready_users = {}
-        _save_bonus_ready_users(bonus_ready_users)
-        # Сбросить кеш конфига
-        config_cache.clear()
-        logger.info("Daily fissure collection reset at midnight MSK")
-    except Exception as e:
-        logger.error(f"Ошибка в reset_daily_fissure_job: {e}")
+
 
 
 async def morning_greeting_job(context):
@@ -3051,12 +3051,7 @@ async def main():
             days=(0, 1, 2, 3, 4, 5, 6)
         )
         
-        # Сброс счётчика ежедневного сбора фиссур в полночь MSK
-        job_queue.run_daily(
-            reset_daily_fissure_job,
-            time=datetime.time(hour=21, minute=0),  # 21:00 UTC = 00:00 MSK
-            days=(0, 1, 2, 3, 4, 5, 6)
-        )
+        
         
         # morning_digest_job удалён
         
@@ -3069,14 +3064,14 @@ async def main():
         
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(seconds=15),
+            interval=datetime.timedelta(minutes=5),
             first=datetime.datetime.now() + datetime.timedelta(seconds=20)
         )
         
-        job_queue.run_repeating(
+        job_queue.run_daily(
             decrease_inactive_job,
-            interval=datetime.timedelta(minutes=1),
-            first=datetime.datetime.now() + datetime.timedelta(seconds=30)
+            time=datetime.time(hour=3, minute=0),  # 03:00 MSK (00:00 UTC)
+            days=(0, 1, 2, 3, 4, 5, 6)
         )
         
         # Копия в backup БД каждый час
