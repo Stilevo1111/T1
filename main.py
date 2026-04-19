@@ -287,7 +287,7 @@ async def announce_weekly_mmr_winner(bot):
         return
 
     from database import get_dota_week_top_from_db
-    top_users = get_dota_week_top_from_db(5)
+    top_users = get_dota_week_top_from_db(5, force_refresh=True)
     if not top_users or all(u.get('week_games', 0) == 0 for u in top_users):
         logger.info("announce_weekly_mmr_winner: нет данных для топа MMR (никто не играл)")
         set_config('mmr_week_top_announced', current_week_start)
@@ -370,7 +370,7 @@ async def announce_weekly_mmr_winner(bot):
         f"\n🥇 {name_display}\n"
         f"📊 {rank_str} • {mmr} MMR\n\n"
         f"📈 Результат за неделю:\n"
-        f" └ {week_wins}W / {week_losses}L • WR {winrate}%{streak_text}\n\n"
+        f" └ {week_wins}W • {week_losses}L • WR {winrate}%{streak_text}\n\n"
         f"🏆Этот игрок показал лучший результат в топе MMR за неделю!{tag_info}"
     )
 
@@ -2478,8 +2478,24 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from database import get_user
         user = get_user(update.effective_user.id)
         
+        # Обновляем недельную статистику для ВСЕХ игроков с Steam через OpenDota
+        try:
+            from dota_mmr import update_user_mmr
+            from database import get_all_users_with_steam
+            all_users = get_all_users_with_steam()
+            
+            for u in all_users:
+                try:
+                    tg_id = u.get('telegram_id')
+                    if tg_id:
+                        update_user_mmr(tg_id)
+                except Exception as e:
+                    logger.debug(f"Failed to update week stats for {u.get('telegram_id')}: {e}")
+        except Exception as e:
+            logger.debug(f"Could not update week stats: {e}")
+        
         # Получаем топ напрямую из БД для актуальных данных
-        top_users = get_dota_week_top_from_db(8)
+        top_users = get_dota_week_top_from_db(8, force_refresh=True)
         
         # Initialize user position variables
         user_is_in_top = False
@@ -2602,7 +2618,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 clickable_name = f'<b><a href="tg://user?id={telegram_id}">{username}</a></b>'
                 lines.append(f"{prefix} {clickable_name} - {rank_str}\n")
                 if week_games > 0:
-                    lines.append(f" └ {week_wins}W/{week_losses}L • WR {winrate}%{streak_text}\n\n")
+                    lines.append(f" └ {week_wins}W • {week_losses}L • WR {winrate}%{streak_text}\n\n")
                 else:
                     lines.append(f" └ Нет игр за неделю\n\n")
             
@@ -2619,7 +2635,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     prefix = f"{emoji_nums.get(user_pos, '#' + str(user_pos))} "
                     lines.append(f"\n{prefix}{clickable_name} - {user_rank_str}\n")
                     if user_week_games > 0:
-                        lines.append(f" └ {user_week_games}W/{user_week_losses}L • WR {user_winrate}%\n\n")
+                        lines.append(f" └ {user_week_games}W • {user_week_losses}L • WR {user_winrate}%\n\n")
                     else:
                         lines.append(f" └ Нет игр за неделю\n\n")
             

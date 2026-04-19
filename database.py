@@ -2328,18 +2328,18 @@ def get_dota_week_top(limit=10, force_refresh=False):
     return top_users[:limit]
 
 
-def get_dota_week_top_from_db(limit=10):
-    """Получение топа игроков Dota 2 за неделю напрямую из БД с кешем 1 час"""
+def get_dota_week_top_from_db(limit=10, force_refresh=False):
+    """Получение топа игроков Dota 2 за неделю напрямую из БД с кешем 5 минут"""
     import time
     
-    _TTL = 3600  # 1 час
+    _TTL = 300  # 5 минут
     
     # Простой кеш в памяти
     if not hasattr(get_dota_week_top_from_db, '_cache'):
         get_dota_week_top_from_db._cache = (None, 0)
     
     cached_data, cached_time = get_dota_week_top_from_db._cache
-    if cached_data and (time.time() - cached_time) < _TTL:
+    if cached_data and (time.time() - cached_time) < _TTL and not force_refresh:
         logger.info(f"get_dota_week_top_from_db: returning cached top ({len(cached_data)} users)")
         return cached_data[:limit]
     
