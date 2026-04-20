@@ -1990,7 +1990,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 retry_after = int(match.group(1)) + 5
             set_rate_limited(retry_after)
         logger.error(f"start command error: {e}")
-        await menu_handler(update, context)
+        await menu_handler(update, context, allow_when_rate_limited=True)
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2008,7 +2008,7 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Чат {chat_id} установлен для дайджестов")
     except Exception as e:
         logger.error(f"set_digest_chat error: {e}")
-        await menu_handler(update, context)
+        await menu_handler(update, context, allow_when_rate_limited=True)
 
 
 async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3058,11 +3058,11 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow_when_rate_limited=False):
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
     try:
-        # Skip if rate limited
-        if is_rate_limited():
+        # Skip if rate limited (but allow override for error fallback)
+        if not allow_when_rate_limited and is_rate_limited():
             logger.warning(f"Skipping menu_handler due to rate limit")
             return
             
