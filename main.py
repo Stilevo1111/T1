@@ -734,6 +734,11 @@ async def dota_digest_job(context):
                 return
             except Exception as e:
                 error_str = str(e)
+                is_rate_limit = "429" in error_str or "too many requests" in error_str
+                if is_rate_limit:
+                    logger.warning(f"Rate limited by Telegram in dota_digest, skipping")
+                    _digest_state["dota_last_text"] = text
+                    return
                 if "message is not modified" in error_str.lower():
                     logger.info("Dota дайджест не изменился, пропускаем")
                     _digest_state["dota_last_text"] = text  # кэшируем текущий
@@ -1008,7 +1013,13 @@ async def alternate_digest_job(context):
                 last_message_id = None
             except Exception as e:
                 error_str = str(e).lower()
+                is_rate_limit = "429" in error_str or "too many requests" in error_str or "retry after" in error_str
                 logger.info(f"Ошибка редактирования: {e}")
+                if is_rate_limit:
+                    logger.warning(f"Rate limited by Telegram, skipping edit for {10 * 60 / 60} seconds")
+                    _digest_state["last_text"] = text  # кэшируем текст чтобы не повторять
+                    _digest_state["last_run"] = 0  # сбрасываем чтобы в следующий раз попробовать снова
+                    return  # выходим чтобы не продолжать
                 if "message to edit not found" in error_str or "message can't be edited" in error_str or "bad request" in error_str:
                     logger.info(f"Старое сообщение {last_message_id} удалено, создаём новое")
                     set_config('alternate_digest_message_id', None)
@@ -1778,6 +1789,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         telegram_username = update.effective_user.username  # только Telegram username (может быть None)
         first_name = update.effective_user.first_name or "Friend"
+        display_username = telegram_username or first_name  # для отображения в карточке
         
         # Получаем пользователя без авто-создания
         db_user = get_user(user_id)
@@ -1891,7 +1903,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             card_data = generate_start_card(
                 avatar_url=avatar_url,
                 message_count=message_count,
-                username=username,
+                username=display_username,
                 steam_nickname=steam_nickname,
                 rank_tier=rank_tier,
                 weekly_mvp=weekly_mvp,
@@ -1928,7 +1940,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             card_data = generate_start_card(
                 avatar_url=avatar_url,
                 message_count=message_count,
-                username=username,
+                username=display_username,
                 steam_nickname=None,
                 rank_tier=0,
                 weekly_mvp=0,
