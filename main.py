@@ -884,33 +884,35 @@ async def alternate_digest_job(context):
             current_type = "0"
         
         # Формируем текст в зависимости от типа
+        # Используем fallback: если для текущего типа нет данных, показываем другой тип
+        text = None
+        next_type = None  # тип для следующего запуска (переключаем только если успешно показали intended)
+
         if current_type == "0":
-            # Утренний дайджест
-            # Используем закэшированные данные если есть
+            # Пытаемся сгенерировать фиссур-дайджест
             if _digest_state.get("digest_data") is None:
                 stats = get_digest_stats()
                 _digest_state["digest_data"] = stats
             else:
                 stats = _digest_state["digest_data"]
-            
+
             growth_player, growth_pos = stats.get("top_growth", ("None", 0))
             drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
             streak_player, streak_len = stats.get("top_streak", ("None", 0))
-            
             growth_id = stats.get("top_growth_id")
             drop_id = stats.get("top_drop_id")
             streak_id = stats.get("top_streak_id")
             streak_username = stats.get("streak_username")
-            
+
             growth_display = make_clickable(growth_player, growth_id)
             drop_display = make_clickable(drop_player, drop_id)
             streak_display = make_clickable(streak_player, streak_id)
-            
+
             if growth_player and growth_player != "None":
                 growth_part = f"🔺{growth_display} +{growth_pos}"
             else:
                 growth_part = "🔺—"
-            
+
             if drop_player and drop_player != "None":
                 if drop_cm < 0:
                     drop_part = f"🔻{drop_display} {drop_cm:.0f} СМ"
@@ -918,103 +920,116 @@ async def alternate_digest_job(context):
                     drop_part = f"🔻{drop_display} +{drop_cm:.0f} СМ"
             else:
                 drop_part = "🔻—"
-            
+
             if streak_username and streak_len > 0:
                 streak_part = f" 🍀<b>@{streak_username}</b>: {streak_len}"
             elif streak_player and streak_player != "None" and streak_len > 0:
                 streak_part = f" 🍀{streak_display}: {streak_len}"
             else:
                 streak_part = " 🍀—"
-            
+
             text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
-            next_type = "1"
+            next_type = "1"  # после успешного показа фиссур-дайджеста переключаем на Dota
         else:
-            # Dota дайджест
-            # Используем закэшированные данные если есть
+            # Пытаемся сгенерировать Dota-дайджест
             if _digest_state.get("dota_data") is None:
                 mmr_top = get_dota_week_top(limit=10)
                 _digest_state["dota_data"] = mmr_top
             else:
                 mmr_top = _digest_state["dota_data"]
+
+            dota_text = None
             if not mmr_top:
                 logger.info("Нет данных для Dota дайджеста")
-                return
-            
-            valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
-            
-            if not valid_players:
-                logger.info("Нет игроков с 3+ играми для Dota дайджеста")
-                # Сохраняем пустой dota_data чтобы не делать запрос повторно до обновления
-                _digest_state["dota_data"] = []
-                return
-            
-            top_by_wr = max(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
-            bottom_by_wr = min(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
-            players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
-            top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
-            
-            top_player = top_by_wr.get('steam_nickname', 'None')
-            top_rank = top_by_wr.get('rank_tier', 0)
-            top_games = top_by_wr.get('week_games', 0)
-            top_wins = top_by_wr.get('week_wins', 0)
-            top_id = top_by_wr.get('telegram_id')
-            
-            bottom_player = bottom_by_wr.get('steam_nickname', 'None')
-            bottom_rank = bottom_by_wr.get('rank_tier', 0)
-            bottom_games = bottom_by_wr.get('week_games', 0)
-            bottom_wins = bottom_by_wr.get('week_wins', 0)
-            bottom_id = bottom_by_wr.get('telegram_id')
-            
-            if top_streak_player:
-                streak_player = top_streak_player.get('steam_nickname', 'None')
-                streak_wins = top_streak_player.get('week_current_streak', 0)
-                streak_id = top_streak_player.get('telegram_id')
             else:
-                streak_player = 'None'
-                streak_wins = 0
-                streak_id = None
-            
-            # Форматируем винрейт правильно
-            if top_games > 0 and top_wins >= 0:
-                top_losses = max(0, top_games - top_wins)
-                top_total = top_wins + top_losses
-                top_winrate = min(round((top_wins / top_total * 100), 1), 100.0) if top_total > 0 else 0
-            else:
-                top_winrate = 0
-                top_losses = 0
-            
-            if bottom_games > 0 and bottom_wins >= 0:
-                bottom_losses = max(0, bottom_games - bottom_wins)
-                bottom_total = bottom_wins + bottom_losses
-                bottom_winrate = min(round((bottom_wins / bottom_total * 100), 1), 100.0) if bottom_total > 0 else 0
-            else:
-                bottom_winrate = 0
-                bottom_losses = 0
-            
-            top_display = make_clickable(top_player, top_id) if top_player and top_player != "None" else "—"
-            bottom_display = make_clickable(bottom_player, bottom_id) if bottom_player and bottom_player != "None" else "—"
-            streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" and streak_wins > 0 else "—"
-            
-            if top_player and top_player != "None":
-                top_losses = max(0, top_games - top_wins)
-                top_part = f"🔺{top_display}: {top_wins}W/{top_losses}L≈{top_winrate}%"
-            else:
-                top_part = "🔺—"
+                valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
+                if not valid_players:
+                    logger.info("Нет игроков с 3+ играми для Dota дайджеста")
+                    _digest_state["dota_data"] = []  # кэшируем пустой результат
+                else:
+                    top_by_wr = max(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
+                    bottom_by_wr = min(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
+                    players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
+                    top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
 
-            if bottom_player and bottom_player != "None":
-                bottom_losses = max(0, bottom_games - bottom_wins)
-                bottom_part = f"🔻{bottom_display}: {bottom_wins}W/{bottom_losses}L≈{bottom_winrate}%"
-            else:
-                bottom_part = "🔻—"
+                    top_player = top_by_wr.get('steam_nickname', 'None')
+                    top_id = top_by_wr.get('telegram_id')
+                    bottom_player = bottom_by_wr.get('steam_nickname', 'None')
+                    bottom_id = bottom_by_wr.get('telegram_id')
+                    streak_player = top_streak_player.get('steam_nickname', 'None') if top_streak_player else 'None'
+                    streak_wins = top_streak_player.get('week_current_streak', 0) if top_streak_player else 0
+                    streak_id = top_streak_player.get('telegram_id') if top_streak_player else None
 
-            if streak_player and streak_player != "None" and streak_wins > 0:
-                streak_part = f" 🔸{streak_display}: {streak_wins}"
+                    if top_player and top_player != "None":
+                        top_part = f"🔺{make_clickable(top_player, top_id)}: {top_by_wr.get('week_wins', 0)}W/{max(0, top_by_wr.get('week_games', 0) - top_by_wr.get('week_wins', 0))}L≈{min(round((top_by_wr.get('week_wins', 0) / (top_by_wr.get('week_games', 1) if top_by_wr.get('week_games', 0) > 0 else 1) * 100), 1), 100.0)}%"
+                    else:
+                        top_part = "🔺—"
+
+                    if bottom_player and bottom_player != "None":
+                        bottom_part = f"🔻{make_clickable(bottom_player, bottom_id)}: {bottom_by_wr.get('week_wins', 0)}W/{max(0, bottom_by_wr.get('week_games', 0) - bottom_by_wr.get('week_wins', 0))}L≈{min(round((bottom_by_wr.get('week_wins', 0) / (bottom_by_wr.get('week_games', 1) if bottom_by_wr.get('week_games', 0) > 0 else 1) * 100), 1), 100.0)}%"
+                    else:
+                        bottom_part = "🔻—"
+
+                    if streak_player and streak_player != "None" and streak_wins > 0:
+                        streak_part = f" 🔸{make_clickable(streak_player, streak_id)}: {streak_wins}"
+                    else:
+                        streak_part = " 🔸—"
+
+                    dota_text = f"<b>{top_part} {bottom_part} {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
+
+            if dota_text is not None:
+                text = dota_text
+                next_type = "0"  # после успешного Dota-дайджеста переключаем на фиссуру
             else:
-                streak_part = " 🔸—"
-            
-            text = f"<b>{top_part} {bottom_part} {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
-            next_type = "0"
-        
+                # Fallback: показываем фиссур-дайджест (если есть данные)
+                if _digest_state.get("digest_data") is None:
+                    stats = get_digest_stats()
+                    _digest_state["digest_data"] = stats
+                else:
+                    stats = _digest_state["digest_data"]
+
+                growth_player, growth_pos = stats.get("top_growth", ("None", 0))
+                drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
+                streak_player, streak_len = stats.get("top_streak", ("None", 0))
+                growth_id = stats.get("top_growth_id")
+                drop_id = stats.get("top_drop_id")
+                streak_id = stats.get("top_streak_id")
+                streak_username = stats.get("streak_username")
+
+                growth_display = make_clickable(growth_player, growth_id)
+                drop_display = make_clickable(drop_player, drop_id)
+                streak_display = make_clickable(streak_player, streak_id)
+
+                if growth_player and growth_player != "None":
+                    growth_part = f"🔺{growth_display} +{growth_pos}"
+                else:
+                    growth_part = "🔺—"
+
+                if drop_player and drop_player != "None":
+                    if drop_cm < 0:
+                        drop_part = f"🔻{drop_display} {drop_cm:.0f} СМ"
+                    else:
+                        drop_part = f"🔻{drop_display} +{drop_cm:.0f} СМ"
+                else:
+                    drop_part = "🔻—"
+
+                if streak_username and streak_len > 0:
+                    streak_part = f" 🍀<b>@{streak_username}</b>: {streak_len}"
+                elif streak_player and streak_player != "None" and streak_len > 0:
+                    streak_part = f" 🍀{streak_display}: {streak_len}"
+                else:
+                    streak_part = " 🍀—"
+
+                text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
+                # Если fallback, не меняем next_type — оставляем как есть (current_type), чтобы в следующий раз снова попытаться показать изначальный тип
+                # next_type уже None, установим его ниже
+                if next_type is None:
+                    next_type = current_type  # не меняем тип, повторяем попытку позже
+
+        if text is None:
+            logger.info("Нет данных ни для одного типа дайджеста")
+            return
+
         # Пробуем отредактировать существующее сообщение
         last_message_id = get_config('alternate_digest_message_id')
         logger.info(f"alternate_digest_job: text = {text[:100]}...")
@@ -1035,9 +1050,7 @@ async def alternate_digest_job(context):
                     )
                     logger.info(f"Обновлён alternate дайджест {last_message_id}")
                     edited = True
-                    
-                    # Переключаем тип даже при успешном редактировании
-                    next_type = "0" if current_type == "1" else "1"
+                    # Используем next_type, вычисленный ранее (с учётом fallback)
                     _digest_state["type"] = next_type
                     set_config('alternate_digest_type', next_type)
             except (ValueError, TypeError) as e:
@@ -1054,10 +1067,8 @@ async def alternate_digest_job(context):
                 elif "message is not modified" in error_str:
                     logger.info(f"Сообщение не изменилось, пропускаем удаление и создание")
                     edited = True  # Считаем что отредактировано успешно
-                    
-                    # Переключаем тип даже если сообщение не изменилось
-                    next_type = "0" if current_type == "1" else "1"
-                    logger.info(f"Switching type: {current_type} -> {next_type}")
+                    # Используем next_type, вычисленный ранее (с учётом fallback)
+                    logger.info(f"Setting type: {current_type} -> {next_type}")
                     _digest_state["type"] = next_type
                     set_config('alternate_digest_type', next_type)
                 else:
