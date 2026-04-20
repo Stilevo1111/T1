@@ -1096,7 +1096,9 @@ def generate_start_card(
     rank_tier: int = 0,
     weekly_mvp: int = 0,
     weekly_top2: int = 0,
-    weekly_top3: int = 0
+    weekly_top3: int = 0,
+    week_wins: int = None,
+    week_losses: int = None
 ) -> bytes | None:
     """Сгенерировать карточку для /start существующего пользователя"""
     try:
@@ -1287,11 +1289,17 @@ def generate_start_card(
         
         # Messages label - white
         msg_label_y = username_y + int(50 * scale)
-        draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(255, 255, 255), font=font_small)
+        if week_wins is not None and week_losses is not None:
+            draw.text((info_x + username_x_offset, msg_label_y), "За неделю:", fill=(255, 255, 255), font=font_small)
+        else:
+            draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(255, 255, 255), font=font_small)
         
         # Number - white
         msg_num_y = msg_label_y + int(28 * scale)
-        draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
+        if week_wins is not None and week_losses is not None:
+            draw.text((info_x + username_x_offset, msg_num_y), f"{week_wins}W/{week_losses}L", fill=(255, 255, 255), font=font_title)
+        else:
+            draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
         
 # Rank icon - only show if rank_tier > 0
         if rank_tier > 0 and rank_icon:

@@ -401,9 +401,11 @@ async def announce_weekly_mmr_winner(bot):
         username=username,
         steam_nickname=username,
         rank_tier=rank_tier,
-        weekly_mvp=1,
+        weekly_mvp=0,
         weekly_top2=0,
-        weekly_top3=0
+        weekly_top3=0,
+        week_wins=week_wins,
+        week_losses=week_losses
     )
     
     if card_data:
