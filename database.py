@@ -1962,7 +1962,7 @@ def zeus_strike(percent=0.05):
 def reset_all_fissure_data():
     """Сбрасывает cm,rolls и cooldown для всех пользователей"""
     try:
-        db = get_connection()
+        db = Database()
         db_type = get_db_type()
         if db_type == "postgresql":
             query = "UPDATE users SET fissure = 0.1, last_fissure = 0, total_rolls = 0, weekly_rolls = 0, weekly_growth = 0.0, current_streak = 0, best_streak = 0"
