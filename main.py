@@ -1882,10 +1882,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if steam_id and steam_nickname:
             from dota_mmr import generate_start_card, get_player_stats
             
-            # Loading animation
+            # Animated loading (same as in profile)
+            async def animate_loading(msg, stop_event):
+                i = 0
+                while not stop_event.is_set():
+                    try:
+                        emoji = "⌛️" if i % 2 == 0 else "⏳"
+                        await msg.edit_text(text=f"{emoji} Загрузка профиля...")
+                    except Exception:
+                        pass
+                    try:
+                        await asyncio.sleep(0.5)
+                    except Exception:
+                        pass
+                    i += 1
+
             loading_msg = None
+            stop_animation = None
             try:
-                loading_msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Загрузка...")
+                loading_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="⏳ Загрузка профиля..."
+                )
+                stop_animation = asyncio.Event()
+                asyncio.create_task(animate_loading(loading_msg, stop_animation))
             except Exception:
                 pass
             
