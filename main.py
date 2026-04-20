@@ -597,33 +597,39 @@ async def update_all_mmr_job(context):
 
 
 async def refresh_digest_message(bot):
-    """Обновляет сообщение дайджеста после каждого броска"""
+    """Обновляет сообщение дайджеста после каждого броска (только для fissure-дайджеста, тип=0)"""
     try:
         digest_chat_id = get_config('digest_chat_id')
         if not digest_chat_id:
             return
         
-        # Получаем статистику (сравнивает со старым снимком)
-        # НЕ обновляем снимок! Он обновляется только в morning_digest_job
+        current_type = _digest_state.get("type")
+        if current_type is None:
+            raw_type = get_config('alternate_digest_type')
+            if raw_type is not None:
+                current_type = str(raw_type)
+            else:
+                current_type = "0"
+            _digest_state["type"] = current_type
+        
+        if current_type != "0":
+            logger.debug(f"refresh_digest_message: пропуск, текущий тип = {current_type} (не fissure-дайджест)")
+            return
+        
         stats = get_digest_stats()
         
-        # Формируем сообщение с кликабельными никнеймами
         growth_player, growth_pos = stats.get("top_growth", ("None", 0))
         drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
         streak_player, streak_len = stats.get("top_streak", ("None", 0))
         
-        # Получаем telegram_id для создания кликабельных ссылок
         growth_id = stats.get("top_growth_id")
         drop_id = stats.get("top_drop_id")
         streak_id = stats.get("top_streak_id")
         
-        # Используем глобальную функцию make_clickable
         growth_display = make_clickable(growth_player, growth_id)
         drop_display = make_clickable(drop_player, drop_id)
         streak_display = make_clickable(streak_player, streak_id)
         
-        # Формат: 📈stilevo +2⬆️ ┃💀None -X СМ┃🍀Wad1m1 - Стрик 1
-        # Всегда показываем данные если есть игрок
         if growth_player and growth_player != "None":
             growth_part = f"📈{growth_display} +{growth_pos}⬆️"
         else:
@@ -644,7 +650,7 @@ async def refresh_digest_message(bot):
         
         text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n{MORNING_DIGEST_FOOTER}"
         
-        last_message_id = get_config('daily_digest_message_id')
+        last_message_id = get_config('alternate_digest_message_id')
         if last_message_id:
             try:
                 await bot.edit_message_text(
@@ -653,55 +659,26 @@ async def refresh_digest_message(bot):
                     text=text,
                     parse_mode="HTML"
                 )
-                logger.debug(f"Обновлён дайджест после броска")
+                logger.debug(f"Обновлён fissure-дайджест после броска")
                 return
             except Exception as e:
                 error_str = str(e)
                 if "Message to edit not found" in error_str or "message can't be edited" in error_str:
                     logger.info(f"Старый дайджест {last_message_id} удалён/недоступен, сбрасываем ID")
-                    set_config('daily_digest_message_id', None)
+                    set_config('alternate_digest_message_id', None)
                 else:
                     logger.debug(f"Не удалось обновить дайджест: {e}")
         
-        # Если message_id пустой/None - не создаём новое сообщение, morning_digest_job создаст его
-        logger.debug("Нет message_id для дайджеста, не создаём (ждём morning_digest_job)")
+        logger.debug("Нет alternate_digest_message_id для дайджеста, не создаём")
         
     except Exception as e:
         logger.error(f"Ошибка в refresh_digest_message: {e}", exc_info=True)
 
 
-async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ручной запуск утреннего дайджеста в этот чат"""
-    try:
-        chat = update.effective_chat
-        chat_id = chat.id
-        # В группах удаляем сообщение пользователя с командой
-        if chat.type in ['group', 'supergroup', 'channel']:
-            if await bot_can_delete(context.bot, chat_id):
-                try:
-                    await context.bot.delete_message(chat_id, update.message.message_id)
-                except Exception as e:
-                    logger.debug(f"Could not delete user message: {e}")
-        # Сохраняем этот чат как чат для дайджеста и сбрасываем message_id
-        set_config("digest_chat_id", chat_id)
-        set_config("daily_digest_message_id", None)
-
-        # Используем общий класс ManualContext
-        manual_context = ManualContext(context.application, context.bot)
-        await alternate_digest_job(manual_context)
-
-        msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ Фиссура дайджест обновлён!")
-        if chat.type in ['group', 'supergroup', 'channel']:
-            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
-    except Exception as e:
-        logger.error(f"Error in digest_now: {e}", exc_info=True)
-        try:
-            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось создать дайджест сейчас", reply_markup=main_menu())
-            chat = update.effective_chat
-            if chat and chat.type in ['group', 'supergroup', 'channel']:
-                schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
-        except Exception:
-            pass
+# DEPRECATED: Используйте digest_handler
+# async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """Ручной запуск утреннего дайджеста в этот чат"""
+#     pass
 
 
 async def dota_digest_job(context):
@@ -840,38 +817,10 @@ async def dota_digest_job(context):
         logger.error(f"Ошибка в dota_digest_job: {e}", exc_info=True)
 
 
-async def dota_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ручной запуск Dota дайджеста в этот чат"""
-    try:
-        chat = update.effective_chat
-        chat_id = chat.id
-        # В группах удаляем сообщение пользователя с командой
-        if chat.type in ['group', 'supergroup', 'channel']:
-            if await bot_can_delete(context.bot, chat_id):
-                try:
-                    await context.bot.delete_message(chat_id, update.message.message_id)
-                except Exception as e:
-                    logger.debug(f"Could not delete user message: {e}")
-        # Сохраняем этот чат как чат для дайджеста и сбрасываем message_id
-        set_config("digest_chat_id", chat_id)
-        set_config("dota_digest_message_id", None)
-
-        # Используем общий класс ManualContext
-        manual_context = ManualContext(context.application, context.bot)
-        await dota_digest_job(manual_context)
-
-        msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ Dota дайджест для этого чата создан/обновлён.")
-        if chat.type in ['group', 'supergroup', 'channel']:
-            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
-    except Exception as e:
-        logger.error(f"Error in dota_digest_now: {e}", exc_info=True)
-        try:
-            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось создать Dota дайджест сейчас")
-            chat = update.effective_chat
-            if chat and chat.type in ['group', 'supergroup', 'channel']:
-                schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
-        except Exception:
-            pass
+# DEPRECATED: Используйте digest_handler
+# async def dota_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """Ручной запуск Dota дайджеста в этот чат"""
+#     pass
 
 
 async def alternate_digest_job(context):
@@ -1993,13 +1942,71 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat_id = update.effective_chat.id
         set_config("digest_chat_id", str(chat_id))
-        set_config("daily_digest_message_id", None)
-        set_config("dota_digest_message_id", None)
+        set_config("alternate_digest_message_id", None)
         
         await update.message.reply_text(f"Чат {chat_id} установлен для дайджестов")
     except Exception as e:
         logger.error(f"set_digest_chat error: {e}")
         await menu_handler(update, context)
+
+
+async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Универсальный обработчик для команд digestnow, dotadigestnow, setdigestchat"""
+    try:
+        chat = update.effective_chat
+        chat_id = chat.id
+        command = update.message.text.split()[0].lower().replace('/', '')
+        
+        if chat.type in ['group', 'supergroup', 'channel']:
+            if await bot_can_delete(context.bot, chat_id):
+                try:
+                    await context.bot.delete_message(chat_id, update.message.message_id)
+                except Exception as e:
+                    logger.debug(f"Could not delete user message: {e}")
+        
+        if command == "setdigestchat":
+            set_config("digest_chat_id", str(chat_id))
+            set_config("alternate_digest_message_id", None)
+            await update.message.reply_text(f"Чат {chat_id} установлен для дайджестов")
+            return
+        
+        current_digest_chat = get_config('digest_chat_id')
+        if not current_digest_chat:
+            set_config("digest_chat_id", str(chat_id))
+        
+        if command == "digestnow":
+            _digest_state["type"] = "0"
+            set_config("alternate_digest_type", "0")
+            set_config("alternate_digest_message_id", None)
+            
+            manual_context = ManualContext(context.application, context.bot)
+            await alternate_digest_job(manual_context)
+            
+            msg = await context.bot.send_message(chat_id=chat_id, text="✅ Фиссура дайджест обновлён!")
+            if chat.type in ['group', 'supergroup', 'channel']:
+                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+        
+        elif command == "dotadigestnow":
+            _digest_state["type"] = "1"
+            set_config("alternate_digest_type", "1")
+            set_config("alternate_digest_message_id", None)
+            
+            manual_context = ManualContext(context.application, context.bot)
+            await alternate_digest_job(manual_context)
+            
+            msg = await context.bot.send_message(chat_id=chat_id, text="✅ Dota дайджест для этого чата создан/обновлён.")
+            if chat.type in ['group', 'supergroup', 'channel']:
+                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+    
+    except Exception as e:
+        logger.error(f"Error in digest_handler: {e}", exc_info=True)
+        try:
+            err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось создать дайджест сейчас", reply_markup=main_menu())
+            chat = update.effective_chat
+            if chat and chat.type in ['group', 'supergroup', 'channel']:
+                schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
+        except Exception:
+            pass
 
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3309,10 +3316,7 @@ async def main():
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("link", link))
-        app.add_handler(CommandHandler("digestnow", digest_now))
-        app.add_handler(CommandHandler("dotadigestnow", dota_digest_now))
-        
-        app.add_handler(CommandHandler("setdigestchat", set_digest_chat))
+        app.add_handler(CommandHandler(("digestnow", "dotadigestnow", "setdigestchat"), digest_handler))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         
