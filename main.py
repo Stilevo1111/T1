@@ -1988,32 +1988,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         if stop_animation:
             stop_animation.set()
-            # No Steam - show card with Telegram avatar, no message count
-            from dota_mmr import generate_start_card
-            
-            avatar_url = await get_user_avatar_url(context.bot, user_id)
-            
-            card_data = generate_start_card(
-                avatar_url=avatar_url,
-                message_count=message_count,
-                username=display_username,
-                steam_nickname=None,
-                rank_tier=0,
-                weekly_mvp=0,
-                weekly_top2=0,
-                weekly_top3=0
-            )
-            
-            if card_data:
-                msg = await context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=card_data,
-                    reply_markup=main_menu()
-                )
-                set_last_bot_message(chat_id, user_id, msg.message_id)
-                update_last_message_id(user_id, msg.message_id)
-            else:
-                await menu_handler(update, context)
     
     except Exception as e:
         error_str = str(e).lower()
