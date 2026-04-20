@@ -2002,7 +2002,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle button callbacks"""
-    await menu_handler(update, context)
+    callback_query = update.callback_query
+    if callback_query:
+        data = callback_query.data
+        if data == "link":
+            # Answer callback and call menu_handler with text
+            await callback_query.answer()
+            update.message.text = "🔑 Привязать Аккаунт"
+            await menu_handler(update, context)
+        else:
+            await callback_query.answer()
 
 
 async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
