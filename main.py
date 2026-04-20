@@ -527,14 +527,37 @@ async def update_all_mmr_job(context):
         # Отправляем уведомления о ранк-апах
         digest_chat_id = get_config('digest_chat_id')
         if digest_chat_id and rank_up_users:
+            from dota_mmr import generate_start_card
+            
             for user, rank_info in rank_up_users:
                 try:
                     username = user.get('steam_nickname') or user.get('username') or 'Игрок'
                     telegram_id = user.get('telegram_id')
-                    name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id else username
-                    text = f"{name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
-                    rank_up_banner_url = "https://i.ibb.co/HLF6JJTw/ji8hy.jpg"
-                    await context.bot.send_photo(chat_id=digest_chat_id, photo=rank_up_banner_url, caption=text, parse_mode="HTML")
+                    message_count = user.get('message_count', 0)
+                    rank_tier = user.get('rank_tier', 0)
+                    avatar_url = user.get('avatar')
+                    
+                    # Generate card with rank icon
+                    card_data = generate_start_card(
+                        avatar_url=avatar_url,
+                        message_count=message_count,
+                        username=username,
+                        steam_nickname=username,
+                        rank_tier=rank_tier,
+                        weekly_mvp=0,
+                        weekly_top2=0,
+                        weekly_top3=0
+                    )
+                    
+                    if card_data:
+                        text = f"🎉 {username} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
+                        await context.bot.send_photo(chat_id=digest_chat_id, photo=card_data, caption=text, parse_mode="HTML")
+                    else:
+                        # Fallback
+                        name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id else username
+                        text = f"{name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
+                        rank_up_banner_url = "https://i.ibb.co/HLF6JJTw/ji8hy.jpg"
+                        await context.bot.send_photo(chat_id=digest_chat_id, photo=rank_up_banner_url, caption=text, parse_mode="HTML")
                 except Exception as notify_err:
                     logger.error(f"Ошибка отправки уведомления о ранк-апе: {notify_err}")
     except Exception as e:
