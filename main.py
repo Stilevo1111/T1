@@ -42,6 +42,22 @@ _digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run
 _digest_state_lock = asyncio.Lock()  # Lock for thread-safe access to _digest_state
 DIGEST_DATA_REFRESH_INTERVAL = 3600  # 1 час - обновление данных из БД
 
+_rate_limit_until = 0  # Unix timestamp - skip API calls until this time after 429
+RATE_LIMIT_COOLDOWN = 60  # 60 seconds cooldown after hitting rate limit
+
+
+def is_rate_limited():
+    """Check if bot is currently rate limited"""
+    return time.time() < _rate_limit_until
+
+
+def set_rate_limited(retry_after=None):
+    """Set rate limit state. retry_after is seconds to wait (default COOLDOWN)"""
+    global _rate_limit_until
+    wait_time = retry_after if retry_after else RATE_LIMIT_COOLDOWN
+    _rate_limit_until = time.time() + wait_time
+    logger.warning(f"Rate limited until {time.strftime('%H:%M:%S', time.localtime(_rate_limit_until))}")
+
 
 async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
     """Удалить сообщение через delay секунд"""
@@ -1786,6 +1802,11 @@ async def get_user_avatar_url(bot, user_id: int) -> str | None:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command - show profile card"""
     try:
+        # Skip if rate limited
+        if is_rate_limited():
+            logger.warning(f"Skipping /start due to rate limit")
+            return
+            
         user_id = update.effective_user.id
         telegram_username = update.effective_user.username  # только Telegram username (может быть None)
         first_name = update.effective_user.first_name or "Friend"
@@ -1960,6 +1981,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await menu_handler(update, context)
     
     except Exception as e:
+        error_str = str(e).lower()
+        if "flood control" in error_str or "429" in error_str or "too many requests" in error_str:
+            retry_after = 60
+            import re
+            match = re.search(r'retry in (\d+) seconds', error_str)
+            if match:
+                retry_after = int(match.group(1)) + 5
+            set_rate_limited(retry_after)
         logger.error(f"start command error: {e}")
         await menu_handler(update, context)
 
@@ -3032,6 +3061,11 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
     try:
+        # Skip if rate limited
+        if is_rate_limited():
+            logger.warning(f"Skipping menu_handler due to rate limit")
+            return
+            
         user_id = update.effective_user.id if update.effective_user else "unknown"
         chat_id = update.message.chat_id if update.message else "unknown"
         logger.info(f"menu_handler: user={user_id}, chat={chat_id}")
