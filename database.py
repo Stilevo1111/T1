@@ -1236,9 +1236,9 @@ class Database:
                         top_growth_positions = moved_up
                         cached = user_cache.get(u["telegram_id"])
                         if cached:
-                            top_growth_user = cached.get('steam_nickname') or cached.get('username') or u.get("steam_nickname") or u["username"]
+                            top_growth_user = cached.get('steam_nickname') or cached.get('username') or str(u["telegram_id"])
                         else:
-                            top_growth_user = u.get("steam_nickname") or u["username"]
+                            top_growth_user = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
                         if not top_growth_user:
                             top_growth_user = str(u["telegram_id"])
                         top_growth_id = u["telegram_id"]
@@ -1256,9 +1256,9 @@ class Database:
                         top_drop_cm = delta
                         cached = user_cache.get(u["telegram_id"])
                         if cached:
-                            top_drop_user = cached.get('steam_nickname') or cached.get('username') or u.get("steam_nickname") or u["username"]
+                            top_drop_user = cached.get('steam_nickname') or cached.get('username') or str(u["telegram_id"])
                         else:
-                            top_drop_user = u.get("steam_nickname") or u["username"]
+                            top_drop_user = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
                         if not top_drop_user:
                             top_drop_user = str(u["telegram_id"])
                         top_drop_id = u["telegram_id"]
@@ -1272,9 +1272,9 @@ class Database:
                     top_streak = u["current_streak"]
                     cached = user_cache.get(u["telegram_id"])
                     if cached:
-                        top_streak_user = cached.get('steam_nickname') or cached.get('username') or u.get("steam_nickname") or u["username"]
+                        top_streak_user = cached.get('steam_nickname') or cached.get('username') or str(u["telegram_id"])
                     else:
-                        top_streak_user = u.get("steam_nickname") or u["username"]
+                        top_streak_user = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
                     if not top_streak_user:
                         top_streak_user = str(u["telegram_id"])
                     top_streak_id = u["telegram_id"]
