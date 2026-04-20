@@ -12,7 +12,7 @@ import urllib.parse as urlparse
 import psycopg2
 from datetime import timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, BACKUP_DATABASE_URL, DATABASE_URL, reset_all_fissure_data
@@ -1776,16 +1776,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command - show profile card"""
     try:
         user_id = update.effective_user.id
-        username = update.effective_user.username or update.effective_user.first_name
+        telegram_username = update.effective_user.username  # только Telegram username (может быть None)
+        first_name = update.effective_user.first_name or "Friend"
         
-        user = get_user(user_id, username)
+        # Получаем пользователя без авто-создания
+        db_user = get_user(user_id)
+        is_new_user = False
         
-        if not user:
-            # Create new user in database
+        if db_user is None:
+            # Создаём нового пользователя с лучшим доступным именем
+            fallback_name = telegram_username or first_name or "Unknown"
             db = Database()
-            db.add_user(user_id, username, "", "")
-            user = get_user(user_id, username)
-            
+            db.add_user(user_id, fallback_name, None, None)
+            logger.info(f"Created new user {user_id} with name '{fallback_name}'")
+            is_new_user = True
+            user = get_user(user_id)
+        else:
+            # Существующий пользователь — обновляем username если нужно
+            updates = {}
+            current_username = db_user.get('username')
+            if telegram_username and telegram_username != current_username:
+                updates['username'] = telegram_username
+            elif current_username is None and first_name and first_name != "Friend":
+                updates['username'] = first_name
+            if updates:
+                from database import update_user_fields_batch
+                update_user_fields_batch(user_id, updates)
+                logger.info(f"Updated user {user_id} fields: {updates}")
+            user = db_user
+        
+        if is_new_user:
+            # Для нового пользователя отправляем приветственный баннер и возвращаемся
             chat_id = update.effective_chat.id
             banner_url = "https://i.ibb.co/LXsGsfxZ/213.png"
             text = "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
@@ -1797,6 +1818,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             set_last_bot_message(chat_id, user_id, msg.message_id)
             update_last_message_id(user_id, msg.message_id)
+            return
+        
+        if not user:
+            logger.error(f"Failed to get/user {user_id}")
             return
         
         steam_id = user.get("steam_id")
@@ -2999,12 +3024,24 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.message.chat_id if update.message else "unknown"
         logger.info(f"menu_handler: user={user_id}, chat={chat_id}")
         
-        # Increment message count for any text message (only in cache, will be saved to DB later)
+        # Increment message count and update username if changed
         try:
             from database import get_user, update_user_fields_batch
-            db_user = get_user(user_id)
-            current_count = db_user.get('message_count', 0) if db_user else 0
-            update_user_fields_batch(user_id, {'message_count': current_count + 1}, save_to_db=False)
+            db_user = get_user(user_id)  # get without auto-create
+            if db_user:
+                updates = {}
+                current_count = db_user.get('message_count', 0)
+                updates['message_count'] = current_count + 1
+                # Обновляем username только если есть telegram_username и он отличается;
+                # или если username пуст, а есть first_name — используем first_name как fallback
+                current_username = db_user.get('username')
+                new_telegram_username = update.effective_user.username
+                if new_telegram_username and new_telegram_username != current_username:
+                    updates['username'] = new_telegram_username
+                elif current_username is None and update.effective_user.first_name:
+                    updates['username'] = update.effective_user.first_name
+                if updates:
+                    update_user_fields_batch(user_id, updates)
         except Exception:
             pass
         
@@ -3059,14 +3096,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         logger.info(f"User {user_id} pressed button: {button_found} in chat type: {chat_type}")
         
-        # Increment message count (only in cache, will be saved to DB later)
-        try:
-            from database import get_user, update_user_fields_batch
-            db_user = get_user(user_id)
-            current_count = db_user.get('message_count', 0) if db_user else 0
-            update_user_fields_batch(user_id, {'message_count': current_count + 1}, save_to_db=False)
-        except Exception:
-            pass
+
         
         # Delete user's message only in groups/channels (non-blocking, don't wait)
         if chat_type in ['group', 'supergroup', 'channel']:
@@ -3173,8 +3203,32 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 name = new_member.user.first_name or "Friend"
                 user_id = new_member.user.id
                 user_obj = new_member.user
+                telegram_username = user_obj.username  # может быть None
                 
                 logger.info(f"New member joined: {name} (id={user_id}) in chat {chat_id}")
+                
+                # Убедимся, что пользователь существует в БД
+                try:
+                    from database import get_user, Database, update_user_fields_batch
+                    db_user = get_user(user_id)  # без создания
+                    if db_user is None:
+                        # Новый пользователь — создаём с лучшим доступным именем
+                        fallback_name = telegram_username or user_obj.first_name or "Unknown"
+                        db = Database()
+                        db.add_user(user_id, fallback_name, None, None)
+                        logger.info(f"Created new user {user_id} with name '{fallback_name}'")
+                    else:
+                        # Существующий пользователь — обновляем username если изменился (только если есть telegram_username)
+                        current_username = db_user.get('username')
+                        if telegram_username and telegram_username != current_username:
+                            update_user_fields_batch(user_id, {'username': telegram_username})
+                            logger.info(f"Updated username for {user_id} to '{telegram_username}'")
+                        # Если username нет в Telegram, но в БД тоже NULL, и есть first_name — устанавливаем first_name
+                        elif current_username is None and user_obj.first_name:
+                            update_user_fields_batch(user_id, {'username': user_obj.first_name})
+                            logger.info(f"Set fallback username for {user_id} to '{user_obj.first_name}'")
+                except Exception as e:
+                    logger.debug(f"Could not ensure user exists for {user_id}: {e}")
                 
                 # Отмечаем пользователя как участника чата
                 try:
