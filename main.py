@@ -1891,6 +1891,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.delete_message(chat_id, loading_msg.message_id)
                 except:
                     pass
+            # Stop the loading animation task
+            if stop_animation:
+                stop_animation.set()
         else:
             # No Steam - show card with Telegram avatar, no message count
             from dota_mmr import generate_start_card
@@ -2588,6 +2591,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.delete_message(chat_id, loading_msg.message_id)
                 except Exception:
                     pass
+            if stop_animation:
+                stop_animation.set()
             return
         
         if loading_msg:
