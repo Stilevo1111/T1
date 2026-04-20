@@ -1970,7 +1970,17 @@ def reset_all_fissure_data():
             query = "UPDATE users SET fissure = 0.1, last_fissure = 0, total_rolls = 0, weekly_rolls = 0, weekly_growth = 0.0, current_streak = 0, best_streak = 0"
         db.execute_query(query)
         top_cache.clear()
-        user_cache.clear()
+        for uid in user_cache.get_all_users():
+            user = user_cache.get(uid)
+            if user:
+                user['fissure'] = 0.1
+                user['last_fissure'] = 0
+                user['total_rolls'] = 0
+                user['weekly_rolls'] = 0
+                user['weekly_growth'] = 0.0
+                user['current_streak'] = 0
+                user['best_streak'] = 0
+                user_cache.set(uid, user)
         user_cache.set('digest_stats', None)
         logger.info("reset_all_fissure_data: все данные сброшены")
         return True
