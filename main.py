@@ -391,14 +391,38 @@ async def announce_weekly_mmr_winner(bot):
         f"🏆Этот игрок показал лучший результат в топе MMR за неделю!{tag_info}"
     )
 
-    winner_banner_url = "https://i.ibb.co/Jj3vwbWB/ANQkz.jpg"
+    from dota_mmr import generate_start_card
     
-    await bot.send_photo(
-        chat_id=digest_chat_id,
-        photo=winner_banner_url,
-        caption=text,
-        parse_mode="HTML"
+    # Generate card with avatar and rank
+    avatar_url = winner.get('avatar')
+    card_data = generate_start_card(
+        avatar_url=avatar_url,
+        message_count=week_games,
+        username=username,
+        steam_nickname=username,
+        rank_tier=rank_tier,
+        weekly_mvp=1,
+        weekly_top2=0,
+        weekly_top3=0
     )
+    
+    if card_data:
+        await bot.send_photo(
+            chat_id=digest_chat_id,
+            photo=card_data,
+            caption=text,
+            parse_mode="HTML"
+        )
+    else:
+        # Fallback to static banner
+        winner_banner_url = "https://i.ibb.co/Jj3vwbWB/ANQkz.jpg"
+        await bot.send_photo(
+            chat_id=digest_chat_id,
+            photo=winner_banner_url,
+            caption=text,
+            parse_mode="HTML"
+        )
+    
     set_config('mmr_week_top_announced', current_week_start)
     logger.info(f"announce_weekly_mmr_winner: отправлено поздравление для {username} (неделя {current_week_start})")
 
