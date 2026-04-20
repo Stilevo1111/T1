@@ -121,11 +121,7 @@ async def bot_can_delete(bot, chat_id):
 
 def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
     """Запланировать удаление сообщения через delay секунд"""
-    # Используем asyncio.create_task для надёжного планирования
     asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay))
-    else:
-        # Fallback если job_queue не передан
-        asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay, job_queue))
 
 
 async def decrease_inactive_job(context):
