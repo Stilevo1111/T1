@@ -56,15 +56,15 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
     else:
         # Fallback - пытаемся удалить сразу (менее надежно)
         await asyncio.sleep(delay)
-        try:
-            await bot.delete_message(chat_id, msg_id)
-            logger.info(f"Deleted delayed message {msg_id} in chat {chat_id}")
-        except Exception as e:
-            error_str = str(e).lower()
-            if "message to delete not found" in error_str or "bad request" in error_str:
-                logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
-            else:
-                logger.warning(f"Failed to delete delayed message {msg_id}: {e}")
+         try:
+             await bot.delete_message(chat_id, msg_id)
+             logger.info(f"Deleted delayed message {msg_id} in chat {chat_id}")
+         except Exception as e:
+             error_str = str(e).lower()
+             if "message to delete not found" in error_str:
+                 logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
+             else:
+                 logger.warning(f"Failed to delete delayed message {msg_id} in chat {chat_id}: {e}")
 
 
 async def delete_message_job(context):
@@ -121,18 +121,8 @@ async def bot_can_delete(bot, chat_id):
 
 def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
     """Запланировать удаление сообщения через delay секунд"""
-    if job_queue:
-        try:
-            job_queue.run_once(
-                delete_message_job,
-                delay,
-                data={'chat_id': chat_id, 'msg_id': msg_id},
-                name=f"delete_{chat_id}_{msg_id}"
-            )
-            logger.info(f"Scheduled delete for msg {msg_id} in {delay}s via job_queue")
-        except Exception as e:
-            logger.warning(f"JobQueue failed, using asyncio fallback: {e}")
-            asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay, None))
+    # Используем asyncio.create_task для надёжного планирования
+    asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay))
     else:
         # Fallback если job_queue не передан
         asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay, job_queue))
@@ -1842,8 +1832,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 i = 0
                 while not stop_event.is_set():
                     try:
-                        emoji = "⌛️" if i % 2 == 0 else "⏳"
-                        await msg.edit_text(text=f"{emoji} Загрузка профиля...")
+                     emoji = "⌛️" if i % 2 == 0 else "⏳"
+                         await msg.edit_text(text=f"{emoji} Загрузка меню...")
                     except Exception:
                         pass
                     try:
@@ -1857,7 +1847,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 loading_msg = await context.bot.send_message(
                     chat_id=chat_id,
-                    text="⏳ Загрузка профиля..."
+                    text="⏳ Загрузка меню..."
                 )
                 stop_animation = asyncio.Event()
                 asyncio.create_task(animate_loading(loading_msg, stop_animation))
