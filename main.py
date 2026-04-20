@@ -356,7 +356,6 @@ async def announce_weekly_mmr_winner(bot):
             logger.warning(f"Не удалось установить тег победителю: {e}")
 
     if telegram_id:
-        from database import update_user_fields_batch, get_user
         user = get_user(telegram_id)
         if user:
             current_mvp_count = user.get('weekly_mvp_count', 0)
@@ -1843,7 +1842,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif current_username is None and first_name and first_name != "Friend":
                 updates['username'] = first_name
             if updates:
-                from database import update_user_fields_batch
                 update_user_fields_batch(user_id, updates)
                 logger.info(f"Updated user {user_id} fields: {updates}")
             user = db_user
@@ -3084,10 +3082,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
         user_id = update.effective_user.id if update.effective_user else "unknown"
         chat_id = update.message.chat_id if update.message else "unknown"
         logger.info(f"menu_handler: user={user_id}, chat={chat_id}")
-        
+         
         # Increment message count and update username if changed
         try:
-            from database import get_user, update_user_fields_batch
             db_user = get_user(user_id)  # get without auto-create
             if db_user:
                 updates = {}
@@ -3263,7 +3260,6 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             is_not_rejoin = (old_member is None) or (old_member.status not in ['member', 'administrator', 'creator'])
             
             if is_new_join and is_not_rejoin:
-                
                 name = new_member.user.first_name or "Friend"
                 user_id = new_member.user.id
                 user_obj = new_member.user
@@ -3273,7 +3269,6 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 
                 # Убедимся, что пользователь существует в БД
                 try:
-                    from database import get_user, Database, update_user_fields_batch
                     db_user = get_user(user_id)  # без создания
                     if db_user is None:
                         # Новый пользователь — создаём с лучшим доступным именем
