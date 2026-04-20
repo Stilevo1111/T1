@@ -685,6 +685,7 @@ async def dota_digest_job(context):
         top_wins = top_by_net.get('week_wins', 0)
         top_losses = top_games - top_wins
         top_net = top_wins - top_losses
+        top_winrate = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
 
         bottom_player = bottom_by_net.get('steam_nickname', 'None')
         bottom_id = bottom_by_net.get('telegram_id')
@@ -692,6 +693,7 @@ async def dota_digest_job(context):
         bottom_wins = bottom_by_net.get('week_wins', 0)
         bottom_losses = bottom_games - bottom_wins
         bottom_net = bottom_wins - bottom_losses
+        bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
 
         if top_streak_player:
             streak_player = top_streak_player.get('steam_nickname', 'None')
@@ -708,12 +710,12 @@ async def dota_digest_job(context):
         streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" and streak_wins > 0 else "—"
 
         if top_player and top_player != "None":
-            top_part = f"🎯 {top_display}▲ {top_wins}W/{top_losses}L = {top_net}"
+            top_part = f"🎯 {top_display}▲ {top_wins}W/{top_losses}L ≈{top_winrate}%"
         else:
             top_part = "🔺—"
 
         if bottom_player and bottom_player != "None":
-            bottom_part = f"🔻{bottom_display}: {bottom_wins}W/{bottom_losses}L = {bottom_net}"
+            bottom_part = f"🔻{bottom_display}: {bottom_wins}W/{bottom_losses}L ≈{bottom_winrate}%"
         else:
             bottom_part = "🔻—"
 
@@ -901,6 +903,7 @@ async def alternate_digest_job(context):
                     top_wins = top_by_net.get('week_wins', 0)
                     top_losses = top_games - top_wins
                     top_net = top_wins - top_losses
+                    top_winrate = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
 
                     bottom_player = bottom_by_net.get('steam_nickname', 'None')
                     bottom_id = bottom_by_net.get('telegram_id')
@@ -908,18 +911,19 @@ async def alternate_digest_job(context):
                     bottom_wins = bottom_by_net.get('week_wins', 0)
                     bottom_losses = bottom_games - bottom_wins
                     bottom_net = bottom_wins - bottom_losses
+                    bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
 
                     streak_player = top_streak_player.get('steam_nickname', 'None') if top_streak_player else 'None'
                     streak_wins = top_streak_player.get('week_current_streak', 0) if top_streak_player else 0
                     streak_id = top_streak_player.get('telegram_id') if top_streak_player else None
 
                     if top_player and top_player != "None":
-                        top_part = f"🔺{make_clickable(top_player, top_id)}: {top_wins}W/{top_losses}L = {top_net}"
+                        top_part = f"🔺{make_clickable(top_player, top_id)}: {top_wins}W/{top_losses}L ≈{top_winrate}%"
                     else:
                         top_part = "🔺—"
 
                     if bottom_player and bottom_player != "None":
-                        bottom_part = f"🔻{make_clickable(bottom_player, bottom_id)}: {bottom_wins}W/{bottom_losses}L = {bottom_net}"
+                        bottom_part = f"🔻{make_clickable(bottom_player, bottom_id)}: {bottom_wins}W/{bottom_losses}L ≈{bottom_winrate}%"
                     else:
                         bottom_part = "🔻—"
 
