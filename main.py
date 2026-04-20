@@ -391,10 +391,16 @@ async def announce_weekly_mmr_winner(bot):
         f"🏆Этот игрок показал лучший результат в топе MMR за неделю!{tag_info}"
     )
 
-    from dota_mmr import generate_start_card
+    from dota_mmr import generate_start_card, get_player_stats
     
     # Generate card with avatar and rank
     avatar_url = winner.get('avatar')
+    # Get from OpenDota if missing
+    if not avatar_url and winner.get('steam_id'):
+        stats = get_player_stats(winner.get('steam_id'))
+        if stats:
+            avatar_url = stats.get('avatar')
+    
     card_data = generate_start_card(
         avatar_url=avatar_url,
         message_count=week_games,
