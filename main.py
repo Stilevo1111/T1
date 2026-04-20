@@ -3051,10 +3051,11 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             # User joined the chat (was not a member, now is member)
             # Handle both cases: with old_member (left/kicked) and first join (no old_member)
-            is_new_join = (new_status in ['member', 'administrator'])
+            # Also handle 'creator' (group owner)
+            is_new_join = (new_status in ['member', 'administrator', 'creator'])
             
             # Check if this is NOT a re-join (old_member doesn't exist or is not member)
-            is_not_rejoin = (old_member is None) or (old_member.status not in ['member', 'administrator'])
+            is_not_rejoin = (old_member is None) or (old_member.status not in ['member', 'administrator', 'creator'])
             
             if is_new_join and is_not_rejoin:
                 
