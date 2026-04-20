@@ -2947,7 +2947,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Build player entry - two lines per player
                 # Если пользователь в топе - показываем только 7 игроков, его позицию добавим в конце
                 telegram_id = player.get('telegram_id')
-                clickable_name = f'<b><a href="tg://user?id={telegram_id}">{username}</a></b>'
+                if telegram_id and telegram_id > 0:
+                    clickable_name = f'<b><a href="tg://user?id={telegram_id}">{username}</a></b>'
+                else:
+                    clickable_name = f'<b>{username}</b>'
                 lines.append(f"{prefix} {clickable_name} - {rank_str}\n")
                 if week_games > 0:
                     lines.append(f" └ {week_wins}W • {week_losses}L • WR {winrate}%{streak_text}\n\n")
