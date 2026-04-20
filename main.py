@@ -38,7 +38,7 @@ COOLDOWN = 86400  # 24 hours
 
 _user_processing = {}  # Spam protection: user_id -> timestamp
 
-_digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run": 0}
+_digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run": 0, "last_text": None}
 _digest_state_lock = asyncio.Lock()  # Lock for thread-safe access to _digest_state
 DIGEST_DATA_REFRESH_INTERVAL = 3600  # 1 час - обновление данных из БД
 
@@ -597,7 +597,8 @@ async def update_all_mmr_job(context):
 
 
 async def refresh_digest_message(bot):
-    """Обновляет сообщение дайджеста после каждого броска (только для fissure-дайджеста, тип=0)"""
+    """Обновляет кэш дайджеста после каждого броска (только для fissure-дайджеста, тип=0).
+    Редактирование сообщения теперь выполняет alternate_digest_job."""
     try:
         digest_chat_id = get_config('digest_chat_id')
         if not digest_chat_id:
@@ -616,66 +617,13 @@ async def refresh_digest_message(bot):
             logger.debug(f"refresh_digest_message: пропуск, текущий тип = {current_type} (не fissure-дайджест)")
             return
         
+        # Только обновляем кэш消化 данных, редактирование будет через alternate_digest_job
         stats = get_digest_stats()
-        
-        growth_player, growth_pos = stats.get("top_growth", ("None", 0))
-        drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
-        streak_player, streak_len = stats.get("top_streak", ("None", 0))
-        
-        growth_id = stats.get("top_growth_id")
-        drop_id = stats.get("top_drop_id")
-        streak_id = stats.get("top_streak_id")
-        
-        growth_display = make_clickable(growth_player, growth_id)
-        drop_display = make_clickable(drop_player, drop_id)
-        streak_display = make_clickable(streak_player, streak_id)
-        
-        if growth_player and growth_player != "None":
-            growth_part = f"📈{growth_display} +{growth_pos}⬆️"
-        else:
-            growth_part = "📈—"
-        
-        if drop_player and drop_player != "None":
-            if drop_cm < 0:
-                drop_part = f"💀{drop_display} {drop_cm:.0f} СМ"
-            else:
-                drop_part = f"💀{drop_display} +{drop_cm:.0f} СМ"
-        else:
-            drop_part = "💀—"
-        
-        if streak_player and streak_player != "None" and streak_len > 0:
-            streak_part = f"🍀{streak_display} - Стрик {streak_len}"
-        else:
-            streak_part = "🍀—"
-        
-        text = f"{growth_part} ┃{drop_part} ┃{streak_part}\n\n{MORNING_DIGEST_HEADER}\n\n\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n{MORNING_DIGEST_FOOTER}"
-        
-        last_message_id = get_config('alternate_digest_message_id')
-        if last_message_id:
-            try:
-                msg_id_int = int(last_message_id)
-                if msg_id_int <= 0:
-                    logger.warning(f"Invalid alternate_digest_message_id: {last_message_id}")
-                    set_config('alternate_digest_message_id', None)
-                    return
-                await bot.edit_message_text(
-                    chat_id=int(digest_chat_id),
-                    message_id=msg_id_int,
-                    text=text,
-                    parse_mode="HTML"
-                )
-                logger.debug(f"Обновлён fissure-дайджест после броска")
-                return
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid alternate_digest_message_id format: {last_message_id}, error: {e}")
-                set_config('alternate_digest_message_id', None)
-            except Exception as e:
-                error_str = str(e).lower()
-                if "message to edit not found" in error_str or "message can't be edited" in error_str or "bad request" in error_str:
-                    logger.info(f"Старый дайджест {last_message_id} удалён/недоступен, сбрасываем ID")
-                    set_config('alternate_digest_message_id', None)
-                else:
-                    logger.debug(f"Не удалось обновить дайджест: {e}")
+        _digest_state["digest_data"] = stats
+        _digest_state["last_data_update"] = time.time()
+        logger.debug("refresh_digest_message: кэш digest_data обновлён, дайджест будет обновлён в следующем тике alternate_digest_job")
+    except Exception as e:
+        logger.error(f"Ошибка в refresh_digest_message: {e}", exc_info=True)
         
         logger.debug("Нет alternate_digest_message_id для дайджеста, не создаём")
         
@@ -723,26 +671,28 @@ async def dota_digest_job(context):
             logger.info("Нет игроков с 3+ играми для Dota дайджеста")
             return
         
-        # Лучший винрейт
-        top_by_wr = max(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
-        # Худший винрейт
-        bottom_by_wr = min(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
+        # top_net - лучший по разнице побед-поражений (wins - losses), при равенстве net — больше игр
+        top_by_net = max(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)))
+        # bottom_net - худший по разнице, при равенстве net — меньше игр
+        bottom_by_net = min(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)))
         # Лучший стрик - только игроки со стриком > 0
         players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
         top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
-        
-        top_player = top_by_wr.get('steam_nickname', 'None')
-        top_rank = top_by_wr.get('rank_tier', 0)
-        top_games = top_by_wr.get('week_games', 0)
-        top_wins = top_by_wr.get('week_wins', 0)
-        top_id = top_by_wr.get('telegram_id')
-        
-        bottom_player = bottom_by_wr.get('steam_nickname', 'None')
-        bottom_rank = bottom_by_wr.get('rank_tier', 0)
-        bottom_games = bottom_by_wr.get('week_games', 0)
-        bottom_wins = bottom_by_wr.get('week_wins', 0)
-        bottom_id = bottom_by_wr.get('telegram_id')
-        
+
+        top_player = top_by_net.get('steam_nickname', 'None')
+        top_id = top_by_net.get('telegram_id')
+        top_games = top_by_net.get('week_games', 0)
+        top_wins = top_by_net.get('week_wins', 0)
+        top_losses = top_games - top_wins
+        top_net = top_wins - top_losses
+
+        bottom_player = bottom_by_net.get('steam_nickname', 'None')
+        bottom_id = bottom_by_net.get('telegram_id')
+        bottom_games = bottom_by_net.get('week_games', 0)
+        bottom_wins = bottom_by_net.get('week_wins', 0)
+        bottom_losses = bottom_games - bottom_wins
+        bottom_net = bottom_wins - bottom_losses
+
         if top_streak_player:
             streak_player = top_streak_player.get('steam_nickname', 'None')
             streak_wins = top_streak_player.get('week_current_streak', 0)
@@ -751,51 +701,36 @@ async def dota_digest_job(context):
             streak_player = 'None'
             streak_wins = 0
             streak_id = None
-        
-        # Форматируем винрейт (по реальным победам/поражениям, макс 100%)
-        if top_games > 0 and top_wins >= 0:
-            top_losses = max(0, top_games - top_wins)
-            top_total = top_wins + top_losses
-            top_winrate = min(round((top_wins / top_total * 100), 1), 100.0) if top_total > 0 else 0
-        else:
-            top_winrate = 0
-            top_losses = 0
-        
-        if bottom_games > 0 and bottom_wins >= 0:
-            bottom_losses = max(0, bottom_games - bottom_wins)
-            bottom_total = bottom_wins + bottom_losses
-            bottom_winrate = min(round((bottom_wins / bottom_total * 100), 1), 100.0) if bottom_total > 0 else 0
-        else:
-            bottom_winrate = 0
-            bottom_losses = 0
-        
-        # Используем make_clickable для никнеймов
+
+        # Форматируем - показываем net wins (разницу)
         top_display = make_clickable(top_player, top_id) if top_player and top_player != "None" else "—"
         bottom_display = make_clickable(bottom_player, bottom_id) if bottom_player and bottom_player != "None" else "—"
         streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" and streak_wins > 0 else "—"
-        
-        # Формат: 🎯 Джумбет▲ 5/3 (62.5%)
+
         if top_player and top_player != "None":
-            top_losses = max(0, top_games - top_wins)
-            top_part = f"🎯 {top_display}▲ {top_wins}/{top_losses} ({top_winrate}%)"
+            top_part = f"🎯 {top_display}▲ {top_wins}W/{top_losses}L = {top_net}"
         else:
             top_part = "🔺—"
-        
+
         if bottom_player and bottom_player != "None":
-            bottom_losses = max(0, bottom_games - bottom_wins)
-            bottom_part = f"🔻{bottom_display}: {bottom_wins}W/{bottom_losses}L≈{bottom_winrate}%"
+            bottom_part = f"🔻{bottom_display}: {bottom_wins}W/{bottom_losses}L = {bottom_net}"
         else:
             bottom_part = "🔻—"
-        
+
         if streak_player and streak_player != "None" and streak_wins > 0:
             streak_part = f" 🔸{streak_display}: {streak_wins}"
         else:
             streak_part = " 🔸—"
-        
+
         text = f"<b>{top_part} {bottom_part} {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
         
         bot = context.application.bot
         
+        # Пропускаем если текст не изменился
+        if _digest_state.get("dota_last_text") == text:
+            logger.debug("Dota дайджест текст не изменился, пропускаем")
+            return
+
         # Пробуем отредактировать существующее сообщение
         last_message_id = get_config('dota_digest_message_id')
         if last_message_id:
@@ -807,9 +742,14 @@ async def dota_digest_job(context):
                     parse_mode="HTML"
                 )
                 logger.info(f"Обновлён существующий Dota дайджест {last_message_id}")
+                _digest_state["dota_last_text"] = text  # кэшируем
                 return
             except Exception as e:
                 error_str = str(e)
+                if "message is not modified" in error_str.lower():
+                    logger.info("Dota дайджест не изменился, пропускаем")
+                    _digest_state["dota_last_text"] = text  # кэшируем текущий
+                    return
                 if "Message to edit not found" in error_str or "message can't be edited" in error_str:
                     logger.info(f"Старое сообщение {last_message_id} удалено или нельзя редактировать, создаём новое")
                     set_config('dota_digest_message_id', None)
@@ -819,6 +759,7 @@ async def dota_digest_job(context):
         # Отправляем новое сообщение
         msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
         set_config('dota_digest_message_id', msg.message_id)
+        _digest_state["dota_last_text"] = text  # кэшируем
         logger.info(f"Создан новый Dota дайджест {msg.message_id}")
         
     except Exception as e:
@@ -928,7 +869,7 @@ async def alternate_digest_job(context):
             else:
                 streak_part = " 🍀—"
 
-            text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
+                text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
             next_type = "1"  # после успешного показа фиссур-дайджеста переключаем на Dota
         else:
             # Пытаемся сгенерировать Dota-дайджест
@@ -947,26 +888,38 @@ async def alternate_digest_job(context):
                     logger.info("Нет игроков с 3+ играми для Dota дайджеста")
                     _digest_state["dota_data"] = []  # кэшируем пустой результат
                 else:
-                    top_by_wr = max(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
-                    bottom_by_wr = min(valid_players, key=lambda p: (p.get('week_wins', 0) / p.get('week_games', 1) if p.get('week_games', 0) > 0 else 0))
+                    # Лучший и худший по net wins (разнице побед-поражений)
+                    # При равенстве net: top — больше игр, bottom — меньше игр
+                    top_by_net = max(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)))
+                    bottom_by_net = min(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)))
                     players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
                     top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
 
-                    top_player = top_by_wr.get('steam_nickname', 'None')
-                    top_id = top_by_wr.get('telegram_id')
-                    bottom_player = bottom_by_wr.get('steam_nickname', 'None')
-                    bottom_id = bottom_by_wr.get('telegram_id')
+                    top_player = top_by_net.get('steam_nickname', 'None')
+                    top_id = top_by_net.get('telegram_id')
+                    top_games = top_by_net.get('week_games', 0)
+                    top_wins = top_by_net.get('week_wins', 0)
+                    top_losses = top_games - top_wins
+                    top_net = top_wins - top_losses
+
+                    bottom_player = bottom_by_net.get('steam_nickname', 'None')
+                    bottom_id = bottom_by_net.get('telegram_id')
+                    bottom_games = bottom_by_net.get('week_games', 0)
+                    bottom_wins = bottom_by_net.get('week_wins', 0)
+                    bottom_losses = bottom_games - bottom_wins
+                    bottom_net = bottom_wins - bottom_losses
+
                     streak_player = top_streak_player.get('steam_nickname', 'None') if top_streak_player else 'None'
                     streak_wins = top_streak_player.get('week_current_streak', 0) if top_streak_player else 0
                     streak_id = top_streak_player.get('telegram_id') if top_streak_player else None
 
                     if top_player and top_player != "None":
-                        top_part = f"🔺{make_clickable(top_player, top_id)}: {top_by_wr.get('week_wins', 0)}W/{max(0, top_by_wr.get('week_games', 0) - top_by_wr.get('week_wins', 0))}L≈{min(round((top_by_wr.get('week_wins', 0) / (top_by_wr.get('week_games', 1) if top_by_wr.get('week_games', 0) > 0 else 1) * 100), 1), 100.0)}%"
+                        top_part = f"🔺{make_clickable(top_player, top_id)}: {top_wins}W/{top_losses}L = {top_net}"
                     else:
                         top_part = "🔺—"
 
                     if bottom_player and bottom_player != "None":
-                        bottom_part = f"🔻{make_clickable(bottom_player, bottom_id)}: {bottom_by_wr.get('week_wins', 0)}W/{max(0, bottom_by_wr.get('week_games', 0) - bottom_by_wr.get('week_wins', 0))}L≈{min(round((bottom_by_wr.get('week_wins', 0) / (bottom_by_wr.get('week_games', 1) if bottom_by_wr.get('week_games', 0) > 0 else 1) * 100), 1), 100.0)}%"
+                        bottom_part = f"🔻{make_clickable(bottom_player, bottom_id)}: {bottom_wins}W/{bottom_losses}L = {bottom_net}"
                     else:
                         bottom_part = "🔻—"
 
@@ -1020,7 +973,7 @@ async def alternate_digest_job(context):
                 else:
                     streak_part = " 🍀—"
 
-                text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n🎁 Сбор фиссур: {daily_fissure_rolls} из {BONUS_FISSURE_GOAL}\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
+            text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
                 # Если fallback, не меняем next_type — оставляем как есть (current_type), чтобы в следующий раз снова попытаться показать изначальный тип
                 # next_type уже None, установим его ниже
                 if next_type is None:
@@ -1028,6 +981,11 @@ async def alternate_digest_job(context):
 
         if text is None:
             logger.info("Нет данных ни для одного типа дайджеста")
+            return
+
+        # Пропускаем редактирование если текст не изменился
+        if _digest_state.get("last_text") == text:
+            logger.debug("Текст дайджеста не изменился, пропускаем редактирование")
             return
 
         # Пробуем отредактировать существующее сообщение
@@ -1053,6 +1011,7 @@ async def alternate_digest_job(context):
                     # Используем next_type, вычисленный ранее (с учётом fallback)
                     _digest_state["type"] = next_type
                     set_config('alternate_digest_type', next_type)
+                    _digest_state["last_text"] = text  # кэшируем текст
             except (ValueError, TypeError) as e:
                 logger.warning(f"Invalid alternate_digest_message_id format: {last_message_id}, error: {e}")
                 set_config('alternate_digest_message_id', None)
@@ -1071,6 +1030,7 @@ async def alternate_digest_job(context):
                     logger.info(f"Setting type: {current_type} -> {next_type}")
                     _digest_state["type"] = next_type
                     set_config('alternate_digest_type', next_type)
+                    _digest_state["last_text"] = text  # кэшируем (текущий текст совпадает с сообщением)
                 else:
                     logger.info(f"Не удалось редактировать: {e}")
 
@@ -1121,6 +1081,7 @@ async def alternate_digest_job(context):
                 # СОХРАНЯЕМ СРАЗУ ПОСЛЕ ОТПРАВКИ
                 set_config('alternate_digest_message_id', msg.message_id)
                 set_config('alternate_digest_last_created', str(time.time()))
+                _digest_state["last_text"] = text  # кэшируем текст
                 logger.info(f"Создан новый alternate дайджест {msg.message_id}, type={next_type}")
                 
                 # ТОЛЬКО ПОСЛЕ УСПЕШНОГО СОЗДАНИЯ ПЕРЕКЛЮЧАЕМ ТИП
