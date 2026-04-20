@@ -1616,6 +1616,7 @@ def get_user_by_steam_id(steam_id: int):
 
 def update_fissure(telegram_id, fissure, last_fissure, growth=0):
     """Обновление fissure - сразу пишем в БД"""
+    logger.info(f"update_fissure called: telegram_id={telegram_id}, fissure={fissure}, last_fissure={last_fissure}, growth={growth}")
     user = get_user(telegram_id)
     
     if user:
@@ -1661,6 +1662,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
                 WHERE telegram_id=?
             """
             db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, win, telegram_id))
+        logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
         
         # Сбрасываем кеши дайджестов при изменении fissure
         user_cache.set('digest_stats', None)
@@ -1668,6 +1670,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
         top_cache.clear()
     else:
         # Пользователя нет - создаем нового
+        logger.info(f"update_fissure: пользователь не найден, создаём нового для telegram_id={telegram_id}")
         db = Database()
         db.add_user(telegram_id, "", "", "")
         # Теперь пробуем снова
@@ -1955,6 +1958,24 @@ def zeus_strike(percent=0.05):
     except Exception as e:
         logger.error(f"Zeus strike error: {e}")
         return 0
+
+def reset_all_fissure_data():
+    """Сбрасывает cm,rolls и cooldown для всех пользователей"""
+    try:
+        db = get_connection()
+        if db.is_postgres:
+            query = "UPDATE users SET fissure = 0.1, last_fissure = 0, total_rolls = 0, weekly_rolls = 0, weekly_growth = 0.0, current_streak = 0, best_streak = 0"
+        else:
+            query = "UPDATE users SET fissure = 0.1, last_fissure = 0, total_rolls = 0, weekly_rolls = 0, weekly_growth = 0.0, current_streak = 0, best_streak = 0"
+        db.execute_query(query)
+        top_cache.clear()
+        user_cache.clear()
+        user_cache.set('digest_stats', None)
+        logger.info("reset_all_fissure_data: все данные сброшены")
+        return True
+    except Exception as e:
+        logger.error(f"reset_all_fissure_data error: {e}")
+        return False
 
 
 def batch_save_mmr(users_data: list):

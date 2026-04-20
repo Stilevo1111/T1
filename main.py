@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, BACKUP_DATABASE_URL, DATABASE_URL
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, BACKUP_DATABASE_URL, DATABASE_URL, reset_all_fissure_data
 from dota_mmr import update_user_mmr
 from database import get_all_users_with_steam, user_cache, update_dota_week_top_cache
 import aiohttp
@@ -2004,6 +2004,21 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сброс игры"""
+    logger.info("reset_game called")
+    chat = update.effective_chat
+    
+    success = reset_all_fissure_data()
+    if success:
+        msg = await context.bot.send_message(chat_id=chat.id, text="✅ Игра сброшена! Все начинают заново.")
+    else:
+        msg = await context.bot.send_message(chat_id=chat.id, text="❌ Не удалось сбросить игру")
+    
+    if chat.type in ['group', 'supergroup', 'channel']:
+        schedule_delete(context.bot, chat.id, msg.message_id, 30, context.application.job_queue)
+
+
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Increase fissure"""
     logger.info(f"User {update.effective_user.id} called fissure")
@@ -3286,10 +3301,10 @@ async def main():
             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
         )
         
-        # Обновление дайджестов каждые 60 секунд (чтобы не превысить лимиты Telegram)
+        # Обновление дайджестов каждые 30 секунд (чтобы не превысить лимиты Telegram)
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(seconds=60),
+            interval=datetime.timedelta(seconds=30),
             first=datetime.datetime.now() + datetime.timedelta(seconds=20)
         )
         
@@ -3309,12 +3324,13 @@ async def main():
         
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CallbackQueryHandler(button_callback))
-        app.add_handler(CommandHandler("fissure", fissure))
+        app.add_handler(CommandHandler(("fissure", "fissura"), fissure))
         app.add_handler(CommandHandler("profile", stats))
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler(("digestnow", "dotadigestnow", "setdigestchat"), digest_handler))
+        app.add_handler(CommandHandler("resetgame", reset_game))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         
