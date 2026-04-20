@@ -786,6 +786,11 @@ async def alternate_digest_job(context):
     try:
         now = time.time()
         
+        # Проверяем глобальный rate limit
+        if is_rate_limited():
+            logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
+            return
+        
         # Блокировка от параллельного запуска
         async with _digest_state_lock:
             last_run = _digest_state.get('last_run', 0)
@@ -1036,7 +1041,12 @@ async def alternate_digest_job(context):
                     _digest_state["last_text"] = text  # кэшируем текст чтобы не повторять
                     _digest_state["last_run"] = 0  # сбрасываем чтобы в следующий раз попробовать снова
                     return  # выходим чтобы не продолжать
-                if "message to edit not found" in error_str or "message can't be edited" in error_str or "bad request" in error_str:
+                if "bad request" in error_str:
+                    logger.warning(f"Bad request for message {last_message_id}, resetting message_id")
+                    set_config('alternate_digest_message_id', None)
+                    last_message_id = None
+                    edited = False  # need to create new message
+                elif "message to edit not found" in error_str or "message can't be edited" in error_str:
                     logger.info(f"Старое сообщение {last_message_id} удалено, создаём новое")
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
