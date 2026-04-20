@@ -2954,20 +2954,27 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     lines.append(f" └ Нет игр за неделю\n\n")
             
-            # Если пользователь НЕ в топе - показываем его внизу с позицией
-            if not user_is_in_top:
-                if user and user.get('steam_id') and user_pos:
+            # Всегда показываем позицию пользователя внизу
+            if user and user.get('steam_id'):
+                # Get user's position in the full MMR list
+                from database import get_dota_mmr_top
+                full_top = get_dota_mmr_top(limit=100)
+                user_full_pos = None
+                for i, p in enumerate(full_top, 1):
+                    if p.get('telegram_id') == user.get('telegram_id'):
+                        user_full_pos = i
+                        break
+                
+                if user_full_pos:
                     lines.append("\n")  # Extra line before user position
                     username = user.get('steam_nickname') or user.get('username') or 'Unknown'
                     if username and len(username) > 25:
                         username = username[:25] + "."
                     user_tg_id = user.get('telegram_id')
                     clickable_name = f'<b><a href="tg://user?id={user_tg_id}">{username}</a></b>'
-                    emoji_nums = {1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
-                    prefix = f"{emoji_nums.get(user_pos, '#' + str(user_pos))} "
-                    lines.append(f"\n{prefix}{clickable_name} - {user_rank_str}\n")
+                    lines.append(f"\n👤 Твоя позиция: #{user_full_pos} - {user_rank_str}\n")
                     if user_week_games > 0:
-                        lines.append(f" └ {user_week_games}W • {user_week_losses}L • WR {user_winrate}%\n\n")
+                        lines.append(f" └ {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%\n\n")
                     else:
                         lines.append(f" └ Нет игр за неделю\n\n")
             
