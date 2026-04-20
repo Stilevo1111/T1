@@ -2326,6 +2326,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             extra_text = extra_text  # уже добавлено выше
         
         if cascade_count > 1 and original_roll is not None:
+            logger.info(f"DEBUG: original_roll={original_roll}, cascade_count={cascade_count}, roll_final={original_roll * cascade_count}")
             roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
             mc_level = f"×{cascade_count}"
             roll_final = original_roll * cascade_count
