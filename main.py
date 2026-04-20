@@ -98,9 +98,9 @@ _BOT_CAN_DELETE_CACHE_MAX = 200
 
 async def bot_can_delete(bot, chat_id):
     """Проверить может ли бот удалять сообщения в чате"""
+    current_time = time.time()
     # Cleanup old entries if cache is too large
     if len(_bot_can_delete_cache) > _BOT_CAN_DELETE_CACHE_MAX:
-        current_time = time.time()
         _bot_can_delete_cache.clear()
         logger.debug("Cleared bot_can_delete cache (exceeded limit)")
     
@@ -653,17 +653,25 @@ async def refresh_digest_message(bot):
         last_message_id = get_config('alternate_digest_message_id')
         if last_message_id:
             try:
+                msg_id_int = int(last_message_id)
+                if msg_id_int <= 0:
+                    logger.warning(f"Invalid alternate_digest_message_id: {last_message_id}")
+                    set_config('alternate_digest_message_id', None)
+                    return
                 await bot.edit_message_text(
-                    chat_id=digest_chat_id,
-                    message_id=int(last_message_id),
+                    chat_id=int(digest_chat_id),
+                    message_id=msg_id_int,
                     text=text,
                     parse_mode="HTML"
                 )
                 logger.debug(f"Обновлён fissure-дайджест после броска")
                 return
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid alternate_digest_message_id format: {last_message_id}, error: {e}")
+                set_config('alternate_digest_message_id', None)
             except Exception as e:
-                error_str = str(e)
-                if "Message to edit not found" in error_str or "message can't be edited" in error_str:
+                error_str = str(e).lower()
+                if "message to edit not found" in error_str or "message can't be edited" in error_str or "bad request" in error_str:
                     logger.info(f"Старый дайджест {last_message_id} удалён/недоступен, сбрасываем ID")
                     set_config('alternate_digest_message_id', None)
                 else:
@@ -793,7 +801,7 @@ async def dota_digest_job(context):
         if last_message_id:
             try:
                 await bot.edit_message_text(
-                    chat_id=digest_chat_id,
+                    chat_id=int(digest_chat_id),
                     message_id=int(last_message_id),
                     text=text,
                     parse_mode="HTML"
@@ -1013,27 +1021,37 @@ async def alternate_digest_job(context):
         edited = False
         if last_message_id:
             try:
-                await bot.edit_message_text(
-                    chat_id=digest_chat_id,
-                    message_id=int(last_message_id),
-                    text=text,
-                    parse_mode="HTML"
-                )
-                logger.info(f"Обновлён alternate дайджест {last_message_id}")
-                edited = True
-                
-                # Переключаем тип даже при успешном редактировании
-                next_type = "0" if current_type == "1" else "1"
-                _digest_state["type"] = next_type
-                set_config('alternate_digest_type', next_type)
+                msg_id_int = int(last_message_id)
+                if msg_id_int <= 0:
+                    logger.warning(f"Invalid alternate_digest_message_id: {last_message_id}")
+                    set_config('alternate_digest_message_id', None)
+                    last_message_id = None
+                else:
+                    await bot.edit_message_text(
+                        chat_id=int(digest_chat_id),
+                        message_id=msg_id_int,
+                        text=text,
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"Обновлён alternate дайджест {last_message_id}")
+                    edited = True
+                    
+                    # Переключаем тип даже при успешном редактировании
+                    next_type = "0" if current_type == "1" else "1"
+                    _digest_state["type"] = next_type
+                    set_config('alternate_digest_type', next_type)
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid alternate_digest_message_id format: {last_message_id}, error: {e}")
+                set_config('alternate_digest_message_id', None)
+                last_message_id = None
             except Exception as e:
-                error_str = str(e)
+                error_str = str(e).lower()
                 logger.info(f"Ошибка редактирования: {e}")
-                if "Message to edit not found" in error_str or "message can't be edited" in error_str:
+                if "message to edit not found" in error_str or "message can't be edited" in error_str or "bad request" in error_str:
                     logger.info(f"Старое сообщение {last_message_id} удалено, создаём новое")
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
-                elif "Message is not modified" in error_str:
+                elif "message is not modified" in error_str:
                     logger.info(f"Сообщение не изменилось, пропускаем удаление и создание")
                     edited = True  # Считаем что отредактировано успешно
                     
@@ -1050,10 +1068,22 @@ async def alternate_digest_job(context):
             # Удаляем старое сообщение ПЕРЕД проверкой времени
             if last_message_id:
                 try:
-                    await bot.delete_message(chat_id=digest_chat_id, message_id=int(last_message_id))
-                    logger.info(f"Удалено старое alternate сообщение {last_message_id}")
+                    msg_id_int = int(last_message_id)
+                    if msg_id_int > 0:
+                        await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
+                        logger.info(f"Удалено старое alternate сообщение {last_message_id}")
+                    else:
+                        logger.warning(f"Invalid last_message_id for deletion: {last_message_id}")
+                        set_config('alternate_digest_message_id', None)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid alternate_digest_message_id format for deletion: {last_message_id}, error: {e}")
+                    set_config('alternate_digest_message_id', None)
                 except Exception as e:
-                    logger.debug(f"Не удалось удалить старое alternate сообщение: {e}")
+                    error_str = str(e).lower()
+                    if "message to delete not found" in error_str or "message can't be deleted" in error_str or "bad request" in error_str:
+                        logger.debug(f"Старое сообщение {last_message_id} уже удалено")
+                    else:
+                        logger.debug(f"Не удалось удалить старое alternate сообщение: {e}")
             set_config('alternate_digest_message_id', None)  # сбрасываем сразу после удаления
 
             # Проверяем, не создавали ли мы новое сообщение слишком недавно (антиспам)
@@ -1076,7 +1106,7 @@ async def alternate_digest_job(context):
 
             try:
                 # Отправляем новое сообщение
-                msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
+                msg = await bot.send_message(chat_id=int(digest_chat_id), text=text, parse_mode="HTML")
                 # СОХРАНЯЕМ СРАЗУ ПОСЛЕ ОТПРАВКИ
                 set_config('alternate_digest_message_id', msg.message_id)
                 set_config('alternate_digest_last_created', str(time.time()))
@@ -1090,7 +1120,7 @@ async def alternate_digest_job(context):
                 # Сначала получаем текущий закреплённый message_id ДО открепления
                 old_pinned_id = None
                 try:
-                    chat_info = await bot.get_chat(chat_id=digest_chat_id)
+                    chat_info = await bot.get_chat(chat_id=int(digest_chat_id))
                     pinned_msg = getattr(chat_info, 'pinned_message', None)
                     if pinned_msg:
                         old_pinned_id = pinned_msg.message_id
