@@ -3098,6 +3098,13 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                         parse_mode="HTML",
                         reply_markup=reply_markup
                     )
+                
+                # Pin the welcome message
+                try:
+                    await context.bot.pin_chat_message(chat_id=chat_id, message_id=result_msg.message_id, disable_notification=True)
+                except Exception as e:
+                    logger.debug(f"Could not pin welcome message: {e}")
+                
                 logger.info(f"Welcome sent for {name}")
             
             # User left the chat (was member, now is left/kicked)
