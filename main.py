@@ -56,15 +56,15 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
     else:
         # Fallback - пытаемся удалить сразу (менее надежно)
         await asyncio.sleep(delay)
-         try:
-             await bot.delete_message(chat_id, msg_id)
-             logger.info(f"Deleted delayed message {msg_id} in chat {chat_id}")
-         except Exception as e:
-             error_str = str(e).lower()
-             if "message to delete not found" in error_str:
-                 logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
-             else:
-                 logger.warning(f"Failed to delete delayed message {msg_id} in chat {chat_id}: {e}")
+        try:
+            await bot.delete_message(chat_id, msg_id)
+            logger.info(f"Deleted delayed message {msg_id} in chat {chat_id}")
+        except Exception as e:
+            error_str = str(e).lower()
+            if "message to delete not found" in error_str:
+                logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
+            else:
+                logger.warning(f"Failed to delete delayed message {msg_id} in chat {chat_id}: {e}")
 
 
 async def delete_message_job(context):
