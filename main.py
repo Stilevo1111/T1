@@ -1828,8 +1828,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 i = 0
                 while not stop_event.is_set():
                     try:
-                     emoji = "⌛️" if i % 2 == 0 else "⏳"
-                         await msg.edit_text(text=f"{emoji} Загрузка меню...")
+                        emoji = "⌛️" if i % 2 == 0 else "⏳"
+                        await msg.edit_text(text=f"{emoji} Загрузка меню...")
                     except Exception:
                         pass
                     try:
