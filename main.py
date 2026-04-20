@@ -3092,7 +3092,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             if db_user:
                 updates = {}
                 current_count = db_user.get('message_count', 0)
-                updates['message_count'] = current_count + 1
+                new_count = current_count + 1
+                updates['message_count'] = new_count
+                logger.info(f"message_count: {user_id} old={current_count} new={new_count}")
                 # Обновляем username только если есть telegram_username и он отличается;
                 # или если username пуст, а есть first_name — используем first_name как fallback
                 current_username = db_user.get('username')
@@ -3103,6 +3105,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                     updates['username'] = update.effective_user.first_name
                 if updates:
                     update_user_fields_batch(user_id, updates)
+                    logger.info(f"Saved message_count for {user_id}: {new_count}")
         except Exception:
             pass
         
