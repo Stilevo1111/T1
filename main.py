@@ -1785,6 +1785,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(user_id, username)
         
         if not user:
+            # Create new user in database
+            db = Database()
+            db.add_user(user_id, username, "", "")
+            user = get_user(user_id, username)
+            
             chat_id = update.effective_chat.id
             banner_url = "https://i.ibb.co/LXsGsfxZ/213.png"
             text = "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
