@@ -575,6 +575,9 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS message_count INTEGER DEFAULT 0
             """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -671,6 +674,7 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN last_greeting_date DATE")
             if 'message_count' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN message_count INTEGER DEFAULT 0")
+            cursor.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
             
             # Создаём индексы для часто используемых полей (улучшение производительности)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)")
@@ -793,11 +797,12 @@ class Database:
             
             if "postgres" in scheme:
                 query = '''
-                    INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    INSERT INTO users (telegram_id, username, first_name, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                     ON CONFLICT (telegram_id) 
                     DO UPDATE SET 
                         username = EXCLUDED.username,
+                        first_name = EXCLUDED.first_name,
                         fissure = EXCLUDED.fissure,
                         last_fissure = EXCLUDED.last_fissure,
                         last_message_id = EXCLUDED.last_message_id,
@@ -805,21 +810,22 @@ class Database:
                         total_rolls = EXCLUDED.total_rolls
                     RETURNING id
                 '''
-                result = self.execute_query(query, (user_id, username, 0.1, 0, 0, 0, 0), fetch="one")
+                result = self.execute_query(query, (user_id, username, first_name, 0.1, 0, 0, 0, 0), fetch="one")
                 return result[0] if result else user_id
             else:
                 query = '''
-                    INSERT INTO users (telegram_id, username, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                    INSERT INTO users (telegram_id, username, first_name, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                     ON CONFLICT(telegram_id) DO UPDATE SET
                         username = excluded.username,
+                        first_name = excluded.first_name,
                         fissure = excluded.fissure,
                         last_fissure = excluded.last_fissure,
                         last_message_id = excluded.last_message_id,
                         total_growth = excluded.total_growth,
                         total_rolls = excluded.total_rolls
                 '''
-                self.execute_query(query, (user_id, username, 0.1, 0, 0, 0, 0))
+                self.execute_query(query, (user_id, username, first_name, 0.1, 0, 0, 0, 0))
                 return None
         except Exception as e:
             logger.error(f"Error adding user: {e}")
@@ -981,13 +987,13 @@ class Database:
             scheme = url.scheme
             
             if get_db_type() == "postgresql":
-                query = "SELECT telegram_id, username, fissure FROM users WHERE in_chat = TRUE ORDER BY fissure DESC LIMIT %s"
+                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure FROM users WHERE in_chat = TRUE ORDER BY fissure DESC LIMIT %s"
                 users = self.execute_query(query, (limit,), fetch="all")
-                return [{"telegram_id": u["telegram_id"], "username": u["username"], "fissure": u["fissure"]} for u in users]
+                return [{"telegram_id": u["telegram_id"], "username": u["username"], "steam_nickname": u["steam_nickname"], "first_name": u["first_name"], "fissure": u["fissure"]} for u in users]
             else:
-                query = "SELECT telegram_id, username, fissure FROM users WHERE in_chat = 1 ORDER BY fissure DESC LIMIT ?"
+                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure FROM users WHERE in_chat = 1 ORDER BY fissure DESC LIMIT ?"
                 users = self.execute_query(query, (limit,), fetch="all")
-                return [{"telegram_id": u[0], "username": u[1], "fissure": u[2]} for u in users]
+                return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], "first_name": u[3], "fissure": u[4]} for u in users]
         except Exception as e:
             logger.error(f"Error getting fissure top: {e}")
             return []
