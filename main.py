@@ -2243,9 +2243,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multicast_count = 1
                 return  # выходим из мультикаста, делаем обычный ролл
             
+            # Сохраняем original_roll ДО умножения!
+            original_roll = roll
             roll = roll * cascade_count
             logger.info(f"fissure multicast: roll after multiply={roll}, cascade_count={cascade_count}")
-            original_roll = roll // cascade_count  # сохраняем для текста
             increment_stat("multicast")
             if cascade_count >= 4:
                 increment_stat("multicast_x4")
@@ -2329,7 +2330,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"DEBUG: original_roll={original_roll}, cascade_count={cascade_count}, roll_final={original_roll * cascade_count}")
             roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
             mc_level = f"×{cascade_count}"
-            roll_final = original_roll * cascade_count
+            # Ролл уже умножён, используем его напрямую
+            roll_final = roll
             text = (
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n"
