@@ -1972,7 +1972,7 @@ def reset_all_fissure_data():
         top_cache.clear()
         for uid in user_cache.get_all_users():
             user = user_cache.get(uid)
-            if user:
+            if user and isinstance(user, dict):
                 user['fissure'] = 0.1
                 user['last_fissure'] = 0
                 user['total_rolls'] = 0
