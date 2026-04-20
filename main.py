@@ -1880,7 +1880,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         
         if steam_id and steam_nickname:
-            from dota_mmr import generate_start_card, get_player_stats, get_top_heroes_async, generate_heroes_image
+            from dota_mmr import generate_start_card, get_player_stats
             
             # Loading animation
             loading_msg = None
@@ -1899,15 +1899,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if not avatar_url:
                 avatar_url = await get_user_avatar_url(context.bot, user_id)
-            
-            # Generate heroes image
-            heroes_image = None
-            try:
-                top_heroes = await get_top_heroes_async(steam_id, last_n=20, top_k=5)
-                if top_heroes:
-                    heroes_image = await asyncio.to_thread(generate_heroes_image, top_heroes)
-            except Exception as e:
-                logger.debug(f"Could not generate heroes image: {e}")
             
             weekly_mvp, weekly_top2, weekly_top3 = 0, 0, 0
             
@@ -1930,14 +1921,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 set_last_bot_message(chat_id, user_id, msg.message_id)
                 update_last_message_id(user_id, msg.message_id)
-                
-                # Send heroes image if available
-                if heroes_image:
-                    import io
-                    await context.bot.send_photo(
-                        chat_id=chat_id,
-                        photo=io.BytesIO(heroes_image)
-                    )
             else:
                 await menu_handler(update, context)
             
