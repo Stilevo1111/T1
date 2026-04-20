@@ -869,7 +869,7 @@ async def alternate_digest_job(context):
             else:
                 streak_part = " 🍀—"
 
-                text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
+            text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
             next_type = "1"  # после успешного показа фиссур-дайджеста переключаем на Dota
         else:
             # Пытаемся сгенерировать Dota-дайджест
@@ -973,7 +973,7 @@ async def alternate_digest_job(context):
                 else:
                     streak_part = " 🍀—"
 
-            text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
+                text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
                 # Если fallback, не меняем next_type — оставляем как есть (current_type), чтобы в следующий раз снова попытаться показать изначальный тип
                 # next_type уже None, установим его ниже
                 if next_type is None:
