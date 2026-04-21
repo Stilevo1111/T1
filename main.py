@@ -197,24 +197,24 @@ async def morning_greeting_job(context):
         "☕ Утро началось! Кто в игре?"
     ]
     
-     greeting_text = random.choice(MORNING_GREETINGS)
-     
-     try:
-          logger.info(f"Запуск утреннего приветствия 09:00 MSK")
-          
-          digest_chat_id = get_config('digest_chat_id')
-          if not digest_chat_id:
-              logger.info("Чат для дайджеста не настроен")
-              return
-          
-          bot = context.application.bot
-          await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=main_menu())
-          
-          set_config('daily_greeting_sent', today_str)
-          logger.info(f"Утреннее приветствие отправлено в чат {digest_chat_id}")
-          
-     except Exception as e:
-         logger.error(f"Ошибка в morning_greeting_job: {e}")
+    greeting_text = random.choice(MORNING_GREETINGS)
+    
+    try:
+        logger.info(f"Запуск утреннего приветствия 09:00 MSK")
+        
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            logger.info("Чат для дайджеста не настроен")
+            return
+        
+        bot = context.application.bot
+        await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=main_menu())
+        
+        set_config('daily_greeting_sent', today_str)
+        logger.info(f"Утреннее приветствие отправлено в чат {digest_chat_id}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка в morning_greeting_job: {e}")
 
 
 @rate_limit(tokens=1)
@@ -238,24 +238,24 @@ async def night_greeting_job(context):
         "🌙 Доброй ночи! Завтра новые катки."
     ]
     
-     greeting_text = random.choice(NIGHT_GREETINGS)
-     
-     try:
-          logger.info(f"Запуск вечернего приветствия 23:00 MSK")
-          
-          digest_chat_id = get_config('digest_chat_id')
-          if not digest_chat_id:
-              logger.info("Чат для дайджеста не настроен")
-              return
-          
-          bot = context.application.bot
-          await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=main_menu())
-          
-          set_config('night_greeting_sent', today_str)
-          logger.info(f"Вечернее приветствие отправлено в чат {digest_chat_id}")
-          
-     except Exception as e:
-         logger.error(f"Ошибка в night_greeting_job: {e}")
+    greeting_text = random.choice(NIGHT_GREETINGS)
+    
+    try:
+        logger.info(f"Запуск вечернего приветствия 23:00 MSK")
+        
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            logger.info("Чат для дайджеста не настроен")
+            return
+        
+        bot = context.application.bot
+        await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=main_menu())
+        
+        set_config('night_greeting_sent', today_str)
+        logger.info(f"Вечернее приветствие отправлено в чат {digest_chat_id}")
+        
+except Exception as e:
+        logger.error(f"Ошибка в night_greeting_job: {e}")
 
 
 
