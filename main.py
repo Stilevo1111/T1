@@ -1400,6 +1400,10 @@ def make_clickable(name, user_id, max_length=12):
         except:
             display_name = name
         
+        # Нормализуем никнейм - убираем @ если есть
+        if display_name and display_name.startswith('@'):
+            display_name = display_name[1:]
+        
         # Если получилось все равно число - показываем как есть
         if display_name.isdigit():
             display_name = f"Игрок {display_name}"
