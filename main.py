@@ -2568,6 +2568,19 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     loading_msg = None
     stop_animation = None
     
+    # Send loading message if user has Steam
+    if target_user.get('steam_id'):
+        try:
+            loading_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text="⏳ Загрузка профиля..."
+            )
+            stop_animation = asyncio.Event()
+            asyncio.create_task(animate_loading(loading_msg, stop_animation))
+        except Exception as e:
+            logger.debug(f"Could not send loading message: {e}")
+            loading_msg = None
+    
     try:
         # Определяем: свой профиль или чужой
         target_user = None
@@ -2718,6 +2731,13 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Error in stats: {e}\n{traceback.format_exc()}")
+        if loading_msg:
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception:
+                pass
+        if stop_animation:
+            stop_animation.set()
         try:
             await context.bot.send_message(
                 chat_id=chat_id,
