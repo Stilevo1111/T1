@@ -2445,6 +2445,16 @@ def get_dota_week_top_from_db(limit=10, force_refresh=False):
         logger.info(f"get_dota_week_top_from_db: returning cached top ({len(cached_data)} users)")
         return cached_data[:limit]
     
+    result = _get_dota_week_top_query(limit)
+    
+    # Сохраняем в кеш
+    get_dota_week_top_from_db._cache = (result, time.time())
+    
+    return result
+
+
+def _get_dota_week_top_query(limit):
+    """Вспомогательная функция для получения топа игроков Dota 2 за неделю"""
     try:
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
@@ -2586,6 +2596,23 @@ def get_dota_week_top_from_db(limit=10, force_refresh=False):
     except Exception as e:
         logger.error(f"Error get_dota_week_top: {e}")
         return []
+
+
+def get_dota_week_rank(telegram_id):
+    """Получить позицию игрока в недельном топе Dota 2"""
+    try:
+        all_users = _get_dota_week_top_query(1000)
+        if not all_users:
+            return None
+        
+        for i, player in enumerate(all_users, 1):
+            if player.get('telegram_id') == telegram_id:
+                return i
+        
+        return None
+    except Exception as e:
+        logger.error(f"Error get_dota_week_rank: {e}")
+        return None
 
 
 def get_dota_digest_stats():

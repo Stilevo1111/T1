@@ -2833,7 +2833,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
     try:
-        from database import get_dota_week_top_from_db
+        from database import get_dota_week_top_from_db, get_dota_week_rank
         from database import get_user
         user = get_user(update.effective_user.id)
         
@@ -2842,9 +2842,11 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         top_users = get_dota_week_top_from_db(8, force_refresh=True)
         logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from DB")
         
+        # Get user's position in the full rankings using the new function
+        user_pos = get_dota_week_rank(update.effective_user.id)
+        
         # Initialize user position variables
         user_is_in_top = False
-        user_pos = None
         user_rank_str = "Без ранга"
         user_week_games = 0
         user_week_wins = 0
@@ -2880,14 +2882,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for player in top_users:
                     if player.get('telegram_id') == user.get('telegram_id'):
                         user_is_in_top = True
-                        break
-            
-            # Find user's REAL position in the sorted top list
-            user_pos = None
-            if user and user.get('telegram_id'):
-                for i, player in enumerate(top_users, 1):
-                    if player.get('telegram_id') == user.get('telegram_id'):
-                        user_pos = i
                         break
         
         if not top_users:
@@ -2971,25 +2965,17 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     lines.append(f" └ Нет игр за неделю\n\n")
             
             # Всегда показываем позицию пользователя внизу
-            if user and user.get('steam_id'):
-                # Use the same sorted list as the top display to find position
-                user_full_pos = None
-                for i, player in enumerate(top_users, 1):
-                    if player.get('telegram_id') == user.get('telegram_id'):
-                        user_full_pos = i
-                        break
-                
-                if user_full_pos:
-                    username = user.get('steam_nickname') or user.get('username') or 'Unknown'
-                    if username and len(username) > 25:
-                        username = username[:25] + "."
-                    user_tg_id = user.get('telegram_id')
-                    clickable_name = f'<b><a href="tg://user?id={user_tg_id}">{username}</a></b>'
-                    lines.append(f"👤 {username}: #{user_full_pos} - {user_rank_str}\n")
-                    if user_week_games > 0:
-                        lines.append(f" └ {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%\n")
-                    else:
-                        lines.append(f" └ Нет игр за неделю\n")
+            if user and user.get('steam_id') and user_pos:
+                username = user.get('steam_nickname') or user.get('username') or 'Unknown'
+                if username and len(username) > 25:
+                    username = username[:25] + "."
+                user_tg_id = user.get('telegram_id')
+                clickable_name = f'<b><a href="tg://user?id={user_tg_id}">{username}</a></b>'
+                lines.append(f"👤 {username}: #{user_pos} - {user_rank_str}\n")
+                if user_week_games > 0:
+                    lines.append(f" └ {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%\n")
+                else:
+                    lines.append(f" └ Нет игр за неделю\n")
             
             text = "".join(lines)
         
