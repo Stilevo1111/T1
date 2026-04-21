@@ -2565,6 +2565,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.debug(f"Could not delete last bot message: {e}")
     
+    loading_msg = None
+    stop_animation = None
+    
     try:
         # Определяем: свой профиль или чужой
         target_user = None
