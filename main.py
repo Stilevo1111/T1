@@ -1947,6 +1947,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=chat_id,
                     text="⏳ Загрузка меню..."
                 )
+                set_last_bot_message(chat_id, user_id, loading_msg.message_id)
                 stop_animation = asyncio.Event()
                 asyncio.create_task(animate_loading(loading_msg, stop_animation))
             except Exception as e:
@@ -2600,6 +2601,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=chat_id,
                     text="⏳ Загрузка профиля..."
                 )
+                set_last_bot_message(chat_id, update.effective_user.id, loading_msg.message_id)
                 stop_animation = asyncio.Event()
                 asyncio.create_task(animate_loading(loading_msg, stop_animation))
             except Exception as e:
