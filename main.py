@@ -2978,17 +2978,16 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         break
                 
                 if user_full_pos:
-                    lines.append("\n")  # Extra line before user position
                     username = user.get('steam_nickname') or user.get('username') or 'Unknown'
                     if username and len(username) > 25:
                         username = username[:25] + "."
                     user_tg_id = user.get('telegram_id')
                     clickable_name = f'<b><a href="tg://user?id={user_tg_id}">{username}</a></b>'
-                    lines.append(f"\n👤 Твоя позиция: #{user_full_pos} - {user_rank_str}\n")
+                    lines.append(f"👤 Твоя позиция: #{user_full_pos} - {user_rank_str}\n")
                     if user_week_games > 0:
-                        lines.append(f" └ {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%\n\n")
+                        lines.append(f" └ {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%\n")
                     else:
-                        lines.append(f" └ Нет игр за неделю\n\n")
+                        lines.append(f" └ Нет игр за неделю\n")
             
             text = "".join(lines)
         
