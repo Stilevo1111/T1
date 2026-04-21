@@ -2568,19 +2568,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     loading_msg = None
     stop_animation = None
     
-    # Send loading message if user has Steam
-    if target_user.get('steam_id'):
-        try:
-            loading_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text="⏳ Загрузка профиля..."
-            )
-            stop_animation = asyncio.Event()
-            asyncio.create_task(animate_loading(loading_msg, stop_animation))
-        except Exception as e:
-            logger.debug(f"Could not send loading message: {e}")
-            loading_msg = None
-    
     try:
         # Определяем: свой профиль или чужой
         target_user = None
@@ -2604,6 +2591,19 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_obj = update.effective_user
             username = user_obj.username or user_obj.first_name
             target_user = get_user(user_obj.id, username)
+        
+        # Send loading message if user has Steam
+        if target_user.get('steam_id'):
+            try:
+                loading_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="⏳ Загрузка профиля..."
+                )
+                stop_animation = asyncio.Event()
+                asyncio.create_task(animate_loading(loading_msg, stop_animation))
+            except Exception as e:
+                logger.debug(f"Could not send loading message: {e}")
+                loading_msg = None
         
         last_fissure_time = target_user["last_fissure"]
         now = time.time()
