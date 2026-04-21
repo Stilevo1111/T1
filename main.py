@@ -2684,9 +2684,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Could not generate heroes image: {e}", exc_info=True)
         
-        if stop_animation:
-            stop_animation.set()
-        
         try:
             result_msg = await context.bot.send_photo(
                 chat_id=update.message.chat_id,
