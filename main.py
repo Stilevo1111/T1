@@ -2968,12 +2968,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Всегда показываем позицию пользователя внизу
             if user and user.get('steam_id'):
-                # Get user's position in the full MMR list
-                from database import get_dota_mmr_top
-                full_top = get_dota_mmr_top(limit=100)
+                # Use the same sorted list as the top display to find position
                 user_full_pos = None
-                for i, p in enumerate(full_top, 1):
-                    if p.get('telegram_id') == user.get('telegram_id'):
+                for i, player in enumerate(top_users, 1):
+                    if player.get('telegram_id') == user.get('telegram_id'):
                         user_full_pos = i
                         break
                 
@@ -2983,7 +2981,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         username = username[:25] + "."
                     user_tg_id = user.get('telegram_id')
                     clickable_name = f'<b><a href="tg://user?id={user_tg_id}">{username}</a></b>'
-                    lines.append(f"👤 Твоя позиция: #{user_full_pos} - {user_rank_str}\n")
+                    lines.append(f"👤 {username}: #{user_full_pos} - {user_rank_str}\n")
                     if user_week_games > 0:
                         lines.append(f" └ {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%\n")
                     else:
