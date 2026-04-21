@@ -2791,6 +2791,18 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="HTML",
                 reply_markup=main_menu()
             )
+            logger.info(f"Profile photo sent successfully")
+            
+            # Delete loading message immediately after successful send
+            if loading_msg:
+                try:
+                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                    logger.info(f"Deleted loading message {loading_msg.message_id} in stats")
+                except Exception as del_e:
+                    logger.warning(f"Failed to delete loading message in stats: {del_e}")
+            
+            if stop_animation:
+                stop_animation.set()
         except Exception as e:
             logger.error(f"Failed to send photo: {e}")
             if loading_msg:
@@ -2799,19 +2811,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.info(f"Deleting loading message in stats: chat_id={chat_id}, msg_id={msg_id}")
                     await context.bot.delete_message(chat_id, msg_id)
                     logger.info(f"Successfully deleted loading message {msg_id}")
-                except Exception as e:
-                    logger.error(f"Failed to delete loading message in stats: {e}")
+                except Exception as del_e:
+                    logger.error(f"Failed to delete loading message in stats: {del_e}")
             if stop_animation:
                 stop_animation.set()
             return
-        
-        # Normal flow - delete loading message after successful send
-        if loading_msg:
-            try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-                logger.info(f"Deleted loading message {loading_msg.message_id} in stats")
-            except Exception as e:
-                logger.warning(f"Failed to delete loading message in stats: {e}")
         
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
