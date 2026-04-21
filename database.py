@@ -866,7 +866,8 @@ class Database:
                         "mmr_updated_at": user.get("mmr_updated_at"),
                         "last_dota_games": user.get("last_dota_games", 0),
                         "last_dota_wins": user.get("last_dota_wins", 0),
-                        "week_start_date": user.get("week_start_date")
+                        "week_start_date": user.get("week_start_date"),
+                        "message_count": user.get("message_count", 0)
                     }
                     # Обновляем username если передан не-None и отличается
                     if username is not None and username != result.get('username'):
@@ -906,7 +907,8 @@ class Database:
                         "week_best_streak": user[29] if len(user) > 29 else 0,
                         "week_current_streak": user[30] if len(user) > 30 else 0,
                         "week_updated_at": user[27] if len(user) > 27 else None,
-                        "mmr_updated_at": user[28] if len(user) > 28 else None
+                        "mmr_updated_at": user[28] if len(user) > 28 else None,
+                        "message_count": user[33] if len(user) > 33 else 0
                     }
                     # Обновляем username если передан не-None и отличается
                     if username is not None and username != result.get('username'):
@@ -918,7 +920,7 @@ class Database:
                 else:
                     if username:
                         self.add_user(telegram_id, username, None, None)
-                        return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "week_updated_at": None, "mmr_updated_at": None}
+                        return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "week_updated_at": None, "mmr_updated_at": None, "message_count": 0}
                     else:
                         return None
         except Exception as e:
@@ -1552,6 +1554,7 @@ def get_user(telegram_id, username=None):
         user.setdefault('week_current_streak', 0)
         user.setdefault('dota_total_games', 0)
         user.setdefault('dota_wins', 0)
+        user.setdefault('message_count', 0)
         user_cache.set(telegram_id, user)
     
     return user
