@@ -680,9 +680,26 @@ async def dota_digest_job(context):
             return
         
         # top_net - лучший по разнице побед-поражений (wins - losses), при равенстве net — больше игр
-        top_by_net = max(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)))
-        # bottom_net - худший по разнице, при равенстве net — меньше игр
-        bottom_by_net = min(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)))
+        # Убедимся что top и bottom это РАЗНЫЕ игроки
+        valid_players_sorted = sorted(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)), reverse=True)
+        
+        if len(valid_players_sorted) >= 2:
+            top_by_net = valid_players_sorted[0]
+            # Для bottom ищем с конца, но исключаем top игрока
+            for p in reversed(valid_players_sorted):
+                if p.get('telegram_id') != top_by_net.get('telegram_id'):
+                    bottom_by_net = p
+                    break
+            else:
+                # Если не нашли другого - берем последнего
+                bottom_by_net = valid_players_sorted[-1]
+        elif len(valid_players_sorted) == 1:
+            top_by_net = valid_players_sorted[0]
+            bottom_by_net = valid_players_sorted[0]  # Только один игрок
+        else:
+            top_by_net = None
+            bottom_by_net = None
+        
         # Лучший стрик - только игроки со стриком > 0
         players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
         top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
@@ -911,8 +928,26 @@ async def alternate_digest_job(context):
                 else:
                     # Лучший и худший по net wins (разнице побед-поражений)
                     # При равенстве net: top — больше игр, bottom — меньше игр
-                    top_by_net = max(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)))
-                    bottom_by_net = min(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)))
+                    # Убедимся что top и bottom это РАЗНЫЕ игроки
+                    valid_players_sorted = sorted(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)), reverse=True)
+                    
+                    if len(valid_players_sorted) >= 2:
+                        top_by_net = valid_players_sorted[0]
+                        # Для bottom ищем с конца, но исключаем top игрока
+                        for p in reversed(valid_players_sorted):
+                            if p.get('telegram_id') != top_by_net.get('telegram_id'):
+                                bottom_by_net = p
+                                break
+                        else:
+                            # Если не нашли другого - берем последнего
+                            bottom_by_net = valid_players_sorted[-1]
+                    elif len(valid_players_sorted) == 1:
+                        top_by_net = valid_players_sorted[0]
+                        bottom_by_net = valid_players_sorted[0]  # Только один игрок
+                    else:
+                        top_by_net = None
+                        bottom_by_net = None
+                    
                     players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
                     top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
 
