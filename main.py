@@ -1930,7 +1930,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
         
-        # Delete last bot message
+# Delete last bot message
         try:
             await delete_last_bot_message(context.bot, chat_id, user_id)
         except:
@@ -1939,20 +1939,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if steam_id and steam_nickname:
             from dota_mmr import generate_start_card, get_player_stats
 
-            # Simple loading indicator without frequent edits
-            async def animate_loading(msg, stop_event):
-                try:
-                    await msg.edit_text(text="⏳ Загрузка меню...")
-                except Exception:
-                    pass
-                # Wait until stopped, checking less frequently
-                while not stop_event.is_set():
-                    try:
-                        await asyncio.sleep(5.0)  # Check every 5 seconds instead of editing
-                    except Exception:
-                        break
-
-loading_msg = None
+            loading_msg = None
             stop_animation = None
             try:
                 loading_msg = await context.bot.send_message(
@@ -2677,34 +2664,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += "\n\n🌟 Любимые герои за 20 матчей:"
         else:
             text += "\n\n💡 /profile ＠ник — чужой профиль"
-        
-        # Simple loading indicator without frequent edits
-        async def animate_loading(msg, stop_event):
-            try:
-                await msg.edit_text(text="⏳ Загрузка профиля...")
-            except Exception:
-                pass
-            # Wait until stopped, checking less frequently
-            while not stop_event.is_set():
-                try:
-                    await asyncio.sleep(5.0)  # Check every 5 seconds instead of editing
-                except Exception:
-                    break
-
-        loading_msg = None
-        stop_animation = None
-        if target_user.get('steam_id'):
-            try:
-                loading_msg = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text="⏳ Загрузка профиля..."
-                )
-                stop_animation = asyncio.Event()
-                asyncio.create_task(animate_loading(loading_msg, stop_animation))
-            except Exception as e:
-                logger.debug(f"Could not send loading message: {e}")
-                loading_msg = None
-                stop_animation = None
         
         # Banner URL - для Steam использовать картинку с героями
         profile_banner_url = "https://i.ibb.co/n8g8yQYt/dasdsadasdsadasdsad.png"
