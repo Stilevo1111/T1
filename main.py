@@ -2597,7 +2597,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if not target_user:
             user_obj = update.effective_user
-            username = user_obj.username or user_obj.first_name
+            username = user_obj.username or user_obj.first_name or "Unknown"
             target_user = get_user(user_obj.id, username)
         
         # Send loading message for all users (shows that bot is working)
