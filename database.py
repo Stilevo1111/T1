@@ -454,22 +454,23 @@ def init_db():
         if "postgres" in scheme:
             # Создаём таблицу если не существует
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id SERIAL PRIMARY KEY,
-                    telegram_id BIGINT UNIQUE NOT NULL,
-                    username VARCHAR(255),
-                    fissure REAL DEFAULT 0.1,
-                    last_fissure DOUBLE PRECISION DEFAULT 0,
-                    last_message_id INTEGER DEFAULT 0,
-                    total_growth REAL DEFAULT 0,
-                    total_rolls INTEGER DEFAULT 0,
-                    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    current_streak INTEGER DEFAULT 0,
-                    best_streak INTEGER DEFAULT 0,
-                    current_position INTEGER DEFAULT 0,
-                    digest_position INTEGER DEFAULT 0,
-                    digest_fissure REAL DEFAULT 0.0
-                )
+                 CREATE TABLE IF NOT EXISTS users (
+                     id SERIAL PRIMARY KEY,
+                     telegram_id BIGINT UNIQUE NOT NULL,
+                     username VARCHAR(255),
+                     fissure REAL DEFAULT 0.1,
+                     last_fissure DOUBLE PRECISION DEFAULT 0,
+                     last_message_id INTEGER DEFAULT 0,
+                     total_growth REAL DEFAULT 0,
+                     total_rolls INTEGER DEFAULT 0,
+                     message_count INTEGER DEFAULT 0,
+                     last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                     current_streak INTEGER DEFAULT 0,
+                     best_streak INTEGER DEFAULT 0,
+                     current_position INTEGER DEFAULT 0,
+                     digest_position INTEGER DEFAULT 0,
+                     digest_fissure REAL DEFAULT 0.0
+                 )
             """)
             # Добавляем колонки если не существуют
             cursor.execute("""
@@ -481,36 +482,39 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS total_rolls INTEGER DEFAULT 0
             """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS current_streak INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS best_streak INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS current_position INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_position INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_fissure REAL DEFAULT 0.0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_rolls INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_growth REAL DEFAULT 0.0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_position INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NULL
-            """)
+             cursor.execute("""
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+             """)
+             cursor.execute("""
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS current_streak INTEGER DEFAULT 0
+             """)
+             cursor.execute("""
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS best_streak INTEGER DEFAULT 0
+             """)
+             cursor.execute("""
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS current_position INTEGER DEFAULT 0
+             """)
+             cursor.execute("""
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_position INTEGER DEFAULT 0
+             """)
+             cursor.execute("""
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_fissure REAL DEFAULT 0.0
+             """)
+             cursor.execute("""
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_rolls INTEGER DEFAULT 0
+             """)
+             cursor.execute("""
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_growth REAL DEFAULT 0.0
+             """)
+             cursor.execute("""
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_position INTEGER DEFAULT 0
+             """)
+             cursor.execute("""
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NULL
+             """)
+             cursor.execute("""
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS message_count INTEGER DEFAULT 0
+             """)
             # Dota 2 поля
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS steam_id BIGINT
@@ -598,15 +602,17 @@ def init_db():
                     digest_fissure REAL DEFAULT 0.0
                 )
             """)
-            # Для SQLite проверяем есть ли колонки и добавляем если нет
-            cursor.execute("PRAGMA table_info(users)")
-            columns = [col[1] for col in cursor.fetchall()]
-            if 'last_message_id' not in columns:
-                cursor.execute("ALTER TABLE users ADD COLUMN last_message_id INTEGER DEFAULT 0")
-            if 'total_growth' not in columns:
-                cursor.execute("ALTER TABLE users ADD COLUMN total_growth REAL DEFAULT 0")
-            if 'total_rolls' not in columns:
-                cursor.execute("ALTER TABLE users ADD COLUMN total_rolls INTEGER DEFAULT 0")
+             # Для SQLite проверяем есть ли колонки и добавляем если нет
+             cursor.execute("PRAGMA table_info(users)")
+             columns = [col[1] for col in cursor.fetchall()]
+             if 'last_message_id' not in columns:
+                 cursor.execute("ALTER TABLE users ADD COLUMN last_message_id INTEGER DEFAULT 0")
+             if 'total_growth' not in columns:
+                 cursor.execute("ALTER TABLE users ADD COLUMN total_growth REAL DEFAULT 0")
+             if 'total_rolls' not in columns:
+                 cursor.execute("ALTER TABLE users ADD COLUMN total_rolls INTEGER DEFAULT 0")
+             if 'message_count' not in columns:
+                 cursor.execute("ALTER TABLE users ADD COLUMN message_count INTEGER DEFAULT 0")
             if 'last_activity' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
             if 'current_streak' not in columns:
