@@ -2723,18 +2723,19 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             logger.error(f"Failed to send photo: {e}")
-if loading_msg:
-            try:
-                msg_id = loading_msg.message_id
-                logger.info(f"Deleting loading message in stats: chat_id={chat_id}, msg_id={msg_id}")
-                await context.bot.delete_message(chat_id, msg_id)
-                logger.info(f"Successfully deleted loading message {msg_id}")
-            except Exception as e:
-                logger.error(f"Failed to delete loading message in stats: {e}")
+            if loading_msg:
+                try:
+                    msg_id = loading_msg.message_id
+                    logger.info(f"Deleting loading message in stats: chat_id={chat_id}, msg_id={msg_id}")
+                    await context.bot.delete_message(chat_id, msg_id)
+                    logger.info(f"Successfully deleted loading message {msg_id}")
+                except Exception as e:
+                    logger.error(f"Failed to delete loading message in stats: {e}")
             if stop_animation:
                 stop_animation.set()
             return
         
+        # Normal flow - delete loading message after successful send
         if loading_msg:
             try:
                 await context.bot.delete_message(chat_id, loading_msg.message_id)
