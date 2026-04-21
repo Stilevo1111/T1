@@ -20,6 +20,7 @@ from dota_mmr import update_user_mmr
 from database import get_all_users_with_steam, user_cache, update_dota_week_top_cache
 import aiohttp
 from aiohttp import web
+from rate_limiter import telegram_rate_limiter, rate_limit
 
 # Logging setup
 logging.basicConfig(
@@ -59,6 +60,7 @@ def set_rate_limited(retry_after=None):
     logger.warning(f"Rate limited until {time.strftime('%H:%M:%S', time.localtime(_rate_limit_until))}")
 
 
+@rate_limit(tokens=1)
 async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
     """Удалить сообщение через delay секунд"""
     if job_queue:
@@ -83,6 +85,7 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
                 logger.warning(f"Failed to delete delayed message {msg_id} in chat {chat_id}: {e}")
 
 
+@rate_limit(tokens=1)
 async def delete_message_job(context):
     """Job для удаления сообщения"""
     bot = context.application.bot  # Доступ через context.application.bot в PTB v20+
@@ -173,6 +176,7 @@ async def decrease_inactive_job(context):
 
 
 
+@rate_limit(tokens=1)
 async def morning_greeting_job(context):
     """✅ Утреннее приветствие 09:00 MSK - 1 раз в чат"""
     from datetime import datetime as dt, timezone, timedelta
@@ -196,15 +200,15 @@ async def morning_greeting_job(context):
     greeting_text = random.choice(MORNING_GREETINGS)
     
     try:
-        logger.info(f"Запуск утреннего приветствия 09:00 MSK")
-        
-        digest_chat_id = get_config('digest_chat_id')
-        if not digest_chat_id:
-            logger.info("Чат для дайджеста не настроен")
-            return
-        
-        bot = context.application.bot
-        await bot.send_message(chat_id=digest_chat_id, text=greeting_text)
+         logger.info(f"Запуск утреннего приветствия 09:00 MSK")
+         
+         digest_chat_id = get_config('digest_chat_id')
+         if not digest_chat_id:
+             logger.info("Чат для дайджеста не настроен")
+             return
+         
+         bot = context.application.bot
+         await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=main_menu())
         
         set_config('daily_greeting_sent', today_str)
         logger.info(f"Утреннее приветствие отправлено в чат {digest_chat_id}")
@@ -213,6 +217,7 @@ async def morning_greeting_job(context):
         logger.error(f"Ошибка в morning_greeting_job: {e}")
 
 
+@rate_limit(tokens=1)
 async def night_greeting_job(context):
     """✅ Вечернее приветствие 23:00 MSK - 1 раз в чат"""
     from datetime import datetime as dt, timezone, timedelta
@@ -236,15 +241,15 @@ async def night_greeting_job(context):
     greeting_text = random.choice(NIGHT_GREETINGS)
     
     try:
-        logger.info(f"Запуск вечернего приветствия 23:00 MSK")
-        
-        digest_chat_id = get_config('digest_chat_id')
-        if not digest_chat_id:
-            logger.info("Чат для дайджеста не настроен")
-            return
-        
-        bot = context.application.bot
-        await bot.send_message(chat_id=digest_chat_id, text=greeting_text)
+         logger.info(f"Запуск вечернего приветствия 23:00 MSK")
+         
+         digest_chat_id = get_config('digest_chat_id')
+         if not digest_chat_id:
+             logger.info("Чат для дайджеста не настроен")
+             return
+         
+         bot = context.application.bot
+         await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=main_menu())
         
         set_config('night_greeting_sent', today_str)
         logger.info(f"Вечернее приветствие отправлено в чат {digest_chat_id}")
@@ -507,6 +512,7 @@ async def backup_database_job(context):
         logger.error(f"Backup job error: {e}")
 
 
+@rate_limit(tokens=1)
 async def update_all_mmr_job(context):
     """Ежечасовое обновление MMR всех пользователей с привязанным Steam (только в кеш)"""
     try:
@@ -638,6 +644,7 @@ async def refresh_digest_message(bot):
 #     pass
 
 
+@rate_limit(tokens=1)
 async def dota_digest_job(context):
     """Dota дайджест - лучший/худший винрейт и стрик побед за неделю"""
     try:
@@ -780,6 +787,7 @@ async def dota_digest_job(context):
 #     pass
 
 
+@rate_limit(tokens=1)
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов каждые 15 секунд"""
     try:
@@ -2099,6 +2107,7 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         schedule_delete(context.bot, chat.id, msg.message_id, 30, context.application.job_queue)
 
 
+@rate_limit(tokens=1)
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Increase fissure"""
     logger.info(f"User {update.effective_user.id} called fissure")
@@ -2503,6 +2512,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _user_processing.pop(user_obj.id, None)
 
 
+@rate_limit(tokens=1)
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show stats — свой или чужой профиль: /profile или /profile @username"""
     logger.info(f"User {update.effective_user.id} called stats")
@@ -2714,6 +2724,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+@rate_limit(tokens=1)
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show top users"""
     logger.info(f"User {update.effective_user.id} called top")
@@ -2800,6 +2811,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+@rate_limit(tokens=1)
 async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать топ игроков по MMR"""
     logger.info(f"User {update.effective_user.id} called topmmr")
