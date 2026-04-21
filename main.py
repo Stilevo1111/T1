@@ -3144,13 +3144,22 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
         if not allow_when_rate_limited and is_rate_limited():
             logger.warning(f"Skipping menu_handler due to rate limit")
             return
+        
+        # Check if we have a message - if not, this is not a text message update
+        if not update.message:
+            logger.warning(f"menu_handler: no message in update")
+            return
             
-        user_id = update.effective_user.id if update.effective_user else "unknown"
-        chat_id = update.message.chat_id if update.message else "unknown"
-        logger.info(f"menu_handler: user={user_id}, chat={chat_id}")
-         
+        if not update.message.text:
+            logger.warning(f"menu_handler: no text in message, msg={update.message}")
+            return
+            
+        text = update.message.text.strip()
+        logger.info(f"menu_handler: text='{text}' (len={len(text)})")
+        
         # Increment message count and update username if changed
         try:
+            user_id = update.effective_user.id
             db_user = get_user(user_id)  # get without auto-create
             if db_user:
                 updates = {}
