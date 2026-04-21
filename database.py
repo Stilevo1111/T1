@@ -1944,29 +1944,31 @@ def zeus_strike(percent=0.05):
     multiplier = 1.0 - percent
     
     logger.info(f"zeus_strike: starting with percent={percent}")
+    affected = 0
     
     try:
-        # Проверим сколько всего игроков в БД
-        total_count = db.execute_query("SELECT COUNT(*) as cnt FROM users", fetch="one")
-        tc = total_count['count'] if total_count and 'count' in total_count else (total_count[0] if total_count else 0)
-        logger.info(f"zeus_strike: total users: {tc}")
-        
-        # Проверим сколько игроков с fissure > 0.1
-        eligible_count = db.execute_query("SELECT COUNT(*) as cnt FROM users WHERE fissure > 0.1", fetch="one")
-        ec = eligible_count['count'] if eligible_count and 'count' in eligible_count else (eligible_count[0] if eligible_count else 0)
-        logger.info(f"zeus_strike: users with fissure > 0.1: {ec}")
-        
         if "postgres" in scheme:
+            # Get count before update
             count_query = "SELECT COUNT(*) as cnt FROM users WHERE fissure > 0.1"
             before_result = db.execute_query(count_query, fetch="one")
-            logger.info(f"zeus_strike: count_query result = {before_result}, type = {type(before_result)}")
-            affected = before_result['cnt'] if before_result and 'cnt' in before_result else (before_result[0] if before_result else 0)
+            if before_result:
+                if isinstance(before_result, dict):
+                    affected = before_result.get('cnt', 0) or 0
+                else:
+                    affected = before_result[0] if before_result else 0
+            
+            # Update all users
             query = "UPDATE users SET fissure = GREATEST(0.1, fissure * %s) WHERE fissure > 0.1"
             db.execute_query(query, (multiplier,))
         else:
             count_query = "SELECT COUNT(*) as cnt FROM users WHERE fissure > 0.1"
             before_result = db.execute_query(count_query, fetch="one")
-            affected = before_result['cnt'] if before_result and 'cnt' in before_result else (before_result[0] if before_result else 0)
+            if before_result:
+                if isinstance(before_result, dict):
+                    affected = before_result.get('cnt', 0) or 0
+                else:
+                    affected = before_result[0] if before_result else 0
+            
             query = "UPDATE users SET fissure = MAX(0.1, fissure * ?) WHERE fissure > 0.1"
             db.execute_query(query, (multiplier,))
         
@@ -1984,7 +1986,7 @@ def zeus_strike(percent=0.05):
         return affected
     except Exception as e:
         logger.error(f"Zeus strike error: {e}")
-        return 0
+        return affected  # Return affected count even on error, not 0
 
 def reset_all_fissure_data():
     """Сбрасывает cm,rolls и cooldown для всех пользователей"""

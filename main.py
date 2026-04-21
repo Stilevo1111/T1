@@ -449,6 +449,9 @@ async def backup_database_job(context):
         
         logger.info("Запуск копирования в backup БД")
         
+        # Import psycopg2 locally to avoid any shadowing issues
+        import psycopg2
+        
         main_url = urlparse(DATABASE_URL)
         backup_url = urlparse(BACKUP_DATABASE_URL)
         
@@ -1949,7 +1952,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except Exception:
                         break
 
-            loading_msg = None
+loading_msg = None
             stop_animation = None
             try:
                 loading_msg = await context.bot.send_message(
@@ -1958,8 +1961,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 stop_animation = asyncio.Event()
                 asyncio.create_task(animate_loading(loading_msg, stop_animation))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not send loading message: {e}")
+                loading_msg = None
             
             # Get avatar and heroes
             avatar_url = user.get("avatar")
@@ -2697,8 +2701,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 stop_animation = asyncio.Event()
                 asyncio.create_task(animate_loading(loading_msg, stop_animation))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not send loading message: {e}")
+                loading_msg = None
+                stop_animation = None
         
         # Banner URL - для Steam использовать картинку с героями
         profile_banner_url = "https://i.ibb.co/n8g8yQYt/dasdsadasdsadasdsad.png"
@@ -3519,6 +3525,12 @@ async def main():
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         
+        # Add error handler
+        async def error_handler(update, context):
+            logger.error(f"Update {update} caused error {context.error}")
+        
+        app.add_error_handler(error_handler)
+        
         webhook_url = os.getenv("WEBHOOK_URL")
         use_polling = os.getenv("USE_POLLING", "false").lower() == "true"
         
@@ -3635,9 +3647,12 @@ async def main():
         raise
     finally:
         try:
-            from database import flush_users_cache
+            from database import flush_users_cache, close_aiohttp_session
             flushed = flush_users_cache()
             logger.info(f"Shutdown: flushed {flushed} users to DB")
+            # Close aiohttp session to prevent "Unclosed connection" error
+            await close_aiohttp_session()
+            logger.info("Shutdown: aiohttp session closed")
         except Exception as flush_err:
             logger.error(f"Shutdown flush error: {flush_err}")
 
