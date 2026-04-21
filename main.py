@@ -254,7 +254,7 @@ async def night_greeting_job(context):
         set_config('night_greeting_sent', today_str)
         logger.info(f"Вечернее приветствие отправлено в чат {digest_chat_id}")
         
-except Exception as e:
+    except Exception as e:
         logger.error(f"Ошибка в night_greeting_job: {e}")
 
 
