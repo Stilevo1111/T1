@@ -1995,9 +1995,66 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update_last_message_id(user_id, msg.message_id)
             else:
                 await menu_handler(update, context)
+                if loading_msg:
+                    try:
+                        msg_id = loading_msg.message_id
+                        logger.info(f"Deleting loading message: chat_id={chat_id}, msg_id={msg_id}")
+                        await context.bot.delete_message(chat_id, msg_id)
+                        logger.info(f"Successfully deleted loading message {msg_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to delete loading message: {e}")
+                if stop_animation:
+                    stop_animation.set()
+                return
+        
+        # No Steam - show card with Telegram avatar, no message count
+        from dota_mmr import generate_start_card
+        
+        avatar_url = await get_user_avatar_url(context.bot, user_id)
+        
+        card_data = generate_start_card(
+            avatar_url=avatar_url,
+            message_count=message_count,
+            username=display_username,
+            steam_nickname=None,
+            rank_tier=0,
+            weekly_mvp=0,
+            weekly_top2=0,
+            weekly_top3=0
+        )
+        
+        if card_data:
+            msg = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=card_data,
+                reply_markup=main_menu()
+            )
+            set_last_bot_message(chat_id, user_id, msg.message_id)
+            update_last_message_id(user_id, msg.message_id)
+            if loading_msg:
+                try:
+                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                    logger.info(f"Deleted loading message {loading_msg.message_id} in start (with Steam)")
+                except Exception as e:
+                    logger.warning(f"Failed to delete loading message in start: {e}")
+            if stop_animation:
+                stop_animation.set()
         else:
-            # No Steam - show card with Telegram avatar, no message count
-            from dota_mmr import generate_start_card
+            await menu_handler(update, context)
+            if loading_msg:
+                try:
+                    msg_id = loading_msg.message_id
+                    logger.info(f"Deleting loading message: chat_id={chat_id}, msg_id={msg_id}")
+                    await context.bot.delete_message(chat_id, msg_id)
+                    logger.info(f"Successfully deleted loading message {msg_id}")
+                except Exception as e:
+                    logger.error(f"Failed to delete loading message: {e}")
+            if stop_animation:
+                stop_animation.set()
+            return
+        
+        # No Steam - show card with Telegram avatar, no message count
+        from dota_mmr import generate_start_card
             
             avatar_url = await get_user_avatar_url(context.bot, user_id)
             
@@ -2020,21 +2077,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 set_last_bot_message(chat_id, user_id, msg.message_id)
                 update_last_message_id(user_id, msg.message_id)
+                if loading_msg:
+                    try:
+                        await context.bot.delete_message(chat_id, loading_msg.message_id)
+                        logger.info(f"Deleted loading message {loading_msg.message_id} in start (no Steam)")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete loading message in start: {e}")
+                if stop_animation:
+                    stop_animation.set()
             else:
                 await menu_handler(update, context)
-        
-        # Always cleanup loading animation (finally block)
-        if loading_msg:
-            try:
-                msg_id = loading_msg.message_id
-                logger.info(f"Deleting loading message: chat_id={chat_id}, msg_id={msg_id}")
-                await context.bot.delete_message(chat_id, msg_id)
-                logger.info(f"Successfully deleted loading message {msg_id}")
-            except Exception as e:
-                logger.error(f"Failed to delete loading message: {e}")
-                pass
-        if stop_animation:
-            stop_animation.set()
+                if loading_msg:
+                    try:
+                        msg_id = loading_msg.message_id
+                        logger.info(f"Deleting loading message: chat_id={chat_id}, msg_id={msg_id}")
+                        await context.bot.delete_message(chat_id, msg_id)
+                        logger.info(f"Successfully deleted loading message {msg_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to delete loading message: {e}")
+                if stop_animation:
+                    stop_animation.set()
+                return
     
     except Exception as e:
         error_str = str(e).lower()
@@ -2046,6 +2109,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 retry_after = int(match.group(1)) + 5
             set_rate_limited(retry_after)
         logger.error(f"start command error: {e}")
+        if loading_msg:
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception:
+                pass
+        if stop_animation:
+            stop_animation.set()
         await menu_handler(update, context, allow_when_rate_limited=True)
 
 
@@ -2739,8 +2809,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if loading_msg:
             try:
                 await context.bot.delete_message(chat_id, loading_msg.message_id)
-            except Exception:
-                pass
+                logger.info(f"Deleted loading message {loading_msg.message_id} in stats")
+            except Exception as e:
+                logger.warning(f"Failed to delete loading message in stats: {e}")
         
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
