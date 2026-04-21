@@ -1936,11 +1936,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
         
+        loading_msg = None
+        stop_animation = None
+        
         if steam_id and steam_nickname:
             from dota_mmr import generate_start_card, get_player_stats
 
-            loading_msg = None
-            stop_animation = None
             try:
                 loading_msg = await context.bot.send_message(
                     chat_id=chat_id,
