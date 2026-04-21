@@ -2791,15 +2791,18 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="HTML",
                 reply_markup=main_menu()
             )
-            logger.info(f"Profile photo sent successfully")
+            logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
             
             # Delete loading message immediately after successful send
             if loading_msg:
+                logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
                 try:
                     await context.bot.delete_message(chat_id, loading_msg.message_id)
-                    logger.info(f"Deleted loading message {loading_msg.message_id} in stats")
+                    logger.error(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
                 except Exception as del_e:
-                    logger.warning(f"Failed to delete loading message in stats: {del_e}")
+                    logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
+            else:
+                logger.error(f"ERROR: loading_msg is None! Cannot delete.")
             
             if stop_animation:
                 stop_animation.set()
