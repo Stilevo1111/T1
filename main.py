@@ -3236,35 +3236,39 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
         text = update.message.text.strip()
         logger.info(f"menu_handler: text='{text}' (len={len(text)})")
         
-        # Increment message count and update username if changed
+        # Increment message count and update username if changed (only for group chats)
         try:
-            user_id = update.effective_user.id
-            db_user = get_user(user_id)  # get without auto-create
-            if not db_user:
-                # User not found in DB, create them first
-                telegram_username = update.effective_user.username
-                first_name = update.effective_user.first_name
-                fallback_name = telegram_username or first_name or "Unknown"
-                db = Database()
-                db.add_user(user_id, fallback_name, None, None)
-                db_user = get_user(user_id)  # Get the newly created user
-                logger.info(f"Created new user {user_id} for message counting")
-            
-            if db_user:
-                current_count = db_user.get('message_count', 0)
-                new_count = current_count + 1
-                logger.info(f"message_count: {user_id} old={current_count} new={new_count}, user exists: {db_user is not None}")
-                updates = {'message_count': new_count}
-                # Обновляем username только если есть telegram_username и он отличается;
-                # или если username пуст, а есть first_name — используем first_name как fallback
-                current_username = db_user.get('username')
-                new_telegram_username = update.effective_user.username
-                if new_telegram_username and new_telegram_username != current_username:
-                    updates['username'] = new_telegram_username
-                elif current_username is None and update.effective_user.first_name:
-                    updates['username'] = update.effective_user.first_name
-                update_user_fields_batch(user_id, updates)
-                logger.info(f"Saved message_count for {user_id}: {new_count}")
+            # Skip counting for private messages (DM with bot)
+            if update.effective_chat.type == 'private':
+                logger.info(f"menu_handler: skipping message_count for private chat")
+            else:
+                user_id = update.effective_user.id
+                db_user = get_user(user_id)  # get without auto-create
+                if not db_user:
+                    # User not found in DB, create them first
+                    telegram_username = update.effective_user.username
+                    first_name = update.effective_user.first_name
+                    fallback_name = telegram_username or first_name or "Unknown"
+                    db = Database()
+                    db.add_user(user_id, fallback_name, None, None)
+                    db_user = get_user(user_id)  # Get the newly created user
+                    logger.info(f"Created new user {user_id} for message counting")
+                
+                if db_user:
+                    current_count = db_user.get('message_count', 0)
+                    new_count = current_count + 1
+                    logger.info(f"message_count: {user_id} old={current_count} new={new_count}, user exists: {db_user is not None}")
+                    updates = {'message_count': new_count}
+                    # Обновляем username только если есть telegram_username и он отличается;
+                    # или если username пуст, а есть first_name — используем first_name как fallback
+                    current_username = db_user.get('username')
+                    new_telegram_username = update.effective_user.username
+                    if new_telegram_username and new_telegram_username != current_username:
+                        updates['username'] = new_telegram_username
+                    elif current_username is None and update.effective_user.first_name:
+                        updates['username'] = update.effective_user.first_name
+                    update_user_fields_batch(user_id, updates)
+                    logger.info(f"Saved message_count for {user_id}: {new_count}")
         except Exception as e:
             logger.error(f"Error updating message_count: {e}")
         
