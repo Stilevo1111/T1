@@ -926,8 +926,10 @@ class Database:
                 else:
                     if username:
                         self.add_user(telegram_id, username, None, None)
+                        logger.warning(f"DB.get_user: created new user {telegram_id} in DB")
                         return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "week_updated_at": None, "mmr_updated_at": None, "message_count": 0}
                     else:
+                        logger.warning(f"DB.get_user: user {telegram_id} not found")
                         return None
         except Exception as e:
             logger.error(f"Error getting user: {e}")
@@ -1536,32 +1538,40 @@ def get_user(telegram_id, username=None):
     # Пробуем получить из кеша
     cached_user = user_cache.get(telegram_id)
     if cached_user:
+        msg_count = cached_user.get('message_count', 0)
+        logger.info(f"get_user: cache hit for {telegram_id}, message_count={msg_count}")
         return cached_user
     
     # Нет в кеше - читаем из БД
     db = Database()
     user = db.get_user(telegram_id, username)
     
-    # Сохраняем в кеш если пользователь найден
     if user:
-        user.setdefault('fissure', 0)
-        user.setdefault('last_fissure', 0)
-        user.setdefault('total_growth', 0)
-        user.setdefault('total_rolls', 0)
-        user.setdefault('best_streak', 0)
-        user.setdefault('current_streak', 0)
-        user.setdefault('steam_id', None)
-        user.setdefault('steam_nickname', None)
-        user.setdefault('mmr', 0)
-        user.setdefault('rank_tier', 0)
-        user.setdefault('week_games', 0)
-        user.setdefault('week_wins', 0)
-        user.setdefault('week_best_streak', 0)
-        user.setdefault('week_current_streak', 0)
-        user.setdefault('dota_total_games', 0)
-        user.setdefault('dota_wins', 0)
-        user.setdefault('message_count', 0)
-        user_cache.set(telegram_id, user)
+        msg_count = user.get('message_count', 0)
+        logger.info(f"get_user: DB hit for {telegram_id}, message_count={msg_count}")
+        
+        # Сохраняем в кеш если пользователь найден
+        if user:
+            user.setdefault('fissure', 0)
+            user.setdefault('last_fissure', 0)
+            user.setdefault('total_growth', 0)
+            user.setdefault('total_rolls', 0)
+            user.setdefault('best_streak', 0)
+            user.setdefault('current_streak', 0)
+            user.setdefault('steam_id', None)
+            user.setdefault('steam_nickname', None)
+            user.setdefault('mmr', 0)
+            user.setdefault('rank_tier', 0)
+            user.setdefault('week_games', 0)
+            user.setdefault('week_wins', 0)
+            user.setdefault('week_best_streak', 0)
+            user.setdefault('week_current_streak', 0)
+            user.setdefault('dota_total_games', 0)
+            user.setdefault('dota_wins', 0)
+            user.setdefault('message_count', 0)
+            user_cache.set(telegram_id, user)
+    else:
+        logger.info(f"get_user: user {telegram_id} NOT found in cache or DB")
     
     return user
 

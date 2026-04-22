@@ -1960,6 +1960,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         steam_nickname = user.get("steam_nickname")
         rank_tier = user.get("rank_tier", 0)
         message_count = user.get("message_count", 0)
+        logger.info(f"start: user {user_id} message_count from DB/cache = {message_count}")
         
         chat_id = update.effective_chat.id
         user_msg_id = update.message.message_id if update.message else None
