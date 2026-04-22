@@ -537,7 +537,7 @@ async def count_group_messages_job(context):
             return
         
         digest_chat_id = str(digest_chat_id)
-        bot = context.application.bot
+        bot = context.bot
         
         last_counted_message_id = int(get_config('last_counted_message_id') or 0)
         
@@ -545,7 +545,9 @@ async def count_group_messages_job(context):
         new_last_message_id = last_counted_message_id
         
         try:
-            async for message in bot.get_chat_history(chat_id=int(digest_chat_id), limit=100):
+            from telegram import Bot
+            telegram_bot = Bot(token=bot.token)
+            async for message in telegram_bot.get_chat_history(chat_id=int(digest_chat_id), limit=100):
                 if message.message_id <= last_counted_message_id:
                     break
                 if message.from_user and message.from_user.id:
