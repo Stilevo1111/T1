@@ -63,6 +63,11 @@ def set_rate_limited(retry_after=None):
 @rate_limit(tokens=1)
 async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
     """Удалить сообщение через delay секунд"""
+    # Skip invalid message IDs
+    if not isinstance(msg_id, int) or msg_id <= 0:
+        logger.debug(f"delete_after_delay: skipping invalid msg_id={msg_id}")
+        return
+    
     if job_queue:
         # Используем JobQueue для надежного планирования
         job_queue.run_once(
@@ -75,6 +80,7 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
         # Fallback - пытаемся удалить сразу (менее надежно)
         await asyncio.sleep(delay)
         try:
+            logger.info(f"delete_after_delay: attempting to delete msg_id={msg_id} in chat={chat_id}")
             await bot.delete_message(chat_id, msg_id)
             logger.info(f"Deleted delayed message {msg_id} in chat {chat_id}")
         except Exception as e:
@@ -91,7 +97,14 @@ async def delete_message_job(context):
     bot = context.application.bot  # Доступ через context.application.bot в PTB v20+
     chat_id = context.job.data['chat_id']
     msg_id = context.job.data['msg_id']
+    
+    # Skip invalid message IDs
+    if not isinstance(msg_id, int) or msg_id <= 0:
+        logger.debug(f"delete_message_job: skipping invalid msg_id={msg_id}")
+        return
+    
     try:
+        logger.info(f"delete_message_job: attempting to delete msg_id={msg_id} in chat={chat_id}")
         await bot.delete_message(chat_id, msg_id)
         logger.info(f"Deleted scheduled message {msg_id} in chat {chat_id}")
     except Exception as e:
@@ -1443,6 +1456,7 @@ async def delete_last_bot_message(bot, chat_id, user_id):
                 continue
             
             try:
+                logger.info(f"delete_last_bot_message: attempting to delete msg_id={msg_id} in chat={chat_id}")
                 await bot.delete_message(chat_id, msg_id)
                 logger.info(f"Deleted last bot message for user {user_id}: {msg_id}")
             except Exception as e:
@@ -1464,6 +1478,11 @@ async def delete_last_bot_message(bot, chat_id, user_id):
 
 def set_last_bot_message(chat_id, user_id, message_id):
     """Set the last bot message for this user in this chat"""
+    # Skip invalid message IDs
+    if not isinstance(message_id, int) or message_id <= 0:
+        logger.debug(f"set_last_bot_message: skipping invalid message_id={message_id}")
+        return
+    
     if chat_id not in last_bot_message:
         last_bot_message[chat_id] = {}
     last_bot_message[chat_id][user_id] = message_id
@@ -1471,6 +1490,11 @@ def set_last_bot_message(chat_id, user_id, message_id):
 
 def add_bot_message(chat_id, user_id, message_id):
     """Add bot message to track list for this user in this chat"""
+    # Skip invalid message IDs
+    if not isinstance(message_id, int) or message_id <= 0:
+        logger.debug(f"add_bot_message: skipping invalid message_id={message_id}")
+        return
+    
     if chat_id not in last_bot_message:
         last_bot_message[chat_id] = {}
     # Сохраняем последние 2 сообщения для удаления
