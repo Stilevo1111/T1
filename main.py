@@ -2026,6 +2026,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 set_last_bot_message(chat_id, user_id, msg.message_id)
                 update_last_message_id(user_id, msg.message_id)
+                # Auto-delete after 30 seconds
+                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
             else:
                 await menu_handler(update, context)
             if loading_msg:
@@ -2062,23 +2064,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             set_last_bot_message(chat_id, user_id, msg.message_id)
             update_last_message_id(user_id, msg.message_id)
-            if loading_msg:
-                try:
-                    await context.bot.delete_message(chat_id, loading_msg.message_id)
-                    logger.info(f"Deleted loading message {loading_msg.message_id} in start (with Steam)")
-                except Exception as e:
-                    logger.warning(f"Failed to delete loading message in start: {e}")
+            # Auto-delete after 30 seconds
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
         else:
             await menu_handler(update, context)
-            if loading_msg:
-                try:
-                    msg_id = loading_msg.message_id
-                    logger.info(f"Deleting loading message: chat_id={chat_id}, msg_id={msg_id}")
-                    await context.bot.delete_message(chat_id, msg_id)
-                    logger.info(f"Successfully deleted loading message {msg_id}")
-                except Exception as e:
-                    logger.error(f"Failed to delete loading message: {e}")
-                return
+        if loading_msg:
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+                logger.info(f"Deleted loading message {loading_msg.message_id} in start (no Steam)")
+            except Exception as e:
+                logger.warning(f"Failed to delete loading message in start: {e}")
     
     except Exception as e:
         error_str = str(e).lower()
