@@ -2920,6 +2920,9 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from database import get_user
         user = get_user(update.effective_user.id)
         
+        # Banner URL
+        topmmr_banner_url = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
+        
         # Только читаем топ из БД - данные уже должны быть обновлены в update_all_mmr_job
         logger.info(f"topmmr: before get_dota_week_top_from_db")
         top_users = get_dota_week_top_from_db(8, force_refresh=True)
@@ -3061,10 +3064,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     lines.append(f" └ Нет игр за неделю\n")
             
             text = "".join(lines)
-        
-        # Add header to final text
-        topmmr_banner_url = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
-        text = f"{text}"
         
         # Delete previous bot message before sending new one
         try:

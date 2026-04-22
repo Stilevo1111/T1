@@ -1006,7 +1006,7 @@ class Database:
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             
-            if get_db_type() == "postgresql":
+            if "postgres" in scheme:
                 query = "SELECT telegram_id, username, steam_nickname, first_name, fissure FROM users WHERE in_chat = TRUE ORDER BY fissure DESC LIMIT %s"
                 users = self.execute_query(query, (limit,), fetch="all")
                 return [{"telegram_id": u["telegram_id"], "username": u["username"], "steam_nickname": u["steam_nickname"], "first_name": u["first_name"], "fissure": u["fissure"]} for u in users]
@@ -2523,10 +2523,16 @@ def _get_dota_week_top_query(limit):
         cursor = conn.cursor()
         
         # Сначала проверим, есть ли вообще данные
-        cursor.execute("""
-            SELECT COUNT(*) FROM users 
-            WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
-        """)
+        if "postgres" in scheme:
+            cursor.execute("""
+                SELECT COUNT(*) FROM users 
+                WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = TRUE
+            """)
+        else:
+            cursor.execute("""
+                SELECT COUNT(*) FROM users 
+                WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
+            """)
         total_with_steam = cursor.fetchone()[0]
         cursor.execute("""
             SELECT COUNT(*) FROM users 
