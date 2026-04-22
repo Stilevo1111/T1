@@ -1572,8 +1572,8 @@ def get_user(telegram_id, username=None):
             user.setdefault('dota_wins', 0)
             user.setdefault('message_count', 0)
             user_cache.set(telegram_id, user)
-    else:
-        logger.info(f"get_user: user {telegram_id} NOT found in cache or DB")
+        else:
+            logger.info(f"get_user: user {telegram_id} NOT found in cache or DB")
     
     return user
 
