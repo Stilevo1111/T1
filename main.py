@@ -2150,9 +2150,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = callback_query.data
         if data == "link":
             await callback_query.answer()
-            if callback_query.message:
-                callback_query.message.text = "🔑 Привязать Аккаунт"
-                await link(update, context)
+            await link(update, context)
         else:
             await callback_query.answer()
 
