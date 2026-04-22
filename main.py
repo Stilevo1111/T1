@@ -1604,48 +1604,6 @@ ZEUS_ICON_URL = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_r
 # Выходной бонус
 WEEKEND_BONUS_MULTIPLIERS = [1.5, 2, 2.5]
 
-# Счётчик бонусной фистуры за сутки
-BONUS_FISSURE_GOAL = 10  # сколько бросков нужно для бонуса
-
-
-def _load_daily_fissure_rolls():
-    """Загрузить счётчик бросков из БД"""
-    try:
-        return int(get_config("daily_fissure_rolls", 0))
-    except (ValueError, TypeError):
-        return 0
-
-
-def _save_daily_fissure_rolls(value):
-    """Сохранить счётчик бросков в БД"""
-    set_config("daily_fissure_rolls", str(value))
-
-
-def _reset_daily_fissure_rolls():
-    """Сбросить счётчик бросков (вызывается в полночь)"""
-    global daily_fissure_rolls
-    daily_fissure_rolls = 0
-    _save_daily_fissure_rolls(0)
-    logger.info("Daily fissure rolls counter reset")
-
-
-def _load_bonus_ready_users():
-    """Загрузить бонусы из БД"""
-    try:
-        data = get_config("bonus_ready_users", "{}")
-        return json.loads(data) if data else {}
-    except (ValueError, TypeError, json.JSONDecodeError):
-        return {}
-
-
-def _save_bonus_ready_users(users):
-    """Сохранить бонусы в БД"""
-    set_config("bonus_ready_users", json.dumps(users))
-
-
-daily_fissure_rolls = _load_daily_fissure_rolls()
-bonus_ready_users = _load_bonus_ready_users()
-
 # Тексты дайджестов
 MORNING_DIGEST_HEADER = "🌅ФИССУРА ДАЙДЖЕСТ"
 MORNING_DIGEST_FOOTER = "🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
@@ -2233,23 +2191,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(user_obj.id, username)
         logger.info(f"user data: {user}")
         
-        # Проверяем кулдаун или бонус (для всех игроков)
-        bonus_time = bonus_ready_users.get("all", 0)
-        # Бонус сгорает через 5 часов если не использован
-        BONUS_EXPIRE = 5 * 3600  # 5 часов
-        if bonus_time > 0 and (now - bonus_time) > BONUS_EXPIRE:
-            # Бонус протух - удаляем
-            bonus_ready_users.pop("all", None)
-            _save_bonus_ready_users(bonus_ready_users)
-            bonus_time = 0
-        
-        has_bonus = (bonus_time > 0)
-        
-        if has_bonus:
-            # Бонус - пропускаем кулдаун
-            bonus_ready_users.pop("all", None)
-            _save_bonus_ready_users(bonus_ready_users)
-        elif now - (user.get("last_fissure") or 0) < COOLDOWN:
+        # Check cooldown
+        if now - (user.get("last_fissure") or 0) < COOLDOWN:
             wait = COOLDOWN - (now - (user.get("last_fissure") or 0))
             elapsed = COOLDOWN - wait
             filled = int(elapsed / COOLDOWN * 10)
@@ -2266,7 +2209,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
             update_last_message_id(user_obj.id, result_msg.message_id)
             return
-
+        
         multicast_count = 1
         multicast_text = ""
         original_roll = None
@@ -2320,27 +2263,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Остальные события (обычный ролл или мулькаст)
         roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
         
-        # Инкремент счётчика для бонусной фиссуры
-        global daily_fissure_rolls
-        bonus_available = False
-        daily_fissure_rolls += 1
-        _save_daily_fissure_rolls(daily_fissure_rolls)
-        
-        # Проверяем достигли цели - бонус будет на следующий бросок
-        if daily_fissure_rolls >= BONUS_FISSURE_GOAL:
-            # Бонус для ВСЕХ игроков - сохраняем с timestamp
-            bonus_ready_users["all"] = now
-            daily_fissure_rolls = 0
-            _save_daily_fissure_rolls(0)
-            _save_bonus_ready_users(bonus_ready_users)
-            # Отправляем оповещение в чат - бонус для ВСЕХ
-            bonus_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"✅ ЗАДАНОЕ ВЫПОЛНЕНО: 🎁 10/10! +1 ФИССУРА!"
-            )
-            schedule_delete(context.bot, chat_id, bonus_msg.message_id, 30, context.application.job_queue)
-            # Обновить дайджест для всех игроков
-            await refresh_digest_message(context.bot)
         
         slot_msg_ids = []
         
