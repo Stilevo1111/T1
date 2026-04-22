@@ -2873,6 +2873,8 @@ def get_all_users():
         scheme = url.scheme
         cursor = conn.cursor()
         
+        logger.info(f"get_all_users: connecting to {scheme} database")
+        
         if "postgres" in scheme:
             cursor.execute("""
                 SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
