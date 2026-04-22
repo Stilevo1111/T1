@@ -528,6 +528,84 @@ async def backup_database_job(context):
         logger.error(f"Backup job error: {e}")
 
 
+async def count_group_messages_job(context):
+    """Подсчёт сообщений пользователей в групповом чате"""
+    try:
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            logger.info("count_group_messages_job: digest_chat_id не настроен")
+            return
+        
+        digest_chat_id = str(digest_chat_id)
+        bot = context.bot
+        
+        last_counted_message_id = int(get_config('last_counted_message_id') or 0)
+        
+        message_counts = {}
+        new_last_message_id = last_counted_message_id
+        
+        try:
+            async for message in bot.get_chat_history(chat_id=int(digest_chat_id), limit=100):
+                if message.message_id <= last_counted_message_id:
+                    break
+                if message.from_user and message.from_user.id:
+                    user_id = message.from_user.id
+                    message_counts[user_id] = message_counts.get(user_id, 0) + 1
+                if message.message_id > new_last_message_id:
+                    new_last_message_id = message.message_id
+        except Exception as e:
+            logger.error(f"Error getting chat history: {e}")
+            return
+        
+        if message_counts:
+            logger.info(f"count_group_messages_job: подсчитано {len(message_counts)} пользователей")
+            
+            for user_id, count in message_counts.items():
+                try:
+                    db_user = get_user(user_id)
+                    if not db_user:
+                        user = await bot.get_chat_member(chat_id=int(digest_chat_id), user_id=user_id)
+                        fallback_name = user.user.username or user.user.first_name or "Unknown"
+                        db = Database()
+                        db.add_user(user_id, fallback_name, None, None)
+                        db_user = get_user(user_id)
+                    
+                    if db_user:
+                        current_count = db_user.get('message_count', 0)
+                        new_count = current_count + count
+                        updates = {'message_count': new_count}
+                        
+                        current_username = db_user.get('username')
+                        new_telegram_username = None
+                        try:
+                            member = await bot.get_chat_member(chat_id=int(digest_chat_id), user_id=user_id)
+                            new_telegram_username = member.user.username
+                        except:
+                            pass
+                        
+                        if new_telegram_username and new_telegram_username != current_username:
+                            updates['username'] = new_telegram_username
+                        elif current_username is None:
+                            try:
+                                member = await bot.get_chat_member(chat_id=int(digest_chat_id), user_id=user_id)
+                                if member.user.first_name:
+                                    updates['username'] = member.user.first_name
+                            except:
+                                pass
+                        
+                        update_user_fields_batch(user_id, updates)
+                        logger.info(f"count_group_messages_job: user {user_id} +{count} messages, total={new_count}")
+                except Exception as e:
+                    logger.error(f"Error updating message_count for user {user_id}: {e}")
+        
+        if new_last_message_id > last_counted_message_id:
+            set_config('last_counted_message_id', str(new_last_message_id))
+            logger.info(f"count_group_messages_job: обновлён last_counted_message_id = {new_last_message_id}")
+        
+    except Exception as e:
+        logger.error(f"count_group_messages_job error: {e}", exc_info=True)
+
+
 @rate_limit(tokens=1)
 async def update_all_mmr_job(context):
     """Ежечасовое обновление MMR всех пользователей с привязанным Steam (только в кеш)"""
@@ -3236,38 +3314,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
         text = update.message.text.strip()
         logger.info(f"menu_handler: text='{text}' (len={len(text)})")
         
-        # Increment message count and update username if changed
-        try:
-            user_id = update.effective_user.id
-            db_user = get_user(user_id)  # get without auto-create
-            if not db_user:
-                # User not found in DB, create them first
-                telegram_username = update.effective_user.username
-                first_name = update.effective_user.first_name
-                fallback_name = telegram_username or first_name or "Unknown"
-                db = Database()
-                db.add_user(user_id, fallback_name, None, None)
-                db_user = get_user(user_id)  # Get the newly created user
-                logger.info(f"Created new user {user_id} for message counting")
-            
-            if db_user:
-                current_count = db_user.get('message_count', 0)
-                new_count = current_count + 1
-                logger.info(f"message_count: {user_id} old={current_count} new={new_count}, user exists: {db_user is not None}")
-                updates = {'message_count': new_count}
-                # Обновляем username только если есть telegram_username и он отличается;
-                # или если username пуст, а есть first_name — используем first_name как fallback
-                current_username = db_user.get('username')
-                new_telegram_username = update.effective_user.username
-                if new_telegram_username and new_telegram_username != current_username:
-                    updates['username'] = new_telegram_username
-                elif current_username is None and update.effective_user.first_name:
-                    updates['username'] = update.effective_user.first_name
-                update_user_fields_batch(user_id, updates)
-                logger.info(f"Saved message_count for {user_id}: {new_count}")
-        except Exception as e:
-            logger.error(f"Error updating message_count: {e}")
-        
+        # Message counting moved to group chat periodic job
         if not update.message:
             logger.warning(f"menu_handler: no message in update")
             return
@@ -3578,6 +3625,13 @@ async def main():
             alternate_digest_job,
             interval=datetime.timedelta(seconds=30),
             first=datetime.datetime.now() + datetime.timedelta(seconds=20)
+        )
+        
+        # Подсчёт сообщений в группе каждые 5 минут
+        job_queue.run_repeating(
+            count_group_messages_job,
+            interval=datetime.timedelta(minutes=5),
+            first=datetime.datetime.now() + datetime.timedelta(minutes=1)
         )
         
         job_queue.run_daily(
