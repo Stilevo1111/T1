@@ -1534,19 +1534,48 @@ class Database:
 
 # Функции для совместимости со старым кодом
 def get_user(telegram_id, username=None):
-    """Получить пользователя - всегда из БД для актуальных данных"""
-    # Всегда читаем из БД чтоб получить актуальные данные включая message_count
+    """Получить пользователя - сначала из кеша, потом из БД"""
+    # Пробуем получить из кеша
+    cached_user = user_cache.get(telegram_id)
+    if cached_user:
+        msg_count = cached_user.get('message_count', 0)
+        logger.info(f"get_user: cache hit for {telegram_id}, message_count={msg_count}")
+        return cached_user
+    
+    # Нет в кеше - читаем из БД
     db = Database()
     user = db.get_user(telegram_id, username)
     
     if user:
         msg_count = user.get('message_count', 0)
-        logger.info(f"get_user: DB read for {telegram_id}, message_count={msg_count}")
-        # Обновляем кэш
+        logger.info(f"get_user: DB hit for {telegram_id}, message_count={msg_count}")
+    else:
+        logger.warning(f"get_user: user {telegram_id} NOT found in DB - will be created with message_count=0")
+        
+    # Сохраняем в кеш если пользователь найден
+    if user:
+        user.setdefault('fissure', 0)
+        user.setdefault('last_fissure', 0)
+        user.setdefault('total_growth', 0)
+        user.setdefault('total_rolls', 0)
+        user.setdefault('best_streak', 0)
+        user.setdefault('current_streak', 0)
+        user.setdefault('steam_id', None)
+        user.setdefault('steam_nickname', None)
+        user.setdefault('mmr', 0)
+        user.setdefault('rank_tier', 0)
+        user.setdefault('week_games', 0)
+        user.setdefault('week_wins', 0)
+        user.setdefault('week_best_streak', 0)
+        user.setdefault('week_current_streak', 0)
+        user.setdefault('dota_total_games', 0)
+        user.setdefault('dota_wins', 0)
+        user.setdefault('message_count', 0)
         user_cache.set(telegram_id, user)
-        return user
+    else:
+        logger.info(f"get_user: user {telegram_id} NOT found in cache or DB")
     
-    return None
+    return user
 
 
 def get_user_by_username(username):
@@ -2888,9 +2917,65 @@ def get_all_users_with_steam():
     finally:
         if conn:
             conn.close()
-    
-    
-    # Second occurrence - for get_all_users
+
+
+def get_all_users_from_db():
+    """Получение всех пользователей из БД (полные данные, включая message_count)"""
+    conn = None
+    try:
+        conn = get_connection()
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        cursor = conn.cursor()
+        
+        if "postgres" in scheme:
+            cursor.execute("""
+                SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
+                       total_growth, total_rolls, best_streak, current_streak,
+                       steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
+                       week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
+                       COALESCE(message_count, 0) as message_count
+                FROM users
+            """)
+            users = cursor.fetchall()
+            cursor.close()
+            return [{
+                "telegram_id": u[0], "username": u[1], "fissure": u[2], "last_fissure": u[3],
+                "last_message_id": u[4], "total_growth": u[5], "total_rolls": u[6],
+                "best_streak": u[7], "current_streak": u[8], "steam_id": u[9],
+                "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
+                "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
+                "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18], 
+                "last_dota_games": u[19], "last_dota_wins": u[20], 
+                "message_count": u[21] if len(u) > 21 else 0
+            } for u in users]
+        else:
+            cursor.execute("""
+                SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
+                       total_growth, total_rolls, best_streak, current_streak,
+                       steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
+                       week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
+                       COALESCE(message_count, 0) as message_count
+                FROM users
+            """)
+            users = cursor.fetchall()
+            cursor.close()
+            return [{
+                "telegram_id": u[0], "username": u[1], "fissure": u[2], "last_fissure": u[3],
+                "last_message_id": u[4], "total_growth": u[5], "total_rolls": u[6],
+                "best_streak": u[7], "current_streak": u[8], "steam_id": u[9],
+                "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
+                "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
+                "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18], 
+                "last_dota_games": u[19], "last_dota_wins": u[20], 
+                "message_count": u[21] if len(u) > 21 else 0
+            } for u in users]
+    except Exception as e:
+        logger.error(f"Error get_all_users_from_db: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
 
 
 def backup_database(backup_dir=None):

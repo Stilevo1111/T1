@@ -528,6 +528,98 @@ async def backup_database_job(context):
         logger.error(f"Backup job error: {e}")
 
 
+async def count_group_messages_job(context):
+    """Подсчёт сообщений пользователей в групповом чате"""
+    try:
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            logger.info("count_group_messages_job: digest_chat_id не настроен")
+            return
+        
+        digest_chat_id = str(digest_chat_id)
+        bot = context.application.bot
+        
+        last_counted_message_id = int(get_config('last_counted_message_id') or 0)
+        
+        message_counts = {}
+        new_last_message_id = last_counted_message_id
+        
+        try:
+            import aiohttp
+            token = bot.token
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"https://api.telegram.org/bot{token}/getChatHistory",
+                    params={"chat_id": int(digest_chat_id), "limit": 100}
+                ) as resp:
+                    data = await resp.json()
+                    if data.get("ok"):
+                        messages = data.get("result", [])
+                        for message in messages:
+                            msg_id = message.get("message_id")
+                            if msg_id <= last_counted_message_id:
+                                continue
+                            from_user = message.get("from")
+                            if from_user and from_user.get("id"):
+                                user_id = from_user["id"]
+                                message_counts[user_id] = message_counts.get(user_id, 0) + 1
+                            if msg_id > new_last_message_id:
+                                new_last_message_id = msg_id
+                    else:
+                        logger.error(f"getChatHistory API error: {data}")
+        except Exception as e:
+            logger.error(f"Error getting chat history: {e}")
+            return
+        
+        if message_counts:
+            logger.info(f"count_group_messages_job: подсчитано {len(message_counts)} пользователей")
+            
+            for user_id, count in message_counts.items():
+                try:
+                    db_user = get_user(user_id)
+                    if not db_user:
+                        user = await bot.get_chat_member(chat_id=int(digest_chat_id), user_id=user_id)
+                        fallback_name = user.user.username or user.user.first_name or "Unknown"
+                        db = Database()
+                        db.add_user(user_id, fallback_name, None, None)
+                        db_user = get_user(user_id)
+                    
+                    if db_user:
+                        current_count = db_user.get('message_count', 0)
+                        new_count = current_count + count
+                        updates = {'message_count': new_count}
+                        
+                        current_username = db_user.get('username')
+                        new_telegram_username = None
+                        try:
+                            member = await bot.get_chat_member(chat_id=int(digest_chat_id), user_id=user_id)
+                            new_telegram_username = member.user.username
+                        except Exception:
+                            pass
+                        
+                        if new_telegram_username and new_telegram_username != current_username:
+                            updates['username'] = new_telegram_username
+                        elif current_username is None:
+                            try:
+                                member = await bot.get_chat_member(chat_id=int(digest_chat_id), user_id=user_id)
+                                if member.user.first_name:
+                                    updates['username'] = member.user.first_name
+                            except Exception:
+                                pass
+                        
+                        update_user_fields_batch(user_id, updates)
+                        logger.info(f"count_group_messages_job: user {user_id} +{count} messages, total={new_count}")
+                except Exception as e:
+                    logger.error(f"Error updating message_count for user {user_id}: {e}")
+        
+        if new_last_message_id > last_counted_message_id:
+            set_config('last_counted_message_id', str(new_last_message_id))
+            logger.info(f"count_group_messages_job: обновлён last_counted_message_id = {new_last_message_id}")
+        
+    except Exception as e:
+        logger.error(f"count_group_messages_job error: {e}", exc_info=True)
+
+
 @rate_limit(tokens=1)
 async def update_all_mmr_job(context):
     """Ежечасовое обновление MMR всех пользователей с привязанным Steam (только в кеш)"""
@@ -3528,11 +3620,21 @@ async def main():
         update_digest_snapshot()
         logger.info("Digest snapshot initialized on startup")
         
-        from database import get_all_users_with_steam, user_cache
-        all_users = get_all_users_with_steam()
-        for u in all_users:
+        # Загружаем ВСЕХ пользователей в кэш при старте
+        from database import get_all_users_with_steam, user_cache, get_all_users_from_db
+        all_steam_users = get_all_users_with_steam()
+        for u in all_steam_users:
             user_cache.set(u['telegram_id'], u)
-        logger.info(f"Loaded {len(all_users)} users with Steam into cache on startup")
+        logger.info(f"Loaded {len(all_steam_users)} users with Steam into cache on startup")
+        
+        # Загружаем всех пользователей из БД (включая message_count)
+        all_users = get_all_users_from_db()
+        for u in all_users:
+            telegram_id = u.get('telegram_id')
+            if telegram_id:
+                if telegram_id not in user_cache:
+                    user_cache.set(telegram_id, u)
+        logger.info(f"Loaded all {len(all_users)} users into cache on startup")
         
         from database import update_dota_week_top_cache
         update_dota_week_top_cache()
@@ -3578,6 +3680,13 @@ async def main():
             alternate_digest_job,
             interval=datetime.timedelta(seconds=30),
             first=datetime.datetime.now() + datetime.timedelta(seconds=20)
+        )
+        
+        # Подсчёт сообщений в группе каждые 5 минут
+        job_queue.run_repeating(
+            count_group_messages_job,
+            interval=datetime.timedelta(minutes=5),
+            first=datetime.datetime.now() + datetime.timedelta(minutes=1)
         )
         
         job_queue.run_daily(
