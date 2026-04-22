@@ -1011,7 +1011,7 @@ class Database:
                 users = self.execute_query(query, (limit,), fetch="all")
                 return [{"telegram_id": u["telegram_id"], "username": u["username"], "steam_nickname": u["steam_nickname"], "first_name": u["first_name"], "fissure": u["fissure"]} for u in users]
             else:
-                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure FROM users WHERE in_chat = 1 ORDER BY fissure DESC LIMIT ?"
+                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure FROM users WHERE in_chat = 1 OR in_chat IS NULL ORDER BY fissure DESC LIMIT ?"
                 users = self.execute_query(query, (limit,), fetch="all")
                 return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], "first_name": u[3], "fissure": u[4]} for u in users]
         except Exception as e:
@@ -1040,7 +1040,7 @@ class Database:
                 query = """
                     SELECT COUNT(*) + 1 FROM users WHERE mmr > (
                         SELECT mmr FROM users WHERE telegram_id = ? LIMIT 1
-                    ) AND steam_id IS NOT NULL AND in_chat = 1
+                    ) AND steam_id IS NOT NULL AND (in_chat = 1 OR in_chat IS NULL)
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 # Если пользователь первый (нет тех, у кого больше MMR), возвращаем 1
@@ -1073,7 +1073,7 @@ class Database:
             else:
                 query = """
                     SELECT COUNT(*) + 1 FROM users 
-                    WHERE in_chat = 1 
+                    WHERE (in_chat = 1 OR in_chat IS NULL)
                     AND fissure > COALESCE(
                         (SELECT fissure FROM users WHERE telegram_id = ? LIMIT 1), -1)
                 """
@@ -1212,6 +1212,7 @@ class Database:
                 query = """
                     SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, total_growth
                     FROM users
+                    WHERE in_chat = TRUE
                 """
                 rows = self.execute_query(query, fetch="all")
                 users = []
@@ -1230,6 +1231,7 @@ class Database:
                 query = """
                     SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, total_growth
                     FROM users
+                    WHERE in_chat = 1 OR in_chat IS NULL
                 """
                 rows = self.execute_query(query, fetch="all")
                 users = []
@@ -1416,6 +1418,7 @@ class Database:
                     SELECT telegram_id, username, fissure, current_position, weekly_digest_position,
                            weekly_growth, weekly_rolls, created_at
                     FROM users
+                    WHERE in_chat = TRUE
                 """
                 rows = self.execute_query(query, fetch="all")
                 
@@ -1428,6 +1431,7 @@ class Database:
                     SELECT telegram_id, username, fissure, current_position, weekly_digest_position,
                            weekly_growth, weekly_rolls, created_at
                     FROM users
+                    WHERE in_chat = 1 OR in_chat IS NULL
                 """
                 rows = self.execute_query(query, fetch="all")
                 
@@ -1783,6 +1787,10 @@ def delete_user(telegram_id: int):
         # Сбрасываем кеши
         top_cache.clear()
         user_cache.delete('dota_digest_stats')
+        user_cache.delete('digest_stats')
+        user_cache.delete('dota_week_top')
+        user_cache.delete('weekly_digest_stats')
+        user_cache.delete(telegram_id)  # Remove specific user from cache
         logger.info(f"delete_user: telegram_id={telegram_id}")
         return True
     except Exception as e:
@@ -2239,23 +2247,23 @@ def get_dota_mmr_top(limit=10):
         
         cursor = conn.cursor()
         
-        if "postgres" in scheme:
-            cursor.execute("""
-                SELECT telegram_id, username, steam_nickname, mmr, 
-                       dota_total_games, dota_wins, week_games, week_wins,
-                       rank_tier, wins, losses,
+         if "postgres" in scheme:
+             cursor.execute("""
+                 SELECT telegram_id, username, steam_nickname, mmr, 
+                        dota_total_games, dota_wins, week_games, week_wins,
+                        rank_tier, wins, losses,
  CASE WHEN week_games > 0 
-                              THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
-                              ELSE 0 END as winrate
-                FROM users 
-                WHERE steam_id IS NOT NULL AND rank_tier > 0
-ORDER BY 
-                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    (wins - losses) DESC,
-                    week_games DESC,
-                    mmr DESC
-                LIMIT %s
-            """, (limit,))
+                               THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
+                               ELSE 0 END as winrate
+                 FROM users 
+                 WHERE steam_id IS NOT NULL AND rank_tier > 0 AND in_chat = TRUE
+             ORDER BY 
+                 CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
+                 (wins - losses) DESC,
+                 week_games DESC,
+                 mmr DESC
+             LIMIT %s
+             """, (limit,))
             users = cursor.fetchall()
             cursor.close()
             return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
@@ -2268,10 +2276,10 @@ ORDER BY
                        dota_total_games, dota_wins, week_games, week_wins,
                        rank_tier, wins, losses,
  CASE WHEN week_games > 0 
-                              THEN ROUND(week_wins * 100.0 / week_games, 1) 
-                              ELSE 0 END as winrate
+                             THEN ROUND(week_wins * 100.0 / week_games, 1) 
+                             ELSE 0 END as winrate
                 FROM users 
-                WHERE steam_id IS NOT NULL AND rank_tier > 0
+                WHERE steam_id IS NOT NULL AND rank_tier > 0 AND (in_chat = 1 OR in_chat IS NULL)
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
                     (wins - losses) DESC,
@@ -2488,7 +2496,7 @@ def _get_dota_week_top_query(limit):
         # Сначала проверим, есть ли вообще данные
         cursor.execute("""
             SELECT COUNT(*) FROM users 
-            WHERE steam_id IS NOT NULL
+            WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
         """)
         total_with_steam = cursor.fetchone()[0]
         cursor.execute("""
@@ -2516,7 +2524,7 @@ def _get_dota_week_top_query(limit):
                                CASE WHEN week_games > 0 THEN week_wins::numeric / NULLIF(week_games, 0) ELSE 0 END as wr,
                                CASE WHEN week_games > 0 THEN CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) ELSE 0 END as wr_int
                         FROM users 
-                        WHERE steam_id IS NOT NULL
+                        WHERE steam_id IS NOT NULL AND in_chat = TRUE
                     )
                     SELECT telegram_id, username, steam_nickname, mmr, 
                            week_games, week_wins, rank_tier, winrate, week_current_streak
@@ -2689,7 +2697,7 @@ def get_dota_digest_stats():
                         ) as rn_bottom,
                         ROW_NUMBER() OVER (ORDER BY week_current_streak DESC) as rn_streak
                     FROM users 
-                    WHERE steam_id IS NOT NULL AND week_games > 0
+                    WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = TRUE
                 )
                 SELECT 
                     MAX(CASE WHEN rn_top = 1 THEN steam_nickname END) as top_nickname,
@@ -2717,66 +2725,66 @@ def get_dota_digest_stats():
             # score = WR * sqrt(games) * multiplier (1.2 if >60%, 0.7 if 50-60%, 0.5 if <50%)
             cursor.execute("""
                 SELECT 
-                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
                      ORDER BY CAST(ROUND(week_wins * 100.0 / week_games, -1) / 10 * 10 AS INTEGER) DESC,
                           (week_wins * 1.0 / week_games) * SQRT(week_games) DESC LIMIT 1) as top_nickname,
-                    (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                    (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
                      ORDER BY CASE 
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END DESC LIMIT 1) as top_rank,
-                    (SELECT week_games FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                    (SELECT week_games FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
                      ORDER BY CASE 
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END DESC LIMIT 1) as top_games,
-                    (SELECT week_wins FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                    (SELECT week_wins FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
                      ORDER BY CASE 
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END DESC LIMIT 1) as top_wins,
-                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
                      ORDER BY CASE 
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END DESC LIMIT 1) as top_id,
-                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
                      ORDER BY CASE 
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END ASC LIMIT 1) as bottom_nickname,
-                    (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                    (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
                      ORDER BY CASE 
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END ASC LIMIT 1) as bottom_rank,
-                    (SELECT week_games FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                    (SELECT week_games FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
                      ORDER BY CASE 
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END ASC LIMIT 1) as bottom_games,
-                    (SELECT week_wins FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                    (SELECT week_wins FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
                      ORDER BY CASE 
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END ASC LIMIT 1) as bottom_wins,
-                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_games > 0 
+                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
                      ORDER BY CASE 
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END ASC LIMIT 1) as bottom_id,
-                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 ORDER BY week_current_streak DESC LIMIT 1) as streak_nickname,
-                    (SELECT week_current_streak FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 ORDER BY week_current_streak DESC LIMIT 1) as streak_val,
-                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 ORDER BY week_current_streak DESC LIMIT 1) as streak_id
+                    (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 AND in_chat = 1 ORDER BY week_current_streak DESC LIMIT 1) as streak_nickname,
+                    (SELECT week_current_streak FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 AND in_chat = 1 ORDER BY week_current_streak DESC LIMIT 1) as streak_val,
+                    (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 AND in_chat = 1 ORDER BY week_current_streak DESC LIMIT 1) as streak_id
             """)
             row = cursor.fetchone()
             
@@ -2949,7 +2957,8 @@ def get_all_users_with_steam():
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
                        week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
                        message_count
-                FROM users WHERE steam_id IS NOT NULL
+                FROM users 
+                WHERE steam_id IS NOT NULL AND in_chat = TRUE
             """)
             users = cursor.fetchall()
             cursor.close()
@@ -2969,7 +2978,8 @@ def get_all_users_with_steam():
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
                        week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
                        message_count
-                FROM users WHERE steam_id IS NOT NULL
+                FROM users 
+                WHERE steam_id IS NOT NULL AND (in_chat = 1 OR in_chat IS NULL)
             """)
             users = cursor.fetchall()
             cursor.close()

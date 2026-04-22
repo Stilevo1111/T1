@@ -3455,24 +3455,10 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 user_id = new_member.user.id
                 name = new_member.user.first_name or "Unknown"
                 try:
-                    set_user_in_chat(user_id, False)
-                    update_user_fields_batch(user_id, {
-                        "steam_id": None,
-                        "steam_nickname": None,
-                        "mmr": 0,
-                        "rank_tier": 0,
-                        "week_games": 0,
-                        "week_wins": 0,
-                        "week_best_streak": 0,
-                        "week_current_streak": 0,
-                        "dota_total_games": 0,
-                        "dota_wins": 0,
-                        "wins": 0,
-                        "losses": 0
-                    })
-                    logger.info(f"User {name} ({user_id}) left chat, set in_chat=False and reset Steam data")
+                    delete_user(user_id)
+                    logger.info(f"User {name} ({user_id}) left chat, deleted from database")
                 except Exception as e:
-                    logger.debug(f"Could not process user leave for {user_id}: {e}")
+                    logger.debug(f"Could not delete user {user_id} on leave: {e}")
         
     except Exception as e:
         logger.error(f"Error in welcome_new_member: {e}")
