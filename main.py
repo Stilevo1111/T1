@@ -545,16 +545,28 @@ async def count_group_messages_job(context):
         new_last_message_id = last_counted_message_id
         
         try:
-            from telegram import Bot
-            telegram_bot = Bot(token=bot.token)
-            async for message in telegram_bot.get_chat_history(chat_id=int(digest_chat_id), limit=100):
-                if message.message_id <= last_counted_message_id:
-                    break
-                if message.from_user and message.from_user.id:
-                    user_id = message.from_user.id
-                    message_counts[user_id] = message_counts.get(user_id, 0) + 1
-                if message.message_id > new_last_message_id:
-                    new_last_message_id = message.message_id
+            import aiohttp
+            token = bot.token
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"https://api.telegram.org/bot{token}/getChatHistory",
+                    params={"chat_id": int(digest_chat_id), "limit": 100}
+                ) as resp:
+                    data = await resp.json()
+                    if data.get("ok"):
+                        messages = data.get("result", [])
+                        for message in messages:
+                            msg_id = message.get("message_id")
+                            if msg_id <= last_counted_message_id:
+                                continue
+                            from_user = message.get("from")
+                            if from_user and from_user.get("id"):
+                                user_id = from_user["id"]
+                                message_counts[user_id] = message_counts.get(user_id, 0) + 1
+                            if msg_id > new_last_message_id:
+                                new_last_message_id = msg_id
+                    else:
+                        logger.error(f"getChatHistory API error: {data}")
         except Exception as e:
             logger.error(f"Error getting chat history: {e}")
             return
