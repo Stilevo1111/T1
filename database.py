@@ -1929,7 +1929,7 @@ def _save_user_to_db_immediately(telegram_id, user_data):
             user_data.get('message_count', 0),
             telegram_id
         ))
-        logger.info(f"Saved user {telegram_id} Dota fields to DB immediately")
+        logger.info(f"DB WRITE: user {telegram_id} message_count={user_data.get('message_count', 0)} saved successfully")
     except Exception as e:
         logger.error(f"Error saving user to DB immediately: {e}")
 
