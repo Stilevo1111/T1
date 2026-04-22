@@ -3528,11 +3528,11 @@ async def main():
         update_digest_snapshot()
         logger.info("Digest snapshot initialized on startup")
         
-        from database import get_all_users_with_steam, user_cache
-        all_users = get_all_users_with_steam()
+        from database import get_all_users, get_all_users_with_steam, user_cache
+        all_users = get_all_users()
         for u in all_users:
             user_cache.set(u['telegram_id'], u)
-        logger.info(f"Loaded {len(all_users)} users with Steam into cache on startup")
+        logger.info(f"Loaded {len(all_users)} users into cache on startup")
         
         from database import update_dota_week_top_cache
         update_dota_week_top_cache()
