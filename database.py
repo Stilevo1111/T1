@@ -1800,6 +1800,35 @@ def delete_user(telegram_id: int):
         release_connection(conn)
 
 
+def cleanup_left_users():
+    """Удалить всех пользователей с in_chat = FALSE (кто вышел из чата)"""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        scheme = get_db_type()
+        if "postgres" in scheme:
+            cursor.execute("DELETE FROM users WHERE in_chat = FALSE")
+        else:
+            cursor.execute("DELETE FROM users WHERE in_chat = 0")
+        deleted = cursor.rowcount
+        conn.commit()
+        cursor.close()
+        # Clear all caches after bulk delete
+        top_cache.clear()
+        user_cache.delete('dota_digest_stats')
+        user_cache.delete('digest_stats')
+        user_cache.delete('dota_week_top')
+        user_cache.delete('weekly_digest_stats')
+        logger.info(f"cleanup_left_users: deleted {deleted} users who left chat")
+        return deleted
+    except Exception as e:
+        logger.error(f"cleanup_left_users error: {e}")
+        return 0
+    finally:
+        release_connection(conn)
+
+
 def get_fissure_top(limit=10):
     """Получение топа пользователей - из кеша"""
     cache_key = f'fissure_top_{limit}'
