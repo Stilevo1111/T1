@@ -1449,12 +1449,15 @@ async def delete_last_bot_message(bot, chat_id, user_id):
         if not isinstance(msg_ids, list):
             msg_ids = [msg_ids]
         
+        # Удаляем дубликаты чтобы избежать повторного удаления
+        unique_msg_ids = []
+        seen = set()
         for msg_id in msg_ids:
-            # Skip invalid message IDs
-            if not isinstance(msg_id, int) or msg_id <= 0:
-                logger.debug(f"Skipping invalid message_id {msg_id}")
-                continue
-            
+            if msg_id not in seen and isinstance(msg_id, int) and msg_id > 0:
+                unique_msg_ids.append(msg_id)
+                seen.add(msg_id)
+        
+        for msg_id in unique_msg_ids:
             try:
                 logger.info(f"delete_last_bot_message: attempting to delete msg_id={msg_id} in chat={chat_id}")
                 await bot.delete_message(chat_id, msg_id)
