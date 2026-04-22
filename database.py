@@ -2276,9 +2276,9 @@ def get_dota_mmr_top(limit=10):
         
         cursor = conn.cursor()
         
-         if "postgres" in scheme:
-             cursor.execute("""
-                 SELECT telegram_id, username, steam_nickname, mmr, 
+        if "postgres" in scheme:
+            cursor.execute("""
+                SELECT telegram_id, username, steam_nickname, mmr, 
                         dota_total_games, dota_wins, week_games, week_wins,
                         rank_tier, wins, losses,
  CASE WHEN week_games > 0 
