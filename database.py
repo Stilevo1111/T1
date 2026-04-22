@@ -889,48 +889,58 @@ class Database:
                     else:
                         return None
             else:
-                query = "SELECT * FROM users WHERE telegram_id = ?"
-                user = self.execute_query(query, (telegram_id,), fetch="one")
-                if user:
-                    result = {
-                        "telegram_id": user[1],
-                        "username": user[2],
-                        "fissure": user[3],
-                        "last_fissure": user[4],
-                        "last_message_id": user[5] if len(user) > 5 else 0,
-                        "total_growth": user[6] if len(user) > 6 else 0,
-                        "total_rolls": user[7] if len(user) > 7 else 0,
-                        "best_streak": user[10] if len(user) > 10 else 0,
-                        "current_streak": user[9] if len(user) > 9 else 0,
-                        "steam_id": user[20] if len(user) > 20 else None,
-                        "steam_nickname": user[21] if len(user) > 21 else None,
-                        "mmr": user[22] if len(user) > 22 else 0,
-                        "rank_tier": user[32] if len(user) > 32 else 0,
-                        "dota_total_games": user[23] if len(user) > 23 else 0,
-                        "dota_wins": user[24] if len(user) > 24 else 0,
-                        "week_games": user[25] if len(user) > 25 else 0,
-                        "week_wins": user[26] if len(user) > 26 else 0,
-                        "week_best_streak": user[29] if len(user) > 29 else 0,
-                        "week_current_streak": user[30] if len(user) > 30 else 0,
-                        "week_updated_at": user[27] if len(user) > 27 else None,
-                        "mmr_updated_at": user[28] if len(user) > 28 else None,
-                        "message_count": user[33] if len(user) > 33 else 0
-                    }
-                    # Обновляем username если передан не-None и отличается
-                    if username is not None and username != result.get('username'):
-                        self.execute_query("UPDATE users SET username = ? WHERE telegram_id = ?", (username, telegram_id))
-                        result['username'] = username
-                        user_cache.set(telegram_id, result)
-                        logger.info(f"get_user: updated username for {telegram_id} to '{username}'")
-                    return result
-                else:
-                    if username:
-                        self.add_user(telegram_id, username, None, None)
-                        logger.warning(f"DB.get_user: created new user {telegram_id} in DB")
-                        return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "week_updated_at": None, "mmr_updated_at": None, "message_count": 0}
+                # SQLite - use column names to avoid index mismatches
+                conn = get_connection()
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+                    user_row = cursor.fetchone()
+                    if user_row:
+                        columns = [desc[0] for desc in cursor.description]
+                        result = dict(zip(columns, user_row))
+                        # Update username if provided and different
+                        if username is not None and username != result.get('username'):
+                            cursor.execute("UPDATE users SET username = ? WHERE telegram_id = ?", (username, telegram_id))
+                            conn.commit()
+                            result['username'] = username
+                            user_cache.set(telegram_id, result)
+                            logger.info(f"get_user: updated username for {telegram_id} to '{username}'")
+                        cursor.close()
+                        return result
                     else:
-                        logger.warning(f"DB.get_user: user {telegram_id} not found")
-                        return None
+                        cursor.close()
+                        if username:
+                            self.add_user(telegram_id, username, None, None)
+                            logger.warning(f"DB.get_user: created new user {telegram_id} in DB")
+                            return {
+                                "telegram_id": telegram_id,
+                                "username": username,
+                                "fissure": 0.1,
+                                "last_fissure": 0,
+                                "last_message_id": 0,
+                                "total_growth": 0,
+                                "total_rolls": 0,
+                                "best_streak": 0,
+                                "current_streak": 0,
+                                "steam_id": None,
+                                "steam_nickname": None,
+                                "mmr": 0,
+                                "rank_tier": 0,
+                                "dota_total_games": 0,
+                                "dota_wins": 0,
+                                "week_games": 0,
+                                "week_wins": 0,
+                                "week_best_streak": 0,
+                                "week_current_streak": 0,
+                                "week_updated_at": None,
+                                "mmr_updated_at": None,
+                                "message_count": 0
+                            }
+                        else:
+                            logger.warning(f"DB.get_user: user {telegram_id} not found")
+                            return None
+                finally:
+                    release_connection(conn)
         except Exception as e:
             logger.error(f"Error getting user: {e}")
             return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "week_current_streak": 0, "message_count": 0}

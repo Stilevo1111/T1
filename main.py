@@ -2082,47 +2082,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.info(f"Successfully deleted loading message {msg_id}")
                 except Exception as e:
                     logger.error(f"Failed to delete loading message: {e}")
-        
-        # No Steam - show card with Telegram avatar, no message count
-        from dota_mmr import generate_start_card
-        
-        avatar_url = await get_user_avatar_url(context.bot, user_id)
-        
-        card_data = generate_start_card(
-            avatar_url=avatar_url,
-            message_count=message_count,
-            username=display_username,
-            steam_nickname=None,
-            rank_tier=0,
-            weekly_mvp=0,
-            weekly_top2=0,
-            weekly_top3=0
-        )
-        
-        if card_data:
-            msg = await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=card_data,
-                reply_markup=main_menu()
-            )
-            set_last_bot_message(chat_id, user_id, msg.message_id)
-            update_last_message_id(user_id, msg.message_id)
-            if loading_msg:
-                try:
-                    await context.bot.delete_message(chat_id, loading_msg.message_id)
-                    logger.info(f"Deleted loading message {loading_msg.message_id} in start (no Steam)")
-                except Exception as e:
-                    logger.warning(f"Failed to delete loading message in start: {e}")
-        else:
-            await menu_handler(update, context)
-            if loading_msg:
-                try:
-                    msg_id = loading_msg.message_id
-                    logger.info(f"Deleting loading message: chat_id={chat_id}, msg_id={msg_id}")
-                    await context.bot.delete_message(chat_id, msg_id)
-                    logger.info(f"Successfully deleted loading message {msg_id}")
-                except Exception as e:
-                    logger.error(f"Failed to delete loading message: {e}")
                 return
     
     except Exception as e:
