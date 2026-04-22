@@ -922,9 +922,7 @@ async def alternate_digest_job(context):
             else:
                 drop_part = "🔻—"
 
-            if streak_username and streak_len > 0:
-                streak_part = f" 🍀<b>@{streak_username}</b>: {streak_len}"
-            elif streak_player and streak_player != "None" and streak_len > 0:
+            if streak_player and streak_player != "None" and streak_len > 0:
                 streak_part = f" 🍀{streak_display}: {streak_len}"
             else:
                 streak_part = " 🍀—"
@@ -1046,9 +1044,7 @@ async def alternate_digest_job(context):
                 else:
                     drop_part = "🔻—"
 
-                if streak_username and streak_len > 0:
-                    streak_part = f" 🍀<b>@{streak_username}</b>: {streak_len}"
-                elif streak_player and streak_player != "None" and streak_len > 0:
+                if streak_player and streak_player != "None" and streak_len > 0:
                     streak_part = f" 🍀{streak_display}: {streak_len}"
                 else:
                     streak_part = " 🍀—"
