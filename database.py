@@ -1548,7 +1548,7 @@ def get_user(telegram_id, username=None):
     
     if user:
         msg_count = user.get('message_count', 0)
-        logger.info(f"get_user: DB hit for {telegram_id}, message_count={msg_count}")
+        logger.info(f"get_user: DB hit for {telegram_id}, message_count={msg_count}, keys={list(user.keys()) if isinstance(user, dict) else 'tuple'}")
     else:
         logger.warning(f"get_user: user {telegram_id} NOT found in DB - will be created with message_count=0")
         
