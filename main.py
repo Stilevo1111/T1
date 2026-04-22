@@ -2366,6 +2366,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         display_roll = roll
         
         # Бонус за 10 бросков - добавляем сообщение
+        has_bonus = user["total_rolls"] % 10 == 0
         if has_bonus:
             extra_text = "\n🎁 БОНУС! +ЕЩЁ РАЗ!"
         else:
