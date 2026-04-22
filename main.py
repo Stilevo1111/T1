@@ -3236,11 +3236,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
         text = update.message.text.strip()
         logger.info(f"menu_handler: text='{text}' (len={len(text)})")
         
-        # Increment message count and update username if changed (only for group chats)
+        # Increment message count only in digest chat
         try:
-            # Skip counting for private messages (DM with bot)
-            if update.effective_chat.type == 'private':
-                logger.info(f"menu_handler: skipping message_count for private chat")
+            from database import get_config
+            digest_chat_id = get_config('digest_chat_id')
+            
+            # Skip if not in digest chat
+            if str(update.effective_chat.id) != str(digest_chat_id):
+                logger.info(f"menu_handler: skipping message_count (not in digest chat)")
             else:
                 user_id = update.effective_user.id
                 db_user = get_user(user_id)  # get without auto-create
