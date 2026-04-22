@@ -1437,21 +1437,29 @@ async def delete_last_bot_message(bot, chat_id, user_id):
             msg_ids = [msg_ids]
         
         for msg_id in msg_ids:
+            # Skip invalid message IDs
+            if not isinstance(msg_id, int) or msg_id <= 0:
+                logger.debug(f"Skipping invalid message_id {msg_id}")
+                continue
+            
             try:
                 await bot.delete_message(chat_id, msg_id)
                 logger.info(f"Deleted last bot message for user {user_id}: {msg_id}")
             except Exception as e:
                 error_str = str(e).lower()
-                if "message to delete not found" in error_str or "bad request" in error_str:
-                    logger.debug(f"Message {msg_id} already deleted in chat {chat_id}: {e}")
+                if "message to delete not found" in error_str or "bad request" in error_str or "not found" in error_str:
+                    logger.debug(f"Message {msg_id} already deleted or invalid in chat {chat_id}: {e}")
                 else:
                     logger.warning(f"Could not delete last bot message {msg_id}: {e}")
         
-        # Всегда очищаем после попытки
-        del last_bot_message[chat_id][user_id]
-        # Очищаем пустые записи чата
-        if not last_bot_message[chat_id]:
-            del last_bot_message[chat_id]
+        # Всегда очищаем после попытки (даже если удалить не получилось)
+        try:
+            del last_bot_message[chat_id][user_id]
+            # Очищаем пустые записи чата
+            if not last_bot_message[chat_id]:
+                del last_bot_message[chat_id]
+        except KeyError:
+            pass
 
 
 def set_last_bot_message(chat_id, user_id, message_id):
@@ -1930,13 +1938,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_msg_id = update.message.message_id if update.message else None
         
         # Delete user message
-        if user_msg_id:
+        if user_msg_id and isinstance(user_msg_id, int) and user_msg_id > 0:
             try:
                 await context.bot.delete_message(chat_id, user_msg_id)
-            except:
-                pass
+            except Exception as e:
+                error_str = str(e).lower()
+                if "not found" in error_str or "bad request" in error_str:
+                    logger.debug(f"User message {user_msg_id} already deleted: {e}")
+                else:
+                    logger.debug(f"Could not delete user message {user_msg_id}: {e}")
         
-# Delete last bot message
+        # Delete last bot message
         try:
             await delete_last_bot_message(context.bot, chat_id, user_id)
         except:
@@ -3202,6 +3214,16 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
         try:
             user_id = update.effective_user.id
             db_user = get_user(user_id)  # get without auto-create
+            if not db_user:
+                # User not found in DB, create them first
+                telegram_username = update.effective_user.username
+                first_name = update.effective_user.first_name
+                fallback_name = telegram_username or first_name or "Unknown"
+                db = Database()
+                db.add_user(user_id, fallback_name, None, None)
+                db_user = get_user(user_id)  # Get the newly created user
+                logger.info(f"Created new user {user_id} for message counting")
+            
             if db_user:
                 current_count = db_user.get('message_count', 0)
                 new_count = current_count + 1
