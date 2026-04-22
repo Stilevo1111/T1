@@ -537,7 +537,7 @@ async def count_group_messages_job(context):
             return
         
         digest_chat_id = str(digest_chat_id)
-        bot = context.bot
+        bot = context.application.bot
         
         last_counted_message_id = int(get_config('last_counted_message_id') or 0)
         
@@ -580,7 +580,7 @@ async def count_group_messages_job(context):
                         try:
                             member = await bot.get_chat_member(chat_id=int(digest_chat_id), user_id=user_id)
                             new_telegram_username = member.user.username
-                        except:
+                        except Exception:
                             pass
                         
                         if new_telegram_username and new_telegram_username != current_username:
@@ -590,7 +590,7 @@ async def count_group_messages_job(context):
                                 member = await bot.get_chat_member(chat_id=int(digest_chat_id), user_id=user_id)
                                 if member.user.first_name:
                                     updates['username'] = member.user.first_name
-                            except:
+                            except Exception:
                                 pass
                         
                         update_user_fields_batch(user_id, updates)
