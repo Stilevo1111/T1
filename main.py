@@ -1211,18 +1211,27 @@ async def alternate_digest_job(context):
                             # Системное сообщение о закрепе появляется сразу после закреплённого
                             # В get_chat_history сообщения идут по убыванию message_id (новые первые)
                             # Наше закреплённое сообщение имеет msg.message_id,
-                            # системное уведомление имеет message_id > msg.message_id и будет перед ним в списке
+                            # системное уведомление имеет message_id > msg.message_id и будет ПЕРЕД ним в списке
                             messages = await bot.get_chat_history(chat_id=digest_chat_id, limit=20)
                             pin_keywords = ('закрепил', 'закрепила', 'закрепили', 'pinned')
                             
                             for m in messages:
                                 if m.message_id == msg.message_id:
-                                    # Дошли до закреплённого сообщения — дальше只有 старые сообщения
+                                    # Дошли до закреплённого сообщения — дальше только старые
                                     break
                                 # Проверяем только сообщения с message_id > msg.message_id (они в начале списка)
+                                # Системные уведомления часто приходят от бота или анонимно
+                                is_system = False
+                                if hasattr(m, 'from_user') and m.from_user:
+                                    if m.from_user.is_bot or getattr(m.from_user, 'is_anonymous', False):
+                                        is_system = True
+                                
                                 if hasattr(m, 'text') and m.text:
                                     text_lower = m.text.lower()
-                                    if any(kw in text_lower for kw in pin_keywords):
+                                    # Убираем formatting chars для поиска
+                                    clean_text = text_lower.replace('\u200b', '').replace('\u2060', '')
+                                    logger.debug(f"Checking msg {m.message_id}: is_system={is_system}, text={m.text[:50]}")
+                                    if any(kw in clean_text for kw in pin_keywords):
                                         await bot.delete_message(chat_id=digest_chat_id, message_id=m.message_id)
                                         logger.debug(f"Удалено системное сообщение о закрепе {m.message_id}: {m.text[:50]}")
                                         break
