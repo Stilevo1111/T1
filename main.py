@@ -1202,18 +1202,25 @@ async def alternate_digest_job(context):
                     await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
                     logger.info(f"Дайджест {msg.message_id} закреплён")
                     
-                    # Удаляем системное сообщение о закрепе - это сообщение ДО дайджеста
-                    try:
-                        # Получаем последние сообщения чтобы найти системное
-                        messages = await bot.get_chat_history(chat_id=digest_chat_id, limit=2)
-                        for m in messages:
-                            # Системное сообщение о закрепе обычно содержит "закрепил"
-                            if m.message_id != msg.message_id and hasattr(m, 'text') and m.text and 'закрепил' in m.text.lower():
-                                await bot.delete_message(chat_id=digest_chat_id, message_id=m.message_id)
-                                logger.debug(f"Удалено системное сообщение о закрепе {m.message_id}")
-                                break
-                    except Exception as e:
-                        logger.debug(f"Не удалось удалить системное сообщение: {e}")
+                    # Удаляем системное сообщение о закрепе, если есть права
+                    if await bot_can_delete(bot, digest_chat_id):
+                        try:
+                            # Получаем последние сообщения чтобы найти системное
+                            # Увеличиваем лимит, т.к. могут быть промежуточные сообщения
+                            messages = await bot.get_chat_history(chat_id=digest_chat_id, limit=10)
+                            pin_keywords = ('закрепил', 'закрепила', 'pinned')
+                            for m in messages:
+                                # Системное сообщение о закрепе обычно содержит ключевые слова
+                                if m.message_id != msg.message_id and hasattr(m, 'text') and m.text:
+                                    text_lower = m.text.lower()
+                                    if any(kw in text_lower for kw in pin_keywords):
+                                        await bot.delete_message(chat_id=digest_chat_id, message_id=m.message_id)
+                                        logger.debug(f"Удалено системное сообщение о закрепе {m.message_id}: {m.text[:50]}")
+                                        break
+                        except Exception as e:
+                            logger.debug(f"Не удалось удалить системное сообщение: {e}")
+                    else:
+                        logger.debug("Нет прав на удаление системного сообщения о закрепе")
                 except Exception as e:
                     logger.debug(f"Не удалось закрепить: {e}")
             finally:
