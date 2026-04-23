@@ -1208,15 +1208,14 @@ async def alternate_digest_job(context):
                     logger.info(f"bot_can_delete result: {can_del}")
                     if can_del:
                         try:
+                            logger.info("Попытка удаления системного сообщения о закрепе...")
                             # Даем Telegram небольшое время на создание системного уведомления
                             await asyncio.sleep(0.5)
+                            logger.info("Задержка 0.5с завершена, запрашиваем историю чата")
                             
                             # Системное сообщение о закрепе появляется сразу после закреплённого
                             # В get_chat_history сообщения идут по убыванию message_id (новые первые)
-                            # Наше закреплённое сообщение имеет msg.message_id,
-                            # системное уведомление имеет message_id > msg.message_id и будет ПЕРЕД ним в списке
-                            messages = await bot.get_chat_history(chat_id=digest_chat_id, limit=20)
-                            pin_keywords = ('закрепил', 'закрепила', 'закрепили', 'pinned')
+                            messages = await bot.get_chat_history(chat_id=int(digest_chat_id), limit=20)
                             logger.info(f"Получено {len(messages)} сообщений из истории")
                             
                             for m in messages:
@@ -1241,7 +1240,7 @@ async def alternate_digest_job(context):
                                         logger.info(f"✅ Удалено системное сообщение о закрепе {m.message_id}")
                                         break
                         except Exception as e:
-                            logger.debug(f"Не удалось удалить системное сообщение: {e}")
+                            logger.info(f"Ошибка при удалении системного сообщения: {e}", exc_info=True)
                     else:
                         logger.info("❌ Нет прав на удаление системного сообщения о закрепе")
                 except Exception as e:
