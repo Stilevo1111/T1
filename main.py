@@ -834,7 +834,7 @@ async def dota_digest_job(context):
 
 @rate_limit(tokens=1)
 async def alternate_digest_job(context):
-    """Чередование утреннего и Dota дайджестов каждые 15 секунд"""
+    """Чередование утреннего и Dota дайджестов (редактирование существующего, создание нового только при необходимости)"""
     try:
         now = time.time()
         
@@ -1135,7 +1135,17 @@ async def alternate_digest_job(context):
 
         # Если не удалось редактировать - проверяем можем ли мы создать новое
         if not edited:
-            # Удаляем старое сообщение ПЕРЕД проверкой времени
+            # Проверяем, не создавали ли мы новое сообщение слишком недавно (антиспам)
+            # Проверяем ПЕРЕД удалением старого, чтобы не оставить чат без сообщения
+            last_created_str = get_config('alternate_digest_last_created')
+            last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
+            time_since_last = time.time() - last_created
+            logger.info(f"alternate_digest_job: last_created={last_created}, time_since_last={time_since_last:.0f}sec")
+            if time_since_last < 60:  # 1 минута
+                logger.info(f"Пропускаем создание нового дайджеста, прошло только {time_since_last:.0f} sec с последнего создания (оставляем старое сообщение)")
+                return  # Выходим без удаления и без создания, оставляя старое сообщение
+            
+            # Удаляем старое сообщение
             if last_message_id:
                 try:
                     msg_id_int = int(last_message_id)
@@ -1158,29 +1168,15 @@ async def alternate_digest_job(context):
 
             # Удаляем ВСЕ старые дайджесты бота в этом чате (предотвращение дублирования при гонке)
             try:
-                # Проверяем消息 в небольшом диапазоне ID вокруг последнего известного (last_message_id)
-                # и вокруг только что созданного (если будет создан). Сначала удалим по last_message_id,
-                # затем проверим соседние ID (были случаи, когда race создаёт несколько сообщений)
+                # Проверяем сообщения в небольшом диапазоне ID вокруг только что удалённого (last_message_id)
+                # и вокруг будущего нового (если будет создан). Исключаем уже удалённый last_message_id.
                 deleted_count = 0
-                # Сначала удаляем last_message_id (уже делается выше, но повторим для надёжности)
-                if last_message_id:
-                    try:
-                        await bot.delete_message(chat_id=int(digest_chat_id), message_id=int(last_message_id))
-                        logger.info(f"Удалено старое alternate сообщение {last_message_id} (повторно)")
-                        deleted_count += 1
-                    except Exception:
-                        pass
-                
-                # Теперь ищем другие сообщения бота с текстом дайджеста в узком диапазоне вокруг last_message_id
-                # и вокруг будущего msg.message_id (если уже создан). 
-                # Проверяем диапазон [min_id-5, max_id+5] где min_id=last_message_id, max_id=msg.message_id (если есть)
                 check_ids = set()
                 if last_message_id:
                     base = int(last_message_id)
                     for offset in range(-5, 6):
-                        check_ids.add(base + offset)
-                # Если later мы создадим msg, мы потом проверим вокруг его ID
-                # (но это будет после отправки, см. ниже)
+                        if offset != 0:  # пропускаем уже удалённое сообщение
+                            check_ids.add(base + offset)
                 
                 for mid in check_ids:
                     if mid <= 0:
@@ -1201,15 +1197,6 @@ async def alternate_digest_job(context):
                 logger.info(f"Удалено {deleted_count} старых/дублирующих дайджестов перед созданием нового")
             except Exception as e:
                 logger.debug(f"Ошибка при поиске старых дайджестов: {e}")
-
-            # Проверяем, не создавали ли мы новое сообщение слишком недавно (антиспам)
-            last_created_str = get_config('alternate_digest_last_created')
-            last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
-            time_since_last = time.time() - last_created
-            logger.info(f"alternate_digest_job: last_created={last_created}, time_since_last={time_since_last:.0f}sec")
-            if time_since_last < 60:  # 1 минута
-                logger.info(f"Пропускаем создание нового дайджеста, прошло только {time_since_last:.0f} сек с последнего создания")
-                return  # Выходим без создания
             
             # Проверяем, не запущен ли уже процесс создания
             creating = get_config('alternate_digest_creating')
