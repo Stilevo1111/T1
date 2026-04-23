@@ -1208,14 +1208,19 @@ async def alternate_digest_job(context):
                             # Даем Telegram небольшое время на создание системного уведомления
                             await asyncio.sleep(0.5)
                             
-                            # Получаем последние сообщения чтобы найти системное
-                            # Увеличиваем лимит, т.к. могут быть промежуточные сообщения
+                            # Системное сообщение о закрепе появляется сразу после закреплённого
+                            # В get_chat_history сообщения идут по убыванию message_id (новые первые)
+                            # Наше закреплённое сообщение имеет msg.message_id,
+                            # системное уведомление имеет message_id > msg.message_id и будет перед ним в списке
                             messages = await bot.get_chat_history(chat_id=digest_chat_id, limit=20)
-                            # Расширенные ключевые слова: русский/английский, разные падежи
-                            pin_keywords = ('закрепил', 'закрепила', 'закрепили', 'pinned', ' pinned ', 'pin')
+                            pin_keywords = ('закрепил', 'закрепила', 'закрепили', 'pinned')
+                            
                             for m in messages:
-                                # Системное сообщение о закрепе обычно содержит ключевые слова
-                                if m.message_id != msg.message_id and hasattr(m, 'text') and m.text:
+                                if m.message_id == msg.message_id:
+                                    # Дошли до закреплённого сообщения — дальше只有 старые сообщения
+                                    break
+                                # Проверяем только сообщения с message_id > msg.message_id (они в начале списка)
+                                if hasattr(m, 'text') and m.text:
                                     text_lower = m.text.lower()
                                     if any(kw in text_lower for kw in pin_keywords):
                                         await bot.delete_message(chat_id=digest_chat_id, message_id=m.message_id)
