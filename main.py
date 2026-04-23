@@ -1157,24 +1157,47 @@ async def alternate_digest_job(context):
 
             # Удаляем ВСЕ старые дайджесты бота в этом чате (предотвращение дублирования при гонке)
             try:
-                # Ищем среди последних 50 сообщений
-                history = await bot.get_chat_history(chat_id=int(digest_chat_id), limit=50)
+                # Проверяем消息 в небольшом диапазоне ID вокруг последнего известного (last_message_id)
+                # и вокруг только что созданного (если будет создан). Сначала удалим по last_message_id,
+                # затем проверим соседние ID (были случаи, когда race создаёт несколько сообщений)
                 deleted_count = 0
-                for m in history:
-                    # Проверяем, что сообщение от бота и содержит текст дайджеста
-                    if hasattr(m, 'from_user') and m.from_user and m.from_user.is_bot:
-                        if hasattr(m, 'text') and m.text:
-                            text_lower = m.text.lower()
-                            # Ищем по ключевым словам
-                            if ('фиссур' in text_lower and ('дайджест' in text_lower or 'dota' in text_lower)) or \
-                               ('dota' in text_lower and 'дайджест' in text_lower):
-                                try:
-                                    await bot.delete_message(chat_id=int(digest_chat_id), message_id=m.message_id)
-                                    logger.info(f"Удалён старый дайджест {m.message_id} из чата")
+                # Сначала удаляем last_message_id (уже делается выше, но повторим для надёжности)
+                if last_message_id:
+                    try:
+                        await bot.delete_message(chat_id=int(digest_chat_id), message_id=int(last_message_id))
+                        logger.info(f"Удалено старое alternate сообщение {last_message_id} (повторно)")
+                        deleted_count += 1
+                    except Exception:
+                        pass
+                
+                # Теперь ищем другие сообщения бота с текстом дайджеста в узком диапазоне вокруг last_message_id
+                # и вокруг будущего msg.message_id (если уже создан). 
+                # Проверяем диапазон [min_id-5, max_id+5] где min_id=last_message_id, max_id=msg.message_id (если есть)
+                check_ids = set()
+                if last_message_id:
+                    base = int(last_message_id)
+                    for offset in range(-5, 6):
+                        check_ids.add(base + offset)
+                # Если later мы создадим msg, мы потом проверим вокруг его ID
+                # (но это будет после отправки, см. ниже)
+                
+                for mid in check_ids:
+                    if mid <= 0:
+                        continue
+                    try:
+                        m = await bot.get_message(chat_id=int(digest_chat_id), message_id=mid)
+                        if hasattr(m, 'from_user') and m.from_user and m.from_user.is_bot:
+                            if hasattr(m, 'text') and m.text:
+                                text_lower = m.text.lower()
+                                if ('фиссур' in text_lower and ('дайджест' in text_lower or 'dota' in text_lower)) or \
+                                   ('dota' in text_lower and 'дайджест' in text_lower):
+                                    # Это дайджест — удаляем
+                                    await bot.delete_message(chat_id=int(digest_chat_id), message_id=mid)
+                                    logger.info(f"Удалён старый дайджест {mid} из чата (по ID range)")
                                     deleted_count += 1
-                                except Exception as e:
-                                    logger.debug(f"Не удалось удалить старый дайджест {m.message_id}: {e}")
-                logger.info(f"Удалено {deleted_count} старых дайджестов при создании нового")
+                    except Exception:
+                        pass  # ignore not found etc.
+                logger.info(f"Удалено {deleted_count} старых/дублирующих дайджестов перед созданием нового")
             except Exception as e:
                 logger.debug(f"Ошибка при поиске старых дайджестов: {e}")
 
@@ -1240,15 +1263,13 @@ async def alternate_digest_job(context):
                     if can_del:
                         try:
                             logger.info("Попытка удаления системного сообщения о закрепе...")
-                            # Даем Telegram небольшое время на создание системного уведомления
                             await asyncio.sleep(0.5)
                             logger.info("Задержка 0.5с завершена, ищем системное сообщение")
                             
                             # Системное сообщение о закрепе имеет message_id = msg.message_id + N (обычно +1 или +2)
-                            # Проверяем последовательно несколько следующих ID
                             pin_keywords = ('закрепил', 'закрепила', 'закрепили', 'pinned')
                             found = False
-                            for offset in range(1, 6):  # Проверяем до +5
+                            for offset in range(1, 6):
                                 candidate_id = msg.message_id + offset
                                 try:
                                     candidate_msg = await bot.get_message(chat_id=int(digest_chat_id), message_id=candidate_id)
@@ -1261,7 +1282,6 @@ async def alternate_digest_job(context):
                                             found = True
                                             break
                                 except Exception as e:
-                                    # Сообщение не найдено или нет доступа — прекращаем поиск
                                     if "message not found" in str(e).lower() or "message to delete not found" in str(e).lower():
                                         logger.debug(f"Сообщение {candidate_id} не найдено, прекращаем поиск")
                                         break
@@ -1269,6 +1289,27 @@ async def alternate_digest_job(context):
                                         logger.debug(f"Ошибка при проверке сообщения {candidate_id}: {e}")
                             if not found:
                                 logger.info("Системное сообщение о закрепе не найдено среди следующих сообщений")
+                                
+                            # Дополнительно: удаляем другие дайджесты бота в узком диапазоне ID вокруг только что созданного
+                            # Это очищает возможные дубликаты от гонки
+                            try:
+                                for offset in range(-20, 0):  # проверяем до 20 сообщений до
+                                    old_id = msg.message_id + offset
+                                    if old_id <= 0:
+                                        continue
+                                    try:
+                                        old_msg = await bot.get_message(chat_id=int(digest_chat_id), message_id=old_id)
+                                        if hasattr(old_msg, 'from_user') and old_msg.from_user and old_msg.from_user.is_bot:
+                                            if hasattr(old_msg, 'text') and old_msg.text:
+                                                txt = old_msg.text.lower()
+                                                if ('фиссур' in txt and ('дайджест' in txt or 'dota' in txt)) or ('dota' in txt and 'дайджест' in txt):
+                                                    await bot.delete_message(chat_id=int(digest_chat_id), message_id=old_id)
+                                                    logger.info(f"Удалён дублирующий дайджест {old_id} (offset {offset})")
+                                    except Exception:
+                                        pass  # ignore not found etc.
+                            except Exception as e:
+                                logger.debug(f"Ошибка при cleanup соседних дайджестов: {e}")
+                                
                         except Exception as e:
                             logger.info(f"Ошибка при удалении системного сообщения: {e}", exc_info=True)
                     else:
