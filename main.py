@@ -38,6 +38,7 @@ else:
 COOLDOWN = 86400  # 24 hours
 
 _user_processing = {}  # Spam protection: user_id -> timestamp
+_START_COOLDOWN = 5  # 5 seconds cooldown for /start command
 
 _digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run": 0, "last_text": None}
 _digest_state_lock = asyncio.Lock()  # Lock for thread-safe access to _digest_state
@@ -1971,6 +1972,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if is_rate_limited():
             logger.warning(f"Skipping /start due to rate limit")
             return
+            
+        # Spam protection for /start command
+        user_id = update.effective_user.id
+        current_time = time.time()
+        if user_id in _user_processing:
+            last_time = _user_processing[user_id]
+            if current_time - last_time < _START_COOLDOWN:
+                logger.warning(f"Spam protection: user {user_id} tried to use /start too soon")
+                await update.message.reply_text("Пожалуйста, подождите перед повторным использованием команды /start")
+                return
+        _user_processing[user_id] = current_time
             
         user_id = update.effective_user.id
         telegram_username = update.effective_user.username  # только Telegram username (может быть None)
