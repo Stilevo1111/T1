@@ -1155,6 +1155,29 @@ async def alternate_digest_job(context):
                         logger.debug(f"Не удалось удалить старое alternate сообщение: {e}")
             set_config('alternate_digest_message_id', None)  # сбрасываем сразу после удаления
 
+            # Удаляем ВСЕ старые дайджесты бота в этом чате (предотвращение дублирования при гонке)
+            try:
+                # Ищем среди последних 50 сообщений
+                history = await bot.get_chat_history(chat_id=int(digest_chat_id), limit=50)
+                deleted_count = 0
+                for m in history:
+                    # Проверяем, что сообщение от бота и содержит текст дайджеста
+                    if hasattr(m, 'from_user') and m.from_user and m.from_user.is_bot:
+                        if hasattr(m, 'text') and m.text:
+                            text_lower = m.text.lower()
+                            # Ищем по ключевым словам
+                            if ('фиссур' in text_lower and ('дайджест' in text_lower or 'dota' in text_lower)) or \
+                               ('dota' in text_lower and 'дайджест' in text_lower):
+                                try:
+                                    await bot.delete_message(chat_id=int(digest_chat_id), message_id=m.message_id)
+                                    logger.info(f"Удалён старый дайджест {m.message_id} из чата")
+                                    deleted_count += 1
+                                except Exception as e:
+                                    logger.debug(f"Не удалось удалить старый дайджест {m.message_id}: {e}")
+                logger.info(f"Удалено {deleted_count} старых дайджестов при создании нового")
+            except Exception as e:
+                logger.debug(f"Ошибка при поиске старых дайджестов: {e}")
+
             # Проверяем, не создавали ли мы новое сообщение слишком недавно (антиспам)
             last_created_str = get_config('alternate_digest_last_created')
             last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
@@ -1199,6 +1222,14 @@ async def alternate_digest_job(context):
                     logger.debug(f"Не удалось открепить старый: {e}")
                 
                 try:
+                    # Открепляем ВСЕ закреплённые сообщения перед закреплением нового
+                    # Это решает проблему гонки между воркерами — только последний останется
+                    try:
+                        await bot.unpin_all_chat_messages(chat_id=int(digest_chat_id))
+                        logger.info("Откреплены все предыдущие закреплённые сообщения")
+                    except Exception as e:
+                        logger.debug(f"Не удалось открепить все сообщения: {e}")
+                    
                     await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
                     logger.info(f"Дайджест {msg.message_id} закреплён")
                     
