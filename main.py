@@ -1205,10 +1205,14 @@ async def alternate_digest_job(context):
                     # Удаляем системное сообщение о закрепе, если есть права
                     if await bot_can_delete(bot, digest_chat_id):
                         try:
+                            # Даем Telegram небольшое время на создание системного уведомления
+                            await asyncio.sleep(0.5)
+                            
                             # Получаем последние сообщения чтобы найти системное
                             # Увеличиваем лимит, т.к. могут быть промежуточные сообщения
-                            messages = await bot.get_chat_history(chat_id=digest_chat_id, limit=10)
-                            pin_keywords = ('закрепил', 'закрепила', 'pinned')
+                            messages = await bot.get_chat_history(chat_id=digest_chat_id, limit=20)
+                            # Расширенные ключевые слова: русский/английский, разные падежи
+                            pin_keywords = ('закрепил', 'закрепила', 'закрепили', 'pinned', ' pinned ', 'pin')
                             for m in messages:
                                 # Системное сообщение о закрепе обычно содержит ключевые слова
                                 if m.message_id != msg.message_id and hasattr(m, 'text') and m.text:
