@@ -275,6 +275,17 @@ async def night_greeting_job(context):
 
 
 
+
+async def test_greeting(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Testovaja komanda dlya otpravki utrennego i vechernego privetstvija"""
+    try:
+        await morning_greeting_job(context)
+        await night_greeting_job(context)
+        await update.message.reply_text("Privetstviya otpravleny (esli chat_id nastroen)")
+    except Exception as e:
+        logger.error(f"Error in test_greeting: {e}")
+        await update.message.reply_text(f"Oshibka: {e}")
+
 async def announce_weekly_mmr_winner(bot):
     """Отправляет поздравление победителю недельного топа MMR при смене недели."""
     from datetime import datetime as dt, timezone, timedelta
@@ -3466,6 +3477,7 @@ async def main():
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler(("digestnow", "dotadigestnow", "setdigestchat"), digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
+        app.add_handler(CommandHandler("testgreeting", test_greeting))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
         
