@@ -310,20 +310,17 @@ def update_dota_week_top_cache():
             'week_current_streak': user.get('week_current_streak', 0)
         })
     
-    # Сортировка: используем get_sort_key
-    import math
+    # Сортировка: score = 2 * week_wins - week_games (победы - поражения)
+    # Игроки без игр за неделю идут в самый конец
     def get_sort_key(x):
         g = x.get('week_games', 0)
         w = x.get('week_wins', 0)
-        l = g - w  # losses
         if g == 0:
-            return (1, 0, 0)
-        score = w - l * 0.5  # Новая формула: победы - поражения * 0.5
-        logger.info(f"get_sort_key: {x.get('steam_nickname')} W={w} L={l} score={score}")
-        return (0, score, g)
+            return (1, 0, 0)  # Помещаем в самый конец
+        score = 2 * w - g  # wins - losses
+        return (0, -score, -g)  # Сортировка по убыванию score, затем по убыванию игр
     
-    logger.info("===== UPDATE DOTA WEEK TOP: STARTING SORT =====")
-    top_users.sort(key=lambda x: get_sort_key(x), reverse=True)
+    top_users.sort(key=get_sort_key)
     
     logger.info("===== TOP USERS AFTER SORT =====")
     for i, u in enumerate(top_users):
@@ -2543,10 +2540,8 @@ def _get_dota_week_top_query(limit):
         
         # Если есть пользователи с steam_id, выполняем запрос
         if total_with_steam > 0:
-            # Новая формула сортировки:
-            # WR >= 60%: группа round UP, сортировка по WR * √игр + бонус
-            # WR 50-59%: группа 40 (штраф), сортировка по WR
-            # WR < 50%: группа 20 или ниже, сортировка по WR * √игр * 0.5
+            # Формула сортировки: score = 2 * week_wins - week_games (победы - поражения)
+            # Игроки без игр за неделю (week_games = 0) идут в конец
             if "postgres" in scheme:
                 cursor.execute("""
                     WITH wr_calc AS (
@@ -2566,17 +2561,9 @@ def _get_dota_week_top_query(limit):
                     FROM wr_calc
                     ORDER BY 
                         CASE WHEN week_games = 0 THEN 1 ELSE 0 END,
-                        CASE 
-                            WHEN wr_int >= 60 THEN 0
-                            WHEN wr_int >= 50 THEN 1
-                            ELSE 2
-                        END,
-                        CASE 
-                            WHEN wr_int >= 60 THEN wr * SQRT(week_games) + SQRT(week_games) * 0.05
-                            WHEN wr_int >= 50 THEN wr
-                            ELSE wr * SQRT(week_games) * 0.5
-                        END DESC,
-                        week_games DESC
+                        (2 * week_wins - week_games) DESC,
+                        week_games DESC,
+                        mmr DESC
                     LIMIT %s
                 """, (limit,))
             users = cursor.fetchall()
@@ -2602,7 +2589,7 @@ def _get_dota_week_top_query(limit):
             
             return result
         else:
-            # Новая формула сортировки для SQLite
+            # Формула сортировки: score = 2 * week_wins - week_games
             cursor.execute("""
                 WITH wr_calc AS (
                     SELECT telegram_id, username, steam_nickname, mmr, 
@@ -2620,17 +2607,9 @@ def _get_dota_week_top_query(limit):
                 FROM wr_calc
                 ORDER BY 
                     CASE WHEN week_games = 0 THEN 1 ELSE 0 END,
-                    CASE 
-                        WHEN wr_int >= 60 THEN 0
-                        WHEN wr_int >= 50 THEN 1
-                        ELSE 2
-                    END,
-                    CASE 
-                        WHEN wr_int >= 60 THEN (CAST(week_wins AS REAL) / NULLIF(week_games, 0)) * SQRT(week_games) + SQRT(week_games) * 0.05
-                        WHEN wr_int >= 50 THEN CAST(week_wins AS REAL) / NULLIF(week_games, 0)
-                        ELSE (CAST(week_wins AS REAL) / NULLIF(week_games, 0)) * SQRT(week_games) * 0.5
-                    END DESC,
-                    week_games DESC
+                    (2 * week_wins - week_games) DESC,
+                    week_games DESC,
+                    mmr DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
