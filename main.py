@@ -2111,7 +2111,7 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if command == "setdigestchat":
             set_config("digest_chat_id", str(chat_id))
             set_config("alternate_digest_message_id", None)
-            await update.message.reply_text(f"Чат {chat_id} установлен для дайджестов")
+            await context.bot.send_message(chat_id=chat_id, text=f"Чат {chat_id} установлен для дайджестов")
             return
         
         current_digest_chat = get_config('digest_chat_id')
