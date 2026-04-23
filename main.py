@@ -1242,34 +1242,33 @@ async def alternate_digest_job(context):
                             logger.info("Попытка удаления системного сообщения о закрепе...")
                             # Даем Telegram небольшое время на создание системного уведомления
                             await asyncio.sleep(0.5)
-                            logger.info("Задержка 0.5с завершена, запрашиваем историю чата")
+                            logger.info("Задержка 0.5с завершена, ищем системное сообщение")
                             
-                            # Системное сообщение о закрепе появляется сразу после закреплённого
-                            # В get_chat_history сообщения идут по убыванию message_id (новые первые)
-                            messages = await bot.get_chat_history(chat_id=int(digest_chat_id), limit=20)
-                            logger.info(f"Получено {len(messages)} сообщений из истории")
-                            
-                            for m in messages:
-                                if m.message_id == msg.message_id:
-                                    # Дошли до закреплённого сообщения — дальше только старые
-                                    logger.debug(f"Найдено закреплённое сообщение {msg.message_id}, прекращаем поиск")
-                                    break
-                                # Проверяем только сообщения с message_id > msg.message_id (они в начале списка)
-                                # Системные уведомления часто приходят от бота или анонимно
-                                is_system = False
-                                if hasattr(m, 'from_user') and m.from_user:
-                                    if m.from_user.is_bot or getattr(m.from_user, 'is_anonymous', False):
-                                        is_system = True
-                                
-                                if hasattr(m, 'text') and m.text:
-                                    text_lower = m.text.lower()
-                                    # Убираем formatting chars для поиска
-                                    clean_text = text_lower.replace('\u200b', '').replace('\u2060', '')
-                                    logger.info(f"Проверяем msg {m.message_id}: is_system={is_system}, text='{m.text[:50]}'")
-                                    if any(kw in clean_text for kw in pin_keywords):
-                                        await bot.delete_message(chat_id=digest_chat_id, message_id=m.message_id)
-                                        logger.info(f"✅ Удалено системное сообщение о закрепе {m.message_id}")
+                            # Системное сообщение о закрепе имеет message_id = msg.message_id + N (обычно +1 или +2)
+                            # Проверяем последовательно несколько следующих ID
+                            pin_keywords = ('закрепил', 'закрепила', 'закрепили', 'pinned')
+                            found = False
+                            for offset in range(1, 6):  # Проверяем до +5
+                                candidate_id = msg.message_id + offset
+                                try:
+                                    candidate_msg = await bot.get_message(chat_id=int(digest_chat_id), message_id=candidate_id)
+                                    if hasattr(candidate_msg, 'text') and candidate_msg.text:
+                                        text_lower = candidate_msg.text.lower().replace('\u200b', '').replace('\u2060', '')
+                                        logger.info(f"Проверяем msg {candidate_id}: text='{candidate_msg.text[:50]}'")
+                                        if any(kw in text_lower for kw in pin_keywords):
+                                            await bot.delete_message(chat_id=int(digest_chat_id), message_id=candidate_id)
+                                            logger.info(f"✅ Удалено системное сообщение о закрепе {candidate_id}")
+                                            found = True
+                                            break
+                                except Exception as e:
+                                    # Сообщение не найдено или нет доступа — прекращаем поиск
+                                    if "message not found" in str(e).lower() or "message to delete not found" in str(e).lower():
+                                        logger.debug(f"Сообщение {candidate_id} не найдено, прекращаем поиск")
                                         break
+                                    else:
+                                        logger.debug(f"Ошибка при проверке сообщения {candidate_id}: {e}")
+                            if not found:
+                                logger.info("Системное сообщение о закрепе не найдено среди следующих сообщений")
                         except Exception as e:
                             logger.info(f"Ошибка при удалении системного сообщения: {e}", exc_info=True)
                     else:
