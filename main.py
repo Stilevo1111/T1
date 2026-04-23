@@ -1203,7 +1203,10 @@ async def alternate_digest_job(context):
                     logger.info(f"Дайджест {msg.message_id} закреплён")
                     
                     # Удаляем системное сообщение о закрепе, если есть права
-                    if await bot_can_delete(bot, digest_chat_id):
+                    logger.info(f"Проверка прав на удаление системного сообщения для chat_id={digest_chat_id}")
+                    can_del = await bot_can_delete(bot, digest_chat_id)
+                    logger.info(f"bot_can_delete result: {can_del}")
+                    if can_del:
                         try:
                             # Даем Telegram небольшое время на создание системного уведомления
                             await asyncio.sleep(0.5)
@@ -1214,10 +1217,12 @@ async def alternate_digest_job(context):
                             # системное уведомление имеет message_id > msg.message_id и будет ПЕРЕД ним в списке
                             messages = await bot.get_chat_history(chat_id=digest_chat_id, limit=20)
                             pin_keywords = ('закрепил', 'закрепила', 'закрепили', 'pinned')
+                            logger.info(f"Получено {len(messages)} сообщений из истории")
                             
                             for m in messages:
                                 if m.message_id == msg.message_id:
                                     # Дошли до закреплённого сообщения — дальше только старые
+                                    logger.debug(f"Найдено закреплённое сообщение {msg.message_id}, прекращаем поиск")
                                     break
                                 # Проверяем только сообщения с message_id > msg.message_id (они в начале списка)
                                 # Системные уведомления часто приходят от бота или анонимно
@@ -1230,15 +1235,15 @@ async def alternate_digest_job(context):
                                     text_lower = m.text.lower()
                                     # Убираем formatting chars для поиска
                                     clean_text = text_lower.replace('\u200b', '').replace('\u2060', '')
-                                    logger.debug(f"Checking msg {m.message_id}: is_system={is_system}, text={m.text[:50]}")
+                                    logger.info(f"Проверяем msg {m.message_id}: is_system={is_system}, text='{m.text[:50]}'")
                                     if any(kw in clean_text for kw in pin_keywords):
                                         await bot.delete_message(chat_id=digest_chat_id, message_id=m.message_id)
-                                        logger.debug(f"Удалено системное сообщение о закрепе {m.message_id}: {m.text[:50]}")
+                                        logger.info(f"✅ Удалено системное сообщение о закрепе {m.message_id}")
                                         break
                         except Exception as e:
                             logger.debug(f"Не удалось удалить системное сообщение: {e}")
                     else:
-                        logger.debug("Нет прав на удаление системного сообщения о закрепе")
+                        logger.info("❌ Нет прав на удаление системного сообщения о закрепе")
                 except Exception as e:
                     logger.debug(f"Не удалось закрепить: {e}")
             finally:
