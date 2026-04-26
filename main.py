@@ -2629,6 +2629,20 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Сохраняем original_roll для отображения в мультикасте (до бонусов)
         display_roll = roll
         
+        # Определяем базовый ролл для текста результата (без учета бонусов выходного дня)
+        if original_roll is not None:
+            base_roll_for_text = original_roll
+        else:
+            base_roll_for_text = roll
+
+        # Вычисляем result_text на основе базового ролла
+        roll_key_text = min(base_roll_for_text, 75)
+        roll_key_text = max(roll_key_text, -15)
+        if roll_key_text in ROLL_TEXTS:
+            result_text = random.choice(ROLL_TEXTS[roll_key_text])
+        else:
+            result_text = f"{'+' if base_roll_for_text > 0 else ''}{base_roll_for_text} см"
+        
         # Бонус для выходных: увеличиваем положительный ролл
         # НЕ применяем выходной бонус при мультикасте
         if is_weekend and roll > 0 and not is_fatal and cascade_count == 1:
@@ -2654,14 +2668,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
 
-        # Вычисляем roll_key и result_text ПОСЛЕ всех бонусов
+        # Вычисляем roll_key для финального значения (используется в extra_text)
         roll_key = min(roll, 75)
         roll_key = max(roll_key, -15)
-        
-        if roll_key in ROLL_TEXTS:
-            result_text = random.choice(ROLL_TEXTS[roll_key])
-        else:
-            result_text = f"{'+' if roll > 0 else ''}{roll} см"
         
         if is_fatal:
             category = "fatal"
