@@ -2197,6 +2197,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "Готово!"
                 ]
                 try:
+                    # На последнем кадре не редактируем, а удаляем заглушку
+                    if i == 2:
+                        await loading_msg.delete()
+                        loading_msg = None
+                        break
+                    await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                except Exception:
+                    break
                     await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
                 except Exception:
                     break
@@ -2867,6 +2875,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "Готово!"
                 ]
                 try:
+                    # На последнем кадре не редактируем, а удаляем заглушку
+                    if i == 2:
+                        await loading_msg.delete()
+                        loading_msg = None
+                        break
+                    await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                except Exception:
+                    break
                     await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
                 except Exception:
                     break
