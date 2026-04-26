@@ -37,7 +37,8 @@ else:
 
 COOLDOWN = 86400  # 24 hours
 
-_user_processing = {}  # Spam protection: user_id -> timestamp
+_user_fissure_processing = {}  # Request lock: user_id -> timestamp (for fissure processing)
+_USER_START_COOLDOWN = {}  # Spam protection for /start: user_id -> timestamp
 _START_COOLDOWN = 5  # 5 seconds cooldown for /start command
 
 _digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run": 0, "last_text": None}
@@ -2043,13 +2044,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Spam protection for /start command
         user_id = update.effective_user.id
         current_time = time.time()
-        if user_id in _user_processing:
-            last_time = _user_processing[user_id]
+        if user_id in _USER_START_COOLDOWN:
+            last_time = _USER_START_COOLDOWN[user_id]
             if current_time - last_time < _START_COOLDOWN:
                 logger.warning(f"Spam protection: user {user_id} tried to use /start too soon")
                 await update.message.reply_text("Пожалуйста, подождите перед повторным использованием команды /start")
                 return
-        _user_processing[user_id] = current_time
+        _USER_START_COOLDOWN[user_id] = current_time
             
         user_id = update.effective_user.id
         telegram_username = update.effective_user.username  # только Telegram username (может быть None)
@@ -2255,6 +2256,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
         await menu_handler(update, context, allow_when_rate_limited=True)
+    finally:
+        pass  # No shared processing dictionary to clean up for /start
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2395,9 +2398,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug(f"Could not delete last bot message: {e}")
     
     # Spam protection - ignore if already processing this user
-    if _user_processing.get(user_obj.id):
+    if _user_fissure_processing.get(user_obj.id):
         return
-    _user_processing[user_obj.id] = now
+    _user_fissure_processing[user_obj.id] = now
     
     try:
         user = get_user(user_obj.id, username)
@@ -2735,7 +2738,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
     finally:
-        _user_processing.pop(user_obj.id, None)
+        _user_fissure_processing.pop(user_obj.id, None)
 
 
 @rate_limit(tokens=1)
@@ -3051,9 +3054,9 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @rate_limit(tokens=1)
-async def compare_pros(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сравнение игрока с профи по статистике Dota 2"""
-    logger.info(f"User {update.effective_user.id} called compare_pros")
+    logger.info(f"User {update.effective_user.id} called topmmr")
     
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
@@ -3156,7 +3159,7 @@ async def compare_pros(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
     except Exception as e:
-        logger.error(f"Error in compare_pros: {e}", exc_info=True)
+        logger.error(f"Error in topmmr: {e}", exc_info=True)
         await context.bot.send_message(
             chat_id=chat_id,
             text="❌ Ошибка сравнения. Попробуй позже.",
@@ -3165,7 +3168,6 @@ async def compare_pros(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         from database import get_dota_week_top_from_db, get_dota_week_rank
-        from database import get_user
         user = get_user(update.effective_user.id)
         
         # Banner URL
@@ -3808,7 +3810,7 @@ async def main():
         app.add_handler(CommandHandler(("fissure", "fissura"), fissure))
         app.add_handler(CommandHandler("profile", stats))
         app.add_handler(CommandHandler("top", top))
-        app.add_handler(CommandHandler("topmmr", compare_pros))
+        app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler(("digestnow", "dotadigestnow", "setdigestchat"), digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
