@@ -428,10 +428,11 @@ async def announce_weekly_mmr_winner(bot):
         tag_info = f"\n👤 Ему присвоен титул \"{mvp_tag}\" и добавлена медалька в профиль!"
 
     text = (
-        f"\n🥇 {name_display}\n"
-        f"📊 {rank_str} • {mmr} MMR\n\n"
+        f"Поздравляем чемпиона недели🏆\n"
+        f"🥇 {name_display} • 🗡️ {rank_str}\n\n"
         f"📈 Результат за неделю:\n"
-        f" └ {week_wins}W • {week_losses}L • WR {winrate}%{streak_text}\n\n"
+        f" └ {week_wins}W • {week_losses}L • WR {winrate}%\n"
+        f"🔥 Текущий стрик: {streak} побед\n\n"
         f"🏆Этот игрок показал лучший результат в топе MMR за неделю!{tag_info}"
     )
 
