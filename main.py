@@ -847,6 +847,7 @@ async def dota_digest_job(context):
 @rate_limit(tokens=1)
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов (редактирование существующего, создание нового только при необходимости)"""
+    global _last_data_refresh, _data_refresh_interval
     try:
         now = time.time()
         
@@ -2538,7 +2539,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 # Не попали в x2 - обычный ролл (не мультикаст)
                 multicast_count = 1
-                return  # выходим из мультикаста, делаем обычный ролл
+                # Продолжаем выполнение для обычного ролла
             
             # Сохраняем original_roll ДО умножения!
             original_roll = roll
