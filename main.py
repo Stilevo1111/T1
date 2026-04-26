@@ -2128,13 +2128,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         loading_msg = None
         
-        # Send loading message for all users (shows that bot is working)
+        # Send animated loading message with ⏳⌛️
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="⏳ Загрузка меню..."
+                text="⏳ Загружаю меню..."
             )
             logger.info(f"Created loading message in start: chat_id={chat_id}, msg_id={loading_msg.message_id}")
+            
+            # Animate with alternating clocks ⏳⌛️
+            for i in range(4):
+                await asyncio.sleep(0.4)
+                frame = "⌛️" if i % 2 == 1 else "⏳"
+                messages = [
+                    "Загружаю меню...",
+                    "Подготавливаю интерфейс...",
+                    "Строю карточку...",
+                    "Готово!"
+                ]
+                try:
+                    await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                except Exception:
+                    break
+                    
         except Exception as e:
             logger.debug(f"Could not send loading message: {e}")
             loading_msg = None
@@ -2771,13 +2787,29 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username = user_obj.username or user_obj.first_name or "Unknown"
             target_user = get_user(user_obj.id, username)
         
-        # Send loading message for all users (shows that bot is working)
+        # Send animated loading message with ⏳⌛️
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="⏳ Загрузка профиля..."
+                text="⏳ Фармирую профиль..."
             )
             logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id}")
+            
+            # Animate with alternating clocks ⏳⌛️
+            for i in range(4):
+                await asyncio.sleep(0.4)
+                frame = "⌛️" if i % 2 == 1 else "⏳"
+                messages = [
+                    "Фармирую профиль...",
+                    "Собираю данные...",
+                    "Анализирую статы...",
+                    "Готово!"
+                ]
+                try:
+                    await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                except Exception:
+                    break
+                    
         except Exception as e:
             logger.debug(f"Could not send loading message: {e}")
             loading_msg = None
@@ -3019,21 +3051,117 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @rate_limit(tokens=1)
-async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать топ игроков по MMR"""
-    logger.info(f"User {update.effective_user.id} called topmmr")
+async def compare_pros(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сравнение игрока с профи по статистике Dota 2"""
+    logger.info(f"User {update.effective_user.id} called compare_pros")
     
+    user_obj = update.effective_user
+    username = user_obj.username or user_obj.first_name
     chat_id = update.message.chat_id
-    logger.info(f"topmmr: chat_id = {chat_id}")
-    chat_type = update.message.chat.type
     
-    # Delete user message only in groups/channels
-    if chat_type in ['group', 'supergroup', 'channel']:
+    # Delete user message in groups
+    if update.message.chat.type in ['group', 'supergroup', 'channel']:
         if await bot_can_delete(context.bot, chat_id):
             try:
                 await context.bot.delete_message(chat_id, update.message.message_id)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not delete user message: {e}")
+    
+    try:
+        user = get_user(user_obj.id, username)
+        player_mmr = user.get("mmr", 0)
+        
+        if player_mmr < 1000:
+            text = (
+                f"🎮 <b>Сравнение с профи</b>\n\n"
+                f"🤔 <a href=\"tg://user?id={user_obj.id}\">{username}</a>, твой MMR: <b>{player_mmr}</b>\n\n"
+                f"🎯 Средний MMR профи: <b>4000-8000+</b>\n"
+                f"📊 Разница: <b>+{4000 - player_mmr} MMR</b> до уровня профи\n\n"
+                f"💡 Совет: Играй больше рейтинговых игр и анализируй свои матчи!\n"
+                f"📈 Каждая победа приближает тебя к про-уровню!"
+            )
+        else:
+            # Получаем топ-100 игроков для сравнения
+            top_players = get_top_players(limit=100)
+            
+            if top_players:
+                # Рассчитываем усредненные показатели топов
+                avg_top_mmr = sum(p.get("mmr", 0) for p in top_players) / len(top_players)
+                avg_top_winrate = sum(p.get("week_wins", 0) / max(p.get("week_games", 1), 1) for p in top_players) / len(top_players)
+                
+                # Сравнение
+                mmr_diff = player_mmr - avg_top_mmr
+                winrate = user.get("week_wins", 0) / max(user.get("week_games", 1), 1)
+                winrate_diff = winrate - avg_top_winrate
+                
+                # Определяем уровень
+                if player_mmr >= 6000:
+                    level = "🌟 ЭЛИТА (6000+ MMR)"
+                    emoji = "👑"
+                elif player_mmr >= 5000:
+                    level = "⭐ ПРОФИ (5000-5999 MMR)"
+                    emoji = "🔥"
+                elif player_mmr >= 4000:
+                    level = "🎯 ВЫСШИЙ РАНГ (4000-4999 MMR)"
+                    emoji = "💎"
+                else:
+                    level = "⚔️ РАЗВИТИЕ (3000-3999 MMR)"
+                    emoji = "⚡"
+                
+                text = (
+                    f"{emoji} <b>Сравнение с профи - {level}</b> {emoji}\n\n"
+                    f"👤 <a href=\"tg://user?id={user_obj.id}\">{username}</a>\n"
+                    f"📈 Твой MMR: <b>{player_mmr}</b>\n"
+                    f"🏆 MMR топ-100: <b>{int(avg_top_mmr)}</b>\n"
+                    f"📊 Разница: <b>{'+' if mmr_diff >= 0 else ''}{int(mmr_diff)} MMR</b>\n\n"
+                    f"📈 Твой винрейт: <b>{winrate*100:.1f}%</b>\n"
+                    f"🎯 Винрейт топов: <b>{avg_top_winrate*100:.1f}%</b>\n"
+                    f"📊 Разница: <b>{'+' if winrate_diff >= 0 else ''}{winrate_diff*100:.1f}%</b>\n\n"
+                )
+                
+                # Рекомендации
+                if mmr_diff > 500:
+                    text += f"✅ <b>Ты выше среднего профи!</b> Продолжай в том же духе!\n"
+                elif mmr_diff > 0:
+                    text += f"⚡ <b>Ты на уровне профи!</b> Почти идеал!\n"
+                elif mmr_diff > -500:
+                    text += f"💪 <b>Ты близок к про-уровню!</b> Еще чуть-чуть!\n"
+                else:
+                    text += f"🎮 <b>Разрыв можно сократить!</b> Сфокусируйся на слабых сторонах.\n"
+                
+                # Советы
+                text += (
+                    f"\n💡 <b>Советы для роста:</b>\n"
+                    f"• Играй свои сильные герои\n"
+                    f"• Анализируй поражения\n"
+                    f"• Смотри реплеи про-игроков\n"
+                    f"• Коммуникация с командой\n"
+                    f"• Контроль карты и тайминг\n"
+                )
+            else:
+                text = (
+                    f"🎮 <b>Сравнение с профи</b>\n\n"
+                    f"🤔 <a href=\"tg://user?id={user_obj.id}\">{username}</a>, твой MMR: <b>{player_mmr}</b>\n\n"
+                    f"🎯 Средний MMR профи: <b>4000+</b>\n"
+                    f"📊 Разница: <b>+{4000 - player_mmr} MMR</b> до уровня профи\n\n"
+                    f"💡 Совет: Играй больше рейтинговых игр!"
+                )
+        
+        # Отправляем результат
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=main_menu()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in compare_pros: {e}", exc_info=True)
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ Ошибка сравнения. Попробуй позже.",
+            reply_markup=main_menu()
+        )
 
     try:
         from database import get_dota_week_top_from_db, get_dota_week_rank
