@@ -2562,7 +2562,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if cascade_count > 1:
             await asyncio.sleep(0.3)
         
-         roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
+        roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
         
         # Сохраняем original_roll для отображения в мультикасте (до бонусов)
         display_roll = roll
@@ -2574,7 +2574,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Показываем точное значение в сообщении, но сохраняем как целое для расчета
             bonus_amount = roll * bonus_multiplier
             roll = int(roll * bonus_multiplier)
-             weekend_bonus = f"🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {bonus_amount:.1f} СМ"
+            weekend_bonus = f"🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {bonus_amount:.1f} СМ"
         else:
             weekend_bonus = ""
         
@@ -2638,7 +2638,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{extra_text}"
             )
 
-         if is_fatal and protection_msg:
+        if is_fatal and protection_msg:
             text = f"{text}\n{protection_msg}"
         
         if weekend_bonus:
@@ -2687,7 +2687,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="HTML", reply_markup=main_menu()
                 )
         
-         logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
+        logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
         # ВСЕГДА удаляем сообщение через 30 секунд во всех чатах
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
@@ -3783,7 +3783,7 @@ async def main():
             # Force sync to ensure port is ready
             await asyncio.sleep(2)
             
-             async def keep_alive_ping():
+        async def keep_alive_ping():
                  ping_url = webhook_url.rsplit('/webhook', 1)[0] + '/health'
                  while True:
                      try:
@@ -3798,7 +3798,7 @@ async def main():
                          await session.get(root_url, timeout=aiohttp.ClientTimeout(total=10))
                      except Exception as e:
                          logger.error(f"Keep-alive ping error: {e}")
-            asyncio.create_task(keep_alive_ping())
+        asyncio.create_task(keep_alive_ping())
         
         while True:
             await asyncio.sleep(3600)
