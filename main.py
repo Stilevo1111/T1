@@ -3055,7 +3055,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @rate_limit(tokens=1)
 async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Сравнение игрока с профи по статистике Dota 2"""
+    """Топ игроков по MMR за неделю"""
     logger.info(f"User {update.effective_user.id} called topmmr")
     
     user_obj = update.effective_user
@@ -3070,102 +3070,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not delete user message: {e}")
     
-    try:
-        user = get_user(user_obj.id, username)
-        player_mmr = user.get("mmr", 0)
-        
-        if player_mmr < 1000:
-            text = (
-                f"🎮 <b>Сравнение с профи</b>\n\n"
-                f"🤔 <a href=\"tg://user?id={user_obj.id}\">{username}</a>, твой MMR: <b>{player_mmr}</b>\n\n"
-                f"🎯 Средний MMR профи: <b>4000-8000+</b>\n"
-                f"📊 Разница: <b>+{4000 - player_mmr} MMR</b> до уровня профи\n\n"
-                f"💡 Совет: Играй больше рейтинговых игр и анализируй свои матчи!\n"
-                f"📈 Каждая победа приближает тебя к про-уровню!"
-            )
-        else:
-            # Получаем топ-100 игроков для сравнения
-            top_players = get_top_players(limit=100)
-            
-            if top_players:
-                # Рассчитываем усредненные показатели топов
-                avg_top_mmr = sum(p.get("mmr", 0) for p in top_players) / len(top_players)
-                avg_top_winrate = sum(p.get("week_wins", 0) / max(p.get("week_games", 1), 1) for p in top_players) / len(top_players)
-                
-                # Сравнение
-                mmr_diff = player_mmr - avg_top_mmr
-                winrate = user.get("week_wins", 0) / max(user.get("week_games", 1), 1)
-                winrate_diff = winrate - avg_top_winrate
-                
-                # Определяем уровень
-                if player_mmr >= 6000:
-                    level = "🌟 ЭЛИТА (6000+ MMR)"
-                    emoji = "👑"
-                elif player_mmr >= 5000:
-                    level = "⭐ ПРОФИ (5000-5999 MMR)"
-                    emoji = "🔥"
-                elif player_mmr >= 4000:
-                    level = "🎯 ВЫСШИЙ РАНГ (4000-4999 MMR)"
-                    emoji = "💎"
-                else:
-                    level = "⚔️ РАЗВИТИЕ (3000-3999 MMR)"
-                    emoji = "⚡"
-                
-                text = (
-                    f"{emoji} <b>Сравнение с профи - {level}</b> {emoji}\n\n"
-                    f"👤 <a href=\"tg://user?id={user_obj.id}\">{username}</a>\n"
-                    f"📈 Твой MMR: <b>{player_mmr}</b>\n"
-                    f"🏆 MMR топ-100: <b>{int(avg_top_mmr)}</b>\n"
-                    f"📊 Разница: <b>{'+' if mmr_diff >= 0 else ''}{int(mmr_diff)} MMR</b>\n\n"
-                    f"📈 Твой винрейт: <b>{winrate*100:.1f}%</b>\n"
-                    f"🎯 Винрейт топов: <b>{avg_top_winrate*100:.1f}%</b>\n"
-                    f"📊 Разница: <b>{'+' if winrate_diff >= 0 else ''}{winrate_diff*100:.1f}%</b>\n\n"
-                )
-                
-                # Рекомендации
-                if mmr_diff > 500:
-                    text += f"✅ <b>Ты выше среднего профи!</b> Продолжай в том же духе!\n"
-                elif mmr_diff > 0:
-                    text += f"⚡ <b>Ты на уровне профи!</b> Почти идеал!\n"
-                elif mmr_diff > -500:
-                    text += f"💪 <b>Ты близок к про-уровню!</b> Еще чуть-чуть!\n"
-                else:
-                    text += f"🎮 <b>Разрыв можно сократить!</b> Сфокусируйся на слабых сторонах.\n"
-                
-                # Советы
-                text += (
-                    f"\n💡 <b>Советы для роста:</b>\n"
-                    f"• Играй свои сильные герои\n"
-                    f"• Анализируй поражения\n"
-                    f"• Смотри реплеи про-игроков\n"
-                    f"• Коммуникация с командой\n"
-                    f"• Контроль карты и тайминг\n"
-                )
-            else:
-                text = (
-                    f"🎮 <b>Сравнение с профи</b>\n\n"
-                    f"🤔 <a href=\"tg://user?id={user_obj.id}\">{username}</a>, твой MMR: <b>{player_mmr}</b>\n\n"
-                    f"🎯 Средний MMR профи: <b>4000+</b>\n"
-                    f"📊 Разница: <b>+{4000 - player_mmr} MMR</b> до уровня профи\n\n"
-                    f"💡 Совет: Играй больше рейтинговых игр!"
-                )
-        
-        # Отправляем результат
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            parse_mode="HTML",
-            reply_markup=main_menu()
-        )
-        
-    except Exception as e:
-        logger.error(f"Error in topmmr: {e}", exc_info=True)
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="❌ Ошибка сравнения. Попробуй позже.",
-            reply_markup=main_menu()
-        )
-
     try:
         from database import get_dota_week_top_from_db, get_dota_week_rank
         user = get_user(update.effective_user.id)
@@ -3255,93 +3159,84 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     tier = min(rank_tier // 10, 8)
                     star = rank_tier % 10
                     
-                    if tier < 1 or tier > 8:
-                        rank_str = "Неизвестно"
+                    if tier == 8:  # Immortal
+                        rank_str = rank_name
                     else:
-                        rank_name = ranks[tier - 1]
-                        if tier == 8:  # Immortal
-                            rank_str = rank_name
-                        else:
-                            rank_str = f"{rank_name} {star}"
+                        rank_str = f"{ranks[tier - 1]} {star}"
                 else:
-                    rank_str = "Не откалиброван"
+                    rank_str = "Без ранга"
                 
-                # Format winrate
-                winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
+                # Medal emoji
+                medals = ["🥇", "🥈", "🥉"]
+                medal = medals[i - 1] if i <= 3 else f"{i}️⃣"
                 
-                # Format prefix (medal or number)
-                if i == 1:
-                    prefix = "🥇"
-                elif i == 2:
-                    prefix = "🥈"
-                elif i == 3:
-                    prefix = "🥉"
-                else:
-                    emoji_nums = {4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
-                    prefix = emoji_nums.get(i, f"{i}.")
-                
-                # Format streak
-                streak = player.get('week_current_streak', 0)
-                streak_text = f" • 🔥{streak}" if streak > 0 else ""
-                
-                if username and len(username) > 25:
-                    username = username[:25] + "."
-                
-                # Build player entry - two lines per player
-                # Если пользователь в топе - показываем только 7 игроков, его позицию добавим в конце
-                telegram_id = player.get('telegram_id')
-                if telegram_id and telegram_id > 0:
-                    clickable_name = f'<b><a href="tg://user?id={telegram_id}">{username}</a></b>'
-                else:
-                    clickable_name = f'<b>{username}</b>'
-                lines.append(f"{prefix} {clickable_name} - {rank_str}\n")
                 if week_games > 0:
-                    lines.append(f" └ {week_wins}W • {week_losses}L • WR {winrate}%{streak_text}\n\n")
+                    wr = round((week_wins / week_games) * 100, 1)
+                    # Format the user's own entry with their current rank
+                    if player.get('telegram_id') == user.get('telegram_id'):
+                        lines.append(f"{medal} <a href='tg://user?id={user_obj.id}'>{username}</a> - {user_rank_str}")
+                    else:
+                        lines.append(f"{medal} {username} - {rank_str}")
+                    lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%" + (f" • 🔥{user.get('week_streak', 0)}" if player.get('week_streak', 0) > 0 else ""))
                 else:
-                    lines.append(f" └ Нет игр за неделю\n\n")
+                    lines.append(f"{medal} {username} - {rank_str}")
+                    lines.append(f" └ Нет игр за неделю")
             
-            # Всегда показываем позицию пользователя внизу
-            if user and user.get('steam_id') and user_pos:
-                username = user.get('steam_nickname') or user.get('username') or 'Unknown'
-                if username and len(username) > 25:
-                    username = username[:25] + "."
-                user_tg_id = user.get('telegram_id')
-                clickable_name = f'<b><a href="tg://user?id={user_tg_id}">{username}</a></b>'
-                lines.append(f"👤 {clickable_name}: #{user_pos} - {user_rank_str}\n")
-                if user_week_games > 0:
-                    lines.append(f" └ {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%\n")
-                else:
-                    lines.append(f" └ Нет игр за неделю\n")
+            # Add the current user's position if not in top
+            if user and not user_is_in_top and user_week_games > 0:
+                user_wr = round((user_week_wins / user_week_games) * 100, 1)
+                lines.append(f"\n👤 <a href='tg://user?id={user_obj.id}'>{username}</a>: #{user_pos or '?' } - {user_rank_str}")
+                lines.append(f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%")
             
-            text = "".join(lines)
+            top_text = "\n".join(lines)
+            
+            # Check if this is a digest chat and add the winner info
+            try:
+                from database import get_config
+                from datetime import datetime
+                digest_chat_id = get_config('digest_chat_id')
+                if str(chat_id) == str(digest_chat_id):
+                    # Find the winner (first in top)
+                    if top_users and top_users[0].get('week_games', 0) > 0:
+                        winner = top_users[0]
+                        winner_username = winner.get('steam_nickname') or winner.get('username') or 'Unknown'
+                        winner_wr = round((winner.get('week_wins', 0) / winner.get('week_games', 1)) * 100, 1)
+                        winner_streak = winner.get('week_streak', 0)
+                        top_text = f"🥇 {winner_username}\n📊 {winner.get('rank_tier', 0) and ('Герой 1' if winner.get('rank_tier') >= 50 else 'Без ранга')}\n\n📈 Результат за неделю:\n └ {winner.get('week_wins', 0)}W • {winner.get('week_games', 0) - winner.get('week_wins', 0)}L • WR {winner_wr}%\n🔥 Текущий стрик: {winner_streak} побед\n\n{top_text}\n\n👤 @{winner_username}: #{user_pos or 1} - {winner.get('rank_tier', 0) and ('Герой 1' if winner.get('rank_tier') >= 50 else 'Без ранга')}\n └ {winner.get('week_wins', 0)}W • {winner.get('week_losses', 0)}L • WR {winner_wr}%" + (f"\n\nЭто сообщение в {datetime.now().strftime('%H:%M')} часов" if chat_id == update.effective_chat.id else "")
+            except Exception as e:
+                logger.debug(f"Could not add digest info: {e}")
+            
+            # Delete previous bot message before sending new one
+            try:
+                await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+            except Exception as e:
+                logger.debug(f"Could not delete last bot message: {e}")
+            
+            result_msg = await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=topmmr_banner_url,
+                caption=top_text,
+                parse_mode="HTML",
+                reply_markup=main_menu()
+            )
+            add_bot_message(chat_id, user_obj.id, result_msg.message_id)
+            set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+            update_last_message_id(user_obj.id, result_msg.message_id)
+            
+            # Small delay for message visibility
+            await asyncio.sleep(0.1)
         
-        # Delete previous bot message before sending new one
-        try:
-            await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
-        except Exception as e:
-            logger.debug(f"Could not delete last bot message: {e}")
-        
-        logger.info(f"topmmr: sending message, text length = {len(text) if text else 0}")
-        result_msg = await context.bot.send_photo(
-            chat_id=update.effective_chat.id,
-            photo=topmmr_banner_url,
-            caption=text,
-            parse_mode="HTML",
-            reply_markup=main_menu()
-        )
-        # Track this message for future deletion
-        set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
-        update_last_message_id(update.effective_user.id, result_msg.message_id)
-        
-        # Small delay to ensure message is visible
-        await asyncio.sleep(0.1)
-    
+        await flush_stat_buffer()
+            
     except Exception as e:
         logger.error(f"Error in topmmr: {e}", exc_info=True)
-        # Send new message instead of replying to avoid "Message not found" error
         try:
-            await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="❌ Ошибка получения топа",
+                reply_markup=main_menu()
+            )
         except Exception:
             pass
         await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка получения топа MMR", reply_markup=main_menu())
