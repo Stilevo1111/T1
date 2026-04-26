@@ -3808,7 +3808,7 @@ async def main():
         app.add_handler(CommandHandler(("fissure", "fissura"), fissure))
         app.add_handler(CommandHandler("profile", stats))
         app.add_handler(CommandHandler("top", top))
-        app.add_handler(CommandHandler("topmmr", topmmr))
+        app.add_handler(CommandHandler("topmmr", compare_pros))
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler(("digestnow", "dotadigestnow", "setdigestchat"), digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
