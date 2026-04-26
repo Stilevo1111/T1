@@ -305,7 +305,7 @@ async def announce_weekly_mmr_winner(bot):
     from datetime import datetime as dt, timezone, timedelta
     MSK = timezone(timedelta(hours=3))
     today_msk = dt.now(MSK)
-    monday_msk = today_msk - datetime.timedelta(days=today_msk.weekday())
+    monday_msk = today_msk - timedelta(days=today_msk.weekday())
     current_week_start = monday_msk.strftime("%Y-%m-%d")
 
     last_announced = get_config('mmr_week_top_announced')
@@ -477,6 +477,48 @@ async def announce_weekly_mmr_winner(bot):
     
     set_config('mmr_week_top_announced', current_week_start)
     logger.info(f"announce_weekly_mmr_winner: отправлено поздравление для {username} (неделя {current_week_start})")
+    
+    # Сброс еженедельной статистики MMR для новой недели
+    try:
+        db = Database()
+        conn = db.connect()
+        cursor = conn.cursor()
+        url = urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        if "postgres" in scheme:
+            # PostgreSQL: обновляем все записи, сохраняя лучший стрик
+            cursor.execute("""
+                UPDATE users 
+                SET week_games = 0, 
+                    week_wins = 0, 
+                    week_current_streak = 0,
+                    week_best_streak = GREATEST(week_best_streak, week_current_streak),
+                    week_start_date = %s
+                WHERE steam_id IS NOT NULL
+            """, (current_week_start,))
+        else:
+            # SQLite
+            cursor.execute("""
+                UPDATE users 
+                SET week_games = 0, 
+                    week_wins = 0, 
+                    week_current_streak = 0,
+                    week_best_streak = MAX(week_best_streak, week_current_streak),
+                    week_start_date = ?
+                WHERE steam_id IS NOT NULL
+            """, (current_week_start,))
+        
+        conn.commit()
+        cursor.close()
+        
+        # Очищаем кеш
+        user_cache.clear()
+        top_cache.clear()
+        logger.info("announce_weekly_mmr_winner: еженедельная статистика MMR сброшена")
+    except Exception as e:
+        logger.error(f"announce_weekly_mmr_winner: ошибка при сбросе статистики: {e}")
+
 
 
 async def backup_database_job(context):
