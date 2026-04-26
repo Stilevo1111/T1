@@ -44,6 +44,18 @@ _digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run
 _digest_state_lock = asyncio.Lock()  # Lock for thread-safe access to _digest_state
 DIGEST_DATA_REFRESH_INTERVAL = 3600  # 1 час - обновление данных из БД
 
+# Кеш для дайджестов - храним сгенерированный текст и время создания
+_digest_cache = {
+    "text": None,           # Кешированный текст дайджеста
+    "type": None,          # Тип дайджеста для кеша
+    "created_at": 0,       # Время создания кеша
+    "cache_ttl": 300,      # Время жизни кеша в секундах (5 минут)
+    "rotation_interval": 15  # Интервал смены типа в секундах (15 секунд)
+}
+
+_last_data_refresh = 0
+_data_refresh_interval = 300  # Обновлять данные каждые 5 минут
+
 _rate_limit_until = 0  # Unix timestamp - skip API calls until this time after 429
 RATE_LIMIT_COOLDOWN = 60  # 60 seconds cooldown after hitting rate limit
 
@@ -843,211 +855,141 @@ async def alternate_digest_job(context):
             logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
             return
         
-        # Блокировка от параллельного запуска
+        # Блокировка от параллельного запуска - УДЕРЖИВАЕМ ДО КОНЦА!
         async with _digest_state_lock:
             last_run = _digest_state.get('last_run', 0)
             if now - last_run < 10:
                 logger.info(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
                 return
             _digest_state['last_run'] = now
+            
+            # Проверяем, нужно ли обновить данные из БД (раз в час)
+            if now - _digest_state.get("last_data_update", 0) >= DIGEST_DATA_REFRESH_INTERVAL:
+                logger.info("alternate_digest_job: обновляем данные из БД")
+                # Сбрасываем кеш в database.py чтобы получить свежие данные
+                from database import user_cache
+                user_cache.set('digest_stats', None)
+                user_cache.set('dota_digest_stats', None)
+                # Очищаем локальный кеш дайджестов
+                _digest_state["digest_data"] = None
+                _digest_state["dota_data"] = None
+                _digest_state["last_data_update"] = now
+            
+            # При первом запуске после деплоя сбрасываем тип на "0"
+            if _digest_state.get("last_data_update") == 0:
+                _digest_state["type"] = "0"
+                set_config('alternate_digest_type', "0")
+                logger.info("alternate_digest_job: сброшен тип на 0 после перезапуска")
+            
+            logger.info("Запуск alternate_digest_job")
+            
+            # Получаем ID чата для дайджеста (из кеша, не БД)
+            digest_chat_id = _digest_state.get("chat_id") or get_config('digest_chat_id')
+            if digest_chat_id:
+                _digest_state["chat_id"] = digest_chat_id
+            logger.info(f"alternate_digest_job: digest_chat_id = {digest_chat_id}")
+            if not digest_chat_id:
+                logger.info("Чат для дайджеста не настроен")
+                return
+            
+            bot = context.application.bot
         
-        # Проверяем, нужно ли обновить данные из БД (раз в час)
-        if now - _digest_state.get("last_data_update", 0) >= DIGEST_DATA_REFRESH_INTERVAL:
-            logger.info("alternate_digest_job: обновляем данные из БД")
-            # Сбрасываем кеш в database.py чтобы получить свежие данные
-            from database import user_cache
-            user_cache.set('digest_stats', None)
-            user_cache.set('dota_digest_stats', None)
-            # Очищаем локальный кеш дайджестов
-            _digest_state["digest_data"] = None
-            _digest_state["dota_data"] = None
-            _digest_state["last_data_update"] = now
+        now = time.time()
         
-        # При первом запуске после деплоя сбрасываем тип на "0"
-        if _digest_state.get("last_data_update") == 0:
-            _digest_state["type"] = "0"
-            set_config('alternate_digest_type', "0")
-            logger.info("alternate_digest_job: сброшен тип на 0 после перезапуска")
+        # === УМНАЯ СИСТЕМА КЕШИРОВАНИЯ ДАЙДЖЕСТОВ ===
+        # Проверяем, нужно ли обновить кеш
+        cache = _digest_cache
+        should_regenerate = False
         
-        logger.info("Запуск alternate_digest_job")
+        # 1. Если кеш пустой - генерируем
+        if cache["text"] is None:
+            should_regenerate = True
+            logger.info("Кеш дайджеста пуст, генерируем новый")
         
-        # Получаем ID чата для дайджеста (из кеша, не БД)
-        digest_chat_id = _digest_state.get("chat_id") or get_config('digest_chat_id')
-        if digest_chat_id:
-            _digest_state["chat_id"] = digest_chat_id
-        logger.info(f"alternate_digest_job: digest_chat_id = {digest_chat_id}")
-        if not digest_chat_id:
-            logger.info("Чат для дайджеста не настроен")
-            return
+        # 2. Если кеш устарел (TTL) - генерируем новый
+        elif now - cache["created_at"] > cache["cache_ttl"]:
+            should_regenerate = True
+            logger.info(f"Кеш дайджеста устарел ({now - cache['created_at']:.0f}с > {cache['cache_ttl']}с), обновляем")
         
-        bot = context.application.bot
+        # 3. Если пришло время сменить тип (rotation) - генерируем
+        elif now - cache["created_at"] > cache["rotation_interval"]:
+            should_regenerate = True
+            logger.info(f"Время сменить тип дайджеста ({cache['rotation_interval']}с), обновляем")
         
-        # Получаем текущий тип дайджеста из памяти
-        current_type = _digest_state.get("type")
-        if current_type is None:
-            # Ensure string type - convert from int if needed
-            raw_type = get_config('alternate_digest_type')
-            if raw_type is not None:
-                current_type = str(raw_type)
+        # 4. Если данные в БД обновились - генерируем
+        elif now - _last_data_refresh > _data_refresh_interval:
+            should_regenerate = True
+            logger.info(f"Данные в БД устарели ({_data_refresh_interval}с), обновляем")
+        
+        # Если кеш валиден - используем его и просто меняем тип для отображения
+        if not should_regenerate:
+            logger.info(f"Используем кешированный дайджест (создан {now - cache['created_at']:.0f}с назад)")
+            
+            # Просто меняем тип для следующего раза
+            current_type = cache["type"]
+            if current_type == "0":
+                next_type = "1"
             else:
-                current_type = "0"
-            _digest_state["type"] = current_type
-        logger.info(f"alternate_digest_job: current_type = {current_type} (type={type(current_type).__name__}), _digest_state = {_digest_state}")
-        if current_type is None:
-            current_type = "0"
+                next_type = "0"
+            
+            text = cache["text"]
+            
+            # Обновляем метаданные
+            _digest_state["type"] = next_type
+            set_config('alternate_digest_type', next_type)
+            
+            logger.info(f"Переключаем тип: {current_type} -> {next_type} (используем кеш)")
         
-        # Формируем текст в зависимости от типа
-        # Используем fallback: если для текущего типа нет данных, показываем другой тип
-        text = None
-        next_type = None  # тип для следующего запуска (переключаем только если успешно показали intended)
-
-        if current_type == "0":
-            # Пытаемся сгенерировать фиссур-дайджест
-            if _digest_state.get("digest_data") is None:
-                stats = get_digest_stats()
-                _digest_state["digest_data"] = stats
-            else:
-                stats = _digest_state["digest_data"]
-
-            growth_player, growth_pos = stats.get("top_growth", ("None", 0))
-            drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
-            streak_player, streak_len = stats.get("top_streak", ("None", 0))
-            growth_id = stats.get("top_growth_id")
-            drop_id = stats.get("top_drop_id")
-            streak_id = stats.get("top_streak_id")
-            streak_username = stats.get("streak_username")
-
-            growth_display = make_clickable(growth_player, growth_id)
-            drop_display = make_clickable(drop_player, drop_id)
-            streak_display = make_clickable(streak_player, streak_id)
-
-            if growth_player and growth_player != "None":
-                growth_part = f"🔺{growth_display} +{growth_pos}"
-            else:
-                growth_part = "🔺—"
-
-            if drop_player and drop_player != "None":
-                if drop_cm < 0:
-                    drop_part = f"🔻{drop_display} {drop_cm:.0f} СМ"
-                else:
-                    drop_part = f"🔻{drop_display} +{drop_cm:.0f} СМ"
-            else:
-                drop_part = "🔻—"
-
-            if streak_player and streak_player != "None" and streak_len > 0:
-                streak_part = f" 🍀{streak_display}: {streak_len}"
-            else:
-                streak_part = " 🍀—"
-
-            text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
-            next_type = "1"  # после успешного показа фиссур-дайджеста переключаем на Dota
+        # Иначе - генерируем новый дайджест
         else:
-            # Пытаемся сгенерировать Dota-дайджест
-            if _digest_state.get("dota_data") is None:
-                mmr_top = get_dota_week_top(limit=10)
-                _digest_state["dota_data"] = mmr_top
-            else:
-                mmr_top = _digest_state["dota_data"]
-
-            dota_text = None
-            if not mmr_top:
-                logger.info("Нет данных для Dota дайджеста")
-            else:
-                valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
-                if not valid_players:
-                    logger.info("Нет игроков с 3+ играми для Dota дайджеста")
-                    _digest_state["dota_data"] = []  # кэшируем пустой результат
+            # Получаем текущий тип дайджеста из памяти
+            current_type = _digest_state.get("type")
+            if current_type is None:
+                raw_type = get_config('alternate_digest_type')
+                if raw_type is not None:
+                    current_type = str(raw_type)
                 else:
-                    # Лучший и худший по net wins (разнице побед-поражений)
-                    # При равенстве net: top — больше игр, bottom — меньше игр
-                    # Убедимся что top и bottom это РАЗНЫЕ игроки
-                    valid_players_sorted = sorted(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)), reverse=True)
-                    
-                    if len(valid_players_sorted) >= 2:
-                        top_by_net = valid_players_sorted[0]
-                        # Для bottom ищем с конца, но исключаем top игрока
-                        for p in reversed(valid_players_sorted):
-                            if p.get('telegram_id') != top_by_net.get('telegram_id'):
-                                bottom_by_net = p
-                                break
-                        else:
-                            # Если не нашли другого - берем последнего
-                            bottom_by_net = valid_players_sorted[-1]
-                    elif len(valid_players_sorted) == 1:
-                        top_by_net = valid_players_sorted[0]
-                        bottom_by_net = valid_players_sorted[0]  # Только один игрок
-                    else:
-                        top_by_net = None
-                        bottom_by_net = None
-                    
-                    players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
-                    top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
-
-                    top_player = top_by_net.get('steam_nickname', 'None')
-                    top_id = top_by_net.get('telegram_id')
-                    top_games = top_by_net.get('week_games', 0)
-                    top_wins = top_by_net.get('week_wins', 0)
-                    top_losses = top_games - top_wins
-                    top_net = top_wins - top_losses
-                    top_winrate = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
-
-                    bottom_player = bottom_by_net.get('steam_nickname', 'None')
-                    bottom_id = bottom_by_net.get('telegram_id')
-                    bottom_games = bottom_by_net.get('week_games', 0)
-                    bottom_wins = bottom_by_net.get('week_wins', 0)
-                    bottom_losses = bottom_games - bottom_wins
-                    bottom_net = bottom_wins - bottom_losses
-                    bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
-
-                    streak_player = top_streak_player.get('steam_nickname', 'None') if top_streak_player else 'None'
-                    streak_wins = top_streak_player.get('week_current_streak', 0) if top_streak_player else 0
-                    streak_id = top_streak_player.get('telegram_id') if top_streak_player else None
-
-                    if top_player and top_player != "None":
-                        top_part = f"🔺{make_clickable(top_player, top_id)}: {top_wins}W/{top_losses}L ≈{top_winrate}%"
-                    else:
-                        top_part = "🔺—"
-
-                    if bottom_player and bottom_player != "None":
-                        bottom_part = f"🔻{make_clickable(bottom_player, bottom_id)}: {bottom_wins}W/{bottom_losses}L ≈{bottom_winrate}%"
-                    else:
-                        bottom_part = "🔻—"
-
-                    if streak_player and streak_player != "None" and streak_wins > 0:
-                        streak_part = f" 🔸{make_clickable(streak_player, streak_id)}: {streak_wins}"
-                    else:
-                        streak_part = " 🔸—"
-
-                    dota_text = f"<b>{top_part} {bottom_part} {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
-
-            if dota_text is not None:
-                text = dota_text
-                next_type = "0"  # после успешного Dota-дайджеста переключаем на фиссуру
+                    current_type = "0"
+                _digest_state["type"] = current_type
+            
+            logger.info(f"alternate_digest_job: current_type = {current_type}, генерируем новый дайджест")
+            
+            # Определяем следующий тип (чередуем)
+            if current_type == "0":
+                next_type = "1"
             else:
-                # Fallback: показываем фиссур-дайджест (если есть данные)
-                if _digest_state.get("digest_data") is None:
+                next_type = "0"
+            
+            # Формируем текст в зависимости от типа
+            text = None
+            
+            if current_type == "0":
+                # Фиссур-дайджест
+                # Проверяем, нужно ли обновить данные из БД
+                if _digest_state.get("digest_data") is None or now - _last_data_refresh > _data_refresh_interval:
+                    logger.info("Обновляем данные для фиссур-дайджеста из БД")
                     stats = get_digest_stats()
                     _digest_state["digest_data"] = stats
+                    _last_data_refresh = now
                 else:
                     stats = _digest_state["digest_data"]
-
+                
                 growth_player, growth_pos = stats.get("top_growth", ("None", 0))
                 drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
                 streak_player, streak_len = stats.get("top_streak", ("None", 0))
                 growth_id = stats.get("top_growth_id")
                 drop_id = stats.get("top_drop_id")
                 streak_id = stats.get("top_streak_id")
-                streak_username = stats.get("streak_username")
-
+                
                 growth_display = make_clickable(growth_player, growth_id)
                 drop_display = make_clickable(drop_player, drop_id)
                 streak_display = make_clickable(streak_player, streak_id)
-
+                
                 if growth_player and growth_player != "None":
                     growth_part = f"🔺{growth_display} +{growth_pos}"
                 else:
                     growth_part = "🔺—"
-
+                
                 if drop_player and drop_player != "None":
                     if drop_cm < 0:
                         drop_part = f"🔻{drop_display} {drop_cm:.0f} СМ"
@@ -1055,27 +997,116 @@ async def alternate_digest_job(context):
                         drop_part = f"🔻{drop_display} +{drop_cm:.0f} СМ"
                 else:
                     drop_part = "🔻—"
-
+                
                 if streak_player and streak_player != "None" and streak_len > 0:
                     streak_part = f" 🍀{streak_display}: {streak_len}"
                 else:
                     streak_part = " 🍀—"
-
+                
                 text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
-                # Если fallback, не меняем next_type — оставляем как есть (current_type), чтобы в следующий раз снова попытаться показать изначальный тип
-                # next_type уже None, установим его ниже
-                if next_type is None:
-                    next_type = current_type  # не меняем тип, повторяем попытку позже
-
-        if text is None:
-            logger.info("Нет данных ни для одного типа дайджеста")
-            return
-
+            
+            else:
+                # Dota-дайджест
+                # Проверяем, нужно ли обновить данные из БД
+                if _digest_state.get("dota_data") is None or now - _last_data_refresh > _data_refresh_interval:
+                    logger.info("Обновляем данные для Dota-дайджеста из БД")
+                    mmr_top = get_dota_week_top(limit=10)
+                    _digest_state["dota_data"] = mmr_top
+                    _last_data_refresh = now
+                else:
+                    mmr_top = _digest_state["dota_data"]
+                
+                dota_text = None
+                if not mmr_top:
+                    logger.info("Нет данных для Dota дайджеста")
+                    # Fallback на фиссур-дайджест
+                    next_type = "0"
+                else:
+                    valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
+                    if not valid_players:
+                        logger.info("Нет игроков с 3+ играми для Dota дайджеста")
+                        next_type = "0"
+                    else:
+                        valid_players_sorted = sorted(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)), reverse=True)
+                        
+                        if len(valid_players_sorted) >= 2:
+                            top_by_net = valid_players_sorted[0]
+                            for p in reversed(valid_players_sorted):
+                                if p.get('telegram_id') != top_by_net.get('telegram_id'):
+                                    bottom_by_net = p
+                                    break
+                            else:
+                                bottom_by_net = valid_players_sorted[-1]
+                        elif len(valid_players_sorted) == 1:
+                            top_by_net = valid_players_sorted[0]
+                            bottom_by_net = valid_players_sorted[0]
+                        else:
+                            top_by_net = None
+                            bottom_by_net = None
+                        
+                        players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
+                        top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
+                        
+                        if top_by_net:
+                            top_player = top_by_net.get('steam_nickname', 'None')
+                            top_id = top_by_net.get('telegram_id')
+                            top_games = top_by_net.get('week_games', 0)
+                            top_wins = top_by_net.get('week_wins', 0)
+                            top_losses = top_games - top_wins
+                            top_winrate = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
+                            
+                            bottom_player = bottom_by_net.get('steam_nickname', 'None')
+                            bottom_id = bottom_by_net.get('telegram_id')
+                            bottom_games = bottom_by_net.get('week_games', 0)
+                            bottom_wins = bottom_by_net.get('week_wins', 0)
+                            bottom_losses = bottom_games - bottom_wins
+                            bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
+                            
+                            streak_player = top_streak_player.get('steam_nickname', 'None') if top_streak_player else 'None'
+                            streak_wins = top_streak_player.get('week_current_streak', 0) if top_streak_player else 0
+                            streak_id = top_streak_player.get('telegram_id') if top_streak_player else None
+                            
+                            if top_player and top_player != "None":
+                                top_part = f"🔺{make_clickable(top_player, top_id)}: {top_wins}W/{top_losses}L ≈{top_winrate}%"
+                            else:
+                                top_part = "🔺—"
+                            
+                            if bottom_player and bottom_player != "None":
+                                bottom_part = f"🔻{make_clickable(bottom_player, bottom_id)}: {bottom_wins}W/{bottom_losses}L ≈{bottom_winrate}%"
+                            else:
+                                bottom_part = "🔻—"
+                            
+                            if streak_player and streak_player != "None" and streak_wins > 0:
+                                streak_part = f" 🔸{make_clickable(streak_player, streak_id)}: {streak_wins}"
+                            else:
+                                streak_part = " 🔸—"
+                            
+                            dota_text = f"<b>{top_part} {bottom_part} {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
+                        
+                        if dota_text is None:
+                            next_type = "0"
+                
+                text = dota_text
+            
+            # Если не удалось сгенерировать текст - используем fallback
+            if text is None:
+                logger.info("Не удалось сгенерировать дайджест, используем fallback")
+                text = "<b>📊 Данные для дайджеста пока не доступны</b>\n\nПопробуйте позже!"
+                next_type = "0"
+            
+            # === СОХРАНЯЕМ В КЕШ ===
+            cache["text"] = text
+            cache["type"] = current_type
+            cache["created_at"] = now
+            
+            logger.info(f"Дайджест сгенерирован и сохранен в кеш (тип: {current_type})")
+        
+        # === ОТПРАВКА ДАЙДЖЕСТА ===
         # Пропускаем редактирование если текст не изменился
         if _digest_state.get("last_text") == text:
             logger.debug("Текст дайджеста не изменился, пропускаем редактирование")
             return
-
+        
         # Пробуем отредактировать существующее сообщение
         last_message_id = get_config('alternate_digest_message_id')
         logger.info(f"alternate_digest_job: text = {text[:100]}...")
@@ -1096,10 +1127,9 @@ async def alternate_digest_job(context):
                     )
                     logger.info(f"Обновлён alternate дайджест {last_message_id}")
                     edited = True
-                    # Используем next_type, вычисленный ранее (с учётом fallback)
                     _digest_state["type"] = next_type
                     set_config('alternate_digest_type', next_type)
-                    _digest_state["last_text"] = text  # кэшируем текст
+                    _digest_state["last_text"] = text
             except (ValueError, TypeError) as e:
                 logger.warning(f"Invalid alternate_digest_message_id format: {last_message_id}, error: {e}")
                 set_config('alternate_digest_message_id', None)
@@ -1109,29 +1139,72 @@ async def alternate_digest_job(context):
                 is_rate_limit = "429" in error_str or "too many requests" in error_str or "retry after" in error_str
                 logger.info(f"Ошибка редактирования: {e}")
                 if is_rate_limit:
-                    logger.warning(f"Rate limited by Telegram, skipping edit for {10 * 60 / 60} seconds")
-                    _digest_state["last_text"] = text  # кэшируем текст чтобы не повторять
-                    _digest_state["last_run"] = 0  # сбрасываем чтобы в следующий раз попробовать снова
-                    return  # выходим чтобы не продолжать
+                    logger.warning(f"Rate limited by Telegram, skipping edit")
+                    _digest_state["last_text"] = text
+                    _digest_state["last_run"] = 0
+                    return
                 if "bad request" in error_str:
                     logger.warning(f"Bad request for message {last_message_id}, resetting message_id")
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
-                    edited = False  # need to create new message
+                    edited = False
                 elif "message to edit not found" in error_str or "message can't be edited" in error_str:
                     logger.info(f"Старое сообщение {last_message_id} удалено, создаём новое")
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
                 elif "message is not modified" in error_str:
-                    logger.info(f"Сообщение не изменилось, пропускаем удаление и создание")
-                    edited = True  # Считаем что отредактировано успешно
-                    # Используем next_type, вычисленный ранее (с учётом fallback)
-                    logger.info(f"Setting type: {current_type} -> {next_type}")
+                    logger.info(f"Сообщение не изменилось, пропускаем")
+                    edited = True
                     _digest_state["type"] = next_type
                     set_config('alternate_digest_type', next_type)
-                    _digest_state["last_text"] = text  # кэшируем (текущий текст совпадает с сообщением)
-                else:
-                    logger.info(f"Не удалось редактировать: {e}")
+                    _digest_state["last_text"] = text
+        
+        # Если не удалось редактировать - создаём новое
+        if not edited:
+            last_created_str = get_config('alternate_digest_last_created')
+            last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
+            time_since_last = time.time() - last_created
+            logger.info(f"alternate_digest_job: last_created={last_created}, time_since_last={time_since_last:.0f}sec")
+            if time_since_last < 60:
+                logger.info(f"Пропускаем создание нового дайджеста, прошло только {time_since_last:.0f} sec")
+                return
+            
+            # Удаляем старое сообщение
+            if last_message_id:
+                try:
+                    msg_id_int = int(last_message_id)
+                    if msg_id_int > 0:
+                        await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
+                        logger.info(f"Удалено старое alternate сообщение {last_message_id}")
+                    else:
+                        logger.warning(f"Invalid last_message_id for deletion: {last_message_id}")
+                        set_config('alternate_digest_message_id', None)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid alternate_digest_message_id format for deletion: {last_message_id}, error: {e}")
+                    set_config('alternate_digest_message_id', None)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "message to delete not found" in error_str or "message can't be deleted" in error_str or "bad request" in error_str:
+                        logger.debug(f"Старое сообщение {last_message_id} уже удалено")
+                    else:
+                        logger.debug(f"Не удалось удалить старое alternate сообщение: {e}")
+            set_config('alternate_digest_message_id', None)
+            
+            # Создаём новое сообщение
+            try:
+                msg = await bot.send_message(
+                    chat_id=int(digest_chat_id),
+                    text=text,
+                    parse_mode="HTML"
+                )
+                set_config('alternate_digest_message_id', str(msg.message_id))
+                set_config('alternate_digest_last_created', str(time.time()))
+                set_config('alternate_digest_type', next_type)
+                _digest_state["type"] = next_type
+                _digest_state["last_text"] = text
+                logger.info(f"Создано новое alternate сообщение {msg.message_id}")
+            except Exception as e:
+                logger.error(f"Ошибка создания сообщения: {e}")
 
         # Если не удалось редактировать - проверяем можем ли мы создать новое
         if not edited:
@@ -1897,19 +1970,25 @@ async def fetch_hero_icon(url, session=None, size=96):
     """Скачать и уменьшить иконку героя через aiohttp"""
     close_session = False
     if session is None:
-        session = aiohttp.ClientSession()
+        from database import get_aiohttp_session
+        session = await get_aiohttp_session()
         close_session = True
     try:
         async with session.get(url) as resp:
             if resp.status == 200:
                 data = await resp.read()
-                # Уменьшаем через Pillow
+                # Уменьшаем через Pillow в отдельном потоке чтобы не блокировать event loop
                 try:
                     from PIL import Image
-                    img = Image.open(io.BytesIO(data))
-                    img = img.resize((size, size), Image.LANCZOS)
+                    import io
+                    loop = asyncio.get_event_loop()
+                    # Выполняем блокирующие операции в thread pool
+                    img = await loop.run_in_executor(
+                        None,
+                        lambda: Image.open(io.BytesIO(data)).resize((size, size), Image.LANCZOS)
+                    )
                     bio = io.BytesIO()
-                    img.save(bio, format='PNG', optimize=True)
+                    await loop.run_in_executor(None, img.save, bio, format='PNG', optimize=True)
                     bio.seek(0)
                     bio.name = url.split("/")[-1]
                     return bio
@@ -2256,6 +2335,9 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         msg = await context.bot.send_message(chat_id=chat.id, text="❌ Не удалось сбросить игру")
     
+    # Small delay to ensure message is visible
+    await asyncio.sleep(0.1)
+    
     if chat.type in ['group', 'supergroup', 'channel']:
         schedule_delete(context.bot, chat.id, msg.message_id, 30, context.application.job_queue)
 
@@ -2278,13 +2360,16 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_weekend = msk_time.weekday() in (5, 6)
     weekend_bonus = ""
     
-    # Delete user message only in groups/channels (not in private)
+     # Delete user message only in groups/channels (not in private)
     if chat_type in ['group', 'supergroup', 'channel']:
         if await bot_can_delete(context.bot, chat_id):
             try:
                 await context.bot.delete_message(chat_id, user_msg_id)
             except Exception as e:
                 logger.debug(f"Could not delete user message: {e}")
+    
+    # Small delay before deleting last bot message to ensure new message can be sent
+    await asyncio.sleep(0.2)
     
     # Delete last bot message immediately
     try:
@@ -2318,6 +2403,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
             update_last_message_id(user_obj.id, result_msg.message_id)
+            
+            # Small delay to ensure cooldown message is visible
+            await asyncio.sleep(0.1)
             return
         
         multicast_count = 1
@@ -2367,6 +2455,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
             schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
             update_last_message_id(user_obj.id, result_msg.message_id)
+            
+            # Small delay to ensure Zeus message is visible
+            await asyncio.sleep(0.1)
             
             return  # выходим — без ролла
         
@@ -2465,30 +2556,27 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
-            await asyncio.sleep(0.3)
+            pass
         
         # Даем время slot сообщениям отправиться перед итоговым
-        await asyncio.sleep(0.3)
+        if cascade_count > 1:
+            await asyncio.sleep(0.3)
         
-        roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
+         roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
         
         # Сохраняем original_roll для отображения в мультикасте (до бонусов)
         display_roll = roll
         
-        # Бонус за 10 бросков - добавляем сообщение
-        has_bonus = user["total_rolls"] % 10 == 0
-        if has_bonus:
-            extra_text = "\n🎁 БОНУС! +ЕЩЁ РАЗ!"
-        else:
-            extra_text = ""
-        
         # Бонус для выходных: увеличиваем положительный ролл
-        if is_weekend and roll > 0 and not is_fatal:
+        # НЕ применяем выходной бонус при мультикасте
+        if is_weekend and roll > 0 and not is_fatal and cascade_count == 1:
             bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
             # Показываем точное значение в сообщении, но сохраняем как целое для расчета
             bonus_amount = roll * bonus_multiplier
             roll = int(roll * bonus_multiplier)
-            weekend_bonus = f"\n🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {bonus_amount:.1f} СМ"
+             weekend_bonus = f"🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {bonus_amount:.1f} СМ"
+        else:
+            weekend_bonus = ""
         
         old_fissure = user["fissure"]
         
@@ -2504,6 +2592,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
 
+        # Вычисляем roll_key и result_text ПОСЛЕ всех бонусов
         roll_key = min(roll, 75)
         roll_key = max(roll_key, -15)
         
@@ -2525,10 +2614,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if roll_key in ROLL_MEMES and random.random() < 0.5:
             extra_text = random.choice(ROLL_MEMES[roll_key])
-        else:
+        elif not is_weekend and cascade_count == 1 and roll > 0 and not is_fatal:
+            # Выбираем фразу только если нет выходного бонуса, нет мультикаста и это положительный ролл
             extra_text = random.choice(CATEGORY_PHRASES[category])
-        
-        # Бонус за 10 бросков уже добавлен выше
         
         if cascade_count > 1 and original_roll is not None:
             logger.info(f"DEBUG: original_roll={original_roll}, cascade_count={cascade_count}, roll_final={original_roll * cascade_count}")
@@ -2539,7 +2627,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = (
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n"
-                f"{multicast_text}\n\n"
+                f"{multicast_text}\n"
                 f"⚡ МУЛЬТИКАСТ{mc_level}  {roll_final} CM"
             )
         else:
@@ -2550,12 +2638,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{extra_text}"
             )
 
-        if is_fatal and protection_msg:
+         if is_fatal and protection_msg:
             text = f"{text}\n{protection_msg}"
-
+        
         if weekend_bonus:
             text = f"{text}\n{weekend_bonus}"
-            
+        
         # Строчка с изменением фиссуры - ВСЕГДА В САМОМ КОНЦЕ
         text = f"{text}\n\n📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
         
@@ -2566,7 +2654,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Шапка: старая для обычных, новая для мультикаста
         if cascade_count > 1:
-            roll_banner_url = "https://i.ibb.co/Mk35C5PY/Hf-S7B.jpg"
+            # Баннер для мультикаста
+            roll_banner_url = "https://i.ibb.co/WN5CBpqR/dsad23.png"
         else:
             roll_banner_url = "https://i.ibb.co/Mk35C5PY/Hf-S7B.jpg"
         
@@ -2598,13 +2687,17 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="HTML", reply_markup=main_menu()
                 )
         
-        logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
+         logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
         # ВСЕГДА удаляем сообщение через 30 секунд во всех чатах
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         
+        # Small delay to ensure message is visible before any further processing
+        await asyncio.sleep(0.1)
+        
         # Удаляем анимационные сообщения слотов
         if slot_msg_ids:
+            await asyncio.sleep(0.2)
             for msg_id in slot_msg_ids:
                 schedule_delete(context.bot, chat_id, msg_id, 30, context.application.job_queue)
         
@@ -3107,6 +3200,11 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Track this message for future deletion
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+        update_last_message_id(update.effective_user.id, result_msg.message_id)
+        
+        # Small delay to ensure message is visible
+        await asyncio.sleep(0.1)
+    
     except Exception as e:
         logger.error(f"Error in topmmr: {e}", exc_info=True)
         # Send new message instead of replying to avoid "Message not found" error
@@ -3158,6 +3256,10 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Track this message for future deletion
             set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+            update_last_message_id(update.effective_user.id, result_msg.message_id)
+            
+            # Small delay to ensure message is visible
+            await asyncio.sleep(0.1)
         except Exception as e:
             logger.error(f"Error in link: {e}", exc_info=True)
             await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Dota аккаунта", reply_markup=main_menu())
@@ -3190,6 +3292,10 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
     add_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
     schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+    update_last_message_id(update.effective_user.id, result_msg.message_id)
+    
+    # Small delay to ensure message is visible
+    await asyncio.sleep(0.1)
 
 
 
@@ -3677,21 +3783,21 @@ async def main():
             # Force sync to ensure port is ready
             await asyncio.sleep(2)
             
-            async def keep_alive_ping():
-                import aiohttp
-                ping_url = webhook_url.rsplit('/webhook', 1)[0] + '/health'
-                while True:
-                    try:
-                        await asyncio.sleep(300)  # Ping every 5 minutes to prevent Render sleep
-                        async with aiohttp.ClientSession() as session:
-                            # Ping health endpoint
-                            await session.get(ping_url, timeout=aiohttp.ClientTimeout(total=30))
-                            logger.info("Keep-alive ping sent")
-                            # Also ping root to keep web server awake
-                            root_url = webhook_url.rsplit('/webhook', 1)[0] + '/'
-                            await session.get(root_url, timeout=aiohttp.ClientTimeout(total=10))
-                    except Exception as e:
-                        logger.error(f"Keep-alive ping error: {e}")
+             async def keep_alive_ping():
+                 ping_url = webhook_url.rsplit('/webhook', 1)[0] + '/health'
+                 while True:
+                     try:
+                         await asyncio.sleep(300)  # Ping every 5 minutes to prevent Render sleep
+                         from database import get_aiohttp_session
+                         session = await get_aiohttp_session()
+                         # Ping health endpoint
+                         await session.get(ping_url, timeout=aiohttp.ClientTimeout(total=30))
+                         logger.info("Keep-alive ping sent")
+                         # Also ping root to keep web server awake
+                         root_url = webhook_url.rsplit('/webhook', 1)[0] + '/'
+                         await session.get(root_url, timeout=aiohttp.ClientTimeout(total=10))
+                     except Exception as e:
+                         logger.error(f"Keep-alive ping error: {e}")
             asyncio.create_task(keep_alive_ping())
         
         while True:

@@ -162,16 +162,17 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
                     return None
                 return None
         else:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status == 200:
-                        return await resp.json()
-                    elif resp.status == 429:
-                        logger.warning(f"Rate limited by OpenDota API, waiting...")
-                        import asyncio
-                        await asyncio.sleep(60)
-                        return None
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                elif resp.status == 429:
+                    logger.warning(f"Rate limited by OpenDota API, waiting...")
+                    import asyncio
+                    await asyncio.sleep(60)
                     return None
+                return None
     except Exception as e:
         logger.error(f"API request error: {e}", exc_info=True)
         return None

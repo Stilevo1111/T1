@@ -89,14 +89,13 @@ class UserCache:
                 del self._cache[key]
     
     def enforce_limit(self):
-        """Ограничить размер кеша - удалить старые записи если превышен лимит"""
         with self._lock:
             if len(self._cache) > self.MAX_CACHE_SIZE:
                 # Удаляем старые записи (первые N / 2)
                 keys_to_remove = list(self._cache.keys())[:len(self._cache) // 2]
                 for key in keys_to_remove:
                     self._cache.pop(key, None)
-                    self._dirty.pop(key, None)
+                    self._dirty.pop(key, None)  # Используем pop с дефолтом
 
 
 # Глобальный экземпляр кеша
@@ -541,6 +540,89 @@ def init_db():
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_dota_wins INTEGER DEFAULT 0
             """)
             cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr_updated_at TIMESTAMP
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS rank_tier INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS wins INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS losses INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_match_id BIGINT DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_start_date DATE
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_best_streak INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_current_streak INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS in_chat BOOLEAN DEFAULT TRUE
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_greeting_date DATE
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT
+            """)
+            # Новые столбцы для раздельных серий побед/поражений
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS current_win_streak INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS current_lose_streak INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS best_lose_streak INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_growth REAL DEFAULT 0.0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_position INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NULL
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS message_count INTEGER DEFAULT 0
+            """)
+            # Dota 2 поля
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS steam_id BIGINT
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS steam_nickname VARCHAR(255)
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS dota_total_games INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS dota_wins INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_games INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_wins INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_dota_games INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_dota_wins INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP
             """)
             cursor.execute("""
@@ -579,6 +661,16 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT
             """)
+            # Новые столбцы для раздельных серий побед/поражений
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS current_win_streak INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS current_lose_streak INTEGER DEFAULT 0
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS best_lose_streak INTEGER DEFAULT 0
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -596,7 +688,35 @@ def init_db():
                     best_streak INTEGER DEFAULT 0,
                     current_position INTEGER DEFAULT 0,
                     digest_position INTEGER DEFAULT 0,
-                    digest_fissure REAL DEFAULT 0.0
+                    digest_fissure REAL DEFAULT 0.0,
+                    weekly_rolls INTEGER DEFAULT 0,
+                    weekly_growth REAL DEFAULT 0.0,
+                    weekly_digest_position INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT NULL,
+                    steam_id INTEGER,
+                    steam_nickname TEXT,
+                    mmr INTEGER DEFAULT 0,
+                    dota_total_games INTEGER DEFAULT 0,
+                    dota_wins INTEGER DEFAULT 0,
+                    week_games INTEGER DEFAULT 0,
+                    week_wins INTEGER DEFAULT 0,
+                    last_dota_games INTEGER DEFAULT 0,
+                    last_dota_wins INTEGER DEFAULT 0,
+                    mmr_updated_at TIMESTAMP,
+                    rank_tier INTEGER DEFAULT 0,
+                    wins INTEGER DEFAULT 0,
+                    losses INTEGER DEFAULT 0,
+                    last_match_id INTEGER DEFAULT 0,
+                    week_start_date DATE,
+                    week_best_streak INTEGER DEFAULT 0,
+                    week_current_streak INTEGER DEFAULT 0,
+                    in_chat BOOLEAN DEFAULT 1,
+                    last_greeting_date DATE,
+                    message_count INTEGER DEFAULT 0,
+                    first_name TEXT,
+                    current_win_streak INTEGER DEFAULT 0,
+                    current_lose_streak INTEGER DEFAULT 0,
+                    best_lose_streak INTEGER DEFAULT 0
                 )
             """)
 # Для SQLite проверяем есть ли колонки и добавляем если нет
@@ -949,6 +1069,7 @@ class Database:
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             win = 1 if growth > 0 else 0
+            lose = 1 if growth < 0 else 0
             
             weekly_inc = max(0.0, float(growth))
             if "postgres" in scheme:
@@ -959,11 +1080,14 @@ class Database:
                     weekly_rolls = weekly_rolls + 1,
                     weekly_growth = weekly_growth + %s,
                     last_activity = CURRENT_TIMESTAMP,
-                    current_streak = CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END,
-                    best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END)
+                    current_win_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
+                    current_lose_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END,
+                    current_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
+                    best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END),
+                    best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END)
                     WHERE telegram_id=%s
                 """
-                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, win, win, telegram_id))
+                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, win, lose, win, win, lose, telegram_id))
             else:
                 query = """
                     UPDATE users SET fissure=?, last_fissure=?, 
@@ -972,11 +1096,16 @@ class Database:
                     weekly_rolls = weekly_rolls + 1,
                     weekly_growth = weekly_growth + ?,
                     last_activity = CURRENT_TIMESTAMP,
-                    current_streak = CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END,
-                    best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END)
+                    current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
+                    current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
+                    current_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
+                    best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END),
+                    best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END)
                     WHERE telegram_id=?
                 """
-                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, win, win, telegram_id))
+                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, win, lose, win, win, lose, telegram_id))
+        except Exception as e:
+            logger.error(f"Error updating fissure: {e}")
         except Exception as e:
             logger.error(f"Error updating fissure: {e}")
     
@@ -1684,12 +1813,21 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
         user['weekly_growth'] = user.get('weekly_growth', 0) + max(0, growth)
         
         win = 1 if growth > 0 else 0
-        user['current_streak'] = user.get('current_streak', 0) + 1 if win else 0
-        user['best_streak'] = max(user.get('best_streak', 0), user['current_streak'])
+        lose = 1 if growth < 0 else 0
+        
+        # Track separate win and lose streaks
+        current_win_streak = user.get('current_win_streak', 0) + 1 if win else 0
+        current_lose_streak = user.get('current_lose_streak', 0) + 1 if lose else 0
+        
+        user['current_win_streak'] = current_win_streak
+        user['current_lose_streak'] = current_lose_streak
+        user['current_streak'] = current_win_streak  # Keep for backward compatibility
+        user['best_streak'] = max(user.get('best_streak', 0), current_win_streak)
+        user['best_lose_streak'] = max(user.get('best_lose_streak', 0), current_lose_streak)
         
         user_cache.set(telegram_id, user)
         
-        # Сразу сохраняем в БД
+         # Сразу сохраняем в БД
         db = Database()
         scheme = get_db_type()
         if "postgres" in scheme:
@@ -1700,11 +1838,14 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
                 weekly_rolls = weekly_rolls + 1,
                 weekly_growth = weekly_growth + %s,
                 last_activity = CURRENT_TIMESTAMP,
-                current_streak = CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END,
-                best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_streak + 1 ELSE 0 END)
+                current_win_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
+                current_lose_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END,
+                current_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
+                best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END),
+                best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END)
                 WHERE telegram_id=%s
             """
-            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, win, telegram_id))
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, win, win, lose, telegram_id))
         else:
             query = """
                 UPDATE users SET fissure=?, last_fissure=?, 
@@ -1713,11 +1854,14 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
                 weekly_rolls = weekly_rolls + 1,
                 weekly_growth = weekly_growth + ?,
                 last_activity = CURRENT_TIMESTAMP,
-                current_streak = CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END,
-                best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END)
+                current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
+                current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
+                current_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
+                best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END),
+                best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END)
                 WHERE telegram_id=?
             """
-            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, win, telegram_id))
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, win, win, lose, telegram_id))
         logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
         
         # Сбрасываем кеши дайджестов при изменении fissure
@@ -2003,48 +2147,77 @@ def zeus_strike(percent=0.05):
     db = Database()
     url = urlparse.urlparse(DATABASE_URL)
     scheme = url.scheme
-    multiplier = 1.0 - percent
     
+    # Progressive penalty: smaller players lose more percentage
+    # This makes Zeus strike fairer
     logger.info(f"zeus_strike: starting with percent={percent}")
     affected = 0
     
     try:
         if "postgres" in scheme:
-            # Get count before update
-            count_query = "SELECT COUNT(*) as cnt FROM users WHERE fissure > 0.1"
-            before_result = db.execute_query(count_query, fetch="one")
-            if before_result:
-                if isinstance(before_result, dict):
-                    affected = before_result.get('cnt', 0) or 0
-                else:
-                    affected = before_result[0] if before_result else 0
+            # Get all users with their fissure values
+            query = "SELECT telegram_id, fissure FROM users WHERE fissure > 0.1"
+            rows = db.execute_query(query, fetch="all")
             
-            # Update all users
-            query = "UPDATE users SET fissure = GREATEST(0.1, fissure * %s) WHERE fissure > 0.1"
-            db.execute_query(query, (multiplier,))
+            affected = len(rows) if rows else 0
+            
+            # Update each user with progressive penalty
+            for row in rows:
+                telegram_id = row['telegram_id'] if isinstance(row, dict) else row[0]
+                fissure = float(row['fissure']) if isinstance(row, dict) else float(row[1])
+                
+                # Progressive penalty based on fissure size
+                if fissure < 10:
+                    user_multiplier = 1.0 - (percent * 2)  # 2x penalty for small fissures
+                elif fissure < 50:
+                    user_multiplier = 1.0 - (percent * 1.5)  # 1.5x penalty for medium
+                else:
+                    user_multiplier = 1.0 - percent  # Normal penalty for large
+                
+                user_multiplier = max(0.85, user_multiplier)  # Cap at 15% minimum
+                new_fissure = max(0.1, fissure * user_multiplier)
+                
+                update_query = "UPDATE users SET fissure = %s WHERE telegram_id = %s"
+                db.execute_query(update_query, (new_fissure, telegram_id))
+                
+                # Update cache
+                cached = user_cache.get(telegram_id)
+                if cached and isinstance(cached, dict):
+                    cached['fissure'] = new_fissure
+                    user_cache.set(telegram_id, cached)
         else:
-            count_query = "SELECT COUNT(*) as cnt FROM users WHERE fissure > 0.1"
-            before_result = db.execute_query(count_query, fetch="one")
-            if before_result:
-                if isinstance(before_result, dict):
-                    affected = before_result.get('cnt', 0) or 0
-                else:
-                    affected = before_result[0] if before_result else 0
+            # SQLite version
+            query = "SELECT telegram_id, fissure FROM users WHERE fissure > 0.1"
+            rows = db.execute_query(query, fetch="all")
             
-            query = "UPDATE users SET fissure = MAX(0.1, fissure * ?) WHERE fissure > 0.1"
-            db.execute_query(query, (multiplier,))
-        
-        # Обновляем кеш всех пользователей
-        all_user_ids = user_cache.get_all_users()
-        for uid in all_user_ids:
-            udata = user_cache.get(uid)
-            if udata and isinstance(udata, dict) and udata.get('fissure', 0) > 0.1:
-                udata['fissure'] = max(0.1, udata['fissure'] * multiplier)
-                user_cache.set(uid, udata)
+            affected = len(rows) if rows else 0
+            
+            for row in rows:
+                telegram_id = row[0]
+                fissure = float(row[1])
+                
+                # Progressive penalty
+                if fissure < 10:
+                    user_multiplier = 1.0 - (percent * 2)
+                elif fissure < 50:
+                    user_multiplier = 1.0 - (percent * 1.5)
+                else:
+                    user_multiplier = 1.0 - percent
+                
+                user_multiplier = max(0.85, user_multiplier)
+                new_fissure = max(0.1, fissure * user_multiplier)
+                
+                update_query = "UPDATE users SET fissure = ? WHERE telegram_id = ?"
+                db.execute_query(update_query, (new_fissure, telegram_id))
+                
+                cached = user_cache.get(telegram_id)
+                if cached and isinstance(cached, dict):
+                    cached['fissure'] = new_fissure
+                    user_cache.set(telegram_id, cached)
         
         top_cache.clear()
         user_cache.set('digest_stats', None)
-        logger.info(f"Zeus strike: {affected} users affected, -{int(percent*100)}% each")
+        logger.info(f"Zeus strike: {affected} users affected, progressive penalty applied")
         return affected
     except Exception as e:
         logger.error(f"Zeus strike error: {e}")
