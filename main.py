@@ -2613,6 +2613,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             category = "same"
         
+        extra_text = ""
         if roll_key in ROLL_MEMES and random.random() < 0.5:
             extra_text = random.choice(ROLL_MEMES[roll_key])
         elif not is_weekend and cascade_count == 1 and roll > 0 and not is_fatal:
