@@ -601,7 +601,6 @@ async def update_all_mmr_job(context):
     """Ежечасовое обновление MMR всех пользователей с привязанным Steam (только в кеш)"""
     try:
         logger.info("Запуск ежечасного обновления MMR")
-        await announce_weekly_mmr_winner(context.bot)
         from dota_mmr import update_user_mmr
         from database import get_all_users_with_steam, user_cache, BACKUP_DATABASE_URL
         
@@ -648,7 +647,6 @@ async def update_all_mmr_job(context):
         logger.info(f"MMR обновлён для {success_count}/{len(users)} пользователей")
         
         # Отправляем уведомления о ранк-апах
-        digest_chat_id = get_config('digest_chat_id')
         if digest_chat_id and rank_up_users:
             from dota_mmr import generate_start_card
             
@@ -683,6 +681,14 @@ async def update_all_mmr_job(context):
                         await context.bot.send_photo(chat_id=digest_chat_id, photo=rank_up_banner_url, caption=text, parse_mode="HTML")
                 except Exception as notify_err:
                     logger.error(f"Ошибка отправки уведомления о ранк-апе: {notify_err}")
+
+        # После обновления всех данных объявляем чемпиона в отдельном блоке try/except,
+        # чтобы ошибка здесь не прерывала обновление MMR
+        try:
+            await announce_weekly_mmr_winner(context.bot)
+        except Exception as e:
+            logger.error(f"Ошибка при объявлении чемпиона недели: {e}")
+
     except Exception as e:
         logger.error(f"Ошибка в update_all_mmr_job: {e}")
 
