@@ -2187,8 +2187,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"Created loading message in start: chat_id={chat_id}, msg_id={loading_msg.message_id}")
             
             # Animate with alternating clocks ⏳⌛️
-            for i in range(4):
-                await asyncio.sleep(0.4)
+            for i in range(3):
+                await asyncio.sleep(0.35)
                 frame = "⌛️" if i % 2 == 1 else "⏳"
                 messages = [
                     "Загружаю меню...",
@@ -2857,8 +2857,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id}")
             
             # Animate with alternating clocks ⏳⌛️
-            for i in range(4):
-                await asyncio.sleep(0.4)
+            for i in range(3):
+                await asyncio.sleep(0.35)
                 frame = "⌛️" if i % 2 == 1 else "⏳"
                 messages = [
                     "Фармирую профиль...",
