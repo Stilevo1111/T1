@@ -10,6 +10,7 @@ import datetime
 import traceback
 import urllib.parse as urlparse
 import psycopg2
+import html
 from datetime import timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity, InlineKeyboardButton, InlineKeyboardMarkup
@@ -3161,42 +3162,23 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Initialize user position variables
         user_is_in_top = False
-        user_rank_str = "Без ранга"
         user_week_games = 0
         user_week_wins = 0
         user_winrate = 0
+        user_username = ""
         
         if user:
-            user_rank_tier = user.get('rank_tier', 0)
             user_week_games = user.get('week_games', 0)
             user_week_wins = user.get('week_wins', 0)
+            user_username = user.get('steam_nickname') or user.get('username') or 'Unknown'
             user_week_losses = user_week_games - user_week_wins
             user_winrate = round((user_week_wins / user_week_games * 100), 1) if user_week_games > 0 else 0
             
-            # Convert user rank tier to string
-            if user_rank_tier:
-                ranks = ["Рекрут", "Страж", "Рыцарь", "Герой", "Легенда", "Властелин", "Божество", "Титан"]
-                tier = min(user_rank_tier // 10, 8)
-                star = user_rank_tier % 10
-                
-                if tier < 1 or tier > 8:
-                    user_rank_str = "Неизвестно"
-                else:
-                    rank_name = ranks[tier - 1]
-                    if tier == 8:  # Immortal
-                        user_rank_str = rank_name
-                    else:
-                        user_rank_str = f"{rank_name} {star}"
-            else:
-                # User without rank (rank_tier=0), but possibly with games
-                user_rank_str = "Без ранга"
-            
             # Check if user is already in the top list
-            if user:
-                for player in top_users:
-                    if player.get('telegram_id') == user.get('telegram_id'):
-                        user_is_in_top = True
-                        break
+            for player in top_users:
+                if player.get('telegram_id') == user.get('telegram_id'):
+                    user_is_in_top = True
+                    break
         
         if not top_users:
             text = f"🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
@@ -3220,6 +3202,17 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Build the top MMR text in the requested format (without title)
             lines = []
             
+            # Helper function to format rank tier
+            def format_rank_tier(rt):
+                if not rt or rt < 10:
+                    return "Без ранга"
+                ranks = ["Рекрут", "Страж", "Рыцарь", "Герой", "Легенда", "Властелин", "Божество", "Титан"]
+                tier = min(rt // 10, 8)
+                star = rt % 10
+                if tier == 8:
+                    return ranks[7]  # Титан
+                return f"{ranks[tier - 1]} {star}"
+            
             for i, player in enumerate(top_users, 1):
                 username = player.get('steam_nickname') or player.get('username') or 'Unknown'
                 rank_tier = player.get('rank_tier', 0)
@@ -3227,18 +3220,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 week_wins = player.get('week_wins', 0)
                 week_losses = week_games - week_wins
                 
-                # Format rank
-                if rank_tier:
-                    ranks = ["Рекрут", "Страж", "Рыцарь", "Герой", "Легенда", "Властелин", "Божество", "Титан"]
-                    tier = min(rank_tier // 10, 8)
-                    star = rank_tier % 10
-                    
-                    if tier == 8:  # Immortal
-                        rank_str = rank_name
-                    else:
-                        rank_str = f"{ranks[tier - 1]} {star}"
-                else:
-                    rank_str = "Без ранга"
+                # Format rank using helper function
+                rank_str = format_rank_tier(rank_tier)
                 
                 # Medal emoji
                 medals = ["🥇", "🥈", "🥉"]
@@ -3246,19 +3229,25 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 if week_games > 0:
                     wr = round((week_wins / week_games) * 100, 1)
-                    # Format the user's own entry with their current rank
+                    streak = player.get('week_current_streak', 0)
+                    # Format the user's own entry with their rank from top
                     if player.get('telegram_id') == user.get('telegram_id'):
-                        lines.append(f"{medal} <a href='tg://user?id={user_obj.id}'>{username}</a> - {user_rank_str}")
+                        safe_username = html.escape(username)
+                        lines.append(f"{medal} <a href='tg://user?id={user_obj.id}'>{safe_username}</a> - {rank_str}")
                     else:
-                        lines.append(f"{medal} {username} - {rank_str}")
-                    lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%" + (f" • 🔥{user.get('week_streak', 0)}" if player.get('week_streak', 0) > 0 else ""))
+                        safe_username = html.escape(username)
+                        lines.append(f"{medal} {safe_username} - {rank_str}")
+                    streak_text = f" • 🔥{streak}" if streak > 0 else ""
+                    lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%{streak_text}")
                 else:
-                    lines.append(f"{medal} {username} - {rank_str}")
+                    safe_username = html.escape(username)
+                    lines.append(f"{medal} {safe_username} - {rank_str}")
                     lines.append(f" └ Нет игр за неделю")
             
             # Add the current user's position if not in top
             if user and not user_is_in_top and user_week_games > 0:
                 user_wr = round((user_week_wins / user_week_games) * 100, 1)
+                user_rank_str = format_rank_tier(user.get('rank_tier', 0))
                 lines.append(f"\n👤 <a href='tg://user?id={user_obj.id}'>{username}</a>: #{user_pos or '?' } - {user_rank_str}")
                 lines.append(f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%")
             
@@ -3270,13 +3259,44 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 from datetime import datetime
                 digest_chat_id = get_config('digest_chat_id')
                 if str(chat_id) == str(digest_chat_id):
-                    # Find the winner (first in top)
-                    if top_users and top_users[0].get('week_games', 0) > 0:
-                        winner = top_users[0]
+                    # Find the winner (first in top with games > 0)
+                    winner = None
+                    for player in top_users:
+                        if player.get('week_games', 0) > 0:
+                            winner = player
+                            break
+                    
+                    if winner:
                         winner_username = winner.get('steam_nickname') or winner.get('username') or 'Unknown'
-                        winner_wr = round((winner.get('week_wins', 0) / winner.get('week_games', 1)) * 100, 1)
-                        winner_streak = winner.get('week_streak', 0)
-                        top_text = f"🥇 {winner_username}\n📊 {winner.get('rank_tier', 0) and ('Герой 1' if winner.get('rank_tier') >= 50 else 'Без ранга')}\n\n📈 Результат за неделю:\n └ {winner.get('week_wins', 0)}W • {winner.get('week_games', 0) - winner.get('week_wins', 0)}L • WR {winner_wr}%\n🔥 Текущий стрик: {winner_streak} побед\n\n{top_text}\n\n👤 @{winner_username}: #{user_pos or 1} - {winner.get('rank_tier', 0) and ('Герой 1' if winner.get('rank_tier') >= 50 else 'Без ранга')}\n └ {winner.get('week_wins', 0)}W • {winner.get('week_losses', 0)}L • WR {winner_wr}%" + (f"\n\nЭто сообщение в {datetime.now().strftime('%H:%M')} часов" if chat_id == update.effective_chat.id else "")
+                        winner_week_games = winner.get('week_games', 0)
+                        winner_week_wins = winner.get('week_wins', 0)
+                        winner_week_losses = winner_week_games - winner_week_wins
+                        winner_wr = round((winner_week_wins / winner_week_games * 100), 1) if winner_week_games > 0 else 0
+                        winner_rank_str = format_rank_tier(winner.get('rank_tier', 0))
+                        winner_streak = winner.get('week_current_streak', 0)
+                        
+                        # Build winner section
+                        winner_section = f"🥇 {winner_username} - {winner_rank_str}\n"
+                        if winner_week_games > 0:
+                            winner_section += f" └ {winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%"
+                            if winner_streak > 0:
+                                winner_section += f" • 🔥{winner_streak}"
+                        else:
+                            winner_section += f" └ Нет игр за неделю"
+                        
+                        # Build user info section (if user not in top or has no games)
+                        user_section = ""
+                        if user and user_week_games > 0:
+                            user_rank_str = format_rank_tier(user.get('rank_tier', 0))
+                            safe_username = html.escape(user_username)
+                            user_section = f"\n\n👤 @{safe_username}: #{user_pos or '?'} - {user_rank_str}\n"
+                            if user_week_games > 0:
+                                user_section += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%"
+                            else:
+                                user_section += f" └ Нет игр за неделю"
+                        
+                        # Combine everything
+                        top_text = f"{winner_section}\n\n{top_text}{user_section}" + (f"\n\nЭто сообщение в {datetime.now().strftime('%H:%M')} часов" if chat_id == update.effective_chat.id else "")
             except Exception as e:
                 logger.debug(f"Could not add digest info: {e}")
             
