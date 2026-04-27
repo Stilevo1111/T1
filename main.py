@@ -3248,89 +3248,25 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             top_text = "\n".join(lines)
             
-            # Check if this is a digest chat and add the winner info
+            # Check if this is a digest chat - show normal top list like in private chat
             try:
                 from database import get_config
                 from datetime import datetime
                 digest_chat_id = get_config('digest_chat_id')
                 if str(chat_id) == str(digest_chat_id):
-                    # Find the winner (first in top with games > 0)
-                    winner = None
-                    winner_index = -1
-                    for i, player in enumerate(top_users):
-                        if player.get('week_games', 0) > 0:
-                            winner = player
-                            winner_index = i
-                            break
-                    
-                    if winner:
-                        winner_username = winner.get('steam_nickname') or winner.get('username') or 'Unknown'
-                        winner_week_games = winner.get('week_games', 0)
-                        winner_week_wins = winner.get('week_wins', 0)
-                        winner_week_losses = winner_week_games - winner_week_wins
-                        winner_wr = round((winner_week_wins / winner_week_games * 100), 1) if winner_week_games > 0 else 0
-                        winner_rank_str = format_rank_tier(winner.get('rank_tier', 0))
-                        winner_streak = winner.get('week_current_streak', 0)
-                        
-                        # Build winner section
-                        winner_section = f"🥇 {winner_username} - {winner_rank_str}\n"
-                        if winner_week_games > 0:
-                            winner_section += f" └ {winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%"
-                            if winner_streak > 0:
-                                winner_section += f" • 🔥{winner_streak}"
-                        else:
-                            winner_section += f" └ Нет игр за неделю"
-                        
-                        # Build the top list WITHOUT the winner to avoid duplication
-                        lines_without_winner = []
-                        new_index = 0  # Position in the filtered list (without winner)
-                        for i, player in enumerate(top_users):
-                            if i == winner_index:  # Skip the winner
-                                continue
-                                
-                            username = player.get('steam_nickname') or player.get('username') or 'Unknown'
-                            rank_tier = player.get('rank_tier', 0)
-                            week_games = player.get('week_games', 0)
-                            week_wins = player.get('week_wins', 0)
-                            week_losses = week_games - week_wins
-                            
-                            # Format rank using helper function
-                            rank_str = format_rank_tier(rank_tier)
-                            
-                            # Medal emoji - based on new position in filtered list
-                            medals = ["🥇", "🥈", "🥉"]
-                            medal = medals[new_index] if new_index < 3 else f"{new_index + 1}️⃣"
-                            
-                            if week_games > 0:
-                                wr = round((week_wins / week_games) * 100, 1)
-                                streak = player.get('week_current_streak', 0)
-                                # Format the user's own entry with their rank from top
-                                if player.get('telegram_id') == user.get('telegram_id'):
-                                    safe_username = html.escape(username)
-                                    lines_without_winner.append(f"{medal} <a href='tg://user?id={user_obj.id}'>{safe_username}</a> - {rank_str}")
-                                else:
-                                    safe_username = html.escape(username)
-                                    lines_without_winner.append(f"{medal} {safe_username} - {rank_str}")
-                                streak_text = f" • 🔥{streak}" if streak > 0 else ""
-                                lines_without_winner.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%{streak_text}")
-                            else:
-                                safe_username = html.escape(username)
-                                lines_without_winner.append(f"{medal} {safe_username} - {rank_str}")
-                                lines_without_winner.append(f" └ Нет игр за неделю")
-                            
-                            new_index += 1
-                        
-                        top_text = winner_section + "\n".join(lines_without_winner)
-                        
-                        # Add the current user's position if not in top and has games
-                        if user and not user_is_in_top and user_week_games > 0:
-                            user_wr = round((user_week_wins / user_week_games) * 100, 1)
-                            user_rank_str = format_rank_tier(user.get('rank_tier', 0))
-                            safe_username = html.escape(user_username)
-                            top_text += f"\n\n👤 <a href='tg://user?id={user_obj.id}'>{safe_username}</a>: #{user_pos or '?'} - {user_rank_str}\n"
-                            top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
+                    # In digest chat, we show the normal top list (same as private chat)
+                    # The user's personal info will be added at the bottom below
+                    pass
             except Exception as e:
-                logger.debug(f"Could not add digest info: {e}")
+                logger.debug(f"Could not process digest chat: {e}")
+            
+            # Add the current user's position if not in top and has games
+            if user and not user_is_in_top and user_week_games > 0:
+                user_wr = round((user_week_wins / user_week_games) * 100, 1)
+                user_rank_str = format_rank_tier(user.get('rank_tier', 0))
+                safe_username = html.escape(user_username)
+                top_text += f"\n\n👤 <a href='tg://user?id={user_obj.id}'>{safe_username}</a>: #{user_pos or '?'} - {user_rank_str}\n"
+                top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
             
             # Delete previous bot message before sending new one
             try:
