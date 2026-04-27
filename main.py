@@ -3261,9 +3261,11 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if str(chat_id) == str(digest_chat_id):
                     # Find the winner (first in top with games > 0)
                     winner = None
-                    for player in top_users:
+                    winner_index = -1
+                    for i, player in enumerate(top_users):
                         if player.get('week_games', 0) > 0:
                             winner = player
+                            winner_index = i
                             break
                     
                     if winner:
@@ -3284,19 +3286,46 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         else:
                             winner_section += f" └ Нет игр за неделю"
                         
-                        # Build user info section (if user not in top or has no games)
-                        user_section = ""
-                        if user and user_week_games > 0:
-                            user_rank_str = format_rank_tier(user.get('rank_tier', 0))
-                            safe_username = html.escape(user_username)
-                            user_section = f"\n\n👤 @{safe_username}: #{user_pos or '?'} - {user_rank_str}\n"
-                            if user_week_games > 0:
-                                user_section += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_winrate}%"
+                        # Build the top list WITHOUT the winner to avoid duplication
+                        lines_without_winner = []
+                        new_index = 0  # Position in the filtered list (without winner)
+                        for i, player in enumerate(top_users):
+                            if i == winner_index:  # Skip the winner
+                                continue
+                                
+                            username = player.get('steam_nickname') or player.get('username') or 'Unknown'
+                            rank_tier = player.get('rank_tier', 0)
+                            week_games = player.get('week_games', 0)
+                            week_wins = player.get('week_wins', 0)
+                            week_losses = week_games - week_wins
+                            
+                            # Format rank using helper function
+                            rank_str = format_rank_tier(rank_tier)
+                            
+                            # Medal emoji - based on new position in filtered list
+                            medals = ["🥇", "🥈", "🥉"]
+                            medal = medals[new_index] if new_index < 3 else f"{new_index + 1}️⃣"
+                            
+                            if week_games > 0:
+                                wr = round((week_wins / week_games) * 100, 1)
+                                streak = player.get('week_current_streak', 0)
+                                # Format the user's own entry with their rank from top
+                                if player.get('telegram_id') == user.get('telegram_id'):
+                                    safe_username = html.escape(username)
+                                    lines_without_winner.append(f"{medal} <a href='tg://user?id={user_obj.id}'>{safe_username}</a> - {rank_str}")
+                                else:
+                                    safe_username = html.escape(username)
+                                    lines_without_winner.append(f"{medal} {safe_username} - {rank_str}")
+                                streak_text = f" • 🔥{streak}" if streak > 0 else ""
+                                lines_without_winner.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%{streak_text}")
                             else:
-                                user_section += f" └ Нет игр за неделю"
+                                safe_username = html.escape(username)
+                                lines_without_winner.append(f"{medal} {safe_username} - {rank_str}")
+                                lines_without_winner.append(f" └ Нет игр за неделю")
+                            
+                            new_index += 1
                         
-                        # Combine everything
-                        top_text = f"{winner_section}\n\n{top_text}{user_section}" + (f"\n\nЭто сообщение в {datetime.now().strftime('%H:%M')} часов" if chat_id == update.effective_chat.id else "")
+                        top_text = winner_section + "\n".join(lines_without_winner)
             except Exception as e:
                 logger.debug(f"Could not add digest info: {e}")
             
