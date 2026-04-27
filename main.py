@@ -3244,12 +3244,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     lines.append(f"{medal} {safe_username} - {rank_str}")
                     lines.append(f" └ Нет игр за неделю")
             
-            # Add the current user's position if not in top
-            if user and not user_is_in_top and user_week_games > 0:
-                user_wr = round((user_week_wins / user_week_games) * 100, 1)
-                user_rank_str = format_rank_tier(user.get('rank_tier', 0))
-                lines.append(f"\n👤 <a href='tg://user?id={user_obj.id}'>{username}</a>: #{user_pos or '?' } - {user_rank_str}")
-                lines.append(f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%")
+
             
             top_text = "\n".join(lines)
             
@@ -3326,6 +3321,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             new_index += 1
                         
                         top_text = winner_section + "\n".join(lines_without_winner)
+                        
+                        # Add the current user's position if not in top and has games
+                        if user and not user_is_in_top and user_week_games > 0:
+                            user_wr = round((user_week_wins / user_week_games) * 100, 1)
+                            user_rank_str = format_rank_tier(user.get('rank_tier', 0))
+                            safe_username = html.escape(user_username)
+                            top_text += f"\n\n👤 <a href='tg://user?id={user_obj.id}'>{safe_username}</a>: #{user_pos or '?'} - {user_rank_str}\n"
+                            top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
             except Exception as e:
                 logger.debug(f"Could not add digest info: {e}")
             
