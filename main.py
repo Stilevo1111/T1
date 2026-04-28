@@ -3225,7 +3225,12 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Medal emoji
                 medals = ["🥇", "🥈", "🥉"]
-                medal = medals[i - 1] if i <= 3 else f"{i}️⃣"
+                if i <= 3:
+                    medal = medals[i - 1]
+                elif i == 10:
+                    medal = "1️⃣0️⃣"
+                else:
+                    medal = f"{i}️⃣"
                 
                 if week_games > 0:
                     wr = round((week_wins / week_games) * 100, 1)
