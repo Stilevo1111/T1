@@ -1213,139 +1213,123 @@ async def alternate_digest_job(context):
         
         # Если не удалось редактировать - создаём новое
         if not edited:
+            # Генерируем геро-мета баннер
+            hero_meta_banner = None
+            try:
+                from hero_meta import get_hero_meta_image
+                hero_meta_banner = get_hero_meta_image()
+                logger.info("Hero meta banner generated for digest")
+            except Exception as e:
+                logger.warning(f"Could not generate hero meta banner: {e}")
+
+            # Проверяем анти-спам
             last_created_str = get_config('alternate_digest_last_created')
             last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
             time_since_last = time.time() - last_created
-            logger.info(f"alternate_digest_job: last_created={last_created}, time_since_last={time_since_last:.0f}sec")
             if time_since_last < 60:
-                logger.info(f"Пропускаем создание нового дайджеста, прошло только {time_since_last:.0f} sec")
+                logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
                 return
-            
-            # Удаляем старое сообщение
+
+            # Удаляем старое сообщение если есть
             if last_message_id:
                 try:
                     msg_id_int = int(last_message_id)
                     if msg_id_int > 0:
                         await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
-                        logger.info(f"Удалено старое alternate сообщение {last_message_id}")
-                    else:
-                        logger.warning(f"Invalid last_message_id for deletion: {last_message_id}")
-                        set_config('alternate_digest_message_id', None)
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"Invalid alternate_digest_message_id format for deletion: {last_message_id}, error: {e}")
-                    set_config('alternate_digest_message_id', None)
+                        logger.info(f"Удалено старое сообщение {last_message_id}")
                 except Exception as e:
-                    error_str = str(e).lower()
-                    if "message to delete not found" in error_str or "message can't be deleted" in error_str or "bad request" in error_str:
-                        logger.debug(f"Старое сообщение {last_message_id} уже удалено")
-                    else:
-                        logger.debug(f"Не удалось удалить старое alternate сообщение: {e}")
+                    logger.debug(f"Старое сообщение уже удалено: {e}")
             set_config('alternate_digest_message_id', None)
-            
+
             # Создаём новое сообщение
             try:
-                msg = await bot.send_message(
-                    chat_id=int(digest_chat_id),
-                    text=text,
-                    parse_mode="HTML"
-                )
+                from io import BytesIO
+                if hero_meta_banner:
+                    photo_buf = BytesIO(hero_meta_banner)
+                    photo_buf.name = "hero_meta_banner.png"
+                    msg = await bot.send_photo(
+                        chat_id=int(digest_chat_id),
+                        photo=photo_buf,
+                        caption=text,
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"Создан новый дайджест с фото {msg.message_id}")
+                else:
+                    msg = await bot.send_message(
+                        chat_id=int(digest_chat_id),
+                        text=text,
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
+
                 set_config('alternate_digest_message_id', str(msg.message_id))
                 set_config('alternate_digest_last_created', str(time.time()))
                 set_config('alternate_digest_type', next_type)
                 _digest_state["type"] = next_type
                 _digest_state["last_text"] = text
-                logger.info(f"Создано новое alternate сообщение {msg.message_id}")
             except Exception as e:
                 logger.error(f"Ошибка создания сообщения: {e}")
+                set_config('alternate_digest_message_id', None)
 
         # Если не удалось редактировать - проверяем можем ли мы создать новое
         if not edited:
-            # Проверяем, не создавали ли мы новое сообщение слишком недавно (антиспам)
-            # Проверяем ПЕРЕД удалением старого, чтобы не оставить чат без сообщения
+            # Генерируем геро-мета баннер
+            hero_meta_banner = None
+            try:
+                from hero_meta import get_hero_meta_image
+                hero_meta_banner = get_hero_meta_image()
+                logger.info("Hero meta banner generated for digest")
+            except Exception as e:
+                logger.warning(f"Could not generate hero meta banner: {e}")
+
+            # Проверяем анти-спам
             last_created_str = get_config('alternate_digest_last_created')
             last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
             time_since_last = time.time() - last_created
-            logger.info(f"alternate_digest_job: last_created={last_created}, time_since_last={time_since_last:.0f}sec")
-            if time_since_last < 60:  # 1 минута
-                logger.info(f"Пропускаем создание нового дайджеста, прошло только {time_since_last:.0f} sec с последнего создания (оставляем старое сообщение)")
-                return  # Выходим без удаления и без создания, оставляя старое сообщение
-            
-            # Удаляем старое сообщение
+            if time_since_last < 60:
+                logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
+                return
+
+            # Удаляем старое сообщение если есть
             if last_message_id:
                 try:
                     msg_id_int = int(last_message_id)
                     if msg_id_int > 0:
                         await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
-                        logger.info(f"Удалено старое alternate сообщение {last_message_id}")
-                    else:
-                        logger.warning(f"Invalid last_message_id for deletion: {last_message_id}")
-                        set_config('alternate_digest_message_id', None)
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"Invalid alternate_digest_message_id format for deletion: {last_message_id}, error: {e}")
-                    set_config('alternate_digest_message_id', None)
+                        logger.info(f"Удалено старое сообщение {last_message_id}")
                 except Exception as e:
-                    error_str = str(e).lower()
-                    if "message to delete not found" in error_str or "message can't be deleted" in error_str or "bad request" in error_str:
-                        logger.debug(f"Старое сообщение {last_message_id} уже удалено")
-                    else:
-                        logger.debug(f"Не удалось удалить старое alternate сообщение: {e}")
-            set_config('alternate_digest_message_id', None)  # сбрасываем сразу после удаления
+                    logger.debug(f"Старое сообщение уже удалено: {e}")
+            set_config('alternate_digest_message_id', None)
 
-            # Удаляем ВСЕ старые дайджесты бота в этом чате (предотвращение дублирования при гонке)
+            # Создаём новое сообщение
             try:
-                # Проверяем сообщения в небольшом диапазоне ID вокруг только что удалённого (last_message_id)
-                # и вокруг будущего нового (если будет создан). Исключаем уже удалённый last_message_id.
-                deleted_count = 0
-                check_ids = set()
-                if last_message_id:
-                    base = int(last_message_id)
-                    for offset in range(-5, 6):
-                        if offset != 0:  # пропускаем уже удалённое сообщение
-                            check_ids.add(base + offset)
-                
-                for mid in check_ids:
-                    if mid <= 0:
-                        continue
-                    try:
-                        m = await bot.get_message(chat_id=int(digest_chat_id), message_id=mid)
-                        if hasattr(m, 'from_user') and m.from_user and m.from_user.is_bot:
-                            if hasattr(m, 'text') and m.text:
-                                text_lower = m.text.lower()
-                                if ('фиссур' in text_lower and ('дайджест' in text_lower or 'dota' in text_lower)) or \
-                                   ('dota' in text_lower and 'дайджест' in text_lower):
-                                    # Это дайджест — удаляем
-                                    await bot.delete_message(chat_id=int(digest_chat_id), message_id=mid)
-                                    logger.info(f"Удалён старый дайджест {mid} из чата (по ID range)")
-                                    deleted_count += 1
-                    except Exception:
-                        pass  # ignore not found etc.
-                logger.info(f"Удалено {deleted_count} старых/дублирующих дайджестов перед созданием нового")
-            except Exception as e:
-                logger.debug(f"Ошибка при поиске старых дайджестов: {e}")
-            
-            # Проверяем, не запущен ли уже процесс создания
-            creating = get_config('alternate_digest_creating')
-            if creating and creating.strip() and time.time() - float(creating) < 60:
-                logger.info(f"Уже идёт создание дайджеста, пропускаем")
-                return
-            
-            # помечаем что начинаем создавать
-            set_config('alternate_digest_creating', str(time.time()))
+                from io import BytesIO
+                if hero_meta_banner:
+                    photo_buf = BytesIO(hero_meta_banner)
+                    photo_buf.name = "hero_meta_banner.png"
+                    msg = await bot.send_photo(
+                        chat_id=int(digest_chat_id),
+                        photo=photo_buf,
+                        caption=text,
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"Создан новый дайджест с фото {msg.message_id}")
+                else:
+                    msg = await bot.send_message(
+                        chat_id=int(digest_chat_id),
+                        text=text,
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
 
-            try:
-                # Отправляем новое сообщение
-                msg = await bot.send_message(chat_id=int(digest_chat_id), text=text, parse_mode="HTML")
-                # СОХРАНЯЕМ СРАЗУ ПОСЛЕ ОТПРАВКИ
-                set_config('alternate_digest_message_id', msg.message_id)
+                set_config('alternate_digest_message_id', str(msg.message_id))
                 set_config('alternate_digest_last_created', str(time.time()))
-                _digest_state["last_text"] = text  # кэшируем текст
-                logger.info(f"Создан новый alternate дайджест {msg.message_id}, type={next_type}")
-                
-                # ТОЛЬКО ПОСЛЕ УСПЕШНОГО СОЗДАНИЯ ПЕРЕКЛЮЧАЕМ ТИП
+                set_config('alternate_digest_type', next_type)
                 _digest_state["type"] = next_type
-                set_config('alternate_digest_type', next_type)  # пишем в БД один раз за переключение
-
-                # Закрепляем дайджест (открепляем старый, закрепляем новый)
+                _digest_state["last_text"] = text
+            except Exception as e:
+                logger.error(f"Ошибка создания сообщения: {e}")
+                set_config('alternate_digest_message_id', None)
                 # Сначала получаем текущий закреплённый message_id ДО открепления
                 old_pinned_id = None
                 try:
