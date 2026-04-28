@@ -15,24 +15,31 @@ BACKGROUND_PATH = "background_new.png"
 
 # Try different font paths for cross-platform compatibility
 FONT_PATHS = [
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
-    "/usr/share/fonts/TTF/DejaVuSans.ttf",              # Alternative Linux
-    "/System/Library/Fonts/Arial.ttf",                  # macOS
-    "C:/Windows/Fonts/arial.ttf",                       # Windows
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",     # Linux (common)
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", # Linux bold
+    "/usr/share/fonts/TTF/DejaVuSans.ttf",                 # Alternative Linux
+    "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",           # Alternative Linux bold
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", # Another Linux font
+    "/System/Library/Fonts/Arial.ttf",                     # macOS
+    "/Library/Fonts/Arial.ttf",                           # macOS alternative
+    "C:/Windows/Fonts/arial.ttf",                          # Windows
+    "C:/Windows/Fonts/Arial.ttf",                         # Windows alternative
 ]
 
 FONT_PATH = None
 for path in FONT_PATHS:
     try:
-        from PIL import ImageFont
         ImageFont.truetype(path, 12)  # Test if font works
         FONT_PATH = path
+        logger.info(f"Using font: {path}")
         break
-    except:
+    except Exception as e:
+        logger.debug(f"Font not available: {path} - {e}")
         continue
 
 if FONT_PATH is None:
     FONT_PATH = ImageFont.load_default()  # Fallback to default
+    logger.warning("Using default PIL font as no system fonts found")
 
 # ╨а╨░╤Б╤И╨╕╤А╨╡╨╜╨╜╤Л╨╣ ╤Б╨┐╨╕╤Б╨╛╨║ ID ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╤А╨╛╨╗╨╕ (╤З╤В╨╛╨▒╤Л ╤В╨╛╤З╨╜╨╛ ╨╜╨░╨▒╤А╨░╨╗╨╛╤Б╤М ╨┐╨╛ 5)
 ROLE_MAPPING = {
@@ -83,12 +90,13 @@ async def get_dota_data():
         logger.error(f"╨Ю╤И╨╕╨▒╨║╨░ API: {e}")
         return None
 
-def create_infographic(hero_stats):
-    """╨б╨▒╨╛╤А╨║╨░ ╨║╨░╤А╤В╨╕╨╜╨║╨╕ 5x5 ╤Б ╤Г╨▓╨╡╨╗╨╕╤З╨╡╨╜╨╜╤Л╨╝╨╕ ╨╕╨║╨╛╨╜╨║╨░╨╝╨╕ (╨╜╨░ 0.5X ╨▒╨╛╨╗╤М╤И╨╡)
-    
-    Returns:
-        bytes: PNG image bytes suitable for embedding in digests
-    """
+def create_infographic(hero_stats):
+    """Создайте инфографику 5x5 с лучшими героями по ролям (на 0.5X больше)
+
+    Returns:
+        bytes: PNG image bytes suitable for embedding in digests
+    """
+    logger.info("Starting create_infographic generation")
     if not os.path.exists(BACKGROUND_PATH):
         base = Image.new("RGBA", (1200, 800), (25, 25, 35, 255))
         bg_width, bg_height = 1200, 800
@@ -348,13 +356,14 @@ async def generate_hero_meta_banner():
     return create_infographic(data)
 
 
-async def get_hero_meta_image():
-    """Generate hero meta image for external use (e.g., digests).
-    
-    Returns:
-        bytes: PNG image bytes that can be embedded as a header,
-               or None if generation failed.
-    """
+async def get_hero_meta_image():
+    """Generate hero meta image for external use (e.g., digests).
+
+    Returns:
+        bytes: PNG image bytes that can be embedded as a header,
+               or None if generation failed.
+    """
+    logger.info("get_hero_meta_image called - starting generation")
     try:
         data = await get_dota_data()
         if not data:
