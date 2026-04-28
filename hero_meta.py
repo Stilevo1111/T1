@@ -326,8 +326,25 @@ def get_hero_meta_image():
             return None
         return create_infographic(data)
     
-    import asyncio
-    return asyncio.run(_generate())
+    try:
+        # Try to get the current event loop
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # We're already in an event loop, create a task
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, _generate())
+                return future.result()
+        else:
+            # No running loop, safe to use asyncio.run
+            return asyncio.run(_generate())
+    except RuntimeError:
+        # Fallback: if we can't get loop or other issues, create new loop
+        try:
+            return asyncio.run(_generate())
+        except Exception as e:
+            logger.error(f"Failed to generate hero meta image: {e}")
+            return None
 
 
 def setup_hero_meta_job(application: Application):
