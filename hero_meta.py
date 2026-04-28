@@ -9,9 +9,30 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# --- ╨Ъ╨Ю╨Э╨д╨Ш╨У╨г╨а╨Р╨ж╨Ш╨п ---
-BACKGROUND_PATH = "background_new.png"
-FONT_PATH = "C:/Windows/Fonts/arial.ttf"
+# --- Hero Meta Banner ---
+
+BACKGROUND_PATH = "background_new.png"
+
+# Try different font paths for cross-platform compatibility
+FONT_PATHS = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
+    "/usr/share/fonts/TTF/DejaVuSans.ttf",              # Alternative Linux
+    "/System/Library/Fonts/Arial.ttf",                  # macOS
+    "C:/Windows/Fonts/arial.ttf",                       # Windows
+]
+
+FONT_PATH = None
+for path in FONT_PATHS:
+    try:
+        from PIL import ImageFont
+        ImageFont.truetype(path, 12)  # Test if font works
+        FONT_PATH = path
+        break
+    except:
+        continue
+
+if FONT_PATH is None:
+    FONT_PATH = ImageFont.load_default()  # Fallback to default
 
 # ╨а╨░╤Б╤И╨╕╤А╨╡╨╜╨╜╤Л╨╣ ╤Б╨┐╨╕╤Б╨╛╨║ ID ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╤А╨╛╨╗╨╕ (╤З╤В╨╛╨▒╤Л ╤В╨╛╤З╨╜╨╛ ╨╜╨░╨▒╤А╨░╨╗╨╛╤Б╤М ╨┐╨╛ 5)
 ROLE_MAPPING = {
