@@ -102,11 +102,11 @@ def create_infographic(hero_stats):
     
     # ╨Ц╨╕╤А╨╜╤Л╨╣ ╤И╤А╨╕╤Д╤В ╨┤╨╗╤П WINRATE
     try:
-        font_wr = ImageFont.truetype(FONT_PATH, 18)
+        font_wr = ImageFont.truetype(FONT_PATH, 27)
         # ╨Я╤А╨╛╨▒╤Г╨╡╨╝ ╨╜╨░╨╣╤В╨╕ ╨╢╨╕╤А╨╜╤Л╨╣ ╨▓╨░╤А╨╕╨░╨╜╤В
         for bold_name in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
             try:
-                font_wr = ImageFont.truetype(bold_name, 18)
+                font_wr = ImageFont.truetype(bold_name, 27)
                 break
             except:
                 continue
@@ -167,10 +167,10 @@ def create_infographic(hero_stats):
                 
                 try:
                     # ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╨╝ ╨╢╨╕╤А╨╜╤Л╨╣ ╤И╤А╨╕╤Д╤В ╨▒╨╛╨╗╤М╤И╨╡╨│╨╛ ╤А╨░╨╖╨╝╨╡╤А╨░ (╤Г╨▓╨╡╨╗╨╕╤З╨╡╨╜ ╨▓ 1.5 ╤А╨░╨╖╨░ ╨╛╤В ╨╛╤А╨╕╨│╨╕╨╜╨░╨╗╨░ 18pt = 27pt)
-                    font_large = ImageFont.truetype(FONT_PATH, 27)
+                    font_large = ImageFont.truetype(FONT_PATH, 41)
                     for bold_name in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
                         try:
-                            font_large = ImageFont.truetype(f"C:/Windows/Fonts/{bold_name}", 27)
+                            font_large = ImageFont.truetype(f"C:/Windows/Fonts/{bold_name}", 41)
                             break
                         except:
                             continue
