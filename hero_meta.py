@@ -50,7 +50,7 @@ ROLE_MAPPING = {
     "HARD SUPP": [87, 30, 26, 111, 31, 40, 50, 119]
 }
 
-def apply_fancy_style(img, size=(160, 90), radius=15, border_width=3):
+def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     """╨Ю╨▒╤А╨╡╨╖╨░╨╡╤В, ╨╖╨░╨║╤А╤Г╨│╨╗╤П╨╡╤В ╤Г╨│╨╗╤Л ╨╕ ╨┤╨╛╨▒╨░╨▓╨╗╤П╨╡╤В ╨╖╨╛╨╗╨╛╤В╤Г╤О ╨╛╨▒╨▓╨╛╨┤╨║╤Г ╨б╨Э╨Р╨а╨г╨Ц╨Ш"""
     # ╨б╨╜╨░╤З╨░╨╗╨░ ╤Б╨╛╨╖╨┤╨░╨╡╨╝ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╤Б ╨╛╨▒╨▓╨╛╨┤╨║╨╛╨╣ ╤Б╨╜╨░╤А╤Г╨╢╨╕
     # ╨Ю╨▒╤Й╨╕╨╣ ╤А╨░╨╖╨╝╨╡╤А ╨▒╤Г╨┤╨╡╤В size + 2*border_width ╤Б ╨║╨░╨╢╨┤╨╛╨╣ ╤Б╤В╨╛╤А╨╛╨╜╤Л
@@ -135,7 +135,7 @@ def create_infographic(hero_stats):
         # ╨Я╤А╨╛╨▒╤Г╨╡╨╝ ╨╜╨░╨╣╤В╨╕ ╨╢╨╕╤А╨╜╤Л╨╣ ╨▓╨░╤А╨╕╨░╨╜╤В
         for bold_name in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
             try:
-                font_wr = ImageFont.truetype(bold_name, 27)
+                font_wr = ImageFont.truetype(bold_name, 20)
                 break
             except:
                 continue
@@ -196,10 +196,10 @@ def create_infographic(hero_stats):
                 
                 try:
                     # ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╨╝ ╨╢╨╕╤А╨╜╤Л╨╣ ╤И╤А╨╕╤Д╤В ╨▒╨╛╨╗╤М╤И╨╡╨│╨╛ ╤А╨░╨╖╨╝╨╡╤А╨░ (╤Г╨▓╨╡╨╗╨╕╤З╨╡╨╜ ╨▓ 1.5 ╤А╨░╨╖╨░ ╨╛╤В ╨╛╤А╨╕╨│╨╕╨╜╨░╨╗╨░ 18pt = 27pt)
-                    font_large = ImageFont.truetype(FONT_PATH, 41)
+                    font_large = ImageFont.truetype(FONT_PATH, 30)
                     for bold_name in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
                         try:
-                            font_large = ImageFont.truetype(f"C:/Windows/Fonts/{bold_name}", 41)
+                            font_large = ImageFont.truetype(f"C:/Windows/Fonts/{bold_name}", 30)
                             break
                         except:
                             continue
