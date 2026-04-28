@@ -1164,63 +1164,51 @@ async def alternate_digest_job(context):
         logger.info(f"alternate_digest_job: last_message_id = {last_message_id}")
         logger.info(f"alternate_digest_job: text = {text[:100]}...")
         edited = False
-        # Try to edit existing message - check if message has photo (use caption) or text
+        # Try to edit existing message
         if last_message_id:
-            logger.info(f'alternate_digest_job: attempting to edit message {last_message_id}')
+            logger.info(f"alternate_digest_job: attempting to edit message {last_message_id}")
             try:
                 msg_id_int = int(last_message_id)
                 if msg_id_int <= 0:
-                    logger.warning(f'Invalid alternate_digest_message_id: {last_message_id}')
+                    logger.warning(f"Invalid alternate_digest_message_id: {last_message_id}")
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
                 else:
-                    # Try to edit - first check if message has photo
+                    # Try to edit - start with text edit
                     try:
-                        # Get message to check if it has photo
-                        msg = await bot.get_message(
+                        await bot.edit_message_text(
                             chat_id=int(digest_chat_id),
-                            message_id=msg_id_int
+                            message_id=msg_id_int,
+                            text=text,
+                            parse_mode="HTML"
                         )
-                        if hasattr(msg, 'photo') and msg.photo:
-                            # Photo message - edit caption
-                            await bot.edit_message_caption(
-                                chat_id=int(digest_chat_id),
-                                message_id=msg_id_int,
-                                caption=text,
-                                parse_mode='HTML'
-                            )
-                            logger.info(f'Updated caption alternate digest {last_message_id}')
-                        else:
-                            # Text message - edit text
-                            await bot.edit_message_text(
-                                chat_id=int(digest_chat_id),
-                                message_id=msg_id_int,
-                                text=text,
-                                parse_mode='HTML'
-                            )
-                            logger.info(f'Updated text alternate digest {last_message_id}')
+                        logger.info(f"Updated text alternate digest {last_message_id}")
                         edited = True
-                        _digest_state['type'] = next_type
+                        _digest_state["type"] = next_type
                         set_config('alternate_digest_type', next_type)
-                        _digest_state['last_text'] = text
-                    except Exception as e2:
-                        logger.info(f'Failed to get/edit message: {e2}')
-                        # Fallback to text edit
-                        try:
-                            await bot.edit_message_text(
-                                chat_id=int(digest_chat_id),
-                                message_id=msg_id_int,
-                                text=text,
-                                parse_mode='HTML'
-                            )
-                            logger.info(f'Updated (fallback) alternate digest {last_message_id}')
-                            edited = True
-                            _digest_state['type'] = next_type
-                            set_config('alternate_digest_type', next_type)
-                            _digest_state['last_text'] = text
-                        except Exception as e3:
-                            logger.warning(f'Fallback edit also failed: {e3}')
-                            edited = False
+                        _digest_state["last_text"] = text
+                    except Exception as e_caption:
+                        # If text edit fails (photo message), try caption edit
+                        error_str = str(e_caption).lower()
+                        if "no text" in error_str or "message is not modified" in error_str:
+                            try:
+                                await bot.edit_message_caption(
+                                    chat_id=int(digest_chat_id),
+                                    message_id=msg_id_int,
+                                    caption=text,
+                                    parse_mode="HTML"
+                                )
+                                logger.info(f"Updated caption alternate digest {last_message_id}")
+                                edited = True
+                                _digest_state["type"] = next_type
+                                set_config('alternate_digest_type', next_type)
+                                _digest_state["last_text"] = text
+                            except Exception as e2:
+                                logger.warning(f"Caption edit also failed: {e2}")
+                                edited = False
+                        else:
+                            # Re-raise if it's another error
+                            raise
             except (ValueError, TypeError) as e:
                 logger.warning(f'Invalid alternate_digest_message_id format: {last_message_id}, error: {e}')
                 set_config('alternate_digest_message_id', None)
