@@ -3230,18 +3230,16 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if week_games > 0:
                     wr = round((week_wins / week_games) * 100, 1)
                     streak = player.get('week_current_streak', 0)
-                    # Format the user's own entry with their rank from top
-                    if player.get('telegram_id') == user.get('telegram_id'):
-                        safe_username = html.escape(username)
-                        lines.append(f"{medal} <a href='tg://user?id={user_obj.id}'>{safe_username}</a> - {rank_str}")
-                    else:
-                        safe_username = html.escape(username)
-                        lines.append(f"{medal} {safe_username} - {rank_str}")
+                    # Make all nicknames clickable and bold
+                    player_id = player.get('telegram_id')
+                    clickable_name = make_clickable(username, player_id)
+                    lines.append(f"{medal} <b>{clickable_name}</b> - {rank_str}")
                     streak_text = f" • 🔥{streak}" if streak > 0 else ""
                     lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%{streak_text}")
                 else:
-                    safe_username = html.escape(username)
-                    lines.append(f"{medal} {safe_username} - {rank_str}")
+                    player_id = player.get('telegram_id')
+                    clickable_name = make_clickable(username, player_id)
+                    lines.append(f"{medal} <b>{clickable_name}</b> - {rank_str}")
                     lines.append(f" └ Нет игр за неделю")
             
 
@@ -3264,8 +3262,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user and not user_is_in_top and user_week_games > 0:
                 user_wr = round((user_week_wins / user_week_games) * 100, 1)
                 user_rank_str = format_rank_tier(user.get('rank_tier', 0))
-                safe_username = html.escape(user_username)
-                top_text += f"\n\n👤 <a href='tg://user?id={user_obj.id}'>{safe_username}</a>: #{user_pos or '?'} - {user_rank_str}\n"
+                clickable_name = make_clickable(user_username, update.effective_user.id)
+                top_text += f"\n\n👤 <b>{clickable_name}</b>: #{user_pos or '?'} - {user_rank_str}\n"
                 top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
             
             # Delete previous bot message before sending new one
