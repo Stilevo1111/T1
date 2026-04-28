@@ -1161,9 +1161,11 @@ async def alternate_digest_job(context):
         
         # Пробуем отредактировать существующее сообщение
         last_message_id = get_config('alternate_digest_message_id')
+        logger.info(f"alternate_digest_job: last_message_id = {last_message_id}")
         logger.info(f"alternate_digest_job: text = {text[:100]}...")
         edited = False
         if last_message_id:
+            logger.info(f"alternate_digest_job: attempting to edit message {last_message_id}")
             try:
                 msg_id_int = int(last_message_id)
                 if msg_id_int <= 0:
@@ -1212,6 +1214,7 @@ async def alternate_digest_job(context):
                      _digest_state["last_text"] = text
 
         # Если не удалось редактировать - создаём новое
+        logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
              # Генерируем геро-мета баннер
              hero_meta_banner = None
@@ -1267,11 +1270,12 @@ async def alternate_digest_job(context):
                      )
                      logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
 
-                 set_config('alternate_digest_message_id', str(msg.message_id))
-                 set_config('alternate_digest_last_created', str(time.time()))
-                 set_config('alternate_digest_type', next_type)
-                 _digest_state["type"] = next_type
-                 _digest_state["last_text"] = text
+                set_config('alternate_digest_message_id', str(msg.message_id))
+                set_config('alternate_digest_last_created', str(time.time()))
+                set_config('alternate_digest_type', next_type)
+                _digest_state["type"] = next_type
+                _digest_state["last_text"] = text
+                logger.info(f"alternate_digest_job: saved new message_id = {msg.message_id}")
 
                  # Закрепляем новое сообщение
                  try:
