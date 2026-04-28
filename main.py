@@ -1164,56 +1164,92 @@ async def alternate_digest_job(context):
         logger.info(f"alternate_digest_job: last_message_id = {last_message_id}")
         logger.info(f"alternate_digest_job: text = {text[:100]}...")
         edited = False
+        # Try to edit existing message - check if message has photo (use caption) or text
         if last_message_id:
-            logger.info(f"alternate_digest_job: attempting to edit message {last_message_id}")
+            logger.info(f'alternate_digest_job: attempting to edit message {last_message_id}')
             try:
                 msg_id_int = int(last_message_id)
                 if msg_id_int <= 0:
-                    logger.warning(f"Invalid alternate_digest_message_id: {last_message_id}")
+                    logger.warning(f'Invalid alternate_digest_message_id: {last_message_id}')
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
                 else:
-                    await bot.edit_message_text(
-                        chat_id=int(digest_chat_id),
-                        message_id=msg_id_int,
-                        text=text,
-                        parse_mode="HTML"
-                    )
-                    logger.info(f"Обновлён alternate дайджест {last_message_id}")
-                    edited = True
-                    _digest_state["type"] = next_type
-                    set_config('alternate_digest_type', next_type)
-                    _digest_state["last_text"] = text
+                    # Try to edit - first check if message has photo
+                    try:
+                        # Get message to check if it has photo
+                        msg = await bot.get_message(
+                            chat_id=int(digest_chat_id),
+                            message_id=msg_id_int
+                        )
+                        if hasattr(msg, 'photo') and msg.photo:
+                            # Photo message - edit caption
+                            await bot.edit_message_caption(
+                                chat_id=int(digest_chat_id),
+                                message_id=msg_id_int,
+                                caption=text,
+                                parse_mode='HTML'
+                            )
+                            logger.info(f'Updated caption alternate digest {last_message_id}')
+                        else:
+                            # Text message - edit text
+                            await bot.edit_message_text(
+                                chat_id=int(digest_chat_id),
+                                message_id=msg_id_int,
+                                text=text,
+                                parse_mode='HTML'
+                            )
+                            logger.info(f'Updated text alternate digest {last_message_id}')
+                        edited = True
+                        _digest_state['type'] = next_type
+                        set_config('alternate_digest_type', next_type)
+                        _digest_state['last_text'] = text
+                    except Exception as e2:
+                        logger.info(f'Failed to get/edit message: {e2}')
+                        # Fallback to text edit
+                        try:
+                            await bot.edit_message_text(
+                                chat_id=int(digest_chat_id),
+                                message_id=msg_id_int,
+                                text=text,
+                                parse_mode='HTML'
+                            )
+                            logger.info(f'Updated (fallback) alternate digest {last_message_id}')
+                            edited = True
+                            _digest_state['type'] = next_type
+                            set_config('alternate_digest_type', next_type)
+                            _digest_state['last_text'] = text
+                        except Exception as e3:
+                            logger.warning(f'Fallback edit also failed: {e3}')
+                            edited = False
             except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid alternate_digest_message_id format: {last_message_id}, error: {e}")
+                logger.warning(f'Invalid alternate_digest_message_id format: {last_message_id}, error: {e}')
                 set_config('alternate_digest_message_id', None)
                 last_message_id = None
             except Exception as e:
                 error_str = str(e).lower()
-                is_rate_limit = "429" in error_str or "too many requests" in error_str or "retry after" in error_str
-                logger.info(f"Ошибка редактирования: {e}")
+                is_rate_limit = '429' in error_str or 'too many requests' in error_str or 'retry after' in error_str
+                logger.info(f'Edit error: {e}')
                 if is_rate_limit:
-                    logger.warning(f"Rate limited by Telegram, skipping edit")
-                    _digest_state["last_text"] = text
-                    _digest_state["last_run"] = 0
+                    logger.warning(f'Rate limited by Telegram, skipping edit')
+                    _digest_state['last_text'] = text
+                    _digest_state['last_run'] = 0
                     return
-                if "bad request" in error_str:
-                    logger.warning(f"Bad request for message {last_message_id}, resetting message_id")
+                if 'bad request' in error_str:
+                    logger.warning(f'Bad request for message {last_message_id}, resetting message_id')
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
                     edited = False
-                elif "message to edit not found" in error_str or "message can't be edited" in error_str:
-                    logger.info(f"Старое сообщение {last_message_id} удалено, создаём новое")
+                elif 'message to edit not found' in error_str or 'message can\'t be edited' in error_str:
+                    logger.info(f'Old message {last_message_id} deleted, creating new')
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
-                elif "message is not modified" in error_str:
-                    logger.info(f"Сообщение не изменилось, пропускаем")
+                elif 'message is not modified' in error_str:
+                    logger.info(f'Message not modified, skipping')
                     edited = True
-                    _digest_state["type"] = next_type
+                    _digest_state['type'] = next_type
                     set_config('alternate_digest_type', next_type)
-                    _digest_state["last_text"] = text
+                    _digest_state['last_text'] = text
 
-        # Если не удалось редактировать - создаём новое
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
             # Генерируем геро-мета баннер
