@@ -1205,8 +1205,8 @@ async def alternate_digest_job(context):
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
                 elif "message is not modified" in error_str:
-                    logger.info(f"Сообщение не изменилось, пропускаем")
-                    edited = True
+                     logger.info(f"Сообщение не изменилось, пропускаем")
+                     edited = True
                      _digest_state["type"] = next_type
                      set_config('alternate_digest_type', next_type)
                      _digest_state["last_text"] = text
