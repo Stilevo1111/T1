@@ -3154,7 +3154,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Только читаем топ из БД - данные уже должны быть обновлены в update_all_mmr_job
         logger.info(f"topmmr: before get_dota_week_top_from_db")
-        top_users = get_dota_week_top_from_db(8, force_refresh=True)
+        top_users = get_dota_week_top_from_db(10, force_refresh=True)
         logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from DB")
         
         # Get user's position in the full rankings using the new function
@@ -3258,13 +3258,21 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not process digest chat: {e}")
             
-            # Add the current user's position if not in top and has games
-            if user and not user_is_in_top and user_week_games > 0:
+            # Add the current user's position (always show it at the bottom)
+            if user and user_week_games > 0:
                 user_wr = round((user_week_wins / user_week_games) * 100, 1)
                 user_rank_str = format_rank_tier(user.get('rank_tier', 0))
                 clickable_name = make_clickable(user_username, update.effective_user.id)
-                top_text += f"\n\n👤 <b>{clickable_name}</b>: #{user_pos or '?'} - {user_rank_str}\n"
-                top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
+                if user_is_in_top:
+                    top_text += f"\n\n👤 <b>{clickable_name}</b>: #{user_pos or '?'} - {user_rank_str}\n"
+                    top_text += f" └ В топе • {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
+                else:
+                    top_text += f"\n\n👤 <b>{clickable_name}</b>: #{user_pos or '?'} - {user_rank_str}\n"
+                    top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
+            elif user and user_week_games == 0:
+                clickable_name = make_clickable(user_username, update.effective_user.id)
+                top_text += f"\n\n👤 <b>{clickable_name}</b>\n"
+                top_text += f" └ Нет игр за неделю"
             
             # Delete previous bot message before sending new one
             try:
