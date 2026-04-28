@@ -312,39 +312,35 @@ async def meta_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in meta_command: {e}", exc_info=True)
         await update.message.reply_text("❌ Произошла ошибка при создании обновления меты")
 
-def get_hero_meta_image():
+async def generate_hero_meta_banner():
+    """Async version to generate hero meta banner.
+    
+    Can be safely called from within an existing event loop.
+    
+    Returns:
+        bytes: PNG image bytes of the hero meta banner
+    """
+    data = await get_dota_data()
+    if not data:
+        logger.error("No data from OpenDota")
+        return None
+    return create_infographic(data)
+
+
+async def get_hero_meta_image():
     """Generate hero meta image for external use (e.g., digests).
     
     Returns:
         bytes: PNG image bytes that can be embedded as a header,
                or None if generation failed.
     """
-    async def _generate():
-        data = await get_dota_data()
-        if not data:
-            logger.error("No data from OpenDota")
-            return None
-        return create_infographic(data)
-    
-    try:
-        # Try to get the current event loop
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # We're already in an event loop, create a task
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, _generate())
-                return future.result()
-        else:
-            # No running loop, safe to use asyncio.run
-            return asyncio.run(_generate())
+    data = await get_dota_data()
+    if not data:
+        logger.error("No data from OpenDota")
+        return None
+    return create_infographic(data)
     except RuntimeError:
-        # Fallback: if we can't get loop or other issues, create new loop
-        try:
-            return asyncio.run(_generate())
-        except Exception as e:
-            logger.error(f"Failed to generate hero meta image: {e}")
-            return None
+        return asyncio.run(generate_hero_meta_banner())
 
 
 def setup_hero_meta_job(application: Application):

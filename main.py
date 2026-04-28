@@ -1207,20 +1207,25 @@ async def alternate_digest_job(context):
                 elif "message is not modified" in error_str:
                     logger.info(f"Сообщение не изменилось, пропускаем")
                     edited = True
-                    _digest_state["type"] = next_type
-                    set_config('alternate_digest_type', next_type)
-                    _digest_state["last_text"] = text
-        
-        # Если не удалось редактировать - создаём новое
-        if not edited:
-            # Генерируем геро-мета баннер
-            hero_meta_banner = None
-            try:
-                from hero_meta import get_hero_meta_image
-                hero_meta_banner = get_hero_meta_image()
-                logger.info("Hero meta banner generated for digest")
-            except Exception as e:
-                logger.warning(f"Could not generate hero meta banner: {e}")
+                     _digest_state["type"] = next_type
+                     set_config('alternate_digest_type', next_type)
+                     _digest_state["last_text"] = text
+
+         # Если не удалось редактировать - создаём новое
+         if not edited:
+             # Генерируем геро-мета баннер
+             hero_meta_banner = None
+             try:
+                 # Import the async function
+                 from hero_meta import get_hero_meta_image
+                 # Since we're in an async context, we can await it directly
+                 hero_meta_banner = await get_hero_meta_image()
+                 if hero_meta_banner:
+                     logger.info("Hero meta banner generated for digest")
+                 else:
+                     logger.warning("Hero meta banner generation returned None")
+             except Exception as e:
+                 logger.warning(f"Could not generate hero meta banner: {e}")
 
             # Проверяем анти-спам
             last_created_str = get_config('alternate_digest_last_created')
