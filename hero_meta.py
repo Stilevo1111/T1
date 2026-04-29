@@ -180,14 +180,24 @@ def create_infographic(hero_stats):
     except:
         font_wr = ImageFont.load_default()
 
-    for col_idx, (role_name, hero_ids) in enumerate(ROLE_MAPPING.items()):
-        role_heroes = [h for h in hero_stats if h['id'] in hero_ids]
-        for h in role_heroes:
-            pro_win = h.get('pro_win', 0)
-            pro_pick = h.get('pro_pick', 0)
-            h['wr'] = (pro_win / pro_pick * 100) if pro_pick > 0 else 0
-        
-        top_5 = sorted(role_heroes, key=lambda x: x['wr'], reverse=True)[:5]
+    for col_idx, (role_name, hero_ids) in enumerate(ROLE_MAPPING.items()):
+
+        role_heroes = [h for h in hero_stats if h['id'] in hero_ids]
+
+        # Фильтруем героев с недостаточной профессиональной статистикой
+        MIN_PRO_PICKS = 10  # минимум 10 профессиональных пиков для включения в анализ
+        role_heroes = [h for h in role_heroes if h.get('pro_pick', 0) >= MIN_PRO_PICKS]
+
+        for h in role_heroes:
+
+            pro_win = h.get('pro_win', 0)
+
+            pro_pick = h.get('pro_pick', 0)
+
+            h['wr'] = (pro_win / pro_pick * 100) if pro_pick > 0 else 0
+
+        # Сортируем по винрейту и берем топ-5
+        top_5 = sorted(role_heroes, key=lambda x: x['wr'], reverse=True)[:5]
 
         for row_idx, hero in enumerate(top_5):
             x = start_x + col_idx * (col_width + gap_between_cols)
@@ -196,7 +206,7 @@ def create_infographic(hero_stats):
             # ╨Ю╤А╨╕╨│╨╕╨╜╨░╨╗╤М╨╜╨░╤П ╨┐╤А╤П╨╝╨╛╤Г╨│╨╛╨╗╤М╨╜╨░╤П ╨╕╨║╨╛╨╜╨║╨░ ╤Б ╤Г╨▓╨╡╨╗╨╕╤З╨╡╨╜╨╕╨╡╨╝ 0.5X
             icon_url = "https://cdn.cloudflare.steamstatic.com" + hero['img']
             try:
-                r = requests.get(icon_url, timeout=5)
+                r = requests.get(icon_url, timeout=2)  # уменьшаем timeout для каждого изображения
                 icon_raw = Image.open(io.BytesIO(r.content)).convert("RGBA")
                 
                 # ╨Ь╨░╤Б╤И╤В╨░╨▒╨╕╤А╤Г╨╡╨╝ ╨┐╨╛ ╤Г╨▓╨╡╨╗╨╕╤З╨╡╨╜╨╜╨╛╨╣ ╨▓╤Л╤Б╨╛╤В╨╡ (0.5X ╨▒╨╛╨╗╤М╤И╨╡)
