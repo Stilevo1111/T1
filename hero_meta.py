@@ -42,14 +42,130 @@ if FONT_PATH is None:
     logger.warning("Using default PIL font as no system fonts found")
 
 # ╨а╨░╤Б╤И╨╕╤А╨╡╨╜╨╜╤Л╨╣ ╤Б╨┐╨╕╤Б╨╛╨║ ID ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╤А╨╛╨╗╨╕ (╤З╤В╨╛╨▒╤Л ╤В╨╛╤З╨╜╨╛ ╨╜╨░╨▒╤А╨░╨╗╨╛╤Б╤М ╨┐╨╛ 5)
-# Полный список всех героев Dota 2 (127 героев по состоянию на 2026)
-# Распределение по ролям на основе профессионального использования и официальных ролей Valve
+# Строгое распределение героев по основным ролям Dota 2 (2026)
+# Исключаем универсальных героев - только "чистые" представители каждой роли
+
 ROLE_MAPPING = {
-    "SAFE LANE": [1, 6, 8, 10, 12, 35, 36, 41, 42, 44, 46, 54, 62, 67, 70, 73, 80, 93, 94, 95],  # Чистые керри + агри-карри
-    "MID LANE": [11, 13, 15, 17, 21, 22, 25, 34, 39, 43, 45, 47, 52, 59, 83, 86, 106, 113],  # Чистые мидеры
-    "OFF LANE": [2, 7, 14, 16, 18, 19, 28, 29, 33, 38, 49, 51, 65, 69, 96, 102, 107, 108, 110, 123, 126, 127, 128, 129],  # Чистые оффлейнеры + танки
-    "SOFT SUPP": [9, 18, 27, 40, 56, 57, 58, 60, 72, 81, 84, 85, 88, 89, 90, 91, 92, 101, 105, 109, 110, 112, 115, 118, 121, 122, 123, 124, 125],  # Активные саппорты 4 позиции
-    "HARD SUPP": [3, 5, 20, 37, 50, 53, 64, 68, 77, 78, 79, 87, 103, 104, 111, 112, 119]  # Пассивные саппорты 5 позиции
+    "КЕРРИ": [
+        # Основные керри (поздняя игра, фарм, драки)
+        1,   # Anti-Mage
+        6,   # Drow Ranger
+        8,   # Juggernaut
+        10,  # Morphling
+        12,  # Phantom Assassin
+        35,  # Sven
+        36,  # Tiny
+        41,  # Faceless Void
+        42,  # Wraith King
+        44,  # Phantom Lancer
+        46,  # Templar Assassin
+        54,  # Lifestealer
+        62,  # Bloodseeker
+        67,  # Spectre
+        70,  # Ursa
+        73,  # Alchemist
+        80,  # Lone Druid
+        93,  # Slardar
+        94,  # Medusa
+        95   # Troll Warlord
+    ],
+
+    "ХАРДЛЕЙНЕР": [
+        # Герои, которые могут брать линии самостоятельно (оффлейн/мид)
+        2,   # Axe
+        7,   # Earthshaker
+        14,  # Pudge
+        16,  # Sand King
+        28,  # Slardar (уже в керри, но может быть хардлейнером)
+        29,  # Tidehunter
+        33,  # Doom
+        38,  # Beastmaster
+        49,  # Dragon Knight
+        51,  # Clockwerk
+        65,  # Batrider
+        69,  # Doom (дубликат)
+        96,  # Centaur Warrunner
+        102, # Abaddon
+        107, # Earthshaker (дубликат)
+        108, # Underlord
+        110, # Phoenix
+        123, # Hoodwink
+        126, # Void Spirit
+        127, # Snapfire
+        128, # Mars
+        129  # Dawnbreaker
+    ],
+
+    "МИДЕР": [
+        # Чистые мидеры (средняя линия)
+        11,  # Shadow Fiend
+        13,  # Puck
+        15,  # Razor
+        17,  # Storm Spirit
+        21,  # Windrunner
+        22,  # Zeus
+        25,  # Lina
+        34,  # Tinker
+        39,  # Queen of Pain
+        43,  # Death Prophet
+        45,  # Pugna
+        47,  # Viper
+        52,  # Leshrac
+        59,  # Huskar
+        83,  # Treant Protector
+        86,  # Rubick
+        106, # Ember Spirit
+        113  # Arc Warden
+    ],
+
+    "ЧАСТИЧНАЯ ПОДДЕРЖКА": [
+        # Герои, которые могут частично поддерживать (активные 4 позиции)
+        9,   # Mirana
+        18,  # Sniper
+        27,  # Shadow Shaman
+        40,  # Venomancer
+        56,  # Clinkz
+        57,  # Broodmother
+        58,  # Bounty Hunter
+        60,  # Night Stalker
+        72,  # Gyrocopter
+        81,  # Chaos Knight
+        84,  # Ogre Magi
+        85,  # Undying
+        88,  # Nyx Assassin
+        89,  # Naga Siren
+        90,  # Keeper of the Light
+        91,  # Io
+        92,  # Visage
+        101, # Skywrath Mage
+        105, # Techies
+        109, # Terrorblade
+        112, # Winter Wyvern
+        115, # Magnus
+        121, # Grimstroke
+        122  # Elder Titan
+    ],
+
+    "ПОЛНАЯ ПОДДЕРЖКА": [
+        # Герои, специализирующиеся на поддержке (пассивные 5 позиции)
+        3,   # Bane
+        5,   # Crystal Maiden
+        20,  # Vengeful Spirit
+        37,  # Warlock
+        50,  # Dazzle
+        53,  # Nature's Prophet
+        64,  # Jakiro
+        68,  # Ancient Apparition
+        77,  # Lich
+        78,  # Lion
+        79,  # Shadow Demon
+        87,  # Disruptor
+        103, # Elder Titan (дубликат)
+        104, # Legion Commander
+        111, # Oracle
+        112, # Winter Wyvern (дубликат)
+        119  # Dark Willow
+    ]
 }
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
@@ -399,18 +515,21 @@ def create_infographic(hero_stats, tier_filter=None):
 
     # Define roles with their corresponding heroStats position numbers
     ROLE_POSITIONS = {
-        "SAFE LANE": 1,   # Position 1 in heroStats
-        "MID LANE": 2,    # Position 2 in heroStats
-        "OFF LANE": 3,    # Position 3 in heroStats
-        "SOFT SUPP": 4,   # Position 4 in heroStats
-        "HARD SUPP": 5    # Position 5 in heroStats
+        "КЕРРИ": 1,   # Position 1 in heroStats - carry on safe lane
+        "МИДЕР": 2,    # Position 2 in heroStats - mid lane
+        "ХАРДЛЕЙНЕР": 3,    # Position 3 in heroStats - off lane/hard lane
+        "ЧАСТИЧНАЯ ПОДДЕРЖКА": 4,   # Position 4 in heroStats - soft support
+        "ПОЛНАЯ ПОДДЕРЖКА": 5    # Position 5 in heroStats - hard support
     }
 
     for col_idx, (role_name, position) in enumerate(ROLE_POSITIONS.items()):
 
-        # Get all heroes that have stats for this position
+        # Get all heroes that have stats for this position and are in the role mapping
         role_heroes = []
+        role_hero_ids = set(ROLE_MAPPING.get(role_name, []))
         for hero in hero_stats:
+            if hero.get('id') not in role_hero_ids:
+                continue
             pick_field = f"{position}_pick"
             win_field = f"{position}_win"
 
@@ -535,292 +654,15 @@ def create_infographic(hero_stats, tier_filter=None):
     base.save(buf, format='PNG')
     return buf.getvalue()
 
-async def weekly_hero_meta(context: ContextTypes.DEFAULT_TYPE, tier_filter=None):
-    """╨Ю╤Б╨╛╨▓╨╜╨░╤П ╨╖╨░╤З╨░╤З╨░: ╤Б╨╛╨▒╤А╨░╤В╤М, ╨╜╨░╤А╨╕╤Б╨╛╨▓╨░╤В╤М, ╨╛╤В╨┐╤А╨░╨▓╨╕╤В╤М ╨╕ ╨╖╨░╨║╤А╨╡╨┐╨╕╤В╤М ╨╡╨╢╨╡╨╜╨╡╨┤╨╡╨╗╤М╨╜╤Г╤О ╨╝╨╡╤В╤Г
-    
-    Args:
-        context: Telegram context
-        tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
-    """
-    try:
-        logger.info(f"Starting weekly hero meta update (tier_filter={tier_filter})")
-
-        data = await get_dota_data(tier_filter)
-
-        if not data:
-            logger.error("No data from OpenDota")
-            return None
-
-        image_buf = create_infographic(data, tier_filter)
-
-        
-
-        # Also save to file for external use (e.g., digest)
-
-        try:
-
-            filename = f"hero_meta_header_tier{tier_filter}.png" if tier_filter else "hero_meta_header_all.png"
-            with open(filename, "wb") as f:
-
-                f.write(image_buf)
-
-            logger.info(f"Saved {filename} for external use")
-
-        except Exception as e:
-
-            logger.warning(f"Could not save hero meta header: {e}")
-
-        
-
-        chat_id = context.bot_data.get('hero_meta_chat_id')
-
-        if not chat_id:
-
-            chat_id = os.getenv('HERO_META_CHAT_ID')
-
-        if not chat_id:
-
-            logger.warning("Hero meta chat ID not configured")
-
-            return
-
-        my_channel = context.bot_data.get('hero_meta_channel')
-
-        if not my_channel:
-
-            my_channel = os.getenv('HERO_META_CHANNEL', 'https://t.me/Seredin999')
-
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-
-            [InlineKeyboardButton(text="ЁЯФ╡ ╨Я╨Ю╨Ф╨Я╨Ш╨б╨Р╨в╨м╨б╨п", url=my_channel)]
-
-        ])
-
-        photo = InputFile(image_buf, filename="meta_update.png")
-
-        msg = await context.bot.send_photo(
-
-            chat_id=chat_id,
-
-            photo=photo,
-
-            caption=r"ЁЯУК **╨Ю╨С╨Э╨Ю╨Т╨Ы╨Х╨Э╨Ш╨Х ╨Ь╨Х╨в╨л**\n╨в╨╛╨┐-5 ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╨┐╨╛╨╖╨╕╤Ж╨╕╨╕\.",
-
-            reply_markup=keyboard,
-
-            parse_mode="MarkdownV2"
-
-        )
-
-        await context.bot.pin_chat_message(chat_id, msg.message_id)
-
-        logger.info(f"Weekly hero meta posted and pinned in chat {chat_id}")
-
-    except Exception as e:
-
-        logger.error(f"Error in weekly_hero_meta: {e}", exc_info=True)
 
 
 
 
 
-async def meta_command(update: Update, context: ContextTypes.DEFAULT_TYPE, tier_filter=None):
-    """Handle /meta command for immediate posting and return image bytes
-    
-    Args:
-        update: Telegram update
-        context: Telegram context
-        tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
-    """
-    try:
-        logger.info(f"Starting immediate hero meta update via /meta command (tier_filter={tier_filter})")
-
-        data = await get_dota_data(tier_filter)
-
-        if not data:
-            logger.error("No data from OpenDota")
-            if update.message:
-                await update.message.reply_text("тЭМ ╨Ю╤И╨╕╨▒╨║╨░ ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨╕╤П ╨┤╨░╨╜╨╜╤Л╤Е ╤Б OpenDota")
-            return None
-
-        image_buf = create_infographic(data, tier_filter)
-
-        
-
-        # Save for external use
-
-        try:
-            filename = f"hero_meta_header_tier{tier_filter}.png" if tier_filter else "hero_meta_header_all.png"
-            with open(filename, "wb") as f:
-                f.write(image_buf)
-            logger.info(f"Saved {filename} for external use")
-        except Exception as e:
-            logger.warning(f"Could not save hero_meta_header.png: {e}")
-
-        
-
-        # If called from chat, send the photo
-
-        if update.message:
-            chat_id = update.effective_chat.id
-            photo = InputFile(image_buf, filename="meta_update.png")
-            msg = await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=photo,
-            caption=r"ЁЯУК **╨Ю╨С╨Э╨Ю╨Т╨Ы╨Х╨Э╨Ш╨Х ╨Ь╨Х╨в╨л**\n╨в╨╛╨┐-5 ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╨┐╨╛╨╖╨╕╤Ж╨╕╨╕\.",
-                reply_markup=keyboard,
-                parse_mode="MarkdownV2"
-            )
-            logger.info(f"Hero meta posted immediately in chat {chat_id}")
-
-        return image_buf
-
-    except Exception as e:
-        logger.error(f"Error in meta_command: {e}", exc_info=True)
-        if update.message:
-            await update.message.reply_text("тЭМ ╨Я╤А╨╛╨╕╨╖╨╛╤И╨╗╨░ ╨╛╤И╨╕╨▒╨║╨░ ╨┐╤А╕ ╤Б╨╛╨╖╨┤╨░╨╜╨╕╨╕ ╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╕╤П ╨╝╨╡╤В╤Л")
 
 
-
-
-async def generate_hero_meta_banner(tier_filter=None):
-    """Async version to generate hero meta banner.
-    
-    Args:
-        tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
-    
-    Returns:
-        bytes: PNG image bytes of the hero meta banner
-    """
-    data = await get_dota_data(tier_filter)
-    if not data:
-        logger.error("No data from OpenDota")
-        return None
-    return create_infographic(data, tier_filter)
-
-
-
-
-async def get_hero_meta_image(tier_filter=None):
-    """Generate hero meta image for external use (e.g., digests).
-    
-    Args:
-        tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
-    
-    Returns:
-        bytes: PNG image bytes that can be embedded as a header,
-               or None if generation failed.
-    """
-    logger.info(f"get_hero_meta_image called - starting generation (tier_filter={tier_filter})")
-    try:
-        data = await get_dota_data(tier_filter)
-        if not data:
-            logger.error("No data from OpenDota")
-            return None
-        return create_infographic(data, tier_filter)
-    except Exception as e:
-        logger.warning(f"Failed to generate hero meta image: {e}")
-        return None
-        image_buf = create_infographic(data)
-        
-        # Also save to file for external use (e.g., digest)
-        try:
-            with open("hero_meta_header.png", "wb") as f:
-                f.write(image_buf)
-            logger.info("Saved hero_meta_header.png for external use")
-        except Exception as e:
-            logger.warning(f"Could not save hero_meta_header.png: {e}")
-        
-        chat_id = context.bot_data.get('hero_meta_chat_id')
-        if not chat_id:
-            chat_id = os.getenv('HERO_META_CHAT_ID')
-        if not chat_id:
-            logger.warning("Hero meta chat ID not configured")
-            return
-        my_channel = context.bot_data.get('hero_meta_channel')
-        if not my_channel:
-            my_channel = os.getenv('HERO_META_CHANNEL', 'https://t.me/Seredin999')
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="ЁЯФ╡ ╨Я╨Ю╨Ф╨Я╨Ш╨б╨Р╨в╨м╨б╨п", url=my_channel)]
-        ])
-        photo = InputFile(image_buf, filename="meta_update.png")
-        msg = await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=photo,
-            caption="ЁЯУК **╨Ю╨С╨Э╨Ю╨Т╨Ы╨Х╨Э╨Ш╨Х ╨Ь╨Х╨в╨л**\n╨в╨╛╨┐-5 ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╨┐╨╛╨╖╨╕╤Ж╨╕╨╕ ╤Г╨╢╨╡ ╨▓ ╨╖╨░╨║╤А╨╡╨┐╨╡\\.",
-            reply_markup=keyboard,
-            parse_mode="MarkdownV2"
-        )
-        await context.bot.pin_chat_message(chat_id, msg.message_id)
-        logger.info(f"Weekly hero meta posted and pinned in chat {chat_id}")
-    except Exception as e:
-        logger.error(f"Error in weekly_hero_meta: {e}", exc_info=True)
 
-
-async def meta_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /meta command for immediate posting and return image bytes"""
-    try:
-        logger.info("Starting immediate hero meta update via /meta command")
-        data = await get_dota_data()
-        if not data:
-            logger.error("No data from OpenDota")
-            if update.message:
-                await update.message.reply_text("тЭМ ╨Ю╤И╨╕╨▒╨║╨░ ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨╕╤П ╨┤╨░╨╜╨╜╤Л╤Е ╤Б OpenDota")
-            return None
-            
-        image_buf = create_infographic(data)
-        
-        # Save for external use
-        try:
-            with open("hero_meta_header.png", "wb") as f:
-                f.write(image_buf)
-            logger.info("Saved hero_meta_header.png for external use")
-        except Exception as e:
-            logger.warning(f"Could not save hero_meta_header.png: {e}")
-        
-        # If called from chat, send the photo
-        if update.message:
-            chat_id = update.effective_chat.id
-            photo = InputFile(image_buf, filename="meta_update.png")
-            msg = await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=photo,
-                caption="ЁЯУК **╨Ю╨С╨Э╨Ю╨Т╨Ы╨Х╨Э╨Ш╨Х ╨Ь╨Х╨в╨л**\n╨в╨╛╨┐-5 ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╨┐╨╛╨╖╨╕╤Ж╨╕╨╕\\.",
-                parse_mode="MarkdownV2"
-            )
-            logger.info(f"Hero meta posted immediately in chat {chat_id}")
-        
-        return image_buf
-            
-        image_buf = create_infographic(data)
-        chat_id = update.effective_chat.id
-        
-        # Send the image
-        photo = InputFile(image_buf, filename="meta_update.png")
-        msg = await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=photo,
-            caption="ЁЯУК **╨Ю╨С╨Э╨Ю╨Т╨Ы╨Х╨Э╨Ш╨Х ╨Ь╨Х╨в╨л**\n╨в╨╛╨┐-5 ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╨┐╨╛╨╖╨╕╤Ж╨╕╨╕ (╨╖╨░╨┐╤А╨╛╤И╨╡╨╜╨╛ ╤З╨╡╤А╨╡╨╖ /meta)\\.",
-            parse_mode="MarkdownV2"
-        )
-        logger.info(f"Hero meta posted immediately in chat {chat_id}")
-    except Exception as e:
-        logger.error(f"Error in meta_command: {e}", exc_info=True)
-        await update.message.reply_text("тЭМ ╨Я╤А╨╛╨╕╨╖╨╛╤И╨╗╨░ ╨╛╤И╨╕╨▒╨║╨░ ╨┐╤А╨╕ ╤Б╨╛╨╖╨┤╨░╨╜╨╕╨╕ ╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╕╤П ╨╝╨╡╤В╤Л")
-
-async def generate_hero_meta_banner():
-    """Async version to generate hero meta banner.
-    
-    Can be safely called from within an existing event loop.
-    
-    Returns:
-        bytes: PNG image bytes of the hero meta banner
-    """
-    data = await get_dota_data()
-    if not data:
-        logger.error("No data from OpenDota")
-        return None
-    return create_infographic(data)
+
 
 
 async def get_hero_meta_image():
