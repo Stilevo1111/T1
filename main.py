@@ -910,9 +910,20 @@ async def alternate_digest_job(context):
         # Глобальная блокировка через БД (защита от параллельных воркеров)
         creating_flag = get_config('alternate_digest_creating')
         if creating_flag and creating_flag.strip():
-            logger.info("alternate_digest_job: пропуск - дайджест уже создается другим воркером")
-            return
-        set_config('alternate_digest_creating', '1')  # устанавливаем флаг
+            # Проверяем, не устарел ли флаг (больше 120 секунд - щедрый таймаут)
+            try:
+                flag_timestamp = float(creating_flag)
+                if now - flag_timestamp > 120:  # флаг старше 120 секунд
+                    logger.warning(f"alternate_digest_job: флаг создания устарел ({now - flag_timestamp:.0f}с назад), очищаем и продолжаем")
+                    set_config('alternate_digest_creating', '')  # очищаем устаревший флаг
+                else:
+                    logger.info(f"alternate_digest_job: пропуск - дайджест уже создается другим воркером ({now - flag_timestamp:.0f}с назад)")
+                    return
+            except ValueError:
+                # Старый формат флага или поврежденный, очищаем
+                logger.warning("alternate_digest_job: флаг создания в старом формате, очищаем")
+                set_config('alternate_digest_creating', '')
+        set_config('alternate_digest_creating', str(now))  # устанавливаем флаг с timestamp
 
         # Блокировка от параллельного запуска в рамках одного воркера
         async with _digest_state_lock:
@@ -1391,6 +1402,7 @@ async def alternate_digest_job(context):
             finally:
                 # ВСЕГДА очищаем флаг создания, даже если упало исключение
                 set_config('alternate_digest_creating', '')  # очищаем флаг создания
+                logger.debug("alternate_digest_job: флаг создания очищен")
 
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
