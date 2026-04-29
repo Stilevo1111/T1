@@ -907,11 +907,19 @@ async def alternate_digest_job(context):
             logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
             return
 
-        # Блокировка от параллельного запуска - УДЕРЖИВАЕМ ДО КОНЦА!
+        # Глобальная блокировка через БД (защита от параллельных воркеров)
+        creating_flag = get_config('alternate_digest_creating')
+        if creating_flag and creating_flag.strip():
+            logger.info("alternate_digest_job: пропуск - дайджест уже создается другим воркером")
+            return
+        set_config('alternate_digest_creating', '1')  # устанавливаем флаг
+
+        # Блокировка от параллельного запуска в рамках одного воркера
         async with _digest_state_lock:
             last_run = _digest_state.get('last_run', 0)
             if now - last_run < 10:
                 logger.info(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
+                set_config('alternate_digest_creating', '')  # очищаем флаг
                 return
             _digest_state['last_run'] = now
 
