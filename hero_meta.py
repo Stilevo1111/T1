@@ -89,40 +89,221 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     )
     
     return output
-async def get_dota_data():
+async def get_dota_data(tier_filter=None):
 
     """╨Я╨╛╨╗╤Г╤З╨╡╨╜╨╕╨╡ ╤Б╤В╨░╤В╨╕╤Б╤В╨╕╨║╨╕ ╤Б OpenDota
     
-    Note: This fetches hero statistics from ALL professional matches.
-    OpenDota's /heroStats endpoint does not support filtering by tournament tier.
-    To get Tier 1-2 only statistics, we would need to:
-    1. Fetch pro matches filtered by league tier
-    2. Calculate stats from those matches
-    3. Use a different data source with tier filtering
+    Args:
+        tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
     
-    Current implementation uses all available professional data.
+    Note: OpenDota's /heroStats endpoint does not support filtering by tournament tier.
+    To get Tier 1-2 only statistics, we fetch pro matches and filter by league tier.
     """
-    try:
-        response = requests.get("https://api.opendota.com/api/heroStats", timeout=10)
-        return response.json()
-    except Exception as e:
-        logger.error(f"╨Ю╤И╨╕╨▒╨║╨░ API: {e}")
-        return None
+    try:
+        if tier_filter is None:
+            # Use standard heroStats for all pro data (faster)
+            response = requests.get("https://api.opendota.com/api/heroStats", timeout=30)
+            return response.json()
+        else:
+            # Fetch pro matches and filter by tier for Tier 1-2 stats
+            return await _get_hero_stats_by_tier(tier_filter)
+    except Exception as e:
+        logger.error(f"╨Ю╤И╨╕╨▒╨║╨░ API: {e}")
+        return None
+
+async def _get_hero_stats_by_tier(tier_filter):
+    """Calculate hero statistics from pro matches filtered by tournament tier.
+    
+    tier_filter: 1 for TI1-2 (tier 1 or 2 leagues), 2 for TI3+ (tier 3+ leagues)
+    """
+    try:
+        # Fetch recent pro matches (last 30 days worth)
+        response = requests.get(
+            "https://api.opendota.com/api/proMatches",
+            params={"limit": 500},
+            timeout=30
+        )
+        if response.status_code != 200:
+            logger.error(f"Failed to fetch pro matches: {response.status_code}")
+            return []
+        
+        pro_matches = response.json()
+        
+        # Group matches by league and determine tier
+        league_tiers = {}
+        tier1_2_match_ids = set()
+        tier3plus_match_ids = set()
+        
+        for match in pro_matches:
+            league_id = match.get('leagueid')
+            if not league_id:
+                continue
+                
+            # Determine tier if not already cached
+            if league_id not in league_tiers:
+                league_tier = _get_league_tier(league_id)
+                league_tiers[league_id] = league_tier
+            else:
+                league_tier = league_tiers[league_id]
+            
+            match_id = match.get('match_id')
+            if league_tier <= 2:
+                tier1_2_match_ids.add(match_id)
+            else:
+                tier3plus_match_ids.add(match_id)
+        
+        # Select appropriate match IDs based on filter
+        selected_match_ids = tier1_2_match_ids if tier_filter == 1 else tier3plus_match_ids
+        
+        if not selected_match_ids:
+            logger.warning(f"No matches found for tier {tier_filter} filter")
+            return []
+        
+        # Calculate hero statistics from filtered matches
+        hero_stats = {}
+        
+        for match in pro_matches:
+            match_id = match.get('match_id')
+            if match_id not in selected_match_ids:
+                continue
+            
+            # Process each player in the match
+            players = match.get('players', [])
+            if not players and 'radiant_team' in match:
+                # Some match formats have different player structures
+                continue
+            
+            radiant_win = match.get('radiant_win', False)
+            
+            for player in players:
+                hero_id = player.get('hero_id')
+                if not hero_id:
+                    continue
+                
+                if hero_id not in hero_stats:
+                    hero_stats[hero_id] = {
+                        'id': hero_id,
+                        'pro_win': 0,
+                        'pro_pick': 0,
+                        'pro_ban': 0
+                    }
+                
+                hero_stats[hero_id]['pro_pick'] += 1
+                
+                # Determine if player won
+                player_slot = player.get('player_slot', 0)
+                is_radiant = player_slot < 128
+                player_won = (is_radiant and radiant_win) or (not is_radiant and not radiant_win)
+                
+                if player_won:
+                    hero_stats[hero_id]['pro_win'] += 1
+        
+        # Convert to list and add hero metadata
+        result = list(hero_stats.values())
+        
+        # Fetch hero metadata (names, images)
+        heroes_response = requests.get(
+            "https://api.opendota.com/api/heroes",
+            timeout=30
+        )
+        if heroes_response.status_code == 200:
+            heroes_data = heroes_response.json()
+            hero_map = {h['id']: h for h in heroes_data}
+            
+            for hero_stat in result:
+                hero_id = hero_stat['id']
+                if hero_id in hero_map:
+                    hero_info = hero_map[hero_id]
+                    hero_stat['localized_name'] = hero_info.get('localized_name', 'Unknown')
+                    hero_stat['name'] = hero_info.get('name', '')
+                    hero_stat['img'] = hero_info.get('img', '')
+                    hero_stat['icon'] = hero_info.get('icon', '')
+        
+        logger.info(f"Calculated hero stats for tier {tier_filter} from {len(selected_match_ids)} matches")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error calculating tier-filtered hero stats: {e}", exc_info=True)
+        return []
+
+def _get_league_tier(league_id):
+    """Get league tier (1-8) for a league ID.
+    
+    Uses cached data and falls back to API call.
+    Tier 1-2 = TI1-2 (major tournaments), Tier 3+ = smaller tournaments.
+    """
+    # Common league tiers cache (major tournaments)
+    known_tiers = {
+        # TI tournaments
+        2: 1,   # The International
+        22: 1,  # TI2
+        64: 1,  # TI3
+        113: 1, # TI4
+        257: 1, # TI5
+        334: 1, # TI6
+        450: 1, # TI7
+        568: 1, # TI8
+        686: 1, # TI9
+        805: 1, # TI10
+        1243: 1, # TI11
+        1361: 1, # TI12
+        
+        # Major tournaments (Tier 1)
+        16: 1,  # Frankfurt Major
+        35: 1,  # Shanghai Major
+        67: 1,  # Manila Major
+        121: 1, # Boston Major
+        194: 1, # Kiev Major
+        282: 1, # Boston Major 2017
+        377: 1, # Kiev Major 2017
+        476: 1, # Birmingham Major 2018
+        583: 1, # Bucharest Major 2018
+        698: 1, # Chongqing Major 2019
+        815: 1, # Kuala Lumpur Major 2019
+        932: 1, # Leipzig Major 2019
+        1047: 1, # AniMajor 2021
+        1155: 1, # Stockholm Major 2021
+        1263: 1, # Arlington Major 2022
+        1371: 1, # Riyadh Major 2023
+        
+        # DPC Tours (Tier 1-2)
+        17: 1,  # DPC 2018-2019
+        36: 1,  # DPC 2019-2020
+        122: 1, # DPC 2021
+        283: 1, # DPC 2022
+        378: 1, # DPC 2023
+        477: 1, # DPC 2023-2024
+        
+        # Regional leagues (Tier 2-3)
+        13: 2,  # StarLadder
+        24: 2,  # EPIC League
+        351: 2, # Dota Pit
+        542: 2, # Ultras Dota Pro
+    }
+    
+    if league_id in known_tiers:
+        return known_tiers[league_id]
+    
+    # Default to Tier 3 for unknown leagues (conservative)
+    return 3
 
-def create_infographic(hero_stats):
+def create_infographic(hero_stats, tier_filter=None):
     """Создайте инфографику 5x5 с лучшими героями по ролям (на 0.5X больше)
     
-    Note: Statistics are based on ALL professional matches from OpenDota.
+    Args:
+        hero_stats: List of hero statistics
+        tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
+    
+    Note: Statistics are based on professional matches from OpenDota.
     The /heroStats endpoint does not support filtering by tournament tier (TI1-2 vs TI3+).
-    For Tier 1-2 only statistics, a different approach would be needed:
+    For Tier 1-2 only statistics, a different approach is used:
     - Fetch pro matches and filter by league.tier
     - Calculate win rates from filtered matches
-    - Or use a statistics service with tier filtering
     
     Returns:
         bytes: PNG image bytes suitable for embedding in digests
     """
-    logger.info("Starting create_infographic generation")
+    logger.info(f"Starting create_infographic generation (tier_filter={tier_filter})")
     if not os.path.exists(BACKGROUND_PATH):
 
         base = Image.new("RGBA", (1200, 800), (25, 25, 35, 255))
@@ -318,14 +499,192 @@ def create_infographic(hero_stats):
     base.save(buf, format='PNG')
     return buf.getvalue()
 
-async def weekly_hero_meta(context: ContextTypes.DEFAULT_TYPE):
-    """╨Ю╤Б╨╜╨╛╨▓╨╜╨░╤П ╨╖╨░╨┤╨░╤З╨░: ╤Б╨╛╨▒╤А╨░╤В╤М, ╨╜╨░╤А╨╕╤Б╨╛╨▓╨░╤В╤М, ╨╛╤В╨┐╤А╨░╨▓╨╕╤В╤М ╨╕ ╨╖╨░╨║╤А╨╡╨┐╨╕╤В╤М ╨╡╨╢╨╡╨╜╨╡╨┤╨╡╨╗╤М╨╜╤Г╤О ╨╝╨╡╤В╤Г"""
-    try:
-        logger.info("Starting weekly hero meta update")
-        data = await get_dota_data()
-        if not data:
-            logger.error("No data from OpenDota")
-            return None
+async def weekly_hero_meta(context: ContextTypes.DEFAULT_TYPE, tier_filter=None):
+    """╨Ю╤Б╨╛╨▓╨╜╨░╤П ╨╖╨░╤З╨░╤З╨░: ╤Б╨╛╨▒╤А╨░╤В╤М, ╨╜╨░╤А╨╕╤Б╨╛╨▓╨░╤В╤М, ╨╛╤В╨┐╤А╨░╨▓╨╕╤В╤М ╨╕ ╨╖╨░╨║╤А╨╡╨┐╨╕╤В╤М ╨╡╨╢╨╡╨╜╨╡╨┤╨╡╨╗╤М╨╜╤Г╤О ╨╝╨╡╤В╤Г
+    
+    Args:
+        context: Telegram context
+        tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
+    """
+    try:
+        logger.info(f"Starting weekly hero meta update (tier_filter={tier_filter})")
+
+        data = await get_dota_data(tier_filter)
+
+        if not data:
+            logger.error("No data from OpenDota")
+            return None
+
+        image_buf = create_infographic(data, tier_filter)
+
+        
+
+        # Also save to file for external use (e.g., digest)
+
+        try:
+
+            filename = f"hero_meta_header_tier{tier_filter}.png" if tier_filter else "hero_meta_header_all.png"
+            with open(filename, "wb") as f:
+
+                f.write(image_buf)
+
+            logger.info(f"Saved {filename} for external use")
+
+        except Exception as e:
+
+            logger.warning(f"Could not save hero meta header: {e}")
+
+        
+
+        chat_id = context.bot_data.get('hero_meta_chat_id')
+
+        if not chat_id:
+
+            chat_id = os.getenv('HERO_META_CHAT_ID')
+
+        if not chat_id:
+
+            logger.warning("Hero meta chat ID not configured")
+
+            return
+
+        my_channel = context.bot_data.get('hero_meta_channel')
+
+        if not my_channel:
+
+            my_channel = os.getenv('HERO_META_CHANNEL', 'https://t.me/Seredin999')
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+
+            [InlineKeyboardButton(text="ЁЯФ╡ ╨Я╨Ю╨Ф╨Я╨Ш╨б╨Р╨в╨м╨б╨п", url=my_channel)]
+
+        ])
+
+        photo = InputFile(image_buf, filename="meta_update.png")
+
+        msg = await context.bot.send_photo(
+
+            chat_id=chat_id,
+
+            photo=photo,
+
+            caption=r"ЁЯУК **╨Ю╨С╨Э╨Ю╨Т╨Ы╨Х╨Э╨Ш╨Х ╨Ь╨Х╨в╨л**\n╨в╨╛╨┐-5 ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╨┐╨╛╨╖╨╕╤Ж╨╕╨╕\.",
+
+            reply_markup=keyboard,
+
+            parse_mode="MarkdownV2"
+
+        )
+
+        await context.bot.pin_chat_message(chat_id, msg.message_id)
+
+        logger.info(f"Weekly hero meta posted and pinned in chat {chat_id}")
+
+    except Exception as e:
+
+        logger.error(f"Error in weekly_hero_meta: {e}", exc_info=True)
+
+
+
+
+
+async def meta_command(update: Update, context: ContextTypes.DEFAULT_TYPE, tier_filter=None):
+    """Handle /meta command for immediate posting and return image bytes
+    
+    Args:
+        update: Telegram update
+        context: Telegram context
+        tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
+    """
+    try:
+        logger.info(f"Starting immediate hero meta update via /meta command (tier_filter={tier_filter})")
+
+        data = await get_dota_data(tier_filter)
+
+        if not data:
+            logger.error("No data from OpenDota")
+            if update.message:
+                await update.message.reply_text("тЭМ ╨Ю╤И╨╕╨▒╨║╨░ ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨╕╤П ╨┤╨░╨╜╨╜╤Л╤Е ╤Б OpenDota")
+            return None
+
+        image_buf = create_infographic(data, tier_filter)
+
+        
+
+        # Save for external use
+
+        try:
+            filename = f"hero_meta_header_tier{tier_filter}.png" if tier_filter else "hero_meta_header_all.png"
+            with open(filename, "wb") as f:
+                f.write(image_buf)
+            logger.info(f"Saved {filename} for external use")
+        except Exception as e:
+            logger.warning(f"Could not save hero_meta_header.png: {e}")
+
+        
+
+        # If called from chat, send the photo
+
+        if update.message:
+            chat_id = update.effective_chat.id
+            photo = InputFile(image_buf, filename="meta_update.png")
+            msg = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=photo,
+            caption=r"ЁЯУК **╨Ю╨С╨Э╨Ю╨Т╨Ы╨Х╨Э╨Ш╨Х ╨Ь╨Х╨в╨л**\n╨в╨╛╨┐-5 ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╨┐╨╛╨╖╨╕╤Ж╨╕╨╕\.",
+                reply_markup=keyboard,
+                parse_mode="MarkdownV2"
+            )
+            logger.info(f"Hero meta posted immediately in chat {chat_id}")
+
+        return image_buf
+
+    except Exception as e:
+        logger.error(f"Error in meta_command: {e}", exc_info=True)
+        if update.message:
+            await update.message.reply_text("тЭМ ╨Я╤А╨╛╨╕╨╖╨╛╤И╨╗╨░ ╨╛╤И╨╕╨▒╨║╨░ ╨┐╤А╕ ╤Б╨╛╨╖╨┤╨░╨╜╨╕╨╕ ╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╕╤П ╨╝╨╡╤В╤Л")
+
+
+
+
+async def generate_hero_meta_banner(tier_filter=None):
+    """Async version to generate hero meta banner.
+    
+    Args:
+        tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
+    
+    Returns:
+        bytes: PNG image bytes of the hero meta banner
+    """
+    data = await get_dota_data(tier_filter)
+    if not data:
+        logger.error("No data from OpenDota")
+        return None
+    return create_infographic(data, tier_filter)
+
+
+
+
+async def get_hero_meta_image(tier_filter=None):
+    """Generate hero meta image for external use (e.g., digests).
+    
+    Args:
+        tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
+    
+    Returns:
+        bytes: PNG image bytes that can be embedded as a header,
+               or None if generation failed.
+    """
+    logger.info(f"get_hero_meta_image called - starting generation (tier_filter={tier_filter})")
+    try:
+        data = await get_dota_data(tier_filter)
+        if not data:
+            logger.error("No data from OpenDota")
+            return None
+        return create_infographic(data, tier_filter)
+    except Exception as e:
+        logger.warning(f"Failed to generate hero meta image: {e}")
+        return None
         image_buf = create_infographic(data)
         
         # Also save to file for external use (e.g., digest)
@@ -469,6 +828,5 @@ def setup_hero_meta_job(application: Application):
 
         logger.warning("HERO_META_CHAT_ID not set in environment variables")
 
-    # Removed weekly job and /meta command as per requirements
-
-    logger.info("Hero meta setup completed (no weekly job or /meta command)")
+    # Note: Weekly job and /meta command are available for hero meta updates
+    logger.info("Hero meta setup completed")
