@@ -606,7 +606,8 @@ async def update_all_mmr_job(context):
         from dota_mmr import update_user_mmr
         from database import get_all_users_with_steam, user_cache, BACKUP_DATABASE_URL
 
-        users = get_all_users_with_steam()
+        # Fetch users in thread to avoid blocking event loop on DB query
+        users = await asyncio.to_thread(get_all_users_with_steam)
         if not users:
             logger.info("Нет пользователей с привязанным Steam для обновления MMR")
             return
@@ -620,7 +621,8 @@ async def update_all_mmr_job(context):
 
         for user in users:
             try:
-                result = update_user_mmr(user['telegram_id'])
+                # Run blocking update_user_mmr in thread pool to avoid blocking event loop
+                result = await asyncio.to_thread(update_user_mmr, user['telegram_id'])
                 if result and result.get('success'):
                     success_count += 1
                     logger.info(f"MMR updated for {user['telegram_id']}: {result.get('mmr')} MMR")
@@ -660,8 +662,9 @@ async def update_all_mmr_job(context):
                     rank_tier = user.get('rank_tier', 0)
                     avatar_url = user.get('avatar')
 
-                    # Generate card with rank icon
-                    card_data = generate_start_card(
+                    # Generate card in thread (blocking image + network ops)
+                    card_data = await asyncio.to_thread(
+                        generate_start_card,
                         avatar_url=avatar_url,
                         message_count=message_count,
                         username=username,
