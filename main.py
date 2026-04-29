@@ -42,9 +42,10 @@ _user_fissure_processing = {}  # Request lock: user_id -> timestamp (for fissure
 _USER_START_COOLDOWN = {}  # Spam protection for /start: user_id -> timestamp
 _START_COOLDOWN = 5  # 5 seconds cooldown for /start command
 
-_digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run": 0, "last_text": None}
+_digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run": 0, "last_text": None, "last_hero_meta_update": 0, "hero_meta_image": None}
 _digest_state_lock = asyncio.Lock()  # Lock for thread-safe access to _digest_state
 DIGEST_DATA_REFRESH_INTERVAL = 3600  # 1 час - обновление данных из БД
+HERO_META_REFRESH_INTERVAL = 172800  # 48 часов - обновление геро-мета баннера
 
 # Кеш для дайджестов - храним сгенерированный текст и время создания
 _digest_cache = {
@@ -1259,25 +1260,39 @@ async def alternate_digest_job(context):
 
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
-            # Генерируем геро-мета баннер
+            # Генерируем или используем кешированный геро-мета баннер (обновление раз в 48 часов)
             hero_meta_banner = None
-            try:
-                # Import the async function
-                from hero_meta import get_hero_meta_image
-                # Since we're in an async context, we can await it directly
-                # Увеличиваем timeout для генерации hero meta (до 45 секунд)
-                import asyncio
+            current_time = time.time()
+            last_meta_update = _digest_state.get("last_hero_meta_update", 0)
+            cached_image = _digest_state.get("hero_meta_image")
+
+            if cached_image is not None and (current_time - last_meta_update) < HERO_META_REFRESH_INTERVAL:
+                hero_meta_banner = cached_image
+                logger.info(f"Using cached hero meta banner (age: {current_time - last_meta_update:.0f}s, refresh in {HERO_META_REFRESH_INTERVAL - (current_time - last_meta_update):.0f}s)")
+            else:
                 try:
-                    hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=45.0)
-                except asyncio.TimeoutError:
-                    logger.warning("Hero meta banner generation timed out after 45 seconds")
+                    from hero_meta import get_hero_meta_image
+                    import asyncio
+                    try:
+                        hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=45.0)
+                    except asyncio.TimeoutError:
+                        logger.warning("Hero meta banner generation timed out after 45 seconds")
+                        hero_meta_banner = None
+                    if hero_meta_banner:
+                        logger.info("Hero meta banner generated for digest")
+                        # Обновляем кеш и timestamp
+                        _digest_state["hero_meta_image"] = hero_meta_banner
+                        _digest_state["last_hero_meta_update"] = current_time
+                    else:
+                        logger.warning("Hero meta banner generation returned None")
+                except Exception as e:
+                    logger.warning(f"Could not generate hero meta banner: {e}")
                     hero_meta_banner = None
-                if hero_meta_banner:
-                    logger.info("Hero meta banner generated for digest")
-                else:
-                    logger.warning("Hero meta banner generation returned None")
-            except Exception as e:
-                logger.warning(f"Could not generate hero meta banner: {e}")
+
+                # Fallback на старый кеш, если генерация не удалась
+                if hero_meta_banner is None and cached_image is not None:
+                    logger.warning("Using stale cached hero meta image due to generation failure")
+                    hero_meta_banner = cached_image
 
             # Проверяем анти-спам
             last_created_str = get_config('alternate_digest_last_created')
