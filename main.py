@@ -1268,7 +1268,7 @@ async def alternate_digest_job(context):
                 # Увеличиваем timeout для генерации hero meta (до 45 секунд)
                 import asyncio
                 try:
-                    hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(tier_filter=1), timeout=45.0)
+                    hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=45.0)
                 except asyncio.TimeoutError:
                     logger.warning("Hero meta banner generation timed out after 45 seconds")
                     hero_meta_banner = None
