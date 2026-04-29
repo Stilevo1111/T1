@@ -19,7 +19,7 @@ def _get_start_card_background():
     if _START_CARD_BACKGROUND_CACHED:
         return _START_CARD_BACKGROUND_RESIZED
     try:
-        resp = requests.get("https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png", timeout=10)
+        resp = requests.get("https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png", timeout=30)
         if resp.status_code == 200:
             bg_image = Image.open(io.BytesIO(resp.content)).convert("RGB")
             bg_image = bg_image.resize((1024, 500), Image.LANCZOS)
@@ -105,18 +105,29 @@ def _clear_cache():
 def _api_get(url: str, params: dict = None) -> dict:
     """Универсальная функция для API-запросов с обработкой ошибок и кешем"""
     _check_rate_limit()  # Применяем rate limiting
-    try:
-        r = requests.get(url, params=params or {}, timeout=10)
-        if r.status_code == 200:
-            return r.json()
-        elif r.status_code == 429:
-            logger.warning(f"Rate limited by OpenDota API, waiting...")
-            time.sleep(60)  # Ждём минуту при 429
+    max_retries = 2
+    for attempt in range(max_retries + 1):
+        try:
+            r = requests.get(url, params=params or {}, timeout=30)
+            if r.status_code == 200:
+                return r.json()
+            elif r.status_code == 429:
+                logger.warning(f"Rate limited by OpenDota API, waiting...")
+                time.sleep(60)  # Ждём минуту при 429
+                return None
             return None
-        return None
-    except Exception as e:
-        logger.error(f"API request error: {e}", exc_info=True)
-        return None
+        except requests.exceptions.ReadTimeout as e:
+            if attempt < max_retries:
+                logger.warning(f"Read timeout on attempt {attempt + 1}/{max_retries + 1}, retrying...")
+                time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            else:
+                logger.error(f"API request error after {max_retries + 1} attempts: {e}", exc_info=True)
+                return None
+        except Exception as e:
+            logger.error(f"API request error: {e}", exc_info=True)
+            return None
+    return None
 
 
 _async_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
@@ -148,34 +159,42 @@ async def _check_rate_limit_async():
 async def _api_get_async(url: str, params: dict = None, use_session: bool = True) -> dict:
     """Асинхронная функция для API-запросов с переиспользованием сессии"""
     await _check_rate_limit_async()
-    try:
-        if use_session:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(url, params=params or {}) as resp:
-                if resp.status == 200:
-                    return await resp.json()
-                elif resp.status == 429:
-                    logger.warning(f"Rate limited by OpenDota API, waiting...")
-                    import asyncio
-                    await asyncio.sleep(60)
+    max_retries = 2
+    for attempt in range(max_retries + 1):
+        try:
+            if use_session:
+                from database import get_aiohttp_session
+                session = await get_aiohttp_session()
+                async with session.get(url, params=params or {}) as resp:
+                    if resp.status == 200:
+                        return await resp.json()
+                    elif resp.status == 429:
+                        logger.warning(f"Rate limited by OpenDota API, waiting...")
+                        import asyncio
+                        await asyncio.sleep(60)
+                        return None
                     return None
-                return None
-        else:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status == 200:
-                    return await resp.json()
-                elif resp.status == 429:
-                    logger.warning(f"Rate limited by OpenDota API, waiting...")
-                    import asyncio
-                    await asyncio.sleep(60)
+            else:
+                from database import get_aiohttp_session
+                session = await get_aiohttp_session()
+                async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status == 200:
+                        return await resp.json()
+                    elif resp.status == 429:
+                        logger.warning(f"Rate limited by OpenDota API, waiting...")
+                        import asyncio
+                        await asyncio.sleep(60)
+                        return None
                     return None
+        except Exception as e:
+            if "timeout" in str(e).lower() and attempt < max_retries:
+                logger.warning(f"Async API timeout on attempt {attempt + 1}/{max_retries + 1}, retrying...")
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            else:
+                logger.error(f"Async API request error: {e}", exc_info=True)
                 return None
-    except Exception as e:
-        logger.error(f"API request error: {e}", exc_info=True)
-        return None
+    return None
 
 
 # ========================
