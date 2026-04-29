@@ -1346,7 +1346,6 @@ async def alternate_digest_job(context):
                     if can_del:
                         try:
                             logger.info("Попытка удаления системного сообщения о закрепе...")
-                            import time
                             time.sleep(0.5)
                             logger.info("Задержка 0.5с завершена, ищем системное сообщение")
 
