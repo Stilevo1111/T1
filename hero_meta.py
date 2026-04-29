@@ -185,7 +185,7 @@ def create_infographic(hero_stats):
         role_heroes = [h for h in hero_stats if h['id'] in hero_ids]
 
         # Фильтруем героев с недостаточной профессиональной статистикой
-        MIN_PRO_PICKS = 10  # минимум 10 профессиональных пиков для включения в анализ
+        MIN_PRO_PICKS = 50  # минимум 50 профессиональных пиков для включения в анализ (только активные в про-сцене герои)
         role_heroes = [h for h in role_heroes if h.get('pro_pick', 0) >= MIN_PRO_PICKS]
 
         for h in role_heroes:
