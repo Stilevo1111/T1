@@ -89,9 +89,19 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     )
     
     return output
-
-async def get_dota_data():
-    """╨Я╨╛╨╗╤Г╤З╨╡╨╜╨╕╨╡ ╤Б╤В╨░╤В╨╕╤Б╤В╨╕╨║╨╕ ╤Б OpenDota"""
+async def get_dota_data():
+
+    """╨Я╨╛╨╗╤Г╤З╨╡╨╜╨╕╨╡ ╤Б╤В╨░╤В╨╕╤Б╤В╨╕╨║╨╕ ╤Б OpenDota
+    
+    Note: This fetches hero statistics from ALL professional matches.
+    OpenDota's /heroStats endpoint does not support filtering by tournament tier.
+    To get Tier 1-2 only statistics, we would need to:
+    1. Fetch pro matches filtered by league tier
+    2. Calculate stats from those matches
+    3. Use a different data source with tier filtering
+    
+    Current implementation uses all available professional data.
+    """
     try:
         response = requests.get("https://api.opendota.com/api/heroStats", timeout=10)
         return response.json()
@@ -101,7 +111,14 @@ async def get_dota_data():
 
 def create_infographic(hero_stats):
     """Создайте инфографику 5x5 с лучшими героями по ролям (на 0.5X больше)
-
+    
+    Note: Statistics are based on ALL professional matches from OpenDota.
+    The /heroStats endpoint does not support filtering by tournament tier (TI1-2 vs TI3+).
+    For Tier 1-2 only statistics, a different approach would be needed:
+    - Fetch pro matches and filter by league.tier
+    - Calculate win rates from filtered matches
+    - Or use a statistics service with tier filtering
+    
     Returns:
         bytes: PNG image bytes suitable for embedding in digests
     """
@@ -185,6 +202,8 @@ def create_infographic(hero_stats):
         role_heroes = [h for h in hero_stats if h['id'] in hero_ids]
 
         # Фильтруем героев с недостаточной профессиональной статистикой
+        # NOTE: OpenDota's heroStats includes ALL pro matches, not filtered by tournament tier
+        # For Tier 1-2 only stats, we would need to filter matches by league.tier first
         MIN_PRO_PICKS = 25  # минимум 25 профессиональных пиков для включения в анализ (активные в про-сцене герои, но не слишком строгий фильтр)
         role_heroes = [h for h in role_heroes if h.get('pro_pick', 0) >= MIN_PRO_PICKS]
 
