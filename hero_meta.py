@@ -89,26 +89,45 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     )
     
     return output
-async def get_dota_data(tier_filter=None):
+async def get_dota_data(tier_filter=None, days=7):
 
-    """╨Я╨╛╨╗╤Г╤З╨╡╨╜╨╕╨╡ ╤Б╤В╨░╤В╨╕╤Б╤В╨╕╨║╨╕ ╤Б OpenDota
-    
+    """Получение статистики героев из OpenDota heroStats API
+
     Args:
         tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
-    
-    Note: OpenDota's /heroStats endpoint does not support filtering by tournament tier.
-    To get Tier 1-2 only statistics, we fetch pro matches and filter by league tier.
+        days: Number of days to look back (default 7 for weekly stats)
+
+    Returns:
+        Hero statistics from OpenDota heroStats API with built-in role statistics
     """
     try:
+        # Use heroStats API which has built-in role statistics
+        response = requests.get("https://api.opendota.com/api/heroStats", timeout=30)
+        if response.status_code != 200:
+            logger.error(f"heroStats API error: HTTP {response.status_code}")
+            return None
+
+        hero_stats = response.json()
+        if not hero_stats:
+            logger.error("No hero stats received from API")
+            return None
+
+        # If no tier filtering needed, return all data
         if tier_filter is None:
-            # Use standard heroStats for all pro data (faster)
-            response = requests.get("https://api.opendota.com/api/heroStats", timeout=30)
-            return response.json()
-        else:
-            # Fetch pro matches and filter by tier for Tier 1-2 stats
-            return await _get_hero_stats_by_tier(tier_filter)
+            return hero_stats
+
+        # Filter heroes by minimum professional picks for reliability
+        filtered_heroes = []
+        for hero in hero_stats:
+            pro_pick = hero.get('pro_pick', 0)
+            if pro_pick >= 25:  # Minimum 25 pro picks for statistical significance
+                filtered_heroes.append(hero)
+
+        logger.info(f"Filtered to {len(filtered_heroes)} heroes with >=25 pro picks")
+        return filtered_heroes
+
     except Exception as e:
-        logger.error(f"╨Ю╤И╨╕╨▒╨║╨░ API: {e}")
+        logger.error(f"OpenDota API error: {e}")
         return None
 
 async def _get_hero_stats_by_tier(tier_filter):
@@ -378,25 +397,42 @@ def create_infographic(hero_stats, tier_filter=None):
     except:
         font_wr = ImageFont.load_default()
 
-    for col_idx, (role_name, hero_ids) in enumerate(ROLE_MAPPING.items()):
+    # Define roles with their corresponding heroStats position numbers
+    ROLE_POSITIONS = {
+        "SAFE LANE": 1,   # Position 1 in heroStats
+        "MID LANE": 2,    # Position 2 in heroStats
+        "OFF LANE": 3,    # Position 3 in heroStats
+        "SOFT SUPP": 4,   # Position 4 in heroStats
+        "HARD SUPP": 5    # Position 5 in heroStats
+    }
 
-        role_heroes = [h for h in hero_stats if h['id'] in hero_ids]
+    for col_idx, (role_name, position) in enumerate(ROLE_POSITIONS.items()):
 
-        # Фильтруем героев с недостаточной профессиональной статистикой
-        # NOTE: OpenDota's heroStats includes ALL pro matches, not filtered by tournament tier
-        # For Tier 1-2 only stats, we would need to filter matches by league.tier first
-        MIN_PRO_PICKS = 25  # минимум 25 профессиональных пиков для включения в анализ (активные в про-сцене герои, но не слишком строгий фильтр)
-        role_heroes = [h for h in role_heroes if h.get('pro_pick', 0) >= MIN_PRO_PICKS]
+        # Get all heroes that have stats for this position
+        role_heroes = []
+        for hero in hero_stats:
+            pick_field = f"{position}_pick"
+            win_field = f"{position}_win"
 
-        for h in role_heroes:
+            # Check if hero has stats for this position
+            if hero.get(pick_field, 0) > 0:
+                # Create a copy of hero data with position-specific stats
+                hero_copy = hero.copy()
+                hero_copy['pro_pick'] = hero.get(pick_field, 0)
+                hero_copy['pro_win'] = hero.get(win_field, 0)
+                role_heroes.append(hero_copy)
 
-            pro_win = h.get('pro_win', 0)
+        # Filter heroes with minimum picks for this position
+        MIN_POSITION_PICKS = 10  # Minimum picks for position-specific stats
+        role_heroes = [h for h in role_heroes if h.get('pro_pick', 0) >= MIN_POSITION_PICKS]
 
-            pro_pick = h.get('pro_pick', 0)
+        # Calculate win rate for this position
+        for hero in role_heroes:
+            pro_win = hero.get('pro_win', 0)
+            pro_pick = hero.get('pro_pick', 0)
+            hero['wr'] = (pro_win / pro_pick * 100) if pro_pick > 0 else 0
 
-            h['wr'] = (pro_win / pro_pick * 100) if pro_pick > 0 else 0
-
-        # Сортируем по винрейту и берем топ-5
+        # Sort by win rate and take top 5
         top_5 = sorted(role_heroes, key=lambda x: x['wr'], reverse=True)[:5]
 
         for row_idx, hero in enumerate(top_5):
