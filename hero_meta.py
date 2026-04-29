@@ -217,7 +217,8 @@ def create_infographic(hero_stats):
                         if attempt == max_retries:
                             raise e  # последняя попытка не удалась
                         logger.debug(f"Failed to load hero image (attempt {attempt + 1}/{max_retries + 1}): {e}")
-                        await asyncio.sleep(0.5)  # небольшая пауза перед повтором
+                        import time
+                        time.sleep(0.5)  # небольшая пауза перед повтором
                 icon_raw = Image.open(io.BytesIO(r.content)).convert("RGBA")
                 
                 # ╨Ь╨░╤Б╤И╤В╨░╨▒╨╕╤А╤Г╨╡╨╝ ╨┐╨╛ ╤Г╨▓╨╡╨╗╨╕╤З╨╡╨╜╨╜╨╛╨╣ ╨▓╤Л╤Б╨╛╤В╨╡ (0.5X ╨▒╨╛╨╗╤М╤И╨╡)

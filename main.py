@@ -1346,7 +1346,8 @@ async def alternate_digest_job(context):
                     if can_del:
                         try:
                             logger.info("Попытка удаления системного сообщения о закрепе...")
-                            await asyncio.sleep(0.5)
+                            import time
+                            time.sleep(0.5)
                             logger.info("Задержка 0.5с завершена, ищем системное сообщение")
 
                             # Системное сообщение о закрепе имеет message_id = msg.message_id + N (обычно +1 или +2)
