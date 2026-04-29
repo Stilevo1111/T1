@@ -911,10 +911,10 @@ async def alternate_digest_job(context):
         # Глобальная блокировка через БД (защита от параллельных воркеров)
         creating_flag = get_config('alternate_digest_creating')
         if creating_flag and creating_flag.strip():
-            # Проверяем, не устарел ли флаг (больше 120 секунд - щедрый таймаут)
+            # Проверяем, не устарел ли флаг (больше 300 секунд - безопасный таймаут)
             try:
                 flag_timestamp = float(creating_flag)
-                if now - flag_timestamp > 120:  # флаг старше 120 секунд
+                if now - flag_timestamp > 300:  # флаг старше 5 минут
                     logger.warning(f"alternate_digest_job: флаг создания устарел ({now - flag_timestamp:.0f}с назад), очищаем и продолжаем")
                     set_config('alternate_digest_creating', '')  # очищаем устаревший флаг
                 else:
@@ -1260,6 +1260,14 @@ async def alternate_digest_job(context):
 
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
+            # Проверяем анти-спам до генерации баннера (быстрый выход)
+            last_created_str = get_config('alternate_digest_last_created')
+            last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
+            time_since_last = time.time() - last_created
+            if time_since_last < 60:
+                logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
+                return
+
             # Генерируем или используем кешированный геро-мета баннер (обновление раз в 48 часов)
             hero_meta_banner = None
             current_time = time.time()
@@ -1293,14 +1301,6 @@ async def alternate_digest_job(context):
                 if hero_meta_banner is None and cached_image is not None:
                     logger.warning("Using stale cached hero meta image due to generation failure")
                     hero_meta_banner = cached_image
-
-            # Проверяем анти-спам
-            last_created_str = get_config('alternate_digest_last_created')
-            last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
-            time_since_last = time.time() - last_created
-            if time_since_last < 60:
-                logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
-                return
 
             # Удаляем старое сообщение если есть
             if last_message_id:
