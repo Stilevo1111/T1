@@ -286,6 +286,11 @@ async def alternate_digest_job(context):
                     _digest_state["type"] = next_type
                     set_config('alternate_digest_type', next_type)
                     _digest_state["last_text"] = text
+                    try:
+                        await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
+                        logger.info(f"Закреплён дайджест {last_message_id}")
+                    except Exception as e:
+                        logger.debug(f"Не удалось закрепить: {e}")
             except (ValueError, TypeError) as e:
                 logger.warning(f"Invalid alternate_digest_message_id format: {last_message_id}, error: {e}")
                 set_config('alternate_digest_message_id', None)
@@ -314,90 +319,95 @@ async def alternate_digest_job(context):
                      _digest_state["type"] = next_type
                      set_config('alternate_digest_type', next_type)
                      _digest_state["last_text"] = text
+                     try:
+                         await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
+                         logger.info(f"Закреплён дайджест {last_message_id}")
+                     except Exception as e:
+                         logger.debug(f"Не удалось закрепить: {e}")
 
         # Если не удалось редактировать - создаём новое
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
-             # Генерируем геро-мета баннер
-             hero_meta_banner = None
+            # Генерируем геро-мета баннер
+            hero_meta_banner = None
             try:
-                 # Import the async function
-                 from hero_meta import get_hero_meta_image
-                 # Since we're in an async context, we can await it directly
-                 hero_meta_banner = await get_hero_meta_image()
-                 if hero_meta_banner:
-                     logger.info("Hero meta banner generated for digest")
-                 else:
-                     logger.warning("Hero meta banner generation returned None")
+                # Import the async function
+                from hero_meta import get_hero_meta_image
+                # Since we're in an async context, we can await it directly
+                hero_meta_banner = await get_hero_meta_image()
+                if hero_meta_banner:
+                    logger.info("Hero meta banner generated for digest")
+                else:
+                    logger.warning("Hero meta banner generation returned None")
             except Exception as e:
-            logger.warning(f"Could not generate hero meta banner: {e}")
+                logger.warning(f"Could not generate hero meta banner: {e}")
 
-             # Проверяем анти-спам
-             last_created_str = get_config('alternate_digest_last_created')
-             last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
-             time_since_last = time.time() - last_created
-             if time_since_last < 60:
-            logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
-            return
+            # Проверяем анти-спам
+            last_created_str = get_config('alternate_digest_last_created')
+            last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
+            time_since_last = time.time() - last_created
+            if time_since_last < 60:
+                logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
+                return
 
-             # Удаляем старое сообщение если есть
-             if last_message_id:
+            # Удаляем старое сообщение если есть
+            if last_message_id:
+                try:
+                    msg_id_int = int(last_message_id)
+                    if msg_id_int > 0:
+                        await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
+                        logger.info(f"Удалено старое сообщение {last_message_id}")
+                except Exception as e:
+                    logger.debug(f"Старое сообщение уже удалено: {e}")
+                set_config('alternate_digest_message_id', None)
+
+            # Создаём новое сообщение
             try:
-                     msg_id_int = int(last_message_id)
-                     if msg_id_int > 0:
-                         await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
-                         logger.info(f"Удалено старое сообщение {last_message_id}")
-            except Exception as e:
-            logger.debug(f"Старое сообщение уже удалено: {e}")
-             set_config('alternate_digest_message_id', None)
+                from io import BytesIO
+                if hero_meta_banner:
+                    photo_buf = BytesIO(hero_meta_banner)
+                    photo_buf.name = "hero_meta_banner.png"
+                    msg = await bot.send_photo(
+                        chat_id=int(digest_chat_id),
+                        photo=photo_buf,
+                        caption=text,
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"Создан новый дайджест с фото {msg.message_id}")
+                else:
+                    msg = await bot.send_message(
+                        chat_id=int(digest_chat_id),
+                        text=text,
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
 
-             # Создаём новое сообщение
-            try:
-                 from io import BytesIO
-                 if hero_meta_banner:
-                     photo_buf = BytesIO(hero_meta_banner)
-                     photo_buf.name = "hero_meta_banner.png"
-                     msg = await bot.send_photo(
-                         chat_id=int(digest_chat_id),
-                         photo=photo_buf,
-                         caption=text,
-                         parse_mode="HTML"
-                     )
-                     logger.info(f"Создан новый дайджест с фото {msg.message_id}")
-                 else:
-                     msg = await bot.send_message(
-                         chat_id=int(digest_chat_id),
-                         text=text,
-                         parse_mode="HTML"
-                      )
-                      logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
+                set_config('alternate_digest_message_id', str(msg.message_id))
+                set_config('alternate_digest_last_created', str(time.time()))
+                set_config('alternate_digest_type', next_type)
+                _digest_state["type"] = next_type
+                _digest_state["last_text"] = text
+                logger.info(f"alternate_digest_job: saved new message_id = {msg.message_id}")
 
-                  set_config('alternate_digest_message_id', str(msg.message_id))
-                  set_config('alternate_digest_last_created', str(time.time()))
-                  set_config('alternate_digest_type', next_type)
-                  _digest_state["type"] = next_type
-                  _digest_state["last_text"] = text
-                  logger.info(f"alternate_digest_job: saved new message_id = {msg.message_id}")
+                # Закрепляем новое сообщение
+                try:
+                    # Открепляем ВСЕ закреплённые сообщения перед закреплением нового
+                    # Это решает проблему гонки между воркерами — только последний останется
+                    try:
+                        await bot.unpin_all_chat_messages(chat_id=int(digest_chat_id))
+                        logger.info("Откреплены все предыдущие закреплённые сообщения")
+                    except Exception as e:
+                        logger.debug(f"Не удалось открепить все сообщения: {e}")
 
-                  # Закрепляем новое сообщение
-            try:
-                     # Открепляем ВСЕ закреплённые сообщения перед закреплением нового
-                     # Это решает проблему гонки между воркерами — только последний останется
-            try:
-                         await bot.unpin_all_chat_messages(chat_id=int(digest_chat_id))
-                         logger.info("Откреплены все предыдущие закреплённые сообщения")
-            except Exception as e:
-            logger.debug(f"Не удалось открепить все сообщения: {e}")
+                    await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
+                    logger.info(f"Дайджест {msg.message_id} закреплён")
 
-            await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
-            logger.info(f"Дайджест {msg.message_id} закреплён")
-
-            # Удаляем системное сообщение о закрепе, если есть права
-            logger.info(f"Проверка прав на удаление системного сообщения для chat_id={digest_chat_id}")
-            can_del = await bot_can_delete(bot, digest_chat_id)
-            logger.info(f"bot_can_delete result: {can_del}")
-            if can_del:
-            try:
+                    # Удаляем системное сообщение о закрепе, если есть права
+                    logger.info(f"Проверка прав на удаление системного сообщения для chat_id={digest_chat_id}")
+                    can_del = await bot_can_delete(bot, digest_chat_id)
+                    logger.info(f"bot_can_delete result: {can_del}")
+                    if can_del:
+                        try:
                             logger.info("Попытка удаления системного сообщения о закрепе...")
                             await asyncio.sleep(0.5)
                             logger.info("Задержка 0.5с завершена, ищем системное сообщение")
@@ -407,7 +417,7 @@ async def alternate_digest_job(context):
                             found = False
                             for offset in range(1, 6):
                                 candidate_id = msg.message_id + offset
-            try:
+                                try:
                                     candidate_msg = await bot.get_message(chat_id=int(digest_chat_id), message_id=candidate_id)
                                     if hasattr(candidate_msg, 'text') and candidate_msg.text:
                                         text_lower = candidate_msg.text.lower().replace('\u200b', '').replace('\u2060', '')
@@ -417,44 +427,24 @@ async def alternate_digest_job(context):
                                             logger.info(f"✅ Удалено системное сообщение о закрепе {candidate_id}")
                                             found = True
                                             break
-            except Exception as e:
-            if "message not found" in str(e).lower() or "message to delete not found" in str(e).lower():
-            logger.debug(f"Сообщение {candidate_id} не найдено, прекращаем поиск")
-            break
-            else:
-            logger.debug(f"Ошибка при проверке сообщения {candidate_id}: {e}")
-            if not found:
-            logger.info("Системное сообщение о закрепе не найдено среди следующих сообщений")
+                                except Exception as e:
+                                    if "message not found" in str(e).lower() or "message to delete not found" in str(e).lower():
+                                        logger.debug(f"Сообщение {candidate_id} не найдено, прекращаем поиск")
+                                        break
+                                    else:
+                                        logger.debug(f"Ошибка при проверке сообщения {candidate_id}: {e}")
+                            if not found:
+                                logger.info("Системное сообщение о закрепе не найдено среди следующих сообщений")
 
-            # Дополнительно: удаляем другие дайджесты бота в узком диапазоне ID вокруг только что созданного
-            # Это очищает возможные дубликаты от гонки
-            try:
-                                for offset in range(-20, 0):  # проверяем до 20 сообщений до
-                                    old_id = msg.message_id + offset
-                                    if old_id <= 0:
-                                        continue
-            try:
-                                        old_msg = await bot.get_message(chat_id=int(digest_chat_id), message_id=old_id)
-                                        if hasattr(old_msg, 'from_user') and old_msg.from_user and old_msg.from_user.is_bot:
-                                            if hasattr(old_msg, 'text') and old_msg.text:
-                                                txt = old_msg.text.lower()
-                                                if ('фиссур' in txt and ('дайджест' in txt or 'dota' in txt)) or ('dota' in txt and 'дайджест' in txt):
-                                                    await bot.delete_message(chat_id=int(digest_chat_id), message_id=old_id)
-                                                    logger.info(f"Удалён дублирующий дайджест {old_id} (offset {offset})")
-            except Exception:
-            pass  # ignore not found etc.
-            except Exception as e:
-            logger.debug(f"Ошибка при cleanup соседних дайджестов: {e}")
-
-            except Exception as e:
-            logger.info(f"Ошибка при удалении системного сообщения: {e}", exc_info=True)
-            else:
-            logger.info("❌ Нет прав на удаление системного сообщения о закрепе")
-            except Exception as e:
-            logger.debug(f"Не удалось закрепить: {e}")
+                        except Exception as e:
+                            logger.info(f"Ошибка при удалении системного сообщения: {e}", exc_info=True)
+                    else:
+                        logger.info("❌ Нет прав на удаление системного сообщения о закрепе")
+                except Exception as e:
+                    logger.debug(f"Не удалось закрепить: {e}")
             finally:
-            # ВСЕГДА очищаем флаг создания, даже если упало исключение
-            set_config('alternate_digest_creating', '')  # очищаем флаг создания
+                # ВСЕГДА очищаем флаг создания, даже если упало исключение
+                set_config('alternate_digest_creating', '')  # очищаем флаг создания
         
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)

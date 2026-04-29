@@ -50,14 +50,21 @@ ROLE_MAPPING = {
     "HARD SUPP": [87, 30, 26, 111, 31, 40, 50, 119]
 }
 
-def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
-    """╨Ю╨▒╤А╨╡╨╖╨░╨╡╤В, ╨╖╨░╨║╤А╤Г╨│╨╗╤П╨╡╤В ╤Г╨│╨╗╤Л ╨╕ ╨┤╨╛╨▒╨░╨▓╨╗╤П╨╡╤В ╨╖╨╛╨╗╨╛╤В╤Г╤О ╨╛╨▒╨▓╨╛╨┤╨║╤Г ╨б╨Э╨Р╨а╨г╨Ц╨Ш"""
-    # ╨б╨╜╨░╤З╨░╨╗╨░ ╤Б╨╛╨╖╨┤╨░╨╡╨╝ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╤Б ╨╛╨▒╨▓╨╛╨┤╨║╨╛╨╣ ╤Б╨╜╨░╤А╤Г╨╢╨╕
-    # ╨Ю╨▒╤Й╨╕╨╣ ╤А╨░╨╖╨╝╨╡╤А ╨▒╤Г╨┤╨╡╤В size + 2*border_width ╤Б ╨║╨░╨╢╨┤╨╛╨╣ ╤Б╤В╨╛╤А╨╛╨╜╤Л
-    outer_size = (size[0] + 2 * border_width, size[1] + 2 * border_width)
-    
-    # ╨Ю╨▒╤А╨╡╨╖╨░╨╡╨╝ ╨╕ ╨╝╨░╤Б╤И╤В╨░╨▒╨╕╤А╤Г╨╡╨╝ ╨╕╤Б╤Е╨╛╨┤╨╜╨╛╨╡ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╨┤╨╛ ╤Г╨║╨░╨╖╨░╨╜╨╜╨╛╨│╨╛ ╤А╨░╨╖╨╝╨╡╤А╨░
-    img_scaled = ImageOps.fit(img, size, centering=(0.5, 0.5))
+def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
+
+    """╨Ю╨▒╤А╨╡╨╖╨░╨╡╤В, ╨╖╨░╨║╤А╤Г╨│╨╗╤П╨╡╤В ╤Г╨│╨╗╨╛╨▓ ╨╕ ╨┤╨╛╨▒╨░╨▓╨╗╤П╨╡╤В ╨╖╨╛╨╗╨╛╤В╤Г╤О ╨╛╨▒╨▓╨╛╨┤╨║╤Г ╨б╨Э╨Р╨а╨г╨Ц╨Ш"""
+
+    # ╨б╨╜╨░╤З╨░╨╗╨░ ╤Б╨╛╨╖╨┤╨░╨╡╨╝ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╤Б ╨╛╨▒╨▓╨╛╨┤╨║╨╛╨╣ ╤Б╨╜╨░╤Р╨╕╨│╨╕
+
+    # ╨Ю╨▒╤Й╨╕╨╣ ╤А╨░╨╖╨╝╨╡╤А ╨▒╤Г╨┤╨╡╤В size + 2*border_width ╤Б ╨║╨░╨╢╨┤╨╛╨╣ ╤Б╤В╨╛╤А╨╛╨╜╤Л
+
+    outer_size = (size[0] + 2 * border_width, size[1] + 2 * border_width)
+
+    
+
+    # ╨Ю╨▒╤А╨╡╨╖╨░╨╡╨╝ ╨╕ ╨╝╨░╤Б╤И╤В╨░╨▒╨╕╤А╤Г╨╡╨╝ ╨╕╤Б╤Е╨╛╨┤╨╜╨╛╨╡ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╨┤╨╛ ╤Г╨║╨░╨╖╨░╨╜╨╜╨╛╨│╨╛ ╤А╨░╨╖╨╝╨╡╤А╨░
+
+    img_scaled = img.resize(size, Image.Resampling.LANCZOS)
     
     # ╨б╨╛╨╖╨┤╨░╨╡╨╝ ╨╝╨░╤Б╨║╤Г ╨┤╨╗╤П ╨╖╨░╨║╤А╤Г╨│╨╗╨╡╨╜╨╜╤Л╤Е ╤Г╨│╨╗╨╛╨▓ ╨▓╨╜╤Г╤В╤А╨╡╨╜╨╜╨╡╨│╨╛ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╤П
     mask = Image.new('L', size, 0)
@@ -97,37 +104,66 @@ def create_infographic(hero_stats):
         bytes: PNG image bytes suitable for embedding in digests
     """
     logger.info("Starting create_infographic generation")
-    if not os.path.exists(BACKGROUND_PATH):
-        base = Image.new("RGBA", (1200, 800), (25, 25, 35, 255))
-        bg_width, bg_height = 1200, 800
-    else:
-        base = Image.open(BACKGROUND_PATH).convert("RGBA")
-        bg_width, bg_height = base.size
-    
-    draw = ImageDraw.Draw(base)
-    
-    # ╨в╨╡╨║╤Б╤В ╨┐╨░╤В╤З╨░ ╤Г╨┤╨░╨╗╤С╨╜ (╨▒╨╛╨╗╤М╤И╨╡ ╨╜╨╡ ╨╜╤Г╨╢╨╡╨╜)
-    # 2. ╨а╨Р╨б╨з╨Х╨в ╨а╨Р╨Ч╨Ь╨Х╨а╨Ю╨Т - ╨г╨Т╨Х╨Ы╨Ш╨з╨Х╨Э╨Ш╨Х ╨Э╨Р 0.5X
-    margin_x = 50
-    margin_y = 250
-    gap_between_cols = 50
-    gap_between_rows = 10
-    
-    available_width = bg_width - 2 * margin_x
-    total_gaps_width = 6 * gap_between_cols
-    col_width = (available_width - total_gaps_width) // 5
-    
-    available_height = bg_height - margin_y - 50
-    total_gaps_height = 6 * gap_between_rows
-    row_height = (available_height - total_gaps_height) // 5
-    
-    # ╨г╨Т╨Х╨Ы╨Ш╨з╨Х╨Э╨Ш╨Х ╨Э╨Р 0.5X
-    base_icon_height = row_height - 25
-    increased_height = int(base_icon_height * 1.5)
-    icon_height = min(increased_height, row_height - 5)
-    
-    start_x = margin_x + gap_between_cols
-    start_y = margin_y
+    if not os.path.exists(BACKGROUND_PATH):
+
+        base = Image.new("RGBA", (1200, 800), (25, 25, 35, 255))
+
+        bg_width, bg_height = 1200, 800
+
+    else:
+
+        base = Image.open(BACKGROUND_PATH).convert("RGBA")
+
+        bg_width, bg_height = base.size
+    
+
+    draw = ImageDraw.Draw(base)
+
+    
+
+    # ╨в╨╡╨║╤Б╤В ╨┐╨░╤В╤З╨░ ╤Г╨┤╨░╨╗╤С╨╜ (╨▒╨╛╨╗╤М╤И╨╡ ╨╜╨╡ ╨╜╤Г╨╢╨╡╨╜)
+
+    # 2. ╨а╨Р╨б╨з╨Х╨в ╨а╨Р╨Ч╨Ь╨Х╨а╨Ю╨Т - ╨г╨Т╨Х╨Ы╨Ш╨з╨Х╨Э╨Ш╨Х ╨Э╨Р 0.5X
+
+    margin_x = 50
+
+    margin_y = 215
+
+    gap_between_cols = 15
+
+    gap_between_rows = 0
+
+    
+
+    available_width = bg_width - 2 * margin_x
+
+    total_gaps_width = 6 * gap_between_cols
+
+    col_width = (available_width - total_gaps_width) // 5
+
+    
+
+    available_height = bg_height - margin_y - 10
+
+    total_gaps_height = 6 * gap_between_rows
+
+    row_height = (available_height - total_gaps_height) // 5
+
+    
+
+    # ╨г╨Т╨Х╨Ы╨Ш╨з╨Х╨Э╨Ш╨Х ╨Э╨Р 0.163X
+
+    base_icon_height = row_height - 25
+
+    increased_height = int(base_icon_height * 1.163)
+
+    icon_height = min(increased_height, row_height - 5)
+
+    
+
+    start_x = margin_x + gap_between_cols
+
+    start_y = margin_y
     
     # ╨Ц╨╕╤А╨╜╤Л╨╣ ╤И╤А╨╕╤Д╤В ╨┤╨╗╤П WINRATE
     try:
@@ -215,16 +251,9 @@ def create_infographic(hero_stats):
                     text_x = icon_center_x - text_width // 2
                     text_y = icon_bottom_y - text_height
                     
-                    # ╨в╨╡╨║╤Б╤В - ╨Ц╨Ш╨а╨Э╨л╨Щ, ╨С╨Ю╨Ы╨м╨и╨Ю╨Щ, ╨С╨Х╨Ы╨л╨Щ, ╨С╨Х╨Ч ╨з╨Х╨а╨Э╨Ю╨Щ ╨Я╨Ю╨Ф╨Ъ╨Ы╨Р╨Ф╨Ъ╨Ш!
-                    # ╨Ф╨╛╨▒╨░╨▓╨╗╤П╨╡╨╝ ╨╛╨▒╨▓╨╛╨┤╨║╤Г (╨║╨╛╨╜╤В╤Г╤А) ╨┤╨╗╤П ╨╗╤Г╤З╤И╨╡╨╣ ╤З╨╕╤В╨░╨╡╨╝╨╛╤Б╤В╨╕
-                    outline_color = (0, 0, 0)
-                    # ╨а╨╕╤Б╤Г╨╡╨╝ ╨║╨╛╨╜╤В╤Г╤А ╨▓╨╛╨║╤А╤Г╨│ ╤В╨╡╨║╤Б╤В╨░ (╨╝╨╜╨╛╨╢╨╡╤Б╤В╨▓╨╡╨╜╨╜╤Л╨╡ ╤Б╨╝╨╡╤Й╨╡╨╜╨╕╤П)
-                    for dx in [-1, 0, 1]:
-                        for dy in [-1, 0, 1]:
-                            if dx != 0 or dy != 0:
-                                draw.text((text_x + dx, text_y + dy), wr_text, fill=outline_color, font=font_large)
-                    # ╨Ю╤Б╨╜╨╛╨▓╨╜╨╛╨╣ ╤В╨╡╨║╤Б╤В ╨┐╨╛╨▓╨╡╤А╤Е
-                    draw.text((text_x, text_y), wr_text, fill=(255, 255, 255), font=font_large)
+                    # ╨Ю╤Б╨╜╨╛╨▓╨╜╨╛╨╣ ╤В╨╡╨║╤Б╤В ╨┐╨╛╨▓╨╡╤А╤Е
+
+                    draw.text((text_x, text_y), wr_text, fill=(255, 255, 255), font=font_large)
                     
                 except Exception:
                     # ╨Х╤Б╨╗╨╕ ╨╜╨╡ ╨┐╨╛╨╗╤Г╤З╨╕╨╗╨╛╤Б╤М - ╨┐╤А╨╛╤Б╤В╨╛ ╨╢╨╕╤А╨╜╤Л╨╣ ╤В╨╡╨║╤Б╤В
@@ -375,25 +404,28 @@ async def get_hero_meta_image():
         return None
 
 
-def setup_hero_meta_job(application: Application):
-    """╨Э╨░╤Б╤В╤А╨╛╨╣╨║╨░ ╨┐╨╗╨░╨╜╨╕╤А╨╛╨▓╤Й╨╕╨║╨░ ╨┤╨╗╤П ╨╡╨╢╨╡╨╜╨╡╨┤╨╡╨╗╤М╨╜╨╛╨│╨╛ ╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╕╤П ╨╝╨╡╤В╤Л ╨│╨╡╤А╨╛╨╡╨▓"""
-    chat_id = os.getenv('HERO_META_CHAT_ID')
-    if chat_id:
-        try:
-            application.bot_data['hero_meta_chat_id'] = int(chat_id)
-            logger.info(f"Hero meta chat ID set to: {chat_id}")
-        except ValueError:
-            logger.warning(f"Invalid HERO_META_CHAT_ID: {chat_id}")
-    else:
-        logger.warning("HERO_META_CHAT_ID not set in environment variables")
-    from datetime import time
-    # Run weekly on Fridays (weekday 4 where Monday=0, Sunday=6)
-    application.job_queue.run_daily(
-        weekly_hero_meta,
-        time=time(hour=10, minute=0),
-        days=(4,),  # Only Friday
-        name="weekly_hero_meta"
-    )
-    # Add command handler for immediate posting
-    application.add_handler(CommandHandler("meta", meta_command))
-    logger.info("Hero meta job scheduled for Fridays at 10:00 and /meta command enabled")
+def setup_hero_meta_job(application: Application):
+
+    """╨Э╨░╤Б╤В╤А╨╛╨╣╨║╨░ ╨┐╨╗╨░╨╜╨╕╤А╨╛╨▓╤Й╨╕╨║╨░ ╨┤╨╗╤П ╨╡╨╢╨╡╨╜╨╡╨┤╨╡╨╗╤М╨╜╨╛╨│╨╛ ╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╕╤П ╨╝╨╡╤В╤Л ╨│╨╡╤А╨╛╨╡╨▓"""
+
+    chat_id = os.getenv('HERO_META_CHAT_ID')
+
+    if chat_id:
+
+        try:
+
+            application.bot_data['hero_meta_chat_id'] = int(chat_id)
+
+            logger.info(f"Hero meta chat ID set to: {chat_id}")
+
+        except ValueError:
+
+            logger.warning(f"Invalid HERO_META_CHAT_ID: {chat_id}")
+
+    else:
+
+        logger.warning("HERO_META_CHAT_ID not set in environment variables")
+
+    # Removed weekly job and /meta command as per requirements
+
+    logger.info("Hero meta setup completed (no weekly job or /meta command)")
