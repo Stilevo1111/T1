@@ -328,11 +328,47 @@ async def test_greeting(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Тестовая команда для отправки поздравления MVP но недели"""
     try:
-        await announce_weekly_mmr_winner(context.bot)
-        await update.message.reply_text("Поздравление MVP отправлено (если chat_id настроен)")
+        # Добавляем отладку перед вызовом функции
+        from datetime import datetime as dt, timezone, timedelta
+        MSK = timezone(timedelta(hours=3))
+        today_msk = dt.now(MSK)
+        monday_msk = today_msk - timedelta(days=today_msk.weekday())
+        current_week_start = monday_msk.strftime("%Y-%m-%d")
+
+        last_announced = get_config('mmr_week_top_announced')
+        digest_chat_id = get_config('digest_chat_id')
+
+        debug_info = f"Отладка MVP:\n"
+        debug_info += f"Сегодня: {today_msk.strftime('%Y-%m-%d %H:%M:%S')} MSK (weekday={today_msk.weekday()})\n"
+        debug_info += f"Начало недели: {current_week_start}\n"
+        debug_info += f"Последнее поздравление: {last_announced}\n"
+        debug_info += f"digest_chat_id: {digest_chat_id}\n"
+
+        # Проверяем данные MMR
+        from database import get_dota_week_top_from_db
+        top_users = get_dota_week_top_from_db(5, force_refresh=True)
+        active_users = [u for u in top_users if u.get('week_games', 0) > 0] if top_users else []
+
+        debug_info += f"Топ MMR пользователей: {len(top_users) if top_users else 0}\n"
+        debug_info += f"Активных пользователей: {len(active_users)}\n"
+
+        if active_users:
+            winner = active_users[0]
+            debug_info += f"MVP: {winner.get('steam_nickname', 'Unknown')} ({winner.get('week_games', 0)} игр, {winner.get('week_wins', 0)} побед)\n"
+
+        await update.message.reply_text(debug_info)
+
+        # Теперь вызываем основную функцию
+        result = await announce_weekly_mmr_winner(context.bot)
+
+        if result is None:  # Функция завершилась без отправки
+            await update.message.reply_text("MVP поздравление НЕ отправлено - проверьте условия выше")
+        else:
+            await update.message.reply_text("MVP поздравление отправлено!")
+
     except Exception as e:
         logger.error(f"Error in test_mvp_winner: {e}")
-        await update.message.reply_text(f"Oshibka: {e}")
+        await update.message.reply_text(f"Ошибка: {e}")
 
 async def announce_weekly_mmr_winner(bot):
     """Отправляет поздравление победителю недельного топа MMR при смене недели."""
@@ -344,7 +380,7 @@ async def announce_weekly_mmr_winner(bot):
 
     last_announced = get_config('mmr_week_top_announced')
     if last_announced == current_week_start:
-        return
+        return False
 
     # ✅ РАСШИРЕНО: окно до 23:00 MSK вместо 01:00 (раньше было слишком узким)
     # ✅ ДОБАВЛЕНО: fallback для отправки поздравления в любой день, если оно не отправилось в понедельник
@@ -383,29 +419,29 @@ async def announce_weekly_mmr_winner(bot):
     # В понедельник проверяем, что есть игроки с новыми данными
     if is_monday and stale_count == 0:
         logger.info("announce_weekly_mmr_winner: в понедельник stale_count == 0 - данных за новую неделю ещё нет")
-        return
+        return False
 
     # В остальные дни - если старых данных нет и это не fallback из понедельника, пропускаем
     if not is_monday and stale_count == 0 and last_announced == current_week_start:
         logger.info("announce_weekly_mmr_winner: не понедельник, старых данных нет, пропускаем")
-        return
+        return False
 
     digest_chat_id = get_config('digest_chat_id')
     if not digest_chat_id:
         logger.info("announce_weekly_mmr_winner: чат для дайджеста не настроен")
-        return
+        return False
 
     from database import get_dota_week_top_from_db
     top_users = get_dota_week_top_from_db(5, force_refresh=True)
     if not top_users or all(u.get('week_games', 0) == 0 for u in top_users):
         logger.info("announce_weekly_mmr_winner: нет данных для топа MMR (никто не играл)")
         set_config('mmr_week_top_announced', current_week_start)
-        return
+        return False
 
     active_users = [u for u in top_users if u.get('week_games', 0) > 0]
     if not active_users:
         set_config('mmr_week_top_announced', current_week_start)
-        return
+        return False
 
     winner = active_users[0]
     username = winner.get('steam_nickname') or winner.get('username') or 'Игрок'
@@ -525,6 +561,7 @@ async def announce_weekly_mmr_winner(bot):
 
     set_config('mmr_week_top_announced', current_week_start)
     logger.info(f"announce_weekly_mmr_winner: отправлено поздравление для {username} (неделя {current_week_start})")
+    return True  # Возвращаем успех
 
     # Сброс еженедельной статистики MMR для новой недели
     try:
