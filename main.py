@@ -302,6 +302,15 @@ async def test_greeting(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in test_greeting: {e}")
         await update.message.reply_text(f"Oshibka: {e}")
 
+async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Тестовая команда для отправки поздравления MVP но недели"""
+    try:
+        await announce_weekly_mmr_winner(context.bot)
+        await update.message.reply_text("Поздравление MVP отправлено (если chat_id настроен)")
+    except Exception as e:
+        logger.error(f"Error in test_mvp_winner: {e}")
+        await update.message.reply_text(f"Oshibka: {e}")
+
 async def announce_weekly_mmr_winner(bot):
     """Отправляет поздравление победителю недельного топа MMR при смене недели."""
     from datetime import datetime as dt, timezone, timedelta
@@ -314,13 +323,13 @@ async def announce_weekly_mmr_winner(bot):
     if last_announced == current_week_start:
         return
 
-    if today_msk.weekday() != 0:
-        return
-
-    if today_msk.hour >= 1:
+    # ✅ РАСШИРЕНО: окно до 23:00 MSK вместо 01:00 (раньше было слишком узким)
+    # ✅ ДОБАВЛЕНО: fallback для отправки поздравления в любой день, если оно не отправилось в понедельник
+    if today_msk.hour >= 23:
         logger.info(f"announce_weekly_mmr_winner: пропуск, уже {today_msk.hour}:00 MSK — окно объявления прошло")
-        set_config('mmr_week_top_announced', current_week_start)
-        return
+        # Но если у нас есть игроки с данными за ПРОШЛУЮ неделю (week_start_date != current_week_start), отправляем
+        # Это означает, что поздравление не было отправлено в понедельник
+        pass  # продолжаем выполнение, а не return
 
     from database import get_connection, DATABASE_URL
     conn = get_connection()
@@ -340,9 +349,22 @@ async def announce_weekly_mmr_winner(bot):
     stale_count = cursor.fetchone()[0]
     cursor.close()
 
-    if stale_count == 0:
-        logger.info("announce_weekly_mmr_winner: все пользователи уже обновлены на новую неделю, пропуск")
-        set_config('mmr_week_top_announced', current_week_start)
+    # ✅ УБРАНО строгое условие `stale_count == 0` - если last_announced != current_week_start,
+    # поздравление нужно отправить независимо от stale_count
+    # stale_count > 0 гарантирует, что есть игроки с данными за НОВУЮ неделю
+
+    # Если stale_count == 0 НО last_announced != current_week_start - это fallback из понедельника
+    # (поздравление не успело отправиться, но данные уже сброшены)
+    is_monday = today_msk.weekday() == 0
+
+    # В понедельник проверяем, что есть игроки с новыми данными
+    if is_monday and stale_count == 0:
+        logger.info("announce_weekly_mmr_winner: в понедельник stale_count == 0 - данных за новую неделю ещё нет")
+        return
+
+    # В остальные дни - если старых данных нет и это не fallback из понедельника, пропускаем
+    if not is_monday and stale_count == 0 and last_announced == current_week_start:
+        logger.info("announce_weekly_mmr_winner: не понедельник, старых данных нет, пропускаем")
         return
 
     digest_chat_id = get_config('digest_chat_id')
@@ -3772,6 +3794,7 @@ async def main():
         app.add_handler(CommandHandler(("digestnow", "dotadigestnow", "setdigestchat"), digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
         app.add_handler(CommandHandler("testgreeting", test_greeting))
+        app.add_handler(CommandHandler("testmvp", test_mvp_winner))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
