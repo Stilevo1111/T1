@@ -11,6 +11,7 @@ import traceback
 import urllib.parse as urlparse
 import psycopg2
 import html
+import hashlib
 from datetime import timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity, InlineKeyboardButton, InlineKeyboardMarkup
@@ -44,17 +45,39 @@ _START_COOLDOWN = 5  # 5 seconds cooldown for /start command
 
 _digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run": 0, "last_text": None, "last_hero_meta_update": 0, "hero_meta_image": None}
 _digest_state_lock = asyncio.Lock()  # Lock for thread-safe access to _digest_state
-DIGEST_DATA_REFRESH_INTERVAL = 3600  # 1 час - обновление данных из БД
-HERO_META_REFRESH_INTERVAL = 172800  # 48 часов - обновление геро-мета баннера
-
-# Кеш для дайджестов - храним сгенерированный текст и время создания
 _digest_cache = {
     "text": None,           # Кешированный текст дайджеста
     "type": None,          # Тип дайджеста для кеша
     "created_at": 0,       # Время создания кеша
     "cache_ttl": 300,      # Время жизни кеша в секундах (5 минут)
-    "rotation_interval": 15  # Интервал смены типа в секундах (15 секунд)
+    "rotation_interval": 15,  # Интервал смены типа в секундах (15 секунд)
+    "data_hash": None,     # Хеш данных для быстрого сравнения изменений
+    "last_data_check": 0   # Время последней проверки данных
 }
+
+def get_digest_data_hash():
+    """Быстрое хеширование ключевых метрик дайджеста без тяжелых SQL запросов"""
+    try:
+        # Получаем ключевые метрики из кеша или быстрой проверки
+        from database import user_cache
+
+        # Используем кешированные данные если они свежие
+        digest_stats = user_cache.get('digest_stats')
+        dota_stats = user_cache.get('dota_digest_stats')
+
+        if not digest_stats or not dota_stats:
+            # Если нет кеша, делаем быструю проверку без полного запроса
+            return None
+
+        # Создаем хеш из ключевых метрик
+        key_data = f"{digest_stats.get('top_growth', '')}{digest_stats.get('top_drop', '')}{digest_stats.get('top_streak', '')}"
+        key_data += f"{dota_stats.get('top_mmr_player', '')}{dota_stats.get('top_mmr', 0)}{dota_stats.get('total_active', 0)}"
+
+        return hashlib.md5(key_data.encode()).hexdigest()
+
+    except Exception as e:
+        logger.debug(f"Error creating digest data hash: {e}")
+        return None
 
 _last_data_refresh = 0
 _data_refresh_interval = 300  # Обновлять данные каждые 5 минут
@@ -951,11 +974,11 @@ async def alternate_digest_job(context):
                 set_config('alternate_digest_creating', '')
         set_config('alternate_digest_creating', str(now))  # устанавливаем флаг с timestamp
 
-        # Блокировка от параллельного запуска в рамках одного воркера
+        # Блокировка от параллельного запуска в рамках одного воркера (уменьшена до 5 сек для частых запусков)
         async with _digest_state_lock:
             last_run = _digest_state.get('last_run', 0)
-            if now - last_run < 10:
-                logger.info(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
+            if now - last_run < 5:
+                logger.debug(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
                 set_config('alternate_digest_creating', '')  # очищаем флаг
                 return
             _digest_state['last_run'] = now
@@ -998,29 +1021,38 @@ async def alternate_digest_job(context):
         cache = _digest_cache
         should_regenerate = False
 
+        # Быстрая проверка изменений данных каждые 15 секунд
+        current_data_hash = get_digest_data_hash()
+        data_changed = current_data_hash != cache.get("data_hash")
+
         # 1. Если кеш пустой - генерируем
         if cache["text"] is None:
             should_regenerate = True
             logger.info("Кеш дайджеста пуст, генерируем новый")
 
-        # 2. Если кеш устарел (TTL) - генерируем новый
+        # 2. Если данные изменились - генерируем
+        elif data_changed:
+            should_regenerate = True
+            logger.info(f"Данные дайджеста изменились (hash: {current_data_hash[:8]}...), обновляем")
+
+        # 3. Если кеш устарел (TTL) - генерируем новый
         elif now - cache["created_at"] > cache["cache_ttl"]:
             should_regenerate = True
             logger.info(f"Кеш дайджеста устарел ({now - cache['created_at']:.0f}с > {cache['cache_ttl']}с), обновляем")
 
-        # 3. Если пришло время сменить тип (rotation) - генерируем
+        # 4. Если пришло время сменить тип (rotation) - генерируем
         elif now - cache["created_at"] > cache["rotation_interval"]:
             should_regenerate = True
             logger.info(f"Время сменить тип дайджеста ({cache['rotation_interval']}с), обновляем")
 
-        # 4. Если данные в БД обновились - генерируем
+        # 5. Если данные в БД обновились - генерируем
         elif now - _last_data_refresh > _data_refresh_interval:
             should_regenerate = True
             logger.info(f"Данные в БД устарели ({_data_refresh_interval}с), обновляем")
 
         # Если кеш валиден - используем его и просто меняем тип для отображения
         if not should_regenerate:
-            logger.info(f"Используем кешированный дайджест (создан {now - cache['created_at']:.0f}с назад)")
+            logger.debug(f"Используем кешированный дайджест (создан {now - cache['created_at']:.0f}с назад)")
 
             # Просто меняем тип для следующего раза
             current_type = cache["type"]
@@ -1035,7 +1067,12 @@ async def alternate_digest_job(context):
             _digest_state["type"] = next_type
             set_config('alternate_digest_type', next_type)
 
-            logger.info(f"Переключаем тип: {current_type} -> {next_type} (используем кеш)")
+            # Обновляем хеш данных в кеше если нужно
+            if current_data_hash and cache.get("data_hash") != current_data_hash:
+                cache["data_hash"] = current_data_hash
+                cache["last_data_check"] = now
+
+            logger.debug(f"Переключаем тип: {current_type} -> {next_type} (используем кеш)")
 
         # Иначе - генерируем новый дайджест
         else:
@@ -1195,12 +1232,15 @@ async def alternate_digest_job(context):
             cache["text"] = text
             cache["type"] = current_type
             cache["created_at"] = now
+            cache["data_hash"] = current_data_hash  # Сохраняем хеш данных
+            cache["last_data_check"] = now
 
-            logger.info(f"Дайджест сгенерирован и сохранен в кеш (тип: {current_type})")
+            logger.info(f"Дайджест сгенерирован и сохранен в кеш (тип: {current_type}, hash: {current_data_hash[:8]}...)")
 
         # === ОТПРАВКА ДАЙДЖЕСТА ===
         # Пропускаем редактирование если текст не изменился
-        if _digest_state.get("last_text") == text:
+        last_text = _digest_state.get("last_text")
+        if last_text == text:
             logger.debug("Текст дайджеста не изменился, пропускаем редактирование")
             return
 
@@ -3763,11 +3803,11 @@ async def main():
             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
         )
 
-        # Обновление дайджестов каждые 30 секунд (чтобы не превысить лимиты Telegram)
+        # Обновление дайджестов каждые 15 секунд (оптимизировано для минимальной нагрузки)
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(seconds=30),
-            first=datetime.datetime.now() + datetime.timedelta(seconds=20)
+            interval=datetime.timedelta(seconds=15),
+            first=datetime.datetime.now() + datetime.timedelta(seconds=10)
         )
 
         job_queue.run_daily(
