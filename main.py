@@ -733,6 +733,9 @@ async def update_all_mmr_job(context):
 
         logger.info(f"MMR обновлён для {success_count}/{len(users)} пользователей")
 
+        # Получаем digest_chat_id из конфига
+        digest_chat_id = get_config('digest_chat_id')
+
         # Отправляем уведомления о ранк-апах
         if digest_chat_id and rank_up_users:
             from dota_mmr import generate_start_card
