@@ -81,6 +81,7 @@ def get_digest_data_hash():
 
 _last_data_refresh = 0
 _data_refresh_interval = 300  # Обновлять данные каждые 5 минут
+DIGEST_DATA_REFRESH_INTERVAL = 3600  # Обновлять данные дайджеста раз в час
 
 _rate_limit_until = 0  # Unix timestamp - skip API calls until this time after 429
 RATE_LIMIT_COOLDOWN = 60  # 60 seconds cooldown after hitting rate limit
