@@ -377,9 +377,8 @@ async def announce_weekly_mmr_winner(bot):
     MSK = timezone(timedelta(hours=3))
     today_msk = dt.now(MSK)
     monday_msk = today_msk - timedelta(days=today_msk.weekday())
-    # Use previous week's Monday as the week to announce
-    previous_monday_msk = monday_msk - timedelta(days=7)
-    current_week_start = previous_monday_msk.strftime("%Y-%m-%d")
+    # current_week_start is the Monday of the current week (used to detect previous week's players)
+    current_week_start = monday_msk.strftime("%Y-%m-%d")
 
     last_announced = get_config('mmr_week_top_announced')
     if last_announced == current_week_start:
@@ -424,10 +423,13 @@ async def announce_weekly_mmr_winner(bot):
         logger.info("announce_weekly_mmr_winner: в понедельник stale_count == 0 - данных за новую неделю ещё нет")
         return False
 
-    # В остальные дни - если старых данных нет и это не fallback из понедельника, пропускаем
-    if not is_monday and stale_count == 0 and last_announced == current_week_start:
-        logger.info("announce_weekly_mmr_winner: не понедельник, старых данных нет, пропускаем")
-        return False
+    # Поздравление должно отправляться ТОЛЬКО в понедельник
+    # В остальные дни - только если это fallback (window > 23:00 and поздравление не отправилось)
+    if not is_monday:
+        # Проверяем, что это fallback - окно уже прошло и поздравление всё ещё не отправлено
+        if today_msk.hour < 23:
+            logger.info("announce_weekly_mmr_winner: не понедельник и до 23:00 - ждём понедельника")
+            return False
 
     digest_chat_id = get_config('digest_chat_id')
     if not digest_chat_id:
