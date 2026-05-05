@@ -1048,6 +1048,7 @@ async def alternate_digest_job(context):
             logger.info(f"alternate_digest_job: digest_chat_id = {digest_chat_id}")
             if not digest_chat_id:
                 logger.info("Чат для дайджеста не настроен")
+                set_config('alternate_digest_creating', '')  # очищаем флаг
                 return
 
             bot = context.application.bot
@@ -1280,6 +1281,7 @@ async def alternate_digest_job(context):
         last_text = _digest_state.get("last_text")
         if last_text == text:
             logger.debug("Текст дайджеста не изменился, пропускаем редактирование")
+            set_config('alternate_digest_creating', '')  # очищаем флаг
             return
 
         # Пробуем отредактировать существующее сообщение
@@ -1369,6 +1371,7 @@ async def alternate_digest_job(context):
             time_since_last = time.time() - last_created
             if time_since_last < 60:
                 logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
+                set_config('alternate_digest_creating', '')  # очищаем флаг
                 return
 
             # Генерируем или используем кешированный геро-мета баннер (обновление раз в 48 часов)
@@ -1524,6 +1527,8 @@ async def alternate_digest_job(context):
 
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
+        # Очищаем флаг в случае ошибки
+        set_config('alternate_digest_creating', '')
 
 # =====================
 # ROLL SYSTEM
