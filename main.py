@@ -377,7 +377,9 @@ async def announce_weekly_mmr_winner(bot):
     MSK = timezone(timedelta(hours=3))
     today_msk = dt.now(MSK)
     monday_msk = today_msk - timedelta(days=today_msk.weekday())
-    current_week_start = monday_msk.strftime("%Y-%m-%d")
+    # Use previous week's Monday as the week to announce
+    previous_monday_msk = monday_msk - timedelta(days=7)
+    current_week_start = previous_monday_msk.strftime("%Y-%m-%d")
 
     last_announced = get_config('mmr_week_top_announced')
     if last_announced == current_week_start:
