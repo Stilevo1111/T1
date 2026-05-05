@@ -76,17 +76,14 @@ ROLE_MAPPING = {
         7,   # Earthshaker
         14,  # Pudge
         16,  # Sand King
-        28,  # Slardar (уже в керри, но может быть хардлейнером)
         29,  # Tidehunter
         33,  # Doom
         38,  # Beastmaster
         49,  # Dragon Knight
         51,  # Clockwerk
         65,  # Batrider
-        69,  # Doom (дубликат)
         96,  # Centaur Warrunner
         102, # Abaddon
-        107, # Earthshaker (дубликат)
         108, # Underlord
         110, # Phoenix
         123, # Hoodwink
@@ -160,10 +157,8 @@ ROLE_MAPPING = {
         78,  # Lion
         79,  # Shadow Demon
         87,  # Disruptor
-        103, # Elder Titan (дубликат)
         104, # Legion Commander
         111, # Oracle
-        112, # Winter Wyvern (дубликат)
         119  # Dark Willow
     ]
 }
@@ -232,15 +227,8 @@ async def get_dota_data(tier_filter=None, days=7):
         if tier_filter is None:
             return hero_stats
 
-        # Filter heroes by minimum professional picks for reliability
-        filtered_heroes = []
-        for hero in hero_stats:
-            pro_pick = hero.get('pro_pick', 0)
-            if pro_pick >= 25:  # Minimum 25 pro picks for statistical significance
-                filtered_heroes.append(hero)
-
-        logger.info(f"Filtered to {len(filtered_heroes)} heroes with >=25 pro picks")
-        return filtered_heroes
+        # For tier filtering, calculate stats from filtered matches
+        return await _get_hero_stats_by_tier(tier_filter)
 
     except Exception as e:
         logger.error(f"OpenDota API error: {e}")
@@ -320,22 +308,36 @@ async def _get_hero_stats_by_tier(tier_filter):
                         'id': hero_id,
                         'pro_win': 0,
                         'pro_pick': 0,
-                        'pro_ban': 0
+                        'pro_ban': 0,
+                        '1_pick': 0, '1_win': 0,  # carry
+                        '2_pick': 0, '2_win': 0,  # mid
+                        '3_pick': 0, '3_win': 0,  # offlane
+                        '4_pick': 0, '4_win': 0,  # soft support
+                        '5_pick': 0, '5_win': 0   # hard support
                     }
-                
+
                 hero_stats[hero_id]['pro_pick'] += 1
-                
-                # Determine if player won
+
+                # Determine position (1-5)
                 player_slot = player.get('player_slot', 0)
+                position = (player_slot % 128) + 1  # 0->1, 1->2, ..., 4->5
+
+                # Ensure position is valid
+                if 1 <= position <= 5:
+                    hero_stats[hero_id][f'{position}_pick'] += 1
+
+                # Determine if player won
                 is_radiant = player_slot < 128
                 player_won = (is_radiant and radiant_win) or (not is_radiant and not radiant_win)
-                
+
                 if player_won:
                     hero_stats[hero_id]['pro_win'] += 1
+                    if 1 <= position <= 5:
+                        hero_stats[hero_id][f'{position}_win'] += 1
         
-        # Convert to list and add hero metadata
-        result = list(hero_stats.values())
-        
+        # Convert to list and filter by minimum picks
+        result = [hero for hero in hero_stats.values() if hero['pro_pick'] >= 25]
+
         # Fetch hero metadata (names, images)
         heroes_response = requests.get(
             "https://api.opendota.com/api/heroes",
@@ -542,7 +544,7 @@ def create_infographic(hero_stats, tier_filter=None):
                 role_heroes.append(hero_copy)
 
         # Filter heroes with minimum picks for this position
-        MIN_POSITION_PICKS = 10  # Minimum picks for position-specific stats
+        MIN_POSITION_PICKS = 25  # Minimum picks for position-specific stats
         role_heroes = [h for h in role_heroes if h.get('pro_pick', 0) >= MIN_POSITION_PICKS]
 
         # Calculate win rate for this position
