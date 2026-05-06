@@ -1080,7 +1080,9 @@ def update_user_mmr(telegram_id: int) -> dict:
             "rank_tier": new_rank_tier,
             "wins": stats.get("wins", 0),
             "losses": stats.get("losses", 0),
-            "mmr": stats["mmr"]
+            "mmr": stats["mmr"],
+            "avatar": stats.get("avatar"),
+            "steam_nickname": stats.get("nickname")
         })
 
         return {"success": True, "rank_up": rank_up}
