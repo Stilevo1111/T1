@@ -82,6 +82,7 @@ def get_digest_data_hash():
 _last_data_refresh = 0
 _data_refresh_interval = 300  # Обновлять данные каждые 5 минут
 DIGEST_DATA_REFRESH_INTERVAL = 3600  # Обновлять данные дайджеста раз в час
+HERO_META_REFRESH_INTERVAL = 3600  # Обновлять мета-баннер героя раз в час
 
 _rate_limit_until = 0  # Unix timestamp - skip API calls until this time after 429
 RATE_LIMIT_COOLDOWN = 60  # 60 seconds cooldown after hitting rate limit
@@ -1079,7 +1080,7 @@ async def alternate_digest_job(context):
         # 2. Если данные изменились - генерируем
         elif data_changed:
             should_regenerate = True
-            logger.info(f"Данные дайджеста изменились (hash: {current_data_hash[:8]}...), обновляем")
+            logger.info(f"Данные дайджеста изменились (hash: {current_data_hash[:8] if current_data_hash else 'None'}...), обновляем")
 
         # 3. Если кеш устарел (TTL) - генерируем новый
         elif now - cache["created_at"] > cache["cache_ttl"]:
@@ -1281,7 +1282,7 @@ async def alternate_digest_job(context):
             cache["data_hash"] = current_data_hash  # Сохраняем хеш данных
             cache["last_data_check"] = now
 
-            logger.info(f"Дайджест сгенерирован и сохранен в кеш (тип: {current_type}, hash: {current_data_hash[:8]}...)")
+            logger.info(f"Дайджест сгенерирован и сохранен в кеш (тип: {current_type}, hash: {current_data_hash[:8] if current_data_hash else 'None'}...)")
 
         # === ОТПРАВКА ДАЙДЖЕСТА ===
         # Пропускаем редактирование если текст не изменился
