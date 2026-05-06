@@ -1176,8 +1176,8 @@ def generate_start_card(
                     # Gold border like /profil
                     draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(215, 175, 85), width=int(4*scale))
                     img.paste(avatar, (avatar_x, avatar_y))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Exception loading avatar: {e}")
         
         if not avatar_url:
             draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(215, 175, 85), width=int(4*scale))
@@ -1244,60 +1244,64 @@ def generate_start_card(
             if star == 0:
                 star = 5
             
-            # Прямые рабочие ссылки на иконки рангов
+            # Прямые рабочие ссылки на иконки рангов (обновлено для fandom)
             rank_urls = {
-                (1, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/85/SeasonalRank1-1.png/140px-SeasonalRank1-1.png?version=ce7c6eea36971495cdad1f06e7ef3709",
-                (1, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/e/ee/SeasonalRank1-2.png/140px-SeasonalRank1-2.png?version=094dc352040053ea02f1bbb82a4591f1",
-                (1, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/0/05/SeasonalRank1-3.png/140px-SeasonalRank1-3.png?version=529b1f8ac23899b14bb30b03036d277e",
-                (1, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/6/6d/SeasonalRank1-4.png/140px-SeasonalRank1-4.png?version=e5fa236efcfc108987fac807d890771d",
-                (1, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/2/2b/SeasonalRank1-5.png/140px-SeasonalRank1-5.png?version=c33004c635c667fa661fad0e2593869e",
-                
-                (2, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/c/c7/SeasonalRank2-1.png/140px-SeasonalRank2-1.png?version=832ba8a7042450ebf2cee3209e2cfac8",
-                (2, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/2/2c/SeasonalRank2-2.png/140px-SeasonalRank2-2.png?version=be558245d8ddcb6479204bd99ca177cc9",
-                (2, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/f/f5/SeasonalRank2-3.png/140px-SeasonalRank2-3.png?version=38233a7123c0b90df8872a6b9a04a87c",
-                (2, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/b/b4/SeasonalRank2-4.png/140px-SeasonalRank2-4.png?version=879bc97952e7acbbb4cb76df1618757a",
-                (2, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/3/32/SeasonalRank2-5.png/140px-SeasonalRank2-5.png?version=5b99be61ba7db96bfdc03a9fef6f1fb4",
-                
-                (3, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/82/SeasonalRank3-1.png/140px-SeasonalRank3-1.png?version=b9a19f0189fe0236ee00fb94cc97a693",
-                (3, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/6/6e/SeasonalRank3-2.png/140px-SeasonalRank3-2.png?version=8e03bbb7be665bcadcb0913eaecee2c0",
-                (3, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/6/67/SeasonalRank3-3.png/140px-SeasonalRank3-3.png?version=59df65f46dbfc05c7dcb5d877aa2f37c",
-                (3, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/87/SeasonalRank3-4.png/140px-SeasonalRank3-4.png?version=8582a808c060a4df95385c98844e666b",
-                (3, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/b/b1/SeasonalRank3-5.png/140px-SeasonalRank3-5.png?version=4f0db8503ae24ddd488374b6e5968daf",
-                
-                (4, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/7/76/SeasonalRank4-1.png/140px-SeasonalRank4-1.png?version=7a9db7f22e02de4a58923f40da38b9db",
-                (4, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/87/SeasonalRank4-2.png/140px-SeasonalRank4-2.png?version=358a9043ef264bcb2ea3424339ac671a",
-                (4, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/6/60/SeasonalRank4-3.png/140px-SeasonalRank4-3.png?version=3e5c81e69f244b6028ef27beb0fc3ec6",
-                (4, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/4/4a/SeasonalRank4-4.png/140px-SeasonalRank4-4.png?version=aacf3fb098fb8de1c514d73b7a0f63c7",
-                (4, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/a/a3/SeasonalRank4-5.png/140px-SeasonalRank4-5.png?version=7b207bd7de3fe423117f6ea7331dfc88",
-                
-                (5, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/7/79/SeasonalRank5-1.png/140px-SeasonalRank5-1.png?version=7742371d2571ee59b59c6ac14e5688fa",
-                (5, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/5/52/SeasonalRank5-2.png/140px-SeasonalRank5-2.png?version=204da548015c1947ce514c8ac81c99ea",
-                (5, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/88/SeasonalRank5-3.png/140px-SeasonalRank5-3.png?version=990f1323b00256eb84002ab050b9188b",
-                (5, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/2/25/SeasonalRank5-4.png/140px-SeasonalRank5-4.png?version=0248fc56651cc810ddceca901386322a",
-                (5, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/8e/SeasonalRank5-5.png/140px-SeasonalRank5-5.png?version=14dc5ce669daf93b178350a0b3ee27e1",
-                
-                (6, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/e/e0/SeasonalRank6-1.png/140px-SeasonalRank6-1.png?version=56f4415e7d8fc83168c03f374e7babbc",
-                (6, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/1/1c/SeasonalRank6-2.png/140px-SeasonalRank6-2.png?version=87515796db90be81886c62cad9faf87f",
-                (6, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/d/da/SeasonalRank6-3.png/140px-SeasonalRank6-3.png?version=190512e1572f037b0936f8b1a4bb55b6",
-                (6, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/d/db/SeasonalRank6-4.png/140px-SeasonalRank6-4.png?version=aba16fcff849cb2495f1ddc25bfefd74",
-                (6, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/4/47/SeasonalRank6-5.png/140px-SeasonalRank6-5.png?version=1ae82223757486aa55461a82fa09ac6a",
-                
-                (7, 1): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/b/b7/SeasonalRank7-1.png/140px-SeasonalRank7-1.png?version=8cd74e57b63ceb730d7b36a8f6589b9f",
-                (7, 2): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/8/8f/SeasonalRank7-2.png/140px-SeasonalRank7-2.png?version=59d74d77a554732a99debd54d1b1b641",
-                (7, 3): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/f/fd/SeasonalRank7-3.png/140px-SeasonalRank7-3.png?version=12f7e65e8c858b1d39e2a4a17bc85522",
-                (7, 4): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/1/13/SeasonalRank7-4.png/140px-SeasonalRank7-4.png?version=247aba452307e17cd6f647321450b8a5",
-                (7, 5): "https://gamepedia.cursecdn.com/dota2_gamepedia/thumb/3/33/SeasonalRank7-5.png/140px-SeasonalRank7-5.png?version=0db40597d94b70e3619c2a3e80317e94",
+                (1, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/85/SeasonalRank1-1.png",
+                (1, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/e/ee/SeasonalRank1-2.png",
+                (1, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/0/05/SeasonalRank1-3.png",
+                (1, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/6/6d/SeasonalRank1-4.png",
+                (1, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/2/2b/SeasonalRank1-5.png",
+
+                (2, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/c/c7/SeasonalRank2-1.png",
+                (2, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/2/2c/SeasonalRank2-2.png",
+                (2, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/f/f5/SeasonalRank2-3.png",
+                (2, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/b/b4/SeasonalRank2-4.png",
+                (2, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/3/32/SeasonalRank2-5.png",
+
+                (3, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/82/SeasonalRank3-1.png",
+                (3, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/6/6e/SeasonalRank3-2.png",
+                (3, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/6/67/SeasonalRank3-3.png",
+                (3, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/87/SeasonalRank3-4.png",
+                (3, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/b/b1/SeasonalRank3-5.png",
+
+                (4, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/7/76/SeasonalRank4-1.png",
+                (4, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/87/SeasonalRank4-2.png",
+                (4, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/6/60/SeasonalRank4-3.png",
+                (4, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/4/4a/SeasonalRank4-4.png",
+                (4, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/a/a3/SeasonalRank4-5.png",
+
+                (5, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/7/79/SeasonalRank5-1.png",
+                (5, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/5/52/SeasonalRank5-2.png",
+                (5, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/88/SeasonalRank5-3.png",
+                (5, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/2/25/SeasonalRank5-4.png",
+                (5, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/8e/SeasonalRank5-5.png",
+
+                (6, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/e/e0/SeasonalRank6-1.png",
+                (6, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/1/1c/SeasonalRank6-2.png",
+                (6, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/d/da/SeasonalRank6-3.png",
+                (6, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/d/db/SeasonalRank6-4.png",
+                (6, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/4/47/SeasonalRank6-5.png",
+
+                (7, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/b/b7/SeasonalRank7-1.png",
+                (7, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/8f/SeasonalRank7-2.png",
+                (7, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/f/fd/SeasonalRank7-3.png",
+                (7, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/1/13/SeasonalRank7-4.png",
+                (7, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/3/33/SeasonalRank7-5.png",
             }
             
             rank_url = rank_urls.get((tier, star))
             if rank_url:
                 try:
+                    logger.info(f"Loading rank icon from: {rank_url}")
                     resp = requests.get(rank_url, timeout=4)
+                    logger.info(f"Rank icon request status: {resp.status_code}")
                     if resp.status_code == 200:
                         rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
                         rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
-                except Exception:
-                    pass
+                    else:
+                        logger.warning(f"Failed to load rank icon: HTTP {resp.status_code}")
+                except Exception as e:
+                    logger.warning(f"Exception loading rank icon: {e}")
         
         # Username/nickname - white color (always show for all users)
         username_y = info_y
