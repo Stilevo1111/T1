@@ -767,7 +767,8 @@ async def update_all_mmr_job(context):
                     )
 
                     if card_data:
-                        text = f"🎉 {username} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
+                        name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id else username
+                        text = f"🎉 {name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
                         await context.bot.send_photo(chat_id=digest_chat_id, photo=card_data, caption=text, parse_mode="HTML")
                     else:
                         # Fallback
