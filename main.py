@@ -334,8 +334,8 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from datetime import datetime as dt, timezone, timedelta
         MSK = timezone(timedelta(hours=3))
         today_msk = dt.now(MSK)
-        monday_msk = today_msk - timedelta(days=today_msk.weekday())
-        current_week_start = monday_msk.strftime("%Y-%m-%d")
+        sunday_msk = today_msk - timedelta(days=(today_msk.weekday() + 1) % 7)
+        current_week_start = sunday_msk.strftime("%Y-%m-%d")
 
         last_announced = get_config('mmr_week_top_announced')
         digest_chat_id = get_config('digest_chat_id')
@@ -377,9 +377,9 @@ async def announce_weekly_mmr_winner(bot):
     from datetime import datetime as dt, timezone, timedelta
     MSK = timezone(timedelta(hours=3))
     today_msk = dt.now(MSK)
-    monday_msk = today_msk - timedelta(days=today_msk.weekday())
-    # current_week_start is the Monday of the current week (used to detect previous week's players)
-    current_week_start = monday_msk.strftime("%Y-%m-%d")
+    sunday_msk = today_msk - timedelta(days=(today_msk.weekday() + 1) % 7)
+    # current_week_start is the Sunday of the current week (used to detect previous week's players)
+    current_week_start = sunday_msk.strftime("%Y-%m-%d")
 
     last_announced = get_config('mmr_week_top_announced')
     if last_announced == current_week_start:
@@ -417,19 +417,19 @@ async def announce_weekly_mmr_winner(bot):
 
     # Если stale_count == 0 НО last_announced != current_week_start - это fallback из понедельника
     # (поздравление не успело отправиться, но данные уже сброшены)
-    is_monday = today_msk.weekday() == 0
+    is_sunday = today_msk.weekday() == 6
 
-    # В понедельник проверяем, что есть игроки с новыми данными
-    if is_monday and stale_count == 0:
-        logger.info("announce_weekly_mmr_winner: в понедельник stale_count == 0 - данных за новую неделю ещё нет")
+    # В воскресенье проверяем, что есть игроки с новыми данными
+    if is_sunday and stale_count == 0:
+        logger.info("announce_weekly_mmr_winner: в воскресенье stale_count == 0 - данных за новую неделю ещё нет")
         return False
 
-    # Поздравление должно отправляться ТОЛЬКО в понедельник
+    # Поздравление должно отправляться ТОЛЬКО в воскресенье
     # В остальные дни - только если это fallback (window > 23:00 and поздравление не отправилось)
-    if not is_monday:
+    if not is_sunday:
         # Проверяем, что это fallback - окно уже прошло и поздравление всё ещё не отправлено
         if today_msk.hour < 23:
-            logger.info("announce_weekly_mmr_winner: не понедельник и до 23:00 - ждём понедельника")
+            logger.info("announce_weekly_mmr_winner: не воскресенье и до 23:00 - ждём воскресенья")
             return False
 
     digest_chat_id = get_config('digest_chat_id')
