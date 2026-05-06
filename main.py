@@ -529,11 +529,11 @@ async def announce_weekly_mmr_winner(bot):
 
     # Generate card with avatar and rank
     avatar_url = winner.get('avatar')
-    # Get from OpenDota if missing
-    if not avatar_url and winner.get('steam_id'):
-        stats = get_player_stats(winner.get('steam_id'))
-        if stats:
-            avatar_url = stats.get('avatar')
+    # Always try to get fresh avatar from OpenDota for champion
+    if winner.get('steam_id'):
+        fresh_stats = get_player_stats(winner.get('steam_id'), use_cache=False)
+        if fresh_stats and fresh_stats.get('avatar'):
+            avatar_url = fresh_stats.get('avatar')
 
     card_data = generate_start_card(
         avatar_url=avatar_url,
