@@ -425,12 +425,9 @@ async def announce_weekly_mmr_winner(bot):
         return False
 
     # Поздравление должно отправляться ТОЛЬКО в воскресенье
-    # В остальные дни - только если это fallback (window > 23:00 and поздравление не отправилось)
     if not is_sunday:
-        # Проверяем, что это fallback - окно уже прошло и поздравление всё ещё не отправлено
-        if today_msk.hour < 23:
-            logger.info("announce_weekly_mmr_winner: не воскресенье и до 23:00 - ждём воскресенья")
-            return False
+        logger.info("announce_weekly_mmr_winner: не воскресенье - ждём воскресенья")
+        return False
 
     digest_chat_id = get_config('digest_chat_id')
     if not digest_chat_id:
@@ -531,9 +528,13 @@ async def announce_weekly_mmr_winner(bot):
     avatar_url = winner.get('avatar')
     # Always try to get fresh avatar from OpenDota for champion
     if winner.get('steam_id'):
+        logger.info(f"Fetching fresh avatar for champion {winner.get('steam_nickname')}")
         fresh_stats = get_player_stats(winner.get('steam_id'), use_cache=False)
         if fresh_stats and fresh_stats.get('avatar'):
             avatar_url = fresh_stats.get('avatar')
+            logger.info(f"Using fresh avatar for champion: {avatar_url}")
+        else:
+            logger.info(f"No fresh avatar available for champion, using DB: {avatar_url}")
 
     card_data = generate_start_card(
         avatar_url=avatar_url,
