@@ -200,19 +200,16 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     )
     
     return output
-async def get_dota_data(tier_filter=None, days=7):
-
+async def get_dota_data(days=7):
     """Получение статистики героев из OpenDota heroStats API
 
     Args:
-        tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
-        days: Number of days to look back (default 7 for weekly stats)
+        days: Number of days to look back (default 7 for weekly stats) - не используется
 
     Returns:
-        Hero statistics from OpenDota heroStats API with built-in role statistics
+        Hero statistics from OpenDota heroStats API
     """
     try:
-        # Use heroStats API which has built-in role statistics
         response = requests.get("https://api.opendota.com/api/heroStats", timeout=30)
         if response.status_code != 200:
             logger.error(f"heroStats API error: HTTP {response.status_code}")
@@ -223,224 +220,22 @@ async def get_dota_data(tier_filter=None, days=7):
             logger.error("No hero stats received from API")
             return None
 
-        # If no tier filtering needed, return all data
-        if tier_filter is None:
-            return hero_stats
-
-        # For tier filtering, calculate stats from filtered matches
-        return await _get_hero_stats_by_tier(tier_filter)
-
+        return hero_stats
     except Exception as e:
         logger.error(f"OpenDota API error: {e}")
         return None
 
-async def _get_hero_stats_by_tier(tier_filter):
-    """Calculate hero statistics from pro matches filtered by tournament tier.
-    
-    tier_filter: 1 for TI1-2 (tier 1 or 2 leagues), 2 for TI3+ (tier 3+ leagues)
-    """
-    try:
-        # Fetch recent pro matches (last 30 days worth)
-        response = requests.get(
-            "https://api.opendota.com/api/proMatches",
-            params={"limit": 500},
-            timeout=30
-        )
-        if response.status_code != 200:
-            logger.error(f"Failed to fetch pro matches: {response.status_code}")
-            return []
-        
-        pro_matches = response.json()
-        
-        # Group matches by league and determine tier
-        league_tiers = {}
-        tier1_2_match_ids = set()
-        tier3plus_match_ids = set()
-        
-        for match in pro_matches:
-            league_id = match.get('leagueid')
-            if not league_id:
-                continue
-                
-            # Determine tier if not already cached
-            if league_id not in league_tiers:
-                league_tier = _get_league_tier(league_id)
-                league_tiers[league_id] = league_tier
-            else:
-                league_tier = league_tiers[league_id]
-            
-            match_id = match.get('match_id')
-            if league_tier <= 2:
-                tier1_2_match_ids.add(match_id)
-            else:
-                tier3plus_match_ids.add(match_id)
-        
-        # Select appropriate match IDs based on filter
-        selected_match_ids = tier1_2_match_ids if tier_filter == 1 else tier3plus_match_ids
-        
-        if not selected_match_ids:
-            logger.warning(f"No matches found for tier {tier_filter} filter")
-            return []
-        
-        # Calculate hero statistics from filtered matches
-        hero_stats = {}
-        
-        for match in pro_matches:
-            match_id = match.get('match_id')
-            if match_id not in selected_match_ids:
-                continue
-            
-            # Process each player in the match
-            players = match.get('players', [])
-            if not players and 'radiant_team' in match:
-                # Some match formats have different player structures
-                continue
-            
-            radiant_win = match.get('radiant_win', False)
-            
-            for player in players:
-                hero_id = player.get('hero_id')
-                if not hero_id:
-                    continue
-                
-                if hero_id not in hero_stats:
-                    hero_stats[hero_id] = {
-                        'id': hero_id,
-                        'pro_win': 0,
-                        'pro_pick': 0,
-                        'pro_ban': 0,
-                        '1_pick': 0, '1_win': 0,  # carry
-                        '2_pick': 0, '2_win': 0,  # mid
-                        '3_pick': 0, '3_win': 0,  # offlane
-                        '4_pick': 0, '4_win': 0,  # soft support
-                        '5_pick': 0, '5_win': 0   # hard support
-                    }
 
-                hero_stats[hero_id]['pro_pick'] += 1
-
-                # Determine position (1-5)
-                player_slot = player.get('player_slot', 0)
-                position = (player_slot % 128) + 1  # 0->1, 1->2, ..., 4->5
-
-                # Ensure position is valid
-                if 1 <= position <= 5:
-                    hero_stats[hero_id][f'{position}_pick'] += 1
-
-                # Determine if player won
-                is_radiant = player_slot < 128
-                player_won = (is_radiant and radiant_win) or (not is_radiant and not radiant_win)
-
-                if player_won:
-                    hero_stats[hero_id]['pro_win'] += 1
-                    if 1 <= position <= 5:
-                        hero_stats[hero_id][f'{position}_win'] += 1
-        
-        # Convert to list and filter by minimum picks
-        result = [hero for hero in hero_stats.values() if hero['pro_pick'] >= 25]
-
-        # Fetch hero metadata (names, images)
-        heroes_response = requests.get(
-            "https://api.opendota.com/api/heroes",
-            timeout=30
-        )
-        if heroes_response.status_code == 200:
-            heroes_data = heroes_response.json()
-            hero_map = {h['id']: h for h in heroes_data}
-            
-            for hero_stat in result:
-                hero_id = hero_stat['id']
-                if hero_id in hero_map:
-                    hero_info = hero_map[hero_id]
-                    hero_stat['localized_name'] = hero_info.get('localized_name', 'Unknown')
-                    hero_stat['name'] = hero_info.get('name', '')
-                    hero_stat['img'] = hero_info.get('img', '')
-                    hero_stat['icon'] = hero_info.get('icon', '')
-        
-        logger.info(f"Calculated hero stats for tier {tier_filter} from {len(selected_match_ids)} matches")
-        return result
-        
-    except Exception as e:
-        logger.error(f"Error calculating tier-filtered hero stats: {e}", exc_info=True)
-        return []
-
-def _get_league_tier(league_id):
-    """Get league tier (1-8) for a league ID.
-    
-    Uses cached data and falls back to API call.
-    Tier 1-2 = TI1-2 (major tournaments), Tier 3+ = smaller tournaments.
-    """
-    # Common league tiers cache (major tournaments)
-    known_tiers = {
-        # TI tournaments
-        2: 1,   # The International
-        22: 1,  # TI2
-        64: 1,  # TI3
-        113: 1, # TI4
-        257: 1, # TI5
-        334: 1, # TI6
-        450: 1, # TI7
-        568: 1, # TI8
-        686: 1, # TI9
-        805: 1, # TI10
-        1243: 1, # TI11
-        1361: 1, # TI12
-        
-        # Major tournaments (Tier 1)
-        16: 1,  # Frankfurt Major
-        35: 1,  # Shanghai Major
-        67: 1,  # Manila Major
-        121: 1, # Boston Major
-        194: 1, # Kiev Major
-        282: 1, # Boston Major 2017
-        377: 1, # Kiev Major 2017
-        476: 1, # Birmingham Major 2018
-        583: 1, # Bucharest Major 2018
-        698: 1, # Chongqing Major 2019
-        815: 1, # Kuala Lumpur Major 2019
-        932: 1, # Leipzig Major 2019
-        1047: 1, # AniMajor 2021
-        1155: 1, # Stockholm Major 2021
-        1263: 1, # Arlington Major 2022
-        1371: 1, # Riyadh Major 2023
-        
-        # DPC Tours (Tier 1-2)
-        17: 1,  # DPC 2018-2019
-        36: 1,  # DPC 2019-2020
-        122: 1, # DPC 2021
-        283: 1, # DPC 2022
-        378: 1, # DPC 2023
-        477: 1, # DPC 2023-2024
-        
-        # Regional leagues (Tier 2-3)
-        13: 2,  # StarLadder
-        24: 2,  # EPIC League
-        351: 2, # Dota Pit
-        542: 2, # Ultras Dota Pro
-    }
-    
-    if league_id in known_tiers:
-        return known_tiers[league_id]
-    
-    # Default to Tier 3 for unknown leagues (conservative)
-    return 3
-
-def create_infographic(hero_stats, tier_filter=None):
+def create_infographic(hero_stats):
     """Создайте инфографику 5x5 с лучшими героями по ролям (на 0.5X больше)
     
     Args:
-        hero_stats: List of hero statistics
-        tier_filter: None (all pro), 1 (TI1-2), or 2 (TI3+) tournament tiers
+        hero_stats: List of hero statistics from OpenDota heroStats API
     
     Note: Statistics are based on professional matches from OpenDota.
-    The /heroStats endpoint does not support filtering by tournament tier (TI1-2 vs TI3+).
-    For Tier 1-2 only statistics, a different approach is used:
-    - Fetch pro matches and filter by league.tier
-    - Calculate win rates from filtered matches
-    
-    Returns:
-        bytes: PNG image bytes suitable for embedding in digests
+    The /heroStats endpoint provides built-in role statistics.
     """
-    logger.info(f"Starting create_infographic generation (tier_filter={tier_filter})")
+    logger.info("Starting create_infographic generation")
     if not os.path.exists(BACKGROUND_PATH):
 
         base = Image.new("RGBA", (1200, 800), (25, 25, 35, 255))
@@ -471,22 +266,7 @@ def create_infographic(hero_stats, tier_filter=None):
     draw.text((text_x, text_y), date_text, fill=(255, 255, 255), font=date_font)
 
 
-    # Add update date in top right corner
-    from datetime import datetime, timezone, timedelta
-    MSK = timezone(timedelta(hours=3))
-    now_msk = datetime.now(MSK)
-    date_text = now_msk.strftime("%d.%m.%Y %H:%M")
-    try:
-        date_font = ImageFont.truetype(FONT_PATH, 24)
-    except:
-        date_font = ImageFont.load_default()
 
-    # Position in top right
-    bbox = draw.textbbox((0, 0), date_text, font=date_font)
-    text_width = bbox[2] - bbox[0]
-    text_x = bg_width - text_width - 20
-    text_y = 20
-    draw.text((text_x, text_y), date_text, fill=(255, 255, 255), font=date_font)
 
     # ╨в╨╡╨║╤Б╤В ╨┐╨░╤В╤З╨░ ╤Г╨┤╨░╨╗╤С╨╜ (╨▒╨╛╨╗╤М╤И╨╡ ╨╜╨╡ ╨╜╤Г╨╢╨╡╨╜)
 
@@ -532,63 +312,52 @@ def create_infographic(hero_stats, tier_filter=None):
 
     start_y = margin_y
     
-    # ╨Ц╨╕╤А╨╜╤Л╨╣ ╤И╤А╨╕╤Д╤В ╨┤╨╗╤П WINRATE
-    try:
-        font_wr = ImageFont.truetype(FONT_PATH, 27)
-        # ╨Я╤А╨╛╨▒╤Г╨╡╨╝ ╨╜╨░╨╣╤В╨╕ ╨╢╨╕╤А╨╜╤Л╨╣ ╨▓╨░╤А╨╕╨░╨╜╤В
-        for bold_name in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
-            try:
-                font_wr = ImageFont.truetype(bold_name, 20)
-                break
-            except:
-                continue
-    except:
-        font_wr = ImageFont.load_default()
-
-    # Define roles with their corresponding heroStats position numbers
-    ROLE_POSITIONS = {
-        "КЕРРИ": 1,   # Position 1 in heroStats - carry on safe lane
-        "МИДЕР": 2,    # Position 2 in heroStats - mid lane
-        "ХАРДЛЕЙНЕР": 3,    # Position 3 in heroStats - off lane/hard lane
-        "ЧАСТИЧНАЯ ПОДДЕРЖКА": 4,   # Position 4 in heroStats - soft support
-        "ПОЛНАЯ ПОДДЕРЖКА": 5    # Position 5 in heroStats - hard support
-    }
+    # ╨Ц╨╕╤А╨╜╤Л╨╣ ╤И╤А╨╕╤Д╤В ╨┤╨╗╤П WINRATE
 
-    for col_idx, (role_name, position) in enumerate(ROLE_POSITIONS.items()):
+    try:
 
-        # Get all heroes that have stats for this position and are in the role mapping
-        role_heroes = []
-        role_hero_ids = set(ROLE_MAPPING.get(role_name, []))
-        for hero in hero_stats:
-            if hero.get('id') not in role_hero_ids:
+        font_wr = ImageFont.truetype(FONT_PATH, 27)
+
+        # ╨Я╤А╨╛╨▒╤Г╨╡╨╝ ╨╜╨░╨╣╤В╨╕ ╨╢╨╕╤А╨╜╤Л╨╣ ╨▓╨░╤А╨╕╨░╨╜╤В
+
+        for bold_name in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
+
+            try:
+
+                font_wr = ImageFont.truetype(bold_name, 20)
+
+                break
+
+            except:
+
                 continue
-            pick_field = f"{position}_pick"
-            win_field = f"{position}_win"
 
-            # Check if hero has stats for this position
-            if hero.get(pick_field, 0) > 0:
-                # Create a copy of hero data with position-specific stats
-                hero_copy = hero.copy()
-                hero_copy['pro_pick'] = hero.get(pick_field, 0)
-                hero_copy['pro_win'] = hero.get(win_field, 0)
-                role_heroes.append(hero_copy)
+    except:
 
-        # Filter heroes with minimum picks for this position
-        MIN_POSITION_PICKS = 25  # Minimum picks for position-specific stats
-        role_heroes = [h for h in role_heroes if h.get('pro_pick', 0) >= MIN_POSITION_PICKS]
+        font_wr = ImageFont.load_default()
 
-        # Calculate win rate for this position
-        for hero in role_heroes:
-            pro_win = hero.get('pro_win', 0)
-            pro_pick = hero.get('pro_pick', 0)
-            hero['wr'] = (pro_win / pro_pick * 100) if pro_pick > 0 else 0
 
-        # Sort by win rate and take top 5
-        top_5 = sorted(role_heroes, key=lambda x: x['wr'], reverse=True)[:5]
-
-        for row_idx, hero in enumerate(top_5):
-            x = start_x + col_idx * (col_width + gap_between_cols)
-            y = start_y + row_idx * (row_height + gap_between_rows)
+
+    # Get top 25 heroes by overall win rate (not position-specific)
+    all_heroes = []
+    for hero in hero_stats:
+        pro_win = hero.get('pro_win', 0)
+        pro_pick = hero.get('pro_pick', 0)
+        if pro_pick >= 50:  # Minimum 50 picks for overall stats
+            hero_copy = hero.copy()
+            hero_copy['wr'] = (pro_win / pro_pick * 100) if pro_pick > 0 else 0
+            all_heroes.append(hero_copy)
+
+    # Sort by win rate and take top 25
+    top_25 = sorted(all_heroes, key=lambda x: x['wr'], reverse=True)[:25]
+
+    # Arrange in 5x5 grid
+    for idx, hero in enumerate(top_25):
+        col_idx = idx % 5
+        row_idx = idx // 5
+
+        x = start_x + col_idx * (col_width + gap_between_cols)
+        y = start_y + row_idx * (row_height + gap_between_rows)
             
             # ╨Ю╤А╨╕╨│╨╕╨╜╨░╨╗╤М╨╜╨░╤П ╨┐╤А╤П╨╝╨╛╤Г╨│╨╛╨╗╤М╨╜╨░╤П ╨╕╨║╨╛╨╜╨║╨░ ╤Б ╤Г╨▓╨╡╨╗╨╕╤З╨╡╨╜╨╕╨╡╨╝ 0.5X
             icon_url = "https://cdn.cloudflare.steamstatic.com" + hero['img']
