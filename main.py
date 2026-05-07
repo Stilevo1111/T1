@@ -1277,6 +1277,9 @@ async def alternate_digest_job(context):
         last_message_id = get_config('alternate_digest_message_id')
         logger.info(f"alternate_digest_job: last_message_id = {last_message_id}")
         logger.info(f"alternate_digest_job: text = {text[:100]}...")
+        
+        # Сохраняем ID текущего сообщения из БД для защиты от удаления в cleanup
+        stored_msg_id_for_cleanup = last_message_id
         edited = False
         # Try to edit existing message
         if last_message_id:
@@ -1484,9 +1487,14 @@ async def alternate_digest_job(context):
 
                             # Дополнительно: удаляем другие дайджесты бота в узком диапазоне ID вокруг только что созданного
                             # Это очищает возможные дубликаты от гонки
+                            # Но сохраняем текущее сообщение из БД (ID из момента входа в блок), чтобы не удалить его в гонке
                             try:
+                                saved_orig_msg_id = int(stored_msg_id_for_cleanup) if stored_msg_id_for_cleanup else None
                                 for offset in range(-20, 0):  # проверяем до 20 сообщений до
                                     old_id = msg.message_id + offset
+                                    # Не удаляем текущее сохранённое в БД сообщение
+                                    if saved_orig_msg_id and old_id == saved_orig_msg_id:
+                                        continue
                                     if old_id <= 0:
                                         continue
                                     try:
