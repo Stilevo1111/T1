@@ -1001,12 +1001,42 @@ async def alternate_digest_job(context):
         # Проверяем глобальный rate limit
         if is_rate_limited():
             logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
-            return
-        # Блокировка от параллельного запуска в рамках одного воркера (уменьшена до 5 сек для частых запусков)
-        last_run = _digest_state.get('last_run', 0)
-            if now - last_run < 5:
-                logger.debug(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
-                return
+        return
+
+    last_run = _digest_state.get('last_run', 0)
+    if now - last_run < 5:
+        logger.debug(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
+        return
+    _digest_state['last_run'] = now
+
+    # Проверяем, нужно ли обновить данные из БД (раз в час)
+    if now - _digest_state.get("last_data_update", 0) >= DIGEST_DATA_REFRESH_INTERVAL:
+        logger.info("alternate_digest_job: обновляем данные из БД")
+        # Сбрасываем кеш в database.py чтобы получить свежие данные
+        from database import user_cache
+        user_cache.set('digest_stats', None)
+        user_cache.set('dota_digest_stats', None)
+        # Очищаем локальный кеш дайджестов
+        _digest_state["digest_data"] = None
+        _digest_state["dota_data"] = None
+        _digest_state["last_data_update"] = now
+
+    # При первом запуске после деплоя сбрасываем тип на "0"
+    if _digest_state.get("last_data_update") == 0:
+        _digest_state["type"] = "0"
+        set_config('alternate_digest_type', "0")
+        logger.info("alternate_digest_job: сброшен тип на 0 после перезапуска")
+
+    logger.info("Запуск alternate_digest_job")
+
+    # Получаем ID чата для дайджеста (из кеша, не БД)
+    digest_chat_id = _digest_state.get("chat_id") or get_config('digest_chat_id')
+    if digest_chat_id:
+        _digest_state["chat_id"] = digest_chat_id
+    logger.info(f"alternate_digest_job: digest_chat_id = {digest_chat_id}")
+    if not digest_chat_id:
+        logger.info("Чат для дайджеста не настроен")
+        return
             _digest_state['last_run'] = now
 
             # Проверяем, нужно ли обновить данные из БД (раз в час)
