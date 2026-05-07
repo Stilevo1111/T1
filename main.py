@@ -998,9 +998,9 @@ async def alternate_digest_job(context):
     global _last_data_refresh, _data_refresh_interval
     now = time.time()
 
-        # Проверяем глобальный rate limit
-        if is_rate_limited():
-            logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
+    # Проверяем глобальный rate limit
+    if is_rate_limited():
+        logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
         return
 
     last_run = _digest_state.get('last_run', 0)
@@ -1033,11 +1033,12 @@ async def alternate_digest_job(context):
     digest_chat_id = _digest_state.get("chat_id") or get_config('digest_chat_id')
     if digest_chat_id:
         _digest_state["chat_id"] = digest_chat_id
-    logger.info(f"alternate_digest_job: digest_chat_id = {digest_chat_id}")
+        logger.info(f"alternate_digest_job: digest_chat_id = {digest_chat_id}")
     if not digest_chat_id:
         logger.info("Чат для дайджеста не настроен")
         return
-            _digest_state['last_run'] = now
+
+    _digest_state['last_run'] = now
 
             # Проверяем, нужно ли обновить данные из БД (раз в час)
             if now - _digest_state.get("last_data_update", 0) >= DIGEST_DATA_REFRESH_INTERVAL:
