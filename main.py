@@ -996,14 +996,13 @@ async def dota_digest_job(context):
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов (редактирование существующего, создание нового только при необходимости)"""
     global _last_data_refresh, _data_refresh_interval
-    now = time.time()
+    try:
+        now = time.time()
 
-    # Проверяем глобальный rate limit
-    if is_rate_limited():
-        logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
-        return
-
-
+        # Проверяем глобальный rate limit
+        if is_rate_limited():
+            logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
+            return
 
         # Блокировка от параллельного запуска в рамках одного воркера (уменьшена до 5 сек для частых запусков)
         async with _digest_state_lock:
@@ -1509,8 +1508,8 @@ async def alternate_digest_job(context):
                         logger.info("❌ Нет прав на удаление системного сообщения о закрепе")
                 except Exception as e:
                     logger.debug(f"Не удалось закрепить: {e}")
-            except Exception:
-                raise
+            finally:
+                pass
 
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
