@@ -1004,30 +1004,13 @@ async def alternate_digest_job(context):
             logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
             return
 
-        # Глобальная блокировка через БД (защита от параллельных воркеров)
-        creating_flag = get_config('alternate_digest_creating')
-        if creating_flag and creating_flag.strip():
-            # Проверяем, не устарел ли флаг (больше 300 секунд - безопасный таймаут)
-            try:
-                flag_timestamp = float(creating_flag)
-                if now - flag_timestamp > 300:  # флаг старше 5 минут
-                    logger.warning(f"alternate_digest_job: флаг создания устарел ({now - flag_timestamp:.0f}с назад), очищаем и продолжаем")
-                    set_config('alternate_digest_creating', '')  # очищаем устаревший флаг
-                else:
-                    logger.info(f"alternate_digest_job: пропуск - дайджест уже создается другим воркером ({now - flag_timestamp:.0f}с назад)")
-                    return
-            except ValueError:
-                # Старый формат флага или поврежденный, очищаем
-                logger.warning("alternate_digest_job: флаг создания в старом формате, очищаем")
-                set_config('alternate_digest_creating', '')
-        set_config('alternate_digest_creating', str(now))  # устанавливаем флаг с timestamp
+        # Глобальная блокировка через БД (защита от параллельных воркеров) - УБРАНА для частых обновлений
 
         # Блокировка от параллельного запуска в рамках одного воркера (уменьшена до 5 сек для частых запусков)
         async with _digest_state_lock:
             last_run = _digest_state.get('last_run', 0)
             if now - last_run < 5:
                 logger.debug(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
-                set_config('alternate_digest_creating', '')  # очищаем флаг
                 return
             _digest_state['last_run'] = now
 
@@ -1058,7 +1041,6 @@ async def alternate_digest_job(context):
             logger.info(f"alternate_digest_job: digest_chat_id = {digest_chat_id}")
             if not digest_chat_id:
                 logger.info("Чат для дайджеста не настроен")
-                set_config('alternate_digest_creating', '')  # очищаем флаг
                 return
 
             bot = context.application.bot
@@ -1186,7 +1168,7 @@ async def alternate_digest_job(context):
                 else:
                     streak_part = " 🍀—"
 
-                text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
+                text = f"<b>{growth_part} ┃ {drop_part} ┃ {streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
 
             else:
                 # Dota-дайджест
@@ -1291,7 +1273,6 @@ async def alternate_digest_job(context):
         last_text = _digest_state.get("last_text")
         if last_text == text:
             logger.debug("Текст дайджеста не изменился, пропускаем редактирование")
-            set_config('alternate_digest_creating', '')  # очищаем флаг
             return
 
         # Пробуем отредактировать существующее сообщение
@@ -1381,7 +1362,6 @@ async def alternate_digest_job(context):
             time_since_last = time.time() - last_created
             if time_since_last < 60:
                 logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
-                set_config('alternate_digest_creating', '')  # очищаем флаг
                 return
 
             # Генерируем или используем кешированный геро-мета баннер (обновление раз в 48 часов)
@@ -1530,15 +1510,9 @@ async def alternate_digest_job(context):
                         logger.info("❌ Нет прав на удаление системного сообщения о закрепе")
                 except Exception as e:
                     logger.debug(f"Не удалось закрепить: {e}")
-            finally:
-                # ВСЕГДА очищаем флаг создания, даже если упало исключение
-                set_config('alternate_digest_creating', '')  # очищаем флаг создания
-                logger.debug("alternate_digest_job: флаг создания очищен")
 
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
-        # Очищаем флаг в случае ошибки
-        set_config('alternate_digest_creating', '')
 
 # =====================
 # ROLL SYSTEM
