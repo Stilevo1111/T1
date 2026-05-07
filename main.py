@@ -996,13 +996,12 @@ async def dota_digest_job(context):
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов (редактирование существующего, создание нового только при необходимости)"""
     global _last_data_refresh, _data_refresh_interval
-    try:
-        now = time.time()
+    now = time.time()
 
-        # Проверяем глобальный rate limit
-        if is_rate_limited():
-            logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
-            return
+    # Проверяем глобальный rate limit
+    if is_rate_limited():
+        logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
+        return
 
 
 
