@@ -358,10 +358,12 @@ def create_infographic(hero_stats):
 
         x = start_x + col_idx * (col_width + gap_between_cols)
         y = start_y + row_idx * (row_height + gap_between_rows)
-            
-            # ╨Ю╤А╨╕╨│╨╕╨╜╨░╨╗╤М╨╜╨░╤П ╨┐╤А╤П╨╝╨╛╤Г╨│╨╛╨╗╤М╨╜╨░╤П ╨╕╨║╨╛╨╜╨║╨░ ╤Б ╤Г╨▓╨╡╨╗╨╕╤З╨╡╨╜╨╕╨╡╨╝ 0.5X
-            icon_url = "https://cdn.cloudflare.steamstatic.com" + hero['img']
-            try:
+
+        # Оригинальная прямаяугольная иконка с увеличением 0.5X
+
+        icon_url = "https://cdn.cloudflare.steamstatic.com" + hero['img']
+
+        try:
                 # Увеличиваем timeout и добавляем повторные попытки для загрузки изображений
                 max_retries = 2
                 for attempt in range(max_retries + 1):
