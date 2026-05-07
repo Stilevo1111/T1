@@ -1267,6 +1267,14 @@ async def alternate_digest_job(context):
             logger.info(f"Дайджест сгенерирован и сохранен в кеш (тип: {current_type}, hash: {current_data_hash[:8] if current_data_hash else 'None'}...)")
 
         # === ОТПРАВКА ДАЙДЖЕСТА ===
+        # Анти-спам: проверяем, не было ли недавнего обновления дайджеста
+        last_created_str = get_config('alternate_digest_last_created')
+        last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
+        time_since_last = time.time() - last_created
+        if time_since_last < 10:  # 10 секунд защиты от гонки
+            logger.info(f"Пропускаем - дайджест обновлен {time_since_last:.0f} сек назад")
+            return
+
         # Пропускаем редактирование если текст не изменился
         last_text = _digest_state.get("last_text")
         if last_text == text:
@@ -1304,6 +1312,7 @@ async def alternate_digest_job(context):
                         _digest_state["type"] = next_type
                         set_config('alternate_digest_type', next_type)
                         _digest_state["last_text"] = text
+                        set_config('alternate_digest_last_created', str(time.time()))
                     except Exception as e_caption:
                         # If text edit fails (photo message), try caption edit
                         error_str = str(e_caption).lower()
@@ -1320,6 +1329,7 @@ async def alternate_digest_job(context):
                                 _digest_state["type"] = next_type
                                 set_config('alternate_digest_type', next_type)
                                 _digest_state["last_text"] = text
+                                set_config('alternate_digest_last_created', str(time.time()))
                             except Exception as e2:
                                 logger.warning(f"Caption edit also failed: {e2}")
                                 edited = False
