@@ -3306,7 +3306,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if i <= 3:
                     medal = medals[i - 1]
                 elif i == 10:
-                    medal = "1️⃣0️⃣"
+                    medal = "🔟"
                 else:
                     medal = f"{i}️⃣"
 
