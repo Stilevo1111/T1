@@ -455,6 +455,21 @@ def create_infographic(hero_stats, tier_filter=None):
     
 
     draw = ImageDraw.Draw(base)
+    # Add update date in top right corner
+    from datetime import datetime, timezone, timedelta
+    MSK = timezone(timedelta(hours=3))
+    now_msk = datetime.now(MSK)
+    date_text = now_msk.strftime("%d.%m.%Y %H:%M")
+    try:
+        date_font = ImageFont.truetype(FONT_PATH, 24)
+    except:
+        date_font = ImageFont.load_default()
+    bbox = draw.textbbox((0, 0), date_text, font=date_font)
+    text_width = bbox[2] - bbox[0]
+    text_x = bg_width - text_width - 20
+    text_y = 20
+    draw.text((text_x, text_y), date_text, fill=(255, 255, 255), font=date_font)
+
 
     
 
