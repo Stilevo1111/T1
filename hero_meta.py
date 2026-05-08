@@ -1,14 +1,25 @@
-import asyncio
-import requests
-import io
-from PIL import Image, ImageDraw, ImageFont, ImageOps
-from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton, Update
-from telegram.ext import Application, ContextTypes, CommandHandler
-import os
-import logging
-
-logger = logging.getLogger(__name__)
-
+import asyncio
+
+import requests
+
+import io
+
+from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton, Update
+
+from telegram.ext import Application, ContextTypes, CommandHandler
+
+import os
+
+import logging
+
+
+
+logger = logging.getLogger(__name__)
+
+
+
 # --- Hero Meta Banner ---
 
 BACKGROUND_PATH = "background_new.png"
@@ -40,8 +51,10 @@ for path in FONT_PATHS:
 if FONT_PATH is None:
     FONT_PATH = ImageFont.load_default()  # Fallback to default
     logger.warning("Using default PIL font as no system fonts found")
-
-# ╨а╨░╤Б╤И╨╕╤А╨╡╨╜╨╜╤Л╨╣ ╤Б╨┐╨╕╤Б╨╛╨║ ID ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╤А╨╛╨╗╨╕ (╤З╤В╨╛╨▒╤Л ╤В╨╛╤З╨╜╨╛ ╨╜╨░╨▒╤А╨░╨╗╨╛╤Б╤М ╨┐╨╛ 5)
+
+
+# ╨а╨░╤Б╤И╨╕╤А╨╡╨╜╨╜╤Л╨╣ ╤Б╨┐╨╕╤Б╨╛╨║ ID ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╤А╨╛╨╗╨╕ (╤З╤В╨╛╨▒╤Л ╤В╨╛╤З╨╜╨╛ ╨╜╨░╨▒╤А╨░╨╗╨╛╤Б╤М ╨┐╨╛ 5)
+
 # Строгое распределение героев по основным ролям Dota 2 (2026)
 # Исключаем универсальных героев - только "чистые" представители каждой роли
 
@@ -162,7 +175,8 @@ ROLE_MAPPING = {
         119  # Dark Willow
     ]
 }
-
+
+
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
 
     """╨Ю╨▒╤А╨╡╨╖╨░╨╡╤В, ╨╖╨░╨║╤А╤Г╨│╨╗╤П╨╡╤В ╤Г╨│╨╗╨╛╨▓ ╨╕ ╨┤╨╛╨▒╨░╨▓╨╗╤П╨╡╤В ╨╖╨╛╨╗╨╛╤В╤Г╤О ╨╛╨▒╨▓╨╛╨┤╨║╤Г ╨б╨Э╨Р╨а╨г╨Ц╨Ш"""
@@ -178,28 +192,50 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     # ╨Ю╨▒╤А╨╡╨╖╨░╨╡╨╝ ╨╕ ╨╝╨░╤Б╤И╤В╨░╨▒╨╕╤А╤Г╨╡╨╝ ╨╕╤Б╤Е╨╛╨┤╨╜╨╛╨╡ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╨┤╨╛ ╤Г╨║╨░╨╖╨░╨╜╨╜╨╛╨│╨╛ ╤А╨░╨╖╨╝╨╡╤А╨░
 
     img_scaled = img.resize(size, Image.Resampling.LANCZOS)
-    
-    # ╨б╨╛╨╖╨┤╨░╨╡╨╝ ╨╝╨░╤Б╨║╤Г ╨┤╨╗╤П ╨╖╨░╨║╤А╤Г╨│╨╗╨╡╨╜╨╜╤Л╤Е ╤Г╨│╨╗╨╛╨▓ ╨▓╨╜╤Г╤В╤А╨╡╨╜╨╜╨╡╨│╨╛ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╤П
-    mask = Image.new('L', size, 0)
-    draw_mask = ImageDraw.Draw(mask)
-    draw_mask.rounded_rectangle((0, 0) + size, radius=radius, fill=255)
-    
-    # ╨б╨╛╨╖╨┤╨░╨╡╨╝ ╨▓╤Л╤Е╨╛╨┤╨╜╨╛╨╡ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╤Б ╨┐╤А╨╛╨╖╤А╨░╤З╨╜╤Л╨╝ ╤Д╨╛╨╜╨╛╨╝
-    output = Image.new('RGBA', outer_size, (0, 0, 0, 0))
-    
-    # ╨Т╤Б╤В╨░╨▓╨╗╤П╨╡╨╝ ╨╝╨░╤Б╤И╤В╨░╨▒╨╕╤А╨╛╨▓╨░╨╜╨╜╨╛╨╡ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╨▓ ╤Ж╨╡╨╜╤В╤А (╤Б ╤Г╤З╨╡╤В╨╛╨╝ ╨╛╨▒╨▓╨╛╨┤╨║╨╕)
-    output.paste(img_scaled, (border_width, border_width), mask=mask)
-    
-    # ╨а╨╕╤Б╤Г╨╡╨╝ ╨╛╨▒╨▓╨╛╨┤╨║╤Г ╨▓╨╛╨║╤А╤Г╨│ ╨▓╤Б╨╡╨│╨╛ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╤П
-    draw_border = ImageDraw.Draw(output)
-    draw_border.rounded_rectangle(
-        (0, 0, outer_size[0]-1, outer_size[1]-1),
-        radius=radius + border_width,  # ╨г╨▓╨╡╨╗╨╕╤З╨╕╨▓╨░╨╡╨╝ ╤А╨░╨┤╨╕╤Г╤Б ╨┤╨╗╤П ╨▓╨╜╨╡╤И╨╜╨╡╨╣ ╨╛╨▒╨▓╨╛╨┤╨║╨╕
-        outline=(255, 204, 0), 
-        width=border_width
-    )
-    
-    return output
+    
+
+    # ╨б╨╛╨╖╨┤╨░╨╡╨╝ ╨╝╨░╤Б╨║╤Г ╨┤╨╗╤П ╨╖╨░╨║╤А╤Г╨│╨╗╨╡╨╜╨╜╤Л╤Е ╤Г╨│╨╗╨╛╨▓ ╨▓╨╜╤Г╤В╤А╨╡╨╜╨╜╨╡╨│╨╛ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╤П
+
+    mask = Image.new('L', size, 0)
+
+    draw_mask = ImageDraw.Draw(mask)
+
+    draw_mask.rounded_rectangle((0, 0) + size, radius=radius, fill=255)
+
+    
+
+    # ╨б╨╛╨╖╨┤╨░╨╡╨╝ ╨▓╤Л╤Е╨╛╨┤╨╜╨╛╨╡ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╤Б ╨┐╤А╨╛╨╖╤А╨░╤З╨╜╤Л╨╝ ╤Д╨╛╨╜╨╛╨╝
+
+    output = Image.new('RGBA', outer_size, (0, 0, 0, 0))
+
+    
+
+    # ╨Т╤Б╤В╨░╨▓╨╗╤П╨╡╨╝ ╨╝╨░╤Б╤И╤В╨░╨▒╨╕╤А╨╛╨▓╨░╨╜╨╜╨╛╨╡ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╨▓ ╤Ж╨╡╨╜╤В╤А (╤Б ╤Г╤З╨╡╤В╨╛╨╝ ╨╛╨▒╨▓╨╛╨┤╨║╨╕)
+
+    output.paste(img_scaled, (border_width, border_width), mask=mask)
+
+    
+
+    # ╨а╨╕╤Б╤Г╨╡╨╝ ╨╛╨▒╨▓╨╛╨┤╨║╤Г ╨▓╨╛╨║╤А╤Г╨│ ╨▓╤Б╨╡╨│╨╛ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╤П
+
+    draw_border = ImageDraw.Draw(output)
+
+    draw_border.rounded_rectangle(
+
+        (0, 0, outer_size[0]-1, outer_size[1]-1),
+
+        radius=radius + border_width,  # ╨г╨▓╨╡╨╗╨╕╤З╨╕╨▓╨░╨╡╨╝ ╤А╨░╨┤╨╕╤Г╤Б ╨┤╨╗╤П ╨▓╨╜╨╡╤И╨╜╨╡╨╣ ╨╛╨▒╨▓╨╛╨┤╨║╨╕
+
+        outline=(255, 204, 0), 
+
+        width=border_width
+
+    )
+
+    
+
+    return output
+
 async def get_dota_data(days=7):
     """Получение статистики героев из OpenDota heroStats API
 
@@ -311,7 +347,8 @@ def create_infographic(hero_stats):
     start_x = margin_x + gap_between_cols
 
     start_y = margin_y
-    
+    
+
     # ╨Ц╨╕╤А╨╜╤Л╨╣ ╤И╤А╨╕╤Д╤В ╨┤╨╗╤П WINRATE
 
     try:
@@ -376,87 +413,155 @@ def create_infographic(hero_stats):
                             raise e  # последняя попытка не удалась
                         logger.debug(f"Failed to load hero image (attempt {attempt + 1}/{max_retries + 1}): {e}")
                         import time
-                        time.sleep(0.5)  # небольшая пауза перед повтором
-                icon_raw = Image.open(io.BytesIO(r.content)).convert("RGBA")
-                
-                # ╨Ь╨░╤Б╤И╤В╨░╨▒╨╕╤А╤Г╨╡╨╝ ╨┐╨╛ ╤Г╨▓╨╡╨╗╨╕╤З╨╡╨╜╨╜╨╛╨╣ ╨▓╤Л╤Б╨╛╤В╨╡ (0.5X ╨▒╨╛╨╗╤М╤И╨╡)
-                scale = icon_height / icon_raw.height
-                new_width = int(icon_raw.width * scale)
-                new_height = icon_height
-                
-                if new_width > col_width:
-                    scale = col_width / icon_raw.width
-                    new_width = col_width
-                    new_height = int(icon_raw.height * scale)
-                
-                icon_scaled = icon_raw.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                
-                # ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╨╝ ╨│╨╛╤В╨╛╨▓╤Г╤О ╤Д╤Г╨╜╨║╤Ж╨╕╤О ╨┤╨╗╤П ╨╛╨▒╨▓╨╛╨┤╨║╨╕ ╨╕ ╨╖╨░╨║╤А╤Г╨│╨╗╨╡╨╜╨╕╤П
-                # ╨б╨╜╨░╤З╨░╨╗╨░ ╨╝╨░╤Б╤И╤В╨░╨▒╨╕╤А╤Г╨╡╨╝ ╨╕╨║╨╛╨╜╨║╤Г
-                icon_processed = apply_fancy_style(icon_scaled, size=(new_width, new_height), radius=max(8, new_height // 12), border_width=2)
-                
-                # ╨а╨░╨╖╨╝╨╡╤А ╨╛╨▒╤А╨░╨▒╨╛╤В╨░╨╜╨╜╨╛╨╣ ╨╕╨║╨╛╨╜╨║╨╕ ╤Б ╨▓╨╜╨╡╤И╨╜╨╡╨╣ ╨╛╨▒╨▓╨╛╨┤╨║╨╛╨╣
-                processed_width = new_width + 4  # 2*border_width ╨│╨┤╨╡ border_width=2
-                processed_height = new_height + 4
-                
-                # ╨Я╨╛╨╖╨╕╤Ж╨╕╤П ╨┐╨╛ ╤Ж╨╡╨╜╤В╤А╤Г ╨▓ ╨║╨╛╨╗╨╛╨╜╨║╨╡
-                icon_x = x + (col_width - processed_width) // 2
-                icon_y = y + 5
-                base.paste(icon_processed, (icon_x, icon_y), icon_processed)
-                
-                # ╨в╨Х╨Ъ╨б╨в WINRATE ╨Т╨Э╨г╨в╨а╨Ш ╨Ш╨Ъ╨Ю╨Э╨Ъ╨Ш - ╨Т ╨ж╨Х╨Э╨в╨а╨Х ╨Т╨Э╨Ш╨Ч╨г (╨С╨Х╨Ч ╨з╨Х╨а╨Э╨Ю╨Щ ╨Я╨Ю╨Ф╨Ъ╨Ы╨Р╨Ф╨Ъ╨Ш!)
-                wr_value = round(hero['wr'])
-                wr_text = f"{wr_value}%"
-                
-                # ╨Я╨╛╨╖╨╕╤Ж╨╕╤П: ╨▓ ╤Б╨░╨╝╨╛╨╝ ╨╜╨╕╨╖╤Г ╨╛╤А╨╕╨│╨╕╨╜╨░╨╗╤М╨╜╨╛╨╣ ╨╕╨║╨╛╨╜╨║╨╕ (╨▒╨╡╨╖ ╨╛╨▒╨▓╨╛╨┤╨║╨╕), ╨┐╨╛ ╤Ж╨╡╨╜╤В╤А╤Г
-                icon_center_x = icon_x + processed_width // 2  # ╨ж╨╡╨╜╤В╤А ╨╛╨▒╤А╨░╨▒╨╛╤В╨░╨╜╨╜╨╛╨╣ ╨╕╨║╨╛╨╜╨║╨╕
-                icon_bottom_y = icon_y + new_height + 2 - 12   # ╨Э╨╕╨╖ ╨╛╤А╨╕╨│╨╕╨╜╨░╨╗╤М╨╜╨╛╨╣ ╨╕╨║╨╛╨╜╨║╨╕ + ╨╛╤В╤Б╤В╤Г╨┐ (new_height + 2*border_width - ╨╛╤В╤Б╤В╤Г╨┐)
-                
-                try:
-                    # ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╨╝ ╨╢╨╕╤А╨╜╤Л╨╣ ╤И╤А╨╕╤Д╤В ╨▒╨╛╨╗╤М╤И╨╡╨│╨╛ ╤А╨░╨╖╨╝╨╡╤А╨░ (╤Г╨▓╨╡╨╗╨╕╤З╨╡╨╜ ╨▓ 1.5 ╤А╨░╨╖╨░ ╨╛╤В ╨╛╤А╨╕╨│╨╕╨╜╨░╨╗╨░ 18pt = 27pt)
-                    font_large = ImageFont.truetype(FONT_PATH, 30)
-                    for bold_name in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
-                        try:
-                            font_large = ImageFont.truetype(f"C:/Windows/Fonts/{bold_name}", 30)
-                            break
-                        except:
-                            continue
-                except:
-                    font_large = ImageFont.load_default()
-                
-                try:
-                    bbox = draw.textbbox((0, 0), wr_text, font=font_large)
-                    text_width = bbox[2] - bbox[0]
-                    text_height = bbox[3] - bbox[1]
-                    
-                    # ╨ж╨╡╨╜╤В╤А╨╕╤А╤Г╨╡╨╝ ╤В╨╡╨║╤Б╤В
-                    text_x = icon_center_x - text_width // 2
-                    text_y = icon_bottom_y - text_height
-                    
+                        time.sleep(0.5)  # небольшая пауза перед повтором
+
+                icon_raw = Image.open(io.BytesIO(r.content)).convert("RGBA")
+
+                
+
+                # ╨Ь╨░╤Б╤И╤В╨░╨▒╨╕╤А╤Г╨╡╨╝ ╨┐╨╛ ╤Г╨▓╨╡╨╗╨╕╤З╨╡╨╜╨╜╨╛╨╣ ╨▓╤Л╤Б╨╛╤В╨╡ (0.5X ╨▒╨╛╨╗╤М╤И╨╡)
+
+                scale = icon_height / icon_raw.height
+
+                new_width = int(icon_raw.width * scale)
+
+                new_height = icon_height
+
+                
+
+                if new_width > col_width:
+
+                    scale = col_width / icon_raw.width
+
+                    new_width = col_width
+
+                    new_height = int(icon_raw.height * scale)
+
+                
+
+                icon_scaled = icon_raw.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+                
+
+                # ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╨╝ ╨│╨╛╤В╨╛╨▓╤Г╤О ╤Д╤Г╨╜╨║╤Ж╨╕╤О ╨┤╨╗╤П ╨╛╨▒╨▓╨╛╨┤╨║╨╕ ╨╕ ╨╖╨░╨║╤А╤Г╨│╨╗╨╡╨╜╨╕╤П
+
+                # ╨б╨╜╨░╤З╨░╨╗╨░ ╨╝╨░╤Б╤И╤В╨░╨▒╨╕╤А╤Г╨╡╨╝ ╨╕╨║╨╛╨╜╨║╤Г
+
+                icon_processed = apply_fancy_style(icon_scaled, size=(new_width, new_height), radius=max(8, new_height // 12), border_width=2)
+
+                
+
+                # ╨а╨░╨╖╨╝╨╡╤А ╨╛╨▒╤А╨░╨▒╨╛╤В╨░╨╜╨╜╨╛╨╣ ╨╕╨║╨╛╨╜╨║╨╕ ╤Б ╨▓╨╜╨╡╤И╨╜╨╡╨╣ ╨╛╨▒╨▓╨╛╨┤╨║╨╛╨╣
+
+                processed_width = new_width + 4  # 2*border_width ╨│╨┤╨╡ border_width=2
+
+                processed_height = new_height + 4
+
+                
+
+                # ╨Я╨╛╨╖╨╕╤Ж╨╕╤П ╨┐╨╛ ╤Ж╨╡╨╜╤В╤А╤Г ╨▓ ╨║╨╛╨╗╨╛╨╜╨║╨╡
+
+                icon_x = x + (col_width - processed_width) // 2
+
+                icon_y = y + 5
+
+                base.paste(icon_processed, (icon_x, icon_y), icon_processed)
+
+                
+
+                # ╨в╨Х╨Ъ╨б╨в WINRATE ╨Т╨Э╨г╨в╨а╨Ш ╨Ш╨Ъ╨Ю╨Э╨Ъ╨Ш - ╨Т ╨ж╨Х╨Э╨в╨а╨Х ╨Т╨Э╨Ш╨Ч╨г (╨С╨Х╨Ч ╨з╨Х╨а╨Э╨Ю╨Щ ╨Я╨Ю╨Ф╨Ъ╨Ы╨Р╨Ф╨Ъ╨Ш!)
+
+                wr_value = round(hero['wr'])
+
+                wr_text = f"{wr_value}%"
+
+                
+
+                # ╨Я╨╛╨╖╨╕╤Ж╨╕╤П: ╨▓ ╤Б╨░╨╝╨╛╨╝ ╨╜╨╕╨╖╤Г ╨╛╤А╨╕╨│╨╕╨╜╨░╨╗╤М╨╜╨╛╨╣ ╨╕╨║╨╛╨╜╨║╨╕ (╨▒╨╡╨╖ ╨╛╨▒╨▓╨╛╨┤╨║╨╕), ╨┐╨╛ ╤Ж╨╡╨╜╤В╤А╤Г
+
+                icon_center_x = icon_x + processed_width // 2  # ╨ж╨╡╨╜╤В╤А ╨╛╨▒╤А╨░╨▒╨╛╤В╨░╨╜╨╜╨╛╨╣ ╨╕╨║╨╛╨╜╨║╨╕
+
+                icon_bottom_y = icon_y + new_height + 2 - 12   # ╨Э╨╕╨╖ ╨╛╤А╨╕╨│╨╕╨╜╨░╨╗╤М╨╜╨╛╨╣ ╨╕╨║╨╛╨╜╨║╨╕ + ╨╛╤В╤Б╤В╤Г╨┐ (new_height + 2*border_width - ╨╛╤В╤Б╤В╤Г╨┐)
+
+                
+
+                try:
+
+                    # ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╨╝ ╨╢╨╕╤А╨╜╤Л╨╣ ╤И╤А╨╕╤Д╤В ╨▒╨╛╨╗╤М╤И╨╡╨│╨╛ ╤А╨░╨╖╨╝╨╡╤А╨░ (╤Г╨▓╨╡╨╗╨╕╤З╨╡╨╜ ╨▓ 1.5 ╤А╨░╨╖╨░ ╨╛╤В ╨╛╤А╨╕╨│╨╕╨╜╨░╨╗╨░ 18pt = 27pt)
+
+                    font_large = ImageFont.truetype(FONT_PATH, 30)
+
+                    for bold_name in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
+
+                        try:
+
+                            font_large = ImageFont.truetype(f"C:/Windows/Fonts/{bold_name}", 30)
+
+                            break
+
+                        except:
+
+                            continue
+
+                except:
+
+                    font_large = ImageFont.load_default()
+
+                
+
+                try:
+
+                    bbox = draw.textbbox((0, 0), wr_text, font=font_large)
+
+                    text_width = bbox[2] - bbox[0]
+
+                    text_height = bbox[3] - bbox[1]
+
+                    
+
+                    # ╨ж╨╡╨╜╤В╤А╨╕╤А╤Г╨╡╨╝ ╤В╨╡╨║╤Б╤В
+
+                    text_x = icon_center_x - text_width // 2
+
+                    text_y = icon_bottom_y - text_height
+
+                    
+
                     # ╨Ю╤Б╨╜╨╛╨▓╨╜╨╛╨╣ ╤В╨╡╨║╤Б╤В ╨┐╨╛╨▓╨╡╤А╤Е
 
                     draw.text((text_x, text_y), wr_text, fill=(255, 255, 255), font=font_large)
-                    
-                except Exception:
-                    # ╨Х╤Б╨╗╨╕ ╨╜╨╡ ╨┐╨╛╨╗╤Г╤З╨╕╨╗╨╛╤Б╤М - ╨┐╤А╨╛╤Б╤В╨╛ ╨╢╨╕╤А╨╜╤Л╨╣ ╤В╨╡╨║╤Б╤В
-                    draw.text((icon_center_x - 20, icon_bottom_y - 20),
-                             wr_text, fill=(255, 255, 255), font=font_large)
-                    # ╨Х╤Б╨╗╨╕ ╨╜╨╡ ╨┐╨╛╨╗╤Г╤З╨╕╨╗╨╛╤Б╤М - ╨┐╤А╨╛╤Б╤В╨╛ ╨╢╨╕╤А╨╜╤Л╨╣ ╤В╨╡╨║╤Б╤В
-                    draw.text((icon_center_x - 20, icon_bottom_y - 20),
-                             wr_text, fill=(255, 255, 255), font=font_large)
-                
-            except Exception as e:
-                # Placeholder
-                draw.rounded_rectangle(
-                    [x + 5, y + 5, x + col_width - 5, y + icon_height],
-                    radius=10,
-                    fill=(80, 80, 80)
-                )
-
-    buf = io.BytesIO()
-    base.save(buf, format='PNG')
-    return buf.getvalue()
-
+                    
+
+                except Exception:
+
+                    # ╨Х╤Б╨╗╨╕ ╨╜╨╡ ╨┐╨╛╨╗╤Г╤З╨╕╨╗╨╛╤Б╤М - ╨┐╤А╨╛╤Б╤В╨╛ ╨╢╨╕╤А╨╜╤Л╨╣ ╤В╨╡╨║╤Б╤В
+
+                    draw.text((icon_center_x - 20, icon_bottom_y - 20),
+
+                             wr_text, fill=(255, 255, 255), font=font_large)
+
+
+        except Exception as e:
+
+                # Placeholder
+
+                draw.rounded_rectangle(
+
+                    [x + 5, y + 5, x + col_width - 5, y + icon_height],
+
+                    radius=10,
+
+                    fill=(80, 80, 80)
+
+                )
+
+
+
+    buf = io.BytesIO()
+
+    base.save(buf, format='PNG')
+
+    return buf.getvalue()
 
 
 
@@ -464,10 +569,16 @@ def create_infographic(hero_stats):
 
 
 
-
 
-
-
+
+
+
+
+
+
+
+
+
 async def get_hero_meta_image():
     """Generate hero meta image for external use (e.g., digests).
 
@@ -485,8 +596,10 @@ async def get_hero_meta_image():
     except Exception as e:
         logger.warning(f"Failed to generate hero meta image: {e}")
         return None
-
-
+
+
+
+
 def setup_hero_meta_job(application: Application):
 
     """╨Э╨░╤Б╤В╤А╨╛╨╣╨║╨░ ╨┐╨╗╨░╨╜╨╕╤А╨╛╨▓╤Й╨╕╨║╨░ ╨┤╨╗╤П ╨╡╨╢╨╡╨╜╨╡╨┤╨╡╨╗╤М╨╜╨╛╨│╨╛ ╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╕╤П ╨╝╨╡╤В╤Л ╨│╨╡╤А╨╛╨╡╨▓"""
