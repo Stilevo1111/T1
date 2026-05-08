@@ -249,7 +249,7 @@ async def get_weekly_hero_stats():
         url = f"https://api.opendota.com/api/matches?date=7&limit=200"
         max_retries = 3  # уменьшено с 5 до 3 для экономии времени
 
-        timeout = aiohttp.ClientTimeout(total=10)  # уменьшено до 10 секунд на запрос
+        timeout = aiohttp.ClientTimeout(total=5)  # уменьшено до 5 секунд на запрос
 
         for attempt in range(max_retries):
             try:
@@ -272,16 +272,17 @@ async def get_weekly_hero_stats():
                             logger.error(f"Matches API error: HTTP {response.status}")
                             return None
             except Exception as e:
-                logger.warning(f"Matches API request error on attempt {attempt + 1}: {e}")
+                logger.warning(f"Matches API request error on attempt {attempt + 1}: {e!r}")
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(2 ** (attempt + 1))  # 2, 4, 8 секунд
+                    await asyncio.sleep(2 ** (attempt + 1))
                     continue
                 else:
-                    logger.error(f"Matches API failed after retries: {e}")
+                    logger.error(f"Matches API failed after retries: {e!r}")
                     return None
 
         if not matches:
-            return None
+            logger.warning("No matches from weekly stats, trying fallback")
+            return await get_fallback_hero_stats()
 
         # Агрегируем статистику героев
         hero_stats = {}
@@ -328,7 +329,7 @@ async def get_fallback_hero_stats():
     """Fallback: получение накопительной статистики героев из OpenDota heroStats API"""
     try:
         url = "https://api.opendota.com/api/heroStats"
-        timeout = aiohttp.ClientTimeout(total=30)
+        timeout = aiohttp.ClientTimeout(total=5)  # уменьшено с 30 до 5 секунд
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=timeout) as response:
@@ -361,7 +362,7 @@ async def get_fallback_hero_stats():
         return hero_list
 
     except Exception as e:
-        logger.error(f"Fallback hero stats error: {e}")
+        logger.error(f"Fallback hero stats error: {e!r}")
         return None
 
 
