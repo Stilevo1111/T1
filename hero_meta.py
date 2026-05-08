@@ -247,9 +247,9 @@ async def get_weekly_hero_stats():
         # Запрашиваем матчи с retry на ошибки 522
         matches = []
         url = f"https://api.opendota.com/api/matches?date=7&limit=200"
-        max_retries = 5
+        max_retries = 3  # уменьшено с 5 до 3 для экономии времени
 
-        timeout = aiohttp.ClientTimeout(total=120)
+        timeout = aiohttp.ClientTimeout(total=10)  # уменьшено до 10 секунд на запрос
 
         for attempt in range(max_retries):
             try:
@@ -263,7 +263,7 @@ async def get_weekly_hero_stats():
                         elif response.status in [429, 500, 502, 503, 504, 522]:
                             logger.warning(f"Matches API {response.status} on attempt {attempt + 1}, retrying...")
                             if attempt < max_retries - 1:
-                                await asyncio.sleep(5 * (2 ** attempt))
+                                await asyncio.sleep(2 ** (attempt + 1))  # 2, 4, 8 секунд вместо 5,10,20
                                 continue
                             else:
                                 logger.error(f"Matches API failed after {max_retries} attempts")
@@ -274,7 +274,7 @@ async def get_weekly_hero_stats():
             except Exception as e:
                 logger.warning(f"Matches API request error on attempt {attempt + 1}: {e}")
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(5 * (2 ** attempt))
+                    await asyncio.sleep(2 ** (attempt + 1))  # 2, 4, 8 секунд
                     continue
                 else:
                     logger.error(f"Matches API failed after retries: {e}")
