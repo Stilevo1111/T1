@@ -378,45 +378,63 @@ async def announce_weekly_mmr_winner(bot):
     MSK = timezone(timedelta(hours=3))
     today_msk = dt.now(MSK)
     sunday_msk = today_msk - timedelta(days=(today_msk.weekday() + 1) % 7)
-    # current_week_start is the Sunday of the current week (used to detect previous week's players)
     current_week_start = sunday_msk.strftime("%Y-%m-%d")
 
     last_announced = get_config('mmr_week_top_announced')
     if last_announced == current_week_start:
         return False
 
-    # ✅ РАСШИРЕНО: окно до 23:00 MSK вместо 01:00 (раньше было слишком узким)
-    # ✅ ДОБАВЛЕНО: fallback для отправки поздравления в любой день, если оно не отправилось в понедельник
-    if today_msk.hour >= 23:
-        logger.info(f"announce_weekly_mmr_winner: пропуск, уже {today_msk.hour}:00 MSK — окно объявления прошло")
-        # Но если у нас есть игроки с данными за ПРОШЛУЮ неделю (week_start_date != current_week_start), отправляем
-        # Это означает, что поздравление не было отправлено в понедельник
-        pass  # продолжаем выполнение, а не return
+    # Сброс еженедельной статистики ДО отправки поздравления,
+    # чтобы код сброса никогда не был мёртвым
+    try:
+        from database import get_connection, DATABASE_URL
+        conn_reset = get_connection()
+        cursor_reset = conn_reset.cursor()
+        url_parsed = urlparse.urlparse(DATABASE_URL)
+        scheme = url_parsed.scheme
+        if "postgres" in scheme:
+            cursor_reset.execute("""
+                UPDATE users
+                SET week_games = 0,
+                    week_wins = 0,
+                    week_current_streak = 0,
+                    week_best_streak = GREATEST(week_best_streak, week_current_streak),
+                    week_start_date = %s
+                WHERE steam_id IS NOT NULL
+            """, (current_week_start,))
+        else:
+            cursor_reset.execute("""
+                UPDATE users
+                SET week_games = 0,
+                    week_wins = 0,
+                    week_current_streak = 0,
+                    week_best_streak = MAX(week_best_streak, week_current_streak),
+                    week_start_date = ?
+                WHERE steam_id IS NOT NULL
+            """, (current_week_start,))
+        conn_reset.commit()
+        cursor_reset.close()
+        user_cache.clear()
+        top_cache.clear()
+        logger.info("announce_weekly_mmr_winner: еженедельная статистика MMR сброшена")
+    except Exception as e:
+        logger.error(f"announce_weekly_mmr_winner: ошибка при сбросе статистики: {e}")
 
-    from database import get_connection, DATABASE_URL
-    conn = get_connection()
+    # Проверяем, есть ли игроки с данными за ПРОШЛУЮ неделю
+    from database import get_connection as gc2
+    conn = gc2()
     cursor = conn.cursor()
-    url = urlparse.urlparse(DATABASE_URL)
-    scheme = url.scheme
     if "postgres" in scheme:
         cursor.execute(
             "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND (week_start_date IS NULL OR week_start_date::text != %s)",
-            (current_week_start,)
-        )
+            (current_week_start,))
     else:
         cursor.execute(
             "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND (week_start_date IS NULL OR week_start_date != ?)",
-            (current_week_start,)
-        )
+            (current_week_start,))
     stale_count = cursor.fetchone()[0]
     cursor.close()
 
-    # ✅ УБРАНО строгое условие `stale_count == 0` - если last_announced != current_week_start,
-    # поздравление нужно отправить независимо от stale_count
-    # stale_count > 0 гарантирует, что есть игроки с данными за НОВУЮ неделю
-
-    # Если stale_count == 0 НО last_announced != current_week_start - это fallback из понедельника
-    # (поздравление не успело отправиться, но данные уже сброшены)
     is_sunday = today_msk.weekday() == 6
 
     # В воскресенье проверяем, что есть игроки с новыми данными
@@ -424,9 +442,9 @@ async def announce_weekly_mmr_winner(bot):
         logger.info("announce_weekly_mmr_winner: в воскресенье stale_count == 0 - данных за новую неделю ещё нет")
         return False
 
-    # Поздравление должно отправляться ТОЛЬКО в воскресенье
-    if not is_sunday:
-        logger.info("announce_weekly_mmr_winner: не воскресенье - ждём воскресенья")
+    # Если не воскресенье и нет данных за прошлую неделю — пропускаем
+    if not is_sunday and stale_count == 0:
+        logger.info("announce_weekly_mmr_winner: нет данных за прошлую неделю и не воскресенье")
         return False
 
     digest_chat_id = get_config('digest_chat_id')
@@ -507,7 +525,6 @@ async def announce_weekly_mmr_winner(bot):
         rank_str = "Без ранга"
 
     name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id else username
-    streak_text = f"\n🔥 Текущий стрик: {streak} побед" if streak > 0 else ""
 
     tag_info = ""
     if tag_set:
@@ -524,92 +541,63 @@ async def announce_weekly_mmr_winner(bot):
 
     from dota_mmr import generate_start_card, get_player_stats
 
-    # Generate card with avatar and rank
+    # Асинхронно получаем свежий аватар (безопасно для event loop)
     avatar_url = winner.get('avatar')
-    # Always try to get fresh avatar from OpenDota for champion
     if winner.get('steam_id'):
         logger.info(f"Fetching fresh avatar for champion {winner.get('steam_nickname')}")
-        fresh_stats = get_player_stats(winner.get('steam_id'), use_cache=False)
-        if fresh_stats and fresh_stats.get('avatar'):
-            avatar_url = fresh_stats.get('avatar')
-            logger.info(f"Using fresh avatar for champion: {avatar_url}")
-        else:
-            logger.info(f"No fresh avatar available for champion, using DB: {avatar_url}")
+        try:
+            fresh_stats = await asyncio.to_thread(get_player_stats, winner.get('steam_id'), False)
+            if fresh_stats and fresh_stats.get('avatar'):
+                avatar_url = fresh_stats.get('avatar')
+                logger.info(f"Using fresh avatar for champion: {avatar_url}")
+            else:
+                logger.info(f"No fresh avatar available for champion, using DB: {avatar_url}")
+        except Exception as e:
+            logger.warning(f"Failed to fetch fresh avatar: {e}")
 
-    card_data = generate_start_card(
-        avatar_url=avatar_url,
-        message_count=week_games,
-        username=username,
-        steam_nickname=username,
-        rank_tier=rank_tier,
-        weekly_mvp=0,
-        weekly_top2=0,
-        weekly_top3=0,
-        week_wins=week_wins,
-        week_losses=week_losses
-    )
-
-    if card_data:
-        await bot.send_photo(
-            chat_id=digest_chat_id,
-            photo=card_data,
-            caption=text,
-            parse_mode="HTML"
+    # Асинхронно генерируем карточку (безопасно для event loop)
+    try:
+        card_data = await asyncio.to_thread(
+            generate_start_card,
+            avatar_url=avatar_url,
+            message_count=week_games,
+            username=username,
+            steam_nickname=username,
+            rank_tier=rank_tier,
+            weekly_mvp=0,
+            weekly_top2=0,
+            weekly_top3=0,
+            week_wins=week_wins,
+            week_losses=week_losses
         )
-    else:
-        # Fallback to static banner
-        winner_banner_url = "https://i.ibb.co/Jj3vwbWB/ANQkz.jpg"
-        await bot.send_photo(
+
+        if card_data:
+            await bot.send_photo(
+                chat_id=digest_chat_id,
+                photo=card_data,
+                caption=text,
+                parse_mode="HTML"
+            )
+        else:
+            winner_banner_url = "https://i.ibb.co/Jj3vwbWB/ANQkz.jpg"
+            await bot.send_photo(
+                chat_id=digest_chat_id,
+                photo=winner_banner_url,
+                caption=text,
+                parse_mode="HTML"
+            )
+    except Exception as e:
+        logger.error(f"Failed to generate/announce champion card: {e}")
+        # Fallback: отправляем текст без карточки
+        await bot.send_message(
             chat_id=digest_chat_id,
-            photo=winner_banner_url,
-            caption=text,
+            text=text,
             parse_mode="HTML"
         )
 
     set_config('mmr_week_top_announced', current_week_start)
     logger.info(f"announce_weekly_mmr_winner: отправлено поздравление для {username} (неделя {current_week_start})")
-    return True  # Возвращаем успех
-
-    # Сброс еженедельной статистики MMR для новой недели
-    try:
-        db = Database()
-        conn = db.connect()
-        cursor = conn.cursor()
-        url = urlparse(DATABASE_URL)
-        scheme = url.scheme
-
-        if "postgres" in scheme:
-            # PostgreSQL: обновляем все записи, сохраняя лучший стрик
-            cursor.execute("""
-                UPDATE users 
-                SET week_games = 0, 
-                    week_wins = 0, 
-                    week_current_streak = 0,
-                    week_best_streak = GREATEST(week_best_streak, week_current_streak),
-                    week_start_date = %s
-                WHERE steam_id IS NOT NULL
-            """, (current_week_start,))
-        else:
-            # SQLite
-            cursor.execute("""
-                UPDATE users 
-                SET week_games = 0, 
-                    week_wins = 0, 
-                    week_current_streak = 0,
-                    week_best_streak = MAX(week_best_streak, week_current_streak),
-                    week_start_date = ?
-                WHERE steam_id IS NOT NULL
-            """, (current_week_start,))
-
-        conn.commit()
-        cursor.close()
-
-        # Очищаем кеш
-        user_cache.clear()
-        top_cache.clear()
-        logger.info("announce_weekly_mmr_winner: еженедельная статистика MMR сброшена")
-    except Exception as e:
-        logger.error(f"announce_weekly_mmr_winner: ошибка при сбросе статистики: {e}")
+    return True
 
 
 
