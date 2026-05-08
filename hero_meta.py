@@ -16,6 +16,8 @@ import os
 
 import logging
 
+from urllib.parse import urlparse
+
 logger = logging.getLogger(__name__)
 
 
@@ -74,8 +76,16 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     return output
 
 
-async def fetch_hero_icon(session, icon_url, max_retries=2):
+async def fetch_hero_icon(session, icon_path, max_retries=2):
     """Асинхронная загрузка иконки героя с retry-логикой"""
+    # Ensure proper URL format
+    if icon_path.startswith('/'):
+        icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
+    elif not icon_path.startswith('http'):
+        icon_url = f"https://cdn.cloudflare.steamstatic.com/{icon_path}"
+    else:
+        icon_url = icon_path
+
     for attempt in range(max_retries + 1):
         try:
             async with session.get(icon_url, timeout=aiohttp.ClientTimeout(total=5)) as response:
@@ -147,7 +157,7 @@ async def get_weekly_hero_stats():
                     'pro_win': stats['wins'],
                     'pro_pick': stats['picks'],
                     'wr': winrate,
-                    'img': f'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{hero_id}.png'
+                    'img': f"/apps/dota2/images/dota_react/heroes/icons/{hero_id}.png"
                 })
 
         logger.info(f"Calculated weekly stats for {len(hero_list)} heroes")
@@ -180,13 +190,22 @@ async def get_fallback_hero_stats():
             pro_pick = hero.get('pro_pick', 0)
             if pro_pick >= 50:
                 wr = (pro_win / pro_pick * 100) if pro_pick > 0 else 0
+                img_path = hero.get('img', '')
+                # Normalize image path: ensure it starts with / and is relative
+                if img_path.startswith('http'):
+                    # Extract path from URL
+                    from urllib.parse import urlparse
+                    parsed = urlparse(img_path)
+                    img_path = parsed.path
+                if not img_path.startswith('/'):
+                    img_path = '/' + img_path
                 hero_list.append({
                     'id': hero['id'],
                     'localized_name': hero.get('localized_name', f'Hero {hero["id"]}'),
                     'pro_win': pro_win,
                     'pro_pick': pro_pick,
                     'wr': wr,
-                    'img': "https://cdn.cloudflare.steamstatic.com" + hero.get('img', '')
+                    'img': img_path
                 })
 
         logger.info(f"Fallback: loaded {len(hero_list)} heroes from heroStats")
@@ -274,8 +293,7 @@ async def create_infographic(hero_stats):
     async with aiohttp.ClientSession() as session:
         icon_tasks = []
         for hero in top_25:
-            icon_url = "https://cdn.cloudflare.steamstatic.com" + hero['img']
-            task = fetch_hero_icon(session, icon_url)
+            task = fetch_hero_icon(session, hero['img'])
             icon_tasks.append((hero, task))
 
         icon_results = []
