@@ -358,11 +358,44 @@ async def get_hero_meta_image():
     try:
         data = await get_dota_data()
         if not data:
-            logger.error("No data from OpenDota")
-            return None
-        return await create_infographic(data)
+            logger.error("No data from OpenDota, using static fallback banner")
+            return get_static_fallback_banner()
+        banner = await create_infographic(data)
+        if banner:
+            return banner
+        logger.warning("create_infographic returned None, using static fallback banner")
+        return get_static_fallback_banner()
     except Exception as e:
-        logger.warning(f"Failed to generate hero meta image: {e!r}")
+        logger.warning(f"Failed to generate hero meta image: {e!r}, using static fallback banner")
+        return get_static_fallback_banner()
+
+
+def get_static_fallback_banner():
+    """Создаёт простой статичный баннер когда API недоступен"""
+    logger.info("Generating static fallback banner")
+    try:
+        base = Image.new("RGBA", (1200, 200), (25, 25, 35, 255))
+        draw = ImageDraw.Draw(base)
+
+        from datetime import datetime, timezone, timedelta
+        MSK = timezone(timedelta(hours=3))
+        now_msk = datetime.now(MSK)
+        date_text = now_msk.strftime("%d.%m.%Y %H:%M")
+
+        try:
+            font = ImageFont.truetype(FONT_PATH, 32)
+        except:
+            font = ImageFont.load_default()
+
+        draw.text((20, 20), "Dota 2 Hero Meta", fill=(255, 215, 0), font=font)
+        draw.text((20, 70), f"Updated: {date_text}", fill=(200, 200, 200), font=font)
+        draw.text((20, 120), "API unavailable - using cached data", fill=(150, 150, 150), font=font)
+
+        buf = io.BytesIO()
+        base.save(buf, format='PNG')
+        return buf.getvalue()
+    except Exception as e:
+        logger.error(f"Failed to create static fallback banner: {e!r}")
         return None
 
 
