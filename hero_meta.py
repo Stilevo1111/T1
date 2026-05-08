@@ -1,3 +1,5 @@
+# Асинхронная версия hero_meta.py с fallback и быстрым отказом
+
 import asyncio
 
 import aiohttp
@@ -14,33 +16,27 @@ import os
 
 import logging
 
-
-
 logger = logging.getLogger(__name__)
 
 
-
-# --- Hero Meta Banner ---
-
 BACKGROUND_PATH = "background_new.png"
 
-# Try different font paths for cross-platform compatibility
 FONT_PATHS = [
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",     # Linux (common)
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", # Linux bold
-    "/usr/share/fonts/TTF/DejaVuSans.ttf",                 # Alternative Linux
-    "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",           # Alternative Linux bold
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", # Another Linux font
-    "/System/Library/Fonts/Arial.ttf",                     # macOS
-    "/Library/Fonts/Arial.ttf",                           # macOS alternative
-    "C:/Windows/Fonts/arial.ttf",                          # Windows
-    "C:/Windows/Fonts/Arial.ttf",                         # Windows alternative
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/TTF/DejaVuSans.ttf",
+    "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/System/Library/Fonts/Arial.ttf",
+    "/Library/Fonts/Arial.ttf",
+    "C:/Windows/Fonts/arial.ttf",
+    "C:/Windows/Fonts/Arial.ttf",
 ]
 
 FONT_PATH = None
 for path in FONT_PATHS:
     try:
-        ImageFont.truetype(path, 12)  # Test if font works
+        ImageFont.truetype(path, 12)
         FONT_PATH = path
         logger.info(f"Using font: {path}")
         break
@@ -49,207 +45,62 @@ for path in FONT_PATHS:
         continue
 
 if FONT_PATH is None:
-    FONT_PATH = ImageFont.load_default()  # Fallback to default
+    FONT_PATH = ImageFont.load_default()
     logger.warning("Using default PIL font as no system fonts found")
 
 
-# ╨а╨░╤Б╤И╨╕╤А╨╡╨╜╨╜╤Л╨╣ ╤Б╨┐╨╕╤Б╨╛╨║ ID ╨│╨╡╤А╨╛╨╡╨▓ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨╣ ╤А╨╛╨╗╨╕ (╤З╤В╨╛╨▒╤Л ╤В╨╛╤З╨╜╨╛ ╨╜╨░╨▒╤А╨░╨╗╨╛╤Б╤М ╨┐╨╛ 5)
-
-# Строгое распределение героев по основным ролям Dota 2 (2026)
-# Исключаем универсальных героев - только "чистые" представители каждой роли
-
 ROLE_MAPPING = {
-    "КЕРРИ": [
-        # Основные керри (поздняя игра, фарм, драки)
-        1,   # Anti-Mage
-        6,   # Drow Ranger
-        8,   # Juggernaut
-        10,  # Morphling
-        12,  # Phantom Assassin
-        35,  # Sven
-        36,  # Tiny
-        41,  # Faceless Void
-        42,  # Wraith King
-        44,  # Phantom Lancer
-        46,  # Templar Assassin
-        54,  # Lifestealer
-        62,  # Bloodseeker
-        67,  # Spectre
-        70,  # Ursa
-        73,  # Alchemist
-        80,  # Lone Druid
-        93,  # Slardar
-        94,  # Medusa
-        95   # Troll Warlord
-    ],
-
-    "ХАРДЛЕЙНЕР": [
-        # Герои, которые могут брать линии самостоятельно (оффлейн/мид)
-        2,   # Axe
-        7,   # Earthshaker
-        14,  # Pudge
-        16,  # Sand King
-        29,  # Tidehunter
-        33,  # Doom
-        38,  # Beastmaster
-        49,  # Dragon Knight
-        51,  # Clockwerk
-        65,  # Batrider
-        96,  # Centaur Warrunner
-        102, # Abaddon
-        108, # Underlord
-        110, # Phoenix
-        123, # Hoodwink
-        126, # Void Spirit
-        127, # Snapfire
-        128, # Mars
-        129  # Dawnbreaker
-    ],
-
-    "МИДЕР": [
-        # Чистые мидеры (средняя линия)
-        11,  # Shadow Fiend
-        13,  # Puck
-        15,  # Razor
-        17,  # Storm Spirit
-        21,  # Windrunner
-        22,  # Zeus
-        25,  # Lina
-        34,  # Tinker
-        39,  # Queen of Pain
-        43,  # Death Prophet
-        45,  # Pugna
-        47,  # Viper
-        52,  # Leshrac
-        59,  # Huskar
-        83,  # Treant Protector
-        86,  # Rubick
-        106, # Ember Spirit
-        113  # Arc Warden
-    ],
-
-    "ЧАСТИЧНАЯ ПОДДЕРЖКА": [
-        # Герои, которые могут частично поддерживать (активные 4 позиции)
-        9,   # Mirana
-        18,  # Sniper
-        27,  # Shadow Shaman
-        40,  # Venomancer
-        56,  # Clinkz
-        57,  # Broodmother
-        58,  # Bounty Hunter
-        60,  # Night Stalker
-        72,  # Gyrocopter
-        81,  # Chaos Knight
-        84,  # Ogre Magi
-        85,  # Undying
-        88,  # Nyx Assassin
-        89,  # Naga Siren
-        90,  # Keeper of the Light
-        91,  # Io
-        92,  # Visage
-        101, # Skywrath Mage
-        105, # Techies
-        109, # Terrorblade
-        112, # Winter Wyvern
-        115, # Magnus
-        121, # Grimstroke
-        122  # Elder Titan
-    ],
-
-    "ПОЛНАЯ ПОДДЕРЖКА": [
-        # Герои, специализирующиеся на поддержке (пассивные 5 позиции)
-        3,   # Bane
-        5,   # Crystal Maiden
-        20,  # Vengeful Spirit
-        37,  # Warlock
-        50,  # Dazzle
-        53,  # Nature's Prophet
-        64,  # Jakiro
-        68,  # Ancient Apparition
-        77,  # Lich
-        78,  # Lion
-        79,  # Shadow Demon
-        87,  # Disruptor
-        104, # Legion Commander
-        111, # Oracle
-        119  # Dark Willow
-    ]
+    "КЕРРИ": [1, 6, 8, 10, 12, 35, 36, 41, 42, 44, 46, 54, 62, 67, 70, 73, 80, 93, 94, 95],
+    "ХАРДЛЕЙНЕР": [2, 7, 14, 16, 29, 33, 38, 49, 51, 65, 96, 102, 108],
 }
 
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
-
-    """╨Ю╨▒╤А╨╡╨╖╨░╨╡╤В, ╨╖╨░╨║╤А╤Г╨│╨╗╤П╨╡╤В ╤Г╨│╨╗╨╛╨▓ ╨╕ ╨┤╨╛╨▒╨░╨▓╨╗╤П╨╡╤В ╨╖╨╛╨╗╨╛╤В╤Г╤О ╨╛╨▒╨▓╨╛╨┤╨║╤Г ╨б╨Э╨Р╨а╨г╨Ц╨Ш"""
-
-    # ╨б╨╜╨░╤З╨░╨╗╨░ ╤Б╨╛╨╖╨┤╨░╨╡╨╝ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╤Б ╨╛╨▒╨▓╨╛╨┤╨║╨╛╨╣ ╤Б╨╜╨░╤Р╨╕╨│╨╕
-
-    # ╨Ю╨▒╤Й╨╕╨╣ ╤А╨░╨╖╨╝╨╡╤А ╨▒╤Г╨┤╨╡╤В size + 2*border_width ╤Б ╨║╨░╨╢╨┤╨╛╨╣ ╤Б╤В╨╛╤А╨╛╨╜╤Л
-
+    """Обрезка, закругление и добавление золотой обводки"""
     outer_size = (size[0] + 2 * border_width, size[1] + 2 * border_width)
-
-    
-
-    # ╨Ю╨▒╤А╨╡╨╖╨░╨╡╨╝ ╨╕ ╨╝╨░╤Б╤И╤В╨░╨▒╨╕╤А╤Г╨╡╨╝ ╨╕╤Б╤Е╨╛╨┤╨╜╨╛╨╡ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╨┤╨╛ ╤Г╨║╨░╨╖╨░╨╜╨╜╨╛╨│╨╛ ╤А╨░╨╖╨╝╨╡╤А╨░
-
     img_scaled = img.resize(size, Image.Resampling.LANCZOS)
-    
-
-    # ╨б╨╛╨╖╨┤╨░╨╡╨╝ ╨╝╨░╤Б╨║╤Г ╨┤╨╗╤П ╨╖╨░╨║╤А╤Г╨│╨╗╨╡╨╜╨╜╤Л╤Е ╤Г╨│╨╗╨╛╨▓ ╨▓╨╜╤Г╤В╤А╨╡╨╜╨╜╨╡╨│╨╛ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╤П
-
     mask = Image.new('L', size, 0)
-
     draw_mask = ImageDraw.Draw(mask)
-
     draw_mask.rounded_rectangle((0, 0) + size, radius=radius, fill=255)
-
-    
-
-    # ╨б╨╛╨╖╨┤╨░╨╡╨╝ ╨▓╤Л╤Е╨╛╨┤╨╜╨╛╨╡ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╤Б ╨┐╤А╨╛╨╖╤А╨░╤З╨╜╤Л╨╝ ╤Д╨╛╨╜╨╛╨╝
-
     output = Image.new('RGBA', outer_size, (0, 0, 0, 0))
-
-    
-
-    # ╨Т╤Б╤В╨░╨▓╨╗╤П╨╡╨╝ ╨╝╨░╤Б╤И╤В╨░╨▒╨╕╤А╨╛╨▓╨░╨╜╨╜╨╛╨╡ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╨▓ ╤Ж╨╡╨╜╤В╤А (╤Б ╤Г╤З╨╡╤В╨╛╨╝ ╨╛╨▒╨▓╨╛╨┤╨║╨╕)
-
     output.paste(img_scaled, (border_width, border_width), mask=mask)
-
-    
-
-    # ╨а╨╕╤Б╤Г╨╡╨╝ ╨╛╨▒╨▓╨╛╨┤╨║╤Г ╨▓╨╛╨║╤А╤Г╨│ ╨▓╤Б╨╡╨│╨╛ ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╤П
-
     draw_border = ImageDraw.Draw(output)
-
     draw_border.rounded_rectangle(
-
-        (0, 0, outer_size[0]-1, outer_size[1]-1),
-
-        radius=radius + border_width,  # ╨г╨▓╨╡╨╗╨╕╤З╨╕╨▓╨░╨╡╨╝ ╤А╨░╨┤╨╕╤Г╤Б ╨┤╨╗╤П ╨▓╨╜╨╡╤И╨╜╨╡╨╣ ╨╛╨▒╨▓╨╛╨┤╨║╨╕
-
-        outline=(255, 204, 0), 
-
-        width=border_width
-
+        (0, 0) + outer_size,
+        radius=radius,
+        outline=(255, 215, 0, 255),
+        width=2
     )
-
-    
-
     return output
+
+
+async def fetch_hero_icon(session, icon_url, max_retries=2):
+    """Асинхронная загрузка иконки героя с retry-логикой"""
+    for attempt in range(max_retries + 1):
+        try:
+            async with session.get(icon_url, timeout=aiohttp.ClientTimeout(total=5)) as response:
+                response.raise_for_status()
+                content = await response.read()
+                return Image.open(io.BytesIO(content)).convert("RGBA")
+        except Exception as e:
+            if attempt == max_retries:
+                logger.error(f"Failed to load hero image after {max_retries + 1} attempts: {e!r}")
+                raise e
+            logger.debug(f"Failed to load hero image (attempt {attempt + 1}/{max_retries + 1}): {e!r}")
+            await asyncio.sleep(0.5)
+
 
 async def get_weekly_hero_stats():
     """Получение недельной статистики героев из матчей OpenDota за последние 7 дней"""
     try:
         from datetime import datetime, timedelta
 
-        # Получаем матчи за последние 7 дней
         start_time = int((datetime.now() - timedelta(days=7)).timestamp())
 
-        # Запрашиваем матчи с retry на ошибки 522
         matches = []
         url = f"https://api.opendota.com/api/matches?date=7&limit=200"
-        max_retries = 3  # уменьшено с 5 до 3 для экономии времени
-
-        timeout = aiohttp.ClientTimeout(total=5)  # уменьшено до 5 секунд на запрос
+        max_retries = 1
+        timeout = aiohttp.ClientTimeout(total=5)
 
         for attempt in range(max_retries):
             try:
@@ -260,50 +111,32 @@ async def get_weekly_hero_stats():
                             matches.extend(data)
                             logger.info(f"Fetched {len(matches)} matches for weekly stats on attempt {attempt + 1}")
                             break
-                        elif response.status in [429, 500, 502, 503, 504, 522]:
-                            logger.warning(f"Matches API {response.status} on attempt {attempt + 1}, retrying...")
-                            if attempt < max_retries - 1:
-                                await asyncio.sleep(2 ** (attempt + 1))  # 2, 4, 8 секунд вместо 5,10,20
-                                continue
-                            else:
-                                logger.error(f"Matches API failed after {max_retries} attempts")
-                                break
                         else:
                             logger.error(f"Matches API error: HTTP {response.status}")
                             break
             except Exception as e:
                 logger.warning(f"Matches API request error on attempt {attempt + 1}: {e!r}")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2 ** (attempt + 1))
-                    continue
-                else:
-                    logger.error(f"Matches API failed after retries: {e!r}")
-                    break
+                break
 
         if not matches:
             logger.warning("No matches from weekly stats, trying fallback")
             return await get_fallback_hero_stats()
 
-        # Агрегируем статистику героев
         hero_stats = {}
         for match in matches:
             if not match.get('players'):
                 continue
-
             radiant_win = match.get('radiant_win', False)
             for player in match['players']:
                 hero_id = player.get('hero_id')
                 if not hero_id:
                     continue
-
                 if hero_id not in hero_stats:
                     hero_stats[hero_id] = {'wins': 0, 'picks': 0}
-
                 hero_stats[hero_id]['picks'] += 1
                 if (player['isRadiant'] and radiant_win) or (not player['isRadiant'] and not radiant_win):
                     hero_stats[hero_id]['wins'] += 1
 
-        # Преобразуем в формат heroStats
         hero_list = []
         for hero_id, stats in hero_stats.items():
             if stats['picks'] >= 10:
@@ -321,7 +154,7 @@ async def get_weekly_hero_stats():
         return hero_list
 
     except Exception as e:
-        logger.error(f"Weekly hero stats error: {e}")
+        logger.error(f"Weekly hero stats error: {e!r}")
         return await get_fallback_hero_stats()
 
 
@@ -329,25 +162,23 @@ async def get_fallback_hero_stats():
     """Fallback: получение накопительной статистики героев из OpenDota heroStats API"""
     try:
         url = "https://api.opendota.com/api/heroStats"
-        timeout = aiohttp.ClientTimeout(total=5)  # уменьшено с 30 до 5 секунд
+        timeout = aiohttp.ClientTimeout(total=5)
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=timeout) as response:
                 if response.status != 200:
                     logger.error(f"Fallback heroStats API error: HTTP {response.status}")
-                    return None
-
+                    raise Exception(f"HTTP {response.status}")
                 hero_stats = await response.json()
                 if not hero_stats:
                     logger.error("No hero stats received from fallback API")
-                    return None
+                    raise Exception("Empty response")
 
-        # Преобразуем в нужный формат
         hero_list = []
         for hero in hero_stats:
             pro_win = hero.get('pro_win', 0)
             pro_pick = hero.get('pro_pick', 0)
-            if pro_pick >= 50:  # Фильтр как в оригинале
+            if pro_pick >= 50:
                 wr = (pro_win / pro_pick * 100) if pro_pick > 0 else 0
                 hero_list.append({
                     'id': hero['id'],
@@ -371,34 +202,10 @@ async def get_dota_data(days=7):
     return await get_weekly_hero_stats()
 
 
-async def fetch_hero_icon(session, icon_url, max_retries=2):
-    """Асинхронная загрузка иконки героя с retry-логикой"""
-    for attempt in range(max_retries + 1):
-        try:
-            async with session.get(icon_url, timeout=aiohttp.ClientTimeout(total=5)) as response:
-                response.raise_for_status()
-                content = await response.read()
-                return Image.open(io.BytesIO(content)).convert("RGBA")
-        except Exception as e:
-            if attempt == max_retries:
-                logger.error(f"Failed to load hero image after {max_retries + 1} attempts: {e}")
-                raise e
-            logger.debug(f"Failed to load hero image (attempt {attempt + 1}/{max_retries + 1}): {e}")
-            await asyncio.sleep(0.5)
-
-
 async def create_infographic(hero_stats):
-    """Создайте инфографику 5x5 с лучшими героями по ролям (на 0.5X больше)
-
-    Args:
-        hero_stats: List of hero statistics from OpenDota heroStats API
-
-    Note: Statistics are based on professional matches from OpenDota.
-    The /heroStats endpoint provides built-in role statistics.
-    """
+    """Создайте инфографику 5x5 с лучшими героями по ролям"""
     logger.info("Starting create_infographic generation")
 
-    # Загружаем фон (синхронно, это быстро)
     if not os.path.exists(BACKGROUND_PATH):
         base = Image.new("RGBA", (1200, 800), (25, 25, 35, 255))
         bg_width, bg_height = 1200, 800
@@ -408,7 +215,6 @@ async def create_infographic(hero_stats):
 
     draw = ImageDraw.Draw(base)
 
-    # Add update date in top right corner
     from datetime import datetime, timezone, timedelta
     MSK = timezone(timedelta(hours=3))
     now_msk = datetime.now(MSK)
@@ -423,7 +229,6 @@ async def create_infographic(hero_stats):
     text_y = 20
     draw.text((text_x, text_y), date_text, fill=(255, 255, 255), font=date_font)
 
-    # Параметры размещения
     margin_x = 50
     margin_y = 215
     gap_between_cols = 15
@@ -444,7 +249,6 @@ async def create_infographic(hero_stats):
     start_x = margin_x + gap_between_cols
     start_y = margin_y
 
-    # Шрифт для winrate
     try:
         font_wr = ImageFont.truetype(FONT_PATH, 27)
         for bold_name in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
@@ -456,7 +260,6 @@ async def create_infographic(hero_stats):
     except:
         font_wr = ImageFont.load_default()
 
-    # Получаем топ-25 героев по overall win rate
     all_heroes = []
     for hero in hero_stats:
         pro_win = hero.get('pro_win', 0)
@@ -468,7 +271,6 @@ async def create_infographic(hero_stats):
 
     top_25 = sorted(all_heroes, key=lambda x: x['wr'], reverse=True)[:25]
 
-    # Асинхронно загружаем все иконки параллельно
     async with aiohttp.ClientSession() as session:
         icon_tasks = []
         for hero in top_25:
@@ -476,17 +278,15 @@ async def create_infographic(hero_stats):
             task = fetch_hero_icon(session, icon_url)
             icon_tasks.append((hero, task))
 
-        # Ждем все загрузки
         icon_results = []
         for hero, task in icon_tasks:
             try:
                 icon_raw = await task
                 icon_results.append((hero, icon_raw))
             except Exception as e:
-                logger.warning(f"Failed to load icon for hero {hero.get('id')}: {e}")
+                logger.warning(f"Failed to load icon for hero {hero.get('id')}: {e!r}")
                 icon_results.append((hero, None))
 
-    # Отрисовываем каждого героя
     for idx, (hero, icon_raw) in enumerate(icon_results):
         col_idx = idx % 5
         row_idx = idx // 5
@@ -495,7 +295,6 @@ async def create_infographic(hero_stats):
         y = start_y + row_idx * (row_height + gap_between_rows)
 
         if icon_raw is None:
-            # Placeholder при ошибке загрузки
             draw.rounded_rectangle(
                 [x + 5, y + 5, x + col_width - 5, y + icon_height],
                 radius=10,
@@ -503,7 +302,6 @@ async def create_infographic(hero_stats):
             )
             continue
 
-        # Масштабирование иконки
         scale = icon_height / icon_raw.height
         new_width = int(icon_raw.width * scale)
         new_height = icon_height
@@ -514,20 +312,16 @@ async def create_infographic(hero_stats):
             new_height = int(icon_raw.height * scale)
 
         icon_scaled = icon_raw.resize((new_width, new_height), Image.Resampling.LANCZOS)
-
-        # Применяем стиль
         icon_processed = apply_fancy_style(icon_scaled, size=(new_width, new_height), radius=max(8, new_height // 12), border_width=2)
 
         processed_width = new_width + 4
         processed_height = new_height + 4
 
-        # Позиционирование
         icon_x = x + (col_width - processed_width) // 2
         icon_y = y + 5
 
         base.paste(icon_processed, (icon_x, icon_y), icon_processed)
 
-        # Текст winrate
         wr_value = round(hero['wr'])
         wr_text = f"{wr_value}%"
 
@@ -558,28 +352,8 @@ async def create_infographic(hero_stats):
     return buf.getvalue()
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 async def get_hero_meta_image():
-    """Generate hero meta image for external use (e.g., digests).
-
-    Returns:
-        bytes: PNG image bytes that can be embedded as a header,
-               or None if generation failed.
-    """
+    """Generate hero meta image for external use (e.g., digest)"""
     logger.info("get_hero_meta_image called - starting generation")
     try:
         data = await get_dota_data()
@@ -588,33 +362,19 @@ async def get_hero_meta_image():
             return None
         return await create_infographic(data)
     except Exception as e:
-        logger.warning(f"Failed to generate hero meta image: {e}")
+        logger.warning(f"Failed to generate hero meta image: {e!r}")
         return None
 
 
-
-
 def setup_hero_meta_job(application: Application):
-
-    """╨Э╨░╤Б╤В╤А╨╛╨╣╨║╨░ ╨┐╨╗╨░╨╜╨╕╤А╨╛╨▓╤Й╨╕╨║╨░ ╨┤╨╗╤П ╨╡╨╢╨╡╨╜╨╡╨┤╨╡╨╗╤М╨╜╨╛╨│╨╛ ╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╕╤П ╨╝╨╡╤В╤Л ╨│╨╡╤А╨╛╨╡╨▓"""
-
+    """Настройка планировщика для еженедельного обновления мета-героев"""
     chat_id = os.getenv('HERO_META_CHAT_ID')
-
     if chat_id:
-
         try:
-
             application.bot_data['hero_meta_chat_id'] = int(chat_id)
-
             logger.info(f"Hero meta chat ID set to: {chat_id}")
-
         except ValueError:
-
             logger.warning(f"Invalid HERO_META_CHAT_ID: {chat_id}")
-
     else:
-
         logger.warning("HERO_META_CHAT_ID not set in environment variables")
-
-    # Note: Weekly job and /meta command are available for hero meta updates
     logger.info("Hero meta setup completed")
