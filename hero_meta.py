@@ -241,22 +241,46 @@ async def get_weekly_hero_stats():
     try:
         from datetime import datetime, timedelta
         import time
+        import asyncio
 
         # Получаем матчи за последние 7 дней
         start_time = int((datetime.now() - timedelta(days=7)).timestamp())
 
-        # Запрашиваем матчи с пагинацией (максимум 1000 матчей для производительности)
+        # Запрашиваем матчи с retry на ошибки 522
         matches = []
-        url = f"https://api.opendota.com/api/matches?date=7&limit=100"
-        response = requests.get(url, timeout=30)
-        if response.status_code != 200:
-            logger.error(f"Matches API error: HTTP {response.status_code}")
+        url = f"https://api.opendota.com/api/matches?date=7&limit=200"  # Увеличил лимит для больше данных
+        max_retries = 5  # Увеличил количество попыток
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, timeout=120)  # Увеличил timeout до 2 минут
+                if response.status_code == 200:
+                    data = response.json()
+                    matches.extend(data)
+                    logger.info(f"Fetched {len(matches)} matches for weekly stats on attempt {attempt + 1}")
+                    break
+                elif response.status_code in [429, 500, 502, 503, 504, 522]:
+                    logger.warning(f"Matches API {response.status_code} on attempt {attempt + 1}, retrying...")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(5 * (2 ** attempt))  # Длиннее backoff
+                        continue
+                    else:
+                        logger.error(f"Matches API failed after {max_retries} attempts")
+                        return None
+                else:
+                    logger.error(f"Matches API error: HTTP {response.status_code}")
+                    return None
+            except Exception as e:
+                logger.warning(f"Matches API request error on attempt {attempt + 1}: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(5 * (2 ** attempt))
+                    continue
+                else:
+                    logger.error(f"Matches API failed after retries: {e}")
+                    return None
+
+        if not matches:
+            # No matches available
             return None
-
-        data = response.json()
-        matches.extend(data)
-
-        logger.info(f"Fetched {len(matches)} matches for weekly stats")
 
         # Агрегируем статистику героев
         hero_stats = {}
@@ -296,11 +320,48 @@ async def get_weekly_hero_stats():
 
     except Exception as e:
         logger.error(f"Weekly hero stats error: {e}")
+        return await get_fallback_hero_stats()
+
+
+async def get_fallback_hero_stats():
+    """Fallback: получение накопительной статистики героев из OpenDota heroStats API"""
+    try:
+        response = requests.get("https://api.opendota.com/api/heroStats", timeout=30)
+        if response.status_code != 200:
+            logger.error(f"Fallback heroStats API error: HTTP {response.status_code}")
+            return None
+
+        hero_stats = response.json()
+        if not hero_stats:
+            logger.error("No hero stats received from fallback API")
+            return None
+
+        # Преобразуем в нужный формат
+        hero_list = []
+        for hero in hero_stats:
+            pro_win = hero.get('pro_win', 0)
+            pro_pick = hero.get('pro_pick', 0)
+            if pro_pick >= 50:  # Фильтр как в оригинале
+                wr = (pro_win / pro_pick * 100) if pro_pick > 0 else 0
+                hero_list.append({
+                    'id': hero['id'],
+                    'localized_name': hero.get('localized_name', f'Hero {hero["id"]}'),
+                    'pro_win': pro_win,
+                    'pro_pick': pro_pick,
+                    'wr': wr,
+                    'img': "https://cdn.cloudflare.steamstatic.com" + hero.get('img', '')
+                })
+
+        logger.info(f"Fallback: loaded {len(hero_list)} heroes from heroStats")
+        return hero_list
+
+    except Exception as e:
+        logger.error(f"Fallback hero stats error: {e}")
         return None
 
 
 async def get_dota_data(days=7):
-    """Получение недельной статистики героев"""
+    """Получение недельной статистики героев с fallback"""
     return await get_weekly_hero_stats()
 
 
