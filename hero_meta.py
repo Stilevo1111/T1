@@ -236,30 +236,72 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
 
     return output
 
-async def get_dota_data(days=7):
-    """Получение статистики героев из OpenDota heroStats API
-
-    Args:
-        days: Number of days to look back (default 7 for weekly stats) - не используется
-
-    Returns:
-        Hero statistics from OpenDota heroStats API
-    """
+async def get_weekly_hero_stats():
+    """Получение недельной статистики героев из матчей OpenDota за последние 7 дней"""
     try:
-        response = requests.get("https://api.opendota.com/api/heroStats", timeout=30)
+        from datetime import datetime, timedelta
+        import time
+
+        # Получаем матчи за последние 7 дней
+        start_time = int((datetime.now() - timedelta(days=7)).timestamp())
+
+        # Запрашиваем матчи с пагинацией (максимум 1000 матчей для производительности)
+        matches = []
+        url = f"https://api.opendota.com/api/matches?date=7&limit=100"
+        response = requests.get(url, timeout=30)
         if response.status_code != 200:
-            logger.error(f"heroStats API error: HTTP {response.status_code}")
+            logger.error(f"Matches API error: HTTP {response.status_code}")
             return None
 
-        hero_stats = response.json()
-        if not hero_stats:
-            logger.error("No hero stats received from API")
-            return None
+        data = response.json()
+        matches.extend(data)
 
-        return hero_stats
+        logger.info(f"Fetched {len(matches)} matches for weekly stats")
+
+        # Агрегируем статистику героев
+        hero_stats = {}
+        for match in matches:
+            if not match.get('players'):
+                continue
+
+            radiant_win = match.get('radiant_win', False)
+            for player in match['players']:
+                hero_id = player.get('hero_id')
+                if not hero_id:
+                    continue
+
+                if hero_id not in hero_stats:
+                    hero_stats[hero_id] = {'wins': 0, 'picks': 0}
+
+                hero_stats[hero_id]['picks'] += 1
+                if (player['isRadiant'] and radiant_win) or (not player['isRadiant'] and not radiant_win):
+                    hero_stats[hero_id]['wins'] += 1
+
+        # Преобразуем в формат heroStats
+        hero_list = []
+        for hero_id, stats in hero_stats.items():
+            if stats['picks'] >= 10:  # Минимум 10 пиков для статистики
+                winrate = (stats['wins'] / stats['picks']) * 100
+                hero_list.append({
+                    'id': hero_id,
+                    'localized_name': f'Hero {hero_id}',  # Можно добавить маппинг имен
+                    'pro_win': stats['wins'],
+                    'pro_pick': stats['picks'],
+                    'wr': winrate,
+                    'img': f'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{hero_id}.png'
+                })
+
+        logger.info(f"Calculated weekly stats for {len(hero_list)} heroes")
+        return hero_list
+
     except Exception as e:
-        logger.error(f"OpenDota API error: {e}")
+        logger.error(f"Weekly hero stats error: {e}")
         return None
+
+
+async def get_dota_data(days=7):
+    """Получение недельной статистики героев"""
+    return await get_weekly_hero_stats()
 
 
 def create_infographic(hero_stats):
