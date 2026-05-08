@@ -217,10 +217,20 @@ async def get_fallback_hero_stats():
             pro_win = hero.get('pro_win', 0)
             pro_pick = hero.get('pro_pick', 0)
             if pro_pick >= 50:  # мин 50 пиков для fallback
+                # Нормализуем путь к иконке
+                img_raw = hero.get('img', '')
+                if img_raw.startswith('http'):
+                    parsed = urlparse(img_raw)
+                    img_path = parsed.path
+                else:
+                    img_path = img_raw
+                if not img_path.startswith('/'):
+                    img_path = '/' + img_path
+
                 hero_entry = {
                     'id': hero['id'],
                     'localized_name': hero.get('localized_name', f'Hero {hero["id"]}'),
-                    'img': "/apps/dota2/images/dota_react/heroes/icons/" + hero.get('img', '').lstrip('/'),
+                    'img': img_path,
                     'pro_win': pro_win,
                     'pro_pick': pro_pick
                 }
