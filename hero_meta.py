@@ -267,10 +267,10 @@ async def get_weekly_hero_stats():
                                 continue
                             else:
                                 logger.error(f"Matches API failed after {max_retries} attempts")
-                                return None
+                                break
                         else:
                             logger.error(f"Matches API error: HTTP {response.status}")
-                            return None
+                            break
             except Exception as e:
                 logger.warning(f"Matches API request error on attempt {attempt + 1}: {e!r}")
                 if attempt < max_retries - 1:
@@ -278,7 +278,7 @@ async def get_weekly_hero_stats():
                     continue
                 else:
                     logger.error(f"Matches API failed after retries: {e!r}")
-                    return None
+                    break
 
         if not matches:
             logger.warning("No matches from weekly stats, trying fallback")
