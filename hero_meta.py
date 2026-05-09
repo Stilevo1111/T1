@@ -168,9 +168,48 @@ def _build_grid(hero_stats):
     grid = {}
     for pos in range(1, 6):
         heroes = sorted(by_position[pos], key=lambda h: -h['wr'])
-        grid[pos] = heroes[:5]  # Take top 5 by win rate on their position
+        grid[pos] = heroes
 
-    return grid
+    # Balance positions: ensure minimum 3 heroes per position
+    # If a position has too few heroes, take from positions with excess
+    target_min = 3
+
+    # First pass: collect positions that need more heroes
+    needs_heroes = []
+    excess_heroes = []
+
+    for pos in range(1, 6):
+        count = len(grid[pos])
+        if count < target_min and count > 0:
+            needs_heroes.append((pos, target_min - count))
+        elif count > 5:
+            excess_heroes.append((pos, count - 5))
+
+    # Redistribute heroes from positions with excess to positions that need them
+    for need_pos, need_count in needs_heroes:
+        for excess_pos, excess_count in excess_heroes:
+            if excess_count <= 0:
+                continue
+
+            # Take heroes from excess position (lowest WR first)
+            to_move = min(need_count, excess_count)
+            moved_heroes = grid[excess_pos][-to_move:]
+            grid[excess_pos] = grid[excess_pos][:-to_move]
+            grid[need_pos].extend(moved_heroes)
+
+            need_count -= to_move
+            excess_count -= to_move
+
+            if need_count <= 0:
+                break
+
+    # Final pass: limit to 5 heroes per position, sorted by WR
+    final_grid = {}
+    for pos in range(1, 6):
+        heroes = sorted(grid[pos], key=lambda h: -h['wr'])
+        final_grid[pos] = heroes[:5] if len(heroes) >= 3 else heroes
+
+    return final_grid
     return grid
 
 
