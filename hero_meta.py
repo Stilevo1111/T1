@@ -42,37 +42,51 @@ if FONT_PATH is None:
 
 def detect_hero_position(hero_roles):
     """Определяет позицию (1-5) по ролям из heroStats. Case-insensitive.
-    Логика для равномерного распределения по всем позициям.
+    Более гибкая логика для равномерного распределения.
     """
     roles = set((r or "").lower().strip() for r in hero_roles)
 
-    # Position 5 (Soft Support): Support without disabler
-    if "support" in roles and "disabler" not in roles:
-        return 5
-
-    # Position 1 (Carry): Carry role
-    if "carry" in roles:
+    # Position 1 (Carry): Primary carry heroes
+    if "carry" in roles and "support" not in roles:
         return 1
 
-    # Position 4 (Hard Support): Support with disabler
-    if "support" in roles and "disabler" in roles:
+    # Position 5 (Soft Support): Support without disabler or complex support
+    if "support" in roles and ("disabler" not in roles or len(roles) > 3):
+        return 5
+
+    # Position 4 (Hard Support): Support + Disabler
+    if "support" in roles and "disabler" in roles and len(roles) <= 3:
         return 4
 
-    # Position 3 (Offlane): Durable or Initiator
-    if "durable" in roles or "initiator" in roles:
+    # Position 3 (Offlane): Durable/Initiator focused
+    if ("durable" in roles or "initiator" in roles) and "carry" not in roles:
         return 3
 
-    # Position 2 (Mid): Nuker, Escape, or fallback for complex heroes
+    # Position 2 (Mid): Nuker/Escape or fallback for complex heroes
     if "nuker" in roles or "escape" in roles:
         return 2
 
-    # Fallback assignments to fill positions
-    # If hero has disabler but no support, put in position 4
-    if "disabler" in roles:
-        return 4
+    # Additional assignments for better distribution
+    if "carry" in roles:
+        return 1  # Carry heroes that also support go to position 1
 
-    # Default to position 2 (Mid) for remaining heroes
-    return 2
+    if "support" in roles:
+        return 5  # Support heroes that are complex go to position 5
+
+    if "disabler" in roles:
+        return 4  # Disablers without support go to position 4
+
+    if "durable" in roles or "initiator" in roles:
+        return 3  # Tanky heroes go to position 3
+
+    # Final fallback: distribute remaining heroes by priority
+    # Many heroes have multiple roles, assign based on most common usage
+    if len(roles) > 2:  # Complex heroes
+        return 2  # Default to mid for complex heroes
+    elif "pusher" in roles:
+        return 1  # Pushers often carry
+    else:
+        return 2  # Default to mid
 
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
@@ -150,8 +164,9 @@ def _build_grid(hero_stats):
         pk = hero.get("%d_pick" % pos, 0)
         wk = hero.get("%d_win" % pos, 0)
 
-        # Минимальный порог пиков для надежности
-        if pk < 1000:
+        # Минимальный порог пиков для надежности (снижен для Position 2 и 5)
+        min_picks = 500 if pos in [2, 5] else 1000
+        if pk < min_picks:
             continue
 
         wr = (wk / pk * 100) if pk > 0 else 0
