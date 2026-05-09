@@ -1,18 +1,25 @@
-# hero_meta.py — асинхронная версия с позиционной статистикой, без дублей
+# Асинхронная версия hero_meta.py с fallback и быстрым отказом
 
 import asyncio
-import aiohttp
-import io
-import os
-import logging
-from urllib.parse import urlparse
 
-from PIL import Image, ImageDraw, ImageFont
+import aiohttp
+
+import io
+
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton, Update
+
 from telegram.ext import Application, ContextTypes, CommandHandler
 
+import os
+
+import logging
+
+from urllib.parse import urlparse
+
 logger = logging.getLogger(__name__)
+
 
 BACKGROUND_PATH = "background_new.png"
 
@@ -35,7 +42,8 @@ for path in FONT_PATHS:
         FONT_PATH = path
         logger.info(f"Using font: {path}")
         break
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Font not available: {path} - {e}")
         continue
 
 if FONT_PATH is None:
@@ -43,8 +51,14 @@ if FONT_PATH is None:
     logger.warning("Using default PIL font as no system fonts found")
 
 
+ROLE_MAPPING = {
+    "КЕРРИ": [1, 6, 8, 10, 12, 35, 36, 41, 42, 44, 46, 54, 62, 67, 70, 73, 80, 93, 94, 95],
+    "ХАРДЛЕЙНЕР": [2, 7, 14, 16, 29, 33, 38, 49, 51, 65, 96, 102, 108],
+}
+
+
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
-    """Закругление и золотая обводка"""
+    """Обрезка, закругление и добавление золотой обводки"""
     outer_size = (size[0] + 2 * border_width, size[1] + 2 * border_width)
     img_scaled = img.resize(size, Image.Resampling.LANCZOS)
     mask = Image.new('L', size, 0)
@@ -54,13 +68,17 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     output.paste(img_scaled, (border_width, border_width), mask=mask)
     draw_border = ImageDraw.Draw(output)
     draw_border.rounded_rectangle(
-        (0, 0) + outer_size, radius=radius, outline=(255, 215, 0, 255), width=2
+        (0, 0) + outer_size,
+        radius=radius,
+        outline=(255, 215, 0, 255),
+        width=2
     )
     return output
 
 
-async def fetch_hero_icon(session, icon_path):
-    """Асинхронная загрузка иконки героя"""
+async def fetch_hero_icon(session, icon_path, max_retries=2):
+    """Асинхронная загрузка иконки героя с retry-логикой"""
+    # Ensure proper URL format
     if icon_path.startswith('/'):
         icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
     elif not icon_path.startswith('http'):
@@ -68,204 +86,144 @@ async def fetch_hero_icon(session, icon_path):
     else:
         icon_url = icon_path
 
-    try:
-        async with session.get(icon_url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-            resp.raise_for_status()
-            content = await resp.read()
-            return Image.open(io.BytesIO(content)).convert("RGBA")
-    except Exception as e:
-        logger.error(f"Failed to load icon: {e!r}")
-        raise
-
-
-def _parse_position(player_slot):
-    """Определяет позицию (1-5) по player_slot.
-    OpenDota: Radiant 0-4, Dire 128-132
-    Позиция 1=Carry, 2=Mid, 3=Offlane, 4=Soft Support, 5=Hard Support
-    """
-    if player_slot < 128:
-        return player_slot + 1
-    else:
-        return player_slot - 127
+    for attempt in range(max_retries + 1):
+        try:
+            async with session.get(icon_url, timeout=aiohttp.ClientTimeout(total=5)) as response:
+                response.raise_for_status()
+                content = await response.read()
+                return Image.open(io.BytesIO(content)).convert("RGBA")
+        except Exception as e:
+            if attempt == max_retries:
+                logger.error(f"Failed to load hero image after {max_retries + 1} attempts: {e!r}")
+                raise e
+            logger.debug(f"Failed to load hero image (attempt {attempt + 1}/{max_retries + 1}): {e!r}")
+            await asyncio.sleep(0.5)
 
 
 async def get_weekly_hero_stats():
-    """Статистика героев из матчей за последние 7 дней"""
+    """Получение недельной статистики героев из матчей OpenDota за последние 7 дней"""
     try:
         from datetime import datetime, timedelta
 
+        start_time = int((datetime.now() - timedelta(days=7)).timestamp())
+
         matches = []
         url = f"https://api.opendota.com/api/matches?date=7&limit=200"
+        max_retries = 1
         timeout = aiohttp.ClientTimeout(total=5)
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=timeout) as resp:
-                if resp.status == 200:
-                    matches = await resp.json()
-                    logger.info(f"Fetched {len(matches)} matches")
-                else:
-                    logger.error(f"Matches API error: HTTP {resp.status}")
+        for attempt in range(max_retries):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, timeout=timeout) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            matches.extend(data)
+                            logger.info(f"Fetched {len(matches)} matches for weekly stats on attempt {attempt + 1}")
+                            break
+                        else:
+                            logger.error(f"Matches API error: HTTP {response.status}")
+                            break
+            except Exception as e:
+                logger.warning(f"Matches API request error on attempt {attempt + 1}: {e!r}")
+                break
 
         if not matches:
+            logger.warning("No matches from weekly stats, trying fallback")
             return await get_fallback_hero_stats()
 
-        # Агрегируем позиционную статистику
         hero_stats = {}
-
         for match in matches:
             if not match.get('players'):
                 continue
             radiant_win = match.get('radiant_win', False)
-
             for player in match['players']:
                 hero_id = player.get('hero_id')
                 if not hero_id:
                     continue
-
-                player_slot = player.get('player_slot', 0)
-                pos = _parse_position(player_slot)
-                if pos < 1 or pos > 5:
-                    continue
-
                 if hero_id not in hero_stats:
-                    hero_stats[hero_id] = {
-                        p: {'picks': 0, 'wins': 0} for p in range(1, 6)
-                    }
+                    hero_stats[hero_id] = {'wins': 0, 'picks': 0}
+                hero_stats[hero_id]['picks'] += 1
+                if (player['isRadiant'] and radiant_win) or (not player['isRadiant'] and not radiant_win):
+                    hero_stats[hero_id]['wins'] += 1
 
-                hero_stats[hero_id][pos]['picks'] += 1
-                is_radiant = player_slot < 128
-                if (is_radiant and radiant_win) or (not is_radiant and not radiant_win):
-                    hero_stats[hero_id][pos]['wins'] += 1
-
-        # Формируем hero_list с позиционными полями
         hero_list = []
-        for hero_id, pos_data in hero_stats.items():
-            total_picks = sum(pos_data[p]['picks'] for p in range(1, 6))
-            if total_picks >= 10:
-                entry = {
+        for hero_id, stats in hero_stats.items():
+            if stats['picks'] >= 10:
+                winrate = (stats['wins'] / stats['picks']) * 100
+                hero_list.append({
                     'id': hero_id,
                     'localized_name': f'Hero {hero_id}',
-                    'img': f'/apps/dota2/images/dota_react/heroes/icons/{hero_id}.png',
-                    'pro_win': sum(pos_data[p]['wins'] for p in range(1, 6)),
-                    'pro_pick': total_picks,
-                }
-                for p in range(1, 6):
-                    entry[f'{p}_pick'] = pos_data[p]['picks']
-                    entry[f'{p}_win'] = pos_data[p]['wins']
-                hero_list.append(entry)
+                    'pro_win': stats['wins'],
+                    'pro_pick': stats['picks'],
+                    'wr': winrate,
+                    'img': f"/apps/dota2/images/dota_react/heroes/icons/{hero_id}.png"
+                })
 
         logger.info(f"Calculated weekly stats for {len(hero_list)} heroes")
         return hero_list
 
     except Exception as e:
-        logger.error(f"Weekly stats error: {e!r}")
+        logger.error(f"Weekly hero stats error: {e!r}")
         return await get_fallback_hero_stats()
 
 
 async def get_fallback_hero_stats():
-    """Fallback: heroStats из OpenDota"""
+    """Fallback: получение накопительной статистики героев из OpenDota heroStats API"""
     try:
+        url = "https://api.opendota.com/api/heroStats"
         timeout = aiohttp.ClientTimeout(total=5)
+
         async with aiohttp.ClientSession() as session:
-            async with session.get(
-                "https://api.opendota.com/api/heroStats", timeout=timeout
-            ) as resp:
-                if resp.status != 200:
-                    raise Exception(f"HTTP {resp.status}")
-                hero_stats = await resp.json()
+            async with session.get(url, timeout=timeout) as response:
+                if response.status != 200:
+                    logger.error(f"Fallback heroStats API error: HTTP {response.status}")
+                    raise Exception(f"HTTP {response.status}")
+                hero_stats = await response.json()
                 if not hero_stats:
-                    raise Exception("Empty")
+                    logger.error("No hero stats received from fallback API")
+                    raise Exception("Empty response")
 
         hero_list = []
         for hero in hero_stats:
+            pro_win = hero.get('pro_win', 0)
             pro_pick = hero.get('pro_pick', 0)
-            if pro_pick < 50:
-                continue
+            if pro_pick >= 50:
+                wr = (pro_win / pro_pick * 100) if pro_pick > 0 else 0
+                img_path = hero.get('img', '')
+                # Normalize image path: ensure it starts with / and is relative
+                if img_path.startswith('http'):
+                    # Extract path from URL
+                    from urllib.parse import urlparse
+                    parsed = urlparse(img_path)
+                    img_path = parsed.path
+                if not img_path.startswith('/'):
+                    img_path = '/' + img_path
+                hero_list.append({
+                    'id': hero['id'],
+                    'localized_name': hero.get('localized_name', f'Hero {hero["id"]}'),
+                    'pro_win': pro_win,
+                    'pro_pick': pro_pick,
+                    'wr': wr,
+                    'img': img_path
+                })
 
-            img_raw = hero.get('img', '')
-            if img_raw.startswith('http'):
-                img_path = urlparse(img_raw).path
-            else:
-                img_path = img_raw
-            if not img_path.startswith('/'):
-                img_path = '/' + img_path
-
-            entry = {
-                'id': hero['id'],
-                'localized_name': hero.get('localized_name', f'Hero {hero["id"]}'),
-                'img': img_path,
-                'pro_win': hero.get('pro_win', 0),
-                'pro_pick': pro_pick,
-            }
-            for p in range(1, 6):
-                pk = f'{p}_pick'
-                wk = f'{p}_win'
-                entry[pk] = hero.get(pk, 0)
-                entry[wk] = hero.get(wk, 0)
-            hero_list.append(entry)
-
-        logger.info(f"Fallback: loaded {len(hero_list)} heroes")
+        logger.info(f"Fallback: loaded {len(hero_list)} heroes from heroStats")
         return hero_list
 
     except Exception as e:
-        logger.error(f"Fallback error: {e!r}")
+        logger.error(f"Fallback hero stats error: {e!r}")
         return None
 
 
 async def get_dota_data(days=7):
+    """Получение недельной статистики героев с fallback"""
     return await get_weekly_hero_stats()
 
 
-def _build_grid(hero_stats):
-    """
-    Строит сетку 5x5: каждый герой на своей ОСНОВНОЙ позиции.
-    Основная позиция = та, где максимально picks.
-    Без дублей — каждый герой только в одном столбце.
-    """
-    hero_main_pos = {}
-    for hero in hero_stats:
-        best_pos = None
-        best_picks = 0
-        for pos in range(1, 6):
-            picks = hero.get(f'{pos}_pick', 0)
-            if picks > best_picks:
-                best_picks = picks
-                best_pos = pos
-        if best_pos and best_picks > 0:
-            hero_main_pos[hero['id']] = best_pos
-
-    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
-    for hero in hero_stats:
-        hid = hero['id']
-        if hid not in hero_main_pos:
-            continue
-        pos = hero_main_pos[hid]
-        picks = hero.get(f'{pos}_pick', 0)
-        if picks < 1:  # минимум 1 игра на позиции
-            continue
-        wins = hero.get(f'{pos}_win', 0)
-        wr = (wins / picks * 100) if picks > 0 else 0
-        by_position[pos].append({
-            'id': hid,
-            'name': hero.get('localized_name', f'Hero {hid}'),
-            'img': hero['img'],
-            'wr': wr,
-            'picks': picks,
-            'wins': wins,
-        })
-
-    # Сортируем каждую позицию по винрейту (desc) и берём топ-5
-    grid = {}
-    for pos in range(1, 6):
-        sorted_heroes = sorted(by_position[pos], key=lambda h: -h['wr'])[:5]
-        grid[pos] = sorted_heroes
-
-    return grid
-
-
 async def create_infographic(hero_stats):
-    """Баннер 5x5: по 5 героев на каждую позицию. Без дублей, без подписей."""
-    logger.info("Starting create_infographic")
+    """Создайте инфографику 5x5 с лучшими героями по ролям"""
+    logger.info("Starting create_infographic generation")
 
     if not os.path.exists(BACKGROUND_PATH):
         base = Image.new("RGBA", (1200, 800), (25, 25, 35, 255))
@@ -280,124 +238,132 @@ async def create_infographic(hero_stats):
     MSK = timezone(timedelta(hours=3))
     now_msk = datetime.now(MSK)
     date_text = now_msk.strftime("%d.%m.%Y %H:%M")
-
     try:
         date_font = ImageFont.truetype(FONT_PATH, 24)
     except:
         date_font = ImageFont.load_default()
     bbox = draw.textbbox((0, 0), date_text, font=date_font)
-    text_x = bg_width - (bbox[2] - bbox[0]) - 20
-    draw.text((text_x, 20), date_text, fill=(255, 255, 255), font=date_font)
+    text_width = bbox[2] - bbox[0]
+    text_x = bg_width - text_width - 20
+    text_y = 20
+    draw.text((text_x, text_y), date_text, fill=(255, 255, 255), font=date_font)
 
     margin_x = 50
     margin_y = 215
     gap_between_cols = 15
+    gap_between_rows = 0
 
-    col_width = (bg_width - 2 * margin_x - 6 * gap_between_cols) // 5
-    row_height = (bg_height - margin_y - 10) // 5
+    available_width = bg_width - 2 * margin_x
+    total_gaps_width = 6 * gap_between_cols
+    col_width = (available_width - total_gaps_width) // 5
+
+    available_height = bg_height - margin_y - 10
+    total_gaps_height = 6 * gap_between_rows
+    row_height = (available_height - total_gaps_height) // 5
 
     base_icon_height = row_height - 25
-    icon_height = min(int(base_icon_height * 1.163), row_height - 5)
+    increased_height = int(base_icon_height * 1.163)
+    icon_height = min(increased_height, row_height - 5)
+
+    start_x = margin_x + gap_between_cols
+    start_y = margin_y
 
     try:
         font_wr = ImageFont.truetype(FONT_PATH, 27)
-        for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
+        for bold_name in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
             try:
-                font_wr = ImageFont.truetype(bn, 20)
+                font_wr = ImageFont.truetype(bold_name, 20)
                 break
             except:
                 continue
     except:
         font_wr = ImageFont.load_default()
 
-    # Строим сетку из героев
-    grid = _build_grid(hero_stats)
-
-    # Собираем уникальных героев
     all_heroes = []
-    seen_ids = set()
-    for pos in range(1, 6):
-        for hero in grid[pos]:
-            if hero['id'] not in seen_ids:
-                seen_ids.add(hero['id'])
-                all_heroes.append(hero)
+    for hero in hero_stats:
+        pro_win = hero.get('pro_win', 0)
+        pro_pick = hero.get('pro_pick', 0)
+        if pro_pick >= 50:
+            hero_copy = hero.copy()
+            hero_copy['wr'] = (pro_win / pro_pick * 100) if pro_pick > 0 else 0
+            all_heroes.append(hero_copy)
 
-    # Асинхронная загрузка иконок
+    top_25 = sorted(all_heroes, key=lambda x: x['wr'], reverse=True)[:25]
+
     async with aiohttp.ClientSession() as session:
-        tasks = [fetch_hero_icon(session, h['img']) for h in all_heroes]
-        icons = {}
-        for i, hero in enumerate(all_heroes):
+        icon_tasks = []
+        for hero in top_25:
+            task = fetch_hero_icon(session, hero['img'])
+            icon_tasks.append((hero, task))
+
+        icon_results = []
+        for hero, task in icon_tasks:
             try:
-                icons[hero['id']] = await tasks[i]
-            except Exception:
-                icons[hero['id']] = None
+                icon_raw = await task
+                icon_results.append((hero, icon_raw))
+            except Exception as e:
+                logger.warning(f"Failed to load icon for hero {hero.get('id')}: {e!r}")
+                icon_results.append((hero, None))
 
-    # Отрисовка: колонка = позиция, строки = топ героев позиции
-    for col_idx in range(5):
-        pos = col_idx + 1
-        heroes = grid[pos]
+    for idx, (hero, icon_raw) in enumerate(icon_results):
+        col_idx = idx % 5
+        row_idx = idx // 5
 
-        for row_idx, hero in enumerate(heroes[:5]):
-            x = margin_x + col_idx * (col_width + gap_between_cols)
-            y = margin_y + row_idx * row_height
+        x = start_x + col_idx * (col_width + gap_between_cols)
+        y = start_y + row_idx * (row_height + gap_between_rows)
 
-            icon_raw = icons.get(hero['id'])
+        if icon_raw is None:
+            draw.rounded_rectangle(
+                [x + 5, y + 5, x + col_width - 5, y + icon_height],
+                radius=10,
+                fill=(80, 80, 80)
+            )
+            continue
 
-            if icon_raw is None:
-                draw.rounded_rectangle(
-                    [x + 5, y + 5, x + col_width - 5, y + icon_height],
-                    radius=10, fill=(80, 80, 80)
-                )
-                # Серый placeholder
+        scale = icon_height / icon_raw.height
+        new_width = int(icon_raw.width * scale)
+        new_height = icon_height
+
+        if new_width > col_width:
+            scale = col_width / icon_raw.width
+            new_width = col_width
+            new_height = int(icon_raw.height * scale)
+
+        icon_scaled = icon_raw.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        icon_processed = apply_fancy_style(icon_scaled, size=(new_width, new_height), radius=max(8, new_height // 12), border_width=2)
+
+        processed_width = new_width + 4
+        processed_height = new_height + 4
+
+        icon_x = x + (col_width - processed_width) // 2
+        icon_y = y + 5
+
+        base.paste(icon_processed, (icon_x, icon_y), icon_processed)
+
+        wr_value = round(hero['wr'])
+        wr_text = f"{wr_value}%"
+
+        try:
+            font_large = ImageFont.truetype(FONT_PATH, 30)
+            for bold_name in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
                 try:
-                    ph_font = ImageFont.truetype(FONT_PATH, 16)
+                    font_large = ImageFont.truetype(f"C:/Windows/Fonts/{bold_name}", 30)
+                    break
                 except:
-                    ph_font = ImageFont.load_default()
-                draw.text((x + 10, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
-                continue
+                    continue
+        except:
+            font_large = ImageFont.load_default()
 
-            # Масштабирование
-            scale = icon_height / icon_raw.height
-            nw = int(icon_raw.width * scale)
-            nh = icon_height
-            if nw > col_width:
-                scale = col_width / icon_raw.width
-                nw = col_width
-                nh = int(icon_raw.height * scale)
-
-            icon_scaled = icon_raw.resize((nw, nh), Image.Resampling.LANCZOS)
-            icon_proc = apply_fancy_style(icon_scaled, size=(nw, nh),
-                                          radius=max(8, nh // 12), border_width=2)
-
-            pw = nw + 4
-            icon_x = x + (col_width - pw) // 2
-            icon_y = y + 5
-
-            base.paste(icon_proc, (icon_x, icon_y), icon_proc)
-
-            wr_text = f"{round(hero['wr'])}%"
-
-            try:
-                font_lg = ImageFont.truetype(FONT_PATH, 28)
-                for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
-                    try:
-                        font_lg = ImageFont.truetype(f"C:/Windows/Fonts/{bn}", 28)
-                        break
-                    except:
-                        continue
-            except:
-                font_lg = ImageFont.load_default()
-
-            try:
-                bb = draw.textbbox((0, 0), wr_text, font=font_lg)
-                tw = bb[2] - bb[0]
-                th = bb[3] - bb[1]
-                tx = icon_x + pw // 2 - tw // 2
-                ty = icon_y + nh + 2 - 12 - th
-                draw.text((tx, ty), wr_text, fill=(255, 255, 255), font=font_lg)
-            except Exception:
-                draw.text((icon_x + pw // 2 - 20, icon_y + nh - 30),
-                          wr_text, fill=(255, 255, 255), font=font_lg)
+        try:
+            bbox = draw.textbbox((0, 0), wr_text, font=font_large)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            text_x = icon_x + processed_width // 2 - text_width // 2
+            text_y = icon_y + new_height + 2 - 12 - text_height
+            draw.text((text_x, text_y), wr_text, fill=(255, 255, 255), font=font_large)
+        except Exception:
+            draw.text((icon_x + processed_width // 2 - 20, icon_y + new_height + 2 - 12 - 20),
+                     wr_text, fill=(255, 255, 255), font=font_large)
 
     buf = io.BytesIO()
     base.save(buf, format='PNG')
@@ -405,47 +371,54 @@ async def create_infographic(hero_stats):
 
 
 async def get_hero_meta_image():
-    """Generate hero meta image"""
-    logger.info("get_hero_meta_image called")
+    """Generate hero meta image for external use (e.g., digest)"""
+    logger.info("get_hero_meta_image called - starting generation")
     try:
         data = await get_dota_data()
         if not data:
-            logger.error("No data from OpenDota")
+            logger.error("No data from OpenDota, using static fallback banner")
             return get_static_fallback_banner()
         banner = await create_infographic(data)
         if banner:
             return banner
+        logger.warning("create_infographic returned None, using static fallback banner")
         return get_static_fallback_banner()
     except Exception as e:
-        logger.warning(f"Hero meta generation failed: {e!r}")
+        logger.warning(f"Failed to generate hero meta image: {e!r}, using static fallback banner")
         return get_static_fallback_banner()
 
 
 def get_static_fallback_banner():
-    """Статичный баннер когда API недоступен"""
+    """Создаёт простой статичный баннер когда API недоступен"""
     logger.info("Generating static fallback banner")
     try:
         base = Image.new("RGBA", (1200, 200), (25, 25, 35, 255))
         draw = ImageDraw.Draw(base)
+
         from datetime import datetime, timezone, timedelta
         MSK = timezone(timedelta(hours=3))
-        date_text = datetime.now(MSK).strftime("%d.%m.%Y %H:%M")
+        now_msk = datetime.now(MSK)
+        date_text = now_msk.strftime("%d.%m.%Y %H:%M")
+
         try:
             font = ImageFont.truetype(FONT_PATH, 32)
         except:
             font = ImageFont.load_default()
+
         draw.text((20, 20), "Dota 2 Hero Meta", fill=(255, 215, 0), font=font)
         draw.text((20, 70), f"Updated: {date_text}", fill=(200, 200, 200), font=font)
-        draw.text((20, 120), "API unavailable", fill=(150, 150, 150), font=font)
+        draw.text((20, 120), "API unavailable - using cached data", fill=(150, 150, 150), font=font)
+
         buf = io.BytesIO()
         base.save(buf, format='PNG')
         return buf.getvalue()
     except Exception as e:
-        logger.error(f"Static banner error: {e!r}")
+        logger.error(f"Failed to create static fallback banner: {e!r}")
         return None
 
 
 def setup_hero_meta_job(application: Application):
+    """Настройка планировщика для еженедельного обновления мета-героев"""
     chat_id = os.getenv('HERO_META_CHAT_ID')
     if chat_id:
         try:
@@ -454,5 +427,5 @@ def setup_hero_meta_job(application: Application):
         except ValueError:
             logger.warning(f"Invalid HERO_META_CHAT_ID: {chat_id}")
     else:
-        logger.warning("HERO_META_CHAT_ID not set")
+        logger.warning("HERO_META_CHAT_ID not set in environment variables")
     logger.info("Hero meta setup completed")
