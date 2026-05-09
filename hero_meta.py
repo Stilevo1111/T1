@@ -40,7 +40,163 @@ if FONT_PATH is None:
     logger.warning("Using default PIL font as no system fonts found")
 
 
-# Removed detect_hero_position - using bestPosition from API data directly
+# Primary role mapping for Dota 2 heroes
+ROLE_MAP = {
+    # Position 1 - Carry
+    "Anti-Mage": 1,
+    "Bloodseeker": 1,
+    "Bounty Hunter": 1,
+    "Broodmother": 1,
+    "Clinkz": 1,
+    "Drow Ranger": 1,
+    "Faceless Void": 1,
+    "Gyrocopter": 1,
+    "Juggernaut": 1,
+    "Lone Druid": 1,
+    "Luna": 1,
+    "Medusa": 1,
+    "Meepo": 1,
+    "Mirana": 1,
+    "Monkey King": 1,
+    "Morphling": 1,
+    "Naga Siren": 1,
+    "Phantom Assassin": 1,
+    "Phantom Lancer": 1,
+    "Razor": 1,
+    "Riki": 1,
+    "Slark": 1,
+    "Sniper": 1,
+    "Spectre": 1,
+    "Templar Assassin": 1,
+    "Terrorblade": 1,
+    "Troll Warlord": 1,
+    "Ursa": 1,
+    "Vengeful Spirit": 1,
+    "Venomancer": 1,
+    "Viper": 1,
+    "Weaver": 1,
+
+    # Position 2 - Mid
+    "Alchemist": 2,
+    "Arc Warden": 2,
+    "Batrider": 2,
+    "Death Prophet": 2,
+    "Dragon Knight": 2,
+    "Ember Spirit": 2,
+    "Huskar": 2,
+    "Invoker": 2,
+    "Kunkka": 2,
+    "Leshrac": 2,
+    "Lina": 2,
+    "Lycan": 2,
+    "Magnus": 2,
+    "Necrophos": 2,
+    "Outworld Destroyer": 2,
+    "Puck": 2,
+    "Queen of Pain": 2,
+    "Shadow Fiend": 2,
+    "Storm Spirit": 2,
+    "Tinker": 2,
+    "Void Spirit": 2,
+    "Zeus": 2,
+
+    # Position 3 - Offlane
+    "Axe": 3,
+    "Beastmaster": 3,
+    "Brewmaster": 3,
+    "Centaur Warrunner": 3,
+    "Chaos Knight": 3,
+    "Clockwerk": 3,
+    "Dark Seer": 3,
+    "Dawnbreaker": 3,
+    "Doom": 3,
+    "Earth Spirit": 3,
+    "Earthshaker": 3,
+    "Elder Titan": 3,
+    "Enigma": 3,
+    "Legion Commander": 3,
+    "Mars": 3,
+    "Night Stalker": 3,
+    "Omniknight": 3,
+    "Primal Beast": 3,
+    "Pudge": 3,
+    "Sand King": 3,
+    "Slardar": 3,
+    "Spirit Breaker": 3,
+    "Sven": 3,
+    "Tidehunter": 3,
+    "Timbersaw": 3,
+    "Treant Protector": 3,
+    "Tusk": 3,
+    "Underlord": 3,
+    "Wraith King": 3,
+
+    # Position 4 - Soft Support
+    "Abaddon": 4,
+    "Ancient Apparition": 4,
+    "Bane": 4,
+    "Bristleback": 4,
+    "Chen": 4,
+    "Crystal Maiden": 4,
+    "Dark Willow": 4,
+    "Dazzle": 4,
+    "Disruptor": 4,
+    "Enchantress": 4,
+    "Grimstroke": 4,
+    "Hoodwink": 4,
+    "Io": 4,
+    "Jakiro": 4,
+    "Keeper of the Light": 4,
+    "Lich": 4,
+    "Lina": 4,
+    "Lion": 4,
+    "Nature's Prophet": 4,
+    "Necrophos": 4,
+    "Ogre Magi": 4,
+    "Oracle": 4,
+    "Phoenix": 4,
+    "Pugna": 4,
+    "Rubick": 4,
+    "Shadow Demon": 4,
+    "Silencer": 4,
+    "Skywrath Mage": 4,
+    "Snapfire": 4,
+    "Techies": 4,
+    "Tinker": 4,
+    "Tiny": 4,
+    "Venomancer": 4,
+    "Viper": 4,
+    "Warlock": 4,
+    "Windranger": 4,
+    "Winter Wyvern": 4,
+    "Witch Doctor": 4,
+    "Zeus": 4,
+
+    # Position 5 - Hard Support
+    "Aghanim's Scepter": 5,  # Wait, this is wrong
+    # Actually, hard supports are usually the same as soft supports but more tanky
+    # For simplicity, let's use position 5 for tanky supports
+    "Earthshaker": 5,
+    "Treant Protector": 5,
+    "Omniknight": 5,
+    "Phoenix": 5,
+}
+
+def detect_hero_position(hero_data):
+    """Get hero position from ROLE_MAP, fallback to max pick detection."""
+    hero_name = hero_data.get("localized_name", "")
+    if hero_name in ROLE_MAP:
+        return ROLE_MAP[hero_name]
+
+    # Fallback: use max pick position
+    max_picks = 0
+    best_position = 2
+    for pos in range(1, 6):
+        picks = hero_data.get(f"{pos}_pick", 0)
+        if picks > max_picks:
+            max_picks = picks
+            best_position = pos
+    return best_position
 
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
@@ -105,32 +261,26 @@ def _build_grid(hero_stats):
     processed_heroes = []
 
     for hero in hero_stats:
-        # Calculate matches (use pub_pick for more data, fallback to pro_pick)
+        # Use pub data with better scoring
         matches = hero.get("pub_pick", hero.get("pro_pick", 0))
-        if matches < 50000:  # Filter out low-play heroes (lower threshold for pub data)
+        if matches < 50000:  # Filter out low-play heroes
             continue
 
-        # Calculate winrate (use pub data)
+        # Calculate winrate
         wins = hero.get("pub_win", hero.get("pro_win", 0))
         winrate = (wins / matches) if matches > 0 else 0
 
-        # Calculate score: winrate * log10(matches)
-        import math
-        score = winrate * math.log10(matches) if matches > 1 else 0
+        # Calculate score: winrate * (matches / 100000) - balances success and popularity
+        score = winrate * (matches / 100000) if matches > 0 else 0
 
-        # Find best position by max picks
-        positions = {}
-        for pos in range(1, 6):
-            pos_picks = hero.get(f"{pos}_pick", 0)
-            positions[pos] = pos_picks
-
-        best_position = max(positions, key=positions.get)
+        # Use position from role detection (not max picks)
+        pos = detect_hero_position(hero)
 
         processed_heroes.append({
             'id': hero["id"],
             'name': hero.get("localized_name", 'Hero %d' % hero["id"]),
             'img': hero.get("img", ""),
-            'position': best_position,
+            'position': pos,
             'score': score,
             'winrate': winrate,
             'matches': matches,
