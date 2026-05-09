@@ -253,14 +253,14 @@ async def create_infographic(hero_stats):
 
             if icon_raw is None:
                 draw.rounded_rectangle(
-                    [x + 15, y + 5, x + col_width - 5, y + icon_height],  # Shift rectangle right by 10
+                    [x + 20, y + 5, x + col_width - 5, y + icon_height],  # Shift rectangle right by 15
                     radius=10, fill=(80, 80, 80)
                 )
                 try:
                     ph_font = ImageFont.truetype(FONT_PATH, 16)
                 except:
                     ph_font = ImageFont.load_default()
-                draw.text((x + 20, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)  # Shift text right by 10
+                draw.text((x + 25, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)  # Shift text right by 15
                 continue
 
             scale = icon_height / icon_raw.height
@@ -276,7 +276,7 @@ async def create_infographic(hero_stats):
                                           radius=max(8, nh // 12), border_width=2)
 
             pw = nw + 4
-            icon_x = x + (col_width - pw) // 2 + 10  # Shift right by 10 pixels
+            icon_x = x + (col_width - pw) // 2 + 15  # Shift right by 15 pixels
             icon_y = y + 5
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
