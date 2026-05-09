@@ -264,17 +264,15 @@ def _build_grid(hero_stats):
     processed_heroes = []
 
     for hero in hero_stats:
-        # Use pub data with better scoring
+        # Use pub data
         matches = hero.get("pub_pick", hero.get("pro_pick", 0))
-        if matches < 50000:  # Filter out low-play heroes
-            continue
 
         # Calculate winrate
         wins = hero.get("pub_win", hero.get("pro_win", 0))
         winrate = (wins / matches) if matches > 0 else 0
 
-        # Calculate score: winrate * (matches / 100000) - balances success and popularity
-        score = winrate * (matches / 100000) if matches > 0 else 0
+        # Use winrate as score (higher winrate = better)
+        score = winrate
 
         # Use position from role detection (not max picks)
         pos = detect_hero_position(hero)
