@@ -40,41 +40,7 @@ if FONT_PATH is None:
     logger.warning("Using default PIL font as no system fonts found")
 
 
-def detect_hero_position(hero_data):
-    """Определяет позицию героя по комбинации ролей и лучшего винрейта."""
-    roles = set((r or "").lower().strip() for r in hero_data.get("roles", []))
-
-    # Define allowed positions based on roles
-    allowed_positions = set()
-
-    if "carry" in roles:
-        allowed_positions.update([1, 2, 3])  # Carry can play multiple positions
-    if "nuker" in roles or "escape" in roles:
-        allowed_positions.add(2)  # Mid
-    if "durable" in roles or "initiator" in roles:
-        allowed_positions.add(3)  # Offlane
-    if "disabler" in roles:
-        allowed_positions.update([2, 3, 4])  # Disablers can be mid/offlane/support
-    if "support" in roles:
-        allowed_positions.add(5)  # Support
-
-    if not allowed_positions:
-        allowed_positions = {2}  # Default to mid
-
-    # Find position with best win rate among allowed positions
-    best_pos = None
-    best_wr = 0
-
-    for pos in allowed_positions:
-        picks = hero_data.get(f"{pos}_pick", 0)
-        wins = hero_data.get(f"{pos}_win", 0)
-        wr = (wins / picks * 100) if picks >= 1000 else 0
-
-        if wr > best_wr:
-            best_wr = wr
-            best_pos = pos
-
-    return best_pos or 2
+# Removed detect_hero_position - using bestPosition from API data directly
 
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
@@ -129,88 +95,59 @@ async def get_dota_data(days=7):
 
 def _build_grid(hero_stats):
     """
-    Сетка 5 колонок с героями на своих позициях по ролям.
-    1) Определяем основную позицию героя по ролям.
-    2) Используем винрейт героя на этой позиции.
-    3) Сортируем по винрейту и берем топ героев.
+    Сетка 5 колонок с лучшими героями по позициям за неделю.
+    1) Для каждого героя определяем bestPosition по максимальным пикам.
+    2) Рассчитываем score = winrate * log10(matches).
+    3) Фильтруем героев с < 5000 матчей.
+    4) Выбираем топ-5 по score для каждой позиции.
     """
-    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
+    # Process heroes
+    processed_heroes = []
 
     for hero in hero_stats:
-        pro_pick = hero.get("pro_pick", 0)
-        if pro_pick < 20:
+        # Calculate matches (use pub_pick for more data, fallback to pro_pick)
+        matches = hero.get("pub_pick", hero.get("pro_pick", 0))
+        if matches < 50000:  # Filter out low-play heroes (lower threshold for pub data)
             continue
 
-        hero_id = hero["id"]
+        # Calculate winrate (use pub data)
+        wins = hero.get("pub_win", hero.get("pro_win", 0))
+        winrate = (wins / matches) if matches > 0 else 0
 
-        # Определяем основную позицию по ролям
-        pos = detect_hero_position(hero)
-        if not pos:
-            continue
+        # Calculate score: winrate * log10(matches)
+        import math
+        score = winrate * math.log10(matches) if matches > 1 else 0
 
-        # Используем винрейт героя на его основной позиции
-        pk = hero.get("%d_pick" % pos, 0)
-        wk = hero.get("%d_win" % pos, 0)
+        # Find best position by max picks
+        positions = {}
+        for pos in range(1, 6):
+            pos_picks = hero.get(f"{pos}_pick", 0)
+            positions[pos] = pos_picks
 
-        # Минимальный порог пиков на позиции
-        if pk < 1000:
-            continue
+        best_position = max(positions, key=positions.get)
 
-        wr = (wk / pk * 100) if pk > 0 else 0
-
-        by_position[pos].append({
-            'id': hero_id,
-            'name': hero.get("localized_name", 'Hero %d' % hero_id),
+        processed_heroes.append({
+            'id': hero["id"],
+            'name': hero.get("localized_name", 'Hero %d' % hero["id"]),
             'img': hero.get("img", ""),
-            'wr': wr,
-            'picks': pk,
-            'wins': wk,
+            'position': best_position,
+            'score': score,
+            'winrate': winrate,
+            'matches': matches,
         })
 
+    # Group by position and sort by score
+    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
+    for hero in processed_heroes:
+        by_position[hero['position']].append(hero)
+
+    # Take top 5 by score for each position
     grid = {}
     for pos in range(1, 6):
-        heroes = sorted(by_position[pos], key=lambda h: -h['wr'])
-        grid[pos] = heroes
+        heroes = sorted(by_position[pos], key=lambda h: -h['score'])
+        grid[pos] = heroes[:5]
 
-    # Balance positions: ensure minimum heroes per position
-    # Redistribute heroes from crowded positions to empty ones
-    target_min = {1: 3, 2: 3, 3: 3, 4: 1, 5: 3}
-
-    needs_heroes = []
-    available_heroes = []
-
-    for pos in range(1, 6):
-        count = len(grid[pos])
-        min_needed = target_min[pos]
-        if count < min_needed:
-            needs_heroes.append((pos, min_needed - count))
-        elif count > min_needed:
-            available_heroes.append((pos, count - min_needed))
-
-    # Redistribute
-    for need_pos, need_count in needs_heroes:
-        for avail_pos, avail_count in available_heroes:
-            if avail_count <= 0:
-                continue
-
-            to_move = min(need_count, avail_count)
-            moved_heroes = grid[avail_pos][-to_move:]
-            grid[avail_pos] = grid[avail_pos][:-to_move]
-            grid[need_pos].extend(moved_heroes)
-
-            need_count -= to_move
-            avail_count -= to_move
-
-            if need_count <= 0:
-                break
-
-    # Final: limit to 5 heroes per position
-    final_grid = {}
-    for pos in range(1, 6):
-        heroes = sorted(grid[pos], key=lambda h: -h['wr'])
-        final_grid[pos] = heroes[:5]
-
-    return final_grid
+    return grid
     return grid
 
 
@@ -322,7 +259,7 @@ async def create_infographic(hero_stats):
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
 
-            wr_text = "%d%%" % round(hero['wr'])
+            wr_text = "%d%%" % round(hero['winrate'] * 100)
 
             try:
                 bb = draw.textbbox((0, 0), wr_text, font=font_lg)
