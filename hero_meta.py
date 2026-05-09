@@ -1,4 +1,4 @@
-# hero_meta.py — асинхронная версия с позиционной статистикой и без дублей
+# hero_meta.py — асинхронная версия с позиционной статистикой, без дублей, без надписей
 
 import asyncio
 import aiohttp
@@ -110,7 +110,6 @@ async def get_weekly_hero_stats():
             return await get_fallback_hero_stats()
 
         # Агрегируем позиционную статистику
-        # hero_stats[hero_id][position] = {picks, wins}
         hero_stats = {}
 
         for match in matches:
@@ -217,15 +216,15 @@ async def get_dota_data(days=7):
     return await get_weekly_hero_stats()
 
 
-def _build_position_map(hero_stats):
+def _build_grid(hero_stats):
     """
-    Для каждой позиции (1-5) выбираем героев, у которых максимум игр на этой позиции.
-    Возвращает dict: {position: [hero_entries_sorted_by_wr]}
+    Строит сетку 5x5: для каждой позиции — свой уникальный набор героев.
+    Герой показывается ТОЛЬКО на своей основной позиции (где больше всего игр).
+    Если на позиции < 5 героев — оставшиеся ячейки пустые.
     """
-    positions = {1: [], 2: [], 3: [], 4: [], 5: []}
-
+    # Шаг 1: для каждого героя определяем основную позицию (максимум picks)
+    hero_main_pos = {}
     for hero in hero_stats:
-        # Находим позицию где у героя больше всего игр
         best_pos = None
         best_picks = 0
         for pos in range(1, 6):
@@ -233,35 +232,44 @@ def _build_position_map(hero_stats):
             if picks > best_picks:
                 best_picks = picks
                 best_pos = pos
+        if best_pos and best_picks > 0:
+            hero_main_pos[hero['id']] = best_pos
 
-        if best_pos is None or best_picks == 0:
+    # Шаг 2: группируем героев по основной позиции
+    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
+    for hero in hero_stats:
+        hid = hero['id']
+        if hid not in hero_main_pos:
             continue
+        pos = hero_main_pos[hid]
+        picks = hero.get(f'{pos}_pick', 0)
+        if picks < 3:  # минимум 3 игры на основной позиции
+            continue
+        wins = hero.get(f'{pos}_win', 0)
+        wr = (wins / picks * 100) if picks > 0 else 0
+        by_position[pos].append({
+            'id': hid,
+            'name': hero.get('localized_name', f'Hero {hid}'),
+            'img': hero['img'],
+            'wr': wr,
+            'picks': picks,
+            'wins': wins,
+        })
 
-        # Добавляем героя ВСЕ позиции где он играл >= 3 игр
-        for pos in range(1, 6):
-            picks = hero.get(f'{pos}_pick', 0)
-            if picks >= 3:
-                wins = hero.get(f'{pos}_win', 0)
-                wr = (wins / picks * 100) if picks > 0 else 0
-                positions[pos].append({
-                    'id': hero['id'],
-                    'name': hero.get('localized_name', f'Hero {hero["id"]}'),
-                    'img': hero['img'],
-                    'wr': wr,
-                    'picks': picks,
-                    'wins': wins,
-                    'is_main': pos == best_pos,
-                })
+    # Шаг 3: сортируем каждую позицию по винрейту (desc)
+    for pos in by_position:
+        by_position[pos].sort(key=lambda h: -h['wr'])
 
-    # Сортируем каждую позицию: сначала main-герои, потом sub, по винрейту
-    for pos in positions:
-        positions[pos].sort(key=lambda h: (not h['is_main'], -h['wr']))
+    # Шаг 4: берём top-5 для каждой позиции
+    grid = {}
+    for pos in range(1, 6):
+        grid[pos] = by_position[pos][:5]
 
-    return positions
+    return grid
 
 
 async def create_infographic(hero_stats):
-    """Баннер 5x5: по 5 героев на каждую позицию, без дублей"""
+    """Баннер 5x5: 5 колонок (позиции), по 5 героев в каждой. Без дублей."""
     logger.info("Starting create_infographic")
 
     if not os.path.exists(BACKGROUND_PATH):
@@ -289,7 +297,6 @@ async def create_infographic(hero_stats):
     margin_x = 50
     margin_y = 215
     gap_between_cols = 15
-    gap_between_rows = 0
 
     col_width = (bg_width - 2 * margin_x - 6 * gap_between_cols) // 5
     row_height = (bg_height - margin_y - 10) // 5
@@ -298,10 +305,6 @@ async def create_infographic(hero_stats):
     icon_height = min(int(base_icon_height * 1.163), row_height - 5)
 
     # Шрифты
-    try:
-        font_col = ImageFont.truetype(FONT_PATH, 20)
-    except:
-        font_col = ImageFont.load_default()
     try:
         font_wr = ImageFont.truetype(FONT_PATH, 27)
         for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
@@ -313,40 +316,21 @@ async def create_infographic(hero_stats):
     except:
         font_wr = ImageFont.load_default()
 
-    # Названия колонок
-    POS_NAMES = ["КЕРРИ", "МИДЛ", "ХАРДЛ", "САППОРТ 4", "САППОРТ 5"]
+    # Строим сетку
+    grid = _build_grid(hero_stats)
 
-    # Собираем позиционную статистику
-    positions = _build_position_map(hero_stats)
-
-    # Dedup: если герой уже назначен на раннюю позицию, пропускаем на поздних
-    assigned_heroes = set()
-
-    # Для каждой позиции выбираем уникальных героев
-    final_positions = {1: [], 2: [], 3: [], 4: [], 5: []}
-    for pos in range(1, 6):
-        for hero in positions[pos]:
-            if hero['id'] not in assigned_heroes:
-                final_positions[pos].append(hero)
-                assigned_heroes.add(hero['id'])
-            if len(final_positions[pos]) >= 5:
-                break
-
-    # Асинхронная загрузка всех иконок
+    # Собираем все уникальные герои для загрузки иконок
     all_heroes = []
+    seen_ids = set()
     for pos in range(1, 6):
-        all_heroes.extend(final_positions[pos])
+        for hero in grid[pos]:
+            if hero['id'] not in seen_ids:
+                seen_ids.add(hero['id'])
+                all_heroes.append(hero)
 
-    # Убираем дубли из all_heroes (на всякий случай)
-    seen = set()
-    unique_heroes = []
-    for h in all_heroes:
-        if h['id'] not in seen:
-            seen.add(h['id'])
-            unique_heroes.append(h)
-
+    # Асинхронная загрузка иконок
     async with aiohttp.ClientSession() as session:
-        tasks = {h['id']: fetch_hero_icon(session, h['img']) for h in unique_heroes}
+        tasks = {h['id']: fetch_hero_icon(session, h['img']) for h in all_heroes}
         icon_cache = {}
         for hid, task in tasks.items():
             try:
@@ -355,19 +339,25 @@ async def create_infographic(hero_stats):
                 icon_cache[hid] = None
 
     # Отрисовка
+    POS_LABELS = ["КЕРРИ", "МИДЛ", "ХАРДЛ", "САПП4", "САПП5"]
+
     for col_idx in range(5):
         pos = col_idx + 1
-        heroes = final_positions[pos]
+        heroes = grid[pos]
 
-        # Название позиции
-        name = POS_NAMES[col_idx]
+        # Подпись позиции (маленьким шрифтом сверху)
+        label = POS_LABELS[col_idx]
         try:
-            bbox = draw.textbbox((0, 0), name, font=font_col)
-            lw = bbox[2] - bbox[0]
+            lbl_font = ImageFont.truetype(FONT_PATH, 16)
+        except:
+            lbl_font = ImageFont.load_default()
+        try:
+            bb = draw.textbbox((0, 0), label, font=lbl_font)
+            lw = bb[2] - bb[0]
         except:
             lw = 0
         lx = margin_x + col_idx * (col_width + gap_between_cols) + (col_width - lw) // 2
-        draw.text((lx, margin_y - 28), name, fill=(200, 200, 200), font=font_col)
+        draw.text((lx, margin_y - 18), label, fill=(180, 180, 180), font=lbl_font)
 
         for row_idx, hero in enumerate(heroes[:5]):
             x = margin_x + col_idx * (col_width + gap_between_cols)
@@ -383,13 +373,13 @@ async def create_infographic(hero_stats):
                 continue
 
             # Масштабирование
-            scale_h = icon_height / icon_raw.height
-            nw = int(icon_raw.width * scale_h)
+            scale = icon_height / icon_raw.height
+            nw = int(icon_raw.width * scale)
             nh = icon_height
             if nw > col_width:
-                scale_w = col_width / icon_raw.width
+                scale = col_width / icon_raw.width
                 nw = col_width
-                nh = int(icon_raw.height * scale_w)
+                nh = int(icon_raw.height * scale)
 
             icon_scaled = icon_raw.resize((nw, nh), Image.Resampling.LANCZOS)
             icon_proc = apply_fancy_style(icon_scaled, size=(nw, nh),
@@ -404,10 +394,10 @@ async def create_infographic(hero_stats):
             # Winrate текст
             wr_text = f"{round(hero['wr'])}%"
             try:
-                font_lg = ImageFont.truetype(FONT_PATH, 30)
+                font_lg = ImageFont.truetype(FONT_PATH, 28)
                 for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
                     try:
-                        font_lg = ImageFont.truetype(f"C:/Windows/Fonts/{bn}", 30)
+                        font_lg = ImageFont.truetype(f"C:/Windows/Fonts/{bn}", 28)
                         break
                     except:
                         continue
@@ -431,7 +421,6 @@ async def create_infographic(hero_stats):
 
 
 async def get_hero_meta_image():
-    """Generate hero meta image"""
     logger.info("get_hero_meta_image called")
     try:
         data = await get_dota_data()
@@ -443,20 +432,18 @@ async def get_hero_meta_image():
             return banner
         return get_static_fallback_banner()
     except Exception as e:
-        logger.warning(f"Hero meta image generation failed: {e!r}")
+        logger.warning(f"Hero meta generation failed: {e!r}")
         return get_static_fallback_banner()
 
 
 def get_static_fallback_banner():
-    """Статичный баннер если API недоступен"""
     logger.info("Generating static fallback banner")
     try:
         base = Image.new("RGBA", (1200, 200), (25, 25, 35, 255))
         draw = ImageDraw.Draw(base)
         from datetime import datetime, timezone, timedelta
         MSK = timezone(timedelta(hours=3))
-        now_msk = datetime.now(MSK)
-        date_text = now_msk.strftime("%d.%m.%Y %H:%M")
+        date_text = datetime.now(MSK).strftime("%d.%m.%Y %H:%M")
         try:
             font = ImageFont.truetype(FONT_PATH, 32)
         except:
@@ -464,7 +451,6 @@ def get_static_fallback_banner():
         draw.text((20, 20), "Dota 2 Hero Meta", fill=(255, 215, 0), font=font)
         draw.text((20, 70), f"Updated: {date_text}", fill=(200, 200, 200), font=font)
         draw.text((20, 120), "API unavailable", fill=(150, 150, 150), font=font)
-
         buf = io.BytesIO()
         base.save(buf, format='PNG')
         return buf.getvalue()
