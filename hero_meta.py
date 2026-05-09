@@ -42,43 +42,37 @@ if FONT_PATH is None:
 
 def detect_hero_position(hero_roles):
     """Определяет позицию (1-5) по ролям из heroStats. Case-insensitive.
-    Сбалансированная логика для равномерного распределения.
+    Логика для равномерного распределения по всем позициям.
     """
     roles = set((r or "").lower().strip() for r in hero_roles)
 
-    # Position 5: Pure supports (no disabler/carry)
-    if "support" in roles and "disabler" not in roles and "carry" not in roles:
+    # Position 5 (Soft Support): Support without disabler
+    if "support" in roles and "disabler" not in roles:
         return 5
 
-    # Position 1: Pure carries (no support/durable)
-    if "carry" in roles and "support" not in roles and "durable" not in roles:
+    # Position 1 (Carry): Carry role
+    if "carry" in roles:
         return 1
 
-    # Position 4: Supports with disabler
+    # Position 4 (Hard Support): Support with disabler
     if "support" in roles and "disabler" in roles:
         return 4
 
-    # Position 3: Durable/Initiator
+    # Position 3 (Offlane): Durable or Initiator
     if "durable" in roles or "initiator" in roles:
         return 3
 
-    # Position 2: Nuker/Escape or complex heroes
-    if "nuker" in roles or "escape" in roles or ("carry" in roles and "support" in roles):
-        return 2
-
-    # Fallback by single roles
-    if "carry" in roles:
-        return 1
-    if "support" in roles:
-        return 5
-    if "disabler" in roles:
-        return 4
-    if "durable" in roles or "initiator" in roles:
-        return 3
+    # Position 2 (Mid): Nuker, Escape, or fallback for complex heroes
     if "nuker" in roles or "escape" in roles:
         return 2
 
-    return None
+    # Fallback assignments to fill positions
+    # If hero has disabler but no support, put in position 4
+    if "disabler" in roles:
+        return 4
+
+    # Default to position 2 (Mid) for remaining heroes
+    return 2
 
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
@@ -133,10 +127,10 @@ async def get_dota_data(days=7):
 
 def _build_grid(hero_stats):
     """
-    Сетка 5 колонок с принудительным балансом.
-    1) Классифицируем героев по ролям в позиции 1-5.
-    2) Для каждой позиции берем топ-5 героев по pro_winrate.
-    3) Если позиционных данных нет — используем общие pro_pick/pro_win.
+    Сетка 5 колонок с ролевой классификацией.
+    1) Распределяем героев по позициям на основе ролей.
+    2) Используем позиционные данные для win rate, если доступны.
+    3) Сортируем по win rate и берем топ героев.
     """
     by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
 
@@ -146,11 +140,13 @@ def _build_grid(hero_stats):
             continue
 
         hero_id = hero["id"]
+
+        # Определяем позицию по ролям
         pos = detect_hero_position(hero.get("roles", []))
         if not pos:
             continue
 
-        # Используем позиционные данные если доступны, иначе общие
+        # Используем позиционные данные для WR, если доступны
         pk = hero.get("%d_pick" % pos, 0) or pro_pick
         wk = hero.get("%d_win" % pos, 0) or hero.get("pro_win", 0)
 
@@ -167,9 +163,49 @@ def _build_grid(hero_stats):
 
     grid = {}
     for pos in range(1, 6):
-        # Сортируем по WR и берем топ-5
         heroes = sorted(by_position[pos], key=lambda h: -h['wr'])
-        grid[pos] = heroes[:5]
+        grid[pos] = heroes
+
+    # Balance positions: ensure minimum 3 heroes per position
+    # If a position has too few heroes, take from positions with excess
+    target_min = 3
+
+    # First pass: collect positions that need more heroes
+    needs_heroes = []
+    excess_heroes = []
+
+    for pos in range(1, 6):
+        count = len(grid[pos])
+        if count < target_min and count > 0:
+            needs_heroes.append((pos, target_min - count))
+        elif count > 5:
+            excess_heroes.append((pos, count - 5))
+
+    # Redistribute heroes from positions with excess to positions that need them
+    for need_pos, need_count in needs_heroes:
+        for excess_pos, excess_count in excess_heroes:
+            if excess_count <= 0:
+                continue
+
+            # Take heroes from excess position (lowest WR first)
+            to_move = min(need_count, excess_count)
+            moved_heroes = grid[excess_pos][-to_move:]
+            grid[excess_pos] = grid[excess_pos][:-to_move]
+            grid[need_pos].extend(moved_heroes)
+
+            need_count -= to_move
+            excess_count -= to_move
+
+            if need_count <= 0:
+                break
+
+    # Final pass: limit to 5 heroes per position, sorted by WR
+    final_grid = {}
+    for pos in range(1, 6):
+        heroes = sorted(grid[pos], key=lambda h: -h['wr'])
+        final_grid[pos] = heroes[:5] if len(heroes) >= 3 else heroes
+
+    return final_grid
     return grid
 
 
