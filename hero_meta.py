@@ -1,4 +1,4 @@
-# hero_meta.py — heroStats API + role-based positions, EXACT layout from a32f3e8
+# hero_meta.py — heroStats API + role-based, layout = dc5d7a5 (a32f3e8)
 
 import asyncio
 import aiohttp
@@ -40,14 +40,9 @@ if FONT_PATH is None:
     logger.warning("Using default PIL font as no system fonts found")
 
 
-# =========================================================
-# ROLE DETECTION
-# =========================================================
-
 def detect_hero_position(hero_roles):
-    """Определяет основную позицию (1-5) по ролям из heroStats"""
+    """Определяет позицию (1-5) по ролям из heroStats"""
     roles = set(hero_roles)
-
     if "Carry" in roles:
         return 1
     if "Nuker" in roles or "Escape" in roles:
@@ -60,10 +55,6 @@ def detect_hero_position(hero_roles):
         return 5
     return None
 
-
-# =========================================================
-# IMAGE STYLE — exact from a32f3e8
-# =========================================================
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     outer_size = (size[0] + 2 * border_width, size[1] + 2 * border_width)
@@ -81,19 +72,13 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     return output
 
 
-# =========================================================
-# FETCH HERO ICON — exact from a32f3e8
-# =========================================================
-
 async def fetch_hero_icon(session, icon_path):
-    """Асинхронная загрузка иконки героя"""
     if icon_path.startswith('/'):
         icon_url = "https://cdn.cloudflare.steamstatic.com%s" % icon_path
     elif not icon_path.startswith('http'):
         icon_url = "https://cdn.cloudflare.steamstatic.com/%s" % icon_path
     else:
         icon_url = icon_path
-
     try:
         async with session.get(icon_url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
             resp.raise_for_status()
@@ -104,17 +89,11 @@ async def fetch_hero_icon(session, icon_path):
         raise
 
 
-# =========================================================
-# HERO STATS — heroStats API
-# =========================================================
-
 async def get_dota_data(days=7):
-    """Загрузка heroStats из OpenDota — единственный источник"""
     url = "https://api.opendota.com/api/heroStats"
     try:
-        timeout = aiohttp.ClientTimeout(total=5)
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=timeout) as resp:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     logger.info("Loaded %d heroes from heroStats", len(data))
@@ -127,16 +106,10 @@ async def get_dota_data(days=7):
         return None
 
 
-# =========================================================
-# BUILD GRID — role-based positions, no duplicates
-# =========================================================
-
 def _build_grid(hero_stats):
     """
-    Строит сетку 5x5: каждый герой на своей ОСНОВНОЙ позиции.
-    Позиция определяется через hero["roles"] -> detect_hero_position.
-    Каждый герой только в одном столбце.
-    Минимум 20 pro_pick. Топ-5 по WR.
+    Сетка 5 колонок. Позиция = detect_hero_position(roles).
+    Каждый герой в одной колонке. Минимум 20 pro_pick.
     """
     by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
 
@@ -145,18 +118,12 @@ def _build_grid(hero_stats):
         if pro_pick < 20:
             continue
 
-        hero_id = hero["id"]
-
-        # Определяем позицию через роли
         pos = detect_hero_position(hero.get("roles", []))
         if not pos:
             continue
 
-        # Берём позиционные данные если есть
         pk = hero.get("%d_pick" % pos, 0)
         wk = hero.get("%d_win" % pos, 0)
-
-        # Fallback: если позиционных данных нет — используем общие пропорционально
         if pk == 0:
             pk = pro_pick
             wk = hero.get("pro_win", 0)
@@ -164,8 +131,8 @@ def _build_grid(hero_stats):
         wr = (wk / pk * 100) if pk > 0 else 0
 
         by_position[pos].append({
-            'id': hero_id,
-            'name': hero.get("localized_name", "Hero %d" % hero_id),
+            'id': hero["id"],
+            'name': hero.get("localized_name", 'Hero %d' % hero["id"]),
             'img': hero.get("img", ""),
             'wr': wr,
             'picks': pk,
@@ -174,18 +141,11 @@ def _build_grid(hero_stats):
 
     grid = {}
     for pos in range(1, 6):
-        sorted_heroes = sorted(by_position[pos], key=lambda h: -h['wr'])
-        grid[pos] = sorted_heroes
-
+        grid[pos] = sorted(by_position[pos], key=lambda h: -h['wr'])[:5]
     return grid
 
 
-# =========================================================
-# INFOGRAPHIC — 1200x800, exact layout from a32f3e8
-# =========================================================
-
 async def create_infographic(hero_stats):
-    """Баннер 1200x800: 5 колонок (позиции), по 5 героев. Без дублей, без подписей."""
     logger.info("Starting create_infographic")
 
     if not os.path.exists(BACKGROUND_PATH):
@@ -223,7 +183,6 @@ async def create_infographic(hero_stats):
     base_icon_height = row_height - 25
     icon_height = min(int(base_icon_height * 1.163), row_height - 5)
 
-    # WR шрифт
     try:
         font_lg = ImageFont.truetype(FONT_PATH, 28)
         for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
@@ -235,10 +194,8 @@ async def create_infographic(hero_stats):
     except:
         font_lg = ImageFont.load_default()
 
-    # Строим сетку из героев
     grid = _build_grid(hero_stats)
 
-    # Собираем уникальных героев
     all_heroes = []
     seen_ids = set()
     for pos in range(1, 6):
@@ -247,7 +204,6 @@ async def create_infographic(hero_stats):
                 seen_ids.add(h['id'])
                 all_heroes.append(h)
 
-    # Асинхронная загрузка иконок
     async with aiohttp.ClientSession() as session:
         tasks = [fetch_hero_icon(session, h['img']) for h in all_heroes]
         icons = {}
@@ -257,8 +213,6 @@ async def create_infographic(hero_stats):
             except Exception:
                 icons[hero['id']] = None
 
-    # Отрисовка: колонка = позиция, строки = топ героев позиции
-    # ИНДЕКСЫ БЕЗ НАДПИСЕЙ — как в рабочем коммите
     for col_idx in range(5):
         pos = col_idx + 1
         heroes = grid[pos]
@@ -281,7 +235,6 @@ async def create_infographic(hero_stats):
                 draw.text((x + 10, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
                 continue
 
-            # Масштабирование — exact из a32f3e8
             scale = icon_height / icon_raw.height
             nw = int(icon_raw.width * scale)
             nh = icon_height
@@ -318,12 +271,7 @@ async def create_infographic(hero_stats):
     return buf.getvalue()
 
 
-# =========================================================
-# MAIN ENTRY POINT
-# =========================================================
-
 async def get_hero_meta_image():
-    """Generate hero meta image"""
     logger.info("get_hero_meta_image called")
     try:
         data = await get_dota_data()
@@ -340,7 +288,6 @@ async def get_hero_meta_image():
 
 
 def get_static_fallback_banner():
-    """Статичный баннер когда API недоступен"""
     logger.info("Generating static fallback banner")
     try:
         base = Image.new("RGBA", (1200, 200), (25, 25, 35, 255))
