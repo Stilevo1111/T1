@@ -1,4 +1,4 @@
-# hero_meta.py — heroStats API + role-based positions, layout 1:1 from a32f3e8
+# hero_meta.py — heroStats API + role-based positions, layout from a32f3e8
 
 import asyncio
 import aiohttp
@@ -127,21 +127,38 @@ def _build_grid(hero_stats):
         if pro_pick < 20:
             continue
 
-        pos = detect_hero_position(hero.get("roles", []))
-        if not pos:
-            continue
+        hero_id = hero["id"]
 
-        pk = hero.get("%d_pick" % pos, hero.get("pro_pick", 0))
-        wk = hero.get("%d_win" % pos, hero.get("pro_win", 0))
-        wr = (wk / pk * 100) if pk > 0 else 0
+        # Проверяем позиционные поля (есть в heroStats API)
+        best_pos = None
+        best_pos_picks = 0
+        for p in range(1, 6):
+            pk = hero.get("%d_pick" % p, 0)
+            if pk > best_pos_picks:
+                best_pos_picks = pk
+                best_pos = p
 
-        by_position[pos].append({
-            'id': hero["id"],
-            'name': hero.get("localized_name", "Hero %d" % hero["id"]),
+        # Fallback через roles если нет позиционных данных
+        if best_pos is None or best_pos_picks == 0:
+            best_pos = detect_hero_position(hero.get("roles", []))
+            if best_pos is None:
+                continue
+            best_pos_picks = pro_pick
+
+        # Wins на этой позиции
+        wins = hero.get("%d_win" % best_pos, 0)
+        if wins == 0 and pro_pick > 0:
+            wins = int(hero.get("pro_win", 0) * (best_pos_picks / pro_pick))
+
+        wr = (wins / best_pos_picks * 100) if best_pos_picks > 0 else 0
+
+        by_position[best_pos].append({
+            'id': hero_id,
+            'name': hero.get("localized_name", "Hero %d" % hero_id),
             'img': hero.get("img", ""),
-            'wr': wr,
-            'picks': pk,
-            'wins': wk,
+            'wr': round(wr, 1),
+            'picks': best_pos_picks,
+            'wins': wins,
         })
 
     grid = {}
@@ -153,7 +170,7 @@ def _build_grid(hero_stats):
 
 
 async def create_infographic(hero_stats):
-    """Баннер 1200x800: 5 колонок, по 5 героев. Без дублей, без подписей."""
+    """Баннер 1200x800: 5 колонок (позиции), по 5 героев. Без дублей, без подписей."""
     logger.info("Starting create_infographic")
 
     if not os.path.exists(BACKGROUND_PATH):
@@ -202,6 +219,17 @@ async def create_infographic(hero_stats):
     except:
         font_wr = ImageFont.load_default()
 
+    try:
+        font_lg = ImageFont.truetype(FONT_PATH, 28)
+        for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
+            try:
+                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 28)
+                break
+            except:
+                continue
+    except:
+        font_lg = ImageFont.load_default()
+
     # Строим сетку из героев
     grid = _build_grid(hero_stats)
 
@@ -223,6 +251,8 @@ async def create_infographic(hero_stats):
                 icons[hero['id']] = await tasks[i]
             except Exception:
                 icons[hero['id']] = None
+
+    border_width = 3
 
     # Отрисовка: колонка = позиция, строки = топ героев позиции
     for col_idx in range(5):
@@ -247,48 +277,38 @@ async def create_infographic(hero_stats):
                 draw.text((x + 10, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
                 continue
 
-            # Масштабирование
-            scale = icon_height / icon_raw.height
+            # Масштабирование: вписываем в (col_width - 2*border_width) чтобы golden border НЕ вылезал
+            max_inner = col_width - 2 * border_width
+            scale_h = icon_height / icon_raw.height
+            scale_w = max_inner / icon_raw.width
+            scale = min(scale_h, scale_w, 1.0)  # не увеличиваем если иконка мала
             nw = int(icon_raw.width * scale)
-            nh = icon_height
-            if nw > col_width:
-                scale = col_width / icon_raw.width
-                nw = col_width
-                nh = int(icon_raw.height * scale)
+            nh = int(icon_raw.height * scale)
 
             icon_scaled = icon_raw.resize((nw, nh), Image.Resampling.LANCZOS)
             icon_proc = apply_fancy_style(icon_scaled, size=(nw, nh),
-                                          radius=max(8, nh // 12), border_width=2)
+                                          radius=max(8, nh // 12), border_width=border_width)
 
-            pw = nw + 4
-            icon_x = x + (col_width - pw) // 2
+            # Центрируем по реальному размеру (с golden border)
+            actual_w = icon_proc.width   # = nw + 2*border_width
+            actual_h = icon_proc.height  # = nh + 2*border_width
+            icon_x = x + (col_width - actual_w) // 2
             icon_y = y + 5
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
 
-            # Winrate текст — точно как в a32f3e8
+            # Winrate текст — сразу под иконкой
             wr_text = "%d%%" % round(hero['wr'])
-
-            try:
-                font_lg = ImageFont.truetype(FONT_PATH, 28)
-                for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
-                    try:
-                        font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 28)
-                        break
-                    except:
-                        continue
-            except:
-                font_lg = ImageFont.load_default()
 
             try:
                 bb = draw.textbbox((0, 0), wr_text, font=font_lg)
                 tw = bb[2] - bb[0]
                 th = bb[3] - bb[1]
-                tx = icon_x + pw // 2 - tw // 2
-                ty = icon_y + nh + 2 - 12 - th
+                tx = icon_x + actual_w // 2 - tw // 2
+                ty = icon_y + actual_h + 2
                 draw.text((tx, ty), wr_text, fill=(255, 255, 255), font=font_lg)
             except Exception:
-                draw.text((icon_x + pw // 2 - 20, icon_y + nh - 30),
+                draw.text((icon_x + actual_w // 2 - 20, icon_y + actual_h + 2),
                           wr_text, fill=(255, 255, 255), font=font_lg)
 
     buf = io.BytesIO()
