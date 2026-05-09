@@ -372,6 +372,12 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in test_mvp_winner: {e}")
         await update.message.reply_text(f"Ошибка: {e}")
 
+def _get_player_stats_wrapper(steam_id, use_cache):
+    """Обёртка для вызова синхронной get_player_stats из потока"""
+    from dota_mmr import get_player_stats
+    return get_player_stats(steam_id, use_cache=use_cache)
+
+
 async def announce_weekly_mmr_winner(bot):
     """Отправляет поздравление победителю недельного топа MMR при смене недели."""
     from datetime import datetime as dt, timezone, timedelta
@@ -539,14 +545,16 @@ async def announce_weekly_mmr_winner(bot):
         f"🏆Этот игрок показал лучший результат в топе MMR за неделю!{tag_info}"
     )
 
-    from dota_mmr import generate_start_card, get_player_stats
+    from dota_mmr import generate_start_card
 
     # Асинхронно получаем свежий аватар (безопасно для event loop)
     avatar_url = winner.get('avatar')
     if winner.get('steam_id'):
         logger.info(f"Fetching fresh avatar for champion {winner.get('steam_nickname')}")
         try:
-            fresh_stats = await asyncio.to_thread(get_player_stats, winner.get('steam_id'), False)
+            fresh_stats = await asyncio.to_thread(
+                _get_player_stats_wrapper, winner.get('steam_id'), False
+            )
             if fresh_stats and fresh_stats.get('avatar'):
                 avatar_url = fresh_stats.get('avatar')
                 logger.info(f"Using fresh avatar for champion: {avatar_url}")
