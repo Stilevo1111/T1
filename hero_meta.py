@@ -41,26 +41,40 @@ if FONT_PATH is None:
 
 
 def detect_hero_position(hero_data):
-    """Определяет основную позицию героя по его ролям."""
+    """Определяет позицию героя по комбинации ролей и лучшего винрейта."""
     roles = set((r or "").lower().strip() for r in hero_data.get("roles", []))
 
-    # Role to position mapping
-    role_priority = [
-        ("carry", 1),
-        ("support", 5),
-        ("nuker", 2),
-        ("escape", 2),
-        ("durable", 3),
-        ("initiator", 3),
-        ("disabler", 4)
-    ]
+    # Define allowed positions based on roles
+    allowed_positions = set()
 
-    # Find first matching role
-    for role, pos in role_priority:
-        if role in roles:
-            return pos
+    if "carry" in roles:
+        allowed_positions.update([1, 2, 3])  # Carry can play multiple positions
+    if "nuker" in roles or "escape" in roles:
+        allowed_positions.add(2)  # Mid
+    if "durable" in roles or "initiator" in roles:
+        allowed_positions.add(3)  # Offlane
+    if "disabler" in roles:
+        allowed_positions.update([2, 3, 4])  # Disablers can be mid/offlane/support
+    if "support" in roles:
+        allowed_positions.add(5)  # Support
 
-    return 2  # Default to mid
+    if not allowed_positions:
+        allowed_positions = {2}  # Default to mid
+
+    # Find position with best win rate among allowed positions
+    best_pos = None
+    best_wr = 0
+
+    for pos in allowed_positions:
+        picks = hero_data.get(f"{pos}_pick", 0)
+        wins = hero_data.get(f"{pos}_win", 0)
+        wr = (wins / picks * 100) if picks >= 1000 else 0
+
+        if wr > best_wr:
+            best_wr = wr
+            best_pos = pos
+
+    return best_pos or 2
 
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
