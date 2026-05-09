@@ -172,14 +172,17 @@ ROLE_MAP = {
     "Witch Doctor": 4,
     "Zeus": 4,
 
-    # Position 5 - Hard Support
-    "Aghanim's Scepter": 5,  # Wait, this is wrong
-    # Actually, hard supports are usually the same as soft supports but more tanky
-    # For simplicity, let's use position 5 for tanky supports
+    # Position 5 - Hard Support (Tanky supports)
+    "Abaddon": 5,
     "Earthshaker": 5,
-    "Treant Protector": 5,
     "Omniknight": 5,
     "Phoenix": 5,
+    "Treant Protector": 5,
+    "Undying": 5,
+    "Witch Doctor": 5,
+    "Oracle": 5,
+    "Silencer": 5,
+    "Venomancer": 5,
 }
 
 def detect_hero_position(hero_data):
