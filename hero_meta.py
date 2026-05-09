@@ -1,4 +1,4 @@
-# hero_meta.py — heroStats API + role-based positions, layout from a32f3e8
+# hero_meta.py — heroStats API + role-based positions, EXACT layout from a32f3e8
 
 import asyncio
 import aiohttp
@@ -40,26 +40,12 @@ if FONT_PATH is None:
     logger.warning("Using default PIL font as no system fonts found")
 
 
-def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
-    """Закругление и золотая обводка"""
-    outer_size = (size[0] + 2 * border_width, size[1] + 2 * border_width)
-    img_scaled = img.resize(size, Image.Resampling.LANCZOS)
-    mask = Image.new('L', size, 0)
-    draw_mask = ImageDraw.Draw(mask)
-    draw_mask.rounded_rectangle((0, 0) + size, radius=radius, fill=255)
-    output = Image.new('RGBA', outer_size, (0, 0, 0, 0))
-    output.paste(img_scaled, (border_width, border_width), mask=mask)
-    draw_border = ImageDraw.Draw(output)
-    draw_border.rounded_rectangle(
-        (0, 0) + outer_size, radius=radius, outline=(255, 215, 0, 255), width=2
-    )
-    return output
-
+# =========================================================
+# ROLE DETECTION
+# =========================================================
 
 def detect_hero_position(hero_roles):
-    """
-    Определяет основную позицию (1-5) по ролям из heroStats.
-    """
+    """Определяет основную позицию (1-5) по ролям из heroStats"""
     roles = set(hero_roles)
 
     if "Carry" in roles:
@@ -74,6 +60,30 @@ def detect_hero_position(hero_roles):
         return 5
     return None
 
+
+# =========================================================
+# IMAGE STYLE — exact from a32f3e8
+# =========================================================
+
+def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
+    outer_size = (size[0] + 2 * border_width, size[1] + 2 * border_width)
+    img_scaled = img.resize(size, Image.Resampling.LANCZOS)
+    mask = Image.new('L', size, 0)
+    draw_mask = ImageDraw.Draw(mask)
+    draw_mask.rounded_rectangle((0, 0) + size, radius=radius, fill=255)
+    output = Image.new('RGBA', outer_size, (0, 0, 0, 0))
+    output.paste(img_scaled, (border_width, border_width), mask=mask)
+    draw_border = ImageDraw.Draw(output)
+    draw_border.rounded_rectangle(
+        (0, 0) + outer_size, radius=radius,
+        outline=(255, 215, 0, 255), width=2
+    )
+    return output
+
+
+# =========================================================
+# FETCH HERO ICON — exact from a32f3e8
+# =========================================================
 
 async def fetch_hero_icon(session, icon_path):
     """Асинхронная загрузка иконки героя"""
@@ -94,8 +104,12 @@ async def fetch_hero_icon(session, icon_path):
         raise
 
 
+# =========================================================
+# HERO STATS — heroStats API
+# =========================================================
+
 async def get_dota_data(days=7):
-    """Загрузка heroStats из OpenDota"""
+    """Загрузка heroStats из OpenDota — единственный источник"""
     url = "https://api.opendota.com/api/heroStats"
     try:
         timeout = aiohttp.ClientTimeout(total=5)
@@ -113,12 +127,16 @@ async def get_dota_data(days=7):
         return None
 
 
+# =========================================================
+# BUILD GRID — role-based positions, no duplicates
+# =========================================================
+
 def _build_grid(hero_stats):
     """
     Строит сетку 5x5: каждый герой на своей ОСНОВНОЙ позиции.
     Позиция определяется через hero["roles"] -> detect_hero_position.
     Каждый герой только в одном столбце.
-    Минимум 20 pro_pick.
+    Минимум 20 pro_pick. Топ-5 по WR.
     """
     by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
 
@@ -129,45 +147,42 @@ def _build_grid(hero_stats):
 
         hero_id = hero["id"]
 
-        # Проверяем позиционные поля (есть в heroStats API)
-        best_pos = None
-        best_pos_picks = 0
-        for p in range(1, 6):
-            pk = hero.get("%d_pick" % p, 0)
-            if pk > best_pos_picks:
-                best_pos_picks = pk
-                best_pos = p
+        # Определяем позицию через роли
+        pos = detect_hero_position(hero.get("roles", []))
+        if not pos:
+            continue
 
-        # Fallback через roles если нет позиционных данных
-        if best_pos is None or best_pos_picks == 0:
-            best_pos = detect_hero_position(hero.get("roles", []))
-            if best_pos is None:
-                continue
-            best_pos_picks = pro_pick
+        # Берём позиционные данные если есть
+        pk = hero.get("%d_pick" % pos, 0)
+        wk = hero.get("%d_win" % pos, 0)
 
-        # Wins на этой позиции
-        wins = hero.get("%d_win" % best_pos, 0)
-        if wins == 0 and pro_pick > 0:
-            wins = int(hero.get("pro_win", 0) * (best_pos_picks / pro_pick))
+        # Fallback: если позиционных данных нет — используем общие пропорционально
+        if pk == 0:
+            pk = pro_pick
+            wk = hero.get("pro_win", 0)
 
-        wr = (wins / best_pos_picks * 100) if best_pos_picks > 0 else 0
+        wr = (wk / pk * 100) if pk > 0 else 0
 
-        by_position[best_pos].append({
+        by_position[pos].append({
             'id': hero_id,
             'name': hero.get("localized_name", "Hero %d" % hero_id),
             'img': hero.get("img", ""),
-            'wr': round(wr, 1),
-            'picks': best_pos_picks,
-            'wins': wins,
+            'wr': wr,
+            'picks': pk,
+            'wins': wk,
         })
 
     grid = {}
     for pos in range(1, 6):
-        sorted_heroes = sorted(by_position[pos], key=lambda h: -h['wr'])[:5]
+        sorted_heroes = sorted(by_position[pos], key=lambda h: -h['wr'])
         grid[pos] = sorted_heroes
 
     return grid
 
+
+# =========================================================
+# INFOGRAPHIC — 1200x800, exact layout from a32f3e8
+# =========================================================
 
 async def create_infographic(hero_stats):
     """Баннер 1200x800: 5 колонок (позиции), по 5 героев. Без дублей, без подписей."""
@@ -208,17 +223,7 @@ async def create_infographic(hero_stats):
     base_icon_height = row_height - 25
     icon_height = min(int(base_icon_height * 1.163), row_height - 5)
 
-    try:
-        font_wr = ImageFont.truetype(FONT_PATH, 27)
-        for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
-            try:
-                font_wr = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 20)
-                break
-            except:
-                continue
-    except:
-        font_wr = ImageFont.load_default()
-
+    # WR шрифт
     try:
         font_lg = ImageFont.truetype(FONT_PATH, 28)
         for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
@@ -252,9 +257,8 @@ async def create_infographic(hero_stats):
             except Exception:
                 icons[hero['id']] = None
 
-    border_width = 3
-
     # Отрисовка: колонка = позиция, строки = топ героев позиции
+    # ИНДЕКСЫ БЕЗ НАДПИСЕЙ — как в рабочем коммите
     for col_idx in range(5):
         pos = col_idx + 1
         heroes = grid[pos]
@@ -277,44 +281,46 @@ async def create_infographic(hero_stats):
                 draw.text((x + 10, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
                 continue
 
-            # Масштабирование: вписываем в (col_width - 2*border_width) чтобы golden border НЕ вылезал
-            max_inner = col_width - 2 * border_width
-            scale_h = icon_height / icon_raw.height
-            scale_w = max_inner / icon_raw.width
-            scale = min(scale_h, scale_w, 1.0)  # не увеличиваем если иконка мала
+            # Масштабирование — exact из a32f3e8
+            scale = icon_height / icon_raw.height
             nw = int(icon_raw.width * scale)
-            nh = int(icon_raw.height * scale)
+            nh = icon_height
+            if nw > col_width:
+                scale = col_width / icon_raw.width
+                nw = col_width
+                nh = int(icon_raw.height * scale)
 
             icon_scaled = icon_raw.resize((nw, nh), Image.Resampling.LANCZOS)
             icon_proc = apply_fancy_style(icon_scaled, size=(nw, nh),
-                                          radius=max(8, nh // 12), border_width=border_width)
+                                          radius=max(8, nh // 12), border_width=2)
 
-            # Центрируем по реальному размеру (с golden border)
-            actual_w = icon_proc.width   # = nw + 2*border_width
-            actual_h = icon_proc.height  # = nh + 2*border_width
-            icon_x = x + (col_width - actual_w) // 2
+            pw = nw + 4
+            icon_x = x + (col_width - pw) // 2
             icon_y = y + 5
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
 
-            # Winrate текст — сразу под иконкой
             wr_text = "%d%%" % round(hero['wr'])
 
             try:
                 bb = draw.textbbox((0, 0), wr_text, font=font_lg)
                 tw = bb[2] - bb[0]
                 th = bb[3] - bb[1]
-                tx = icon_x + actual_w // 2 - tw // 2
-                ty = icon_y + actual_h + 2
+                tx = icon_x + pw // 2 - tw // 2
+                ty = icon_y + nh + 2 - 12 - th
                 draw.text((tx, ty), wr_text, fill=(255, 255, 255), font=font_lg)
             except Exception:
-                draw.text((icon_x + actual_w // 2 - 20, icon_y + actual_h + 2),
+                draw.text((icon_x + pw // 2 - 20, icon_y + nh - 30),
                           wr_text, fill=(255, 255, 255), font=font_lg)
 
     buf = io.BytesIO()
     base.save(buf, format='PNG')
     return buf.getvalue()
 
+
+# =========================================================
+# MAIN ENTRY POINT
+# =========================================================
 
 async def get_hero_meta_image():
     """Generate hero meta image"""
