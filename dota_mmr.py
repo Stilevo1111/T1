@@ -105,29 +105,22 @@ def _clear_cache():
 def _api_get(url: str, params: dict = None) -> dict:
     """Универсальная функция для API-запросов с обработкой ошибок и кешем"""
     _check_rate_limit()  # Применяем rate limiting
-    max_retries = 2
-    for attempt in range(max_retries + 1):
-        try:
-            r = requests.get(url, params=params or {}, timeout=30)
-            if r.status_code == 200:
-                return r.json()
-            elif r.status_code == 429:
-                logger.warning(f"Rate limited by OpenDota API, waiting...")
-                time.sleep(60)  # Ждём минуту при 429
-                return None
+    timeout = 5
+    try:
+        r = requests.get(url, params=params or {}, timeout=timeout)
+        if r.status_code == 200:
+            return r.json()
+        elif r.status_code == 429:
+            logger.warning(f"Rate limited by OpenDota API, waiting...")
+            time.sleep(3)
             return None
-        except requests.exceptions.ReadTimeout as e:
-            if attempt < max_retries:
-                logger.warning(f"Read timeout on attempt {attempt + 1}/{max_retries + 1}, retrying...")
-                time.sleep(2 ** attempt)  # Exponential backoff
-                continue
-            else:
-                logger.error(f"API request error after {max_retries + 1} attempts: {e}", exc_info=True)
-                return None
-        except Exception as e:
-            logger.error(f"API request error: {e}", exc_info=True)
-            return None
-    return None
+        return None
+    except requests.exceptions.ReadTimeout as e:
+        logger.error(f"API request timeout ({timeout}s): {e}")
+        return None
+    except Exception as e:
+        logger.error(f"API request error: {e}", exc_info=True)
+        return None
 
 
 _async_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
@@ -159,42 +152,35 @@ async def _check_rate_limit_async():
 async def _api_get_async(url: str, params: dict = None, use_session: bool = True) -> dict:
     """Асинхронная функция для API-запросов с переиспользованием сессии"""
     await _check_rate_limit_async()
-    max_retries = 2
-    for attempt in range(max_retries + 1):
-        try:
-            if use_session:
-                from database import get_aiohttp_session
-                session = await get_aiohttp_session()
-                async with session.get(url, params=params or {}) as resp:
-                    if resp.status == 200:
-                        return await resp.json()
-                    elif resp.status == 429:
-                        logger.warning(f"Rate limited by OpenDota API, waiting...")
-                        import asyncio
-                        await asyncio.sleep(60)
-                        return None
+    timeout = 5
+    try:
+        if use_session:
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                elif resp.status == 429:
+                    logger.warning(f"Rate limited by OpenDota API, waiting...")
+                    import asyncio
+                    await asyncio.sleep(3)
                     return None
-            else:
-                from database import get_aiohttp_session
-                session = await get_aiohttp_session()
-                async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    if resp.status == 200:
-                        return await resp.json()
-                    elif resp.status == 429:
-                        logger.warning(f"Rate limited by OpenDota API, waiting...")
-                        import asyncio
-                        await asyncio.sleep(60)
-                        return None
-                    return None
-        except Exception as e:
-            if "timeout" in str(e).lower() and attempt < max_retries:
-                logger.warning(f"Async API timeout on attempt {attempt + 1}/{max_retries + 1}, retrying...")
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                continue
-            else:
-                logger.error(f"Async API request error: {e}", exc_info=True)
                 return None
-    return None
+        else:
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                elif resp.status == 429:
+                    logger.warning(f"Rate limited by OpenDota API, waiting...")
+                    import asyncio
+                    await asyncio.sleep(3)
+                    return None
+                return None
+    except Exception as e:
+        logger.error(f"Async API request error: {e}", exc_info=True)
+        return None
 
 
 # ========================
@@ -218,14 +204,14 @@ def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None
         return get_cached_hero_icon(hero_short_name)
     except ImportError:
         pass
-    
+
     cache_file = Path(__file__).parent / "hero_cache" / f"{hero_short_name}.png"
     if cache_file.exists():
         try:
             return cache_file.read_bytes()
         except Exception:
             pass
-    
+
     try:
         url = f"{HERO_ICON_BASE}/{hero_short_name}.png"
         resp = requests.get(url, timeout=timeout)
@@ -255,7 +241,7 @@ def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | 
             pass
     try:
         url = f"{HERO_IMAGE_BASE}/{hero_short_name}.png"
-        resp = requests.get(url, timeout=timeout)
+        resp = requests.get(url, timeout=3)
         if resp.status_code == 200:
             data = resp.content
             try:
@@ -1144,9 +1130,6 @@ def generate_start_card(
                 # Fallback to the original color
                 logger.info("Background image HTTP error: using fallback")
                 img = Image.new("RGB", (width, height), (15, 20, 35))
-        except Exception as e:
-            logger.error(f"Failed to load background image: {e}")
-            img = Image.new("RGB", (width, height), (15, 20, 35))
         except Exception as e:
             logger.error(f"Failed to load background image: {e}")
             img = Image.new("RGB", (width, height), (15, 20, 35))
