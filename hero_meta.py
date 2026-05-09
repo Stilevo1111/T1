@@ -44,8 +44,8 @@ if FONT_PATH is None:
 
 def detect_hero_position(hero_roles):
     """
-    Automatic hero position detection based on roles.
-    Role priority: Carry > Nuker/Escape > Durable/Initiator > Support+Disabler > Support
+    Определяет основную позицию (1-5) по ролям из heroStats.
+    Приоритет: Carry > Nuker/Escape > Durable/Initiator > Support+Disabler > Support
     """
     roles = set(hero_roles)
 
@@ -84,15 +84,15 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
 
 
 # =========================================================
-# HERO ICON DOWNLOAD
+# FETCH HERO ICON
 # =========================================================
 
 async def fetch_hero_icon(session, icon_path):
     """Асинхронная загрузка иконки героя из Steam CDN"""
-    if not icon_path.startswith("http"):
-        if not icon_path.startswith("/"):
-            icon_path = "/" + icon_path
+    if icon_path.startswith('/'):
         icon_url = "https://cdn.cloudflare.steamstatic.com%s" % icon_path
+    elif not icon_path.startswith('http'):
+        icon_url = "https://cdn.cloudflare.steamstatic.com/%s" % icon_path
     else:
         icon_url = icon_path
 
@@ -102,16 +102,16 @@ async def fetch_hero_icon(session, icon_path):
             content = await resp.read()
             return Image.open(io.BytesIO(content)).convert("RGBA")
     except Exception as e:
-        logger.error("Failed to load icon %s: %s", icon_path, e)
+        logger.error("Failed to load icon: %s", e)
         raise
 
 
 # =========================================================
-# HERO STATS — heroStats API
+# FETCH HERO STATS — heroStats API only
 # =========================================================
 
 async def get_dota_data():
-    """Загрузка heroStats из OpenDota API"""
+    """Загрузка heroStats из OpenDota"""
     url = "https://api.opendota.com/api/heroStats"
     try:
         async with aiohttp.ClientSession() as session:
@@ -127,15 +127,15 @@ async def get_dota_data():
 
 
 # =========================================================
-# BUILD GRID — role-based, no duplicates
+# BUILD GRID — role-based, no duplicates, top-5 per position
 # =========================================================
 
 def _build_grid(hero_stats):
     """
     Строит сетку 5 колонок.
-    Позиция определяется через hero["roles"] → detect_hero_position.
-    Каждый герой только в одной колонке (основная позиция).
-    Минимум 20 pro_pick. Топ-5 по WR на позицию.
+    Позиция — detect_hero_position(hero["roles"]).
+    Каждый герой — только в одной колонке (основная роль).
+    Минимум 20 pro_pick. Топ-5 по WR.
     """
     by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
 
@@ -152,26 +152,26 @@ def _build_grid(hero_stats):
         wr = (pro_win / pro_pick * 100) if pro_pick > 0 else 0
 
         by_position[pos].append({
-            "id": hero["id"],
-            "name": hero.get("localized_name", "Hero %d" % hero["id"]),
-            "img": hero.get("img", ""),
-            "wr": round(wr, 1),
-            "picks": pro_pick,
-            "wins": pro_win,
+            'id': hero["id"],
+            'name': hero.get("localized_name", "Hero %d" % hero["id"]),
+            'img': hero.get("img", ""),
+            'wr': round(wr, 1),
+            'picks': pro_pick,
+            'wins': pro_win,
         })
 
     grid = {}
     for pos in range(1, 6):
-        grid[pos] = sorted(by_position[pos], key=lambda h: -h["wr"])[:5]
+        grid[pos] = sorted(by_position[pos], key=lambda h: -h['wr'])[:5]
     return grid
 
 
 # =========================================================
-# INFOGRAPHIC — 1200x800, old layout
+# INFOGRAPHIC — 1200x800, old layout, NO labels
 # =========================================================
 
 async def create_infographic(hero_stats):
-    """Баннер 1200x800: 5 колонок (позиции), по 5 героев. Без дублей, без подписей."""
+    """Баннер 1200x800: 5 колонок (позиции), по 5 героев. Без подписей."""
     logger.info("Starting create_infographic")
 
     if os.path.exists(BACKGROUND_PATH):
@@ -208,6 +208,7 @@ async def create_infographic(hero_stats):
     base_icon_height = row_height - 25
     icon_height = min(int(base_icon_height * 1.163), row_height - 5)
 
+    # WR font
     try:
         font_wr = ImageFont.truetype(FONT_PATH, 27)
         for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
@@ -219,6 +220,18 @@ async def create_infographic(hero_stats):
     except Exception:
         font_wr = ImageFont.load_default()
 
+    # Winrate font (big numbers under icons)
+    try:
+        font_lg = ImageFont.truetype(FONT_PATH, 28)
+        for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
+            try:
+                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 28)
+                break
+            except Exception:
+                continue
+    except Exception:
+        font_lg = ImageFont.load_default()
+
     # Сетка
     grid = _build_grid(hero_stats)
 
@@ -227,19 +240,19 @@ async def create_infographic(hero_stats):
     seen_ids = set()
     for pos in range(1, 6):
         for h in grid[pos]:
-            if h["id"] not in seen_ids:
-                seen_ids.add(h["id"])
+            if h['id'] not in seen_ids:
+                seen_ids.add(h['id'])
                 all_heroes.append(h)
 
     # Асинхронная загрузка иконок
     async with aiohttp.ClientSession() as session:
-        tasks = [fetch_hero_icon(session, h["img"]) for h in all_heroes]
+        tasks = [fetch_hero_icon(session, h['img']) for h in all_heroes]
         icons = {}
         for i, hero in enumerate(all_heroes):
             try:
-                icons[hero["id"]] = await tasks[i]
+                icons[hero['id']] = await tasks[i]
             except Exception:
-                icons[hero["id"]] = None
+                icons[hero['id']] = None
 
     # Отрисовка: колонка = позиция, строки = топ героев позиции
     for col_idx in range(5):
@@ -250,7 +263,8 @@ async def create_infographic(hero_stats):
             x = margin_x + col_idx * (col_width + gap_between_cols)
             y = margin_y + row_idx * row_height
 
-            icon_raw = icons.get(hero["id"])
+            icon_raw = icons.get(hero['id'])
+
             if icon_raw is None:
                 draw.rounded_rectangle(
                     [x + 5, y + 5, x + col_width - 5, y + icon_height],
@@ -263,7 +277,7 @@ async def create_infographic(hero_stats):
                 draw.text((x + 10, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
                 continue
 
-            # Масштабирование
+            # Масштабирование — иконка вписывается в icon_height с сохранением пропорций
             scale = icon_height / icon_raw.height
             nw = int(icon_raw.width * scale)
             nh = icon_height
@@ -272,6 +286,7 @@ async def create_infographic(hero_stats):
                 nw = col_width
                 nh = int(icon_raw.height * scale)
 
+            # apply_fancy_style ресайзит до size и добавляет golden border (+6px)
             icon_scaled = icon_raw.resize((nw, nh), Image.Resampling.LANCZOS)
             icon_proc = apply_fancy_style(icon_scaled, size=(nw, nh),
                                           radius=max(8, nh // 12), border_width=2)
@@ -282,19 +297,8 @@ async def create_infographic(hero_stats):
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
 
-            # WR текст
-            wr_text = "%d%%" % round(hero["wr"])
-
-            try:
-                font_lg = ImageFont.truetype(FONT_PATH, 28)
-                for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
-                    try:
-                        font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 28)
-                        break
-                    except Exception:
-                        continue
-            except Exception:
-                font_lg = ImageFont.load_default()
+            # Winrate текст
+            wr_text = "%d%%" % round(hero['wr'])
 
             try:
                 bb = draw.textbbox((0, 0), wr_text, font=font_lg)
@@ -337,7 +341,7 @@ def get_static_fallback_banner():
     """Статичный баннер когда API недоступен"""
     logger.info("Generating static fallback banner")
     try:
-        base = Image.new("RGBA", (1200, 800), (25, 25, 35, 255))
+        base = Image.new("RGBA", (1200, 200), (25, 25, 35, 255))
         draw = ImageDraw.Draw(base)
         MSK = timezone(timedelta(hours=3))
         date_text = datetime.now(MSK).strftime("%d.%m.%Y %H:%M")
