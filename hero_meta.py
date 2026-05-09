@@ -40,30 +40,20 @@ if FONT_PATH is None:
     logger.warning("Using default PIL font as no system fonts found")
 
 
-def detect_hero_position(hero_roles):
-    """Определяет позицию (1-5) по ролям из heroStats. Case-insensitive.
-    Корректная логика: роли соответствуют позициям в Dota 2.
+def detect_hero_position(hero_data):
+    """Определяет позицию героя по максимальному количеству профессиональных пиков.
+    Герой идет в позицию, где у него больше всего пиков в профессиональных матчах.
     """
-    roles = set((r or "").lower().strip() for r in hero_roles)
+    max_picks = 0
+    best_position = 2  # Default to mid
 
-    # Primary role mappings (Dota 2 standard positions)
-    if "carry" in roles:
-        return 1  # Position 1: Carry
-    if "support" in roles:
-        return 5  # Position 5: Support (base support role)
-    if "nuker" in roles:
-        return 2  # Position 2: Mid (nuker is primary mid role)
-    if "escape" in roles:
-        return 2  # Position 2: Mid (escape heroes often mid)
-    if "durable" in roles:
-        return 3  # Position 3: Offlane (durable tanks)
-    if "initiator" in roles:
-        return 3  # Position 3: Offlane (initiators)
-    if "disabler" in roles:
-        return 4  # Position 4: Hard Support (disablers)
+    for pos in range(1, 6):
+        picks = hero_data.get(f"{pos}_pick", 0)
+        if picks > max_picks:
+            max_picks = picks
+            best_position = pos
 
-    # Fallback for edge cases
-    return 2  # Default to mid for heroes without standard roles
+    return best_position
 
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
@@ -132,8 +122,8 @@ def _build_grid(hero_stats):
 
         hero_id = hero["id"]
 
-        # Определяем позицию по ролям
-        pos = detect_hero_position(hero.get("roles", []))
+        # Определяем позицию по максимальным пикам на позиции
+        pos = detect_hero_position(hero)
         if not pos:
             continue
 
