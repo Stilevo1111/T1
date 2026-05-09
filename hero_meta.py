@@ -127,13 +127,12 @@ async def get_dota_data(days=7):
 
 def _build_grid(hero_stats):
     """
-    Сетка 5 колонок с героями, имеющими лучший винрейт на каждой позиции.
-    1) Для каждого героя собираем его винрейт на всех позициях.
-    2) Для каждой позиции находим героев с самым высоким WR на этой позиции.
-    3) Берем топ-5 героев по WR для каждой позиции.
+    Сетка 5 колонок с героями на своих позициях по ролям.
+    1) Определяем позицию героя по его ролям.
+    2) Используем винрейт героя на этой конкретной позиции.
+    3) Сортируем по винрейту на позиции и берем топ героев.
     """
-    # Collect all hero-position combinations
-    hero_positions = []
+    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
 
     for hero in hero_stats:
         pro_pick = hero.get("pro_pick", 0)
@@ -141,35 +140,35 @@ def _build_grid(hero_stats):
             continue
 
         hero_id = hero["id"]
-        hero_name = hero.get("localized_name", 'Hero %d' % hero_id)
-        hero_img = hero.get("img", "")
 
-        # Check win rate on each position
-        for pos in range(1, 6):
-            pk = hero.get("%d_pick" % pos, 0)
-            wk = hero.get("%d_win" % pos, 0)
+        # Определяем позицию по ролям
+        pos = detect_hero_position(hero.get("roles", []))
+        if not pos:
+            continue
 
-            if pk >= 1000:  # Minimum picks threshold for position
-                wr = (wk / pk * 100) if pk > 0 else 0
-                hero_positions.append({
-                    'id': hero_id,
-                    'name': hero_name,
-                    'img': hero_img,
-                    'position': pos,
-                    'wr': wr,
-                    'picks': pk,
-                    'wins': wk,
-                })
+        # Используем винрейт героя именно на этой позиции
+        pk = hero.get("%d_pick" % pos, 0)
+        wk = hero.get("%d_win" % pos, 0)
 
-    # Group by position and sort by win rate
-    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
-    for hp in hero_positions:
-        by_position[hp['position']].append(hp)
+        # Минимальный порог пиков для надежности
+        if pk < 1000:
+            continue
+
+        wr = (wk / pk * 100) if pk > 0 else 0
+
+        by_position[pos].append({
+            'id': hero_id,
+            'name': hero.get("localized_name", 'Hero %d' % hero_id),
+            'img': hero.get("img", ""),
+            'wr': wr,
+            'picks': pk,
+            'wins': wk,
+        })
 
     grid = {}
     for pos in range(1, 6):
         heroes = sorted(by_position[pos], key=lambda h: -h['wr'])
-        grid[pos] = heroes[:5]  # Take top 5 by win rate
+        grid[pos] = heroes[:5]  # Take top 5 by win rate on their position
 
     return grid
     return grid
