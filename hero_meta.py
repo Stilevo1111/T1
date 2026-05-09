@@ -1,4 +1,4 @@
-# Асинхронная версия hero_meta.py с fallback и быстрым отказом
+# Асинхронная версия hero_meta.py с fallback, позиционной статистикой и правильной группировкой
 
 import asyncio
 
@@ -59,6 +59,15 @@ ROLE_MAPPING = {
     "ПОДДЕРЖКА 5": [5, 9, 11, 13, 18, 25, 31, 37, 40, 53, 57, 58, 63, 64, 69, 74, 77, 79, 84, 86, 88, 90, 92, 97, 104, 111, 112, 114, 115, 116, 117, 118, 120, 122]
 }
 
+# Названия колонок, соответствующие позициям 1-5
+POSITION_NAMES = {
+    1: "КЕРРИ",
+    2: "МИДЛ",
+    3: "ХАРДЛЕЙНЕР",
+    4: "ПОДДЕРЖКА",
+    5: "ХАРД САППОРТ"
+}
+
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     """Обрезка, закругление и добавление золотой обводки"""
@@ -81,7 +90,6 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
 
 async def fetch_hero_icon(session, icon_path, max_retries=2):
     """Асинхронная загрузка иконки героя с retry-логикой"""
-    # Ensure proper URL format
     if icon_path.startswith('/'):
         icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
     elif not icon_path.startswith('http'):
@@ -100,16 +108,13 @@ async def fetch_hero_icon(session, icon_path, max_retries=2):
                 logger.error(f"Failed to load hero image after {max_retries + 1} attempts: {e!r}")
                 raise e
             logger.debug(f"Failed to load hero image (attempt {attempt + 1}/{max_retries + 1}): {e!r}")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.3)
 
 
 async def get_weekly_hero_stats():
-    """Получение недельной статистики героев из матчей OpenDota за последние 7 дней
-    Возвращает данные в формате heroStats с позиционной статистикой"""
+    """Получение недельной статистики героев из матчей OpenDota за последние 7 дней"""
     try:
         from datetime import datetime, timedelta
-
-        start_time = int((datetime.now() - timedelta(days=7)).timestamp())
 
         matches = []
         url = f"https://api.opendota.com/api/matches?date=7&limit=200"
@@ -123,7 +128,7 @@ async def get_weekly_hero_stats():
                         if response.status == 200:
                             data = await response.json()
                             matches.extend(data)
-                            logger.info(f"Fetched {len(matches)} matches for weekly stats on attempt {attempt + 1}")
+                            logger.info(f"Fetched {len(matches)} matches for weekly stats")
                             break
                         else:
                             logger.error(f"Matches API error: HTTP {response.status}")
@@ -138,21 +143,20 @@ async def get_weekly_hero_stats():
 
         # Агрегируем статистику героев по позициям из матчей
         # player_slot: 0-4 = Radiant positions 1-5, 128-132 = Dire positions 1-5
-        hero_stats = {}  # {hero_id: {1: {picks, wins}, 2:..., 5:...}}
+        hero_stats = {}
 
         for match in matches:
             if not match.get('players'):
                 continue
 
+            radiant_win = match.get('radiant_win', False)
+
             for player in match['players']:
                 hero_id = player.get('hero_id')
                 player_slot = player.get('player_slot', 0)
 
-                # Определяем позицию (1-5)
-                if player_slot < 128:  # Radiant
-                    position = (player_slot % 5) + 1
-                else:  # Dire (128-132 -> 1-5)
-                    position = ((player_slot - 128) % 5) + 1
+                if not hero_id:
+                    continue
 
                 if hero_id not in hero_stats:
                     hero_stats[hero_id] = {1: {'picks': 0, 'wins': 0},
@@ -161,19 +165,26 @@ async def get_weekly_hero_stats():
                                            4: {'picks': 0, 'wins': 0},
                                            5: {'picks': 0, 'wins': 0}}
 
-                hero_stats[hero_id][position]['picks'] += 1
+                # Определяем позицию:
+                # Radiant: slot 0-4 → позиция 1-5 (player_slot + 1)
+                # Dire: slot 128-132 → позиция 1-5 (player_slot - 127)
+                if player_slot < 128:
+                    position = player_slot + 1
+                else:
+                    position = player_slot - 127
 
-                # Проверяем победу
-                radiant_win = match.get('radiant_win', False)
-                is_radiant = player_slot < 128
-                if (is_radiant and radiant_win) or (not is_radiant and not radiant_win):
+                if position < 1 or position > 5:
+                    continue
+
+                hero_stats[hero_id][position]['picks'] += 1
+                if (player_slot < 128 and radiant_win) or (player_slot >= 128 and not radiant_win):
                     hero_stats[hero_id][position]['wins'] += 1
 
-        # Преобразуем в формат heroStats (позиционная статистика)
+        # Преобразуем в формат heroStats с позиционными полями
         hero_list = []
         for hero_id, pos_stats in hero_stats.items():
             total_picks = sum(pos_stats[p]['picks'] for p in range(1, 6))
-            if total_picks >= 10:  # минимум 10 пиков
+            if total_picks >= 10:
                 hero_entry = {
                     'id': hero_id,
                     'localized_name': f'Hero {hero_id}',
@@ -181,11 +192,9 @@ async def get_weekly_hero_stats():
                     'pro_win': sum(pos_stats[p]['wins'] for p in range(1, 6)),
                     'pro_pick': total_picks
                 }
-                # Добавляем позиционные поля
                 for pos in range(1, 6):
                     hero_entry[f'{pos}_pick'] = pos_stats[pos]['picks']
                     hero_entry[f'{pos}_win'] = pos_stats[pos]['wins']
-
                 hero_list.append(hero_entry)
 
         logger.info(f"Calculated weekly stats with positions for {len(hero_list)} heroes")
@@ -216,7 +225,7 @@ async def get_fallback_hero_stats():
         for hero in hero_stats:
             pro_win = hero.get('pro_win', 0)
             pro_pick = hero.get('pro_pick', 0)
-            if pro_pick >= 50:  # мин 50 пиков для fallback
+            if pro_pick >= 50:
                 # Нормализуем путь к иконке
                 img_raw = hero.get('img', '')
                 if img_raw.startswith('http'):
@@ -307,6 +316,7 @@ async def create_infographic(hero_stats):
     start_x = margin_x + gap_between_cols
     start_y = margin_y
 
+    # Шрифт для winrate
     try:
         font_wr = ImageFont.truetype(FONT_PATH, 27)
         for bold_name in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
@@ -319,23 +329,8 @@ async def create_infographic(hero_stats):
         font_wr = ImageFont.load_default()
 
     # === ПОЗИЦИОННАЯ СТАТИСТИКА ===
-    # position -> list of (hero, winrate, picks, img)
-    positions_data = {
-        1: [],  # КЕРРИ
-        2: [],  # МИДЛ
-        3: [],  # ХАРДЛЕЙНЕР
-        4: [],  # ПОДДЕРЖКА 4
-        5: []   # ПОДДЕРЖКА 5
-    }
-
-    # Сопоставление позиции с названием роли
-    position_to_role = {
-        1: "КЕРРИ",
-        2: "МИДЛ",
-        3: "ХАРДЛЕЙНЕР",
-        4: "ПОДДЕРЖКА 4",
-        5: "ПОДДЕРЖКА 5"
-    }
+    # Собираем героев для каждой позиции (1-5)
+    positions_data = {1: [], 2: [], 3: [], 4: [], 5: []}
 
     for hero in hero_stats:
         hero_id = hero.get('id')
@@ -345,11 +340,10 @@ async def create_infographic(hero_stats):
         for pos in range(1, 6):
             pick_key = f'{pos}_pick'
             win_key = f'{pos}_win'
-
             picks = hero.get(pick_key, 0)
             wins = hero.get(win_key, 0)
 
-            if picks >= 5:  # минимум 5 пиков на позиции
+            if picks >= 5:  # минимум 5 пиков на этой позиции
                 wr = (wins / picks * 100) if picks > 0 else 0
                 positions_data[pos].append({
                     'id': hero_id,
@@ -362,42 +356,53 @@ async def create_infographic(hero_stats):
 
     # Сортируем каждую позицию по винрейту и берём топ-5
     top_by_position = {}
-    for pos, heroes in positions_data.items():
-        sorted_heroes = sorted(heroes, key=lambda x: x['wr'], reverse=True)[:5]
+    for pos in range(1, 6):
+        sorted_heroes = sorted(positions_data[pos], key=lambda x: x['wr'], reverse=True)[:5]
         top_by_position[pos] = sorted_heroes
 
-    # Собираем всех героев для загрузки иконок
-    all_top_heroes = []
+    # Собираем ВСЕ герои с учётом позиции (pos, hero) — чтобы не было дублей
+    all_entries = []  # список (position, hero)
     for pos in range(1, 6):
-        all_top_heroes.extend(top_by_position[pos])
+        for hero in top_by_position[pos]:
+            all_entries.append((pos, hero))
 
-    # Асинхронно загружаем иконки
+    # Асинхронно загружаем иконки (с возможными дублями по hero_id, но с разной позицией)
     async with aiohttp.ClientSession() as session:
-        icon_tasks = []
-        for hero in all_top_heroes:
-            task = fetch_hero_icon(session, hero['img'])
-            icon_tasks.append((hero, task))
+        tasks = []
+        for pos, hero in all_entries:
+            tasks.append(fetch_hero_icon(session, hero['img']))
 
         icon_results = []
-        for hero, task in icon_tasks:
+        for i, task in enumerate(tasks):
+            pos, hero = all_entries[i]
             try:
                 icon_raw = await task
-                icon_results.append((hero, icon_raw))
+                icon_results.append((pos, hero, icon_raw))
             except Exception as e:
                 logger.warning(f"Failed to load icon for hero {hero.get('id')}: {e!r}")
-                icon_results.append((hero, None))
+                icon_results.append((pos, hero, None))
 
-    # Группируем по позициям
+    # Группируем результаты по позиции
     pos_icons = {1: [], 2: [], 3: [], 4: [], 5: []}
-    for hero, icon_raw in icon_results:
-        for pos in range(1, 6):
-            if any(h['id'] == hero['id'] for h in top_by_position[pos]):
-                pos_icons[pos].append((hero, icon_raw))
-                break
+    for pos, hero, icon_raw in icon_results:
+        pos_icons[pos].append((hero, icon_raw))
 
-    # Отрисовываем каждую позицию (колонка = роль)
-    for col_idx, pos in enumerate(range(1, 6)):  # 1=carry, 2=mid, 3=offlane, 4=soft support, 5=hard support
+    # Отрисовываем: колонка = позиция, строки = топ-5 героев позиции
+    for col_idx in range(5):
+        pos = col_idx + 1  # 1, 2, 3, 4, 5
         heroes_in_pos = pos_icons[pos]
+
+        # Рисуем название позиции
+        try:
+            font_col = ImageFont.truetype(FONT_PATH, 20)
+        except:
+            font_col = ImageFont.load_default()
+        col_label = POSITION_NAMES.get(pos, f"POS {pos}")
+        bbox = draw.textbbox((0, 0), col_label, font=font_col)
+        label_w = bbox[2] - bbox[0]
+        label_x = start_x + col_idx * (col_width + gap_between_cols) + (col_width - label_w) // 2
+        draw.text((label_x, start_y - 30), col_label, fill=(255, 215, 0), font=font_col)
+
         for row_idx, (hero, icon_raw) in enumerate(heroes_in_pos[:5]):
             x = start_x + col_idx * (col_width + gap_between_cols)
             y = start_y + row_idx * (row_height + gap_between_rows)
@@ -420,10 +425,12 @@ async def create_infographic(hero_stats):
                 new_height = int(icon_raw.height * scale)
 
             icon_scaled = icon_raw.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            icon_processed = apply_fancy_style(icon_scaled, size=(new_width, new_height), radius=max(8, new_height // 12), border_width=2)
+            icon_processed = apply_fancy_style(icon_scaled, size=(new_width, new_height),
+                                                radius=max(8, new_height // 12), border_width=2)
 
             processed_width = new_width + 4
             processed_height = new_height + 4
+
             icon_x = x + (col_width - processed_width) // 2
             icon_y = y + 5
 
@@ -445,10 +452,10 @@ async def create_infographic(hero_stats):
 
             try:
                 bbox = draw.textbbox((0, 0), wr_text, font=font_large)
-                text_width = bbox[2] - bbox[0]
-                text_height = bbox[3] - bbox[1]
-                text_x = icon_x + processed_width // 2 - text_width // 2
-                text_y = icon_y + new_height + 2 - 12 - text_height
+                tw = bbox[2] - bbox[0]
+                th = bbox[3] - bbox[1]
+                text_x = icon_x + processed_width // 2 - tw // 2
+                text_y = icon_y + new_height + 2 - 12 - th
                 draw.text((text_x, text_y), wr_text, fill=(255, 255, 255), font=font_large)
             except Exception:
                 draw.text((icon_x + processed_width // 2 - 20, icon_y + new_height + 2 - 12 - 20),
