@@ -42,25 +42,42 @@ if FONT_PATH is None:
 
 def detect_hero_position(hero_roles):
     """Определяет позицию (1-5) по ролям из heroStats. Case-insensitive.
-    Приоритет: Support+Disabler > Support > Durable/Initiator > Carry > Nuker/Escape
+    Сбалансированная логика для равномерного распределения.
     """
     roles = set((r or "").lower().strip() for r in hero_roles)
 
-    # Support+Disabler → POS 4 (Hard Support)
+    # Position 5: Pure supports (no disabler/carry)
+    if "support" in roles and "disabler" not in roles and "carry" not in roles:
+        return 5
+
+    # Position 1: Pure carries (no support/durable)
+    if "carry" in roles and "support" not in roles and "durable" not in roles:
+        return 1
+
+    # Position 4: Supports with disabler
     if "support" in roles and "disabler" in roles:
         return 4
-    # Support без Disabler → POS 5 (Soft Support)
-    if "support" in roles and "disabler" not in roles:
-        return 5
-    # Durable / Initiator → POS 3 (Offlane)
+
+    # Position 3: Durable/Initiator
     if "durable" in roles or "initiator" in roles:
         return 3
-    # Carry → POS 1
+
+    # Position 2: Nuker/Escape or complex heroes
+    if "nuker" in roles or "escape" in roles or ("carry" in roles and "support" in roles):
+        return 2
+
+    # Fallback by single roles
     if "carry" in roles:
         return 1
-    # Nuker / Escape → POS 2 (Mid)
+    if "support" in roles:
+        return 5
+    if "disabler" in roles:
+        return 4
+    if "durable" in roles or "initiator" in roles:
+        return 3
     if "nuker" in roles or "escape" in roles:
         return 2
+
     return None
 
 
@@ -116,11 +133,10 @@ async def get_dota_data(days=7):
 
 def _build_grid(hero_stats):
     """
-    Сетка 5 колонок.
-    1) Определяем позицию через {pos}_pick (основной метод).
-    2) Fallback через detect_hero_position(roles).
-    3) Каждый герой — только в одной колонке.
-    4) Минимум 20 pro_pick.
+    Сетка 5 колонок с принудительным балансом.
+    1) Классифицируем героев по ролям в позиции 1-5.
+    2) Для каждой позиции берем топ-5 героев по pro_winrate.
+    3) Если позиционных данных нет — используем общие pro_pick/pro_win.
     """
     by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
 
@@ -130,32 +146,17 @@ def _build_grid(hero_stats):
             continue
 
         hero_id = hero["id"]
+        pos = detect_hero_position(hero.get("roles", []))
+        if not pos:
+            continue
 
-        # Шаг 1: ищем позицию с максимумом {pos}_pick
-        best_pos = None
-        best_pk = 0
-        for p in range(1, 6):
-            pk = hero.get("%d_pick" % p, 0)
-            if pk > best_pk:
-                best_pk = pk
-                best_pos = p
-
-        # Шаг 2: если позиционные данные отсутствуют — fallback через роли
-        if not best_pos or best_pk == 0:
-            best_pos = detect_hero_position(hero.get("roles", []))
-            if not best_pos:
-                continue
-            best_pk = pro_pick
-
-        pk = best_pk
-        wk = hero.get("%d_win" % best_pos, 0)
-        # Fallback wins из общих данных
-        if wk == 0 and pro_pick > 0 and pk > 0:
-            wk = int(hero.get("pro_win", 0) * min(pk / pro_pick, 1.0))
+        # Используем позиционные данные если доступны, иначе общие
+        pk = hero.get("%d_pick" % pos, 0) or pro_pick
+        wk = hero.get("%d_win" % pos, 0) or hero.get("pro_win", 0)
 
         wr = (wk / pk * 100) if pk > 0 else 0
 
-        by_position[best_pos].append({
+        by_position[pos].append({
             'id': hero_id,
             'name': hero.get("localized_name", 'Hero %d' % hero_id),
             'img': hero.get("img", ""),
@@ -166,7 +167,9 @@ def _build_grid(hero_stats):
 
     grid = {}
     for pos in range(1, 6):
-        grid[pos] = sorted(by_position[pos], key=lambda h: -h['wr'])[:5]
+        # Сортируем по WR и берем топ-5
+        heroes = sorted(by_position[pos], key=lambda h: -h['wr'])
+        grid[pos] = heroes[:5]
     return grid
 
 
