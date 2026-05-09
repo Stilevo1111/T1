@@ -1,4 +1,4 @@
-# hero_meta.py — heroStats API + role-based positions, layout from a32f3e8
+# hero_meta.py — heroStats API + role-based positions, layout 1:1 from a32f3e8
 
 import asyncio
 import aiohttp
@@ -116,8 +116,8 @@ async def get_dota_data(days=7):
 def _build_grid(hero_stats):
     """
     Строит сетку 5x5: каждый герой на своей ОСНОВНОЙ позиции.
-    Позиция определяется через hero["roles"] → detect_hero_position.
-    Каждый герой — только в одном столбце.
+    Позиция определяется через hero["roles"] -> detect_hero_position.
+    Каждый герой только в одном столбце.
     Минимум 20 pro_pick.
     """
     by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
@@ -131,15 +131,17 @@ def _build_grid(hero_stats):
         if not pos:
             continue
 
-        pro_win = hero.get("pro_win", 0)
+        pk = hero.get("%d_pick" % pos, hero.get("pro_pick", 0))
+        wk = hero.get("%d_win" % pos, hero.get("pro_win", 0))
+        wr = (wk / pk * 100) if pk > 0 else 0
 
         by_position[pos].append({
             'id': hero["id"],
             'name': hero.get("localized_name", "Hero %d" % hero["id"]),
             'img': hero.get("img", ""),
-            'wr': round((pro_win / pro_pick) * 100, 1) if pro_pick > 0 else 0,
-            'picks': pro_pick,
-            'wins': pro_win,
+            'wr': wr,
+            'picks': pk,
+            'wins': wk,
         })
 
     grid = {}
@@ -151,7 +153,7 @@ def _build_grid(hero_stats):
 
 
 async def create_infographic(hero_stats):
-    """Баннер 1200x800: 5 колонок (позиции), по 5 героев. Без дублей, без подписей."""
+    """Баннер 1200x800: 5 колонок, по 5 героев. Без дублей, без подписей."""
     logger.info("Starting create_infographic")
 
     if not os.path.exists(BACKGROUND_PATH):
@@ -172,9 +174,12 @@ async def create_infographic(hero_stats):
         date_font = ImageFont.truetype(FONT_PATH, 24)
     except:
         date_font = ImageFont.load_default()
-    bbox = draw.textbbox((0, 0), date_text, font=date_font)
-    text_x = bg_width - (bbox[2] - bbox[0]) - 20
-    draw.text((text_x, 20), date_text, fill=(255, 255, 255), font=date_font)
+    try:
+        bbox = draw.textbbox((0, 0), date_text, font=date_font)
+        tw = bbox[2] - bbox[0]
+    except:
+        tw = 0
+    draw.text((bg_width - tw - 20, 20), date_text, fill=(255, 255, 255), font=date_font)
 
     margin_x = 50
     margin_y = 215
@@ -190,7 +195,7 @@ async def create_infographic(hero_stats):
         font_wr = ImageFont.truetype(FONT_PATH, 27)
         for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
             try:
-                font_wr = ImageFont.truetype(bn, 20)
+                font_wr = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 20)
                 break
             except:
                 continue
@@ -204,10 +209,10 @@ async def create_infographic(hero_stats):
     all_heroes = []
     seen_ids = set()
     for pos in range(1, 6):
-        for hero in grid[pos]:
-            if hero['id'] not in seen_ids:
-                seen_ids.add(hero['id'])
-                all_heroes.append(hero)
+        for h in grid[pos]:
+            if h['id'] not in seen_ids:
+                seen_ids.add(h['id'])
+                all_heroes.append(h)
 
     # Асинхронная загрузка иконок
     async with aiohttp.ClientSession() as session:
@@ -235,7 +240,6 @@ async def create_infographic(hero_stats):
                     [x + 5, y + 5, x + col_width - 5, y + icon_height],
                     radius=10, fill=(80, 80, 80)
                 )
-                # Серый placeholder
                 try:
                     ph_font = ImageFont.truetype(FONT_PATH, 16)
                 except:
@@ -262,6 +266,7 @@ async def create_infographic(hero_stats):
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
 
+            # Winrate текст — точно как в a32f3e8
             wr_text = "%d%%" % round(hero['wr'])
 
             try:
