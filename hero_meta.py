@@ -42,51 +42,28 @@ if FONT_PATH is None:
 
 def detect_hero_position(hero_roles):
     """Определяет позицию (1-5) по ролям из heroStats. Case-insensitive.
-    Более гибкая логика для равномерного распределения.
+    Корректная логика: роли соответствуют позициям в Dota 2.
     """
     roles = set((r or "").lower().strip() for r in hero_roles)
 
-    # Position 1 (Carry): Primary carry heroes
-    if "carry" in roles and "support" not in roles:
-        return 1
-
-    # Position 5 (Soft Support): Support without disabler or complex support
-    if "support" in roles and ("disabler" not in roles or len(roles) > 3):
-        return 5
-
-    # Position 4 (Hard Support): Support + Disabler
-    if "support" in roles and "disabler" in roles and len(roles) <= 3:
-        return 4
-
-    # Position 3 (Offlane): Durable/Initiator focused
-    if ("durable" in roles or "initiator" in roles) and "carry" not in roles:
-        return 3
-
-    # Position 2 (Mid): Nuker/Escape or fallback for complex heroes
-    if "nuker" in roles or "escape" in roles:
-        return 2
-
-    # Additional assignments for better distribution
+    # Primary role mappings (Dota 2 standard positions)
     if "carry" in roles:
-        return 1  # Carry heroes that also support go to position 1
-
+        return 1  # Position 1: Carry
     if "support" in roles:
-        return 5  # Support heroes that are complex go to position 5
-
+        return 5  # Position 5: Support (base support role)
+    if "nuker" in roles:
+        return 2  # Position 2: Mid (nuker is primary mid role)
+    if "escape" in roles:
+        return 2  # Position 2: Mid (escape heroes often mid)
+    if "durable" in roles:
+        return 3  # Position 3: Offlane (durable tanks)
+    if "initiator" in roles:
+        return 3  # Position 3: Offlane (initiators)
     if "disabler" in roles:
-        return 4  # Disablers without support go to position 4
+        return 4  # Position 4: Hard Support (disablers)
 
-    if "durable" in roles or "initiator" in roles:
-        return 3  # Tanky heroes go to position 3
-
-    # Final fallback: distribute remaining heroes by priority
-    # Many heroes have multiple roles, assign based on most common usage
-    if len(roles) > 2:  # Complex heroes
-        return 2  # Default to mid for complex heroes
-    elif "pusher" in roles:
-        return 1  # Pushers often carry
-    else:
-        return 2  # Default to mid
+    # Fallback for edge cases
+    return 2  # Default to mid for heroes without standard roles
 
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
@@ -185,35 +162,36 @@ def _build_grid(hero_stats):
         heroes = sorted(by_position[pos], key=lambda h: -h['wr'])
         grid[pos] = heroes
 
-    # Balance positions: ensure minimum 3 heroes per position
-    # If a position has too few heroes, take from positions with excess
-    target_min = 3
+    # Balance positions: ensure minimum heroes per position
+    # If a position has too few heroes, take from positions with excess or adequate heroes
+    target_min = {1: 3, 2: 3, 3: 3, 4: 1, 5: 3}  # Position 4 can have minimum 1 hero
 
     # First pass: collect positions that need more heroes
     needs_heroes = []
-    excess_heroes = []
+    available_heroes = []
 
     for pos in range(1, 6):
         count = len(grid[pos])
-        if count < target_min and count > 0:
-            needs_heroes.append((pos, target_min - count))
-        elif count > 5:
-            excess_heroes.append((pos, count - 5))
+        min_needed = target_min[pos]
+        if count < min_needed:
+            needs_heroes.append((pos, min_needed - count))
+        elif count > min_needed:
+            available_heroes.append((pos, count - min_needed))
 
     # Redistribute heroes from positions with excess to positions that need them
     for need_pos, need_count in needs_heroes:
-        for excess_pos, excess_count in excess_heroes:
-            if excess_count <= 0:
+        for avail_pos, avail_count in available_heroes:
+            if avail_count <= 0:
                 continue
 
-            # Take heroes from excess position (lowest WR first)
-            to_move = min(need_count, excess_count)
-            moved_heroes = grid[excess_pos][-to_move:]
-            grid[excess_pos] = grid[excess_pos][:-to_move]
+            # Take heroes from available position (lowest WR first)
+            to_move = min(need_count, avail_count)
+            moved_heroes = grid[avail_pos][-to_move:]
+            grid[avail_pos] = grid[avail_pos][:-to_move]
             grid[need_pos].extend(moved_heroes)
 
             need_count -= to_move
-            excess_count -= to_move
+            avail_count -= to_move
 
             if need_count <= 0:
                 break
