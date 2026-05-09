@@ -1,4 +1,4 @@
-# hero_meta.py — heroStats API + role-based, layout = dc5d7a5 (a32f3e8)
+# hero_meta.py — heroStats API + role-based positions, layout = dc5d7a5 (a32f3e8)
 
 import asyncio
 import aiohttp
@@ -41,18 +41,26 @@ if FONT_PATH is None:
 
 
 def detect_hero_position(hero_roles):
-    """Определяет позицию (1-5) по ролям из heroStats"""
-    roles = set(hero_roles)
-    if "Carry" in roles:
-        return 1
-    if "Nuker" in roles or "Escape" in roles:
-        return 2
-    if "Durable" in roles or "Initiator" in roles:
-        return 3
-    if "Support" in roles and "Disabler" in roles:
+    """Определяет позицию (1-5) по ролям из heroStats. Case-insensitive.
+    Приоритет: Support+Disabler > Support > Durable/Initiator > Carry > Nuker/Escape
+    """
+    roles = set((r or "").lower().strip() for r in hero_roles)
+
+    # Support+Disabler → POS 4 (Hard Support)
+    if "support" in roles and "disabler" in roles:
         return 4
-    if "Support" in roles and "Disabler" not in roles:
+    # Support без Disabler → POS 5 (Soft Support)
+    if "support" in roles and "disabler" not in roles:
         return 5
+    # Durable / Initiator → POS 3 (Offlane)
+    if "durable" in roles or "initiator" in roles:
+        return 3
+    # Carry → POS 1
+    if "carry" in roles:
+        return 1
+    # Nuker / Escape → POS 2 (Mid)
+    if "nuker" in roles or "escape" in roles:
+        return 2
     return None
 
 
@@ -108,8 +116,11 @@ async def get_dota_data(days=7):
 
 def _build_grid(hero_stats):
     """
-    Сетка 5 колонок. Позиция = detect_hero_position(roles).
-    Каждый герой в одной колонке. Минимум 20 pro_pick.
+    Сетка 5 колонок.
+    1) Определяем позицию через {pos}_pick (основной метод).
+    2) Fallback через detect_hero_position(roles).
+    3) Каждый герой — только в одной колонке.
+    4) Минимум 20 pro_pick.
     """
     by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
 
@@ -118,21 +129,35 @@ def _build_grid(hero_stats):
         if pro_pick < 20:
             continue
 
-        pos = detect_hero_position(hero.get("roles", []))
-        if not pos:
-            continue
+        hero_id = hero["id"]
 
-        pk = hero.get("%d_pick" % pos, 0)
-        wk = hero.get("%d_win" % pos, 0)
-        if pk == 0:
-            pk = pro_pick
-            wk = hero.get("pro_win", 0)
+        # Шаг 1: ищем позицию с максимумом {pos}_pick
+        best_pos = None
+        best_pk = 0
+        for p in range(1, 6):
+            pk = hero.get("%d_pick" % p, 0)
+            if pk > best_pk:
+                best_pk = pk
+                best_pos = p
+
+        # Шаг 2: если позиционные данные отсутствуют — fallback через роли
+        if not best_pos or best_pk == 0:
+            best_pos = detect_hero_position(hero.get("roles", []))
+            if not best_pos:
+                continue
+            best_pk = pro_pick
+
+        pk = best_pk
+        wk = hero.get("%d_win" % best_pos, 0)
+        # Fallback wins из общих данных
+        if wk == 0 and pro_pick > 0 and pk > 0:
+            wk = int(hero.get("pro_win", 0) * min(pk / pro_pick, 1.0))
 
         wr = (wk / pk * 100) if pk > 0 else 0
 
-        by_position[pos].append({
-            'id': hero["id"],
-            'name': hero.get("localized_name", 'Hero %d' % hero["id"]),
+        by_position[best_pos].append({
+            'id': hero_id,
+            'name': hero.get("localized_name", 'Hero %d' % hero_id),
             'img': hero.get("img", ""),
             'wr': wr,
             'picks': pk,
@@ -299,9 +324,9 @@ def get_static_fallback_banner():
             font = ImageFont.truetype(FONT_PATH, 32)
         except:
             font = ImageFont.load_default()
-        draw.text((20, 20), "Dota 2 Hero Meta", fill=(255, 215, 0), font=font)
-        draw.text((20, 70), "Updated: %s" % date_text, fill=(200, 200, 200), font=font)
-        draw.text((20, 120), "API unavailable", fill=(150, 150, 150), font=font)
+        # Removed "Dota 2 Hero Meta" label as requested
+        draw.text((20, 20), "Updated: %s" % date_text, fill=(200, 200, 200), font=font)
+        draw.text((20, 70), "API unavailable", fill=(150, 150, 150), font=font)
         buf = io.BytesIO()
         base.save(buf, format='PNG')
         return buf.getvalue()
