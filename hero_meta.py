@@ -40,14 +40,27 @@ if FONT_PATH is None:
     logger.warning("Using default PIL font as no system fonts found")
 
 
-def get_hero_positions(hero_data):
-    """Возвращает список позиций, на которых герой имеет достаточно данных (пиков)."""
-    positions = []
-    for pos in range(1, 6):
-        picks = hero_data.get(f"{pos}_pick", 0)
-        if picks >= 1000:  # Minimum picks threshold
-            positions.append(pos)
-    return positions
+def detect_hero_position(hero_data):
+    """Определяет основную позицию героя по его ролям."""
+    roles = set((r or "").lower().strip() for r in hero_data.get("roles", []))
+
+    # Role to position mapping
+    role_priority = [
+        ("carry", 1),
+        ("support", 5),
+        ("nuker", 2),
+        ("escape", 2),
+        ("durable", 3),
+        ("initiator", 3),
+        ("disabler", 4)
+    ]
+
+    # Find first matching role
+    for role, pos in role_priority:
+        if role in roles:
+            return pos
+
+    return 2  # Default to mid
 
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
@@ -102,13 +115,12 @@ async def get_dota_data(days=7):
 
 def _build_grid(hero_stats):
     """
-    Сетка 5 колонок с героями, имеющими лучший винрейт на каждой позиции.
-    1) Собираем всех героев для каждой позиции.
-    2) Сортируем по винрейту на позиции.
-    3) Берем топ-5 героев по винрейту для каждой позиции.
+    Сетка 5 колонок с героями на своих позициях по ролям.
+    1) Определяем основную позицию героя по ролям.
+    2) Используем винрейт героя на этой позиции.
+    3) Сортируем по винрейту и берем топ героев.
     """
-    # Collect all hero-position combinations
-    hero_positions = []
+    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
 
     for hero in hero_stats:
         pro_pick = hero.get("pro_pick", 0)
@@ -116,38 +128,75 @@ def _build_grid(hero_stats):
             continue
 
         hero_id = hero["id"]
-        hero_name = hero.get("localized_name", 'Hero %d' % hero_id)
-        hero_img = hero.get("img", "")
 
-        # Get all positions where hero has enough data
-        positions = get_hero_positions(hero)
+        # Определяем основную позицию по ролям
+        pos = detect_hero_position(hero)
+        if not pos:
+            continue
 
-        for pos in positions:
-            pk = hero.get("%d_pick" % pos, 0)
-            wk = hero.get("%d_win" % pos, 0)
-            wr = (wk / pk * 100) if pk > 0 else 0
+        # Используем винрейт героя на его основной позиции
+        pk = hero.get("%d_pick" % pos, 0)
+        wk = hero.get("%d_win" % pos, 0)
 
-            hero_positions.append({
-                'id': hero_id,
-                'name': hero_name,
-                'img': hero_img,
-                'position': pos,
-                'wr': wr,
-                'picks': pk,
-                'wins': wk,
-            })
+        # Минимальный порог пиков на позиции
+        if pk < 1000:
+            continue
 
-    # Group by position and take top 5 by win rate
-    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
-    for hp in hero_positions:
-        by_position[hp['position']].append(hp)
+        wr = (wk / pk * 100) if pk > 0 else 0
+
+        by_position[pos].append({
+            'id': hero_id,
+            'name': hero.get("localized_name", 'Hero %d' % hero_id),
+            'img': hero.get("img", ""),
+            'wr': wr,
+            'picks': pk,
+            'wins': wk,
+        })
 
     grid = {}
     for pos in range(1, 6):
         heroes = sorted(by_position[pos], key=lambda h: -h['wr'])
-        grid[pos] = heroes[:5]  # Take top 5 by win rate on position
+        grid[pos] = heroes
 
-    return grid
+    # Balance positions: ensure minimum heroes per position
+    # Redistribute heroes from crowded positions to empty ones
+    target_min = {1: 3, 2: 3, 3: 3, 4: 1, 5: 3}
+
+    needs_heroes = []
+    available_heroes = []
+
+    for pos in range(1, 6):
+        count = len(grid[pos])
+        min_needed = target_min[pos]
+        if count < min_needed:
+            needs_heroes.append((pos, min_needed - count))
+        elif count > min_needed:
+            available_heroes.append((pos, count - min_needed))
+
+    # Redistribute
+    for need_pos, need_count in needs_heroes:
+        for avail_pos, avail_count in available_heroes:
+            if avail_count <= 0:
+                continue
+
+            to_move = min(need_count, avail_count)
+            moved_heroes = grid[avail_pos][-to_move:]
+            grid[avail_pos] = grid[avail_pos][:-to_move]
+            grid[need_pos].extend(moved_heroes)
+
+            need_count -= to_move
+            avail_count -= to_move
+
+            if need_count <= 0:
+                break
+
+    # Final: limit to 5 heroes per position
+    final_grid = {}
+    for pos in range(1, 6):
+        heroes = sorted(grid[pos], key=lambda h: -h['wr'])
+        final_grid[pos] = heroes[:5]
+
+    return final_grid
     return grid
 
 
