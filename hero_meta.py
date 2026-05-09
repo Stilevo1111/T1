@@ -127,12 +127,13 @@ async def get_dota_data(days=7):
 
 def _build_grid(hero_stats):
     """
-    Сетка 5 колонок с ролевой классификацией.
-    1) Распределяем героев по позициям на основе ролей.
-    2) Используем позиционные данные для win rate, если доступны.
-    3) Сортируем по win rate и берем топ героев.
+    Сетка 5 колонок с героями, имеющими лучший винрейт на каждой позиции.
+    1) Для каждого героя собираем его винрейт на всех позициях.
+    2) Для каждой позиции находим героев с самым высоким WR на этой позиции.
+    3) Берем топ-5 героев по WR для каждой позиции.
     """
-    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
+    # Collect all hero-position combinations
+    hero_positions = []
 
     for hero in hero_stats:
         pro_pick = hero.get("pro_pick", 0)
@@ -140,72 +141,37 @@ def _build_grid(hero_stats):
             continue
 
         hero_id = hero["id"]
+        hero_name = hero.get("localized_name", 'Hero %d' % hero_id)
+        hero_img = hero.get("img", "")
 
-        # Определяем позицию по ролям
-        pos = detect_hero_position(hero.get("roles", []))
-        if not pos:
-            continue
+        # Check win rate on each position
+        for pos in range(1, 6):
+            pk = hero.get("%d_pick" % pos, 0)
+            wk = hero.get("%d_win" % pos, 0)
 
-        # Используем позиционные данные для WR, если доступны
-        pk = hero.get("%d_pick" % pos, 0) or pro_pick
-        wk = hero.get("%d_win" % pos, 0) or hero.get("pro_win", 0)
+            if pk >= 1000:  # Minimum picks threshold for position
+                wr = (wk / pk * 100) if pk > 0 else 0
+                hero_positions.append({
+                    'id': hero_id,
+                    'name': hero_name,
+                    'img': hero_img,
+                    'position': pos,
+                    'wr': wr,
+                    'picks': pk,
+                    'wins': wk,
+                })
 
-        wr = (wk / pk * 100) if pk > 0 else 0
-
-        by_position[pos].append({
-            'id': hero_id,
-            'name': hero.get("localized_name", 'Hero %d' % hero_id),
-            'img': hero.get("img", ""),
-            'wr': wr,
-            'picks': pk,
-            'wins': wk,
-        })
+    # Group by position and sort by win rate
+    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
+    for hp in hero_positions:
+        by_position[hp['position']].append(hp)
 
     grid = {}
     for pos in range(1, 6):
         heroes = sorted(by_position[pos], key=lambda h: -h['wr'])
-        grid[pos] = heroes
+        grid[pos] = heroes[:5]  # Take top 5 by win rate
 
-    # Balance positions: ensure minimum 3 heroes per position
-    # If a position has too few heroes, take from positions with excess
-    target_min = 3
-
-    # First pass: collect positions that need more heroes
-    needs_heroes = []
-    excess_heroes = []
-
-    for pos in range(1, 6):
-        count = len(grid[pos])
-        if count < target_min and count > 0:
-            needs_heroes.append((pos, target_min - count))
-        elif count > 5:
-            excess_heroes.append((pos, count - 5))
-
-    # Redistribute heroes from positions with excess to positions that need them
-    for need_pos, need_count in needs_heroes:
-        for excess_pos, excess_count in excess_heroes:
-            if excess_count <= 0:
-                continue
-
-            # Take heroes from excess position (lowest WR first)
-            to_move = min(need_count, excess_count)
-            moved_heroes = grid[excess_pos][-to_move:]
-            grid[excess_pos] = grid[excess_pos][:-to_move]
-            grid[need_pos].extend(moved_heroes)
-
-            need_count -= to_move
-            excess_count -= to_move
-
-            if need_count <= 0:
-                break
-
-    # Final pass: limit to 5 heroes per position, sorted by WR
-    final_grid = {}
-    for pos in range(1, 6):
-        heroes = sorted(grid[pos], key=lambda h: -h['wr'])
-        final_grid[pos] = heroes[:5] if len(heroes) >= 3 else heroes
-
-    return final_grid
+    return grid
     return grid
 
 
