@@ -982,11 +982,11 @@ async def dota_digest_job(context):
             bottom_part = "🔻—"
 
         if streak_player and streak_player != "None" and streak_wins > 0:
-            streak_part = f" 🔸{streak_display}: {streak_wins}"
+            streak_part = f"🔸{streak_display}: {streak_wins} игр подряд"
         else:
-            streak_part = " 🔸—"
+            streak_part = "🔸—"
 
-        text = f"<b>{top_part} {bottom_part} {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
+        text = f"<b>{top_part}\n{bottom_part}\n{streak_part}</b>\n\n🦞 Дота Дайджест"
 
         bot = context.application.bot
 
@@ -1186,6 +1186,17 @@ async def alternate_digest_job(context):
                 else:
                     stats = _digest_state["digest_data"]
 
+                # Проверяем, есть ли данные
+                if stats.get("top_growth", ("None", 0))[0] == "None" and stats.get("top_drop", ("None", 0.0))[0] == "None" and stats.get("top_streak", ("None", 0))[0] == "None":
+                    # Загружаем из кеша
+                    cached_stats = get_config('fissure_digest_cache')
+                    if cached_stats:
+                        try:
+                            stats = json.loads(cached_stats)
+                            logger.info("Загружены кешированные данные для фиссур-дайджеста")
+                        except Exception as e:
+                            logger.warning(f"Не удалось загрузить кеш фиссур-дайджеста: {e}")
+
                 growth_player, growth_pos = stats.get("top_growth", ("None", 0))
                 drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
                 streak_player, streak_len = stats.get("top_streak", ("None", 0))
@@ -1193,17 +1204,33 @@ async def alternate_digest_job(context):
                 drop_id = stats.get("top_drop_id")
                 streak_id = stats.get("top_streak_id")
 
+                # Сохраняем в кеш если есть данные
+                if growth_player != "None" or drop_player != "None" or streak_player != "None":
+                    try:
+                        set_config('fissure_digest_cache', json.dumps(stats))
+                        logger.info("Сохранены данные фиссур-дайджеста в кеш")
+                    except Exception as e:
+                        logger.warning(f"Не удалось сохранить кеш фиссур-дайджеста: {e}")
+
                 growth_display = make_clickable(growth_player, growth_id)
                 drop_display = make_clickable(drop_player, drop_id)
                 streak_display = make_clickable(streak_player, streak_id)
 
-                growth_part = f"🔺{growth_display} +{growth_pos} см" if growth_player and growth_player != "None" else "🔺—"
+                parts = []
+                if growth_player and growth_player != "None":
+                    parts.append(f"🔺{growth_display} +{growth_pos} см")
+                else:
+                    parts.append("🔺—")
+                if drop_player and drop_player != "None":
+                    parts.append(f"🔻{drop_display} {drop_cm:.0f} см")
+                else:
+                    parts.append("🔻—")
+                if streak_player and streak_player != "None" and streak_len > 0:
+                    parts.append(f"🍀{streak_display}: {streak_len}")
+                else:
+                    parts.append("🍀—")
 
-                drop_part = f"🔻{drop_display} {drop_cm:.0f} см" if drop_player and drop_player != "None" else "🔻—"
-
-                streak_part = f"🍀{streak_display}: {streak_len}" if streak_player and streak_player != "None" and streak_len > 0 else "🍀—"
-
-                text = f"<b>{growth_part}{drop_part}{streak_part} подряд</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = топ рост\n🔻 = топ падение\n🍀 = текущий стрик побед"
+                text = f"<b>{chr(10).join(parts)} подряд</b>\n\n🍆 Фиссура Дайджест."
 
             else:
                 # Dota-дайджест
@@ -1272,11 +1299,11 @@ async def alternate_digest_job(context):
                                 bottom_part = "🔻—"
 
                             if streak_player and streak_player != "None" and streak_wins > 0:
-                                streak_part = f" 🔸{make_clickable(streak_player, streak_id)}: {streak_wins}"
+                                streak_part = f"🔸{make_clickable(streak_player, streak_id)}: {streak_wins} игр подряд"
                             else:
-                                streak_part = " 🔸—"
+                                streak_part = "🔸—"
 
-                            dota_text = f"<b>{top_part} {bottom_part} {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
+                            dota_text = f"<b>{top_part}\n{bottom_part}\n{streak_part}</b>\n\n🦞 Дота Дайджест"
 
                         if dota_text is None:
                             next_type = "0"
