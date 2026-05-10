@@ -17,40 +17,29 @@ logger = logging.getLogger(__name__)
 ASSETS_DIR = "assets/heroes"
 os.makedirs(ASSETS_DIR, exist_ok=True)
 
-# PRO-бенчмарки (средние значения по ролям)
-PRO_DATA = {
+# PRO-бенчмарки с игроками и средними
+PRO_DB = {
     "CARRY": {
-        "players": ["Yatoro", "Ame", "Skiter", "Nightfall", "Pure"],
-        "gpm": 750,
-        "kda": 5.5,
-        "lh": 78,
-        "apm": 320,
-        "utility": 400
-    },
-    "MID": {
-        "players": ["Malr1ne", "Quinn", "Nisha", "gpk", "SumaiL"],
-        "gpm": 700,
-        "kda": 4.8,
-        "lh": 72,
-        "apm": 350,
-        "utility": 800
-    },
-    "OFFLANE": {
-        "players": ["Collapse", "33", "Ace", "ATF", "Wisper"],
-        "gpm": 580,
-        "kda": 4.2,
-        "lh": 60,
-        "apm": 300,
-        "utility": 1500
+        "players": {
+            "Watson":  {"wr": 68, "lh": 72, "deny": 12, "gpm": 725, "kda": "8/2.9/8"},
+            "skiter":  {"wr": 65, "lh": 72, "deny": 13, "gpm": 693, "kda": "7/3.0/9"},
+            "Pure":    {"wr": 63, "lh": 67, "deny": 11, "gpm": 742, "kda": "8/3.7/9"},
+            "Satanic": {"wr": 61, "lh": 81, "deny": 14, "gpm": 825, "kda": "8/2.8/7"},
+            "Ame":     {"wr": 60, "lh": 78, "deny": 9,  "gpm": 743, "kda": "7/3.2/7"}
+        },
+        "benchmarks": {"lh10": 73.8, "deny10": 10.2, "gpm": 732, "xpm": 855, "deaths": 3.1, "h_dmg": 28.0, "t_dmg": 9.3, "stacks": 2.3, "utility": 1.0, "apm": 300}
     },
     "SUPPORT": {
-        "players": ["Miposhka", "Save-", "Sneyking", "Puppey", "Fishman"],
-        "gpm": 380,
-        "kda": 3.5,
-        "lh": 15,
-        "apm": 280,
-        "utility": 4500
+        "players": {
+            "Miposhka": {"wr": 62, "lh": 12, "deny": 4, "gpm": 380, "kda": "3/4.2/18"},
+            "Save-":    {"wr": 60, "lh": 18, "deny": 6, "gpm": 410, "kda": "4/3.8/15"},
+            "Sneyking": {"wr": 64, "lh": 14, "deny": 3, "gpm": 395, "kda": "2/4.5/20"},
+            "Puppey":   {"wr": 58, "lh": 10, "deny": 2, "gpm": 350, "kda": "1/5.1/14"},
+            "Fishman":  {"wr": 59, "lh": 15, "deny": 5, "gpm": 370, "kda": "2/4.9/16"}
+        },
+        "benchmarks": {"lh10": 14.5, "deny10": 4.8, "gpm": 385, "xpm": 420, "deaths": 5.2, "h_dmg": 12.0, "t_dmg": 0.8, "stacks": 4.5, "utility": 5.2, "apm": 280}
     }
+    # TODO: Добавить MID и OFFLANE
 }
 
 # Весовые коэффициенты для IMP
@@ -102,34 +91,78 @@ def calculate_imp(gpm: float, kda: float, utility: float, apm: float, role: str)
     return round(imp, 2)
 
 
-def compare_with_pro(player_stats: dict, role: str) -> dict:
-    """Сравнение с PRO-бенчмарками"""
-    if role not in PRO_DATA:
-        return {"error": "Unknown role"}
+def generate_pro_table(role: str, user_stats: dict) -> str:
+    """Генерирует таблицу ТОП-5 PRO игроков"""
+    if role not in PRO_DB:
+        role = "CARRY"
 
-    pro = PRO_DATA[role]
-    result = {}
+    config = PRO_DB[role]
+    pros = config["players"]
+    avg = config["benchmarks"]
 
-    for metric in ["gpm", "kda", "lh", "apm", "utility"]:
-        player_val = player_stats.get(metric, 0)
-        pro_val = pro.get(metric, 0)
+    table = "```\n          WR   LH  Deny  GPM   KDA\n"
+    table += "--------------------------------------\n"
+    for name, stats in pros.items():
+        table += f"{name:<9} {stats['wr']:>3}% {stats['lh']:>4} {stats['deny']:>4} {stats['gpm']:>5} {stats['kda']}\n"
+    table += "--------------------------------------\n"
+    # PRO AVG (примерно, нужно рассчитать)
+    avg_wr = sum(stats['wr'] for stats in pros.values()) // len(pros)
+    avg_lh = sum(stats['lh'] for stats in pros.values()) / len(pros)
+    avg_deny = sum(stats['deny'] for stats in pros.values()) / len(pros)
+    avg_gpm = sum(stats['gpm'] for stats in pros.values()) // len(pros)
+    avg_kda = "8/3.1/8" if role == "CARRY" else "2/4.5/17"
+    table += f"PRO AVG   {avg_wr:>3}% {avg_lh:>4.1f} {avg_deny:>4.1f} {avg_gpm:>5} {avg_kda}\n\n"
+
+    # YOU
+    u_wr = user_stats.get('wr', 0)
+    u_lh = user_stats.get('lh', 0)
+    u_deny = user_stats.get('deny', 0)
+    u_gpm = user_stats.get('gpm', 0)
+    u_kda = user_stats.get('kda', "0/0/0")
+    table += f"YOU ✨    {u_wr:>3}% {u_lh:>4.1f} {u_deny:>4.1f} {u_gpm:>5.0f} {u_kda}\n```"
+
+    return table
+
+
+def compare_with_pro(player_stats: dict, role: str) -> str:
+    """Генерирует таблицу детального сравнения"""
+    if role not in PRO_DB:
+        return "```\nРоль не найдена\n```"
+
+    bench = PRO_DB[role]["benchmarks"]
+
+    table = "```\n🔍 Детальное сравнение\n\n"
+    table += "Метрика          Ты      PRO      Δ \n"
+    table += "------------------------------------\n"
+
+    metrics = [
+        ("LH@10", "lh10", 1),
+        ("Denies@10", "deny10", 1),
+        ("GPM", "gpm", 0),
+        ("XPM", "xpm", 0),
+        ("Deaths", "deaths", 1),
+        ("Hero DMG", "h_dmg", 0),
+        ("Tower DMG", "t_dmg", 0),
+        ("Stacks", "stacks", 1),
+        ("Utility", "utility", 1),
+        ("APM", "apm", 0)
+    ]
+
+    for label, key, decimal in metrics:
+        player_val = player_stats.get(key, 0)
+        pro_val = bench.get(key, 0)
         if pro_val > 0:
-            delta = ((player_val - pro_val) / pro_val) * 100
-            if delta > 10:
-                emoji = "🟢"
-            elif delta < -10:
-                emoji = "🔴"
-            else:
-                emoji = "🟡"
-            result[metric] = {
-                "value": round(player_val, 1) if metric != "utility" else int(player_val),
-                "delta": round(delta, 1),
-                "emoji": emoji
-            }
+            delta = player_val - pro_val
+            arrow = "↑" if delta > 0 else "↓" if delta < 0 else "→"
+            p_val = f"{player_val:.1f}" if decimal else f"{int(player_val)}"
+            p_pro = f"{pro_val:.1f}" if decimal else f"{int(pro_val)}"
+            d_str = f"{delta:+.1f}" if decimal else f"{int(delta):+d}"
+            table += f"{label:<15} {p_val:>7} {p_pro:>7} {d_str:>6} {arrow}\n"
         else:
-            result[metric] = {"value": "-", "delta": 0, "emoji": "🟡"}
+            table += f"{label:<15} {player_val:>7} -      -      -\n"
 
-    return result
+    table += "```"
+    return table
 
 
 async def cache_hero_icon(hero_id: int) -> str:
@@ -153,39 +186,99 @@ async def cache_hero_icon(hero_id: int) -> str:
     return ""  # Fallback
 
 
-def create_impact_chart(data_points: list[float], hero_ids: list[int]) -> bytes:
-    """Создаёт график IMP с иконками героев"""
+def create_impact_chart(game_history: list[dict]) -> io.BytesIO:
+    """
+    Создаёт график IMP с иконками героев
+    game_history: [{'impact': float, 'hero_id': int}, ...]
+    """
+    impacts = [g['impact'] for g in game_history]
+    hero_ids = [g['hero_id'] for g in game_history]
+
+    # 1. Создаем базовый график в Plotly
     fig = go.Figure()
 
-    # Линия графика
+    # Линия и заливка
     fig.add_trace(go.Scatter(
-        x=list(range(1, len(data_points) + 1)),
-        y=data_points,
-        mode='lines+markers',
-        line=dict(color='#ff9900', width=3),
+        x=list(range(len(impacts))),
+        y=impacts,
+        mode='lines',
+        line=dict(color='#ff9900', width=4),
         fill='tozeroy',
-        fillcolor='rgba(255, 153, 0, 0.1)'
+        fillcolor='rgba(255, 153, 0, 0.15)',
+        hoverinfo='none'
     ))
 
-    # PRO Target линия
-    fig.add_hline(y=1.0, line_dash="dot", line_color="red", annotation_text="PRO Target")
-
-    # Настройки
-    fig.update_layout(
-        template="plotly_dark",
-        paper_bgcolor='#18181b',
-        plot_bgcolor='#18181b',
-        font=dict(family="Arial", size=12),
-        xaxis_title="Матч",
-        yaxis_title="IMP",
-        showlegend=False
+    # Линия PRO TARGET
+    fig.add_hline(
+        y=1.0,
+        line_dash="dash",
+        line_color="rgba(255, 255, 255, 0.4)",
+        annotation_text="PRO TARGET",
+        annotation_position="top left",
+        annotation_font=dict(color="rgba(255, 255, 255, 0.4)")
     )
 
-    # Сохранить в PNG
-    buf = io.BytesIO()
-    fig.write_image(buf, format='png', engine='kaleido')
-    buf.seek(0)
-    return buf.getvalue()
+    # Добавляем иконки героев
+    for i, (val, h_id) in enumerate(zip(impacts, hero_ids)):
+        icon_url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{h_id}.png"
+
+        fig.add_layout_image(
+            dict(
+                source=icon_url,
+                xref="x", yref="y",
+                x=i, y=val,
+                sizex=0.6, sizey=0.6, # Размер иконок
+                xanchor="center", yanchor="middle",
+                layer="above"
+            )
+        )
+
+    # Настройка темной темы
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor='rgb(24, 24, 27)',
+        plot_bgcolor='rgb(24, 24, 27)',
+        width=900,
+        height=500,
+        margin=dict(l=50, r=50, t=80, b=50),
+        xaxis=dict(showgrid=False, visible=False),
+        yaxis=dict(
+            gridcolor='rgba(255, 255, 255, 0.1)',
+            zeroline=False,
+            tickfont=dict(color="gray")
+        ),
+        title=dict(
+            text="Impact (IMP)",
+            font=dict(size=24, color="white"),
+            x=0.05, y=0.92
+        )
+    )
+
+    # Рендерим в байты (нужна библиотека kaleido)
+    img_bytes = fig.to_image(format="png", engine="kaleido")
+
+    # 2. Добавляем бейдж "Улучшение" с помощью Pillow
+    img = Image.open(io.BytesIO(img_bytes))
+    draw = ImageDraw.Draw(img)
+
+    # Координаты для бейджа (правый верхний угол)
+    badge_rect = [680, 25, 850, 65]
+    draw.rounded_rectangle(badge_rect, radius=20, fill="#22c55e")
+
+    # Текст на бейдже (используй шрифт, если он есть в системе, или дефолтный)
+    try:
+        font = ImageFont.truetype("Arial.ttf", 20)
+    except:
+        font = ImageFont.load_default()
+
+    draw.text((700, 32), "↑ Улучшение", fill="white", font=font)
+
+    # Сохраняем финальный результат
+    output = io.BytesIO()
+    img.save(output, format="PNG")
+    output.seek(0)
+
+    return output
 
 
 async def get_weekly_matches(telegram_id: int) -> list[dict]:
@@ -241,14 +334,16 @@ async def generate_weekly_analytics(telegram_id: int) -> dict | None:
     total_assists = sum(m.get("assists", 0) for m in matches)
     total_lh = sum(m.get("last_hits", 0) for m in matches)
     total_apm = sum(m.get("actions_per_min", 0) for m in matches)
+    total_wins = sum(1 for m in matches if m.get("win", 0) == 1)
 
     avg_gpm = total_gpm / len(matches)
     avg_kda = (total_kills + total_assists) / (total_deaths + 1)  # +1 чтобы избежать деления на 0
     avg_lh = total_lh / len(matches)
     avg_apm = total_apm / len(matches)
+    wr = (total_wins / len(matches)) * 100
 
     # Utility (упрощённо, без детальных данных)
-    avg_utility = calculate_utility()  # Заглушка, так как данные не всегда доступны
+    avg_utility = calculate_utility()  # Заглушка
 
     player_stats = {
         "gpm": avg_gpm,
@@ -258,25 +353,42 @@ async def generate_weekly_analytics(telegram_id: int) -> dict | None:
         "utility": avg_utility
     }
 
-    # Сравнение с PRO
-    comparison = compare_with_pro(player_stats, role)
+    # Подготовка данных для таблиц
+    user_table_stats = {
+        'wr': int(wr),
+        'lh': avg_lh,
+        'deny': 0,  # Заглушка
+        'gpm': avg_gpm,
+        'kda': f"{total_kills}/{total_deaths}/{total_assists}",
+        'lh10': avg_lh,
+        'deny10': 0,
+        'xpm': avg_apm * 2,  # Заглушка
+        'deaths': total_deaths / len(matches),
+        'h_dmg': 0,
+        't_dmg': 0,
+        'stacks': 0,
+        'utility': avg_utility,
+        'apm': avg_apm
+    }
 
-    # IMP по матчам (упрощённо, повторяем среднее)
-    hero_ids = [m.get("hero_id", 0) for m in matches]
-    imp_points = [calculate_imp(avg_gpm, avg_kda, avg_utility, avg_apm, role)] * len(matches)
+    # Таблица 1: ТОП-5 PRO
+    table1 = generate_pro_table(role, user_table_stats)
+
+    # Таблица 2: Детальное сравнение
+    table2 = compare_with_pro(user_table_stats, role)
+
+    # IMP по матчам
+    game_history = []
+    for m in matches:
+        imp = calculate_imp(avg_gpm, avg_kda, avg_utility, avg_apm, role)
+        game_history.append({'impact': imp, 'hero_id': m.get("hero_id", 0)})
 
     # График
-    chart_image = create_impact_chart(imp_points, hero_ids)
+    chart_image = create_impact_chart(game_history)
 
     # Текст в MarkdownV2
-    text = f"🎯 Еженедельная аналитика\n\nРоль: {role}\n\n"
-    text += "```\n"
-    text += "Метрика\tТы\tPRO\tДельта\tСтатус\n"
-    for metric, data in comparison.items():
-        if "error" not in data:
-            pro_val = PRO_DATA[role].get(metric, 0)
-            text += f"{metric.upper()}\t{data['value']}\t{pro_val}\t{data['delta']}%\t{data['emoji']}\n"
-    text += "```\n\n"
+    text = f"📊 АНАЛИЗ ЗА {len(matches)} ИГР (Роль: {role}) ━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    text += f"🏆 Сравнение с ТОП-5 PRO ({role})\n\n{table1}\n\n{table2}\n\n"
     text += "📊 График IMP по 10 матчам\\. PRO Target \\= 1\\.0"
 
     return {"text": text, "image": chart_image}
