@@ -446,7 +446,7 @@ def generate_detailed_metrics_table(role: str, user_stats: dict) -> str:
     if user_stats["apm"] < bench["apm"] * 0.85:
         feedback.append("• Низкий APM → участвуйте активнее в игровых моментах")
     if user_stats["util"] < bench["utility"] * 0.75:
-        feedback.append("• Мало утилити → больше помощи команде (стаки, варды, контроли)")
+        feedback.append("• Мало утилити → больше помощи команде \\(стаки, варды, контроли\\)")
     if not feedback:
         feedback.append("• Отличные показатели по сравнению с PRO-игроками")
 
@@ -594,7 +594,7 @@ async def generate_weekly_analytics(telegram_id: int):
 # CHART
 # =========================================================
 
-async def create_visual_chart(history: list, match_dates: list = None):
+async def create_visual_chart(history: list):
 
     impacts = [g["imp"] for g in history]
     n = len(history)
@@ -643,7 +643,7 @@ async def create_visual_chart(history: list, match_dates: list = None):
                     color = None
 
                 if color:
-                    radius = 0.42
+                    radius = 0.3  # tight around 0.6-sized icon
                     fig.add_shape(
                         type="circle",
                         xref="x",
@@ -652,7 +652,7 @@ async def create_visual_chart(history: list, match_dates: list = None):
                         y0=imp_val - radius,
                         x1=i + radius,
                         y1=imp_val + radius,
-                        line=dict(color=color, width=3),
+                        line=dict(color=color, width=2),
                         fillcolor="rgba(0,0,0,0)"
                     )
 
@@ -665,17 +665,9 @@ async def create_visual_chart(history: list, match_dates: list = None):
     y_pad = (y_max - y_min) * 0.15 if y_max > y_min else 0.2
     y_range = [max(0, y_min - y_pad), y_max + y_pad]
 
-    # X-axis date labels
+    # X-axis: simple numbers 1..n
     x_tick_vals = list(range(n))
-    x_tick_text = []
-    if match_dates:
-        for dt in match_dates:
-            if isinstance(dt, datetime):
-                x_tick_text.append(dt.strftime("%m.%d"))
-            else:
-                x_tick_text.append(str(dt))
-    else:
-        x_tick_text = [str(i+1) for i in range(n)]
+    x_tick_text = [str(i+1) for i in range(n)]
 
     fig.update_layout(
         template="plotly_dark",
