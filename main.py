@@ -3747,6 +3747,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                 chat_id=chat_id,
                 text="⏳ Провожу исследования..."
             )
+            # Give time for the loading message to be visible
+            await asyncio.sleep(1)
             try:
                 # Call analyze (it will send its own message)
                 await analyze_command(update, context)
