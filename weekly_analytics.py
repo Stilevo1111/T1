@@ -2,10 +2,10 @@
 
 import asyncio
 import aiohttp
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 from PIL import Image, ImageDraw, ImageFont
 import io
-import base64
 from datetime import datetime, timezone, timedelta
 
 from dota_mmr import steam64_to_account_id, OPENDOTA_API_URL, _api_get_async
@@ -45,8 +45,6 @@ PRO_DB = {
             "Ame": {"wr": 60, "lh": 78, "deny": 9, "gpm": 743, "kda": "7/3.2/7"}
         },
         "benchmarks": {
-            "lh10": 73.8,
-            "deny10": 10.2,
             "gpm": 732,
             "xpm": 855,
             "deaths": 3.1,
@@ -67,8 +65,6 @@ PRO_DB = {
             "No[o]ne": {"wr": 61, "lh": 74, "deny": 21, "gpm": 710, "kda": "10/3.2/8"}
         },
         "benchmarks": {
-            "lh10": 71.5,
-            "deny10": 21.8,
             "gpm": 702,
             "xpm": 810,
             "deaths": 3.2,
@@ -89,8 +85,6 @@ PRO_DB = {
             "Wisper": {"wr": 58, "lh": 63, "deny": 16, "gpm": 595, "kda": "6/4.0/11"}
         },
         "benchmarks": {
-            "lh10": 61.2,
-            "deny10": 17.5,
             "gpm": 595,
             "xpm": 680,
             "deaths": 3.8,
@@ -111,8 +105,6 @@ PRO_DB = {
             "Fishman": {"wr": 59, "lh": 15, "deny": 5, "gpm": 370, "kda": "2/4.9/16"}
         },
         "benchmarks": {
-            "lh10": 14.5,
-            "deny10": 4.8,
             "gpm": 385,
             "xpm": 420,
             "deaths": 4.8,
@@ -224,19 +216,6 @@ async def load_heroes():
 
 async def get_hero_icon(hero_id: int):
 
-    from main import get_config, set_config
-
-    cache_key = f"icon_{hero_id}"
-
-    cached = get_config(cache_key)
-
-    if cached:
-        try:
-            data = base64.b64decode(cached)
-            return Image.open(io.BytesIO(data))
-        except Exception:
-            logger.exception("Failed decode cached icon")
-
     heroes = await load_heroes()
 
     hero_name = heroes.get(hero_id)
@@ -244,28 +223,17 @@ async def get_hero_icon(hero_id: int):
     if not hero_name:
         return None
 
-    url = (
-        "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/"
-        f"dota_react/heroes/icons/{hero_name}.png"
-    )
+    path = f"assets/heroes/{hero_name}.png"
 
     try:
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=5) as resp:
-
-                if resp.status == 200:
-
-                    data = await resp.read()
-
-                    encoded = base64.b64encode(data).decode()
-
-                    set_config(cache_key, encoded)
-
-                    return Image.open(io.BytesIO(data))
+        return Image.open(path).convert("RGBA")
 
     except Exception:
-        logger.exception("Failed load hero icon")
+
+        logger.exception(
+            f"Failed load icon: {hero_name}"
+        )
 
     return None
 
@@ -321,112 +289,92 @@ def convert_opendota_roles(opendota_roles: list) -> str:
     return "SUPPORT"
 
 
-async def detect_role_from_history(matches: list) -> str:
+async def detect_role_from_history(matches: list):
 
-    hero_roles = await load_hero_roles()
-
-    role_scores = {
+    scores = {
         "CARRY": 0,
         "MID": 0,
         "OFFLANE": 0,
         "SUPPORT": 0
     }
 
-    for match in matches:
+    for m in matches:
 
-        hero_id = match.get("hero_id")
-        gpm = match.get("gold_per_min", 0)
-        xpm = match.get("xp_per_min", 0)
-        lh = match.get("last_hits", 0)
-        kills = match.get("kills", 0)
-        assists = match.get("assists", 0)
-        hero_dmg = match.get("hero_damage", 0)
-        obs = match.get("observer_uses", 0)
-        sen = match.get("sentry_uses", 0)
-        lane = match.get("lane_role", 0)
+        gpm = m.get("gold_per_min", 0)
+        xpm = m.get("xp_per_min", 0)
+        lh = m.get("last_hits", 0)
 
-        # Hero base role from OpenDota (2 points)
-        od_roles = hero_roles.get(hero_id, [])
-        predicted_role = convert_opendota_roles(od_roles)
-        role_scores[predicted_role] += 2
+        kills = m.get("kills", 0)
+        assists = m.get("assists", 0)
 
-        # Lane role (3 points, higher weight)
-        if lane == 1:
-            role_scores["CARRY"] += 3
-        elif lane == 2:
-            role_scores["MID"] += 3
-        elif lane == 3:
-            role_scores["OFFLANE"] += 3
+        lane = m.get("lane_role", 0)
 
-        # Stat-based corrections (1 point)
+        hero_damage = m.get(
+            "hero_damage",
+            0
+        )
+
+        # =========================
         # MID
-        if xpm >= 600 and hero_dmg >= 18000:
-            role_scores["MID"] += 1
+        # =========================
 
-        # OFFLANE
-        if hero_dmg >= 18000 and assists >= kills:
-            role_scores["OFFLANE"] += 1
+        if lane == 2:
+            scores["MID"] += 5
 
+        if xpm >= 650:
+            scores["MID"] += 2
+
+        if hero_damage >= 25000:
+            scores["MID"] += 1
+
+        # =========================
         # CARRY
-        if gpm >= 650 and lh >= 220:
-            role_scores["CARRY"] += 1
+        # =========================
 
+        if gpm >= 650:
+            scores["CARRY"] += 3
+
+        if lh >= 220:
+            scores["CARRY"] += 2
+
+        if kills > assists:
+            scores["CARRY"] += 1
+
+        # =========================
         # SUPPORT
-        if obs + sen >= 10:
-            role_scores["SUPPORT"] += 1
-        if assists > kills and gpm < 450:
-            role_scores["SUPPORT"] += 1
+        # =========================
 
-    logger.info(f"Role scores: {role_scores}")
+        if assists > kills:
+            scores["SUPPORT"] += 2
 
-    final_role = max(role_scores, key=role_scores.get)
-    logger.info(f"Detected role: {final_role}")
+        if gpm <= 450:
+            scores["SUPPORT"] += 2
 
-    return final_role
+        if lh <= 80:
+            scores["SUPPORT"] += 2
+
+        # =========================
+        # OFFLANE
+        # =========================
+
+        if lane == 3:
+            scores["OFFLANE"] += 4
+
+        if assists >= kills:
+            scores["OFFLANE"] += 1
+
+        if 450 <= gpm <= 650:
+            scores["OFFLANE"] += 1
+
+    logger.info(f"ROLE SCORES: {scores}")
+
+    return max(scores, key=scores.get)
 
 # =========================================================
 # MATCH DETAILS
 # =========================================================
 
-async def get_player_match_details(match_id: int, account_id: int) -> dict:
-    """Fetch detailed match data and extract player's stats"""
-    try:
-        url = f"{OPENDOTA_API_URL}/matches/{match_id}"
-        match_data = await _api_get_async(url, timeout=10)
 
-        if not match_data or "players" not in match_data:
-            return {}
-
-        # Find the player's data in the match
-        for player in match_data["players"]:
-            if player.get("account_id") == account_id:
-                return {
-                    "gold_per_min": player.get("gold_per_min", 0),
-                    "xp_per_min": player.get("xp_per_min", 0),
-                    "last_hits": player.get("last_hits", 0),
-                    "denies": player.get("denies", 0),
-                    "hero_damage": player.get("hero_damage", 0),
-                    "tower_damage": player.get("tower_damage", 0),
-                    "actions_per_min": player.get("actions_per_min", 0),
-                    "kills": player.get("kills", 0),
-                    "deaths": player.get("deaths", 0),
-                    "assists": player.get("assists", 0),
-                    "win": 1 if player.get("win", 0) == 1 else 0,
-                    "lane_role": player.get("lane_role", 0),
-                    "observer_uses": player.get("observer_uses", 0),
-                    "sentry_uses": player.get("sentry_uses", 0),
-                    "stuns": player.get("stuns", 0.0),
-                    "hero_healing": player.get("hero_healing", 0),
-                    "creeps_stacked": player.get("creeps_stacked", 0),
-                    "hero_id": player.get("hero_id", 0),
-                    "start_time": match_data.get("start_time", 0)
-                }
-
-        return {}
-
-    except Exception as e:
-        logger.exception(f"Failed to get match details for {match_id}")
-        return {}
 
 # =========================================================
 # MATCHES
@@ -439,49 +387,62 @@ async def get_weekly_matches(telegram_id: int):
     if not user or not user.get("steam_id"):
         return []
 
-    steam_id = user["steam_id"]
+    account_id = steam64_to_account_id(
+        user["steam_id"]
+    )
 
-    account_id = steam64_to_account_id(steam_id)
-
-    now = datetime.now(timezone.utc)
-
-    week_start = now - timedelta(days=7)
-
-    url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
-
-    params = {
-        "limit": 50,
-        "sort": "-start_time"
-    }
+    url = (
+        f"{OPENDOTA_API_URL}"
+        f"/players/{account_id}/matches"
+    )
 
     matches = await _api_get_async(
         url,
-        params,
-        timeout=15
+        params={"limit": 20},
+        timeout=10
     )
 
     if not matches:
         return []
 
-    weekly_matches = []
+    week_start = (
+        datetime.now(timezone.utc)
+        - timedelta(days=7)
+    )
+
+    filtered = []
 
     for m in matches:
 
+        ts = m.get("start_time", 0)
+
         match_time = datetime.fromtimestamp(
-            m.get("start_time", 0),
+            ts,
             tz=timezone.utc
         )
 
-        if match_time >= week_start:
-            # Fetch detailed match data for the player
-            match_details = await get_player_match_details(m["match_id"], account_id)
-            if match_details:
-                weekly_matches.append(match_details)
+        if match_time < week_start:
+            continue
 
-        if len(weekly_matches) >= 10:
+        filtered.append({
+            "hero_id": m.get("hero_id", 0),
+            "kills": m.get("kills", 0),
+            "deaths": m.get("deaths", 0),
+            "assists": m.get("assists", 0),
+            "gold_per_min": m.get("gold_per_min", 0),
+            "xp_per_min": m.get("xp_per_min", 0),
+            "last_hits": m.get("last_hits", 0),
+            "hero_damage": m.get("hero_damage", 0),
+            "tower_damage": m.get("tower_damage", 0),
+            "lane_role": m.get("lane_role", 0),
+            "start_time": ts,
+            "win": m.get("radiant_win", False)
+        })
+
+        if len(filtered) >= 10:
             break
 
-    return weekly_matches
+    return filtered
 
 # =========================================================
 # REPORT TEXT
@@ -494,23 +455,19 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
 
     # Таблица 1: Сравнение с PRO игроками
     t1 = "```\n"
-    t1 += "PLAYER       WR   LH  DN   GPM   KDA\n"
-    t1 += "--------------------------------------\n"
+    t1 += "PLAYER       WR   GPM   KDA\n"
+    t1 += "----------------------------\n"
     for name, s in db["players"].items():
         t1 += (
             f"{name:<11}"
             f"{s['wr']:>3}% "
-            f"{s['lh']:>4} "
-            f"{s['deny']:>3} "
             f"{s['gpm']:>5} "
             f"{s['kda']}\n"
         )
-    t1 += "--------------------------------------\n"
+    t1 += "----------------------------\n"
     t1 += (
         f"{'YOU':<11}"
         f"{user_stats['wr']:>3}% "
-        f"{int(user_stats['lh10']):>4} "
-        f"{int(user_stats['deny10']):>3} "
         f"{int(user_stats['gpm']):>5} "
         f"{user_stats['kda']}\n"
     )
@@ -522,8 +479,6 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
     t2 += "------------------------------------\n"
     bench = db["benchmarks"]
     metrics = [
-        ("LH@10", user_stats['lh10'], bench['lh10']),
-        ("Denies@10", user_stats['deny10'], bench['deny10']),
         ("GPM", user_stats['gpm'], bench['gpm']),
         ("XPM", user_stats['xpm'], bench['xpm']),
         ("Deaths", user_stats['deaths'], bench['deaths']),
@@ -541,11 +496,15 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
         t2 += f"{label:<14} {u_str:>6} {p_str:>8} {arrow:>4}\n"
     t2 += "```"
 
-    header_pro = escape_markdown_v2(f"📊 ANALYTICS ({role})")
-    pro_full = f"{header_pro}\n\n{t1}"
-    detailed_full = escape_markdown_v2(f"🔍 Детальное сравнение\n{t2}")
+    header = escape_markdown_v2(f"📊 ANALYTICS ({role})")
 
-    return {"pro": pro_full, "detailed": detailed_full}
+    text = f"{header}\n\n{t1}"
+
+    header_detailed = escape_markdown_v2(f"🔍 Детальное сравнение")
+
+    text_detailed = f"{header_detailed}\n\n{t2}"
+
+    return {"pro": text, "detailed": text_detailed}
 
 
 def generate_detailed_metrics_table(role: str, user_stats: dict) -> str:
@@ -748,8 +707,6 @@ async def generate_weekly_analytics(telegram_id: int):
         "t_dmg": round(avg_t_dmg, 1),
         "util": round(avg_utility, 1),
         "apm": round(avg_apm, 1),
-        "lh10": round(avg_lh * 0.32, 1),
-        "deny10": round(avg_denies * 0.55, 1),
         "deaths": round(avg_deaths, 1),
         "kda_number": round(real_kda, 2),
         "kda": f"{round(avg_kills,1)}/{round(avg_deaths,1)}/{round(avg_assists,1)}"
@@ -797,242 +754,139 @@ async def generate_weekly_analytics(telegram_id: int):
 # CHART
 # =========================================================
 
-async def create_visual_chart(history: list, dates: list = None):
+async def create_visual_chart(history):
 
-    impacts = [g["imp"] for g in history]
+    import matplotlib.pyplot as plt
+    import matplotlib.patheffects as pe
+
+    impacts = [
+        g["imp"]
+        for g in history
+    ]
 
     if not impacts:
         return None
 
-    n = len(history)
+    x = list(range(1, len(impacts) + 1))
 
-    avg_imp = sum(impacts) / len(impacts)
+    avg = sum(impacts) / len(impacts)
 
-    fig = go.Figure()
-
-    # =====================================================
-    # BACKGROUND IMAGE
-    # =====================================================
-
-    fig.add_layout_image(
-        dict(
-            source="https://i.ibb.co/8Lt8vPv5/photo-2026-05-10-17-02-44.png",
-            xref="paper",
-            yref="paper",
-            x=0,
-            y=0,
-            sizex=1,
-            sizey=1,
-            layer="below"
-        )
+    fig, ax = plt.subplots(
+        figsize=(12, 7),
+        dpi=140
     )
 
-    # =====================================================
-    # CENTER LINE (removed, drawn on background)
-    # =====================================================
+    fig.patch.set_facecolor("#050505")
+    ax.set_facecolor("#050505")
 
-    CENTER = 1.0
+    # =========================
+    # RED/GREEN ZONES
+    # =========================
 
-    # =====================================================
-    # AVERAGE LINE
-    # =====================================================
-
-    fig.add_hline(
-        y=avg_imp,
-        line_dash="dash",
-        line_color="rgba(255,255,255,0.35)",
-        line_width=2
+    ax.axhspan(
+        0,
+        avg,
+        color="#3a1010",
+        alpha=0.45
     )
 
-    fig.add_annotation(
-        x=n - 0.5,
-        y=avg_imp + 0.015,
-        text=f"AVG {avg_imp:.2f}",
-        showarrow=False,
-        font=dict(
-            size=18,
-            color="rgba(255,255,255,0.75)"
-        )
+    ax.axhspan(
+        avg,
+        2,
+        color="#103a1f",
+        alpha=0.45
     )
 
-    # =====================================================
-    # MAIN LINE GLOW
-    # =====================================================
+    # =========================
+    # AVG LINE
+    # =========================
 
-    fig.add_trace(
-        go.Scatter(
-            x=list(range(n)),
-            y=impacts,
-            mode="lines",
-            line=dict(
-                color="rgba(255,170,0,0.25)",
-                width=16,
-                shape="spline",
-                smoothing=1.0
-            ),
-            hoverinfo="skip"
-        )
+    ax.axhline(
+        avg,
+        linestyle="--",
+        linewidth=2,
+        color="white",
+        alpha=0.3
     )
 
-    # =====================================================
+    # =========================
     # MAIN LINE
-    # =====================================================
+    # =========================
 
-    fig.add_trace(
-        go.Scatter(
-            x=list(range(n)),
-            y=impacts,
-            mode="lines+markers",
-            line=dict(
-                color="#ffb000",
-                width=6,
-                shape="spline",
-                smoothing=1.0
-            ),
-            marker=dict(
-                size=10,
-                color="#ffb000"
-            ),
-            fill="tozeroy",
-            fillcolor="rgba(255,176,0,0.12)",
-            hoverinfo="skip"
+    line = ax.plot(
+        x,
+        impacts,
+        linewidth=5,
+        color="#ffb000"
+    )[0]
+
+    line.set_path_effects([
+        pe.Stroke(
+            linewidth=9,
+            foreground="orange",
+            alpha=0.25
+        ),
+        pe.Normal()
+    ])
+
+    # =========================
+    # HERO ICONS
+    # =========================
+
+    for idx, g in enumerate(history):
+
+        hero_img = await get_hero_icon(
+            g["hero_id"]
         )
+
+        if not hero_img:
+            continue
+
+        imp = g["imp"]
+
+        img = hero_img.resize((64, 64))
+
+        ax.imshow(
+            img,
+            extent=(
+                idx + 1 - 0.18,
+                idx + 1 + 0.18,
+                imp - 0.08,
+                imp + 0.08
+            ),
+            zorder=10
+        )
+
+    # =========================
+    # STYLE
+    # =========================
+
+    ax.set_xlim(0.5, len(x) + 0.5)
+
+    ax.set_ylim(
+        0,
+        max(1.6, max(impacts) + 0.2)
     )
 
-    # =====================================================
-    # HERO ICONS WITH COLORED BORDERS & GLOW
-    # =====================================================
+    ax.set_xticks([])
+    ax.set_yticks([])
 
-    for i, g in enumerate(history):
+    for spine in ax.spines.values():
+        spine.set_visible(False)
 
-        try:
+    plt.tight_layout()
 
-            img = await get_hero_icon(g["hero_id"])
+    buf = io.BytesIO()
 
-            if not img:
-                continue
-
-            imp = g["imp"]
-
-            # Border color based on performance
-            if imp >= 1.0:
-                border = "#22c55e"  # green
-            elif imp >= 0.8:
-                border = "#f59e0b"  # orange
-            else:
-                border = "#ef4444"  # red
-
-            # Glow effect (large transparent marker)
-            fig.add_trace(
-                go.Scatter(
-                    x=[i],
-                    y=[imp],
-                    mode="markers",
-                    marker=dict(
-                        size=76,
-                        color=border,
-                        opacity=0.22
-                    ),
-                    hoverinfo="skip",
-                    showlegend=False
-                )
-            )
-
-            # Border ring (transparent fill, colored stroke)
-            fig.add_trace(
-                go.Scatter(
-                    x=[i],
-                    y=[imp],
-                    mode="markers",
-                    marker=dict(
-                        size=60,
-                        color="rgba(0,0,0,0)",
-                        line=dict(
-                            color=border,
-                            width=8
-                        )
-                    ),
-                    hoverinfo="skip",
-                    showlegend=False
-                )
-            )
-
-            # Hero icon
-            fig.add_layout_image(
-                dict(
-                    source=img,
-                    xref="x",
-                    yref="y",
-                    x=i,
-                    y=imp,
-                    sizex=0.56,
-                    sizey=0.56,
-                    xanchor="center",
-                    yanchor="middle",
-                    layer="above"
-                )
-            )
-
-        except Exception:
-            logger.exception("Hero image failed")
-
-    # =====================================================
-    # AXIS
-    # =====================================================
-
-    y_min = min(impacts)
-    y_max = max(impacts)
-
-    fig.update_layout(
-
-        width=1200,
-        height=800,
-
-        template="plotly_dark",
-
-        paper_bgcolor="#050505",
-        plot_bgcolor="rgba(0,0,0,0)",
-
-        showlegend=False,
-
-        margin=dict(
-            t=0,
-            b=0,
-            l=0,
-            r=0
-        ),
-
-        xaxis=dict(
-            range=[-0.5, n - 0.5],
-            showticklabels=False,
-            showgrid=False,
-            zeroline=False,
-            title=None
-        ),
-
-        yaxis=dict(
-            range=[
-                0,
-                max(2.0, y_max + 0.2)
-            ],
-            showticklabels=False,
-            showgrid=False,
-            zeroline=False,
-            title=None
-        )
-    )
-
-    # =====================================================
-    # EXPORT
-    # =====================================================
-
-    img_bytes = await asyncio.to_thread(
-        fig.to_image,
+    plt.savefig(
+        buf,
         format="png",
-        engine="kaleido",
-        scale=2
+        bbox_inches="tight",
+        facecolor=fig.get_facecolor()
     )
 
-    out = io.BytesIO(img_bytes)
+    plt.close(fig)
 
-    return out.getvalue()
+    buf.seek(0)
+
+    return buf.getvalue()
