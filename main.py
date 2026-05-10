@@ -3237,54 +3237,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         logger.error(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
                     except Exception as del_e:
                         logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
-                else:
+else:
                     logger.error(f"ERROR: loading_msg is None! Cannot delete.")
 
         except Exception as e:
             logger.error(f"Could not generate heroes image: {e}", exc_info=True)
-                profile_banner_url = None
-            
-            # Only send photo if we have valid image data
-            if profile_banner_url:
-                result_msg = await context.bot.send_photo(
-                    chat_id=update.message.chat_id,
-                    photo=profile_banner_url,
-                    caption=text,
-                    parse_mode="HTML",
-                    reply_markup=main_menu()
-                )
-                logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
-                
-                # Delete loading message immediately after successful send
-                if loading_msg:
-                    logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
-                    try:
-                        await context.bot.delete_message(chat_id, loading_msg.message_id)
-                        logger.error(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
-                    except Exception as del_e:
-                        logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
-                else:
-                    logger.error(f"ERROR: loading_msg is None! Cannot delete.")
-            else:
-                # Send text-only message if no image could be generated
-                result_msg = await context.bot.send_message(
-                    chat_id=update.message.chat_id,
-                    text=text,
-                    parse_mode="HTML",
-                    reply_markup=main_menu()
-                )
-                logger.info(f"Text-only stats message sent successfully, result_msg_id={result_msg.message_id}")
-                
-                # Delete loading message
-                if loading_msg:
-                    logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
-                    try:
-                        await context.bot.delete_message(chat_id, loading_msg.message_id)
-                        logger.error(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
-                    except Exception as del_e:
-                        logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
-                else:
-                    logger.error(f"ERROR: loading_msg is None! Cannot delete.")
 
         except Exception as e:
             logger.error(f"Could not generate heroes image: {e}", exc_info=True)
