@@ -168,34 +168,21 @@ async def _check_rate_limit_async():
     _async_rate_limit["last_request"] = time.time()
 
 
-async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 5) -> dict:
-    """Асинхронная функция для API-запросов с переиспользованием сессии"""
+async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15) -> dict:
+    """Асинхронная функция для API-запросов с переиспользованием сессии и увеличенным таймаутом"""
     await _check_rate_limit_async()
     try:
-        if use_session:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
-                if resp.status == 200:
-                    return await resp.json()
-                elif resp.status == 429:
-                    logger.warning(f"Rate limited by OpenDota API, waiting...")
-                    import asyncio
-                    await asyncio.sleep(3)
-                    return None
+        from database import get_aiohttp_session
+        session = await get_aiohttp_session()
+        async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+            if resp.status == 200:
+                return await resp.json()
+            elif resp.status == 429:
+                logger.warning(f"Rate limited by OpenDota API, waiting...")
+                import asyncio
+                await asyncio.sleep(3)
                 return None
-        else:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
-                if resp.status == 200:
-                    return await resp.json()
-                elif resp.status == 429:
-                    logger.warning(f"Rate limited by OpenDota API, waiting...")
-                    import asyncio
-                    await asyncio.sleep(3)
-                    return None
-                return None
+            return None
     except Exception as e:
         logger.error(f"Async API request error: {e}", exc_info=True)
         return None
@@ -881,6 +868,7 @@ def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
         player_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}")
         if not player_data:
             logger.warning(f"Player data not found for account_id: {account_id}")
+            logger.warning(f"API URL used: {OPENDOTA_API_URL}/players/{account_id}")
             return None
 
         profile = player_data.get("profile", {})
@@ -932,24 +920,35 @@ def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
 
 def register_steam(telegram_id: int, identifier: str) -> dict:
     try:
+        logger.info(f"Registering Steam for user {telegram_id} with identifier: {identifier}")
+
         # Создаем пользователя если не существует
         from database import get_user
         user = get_user(telegram_id)
         if not user:
             return {"success": False, "message": "❌ Пользователь не найден. Сначала отправьте /start или /fissure"}
-        
+
         steam_id = parse_steam_identifier(identifier)
+        logger.info(f"Parsed steam_id: {steam_id}")
 
         if steam_id:
             # если получилось получить steam_id → stats по ID
+            logger.info(f"Getting player stats for steam_id: {steam_id}")
+            account_id = steam64_to_account_id(steam_id)
+            logger.info(f"Using account_id: {account_id} for API call")
+
             stats = get_player_stats(steam_id)
+            logger.info(f"Player stats result: {stats is not None}")
+
             if not stats:
-                return {"success": False, "message": "❌ Игрок не найден"}
+                return {"success": False, "message": "❌ Игрок не найден или профиль приватный\n\n💡 Возможные причины:\n• Неправильный Steam ID\n• Профиль скрыт (не публичный)\n• Мало сыгранных матчей\n\nПопробуйте:\n1. Проверьте Steam ID на сайте steamid.io\n2. Убедитесь, что профиль открыт для всех\n3. Или используйте никнейм вместо ID"}
         else:
             # иначе ищем по никнейму через OpenDota
+            logger.info(f"Searching player by nickname: {identifier}")
             data = search_player(identifier)
+            logger.info(f"Search result: {data is not None}")
             if not data:
-                return {"success": False, "message": "❌ Игрок не найден"}
+                return {"success": False, "message": "❌ Игрок с таким ником не найден\n\n💡 Попробуйте:\n• Использовать Steam ID вместо ника\n• Проверить правильность написания\n• Убедиться, что игрок играет в Dota 2"}
             steam_id = data["steam_id"]
             stats = data
 
