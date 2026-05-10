@@ -398,6 +398,11 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from weekly_analytics import generate_weekly_analytics
         data = await generate_weekly_analytics(update.effective_user.id)
 
+        # Store analytics data for button callbacks
+        if data:
+            context.user_data['analytics_stats'] = data.get('stats')
+            context.user_data['analytics_role'] = data.get('role')
+
         if data and data.get("image"):
             # Send analytics with chart
             photo_buf = io.BytesIO(data["image"])
@@ -3217,10 +3222,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
                 else:
                     logger.warning("generate_heroes_image returned None or empty bytes")
-                    profile_banner_url = None
+                    # Keep default banner for no Steam ID or failed generation
             except Exception as e:
                 logger.error(f"Could not generate heroes image: {e}", exc_info=True)
-                profile_banner_url = None
+                # Keep default banner for no Steam ID or failed generation
             
             # Only send photo if we have valid image data
             if profile_banner_url:

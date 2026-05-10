@@ -434,7 +434,14 @@ async def get_weekly_matches(telegram_id: int):
             "tower_damage": m.get("tower_damage", 0),
             "lane_role": m.get("lane_role", 0),
             "start_time": ts,
-            "win": m.get("radiant_win", False)
+            "win": m.get("radiant_win", False),
+            "denies": m.get("denies", 0),
+            "actions_per_min": m.get("actions_per_min", 0),
+            "stuns": m.get("stuns", 0),
+            "hero_healing": m.get("hero_healing", 0),
+            "creeps_stacked": m.get("creeps_stacked", 0),
+            "observer_uses": m.get("observer_uses", 0),
+            "sentry_uses": m.get("sentry_uses", 0)
         })
 
         if len(filtered) >= 10:
@@ -672,7 +679,7 @@ async def generate_weekly_analytics(telegram_id: int):
         total_t_dmg += m.get("tower_damage", 0)
         total_utility += utility
 
-        if m.get("win", 0) == 1:
+        if m.get("win", False):
             total_wins += 1
 
     logger.info(f"User {telegram_id} totals: gpm={total_gpm}, lh={total_lh}, denies={total_denies}, kills={total_kills}, deaths={total_deaths}, assists={total_assists}, wins={total_wins}, match_count={len(matches)}")
@@ -843,25 +850,21 @@ async def create_visual_chart(history):
 
     icons = await asyncio.gather(*tasks)
 
-    # Color mapping based on performance relative to average
-    for idx, icon in enumerate(icons):
+        # Color mapping based on performance relative to average
+        for idx, icon in enumerate(icons):
 
-        if not icon:
-            continue
+            if not icon:
+                continue
 
-        imp = history[idx]["imp"]
+            imp = history[idx]["imp"]
 
-        # Determine border color based on performance
-        if imp > avg_value + 0.2:  # Significantly above average - green
-            border_color = "#00FF00"
-        elif imp < avg_value - 0.2:  # Significantly below average - red
-            border_color = "#FF0000"
-        else:  # Around average - yellow
-            border_color = "#FFFF00"
-
-        # Special case for point 10 (last point) - always red
-        if idx == len(icons) - 1:
-            border_color = "#FF0000"
+            # Determine border color based on performance
+            if imp > avg_value + 0.2:  # Significantly above average - green
+                border_color = "#00FF00"
+            elif imp < avg_value - 0.2:  # Significantly below average - red
+                border_color = "#FF0000"
+            else:  # Around average - yellow
+                border_color = "#FFFF00"
 
         img = icon.resize((64, 64))
 
