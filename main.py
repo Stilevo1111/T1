@@ -1197,25 +1197,13 @@ async def alternate_digest_job(context):
                 drop_display = make_clickable(drop_player, drop_id)
                 streak_display = make_clickable(streak_player, streak_id)
 
-                if growth_player and growth_player != "None":
-                    growth_part = f"🔺{growth_display} +{growth_pos}"
-                else:
-                    growth_part = "🔺—"
+                growth_part = f"🔺{growth_display} +{growth_pos} см" if growth_player and growth_player != "None" else "🔺—"
 
-                if drop_player and drop_player != "None":
-                    if drop_cm < 0:
-                        drop_part = f"🔻{drop_display} {drop_cm:.0f} СМ"
-                    else:
-                        drop_part = f"🔻{drop_display} +{drop_cm:.0f} СМ"
-                else:
-                    drop_part = "🔻—"
+                drop_part = f"🔻{drop_display} {drop_cm:.0f} см" if drop_player and drop_player != "None" else "🔻—"
 
-                if streak_player and streak_player != "None" and streak_len > 0:
-                    streak_part = f"🍀{streak_display}: {streak_len}"
-                else:
-                    streak_part = "🍀—"
+                streak_part = f"🍀{streak_display}: {streak_len}" if streak_player and streak_player != "None" and streak_len > 0 else "🍀—"
 
-                text = f"<b>{growth_part}{drop_part}{streak_part} подряд</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
+                text = f"<b>{growth_part}{drop_part}{streak_part} подряд</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = топ рост\n🔻 = топ падение\n🍀 = текущий стрик побед"
 
             else:
                 # Dota-дайджест
