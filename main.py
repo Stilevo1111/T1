@@ -3261,6 +3261,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += "\n\n💡 /profile ＠ник — чужой профиль"
 
         # Banner URL - для Steam использовать картинку с героями
+        logger.info("Setting profile_banner_url to None")
         profile_banner_url = None
 
         try:
@@ -3290,6 +3291,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 profile_banner_url = None
             
             # Only send photo if we have valid image data
+            logger.info(f"Final profile_banner_url check: {type(profile_banner_url)}, value: {profile_banner_url is not None}")
             if profile_banner_url and isinstance(profile_banner_url, io.BytesIO):
                 logger.info("Sending profile with generated hero banner")
                 result_msg = await context.bot.send_photo(
@@ -3313,7 +3315,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.error(f"ERROR: loading_msg is None! Cannot delete.")
             else:
                 # Send text-only message if no image could be generated
-                logger.info("Sending text-only profile (no hero banner)")
+                logger.info(f"Sending text-only profile (no hero banner available). profile_banner_url type: {type(profile_banner_url)}")
                 result_msg = await context.bot.send_message(
                     chat_id=update.message.chat_id,
                     text=text,
@@ -3335,6 +3337,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         except Exception as e:
             logger.error(f"Could not generate heroes image: {e}", exc_info=True)
+            logger.info(f"In exception handler, profile_banner_url: {type(profile_banner_url)}")
 
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
