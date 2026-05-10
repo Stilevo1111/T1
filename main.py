@@ -3742,25 +3742,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
         elif button_found == "🏆 Топ MMR":
             await topmmr(update, context)
         elif button_found == "🔎 Аналитика":
-            # Send loading message
-            loading_msg = await context.bot.send_message(
+            # Send loading message (will stay until analytics is sent)
+            await context.bot.send_message(
                 chat_id=chat_id,
                 text="⏳ Провожу исследования..."
             )
-            # Give time for the loading message to be visible
-            await asyncio.sleep(1)
-            try:
-                # Call analyze (it will send its own message)
-                await analyze_command(update, context)
-            finally:
-                # Delete loading message
-                try:
-                    await context.bot.delete_message(
-                        chat_id=chat_id,
-                        message_id=loading_msg.message_id
-                    )
-                except Exception:
-                    pass
+            # Call analyze (it will send its own message after this)
+            await analyze_command(update, context)
         elif button_found == "🔑 Привязать Аккаунт":
             await link(update, context)
 

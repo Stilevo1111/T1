@@ -336,30 +336,35 @@ async def detect_role_from_history(matches: list) -> str:
         sen = match.get("sentry_uses", 0)
         lane = match.get("lane_role", 0)
 
-        # Hero base role from OpenDota
+        # Hero base role from OpenDota (2 points)
         od_roles = hero_roles.get(hero_id, [])
         predicted_role = convert_opendota_roles(od_roles)
-        role_scores[predicted_role] += 3
+        role_scores[predicted_role] += 2
 
-        # MID corrections
-        if lane == 2:
-            role_scores["MID"] += 2
+        # Lane role (3 points, higher weight)
+        if lane == 1:
+            role_scores["CARRY"] += 3
+        elif lane == 2:
+            role_scores["MID"] += 3
+        elif lane == 3:
+            role_scores["OFFLANE"] += 3
+
+        # Stat-based corrections (1 point)
+        # MID
         if xpm >= 600 and hero_dmg >= 18000:
             role_scores["MID"] += 1
 
-        # OFFLANE corrections
-        if lane == 3:
-            role_scores["OFFLANE"] += 2
+        # OFFLANE
         if hero_dmg >= 18000 and assists >= kills:
             role_scores["OFFLANE"] += 1
 
-        # CARRY corrections
+        # CARRY
         if gpm >= 650 and lh >= 220:
-            role_scores["CARRY"] += 2
+            role_scores["CARRY"] += 1
 
-        # SUPPORT corrections
+        # SUPPORT
         if obs + sen >= 10:
-            role_scores["SUPPORT"] += 2
+            role_scores["SUPPORT"] += 1
         if assists > kills and gpm < 450:
             role_scores["SUPPORT"] += 1
 
