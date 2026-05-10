@@ -1203,7 +1203,7 @@ async def alternate_digest_job(context):
 
                 streak_part = f"🍀{streak_display}: {streak_len}" if streak_player and streak_player != "None" and streak_len > 0 else "🍀—"
 
-                text = f"<b>{growth_part}{drop_part}{streak_part} подряд</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = топ рост\n🔻 = топ падение\n🍀 = текущий стрик побед"
+                text = f"<b>{growth_part}{drop_part}{streak_part} подряд</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = максимальный рост за сутки\n🔻 = топ падение\n🍀 = текущий стрик побед"
 
             else:
                 # Dota-дайджест
