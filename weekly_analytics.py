@@ -417,8 +417,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict | None:
     chart_image = create_impact_chart(game_history)
 
     # Текст в MarkdownV2
-    text = f"📊 АНАЛИЗ ЗА {len(matches)} ИГР (Роль: {role}) ━━━━━━━━━━━━━━━━━━━━━━\n\n"
-    text += f"🏆 Сравнение с ТОП-5 PRO ({role})\n\n{table1}\n\n{table2}\n\n"
+    text = f"🏆 Сравнение с ПРО ({role.upper()})\n\n{table1}\n\n{table2}\n\n"
     text += "📊 График IMP по 10 матчам\\. PRO Target \\= 1\\.0"
 
     return {"text": text, "image": chart_image}
