@@ -1222,7 +1222,7 @@ async def alternate_digest_job(context):
                     # Fallback на фиссур-дайджест
                     next_type = "0"
                 else:
-                    valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 5]
+                    valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 1]
                     if not valid_players or len(valid_players) < 2:
                         logger.info("Нет игроков с 5+ играми или менее 2 игроков для Dota дайджеста")
                         next_type = "0"
