@@ -378,6 +378,15 @@ def _get_player_stats_wrapper(steam_id, use_cache):
     return get_player_stats(steam_id, use_cache=use_cache)
 
 
+@rate_limit(tokens=1)
+async def weekly_champion_announcement_job(context):
+    """Объявление чемпиона недели в воскресенье 23:00 MSK"""
+    try:
+        await announce_weekly_mmr_winner(context.bot)
+    except Exception as e:
+        logger.error(f"Ошибка в weekly_champion_announcement_job: {e}")
+
+
 async def announce_weekly_mmr_winner(bot):
     """Отправляет поздравление победителю недельного топа MMR при смене недели."""
     from datetime import datetime as dt, timezone, timedelta
@@ -776,12 +785,7 @@ async def update_all_mmr_job(context):
                 except Exception as notify_err:
                     logger.error(f"Ошибка отправки уведомления о ранк-апе: {notify_err}")
 
-        # После обновления всех данных объявляем чемпиона в отдельном блоке try/except,
-        # чтобы ошибка здесь не прерывала обновление MMR
-        try:
-            await announce_weekly_mmr_winner(context.bot)
-        except Exception as e:
-            logger.error(f"Ошибка при объявлении чемпиона недели: {e}")
+
 
     except Exception as e:
         logger.error(f"Ошибка в update_all_mmr_job: {e}")
@@ -3855,6 +3859,13 @@ async def main():
             decrease_inactive_job,
             time=datetime.time(hour=3, minute=0),  # 03:00 MSK (00:00 UTC)
             days=(0, 1, 2, 3, 4, 5, 6)
+        )
+
+        # ✅ Объявление чемпиона недели в воскресенье 23:00 MSK (за час до конца недели)
+        job_queue.run_daily(
+            weekly_champion_announcement_job,
+            time=datetime.time(hour=20, minute=0),  # 20:00 UTC = 23:00 MSK
+            days=(6,)  # Только воскресенье
         )
 
         # Копия в backup БД каждый час
