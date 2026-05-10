@@ -13,9 +13,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Директория для кэша иконок
-ASSETS_DIR = "assets/heroes"
-os.makedirs(ASSETS_DIR, exist_ok=True)
+# На Render локальный кэш не сохраняется, поэтому загружаем напрямую из CDN
 
 # ПОЛНАЯ БАЗА ДАННЫХ РОЛЕЙ И ПРО-ИГРОКОВ
 PRO_DB = {
@@ -98,19 +96,9 @@ def calculate_imp(gpm: float, kda: float, utility: float, apm: float, role: str)
     imp = (p_gpm * weights["gpm"]) + (p_kda * weights["kda"]) + (p_utility * weights["utility"]) + (p_apm * weights["apm"])
     return round(imp, 2)
 
-async def get_hero_icon(hero_id: int):
-    """Кэширование иконок героев"""
-    path = f"{ASSETS_DIR}/{hero_id}.png"
-    if os.path.exists(path): return path
-    url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{hero_id}.png"
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as r:
-                if r.status == 200:
-                    with open(path, "wb") as f: f.write(await r.read())
-                    return path
-    except: pass
-    return None
+def get_hero_icon(hero_id: int):
+    """Получение URL иконки героя (без кэша на Render)"""
+    return f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{hero_id}.png"
 
 async def get_weekly_matches(telegram_id: int) -> list[dict]:
     """Получает 10 последних матчей за неделю"""
@@ -249,43 +237,42 @@ async def generate_weekly_analytics(telegram_id: int) -> dict | None:
         game_history.append({'imp': imp, 'hero_id': m.get("hero_id", 0)})
 
     # График
-    chart_image = await create_visual_chart(game_history)
+    chart_image = create_visual_chart(game_history)
 
     return {"text": text, "image": chart_image}
 
-async def create_visual_chart(history: list):
-    """Создание графика Plotly + Pillow"""
+def create_visual_chart(history: list):
+    """Создание графика Plotly + Pillow (синхронно, без кэша)"""
     impacts = [g['imp'] for g in history]
     fig = go.Figure()
-    
+
     # Стилизация как на скрине
     fig.add_trace(go.Scatter(
         y=impacts, mode='lines', line=dict(color='#ff9900', width=4),
         fill='tozeroy', fillcolor='rgba(255,153,0,0.1)'
     ))
-    
+
     for i, g in enumerate(history):
-        path = await get_hero_icon(g['hero_id'])
-        if path:
-            fig.add_layout_image(dict(
-                source=Image.open(path), xref="x", yref="y",
-                x=i, y=g['imp'], sizex=0.5, sizey=0.5, xanchor="center", yanchor="middle"
-            ))
+        url = get_hero_icon(g['hero_id'])
+        fig.add_layout_image(dict(
+            source=url, xref="x", yref="y",
+            x=i, y=g['imp'], sizex=0.5, sizey=0.5, xanchor="center", yanchor="middle"
+        ))
 
     fig.update_layout(
         template="plotly_dark", paper_bgcolor='#18181b', plot_bgcolor='#18181b',
         margin=dict(t=50, b=20, l=40, r=40), height=400, width=800,
         yaxis=dict(gridcolor='rgba(255,255,255,0.05)', zeroline=False)
     )
-    
+
     img_bytes = fig.to_image(format="png", engine="kaleido")
     img = Image.open(io.BytesIO(img_bytes))
-    
+
     # Добавляем бейдж Улучшение
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle([620, 20, 780, 55], radius=15, fill="#22c55e")
     draw.text((640, 28), "↑ Улучшение", fill="white")
-    
+
     out = io.BytesIO()
     img.save(out, format="PNG")
     out.seek(0)
