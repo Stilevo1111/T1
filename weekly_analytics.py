@@ -119,7 +119,7 @@ def generate_pro_table(role: str, user_stats: dict) -> str:
     u_deny = user_stats.get('deny', 0)
     u_gpm = user_stats.get('gpm', 0)
     u_kda = user_stats.get('kda', "0/0/0")
-    table += f"YOU ✨    {u_wr:>3}% {u_lh:>4.1f} {u_deny:>4.1f} {u_gpm:>5.0f} {u_kda}\n```"
+    table += f"YOU ✨    {u_wr:>3}% {u_lh:>4.1f} {u_deny:>4.1f} {int(u_gpm):>5} {u_kda}\n```"
 
     return table
 
@@ -335,15 +335,17 @@ async def generate_weekly_analytics(telegram_id: int) -> dict | None:
     total_lh = sum(m.get("last_hits", 0) for m in matches)
     total_apm = sum(m.get("actions_per_min", 0) for m in matches)
     total_wins = sum(1 for m in matches if m.get("win", 0) == 1)
+    total_stuns = sum(m.get("stuns", 0) for m in matches)
+    total_heals = sum(m.get("hero_healing", 0) for m in matches)
+    total_stacks = sum(m.get("creeps_stacked", 0) for m in matches)
+    total_wards = sum(m.get("observer_uses", 0) + m.get("sentry_uses", 0) for m in matches)
 
     avg_gpm = total_gpm / len(matches)
     avg_kda = (total_kills + total_assists) / (total_deaths + 1)  # +1 чтобы избежать деления на 0
     avg_lh = total_lh / len(matches)
     avg_apm = total_apm / len(matches)
     wr = (total_wins / len(matches)) * 100
-
-    # Utility (упрощённо, без детальных данных)
-    avg_utility = calculate_utility()  # Заглушка
+    avg_utility = calculate_utility(total_stuns, total_heals, total_stacks, total_wards) / len(matches)
 
     player_stats = {
         "gpm": avg_gpm,
@@ -354,19 +356,26 @@ async def generate_weekly_analytics(telegram_id: int) -> dict | None:
     }
 
     # Подготовка данных для таблиц
+    avg_xpm = sum(m.get("xp_per_min", 0) for m in matches) / len(matches)
+    avg_deaths = total_deaths / len(matches)
+    avg_h_dmg = sum(m.get("hero_damage", 0) for m in matches) / len(matches)
+    avg_t_dmg = sum(m.get("tower_damage", 0) for m in matches) / len(matches)
+    avg_stacks = total_stacks / len(matches)
+    avg_wards = total_wards / len(matches)
+
     user_table_stats = {
         'wr': int(wr),
         'lh': avg_lh,
-        'deny': 0,  # Заглушка
+        'deny': 0,  # Denies не всегда доступны
         'gpm': avg_gpm,
-        'kda': f"{total_kills}/{total_deaths}/{total_assists}",
+        'kda': f"{int(total_kills / len(matches))}/{int(avg_deaths)}/{int(total_assists / len(matches))}",
         'lh10': avg_lh,
         'deny10': 0,
-        'xpm': avg_apm * 2,  # Заглушка
-        'deaths': total_deaths / len(matches),
-        'h_dmg': 0,
-        't_dmg': 0,
-        'stacks': 0,
+        'xpm': avg_xpm,
+        'deaths': avg_deaths,
+        'h_dmg': avg_h_dmg / 1000,  # В к
+        't_dmg': avg_t_dmg / 1000,
+        'stacks': avg_stacks,
         'utility': avg_utility,
         'apm': avg_apm
     }
