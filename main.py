@@ -2493,7 +2493,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             role = context.user_data.get('analytics_role')
             if stats and role:
                 pro_text = generate_report_text(role, stats)
-                msg = await callback_query.message.reply_text(pro_text, parse_mode="MarkdownV2")
+                # Delete old message and send new one
+                await callback_query.message.delete()
+                msg = await context.bot.send_message(
+                    chat_id=callback_query.message.chat.id,
+                    text=pro_text,
+                    parse_mode="MarkdownV2"
+                )
                 schedule_delete(context.bot, callback_query.message.chat.id, msg.message_id, 30, context.application.job_queue)
             else:
                 await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
@@ -2504,7 +2510,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             role = context.user_data.get('analytics_role')
             if stats and role:
                 detailed_text = generate_detailed_metrics_table(role, stats)
-                msg = await callback_query.message.reply_text(detailed_text, parse_mode="MarkdownV2")
+                # Delete old message and send new one
+                await callback_query.message.delete()
+                msg = await context.bot.send_message(
+                    chat_id=callback_query.message.chat.id,
+                    text=detailed_text,
+                    parse_mode="MarkdownV2"
+                )
                 schedule_delete(context.bot, callback_query.message.chat.id, msg.message_id, 30, context.application.job_queue)
             else:
                 await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
