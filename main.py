@@ -372,6 +372,43 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in test_mvp_winner: {e}")
         await update.message.reply_text(f"Ошибка: {e}")
 
+
+@rate_limit(tokens=1)
+async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Еженедельная аналитика игрока"""
+    user_obj = update.effective_user
+    username = user_obj.username or user_obj.first_name
+    chat_id = update.message.chat_id
+
+    # Delete user message in groups
+    if update.message.chat.type in ['group', 'supergroup', 'channel']:
+        if await bot_can_delete(context.bot, chat_id):
+            try:
+                await context.bot.delete_message(chat_id, update.message.message_id)
+            except Exception as e:
+                logger.debug(f"Could not delete user message: {e}")
+
+    try:
+        from weekly_analytics import generate_weekly_analytics
+        data = await generate_weekly_analytics(update.effective_user.id)
+
+        if data:
+            photo_buf = io.BytesIO(data["image"])
+            photo_buf.name = "weekly_analytics.png"
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=photo_buf,
+                caption=data["text"],
+                parse_mode="MarkdownV2"
+            )
+        else:
+            await update.message.reply_text("Недостаточно данных для анализа (минимум 5 матчей за неделю).")
+
+    except Exception as e:
+        logger.error(f"Error in analyze_command: {e}")
+        await update.message.reply_text(f"Ошибка анализа: {e}")
+
+
 def _get_player_stats_wrapper(steam_id, use_cache):
     """Обёртка для вызова синхронной get_player_stats из потока"""
     from dota_mmr import get_player_stats
@@ -3897,6 +3934,9 @@ async def main():
         app.add_handler(CommandHandler("resetgame", reset_game))
         app.add_handler(CommandHandler("testgreeting", test_greeting))
         app.add_handler(CommandHandler("testmvp", test_mvp_winner))
+
+        # Еженедельная аналитика
+        app.add_handler(CommandHandler("analyze", analyze_command))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
