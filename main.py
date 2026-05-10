@@ -3242,19 +3242,23 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not delete user message: {e}")
 
     try:
-        from database import get_dota_week_top_from_db, get_dota_week_rank
+        from database import get_dota_mmr_top
         user = get_user(update.effective_user.id)
 
         # Banner URL
         topmmr_banner_url = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
 
-        # Только читаем топ из БД - данные уже должны быть обновлены в update_all_mmr_job
-        logger.info(f"topmmr: before get_dota_week_top_from_db")
-        top_users = get_dota_week_top_from_db(10, force_refresh=True)
+        # Получаем топ по MMR
+        logger.info(f"topmmr: before get_dota_mmr_top")
+        top_users = get_dota_mmr_top(10)
         logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from DB")
 
-        # Get user's position in the full rankings using the new function
-        user_pos = get_dota_week_rank(update.effective_user.id)
+        # Find user's position
+        user_pos = None
+        for i, player in enumerate(top_users, 1):
+            if player.get('telegram_id') == update.effective_user.id:
+                user_pos = i
+                break
 
         # Initialize user position variables
         user_is_in_top = False

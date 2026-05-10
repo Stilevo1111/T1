@@ -2454,8 +2454,8 @@ def get_dota_mmr_top(limit=10):
  CASE WHEN week_games > 0 
                                THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
                                ELSE 0 END as winrate
-                 FROM users 
-                 WHERE steam_id IS NOT NULL AND rank_tier > 0 AND in_chat = TRUE
+                  FROM users
+                  WHERE steam_id IS NOT NULL AND rank_tier > 0
              ORDER BY 
                  CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
                  (wins - losses) DESC,
@@ -2477,8 +2477,8 @@ def get_dota_mmr_top(limit=10):
  CASE WHEN week_games > 0 
                              THEN ROUND(week_wins * 100.0 / week_games, 1) 
                              ELSE 0 END as winrate
-                FROM users 
-                WHERE steam_id IS NOT NULL AND rank_tier > 0 AND (in_chat = 1 OR in_chat IS NULL)
+                FROM users
+                WHERE steam_id IS NOT NULL AND rank_tier > 0
                 ORDER BY 
                     CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
                     (wins - losses) DESC,
