@@ -2494,7 +2494,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             stats = context.user_data.get('analytics_stats')
             role = context.user_data.get('analytics_role')
             if stats and role:
-                pro_text = generate_report_text(role, stats)
+                pro_text = generate_report_text(role, stats)["pro"]
                 # Delete old message and send new one
                 await callback_query.message.delete()
                 msg = await context.bot.send_message(

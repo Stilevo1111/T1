@@ -541,11 +541,11 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
         t2 += f"{label:<14} {u_str:>6} {p_str:>8} {arrow:>4}\n"
     t2 += "```"
 
-    header_pro = f"📊 ANALYTICS \\({role}\\)"
+    header_pro = escape_markdown_v2(f"📊 ANALYTICS ({role})")
     pro_full = f"{header_pro}\n\n{t1}"
-    detailed_full = f"🔍 Детальное сравнение\n{t2}"
+    detailed_full = escape_markdown_v2(f"🔍 Детальное сравнение\n{t2}")
 
-    return {"pro": escape_markdown_v2(pro_full), "detailed": escape_markdown_v2(detailed_full)}
+    return {"pro": pro_full, "detailed": detailed_full}
 
 
 def generate_detailed_metrics_table(role: str, user_stats: dict) -> str:
@@ -609,7 +609,9 @@ def generate_detailed_metrics_table(role: str, user_stats: dict) -> str:
 
     feedback_text = "\n".join(feedback)
 
-    return escape_markdown_v2(f"📈 DETAILED METRICS \\({role}\\)\n\n{table}\n\n🧠 AI FEEDBACK\n{feedback_text}")
+    header = escape_markdown_v2(f"📈 DETAILED METRICS ({role})")
+    feedback = escape_markdown_v2(f"🧠 AI FEEDBACK\n{feedback_text}")
+    return f"{header}\n\n{table}\n\n{feedback}"
 
 
 # =========================================================
