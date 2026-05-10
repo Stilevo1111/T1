@@ -398,8 +398,27 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from weekly_analytics import generate_weekly_analytics
         data = await generate_weekly_analytics(update.effective_user.id)
 
-        if data:
-            # Send text-based analytics (matplotlib not available)
+        if data and data.get("image"):
+            # Send analytics with chart
+            photo_buf = io.BytesIO(data["image"])
+            photo_buf.name = "weekly_analytics.png"
+
+            keyboard = [
+                [
+                    InlineKeyboardButton("🆚 Сравнение с ПРО", callback_data="analytics_pro"),
+                    InlineKeyboardButton("🔍 Детальное сравнение 🔍", callback_data="analytics_detailed")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=photo_buf,
+                caption="🧠 Импакт в 10 последних матчах",
+                reply_markup=reply_markup
+            )
+        elif data:
+            # Send text-based analytics if no chart available
             text = f"🧠 Аналитика игрока {username}\n\n"
             text += f"Роль: {data.get('role', 'Не определена')}\n\n"
 

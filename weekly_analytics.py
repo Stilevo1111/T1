@@ -755,6 +755,8 @@ async def generate_weekly_analytics(telegram_id: int):
 async def create_visual_chart(history):
 
     try:
+        import matplotlib
+        matplotlib.use('Agg')  # Use non-GUI backend
         import matplotlib.pyplot as plt
         import matplotlib.patheffects as pe
     except ImportError:
