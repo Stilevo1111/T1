@@ -919,22 +919,29 @@ def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
 
 def register_steam(telegram_id: int, identifier: str) -> dict:
     try:
+        logger.info(f"Registering Steam for user {telegram_id} with identifier: {identifier}")
+
         # Создаем пользователя если не существует
         from database import get_user
         user = get_user(telegram_id)
         if not user:
             return {"success": False, "message": "❌ Пользователь не найден. Сначала отправьте /start или /fissure"}
-        
+
         steam_id = parse_steam_identifier(identifier)
+        logger.info(f"Parsed steam_id: {steam_id}")
 
         if steam_id:
             # если получилось получить steam_id → stats по ID
+            logger.info(f"Getting player stats for steam_id: {steam_id}")
             stats = get_player_stats(steam_id)
+            logger.info(f"Player stats result: {stats is not None}")
             if not stats:
                 return {"success": False, "message": "❌ Игрок не найден"}
         else:
             # иначе ищем по никнейму через OpenDota
+            logger.info(f"Searching player by nickname: {identifier}")
             data = search_player(identifier)
+            logger.info(f"Search result: {data is not None}")
             if not data:
                 return {"success": False, "message": "❌ Игрок не найден"}
             steam_id = data["steam_id"]

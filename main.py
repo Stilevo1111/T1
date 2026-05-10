@@ -3693,9 +3693,11 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Если есть аргумент - сразу привязываем
     if identifier:
+        logger.info(f"Link command called with identifier: {identifier}")
         try:
             from dota_mmr import register_steam
             result = register_steam(update.effective_user.id, identifier)
+            logger.info(f"Register steam result: {result}")
 
             # Delete previous bot message before sending new one
             try:
