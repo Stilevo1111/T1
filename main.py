@@ -397,10 +397,9 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             photo_buf.name = "weekly_analytics.png"
 
             keyboard = [
-                [
-                    InlineKeyboardButton("🆚 Сравнение с ПРО", callback_data="analytics_pro"),
-                    InlineKeyboardButton("🔍 Детальное сравнение 🔍", callback_data="analytics_detailed")
-                ]
+                [InlineKeyboardButton("🆚 Сравнение с ПРО", callback_data="analytics_pro")],
+                [InlineKeyboardButton("🔍 Детальное сравнение 🔍", callback_data="analytics_detailed")],
+                [InlineKeyboardButton("❌ Удалить", callback_data="delete_analytics")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -2505,6 +2504,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await callback_query.message.reply_text(detailed_text, parse_mode="MarkdownV2")
             else:
                 await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
+            await callback_query.answer()
+        elif data == "delete_analytics":
+            try:
+                await callback_query.message.delete()
+            except Exception:
+                pass
             await callback_query.answer()
         else:
             await callback_query.answer()
