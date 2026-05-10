@@ -118,8 +118,12 @@ def _api_get(url: str, params: dict = None, max_retries: int = 2) -> dict:
             if r.status_code == 200:
                 return r.json()
             elif r.status_code == 429:
-                logger.warning(f"Rate limited by OpenDota API, waiting...")
-                time.sleep(3)
+                # Rate limited - wait longer and retry
+                wait_time = 5 * (attempt + 1)
+                logger.warning(f"Rate limited by OpenDota API, waiting {wait_time}s...")
+                time.sleep(wait_time)
+                if attempt < max_retries:
+                    continue
                 return None
             elif r.status_code >= 500:
                 # Серверная ошибка, попробуем ещё раз
@@ -127,6 +131,10 @@ def _api_get(url: str, params: dict = None, max_retries: int = 2) -> dict:
                     logger.warning(f"Server error {r.status_code}, retrying in {attempt + 1}s...")
                     time.sleep(attempt + 1)
                     continue
+                return None
+            elif r.status_code >= 400:
+                logger.error(f"API error {r.status_code} for URL: {url}")
+                return None
             return None
         except requests.exceptions.ReadTimeout as e:
             if attempt < max_retries:
@@ -941,7 +949,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
             logger.info(f"Player stats result: {stats is not None}")
 
             if not stats:
-                return {"success": False, "message": "❌ Игрок не найден или профиль приватный\n\n💡 Возможные причины:\n• Неправильный Steam ID\n• Профиль скрыт (не публичный)\n• Мало сыгранных матчей\n\nПопробуйте:\n1. Проверьте Steam ID на сайте steamid.io\n2. Убедитесь, что профиль открыт для всех\n3. Или используйте никнейм вместо ID"}
+                return {"success": False, "message": "❌ Игрок не найден или профиль приватный\n\n💡 Причины:\n• Профиль закрыт для публики\n• Мало сыгранных матчей\n• Проблемы с API OpenDota\n\nПопробуйте позже или используйте никнейм"}
         else:
             # иначе ищем по никнейму через OpenDota
             logger.info(f"Searching player by nickname: {identifier}")
