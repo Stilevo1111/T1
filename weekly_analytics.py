@@ -2,8 +2,6 @@
 
 import asyncio
 import aiohttp
-import matplotlib.pyplot as plt
-import matplotlib.patheffects as pe
 from PIL import Image, ImageDraw, ImageFont
 import io
 from datetime import datetime, timezone, timedelta
