@@ -3185,10 +3185,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             from dota_mmr import get_top_heroes_async, generate_heroes_image
-            top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
-            logger.info(f"Fetched top_heroes for steam_id {target_user.get('steam_id')}: {len(top_heroes)} heroes")
-            if top_heroes:
-                img_bytes = await generate_heroes_image(top_heroes)
+
+            try:
+                img_bytes = generate_heroes_image(top_heroes)
                 if img_bytes:
                     profile_banner_url = io.BytesIO(img_bytes)
                     logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")

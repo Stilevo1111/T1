@@ -554,7 +554,20 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
         return None
 
 
-async def generate_heroes_image(top_heroes: list) -> bytes | None:
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+_heroes_image_cache = {}
+_heroes_image_cache_ttl = 86400
+
+
+def _fetch_hero_portrait(hero_short: str) -> tuple[str, bytes | None]:
+    """Загрузить портрет героя (для параллельной загрузки)"""
+    data = get_hero_portrait_cached(hero_short) or get_hero_icon_cached(hero_short)
+    return hero_short, data
+
+
+def generate_heroes_image(top_heroes: list) -> bytes | None:
     """Сгенерировать картинку с иконками топ-героев: центральный крупнее, к краям меньше."""
     global _heroes_image_cache
 
@@ -568,21 +581,22 @@ async def generate_heroes_image(top_heroes: list) -> bytes | None:
 
         from PIL import Image, ImageDraw, ImageFont
         import io
-        
+        import requests as req
+
         if not top_heroes:
             return None
-        
+
         target_width = 1744
         target_height = 592
         img = _compose_heroes_strip_background(target_width, target_height)
         padding = 100
         gap = 18
         min_side, max_side = 210, 368
-        
+
         n = len(top_heroes)
-        
+
         top_heroes = sorted(top_heroes, key=lambda h: h.get("picks", 0), reverse=True)
-        
+
         center = (n - 1) / 2.0
         max_dist = max(abs(i - center) for i in range(n))
         if max_dist < 1e-9:
@@ -593,7 +607,7 @@ async def generate_heroes_image(top_heroes: list) -> bytes | None:
             ratio = 1.0 - (dist / max_dist)
             sz = int(round(min_side + (max_side - min_side) * ratio))
             sizes.append(max(96, sz))
-        
+
         available = target_width - 2 * padding
         total_w = sum(sizes) + gap * max(0, n - 1)
         if total_w > available > 0:
@@ -601,56 +615,57 @@ async def generate_heroes_image(top_heroes: list) -> bytes | None:
             sizes = [max(88, int(round(s * scale))) for s in sizes]
             gap = max(8, int(round(gap * scale)))
             total_w = sum(sizes) + gap * max(0, n - 1)
-        
+
         start_x = max(padding, (target_width - total_w) // 2)
-        
+
         draw = ImageDraw.Draw(img)
-        
+
         hero_short_names = [h.get("short_name", "") for h in top_heroes]
+        icon_data_map = {}
 
-        # Async parallel loading
-        tasks = [get_cached_hero_portrait(sh) for sh in hero_short_names if sh]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        with ThreadPoolExecutor(max_workers=min(5, n)) as executor:
+            futures = {executor.submit(_fetch_hero_portrait, sh): sh for sh in hero_short_names if sh}
+            for future in as_completed(futures):
+                try:
+                    sh, data = future.result()
+                    if data:
+                        icon_data_map[sh] = data
+                except Exception:
+                    pass
 
-        icon_map = {}
-        for sh, result in zip([sh for sh in hero_short_names if sh], results):
-            if isinstance(result, Exception):
-                logger.exception(f"Failed to load hero icon: {sh}")
-                icon_map[sh] = None
-            else:
-                icon_map[sh] = result
-        
         x = start_x
         for i, hero in enumerate(top_heroes):
             icon_size = sizes[i]
             y = (target_height - icon_size) // 2
-            
-            hero_short = hero.get("short_name", "")
-            icon = icon_map.get(hero_short)
 
-            if icon:
+            hero_short = hero.get("short_name", "")
+            icon_data = icon_data_map.get(hero_short)
+
+            if icon_data:
                 try:
+                    icon = Image.open(io.BytesIO(icon_data)).convert("RGBA")
                     w, h = icon.size
                     side = min(w, h)
                     left = (w - side) // 2
                     top = (h - side) // 2
                     icon = icon.crop((left, top, left + side, top + side))
-                    icon = icon.resize((icon_size, icon_size), Image.Resampling.LANCZOS)
+                    icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
                     img.paste(icon, (x, y), icon)
                 except Exception as e:
-                    logger.debug(f"Could not process hero icon: {e}")
+                    logger.debug(f"Could not load hero icon: {e}")
                     draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
             else:
                 draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
-            
+
             draw.rectangle([x - 2, y - 2, x + icon_size, y + icon_size], outline=(215, 175, 85), width=2)
             x += icon_size + gap
-        
+
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        img_rgb = img.convert("RGB")
+        img_rgb.save(buf, format="JPEG", quality=85)
         buf.seek(0)
         result = buf.read()
-        
+
         _heroes_image_cache[cache_key] = (result, time.time())
         return result
     except Exception as e:
