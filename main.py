@@ -3691,7 +3691,32 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     identifier = args[0] if args else None
 
-    # Если есть аргумент - сразу привязываем
+    # Если аргументов нет - показываем инструкцию
+    if not identifier:
+        help_text = """🎮 Привязка Steam аккаунта
+
+<b>Как найти Steam ID:</b>
+1. Зайдите на сайт: https://steamid.io/
+2. Введите свой ник или ссылку на профиль
+3. Скопируйте <b>steamID64</b> (начинается с 7656119...)
+
+<b>Примеры команд:</b>
+• /link 76561198000000000
+• /link your_nickname
+
+<b>Важно:</b>
+• Профиль должен быть открыт для всех
+• Нужно сыграть минимум 1 игру в Dota 2
+• Используйте SteamID64, а не короткий ID"""
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=help_text,
+            parse_mode="HTML"
+        )
+        return
+
+    # Если есть аргумент - привязываем
     if identifier:
         logger.info(f"Link command called with identifier: {identifier}")
         try:

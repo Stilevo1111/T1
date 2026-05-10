@@ -868,6 +868,7 @@ def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
         player_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}")
         if not player_data:
             logger.warning(f"Player data not found for account_id: {account_id}")
+            logger.warning(f"API URL used: {OPENDOTA_API_URL}/players/{account_id}")
             return None
 
         profile = player_data.get("profile", {})
@@ -933,17 +934,21 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         if steam_id:
             # если получилось получить steam_id → stats по ID
             logger.info(f"Getting player stats for steam_id: {steam_id}")
+            account_id = steam64_to_account_id(steam_id)
+            logger.info(f"Using account_id: {account_id} for API call")
+
             stats = get_player_stats(steam_id)
             logger.info(f"Player stats result: {stats is not None}")
+
             if not stats:
-                return {"success": False, "message": "❌ Игрок не найден"}
+                return {"success": False, "message": "❌ Игрок не найден или профиль приватный\n\n💡 Возможные причины:\n• Неправильный Steam ID\n• Профиль скрыт (не публичный)\n• Мало сыгранных матчей\n\nПопробуйте:\n1. Проверьте Steam ID на сайте steamid.io\n2. Убедитесь, что профиль открыт для всех\n3. Или используйте никнейм вместо ID"}
         else:
             # иначе ищем по никнейму через OpenDota
             logger.info(f"Searching player by nickname: {identifier}")
             data = search_player(identifier)
             logger.info(f"Search result: {data is not None}")
             if not data:
-                return {"success": False, "message": "❌ Игрок не найден"}
+                return {"success": False, "message": "❌ Игрок с таким ником не найден\n\n💡 Попробуйте:\n• Использовать Steam ID вместо ника\n• Проверить правильность написания\n• Убедиться, что игрок играет в Dota 2"}
             steam_id = data["steam_id"]
             stats = data
 
