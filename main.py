@@ -3701,8 +3701,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             return
 
         text = update.message.text.strip()
-        logger.info(f"menu_handler: text='{text}' (len={len(text)})")
-
         menu_buttons = {
             "🎲 Ролл Фиссуры": "🎲 Ролл Фиссуры",
             "👤 Профиль": "👤 Профиль",
@@ -3711,6 +3709,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             "🔎 Аналитика": "🔎 Аналитика",
             "🔑 Привязать Аккаунт": "🔑 Привязать Аккаунт"
         }
+
+        logger.info(f"menu_handler: text='{text}' (len={len(text)}), menu_buttons_keys={list(menu_buttons.keys())}")
 
         # Try exact match first
         button_found = menu_buttons.get(text)
