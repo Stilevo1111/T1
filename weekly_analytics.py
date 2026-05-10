@@ -154,9 +154,14 @@ def compare_with_pro(player_stats: dict, role: str) -> str:
         if pro_val > 0:
             delta = player_val - pro_val
             arrow = "↑" if delta > 0 else "↓" if delta < 0 else "→"
-            p_val = f"{player_val:.1f}" if decimal else f"{int(player_val)}"
-            p_pro = f"{pro_val:.1f}" if decimal else f"{int(pro_val)}"
-            d_str = f"{delta:+.1f}" if decimal else f"{int(delta):+d}"
+            if key in ["h_dmg", "t_dmg"]:
+                p_val = f"{player_val:.1f}k"
+                p_pro = f"{pro_val:.1f}k"
+                d_str = f"{delta:+.1f}"
+            else:
+                p_val = f"{player_val:.1f}" if decimal else f"{int(player_val)}"
+                p_pro = f"{pro_val:.1f}" if decimal else f"{int(pro_val)}"
+                d_str = f"{delta:+.1f}" if decimal else f"{int(delta):+d}"
             table += f"{label:<15} {p_val:>7} {p_pro:>7} {d_str:>6} {arrow}\n"
         else:
             table += f"{label:<15} {player_val:>7} -      -      -\n"
