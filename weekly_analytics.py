@@ -678,7 +678,7 @@ async def create_visual_chart(history: list):
 
     draw.text(
         (640, 30),
-        "↑ Improvement",
+        "Прогрес импакта",
         fill="white",
         font=font
     )
