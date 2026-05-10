@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import logging
+import numpy as np
 from datetime import datetime, timezone, timedelta
 
 import matplotlib
@@ -338,27 +339,80 @@ async def create_visual_chart(history):
 
     x = list(range(1, len(impacts) + 1))
 
+    # Create figure with specified dimensions
     fig, ax = plt.subplots(
-        figsize=(10, 5),
-        dpi=150
+        figsize=(12, 8),  # 1200x800 at 100 DPI
+        dpi=100
     )
 
-    fig.patch.set_facecolor("#0f0f0f")
-    ax.set_facecolor("#0f0f0f")
+    # Create gradient background
+    gradient = np.linspace(0, 1, 256).reshape(1, -1)
+    gradient = np.vstack((gradient, gradient))
 
-    ax.plot(
+    # Dark green to brown gradient
+    from matplotlib.colors import LinearSegmentedColormap
+    cmap = LinearSegmentedColormap.from_list("custom", ["#0a1f0f", "#2c1f14"])
+    ax.imshow(gradient, extent=[0, 1, 0, 1], aspect='auto',
+              cmap=cmap, alpha=1.0, zorder=-10,
+              transform=ax.transAxes)
+
+    fig.patch.set_facecolor("#0a1f0f")
+    ax.set_facecolor("none")  # Transparent to show gradient
+
+    # Plot the main line with glow effect
+    line = ax.plot(
         x,
         impacts,
-        linewidth=4,
-        color="#ffb000"
+        linewidth=6,
+        color="#f4c430",
+        solid_capstyle='round'
+    )[0]
+
+    # Add glow effect
+    line.set_path_effects([
+        matplotlib.patheffects.Stroke(linewidth=10, foreground="#f4c430", alpha=0.3),
+        matplotlib.patheffects.Normal()
+    ])
+
+    # Fill area under the curve
+    ax.fill_between(x, impacts, 0, color="#8B4513", alpha=0.3)
+
+    # Calculate average
+    avg_value = sum(impacts) / len(impacts)
+
+    # Add dashed average line
+    ax.axhline(
+        y=avg_value,
+        color="#CCCCCC",
+        linestyle="--",
+        linewidth=2,
+        alpha=0.7
     )
 
+    # Add average text
+    ax.text(
+        len(x) - 0.5, avg_value + 0.05,
+        f"AVG {avg_value:.2f}",
+        color="#CCCCCC",
+        fontsize=12,
+        fontweight="bold",
+        ha="right",
+        va="bottom",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="#1a1a1a", alpha=0.8)
+    )
+
+    # Get hero icons
     tasks = [
         get_hero_icon(g["hero_id"])
         for g in history
     ]
 
     icons = await asyncio.gather(*tasks)
+
+    # Color mapping based on performance
+    max_imp = max(impacts)
+    min_imp = min(impacts)
+    mid_imp = (max_imp + min_imp) / 2
 
     for idx, icon in enumerate(icons):
 
@@ -367,25 +421,78 @@ async def create_visual_chart(history):
 
         imp = history[idx]["imp"]
 
-        img = icon.resize((48, 48))
+        # Determine border color based on performance
+        if imp >= mid_imp + (max_imp - mid_imp) * 0.3:  # Top performers
+            border_color = "#00FF00"  # Green
+        elif imp <= mid_imp - (mid_imp - min_imp) * 0.3:  # Poor performers
+            border_color = "#FF0000"  # Red
+        else:  # Average performers
+            border_color = "#FFFF00"  # Yellow
+
+        # Special case for point 10 (last point)
+        if idx == len(icons) - 1:
+            border_color = "#FF0000"  # Red for the last point
+
+        img = icon.resize((64, 64))
+
+        # Create circular mask
+        from PIL import ImageDraw
+        mask = Image.new("L", (64, 64), 0)
+        draw = ImageDraw.Draw(mask)
+        draw.ellipse((0, 0, 64, 64), fill=255)
+
+        # Create circular icon with border
+        bordered_icon = Image.new("RGBA", (72, 72), (0, 0, 0, 0))
+        icon_draw = ImageDraw.Draw(bordered_icon)
+
+        # Draw border circle
+        icon_draw.ellipse((0, 0, 72, 72), outline=border_color, width=3)
+        # Draw inner circle for icon
+        icon_draw.ellipse((4, 4, 68, 68), fill=(0, 0, 0, 255))
+
+        # Paste icon with circular mask
+        bordered_icon.paste(img, (4, 4), mask)
+
+        # Add glow effect to border
+        glow_icon = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
+        glow_draw = ImageDraw.Draw(glow_icon)
+        glow_draw.ellipse((0, 0, 80, 80), outline=border_color, width=1)
+        glow_draw.ellipse((1, 1, 79, 79), outline=border_color, width=1)
+
+        # Composite glow under main icon
+        final_icon = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
+        final_icon.paste(glow_icon, (0, 0))
+        final_icon.paste(bordered_icon, (4, 4), bordered_icon)
 
         ax.imshow(
-            img,
+            final_icon,
             extent=(
-                idx + 1 - 0.15,
-                idx + 1 + 0.15,
-                imp - 0.06,
-                imp + 0.06
+                idx + 1 - 0.2,
+                idx + 1 + 0.2,
+                imp - 0.08,
+                imp + 0.08
             ),
-            zorder=10
+            zorder=15
         )
 
-    ax.set_xticks([])
-    ax.set_yticks([])
+    # Configure axes
+    ax.set_xlim(0.5, len(x) + 0.5)
+    ax.set_ylim(0, max(2.0, max(impacts) + 0.2))
 
+    # Set ticks and labels
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(i) for i in x], color="#CCCCCC", fontsize=12, fontweight="bold")
+    ax.set_yticks([0, 0.5, 1.0, 1.5, 2.0])
+    ax.set_yticklabels(["0", "0.5", "1.0", "1.5", "2.0"], color="#CCCCCC", fontsize=12, fontweight="bold")
+
+    # Add grid
+    ax.grid(axis='y', color="#333333", linestyle="-", linewidth=0.5, alpha=0.3)
+
+    # Remove spines
     for spine in ax.spines.values():
         spine.set_visible(False)
 
+    # Set layout
     plt.tight_layout()
 
     buf = io.BytesIO()
@@ -394,7 +501,8 @@ async def create_visual_chart(history):
         buf,
         format="png",
         bbox_inches="tight",
-        facecolor=fig.get_facecolor()
+        facecolor=fig.get_facecolor(),
+        dpi=100
     )
 
     plt.close(fig)
