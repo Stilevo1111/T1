@@ -414,17 +414,19 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['analytics_stats'] = data["stats"]
             context.user_data['analytics_role'] = data["role"]
         else:
-            await context.bot.send_message(
+            msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text="Недостаточно данных для анализа (минимум 5 матчей за неделю)."
             )
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
 
     except Exception as e:
         logger.error(f"Error in analyze_command: {e}")
-        await context.bot.send_message(
+        msg = await context.bot.send_message(
             chat_id=chat_id,
             text=f"Ошибка анализа: {e}"
         )
+        schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
 
 
 def _get_player_stats_wrapper(steam_id, use_cache):
@@ -2992,11 +2994,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tb = traceback.format_exc()
         logger.error(f"Error in fissure: {e}\n{tb}")
         try:
-            await context.bot.send_message(
+            msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text=f"❌ Ошибка обработки запроса\n<code>{e}</code>",
                 parse_mode="HTML"
             )
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
         except Exception:
             pass
     finally:
@@ -3327,7 +3330,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in top: {e}", exc_info=True)
         try:
-            await update.message.reply_text("❌ Ошибка получения топа", reply_markup=main_menu())
+            msg = await update.message.reply_text("❌ Ошибка получения топа", reply_markup=main_menu())
+            schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.application.job_queue)
         except Exception:
             pass
 
@@ -3530,14 +3534,16 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in topmmr: {e}", exc_info=True)
         try:
-            await context.bot.send_message(
+            msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text="❌ Ошибка получения топа",
                 reply_markup=main_menu()
             )
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
         except Exception:
             pass
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка получения топа MMR", reply_markup=main_menu())
+        msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка получения топа MMR", reply_markup=main_menu())
+        schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.application.job_queue)
 
 
 async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3587,7 +3593,8 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.1)
         except Exception as e:
             logger.error(f"Error in link: {e}", exc_info=True)
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Dota аккаунта", reply_markup=main_menu())
+            msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Dota аккаунта", reply_markup=main_menu())
+            schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.application.job_queue)
         return
 
     # Если нет аргумента - отправляем инструкцию
@@ -3701,6 +3708,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             "👤 Профиль": "👤 Профиль",
             "🏆 Топ Фиссур": "🏆 Топ Фиссур",
             "🏆 Топ MMR": "🏆 Топ MMR",
+            "🔎 Аналитика": "🔎 Аналитика",
             "🔑 Привязать Аккаунт": "🔑 Привязать Аккаунт"
         }
 
