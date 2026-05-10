@@ -2221,7 +2221,7 @@ async def fetch_hero_icon(url, session=None, size=96):
 def main_menu():
     keyboard = [
         [KeyboardButton("🎲 Ролл Фиссуры"), KeyboardButton("👤 Профиль")],
-        [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
+        [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR"), KeyboardButton("🔎 Аналитика")],
         [KeyboardButton("🔑 Привязать Аккаунт")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
@@ -3741,6 +3741,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             await top(update, context)
         elif button_found == "🏆 Топ MMR":
             await topmmr(update, context)
+        elif button_found == "🔎 Аналитика":
+            await analyze_command(update, context)
         elif button_found == "🔑 Привязать Аккаунт":
             await link(update, context)
 
