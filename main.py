@@ -397,8 +397,10 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             photo_buf.name = "weekly_analytics.png"
 
             keyboard = [
-                [InlineKeyboardButton("📊 Сравнение с PRO", callback_data="analytics_pro")],
-                [InlineKeyboardButton("Детальное сравнение🔥", callback_data="analytics_detailed")]
+                [
+                    InlineKeyboardButton("📊 Сравнение с PRO 📊", callback_data="analytics_pro"),
+                    InlineKeyboardButton("🔍 Детальное сравнение 🔍", callback_data="analytics_detailed")
+                ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
