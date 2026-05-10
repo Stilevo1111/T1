@@ -620,6 +620,29 @@ async def create_visual_chart(history: list):
                     )
                 )
 
+                # Circle around icon based on performance
+                imp = g["imp"]
+                if imp >= 1.0:
+                    color = "rgba(34, 197, 94, 0.9)"  # green
+                elif imp < 0.8:
+                    color = "rgba(239, 68, 68, 0.9)"  # red
+                else:
+                    color = None
+
+                if color:
+                    radius = 0.35  # radius around the 0.5-sized icon
+                    fig.add_shape(
+                        type="circle",
+                        xref="x",
+                        yref="y",
+                        x0=i - radius,
+                        y0=imp - radius,
+                        x1=i + radius,
+                        y1=imp + radius,
+                        line=dict(color=color, width=3),
+                        fillcolor="rgba(0,0,0,0)"
+                    )
+
         except Exception:
             logger.exception("Hero image failed")
 
