@@ -389,6 +389,12 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not delete user message: {e}")
 
     try:
+        # Send loading message
+        loading_msg = await context.bot.send_message(
+            chat_id=chat_id,
+            text="⏳ Генерирую аналитику..."
+        )
+
         from weekly_analytics import generate_weekly_analytics
         data = await generate_weekly_analytics(update.effective_user.id)
 
@@ -411,9 +417,21 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=reply_markup
             )
 
+            # Delete loading message
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception as e:
+                logger.debug(f"Could not delete loading message: {e}")
+
             context.user_data['analytics_stats'] = data["stats"]
             context.user_data['analytics_role'] = data["role"]
         else:
+            # Delete loading message
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception as e:
+                logger.debug(f"Could not delete loading message: {e}")
+
             msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text="Недостаточно данных для анализа (минимум 5 матчей за неделю)."
