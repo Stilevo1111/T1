@@ -1197,28 +1197,40 @@ async def alternate_digest_job(context):
                         except Exception as e:
                             logger.warning(f"Не удалось загрузить кеш фиссур-дайджеста: {e}")
 
-                top_15 = stats.get("top_15", [])
+                growth_player, growth_pos = stats.get("top_growth", ("None", 0))
+                drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
+                streak_player, streak_len = stats.get("top_streak", ("None", 0))
+                growth_id = stats.get("top_growth_id")
+                drop_id = stats.get("top_drop_id")
+                streak_id = stats.get("top_streak_id")
 
                 # Сохраняем в кеш если есть данные
-                if top_15:
+                if growth_player != "None" or drop_player != "None" or streak_player != "None":
                     try:
                         set_config('fissure_digest_cache', json.dumps(stats))
                         logger.info("Сохранены данные фиссур-дайджеста в кеш")
                     except Exception as e:
                         logger.warning(f"Не удалось сохранить кеш фиссур-дайджеста: {e}")
 
-                if top_15:
-                    lines = []
-                    for i, (name, cm, uid) in enumerate(top_15, 1):
-                        if i == 10:
-                            medal = "🔟"
-                        else:
-                            medal = f"{i}️⃣"
-                        lines.append(f"{medal} {make_clickable(name, uid)}: {cm:.1f} см")
-                    combined = "\n".join(lines)
-                    text = f"<b>{combined} подряд</b>\n\n🗿 Фиссура Дайджест."
+                growth_display = make_clickable(growth_player, growth_id) if growth_id else growth_player
+                drop_display = make_clickable(drop_player, drop_id) if drop_id else drop_player
+                streak_display = make_clickable(streak_player, streak_id) if streak_id else streak_player
+
+                parts = []
+                if growth_player and growth_player != "None":
+                    parts.append(f"🔺{growth_display} +{growth_pos} см")
                 else:
-                    text = "<b>Нет данных для дайджеста</b>\n\n🍆 Фиссура Дайджест."
+                    parts.append("🔺—")
+                if drop_player and drop_player != "None":
+                    parts.append(f"🔻{drop_display} {drop_cm:.0f} см")
+                else:
+                    parts.append("🔻—")
+                if streak_player and streak_player != "None" and streak_len > 0:
+                    parts.append(f"🍀{streak_display}: {streak_len} побед подряд")
+                else:
+                    parts.append("🍀—")
+
+                text = f"<b>{chr(10).join(parts)} подряд</b>\n\n🗿 Фиссура Дайджест."
 
             else:
                 # Dota-дайджест
