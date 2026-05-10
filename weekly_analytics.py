@@ -1,305 +1,561 @@
-# weekly_analytics.py - Еженедельная аналитика игрока (финальная версия)
+# weekly_analytics.py - Еженедельная аналитика игрока
+
 import asyncio
-import aiohttp
-import requests
-import plotly.graph_objects as go
-from PIL import Image, ImageDraw, ImageFont
 import io
-import os
-import base64
-from datetime import datetime, timezone, timedelta
-from dota_mmr import steam64_to_account_id, OPENDOTA_API_URL, _api_get_async
-from database import get_user
+import json
 import logging
+from datetime import datetime, timezone, timedelta
+
+import matplotlib
+matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
+
+from PIL import Image
+
+from dota_mmr import (
+    steam64_to_account_id,
+    OPENDOTA_API_URL,
+    _api_get_async
+)
+
+from database import get_user, Database
 
 logger = logging.getLogger(__name__)
 
-# ПОЛНАЯ БАЗА ДАННЫХ РОЛЕЙ И ПРО-ИГРОКОВ
+# =========================================================
+# HERO CACHE
+# =========================================================
+
+_HERO_NAME_CACHE = {}
+
+# =========================================================
+# PRO DATABASE
+# =========================================================
+
 PRO_DB = {
     "CARRY": {
-        "players": {
-            "Watson":  {"wr": 68, "lh": 72, "deny": 12, "gpm": 725, "kda": "8/2.9/8"},
-            "skiter":  {"wr": 65, "lh": 72, "deny": 13, "gpm": 693, "kda": "7/3.0/9"},
-            "Pure":    {"wr": 63, "lh": 67, "deny": 11, "gpm": 742, "kda": "8/3.7/9"},
-            "Satanic": {"wr": 61, "lh": 81, "deny": 14, "gpm": 825, "kda": "8/2.8/7"},
-            "Ame":     {"wr": 60, "lh": 78, "deny": 9,  "gpm": 743, "kda": "7/3.2/7"}
-        },
-        "benchmarks": {"lh10": 73.8, "deny10": 10.2, "gpm": 732, "xpm": 855, "deaths": 3.1, "h_dmg": 28.0, "t_dmg": 9.3, "stacks": 2.3, "utility": 1.0, "apm": 310}
+        "benchmarks": {
+            "gpm": 730,
+            "xpm": 820,
+            "deaths": 3.0,
+            "kda": 5.5,
+            "apm": 300,
+            "utility": 8
+        }
     },
     "MID": {
-        "players": {
-            "Malr1ne": {"wr": 64, "lh": 75, "deny": 24, "gpm": 715, "kda": "9/3.1/8"},
-            "Quinn":   {"wr": 62, "lh": 70, "deny": 20, "gpm": 690, "kda": "8/3.4/9"},
-            "Nisha":   {"wr": 63, "lh": 73, "deny": 22, "gpm": 705, "kda": "9/2.8/7"},
-            "gpk~":    {"wr": 60, "lh": 68, "deny": 25, "gpm": 685, "kda": "8/3.5/10"},
-            "No[o]ne": {"wr": 61, "lh": 74, "deny": 21, "gpm": 710, "kda": "10/3.2/8"}
-        },
-        "benchmarks": {"lh10": 71.5, "deny10": 21.8, "gpm": 702, "xpm": 810, "deaths": 3.2, "h_dmg": 32.0, "t_dmg": 4.5, "stacks": 1.2, "utility": 1.5, "apm": 340}
+        "benchmarks": {
+            "gpm": 700,
+            "xpm": 850,
+            "deaths": 3.2,
+            "kda": 5.2,
+            "apm": 340,
+            "utility": 5
+        }
     },
     "OFFLANE": {
-        "players": {
-            "Collapse": {"wr": 62, "lh": 62, "deny": 18, "gpm": 590, "kda": "5/3.8/12"},
-            "33":       {"wr": 65, "lh": 58, "deny": 15, "gpm": 610, "kda": "4/3.2/14"},
-            "Ace":      {"wr": 63, "lh": 65, "deny": 20, "gpm": 580, "kda": "5/3.5/15"},
-            "ATF":      {"wr": 60, "lh": 70, "deny": 14, "gpm": 640, "kda": "7/4.1/10"},
-            "Wisper":   {"wr": 58, "lh": 63, "deny": 16, "gpm": 595, "kda": "6/4.0/11"}
-        },
-        "benchmarks": {"lh10": 61.2, "deny10": 17.5, "gpm": 595, "xpm": 680, "deaths": 3.8, "h_dmg": 24.5, "t_dmg": 6.2, "stacks": 3.5, "utility": 4.2, "apm": 290}
+        "benchmarks": {
+            "gpm": 590,
+            "xpm": 680,
+            "deaths": 4.0,
+            "kda": 4.3,
+            "apm": 280,
+            "utility": 10
+        }
     },
     "SUPPORT": {
-        "players": {
-            "Miposhka": {"wr": 62, "lh": 12, "deny": 4, "gpm": 380, "kda": "3/4.2/18"},
-            "Save-":    {"wr": 60, "lh": 18, "deny": 6, "gpm": 410, "kda": "4/3.8/15"},
-            "Sneyking": {"wr": 64, "lh": 14, "deny": 3, "gpm": 395, "kda": "2/4.5/20"},
-            "Puppey":   {"wr": 58, "lh": 10, "deny": 2, "gpm": 350, "kda": "1/5.1/14"},
-            "Fishman":  {"wr": 59, "lh": 15, "deny": 5, "gpm": 370, "kda": "2/4.9/16"}
-        },
-        "benchmarks": {"lh10": 14.5, "deny10": 4.8, "gpm": 385, "xpm": 420, "deaths": 4.8, "h_dmg": 12.0, "t_dmg": 0.8, "stacks": 5.2, "utility": 8.5, "apm": 270}
+        "benchmarks": {
+            "gpm": 380,
+            "xpm": 480,
+            "deaths": 5.0,
+            "kda": 3.5,
+            "apm": 240,
+            "utility": 16
+        }
     }
 }
 
-# Весовые коэффициенты для IMP
-IMP_WEIGHTS = {
-    "CARRY": {"gpm": 0.4, "kda": 0.3, "utility": 0.1, "apm": 0.2},
-    "SUPPORT": {"gpm": 0.1, "kda": 0.3, "utility": 0.4, "apm": 0.2},
-    "MID": {"gpm": 0.35, "kda": 0.35, "utility": 0.15, "apm": 0.15},
-    "OFFLANE": {"gpm": 0.3, "kda": 0.3, "utility": 0.2, "apm": 0.2}
-}
+# =========================================================
+# ROLE DETECTION
+# =========================================================
 
-def detect_role(m: dict) -> str:
-    """Определение роли по статистике матча"""
-    lane = m.get("lane_role", 0)
-    gpm = m.get("gold_per_min", 0)
-    if lane == 1 or (lane == 0 and gpm > 650): return "CARRY"
-    if lane == 2: return "MID"
-    if lane == 3: return "OFFLANE"
-    return "SUPPORT"
+async def detect_role(matches):
 
-def calculate_utility(stuns: float = 0, heals: float = 0, stacks: int = 0, wards: int = 0) -> float:
-    """Расчёт Utility по формуле"""
-    return (stuns * 0.5) + (heals * 0.01) + (stacks * 150) + (wards * 50)
+    scores = {
+        "CARRY": 0,
+        "MID": 0,
+        "OFFLANE": 0,
+        "SUPPORT": 0
+    }
 
-def calculate_imp(gpm: float, kda: float, utility: float, apm: float, role: str) -> float:
-    """Расчёт Индекса Импакта (IMP)"""
-    if role not in PRO_DB:
-        role = "CARRY"
+    for m in matches:
 
-    pro = PRO_DB[role]["benchmarks"]
-    weights = IMP_WEIGHTS[role]
+        gpm = m.get("gold_per_min", 0)
+        xpm = m.get("xp_per_min", 0)
+        lh = m.get("last_hits", 0)
+        assists = m.get("assists", 0)
+        kills = m.get("kills", 0)
+        lane = m.get("lane_role", 0)
 
-    p_gpm = gpm / pro["gpm"] if pro["gpm"] > 0 else 0
-    p_kda = kda / 5.5 if role == "CARRY" else kda / 3.5  # Simplified
-    p_utility = utility / pro["utility"] if pro["utility"] > 0 else 0
-    p_apm = apm / pro["apm"] if pro["apm"] > 0 else 0
+        if lane == 2:
+            scores["MID"] += 4
 
-    imp = (p_gpm * weights["gpm"]) + (p_kda * weights["kda"]) + (p_utility * weights["utility"]) + (p_apm * weights["apm"])
-    return round(imp, 2)
+        if lane == 3:
+            scores["OFFLANE"] += 4
 
-def get_hero_icon(hero_id: int) -> Image.Image | None:
-    """Получение иконки героя с кэшем в config (persistent на Render)"""
-    from main import get_config, set_config
-    cache_key = f"icon_{hero_id}"
-    cached = get_config(cache_key)
-    if cached:
-        try:
-            data = base64.b64decode(cached)
-            return Image.open(io.BytesIO(data))
-        except Exception as e:
-            logger.warning(f"Failed to decode cached icon {hero_id}: {e}")
+        if gpm >= 650:
+            scores["CARRY"] += 3
 
-    # Загрузить из CDN
-    url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{hero_id}.png"
+        if lh >= 220:
+            scores["CARRY"] += 2
+
+        if assists > kills:
+            scores["SUPPORT"] += 3
+
+        if gpm <= 430:
+            scores["SUPPORT"] += 2
+
+    return max(scores, key=scores.get)
+
+# =========================================================
+# HEROES
+# =========================================================
+
+async def load_heroes():
+
+    global _HERO_NAME_CACHE
+
+    if _HERO_NAME_CACHE:
+        return _HERO_NAME_CACHE
+
+    url = f"{OPENDOTA_API_URL}/heroes"
+
+    data = await _api_get_async(url)
+
+    for h in data:
+        _HERO_NAME_CACHE[h["id"]] = h["name"].replace(
+            "npc_dota_hero_",
+            ""
+        )
+
+    return _HERO_NAME_CACHE
+
+# =========================================================
+# HERO ICON
+# =========================================================
+
+async def get_hero_icon(hero_id):
+
+    heroes = await load_heroes()
+
+    hero_name = heroes.get(hero_id)
+
+    if not hero_name:
+        return None
+
+    path = f"assets/heroes/{hero_name}.png"
+
     try:
-        resp = requests.get(url, timeout=5)
-        if resp.status_code == 200:
-            data = resp.content
-            # Сохранить в кэш
-            encoded = base64.b64encode(data).decode()
-            set_config(cache_key, encoded)
-            return Image.open(io.BytesIO(data))
-    except Exception as e:
-        logger.error(f"Failed to load icon {hero_id}: {e}")
-    return None
 
-async def get_weekly_matches(telegram_id: int) -> list[dict]:
-    """Получает 10 последних матчей за неделю"""
+        with Image.open(path) as img:
+            return img.convert("RGBA")
+
+    except Exception as e:
+
+        logger.warning(f"Hero icon error: {e}")
+
+        return None
+
+# =========================================================
+# GET MATCHES
+# =========================================================
+
+async def get_weekly_matches(telegram_id):
+
     user = get_user(telegram_id)
-    if not user or not user.get("steam_id"):
+
+    if not user:
         return []
 
-    steam_id = user["steam_id"]
+    steam_id = user.get("steam_id")
+
+    if not steam_id:
+        return []
+
     account_id = steam64_to_account_id(steam_id)
 
-    # Рассчитать начало недели (понедельник 00:00 MSK)
-    msk = timezone(timedelta(hours=3))
-    now_msk = datetime.now(msk)
-    monday_msk = now_msk - timedelta(days=now_msk.weekday())
-    week_start = monday_msk.replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start_utc = week_start.astimezone(timezone.utc)
-
-    # Запрос матчей
     url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
-    params = {"limit": 50, "sort": "-start_time"}  # Новые первыми
 
-    matches = await _api_get_async(url, params, timeout=10)
+    matches = await _api_get_async(
+        url,
+        params={"limit": 20},
+        timeout=15
+    )
+
     if not matches:
         return []
 
-    # Фильтр по неделе
-    weekly_matches = []
-    for match in matches:
-        match_time = datetime.fromtimestamp(match.get("start_time", 0), tz=timezone.utc)
-        if match_time >= week_start_utc:
-            weekly_matches.append(match)
-        if len(weekly_matches) >= 10:
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+
+    result = []
+
+    for m in matches:
+
+        ts = m.get("start_time", 0)
+
+        dt = datetime.fromtimestamp(
+            ts,
+            tz=timezone.utc
+        )
+
+        if dt < week_ago:
+            continue
+
+        player_slot = m.get("player_slot", 0)
+
+        radiant_win = m.get("radiant_win", False)
+
+        is_radiant = player_slot < 128
+
+        win = (
+            (radiant_win and is_radiant)
+            or
+            (not radiant_win and not is_radiant)
+        )
+
+        result.append({
+            "hero_id": m.get("hero_id", 0),
+            "kills": m.get("kills", 0),
+            "deaths": m.get("deaths", 0),
+            "assists": m.get("assists", 0),
+            "gold_per_min": m.get("gold_per_min", 0),
+            "xp_per_min": m.get("xp_per_min", 0),
+            "last_hits": m.get("last_hits", 0),
+            "hero_damage": m.get("hero_damage", 0),
+            "tower_damage": m.get("tower_damage", 0),
+            "lane_role": m.get("lane_role", 0),
+            "win": win
+        })
+
+        if len(result) >= 10:
             break
 
-    return weekly_matches[:10]
+    return result
 
-def generate_report_text(role: str, user_stats: dict) -> str:
-    """Генерация текстовых таблиц в стиле референса"""
-    db = PRO_DB.get(role, PRO_DB["CARRY"])
+# =========================================================
+# IMPACT
+# =========================================================
 
-    # Таблица 1
-    t1 = "```\n          WR   LH  Deny  GPM   KDA\n"
-    t1 += "--------------------------------------\n"
-    for name, s in db["players"].items():
-        t1 += f"{name:<9} {s['wr']}% {s['lh']:>4} {s['deny']:>4} {s['gpm']:>5} {s['kda']}\n"
-    t1 += "--------------------------------------\n"
-    t1 += f"YOU ✨    {user_stats['wr']}% {user_stats['lh']:>4} {user_stats['deny']:>4} {user_stats['gpm']:>5} {user_stats['kda']}\n```"
+def calculate_imp(stats, role):
 
-    # Таблица 2
-    t2 = "```\nМетрика          Ты      PRO      Δ \n"
-    t2 += "------------------------------------\n"
-    bench = db["benchmarks"]
-    metrics = [
-        ("LH@10", user_stats['lh10'], bench['lh10']),
-        ("Denies@10", user_stats['deny10'], bench['deny10']),
-        ("GPM", user_stats['gpm'], bench['gpm']),
-        ("XPM", user_stats['xpm'], bench['xpm']),
-        ("Deaths", user_stats['deaths'], bench['deaths']),
-        ("Hero DMG", user_stats['h_dmg'], bench['h_dmg']),
-        ("Tower DMG", user_stats['t_dmg'], bench['t_dmg']),
-        ("Utility", user_stats['util'], bench['utility']),
-        ("APM", user_stats['apm'], bench['apm'])
-    ]
+    bench = PRO_DB[role]["benchmarks"]
 
-    for label, u, p in metrics:
-        diff = u - p
-        # Инверсия для смертей
-        is_bad = diff > 0 if "Deaths" in label else diff < 0
-        arrow = "↓" if is_bad else "↑"
+    gpm_score = stats["gpm"] / bench["gpm"]
+    xpm_score = stats["xpm"] / bench["xpm"]
+    kda_score = stats["kda"] / bench["kda"]
 
-        u_str = f"{u:.1f}k" if "DMG" in label else f"{u:.1f}"
-        p_str = f"{p:.1f}k" if "DMG" in label else f"{p:.1f}"
+    deaths_score = bench["deaths"] / max(stats["deaths"], 1)
 
-        t2 += f"{label:<14} {u_str:>6} {p_str:>8} {arrow:>4}\n"
-    t2 += "```"
-
-    return f"📊 **АНАЛИЗ ЗА 10 ИГР (Роль: {role})**\n\n🏆 **Сравнение с ТОП-5 PRO**\n{t1}\n🔍 **Детальное сравнение**\n{t2}"
-
-async def generate_weekly_analytics(telegram_id: int) -> dict | None:
-    """Генерирует еженедельную аналитику"""
-    matches = await get_weekly_matches(telegram_id)
-    if len(matches) < 5:  # Минимум 5 матчей
-        return None
-
-    # Определить доминирующую роль
-    roles = [detect_role(m) for m in matches]
-    role = max(set(roles), key=roles.count) if roles else "CARRY"
-
-    # Рассчитать средние метрики
-    total_gpm = sum(m.get("gold_per_min", 0) for m in matches)
-    total_kills = sum(m.get("kills", 0) for m in matches)
-    total_deaths = sum(m.get("deaths", 0) for m in matches)
-    total_assists = sum(m.get("assists", 0) for m in matches)
-    total_lh = sum(m.get("last_hits", 0) for m in matches)
-    total_apm = sum(m.get("actions_per_min", 0) for m in matches)
-    total_wins = sum(1 for m in matches if m.get("win", 0) == 1)
-    total_stuns = sum(m.get("stuns", 0) for m in matches)
-    total_heals = sum(m.get("hero_healing", 0) for m in matches)
-    total_stacks = sum(m.get("creeps_stacked", 0) for m in matches)
-    total_wards = sum(m.get("observer_uses", 0) + m.get("sentry_uses", 0) for m in matches)
-    total_denies = sum(m.get("denies", 0) for m in matches)
-
-    avg_gpm = total_gpm / len(matches)
-    avg_kda = (total_kills + total_assists) / (total_deaths + 1)  # +1 чтобы избежать деления на 0
-    avg_lh = total_lh / len(matches)
-    avg_apm = total_apm / len(matches)
-    wr = (total_wins / len(matches)) * 100
-    avg_utility = calculate_utility(total_stuns, total_heals, total_stacks, total_wards) / len(matches)
-    avg_denies = total_denies / len(matches)
-
-    # Подготовка данных для таблиц
-    avg_xpm = sum(m.get("xp_per_min", 0) for m in matches) / len(matches)
-    avg_deaths = total_deaths / len(matches)
-    avg_h_dmg = sum(m.get("hero_damage", 0) for m in matches) / len(matches)
-    avg_t_dmg = sum(m.get("tower_damage", 0) for m in matches) / len(matches)
-
-    user_table_stats = {
-        'wr': int(wr),
-        'lh': avg_lh,
-        'deny': avg_denies,
-        'gpm': avg_gpm,
-        'kda': f"{int(total_kills / len(matches))}/{int(avg_deaths)}/{int(total_assists / len(matches))}",
-        'lh10': avg_lh,
-        'deny10': avg_denies,
-        'xpm': avg_xpm,
-        'deaths': avg_deaths,
-        'h_dmg': avg_h_dmg / 1000,  # В к
-        't_dmg': avg_t_dmg / 1000,
-        'util': avg_utility,
-        'apm': avg_apm
-    }
-
-    # Генерация текста
-    text = generate_report_text(role, user_table_stats)
-
-    # IMP по матчам
-    game_history = []
-    for m in matches:
-        imp = calculate_imp(avg_gpm, avg_kda, avg_utility, avg_apm, role)
-        game_history.append({'imp': imp, 'hero_id': m.get("hero_id", 0)})
-
-    # График
-    chart_image = create_visual_chart(game_history)
-
-    return {"text": text, "image": chart_image}
-
-def create_visual_chart(history: list):
-    """Создание графика Plotly + Pillow (синхронно, без кэша)"""
-    impacts = [g['imp'] for g in history]
-    fig = go.Figure()
-
-    # Стилизация как на скрине
-    fig.add_trace(go.Scatter(
-        y=impacts, mode='lines', line=dict(color='#ff9900', width=4),
-        fill='tozeroy', fillcolor='rgba(255,153,0,0.1)'
-    ))
-
-    for i, g in enumerate(history):
-        img = get_hero_icon(g['hero_id'])
-        if img:
-            fig.add_layout_image(dict(
-                source=img, xref="x", yref="y",
-                x=i, y=g['imp'], sizex=0.5, sizey=0.5, xanchor="center", yanchor="middle"
-            ))
-
-    fig.update_layout(
-        template="plotly_dark", paper_bgcolor='#18181b', plot_bgcolor='#18181b',
-        margin=dict(t=50, b=20, l=40, r=40), height=400, width=800,
-        yaxis=dict(gridcolor='rgba(255,255,255,0.05)', zeroline=False)
+    result = (
+        gpm_score * 0.35 +
+        xpm_score * 0.25 +
+        kda_score * 0.25 +
+        deaths_score * 0.15
     )
 
-    img_bytes = fig.to_image(format="png", engine="kaleido")
-    img = Image.open(io.BytesIO(img_bytes))
+    return round(result, 2)
 
-    # Добавляем бейдж Улучшение
-    draw = ImageDraw.Draw(img)
-    draw.rounded_rectangle([620, 20, 780, 55], radius=15, fill="#22c55e")
-    draw.text((640, 28), "↑ Улучшение", fill="white")
+# =========================================================
+# REPORTS
+# =========================================================
 
-    out = io.BytesIO()
-    img.save(out, format="PNG")
-    out.seek(0)
-    return out
+def generate_report_text(role, stats):
+
+    bench = PRO_DB[role]["benchmarks"]
+
+    text = (
+        f"📊 ANALYTICS ({role})\n\n"
+        f"GPM: {stats['gpm']}\n"
+        f"XPM: {stats['xpm']}\n"
+        f"KDA: {stats['kda_string']}\n"
+        f"Deaths: {stats['deaths']}\n"
+        f"Winrate: {stats['wr']}%\n\n"
+        f"======= PRO =======\n"
+        f"GPM: {bench['gpm']}\n"
+        f"XPM: {bench['xpm']}\n"
+        f"KDA: {bench['kda']}\n"
+    )
+
+    return {
+        "pro": text
+    }
+
+def generate_detailed_metrics_table(role, stats):
+
+    bench = PRO_DB[role]["benchmarks"]
+
+    metrics = [
+        ("GPM", stats["gpm"], bench["gpm"]),
+        ("XPM", stats["xpm"], bench["xpm"]),
+        ("Deaths", stats["deaths"], bench["deaths"]),
+        ("KDA", stats["kda"], bench["kda"]),
+    ]
+
+    text = "📈 DETAILED METRICS\n\n"
+
+    for name, user_val, pro_val in metrics:
+
+        diff = round(user_val - pro_val, 1)
+
+        if name == "Deaths":
+            better = diff <= 0
+        else:
+            better = diff >= 0
+
+        status = "✅" if better else "❌"
+
+        text += (
+            f"{status} {name}\n"
+            f"You: {user_val}\n"
+            f"PRO: {pro_val}\n"
+            f"Delta: {diff}\n\n"
+        )
+
+    return text
+
+# =========================================================
+# CHART
+# =========================================================
+
+async def create_visual_chart(history):
+
+    impacts = [x["imp"] for x in history]
+
+    if not impacts:
+        return None
+
+    x = list(range(1, len(impacts) + 1))
+
+    fig, ax = plt.subplots(
+        figsize=(10, 5),
+        dpi=150
+    )
+
+    fig.patch.set_facecolor("#0f0f0f")
+    ax.set_facecolor("#0f0f0f")
+
+    ax.plot(
+        x,
+        impacts,
+        linewidth=4,
+        color="#ffb000"
+    )
+
+    tasks = [
+        get_hero_icon(g["hero_id"])
+        for g in history
+    ]
+
+    icons = await asyncio.gather(*tasks)
+
+    for idx, icon in enumerate(icons):
+
+        if not icon:
+            continue
+
+        imp = history[idx]["imp"]
+
+        img = icon.resize((48, 48))
+
+        ax.imshow(
+            img,
+            extent=(
+                idx + 1 - 0.15,
+                idx + 1 + 0.15,
+                imp - 0.06,
+                imp + 0.06
+            ),
+            zorder=10
+        )
+
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+
+    plt.savefig(
+        buf,
+        format="png",
+        bbox_inches="tight",
+        facecolor=fig.get_facecolor()
+    )
+
+    plt.close(fig)
+
+    buf.seek(0)
+
+    return buf.getvalue()
+
+# =========================================================
+# MAIN
+# =========================================================
+
+async def generate_weekly_analytics(telegram_id):
+
+    user = get_user(telegram_id)
+
+    if not user:
+        return None
+
+    try:
+
+        if user.get("analytics_cache"):
+
+            updated = user.get("analytics_updated_at")
+
+            if updated:
+
+                if isinstance(updated, str):
+
+                    updated = datetime.fromisoformat(updated)
+
+                delta = (
+                    datetime.now(timezone.utc) - updated
+                ).total_seconds()
+
+                if delta < 3600:
+
+                    cache = json.loads(
+                        user["analytics_cache"]
+                    )
+
+                    chart = await create_visual_chart(
+                        cache["history"]
+                    )
+
+                    cache["image"] = chart
+
+                    return cache
+
+    except Exception as e:
+
+        logger.warning(f"Cache error: {e}")
+
+    matches = await get_weekly_matches(
+        telegram_id
+    )
+
+    if len(matches) < 5:
+        return None
+
+    role = await detect_role(matches)
+
+    total_gpm = 0
+    total_xpm = 0
+    total_kills = 0
+    total_deaths = 0
+    total_assists = 0
+    total_wins = 0
+
+    history = []
+
+    for m in matches:
+
+        kills = m["kills"]
+        deaths = m["deaths"]
+        assists = m["assists"]
+
+        kda = (
+            (kills + assists)
+            / max(deaths, 1)
+        )
+
+        imp = calculate_imp({
+            "gpm": m["gold_per_min"],
+            "xpm": m["xp_per_min"],
+            "kda": kda,
+            "deaths": deaths
+        }, role)
+
+        history.append({
+            "hero_id": m["hero_id"],
+            "imp": imp
+        })
+
+        total_gpm += m["gold_per_min"]
+        total_xpm += m["xp_per_min"]
+        total_kills += kills
+        total_deaths += deaths
+        total_assists += assists
+
+        if m["win"]:
+            total_wins += 1
+
+    count = len(matches)
+
+    avg_kda = (
+        (total_kills + total_assists)
+        / max(total_deaths, 1)
+    )
+
+    stats = {
+        "gpm": round(total_gpm / count, 1),
+        "xpm": round(total_xpm / count, 1),
+        "deaths": round(total_deaths / count, 1),
+        "kda": round(avg_kda, 2),
+        "wr": round((total_wins / count) * 100, 1),
+        "kda_string":
+            f"{round(total_kills / count,1)}/"
+            f"{round(total_deaths / count,1)}/"
+            f"{round(total_assists / count,1)}"
+    }
+
+    image = await create_visual_chart(
+        history
+    )
+
+    result = {
+        "image": image,
+        "role": role,
+        "stats": stats,
+        "history": history
+    }
+
+    try:
+
+        db = Database()
+
+        cache_data = json.dumps({
+            "role": role,
+            "stats": stats,
+            "history": history
+        })
+
+        db.execute_query(
+            """
+            UPDATE users
+            SET analytics_cache = ?,
+                analytics_updated_at = ?
+            WHERE telegram_id = ?
+            """,
+            (
+                cache_data,
+                datetime.now(
+                    timezone.utc
+                ).isoformat(),
+                telegram_id
+            )
+        )
+
+    except Exception as e:
+
+        logger.warning(f"DB cache save error: {e}")
+
+    return result

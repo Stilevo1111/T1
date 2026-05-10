@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, BACKUP_DATABASE_URL, DATABASE_URL, reset_all_fissure_data, cleanup_left_users
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, get_dota_week_rank, BACKUP_DATABASE_URL, DATABASE_URL, reset_all_fissure_data, cleanup_left_users
 from dota_mmr import update_user_mmr
 from database import get_all_users_with_steam, user_cache, update_dota_week_top_cache
 import aiohttp
@@ -374,51 +374,156 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @rate_limit(tokens=1)
-async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Еженедельная аналитика игрока"""
-    user_obj = update.effective_user
-    username = user_obj.username or user_obj.first_name
-    chat_id = update.message.chat_id
+from weekly_analytics import (
+    generate_weekly_analytics,
+    generate_report_text,
+    generate_detailed_metrics_table
+)
 
-    # Delete user message in groups
-    if update.message.chat.type in ['group', 'supergroup', 'channel']:
-        if await bot_can_delete(context.bot, chat_id):
-            try:
-                await context.bot.delete_message(chat_id, update.message.message_id)
-            except Exception as e:
-                logger.debug(f"Could not delete user message: {e}")
+from telegram import (
+    InlineKeyboardMarkup,
+    InlineKeyboardButton
+)
+
+import io
+import json
+
+# =========================================================
+# ANALYZE COMMAND
+# =========================================================
+
+async def analyze_command(update, context):
+
+    chat_id = update.effective_chat.id
+
+    loading = await context.bot.send_message(
+        chat_id=chat_id,
+        text="⏳ Анализирую матчи..."
+    )
 
     try:
-        from weekly_analytics import generate_weekly_analytics
-        data = await generate_weekly_analytics(update.effective_user.id)
 
-        if data:
-            # Сначала график с подписью
-            photo_buf = io.BytesIO(data["image"])
-            photo_buf.name = "weekly_analytics.png"
+        data = await generate_weekly_analytics(
+            update.effective_user.id
+        )
+
+        if not data:
+
+            await loading.edit_text(
+                "❌ Недостаточно матчей за неделю"
+            )
+
+            return
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "🆚 Сравнение с ПРО",
+                    callback_data="analytics_pro"
+                ),
+                InlineKeyboardButton(
+                    "📈 Детально",
+                    callback_data="analytics_details"
+                )
+            ]
+        ])
+
+        if data.get("image"):
+
+            buf = io.BytesIO(data["image"])
+            buf.name = "analytics.png"
+
             await context.bot.send_photo(
                 chat_id=chat_id,
-                photo=photo_buf,
-                caption="📊 График IMP по 10 матчам\\. PRO Target \\= 1\\.0"
-            )
-            # Потом текст с таблицами
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=data["text"],
-                parse_mode="MarkdownV2"
-            )
-        else:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="Недостаточно данных для анализа (минимум 5 матчей за неделю)."
+                photo=buf,
+                caption="🧠 Импакт за последние матчи",
+                reply_markup=keyboard
             )
 
+        else:
+
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="📊 Аналитика готова",
+                reply_markup=keyboard
+            )
+
+        await loading.delete()
+
     except Exception as e:
-        logger.error(f"Error in analyze_command: {e}")
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"Ошибка анализа: {e}"
+
+        await loading.edit_text(
+            f"❌ Ошибка аналитики\n\n{e}"
         )
+
+# =========================================================
+# CALLBACKS
+# =========================================================
+
+async def analytics_callback(update, context):
+
+    query = update.callback_query
+
+    await query.answer()
+
+    from database import get_user
+
+    user = get_user(query.from_user.id)
+
+    if not user:
+
+        await query.answer(
+            "Пользователь не найден",
+            show_alert=True
+        )
+
+        return
+
+    cache = user.get("analytics_cache")
+
+    if not cache:
+
+        await query.answer(
+            "Сначала используйте /analyze",
+            show_alert=True
+        )
+
+        return
+
+    try:
+
+        data = json.loads(cache)
+
+    except Exception:
+
+        await query.answer(
+            "Ошибка кеша",
+            show_alert=True
+        )
+
+        return
+
+    role = data["role"]
+    stats = data["stats"]
+
+    if query.data == "analytics_pro":
+
+        text = generate_report_text(
+            role,
+            stats
+        )["pro"]
+
+    else:
+
+        text = generate_detailed_metrics_table(
+            role,
+            stats
+        )
+
+    await context.bot.send_message(
+        chat_id=query.message.chat.id,
+        text=text
+    )
 
 
 def _get_player_stats_wrapper(steam_id, use_cache):
@@ -2214,7 +2319,7 @@ def main_menu():
     keyboard = [
         [KeyboardButton("🎲 Ролл Фиссуры"), KeyboardButton("👤 Профиль")],
         [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
-        [KeyboardButton("🔑 Привязать Аккаунт")],
+        [KeyboardButton("🔑 Привязать Аккаунт"), KeyboardButton("🔎 Аналитика")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
@@ -2481,6 +2586,36 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if data == "link":
             await callback_query.answer()
             await link(update, context)
+        elif data == "analytics_pro":
+            from weekly_analytics import generate_report_text
+            stats = context.user_data.get('analytics_stats')
+            role = context.user_data.get('analytics_role')
+            if stats and role:
+                pro_text = generate_report_text(role, stats)["pro"]
+                msg = await context.bot.send_message(
+                    chat_id=callback_query.message.chat.id,
+                    text=pro_text,
+                    parse_mode="MarkdownV2"
+                )
+                schedule_delete(context.bot, callback_query.message.chat.id, msg.message_id, 30, context.application.job_queue)
+            else:
+                await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
+            await callback_query.answer()
+        elif data == "analytics_detailed":
+            from weekly_analytics import generate_detailed_metrics_table
+            stats = context.user_data.get('analytics_stats')
+            role = context.user_data.get('analytics_role')
+            if stats and role:
+                detailed_text = generate_detailed_metrics_table(role, stats)
+                msg = await context.bot.send_message(
+                    chat_id=callback_query.message.chat.id,
+                    text=detailed_text,
+                    parse_mode="MarkdownV2"
+                )
+                schedule_delete(context.bot, callback_query.message.chat.id, msg.message_id, 30, context.application.job_queue)
+            else:
+                await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
+            await callback_query.answer()
         else:
             await callback_query.answer()
 
@@ -2952,11 +3087,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tb = traceback.format_exc()
         logger.error(f"Error in fissure: {e}\n{tb}")
         try:
-            await context.bot.send_message(
+            msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text=f"❌ Ошибка обработки запроса\n<code>{e}</code>",
                 parse_mode="HTML"
             )
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
         except Exception:
             pass
     finally:
@@ -3128,52 +3264,73 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             from dota_mmr import get_top_heroes_async, generate_heroes_image
-            top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
-            logger.info(f"Fetched top_heroes for steam_id {target_user.get('steam_id')}: {len(top_heroes)} heroes")
-            if top_heroes:
-                img_bytes = await asyncio.to_thread(generate_heroes_image, top_heroes)
+
+            # Get top heroes data if Steam is linked
+            top_heroes = []
+            if target_user.get('steam_id'):
+                try:
+                    top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
+                    logger.info(f"Fetched top_heroes for steam_id {target_user['steam_id']}: {len(top_heroes)} heroes")
+                except Exception as e:
+                    logger.warning(f"Could not get top heroes: {e}")
+                    top_heroes = []
+
+            try:
+                img_bytes = generate_heroes_image(top_heroes)
                 if img_bytes:
                     profile_banner_url = io.BytesIO(img_bytes)
                     logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
                 else:
-                    logger.warning("generate_heroes_image returned None")
+                    logger.warning("generate_heroes_image returned None or empty bytes")
+                    profile_banner_url = None
+            except Exception as e:
+                logger.error(f"Could not generate heroes image: {e}", exc_info=True)
+                profile_banner_url = None
+            
+            # Only send photo if we have valid image data
+            if profile_banner_url:
+                result_msg = await context.bot.send_photo(
+                    chat_id=update.message.chat_id,
+                    photo=profile_banner_url,
+                    caption=text,
+                    parse_mode="HTML",
+                    reply_markup=main_menu()
+                )
+                logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
+                
+                # Delete loading message immediately after successful send
+                if loading_msg:
+                    logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
+                    try:
+                        await context.bot.delete_message(chat_id, loading_msg.message_id)
+                        logger.error(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
+                    except Exception as del_e:
+                        logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
+                else:
+                    logger.error(f"ERROR: loading_msg is None! Cannot delete.")
             else:
-                logger.warning("get_top_heroes_async returned empty list")
+                # Send text-only message if no image could be generated
+                result_msg = await context.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=main_menu()
+                )
+                logger.info(f"Text-only stats message sent successfully, result_msg_id={result_msg.message_id}")
+                
+                # Delete loading message
+                if loading_msg:
+                    logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
+                    try:
+                        await context.bot.delete_message(chat_id, loading_msg.message_id)
+                        logger.error(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
+                    except Exception as del_e:
+                        logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
+                else:
+                    logger.error(f"ERROR: loading_msg is None! Cannot delete.")
+
         except Exception as e:
             logger.error(f"Could not generate heroes image: {e}", exc_info=True)
-
-        try:
-            result_msg = await context.bot.send_photo(
-                chat_id=update.message.chat_id,
-                photo=profile_banner_url,
-                caption=text,
-                parse_mode="HTML",
-                reply_markup=main_menu()
-            )
-            logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
-
-            # Delete loading message immediately after successful send
-            if loading_msg:
-                logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
-                try:
-                    await context.bot.delete_message(chat_id, loading_msg.message_id)
-                    logger.error(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
-                except Exception as del_e:
-                    logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
-            else:
-                logger.error(f"ERROR: loading_msg is None! Cannot delete.")
-
-        except Exception as e:
-            logger.error(f"Failed to send photo: {e}")
-            if loading_msg:
-                try:
-                    msg_id = loading_msg.message_id
-                    logger.info(f"Deleting loading message in stats: chat_id={chat_id}, msg_id={msg_id}")
-                    await context.bot.delete_message(chat_id, msg_id)
-                    logger.info(f"Successfully deleted loading message {msg_id}")
-                except Exception as del_e:
-                    logger.error(f"Failed to delete loading message in stats: {del_e}")
-            return
 
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
@@ -3287,7 +3444,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in top: {e}", exc_info=True)
         try:
-            await update.message.reply_text("❌ Ошибка получения топа", reply_markup=main_menu())
+            msg = await update.message.reply_text("❌ Ошибка получения топа", reply_markup=main_menu())
+            schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.application.job_queue)
         except Exception:
             pass
 
@@ -3296,6 +3454,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Топ игроков по MMR за неделю"""
     logger.info(f"User {update.effective_user.id} called topmmr")
+
+    from dota_mmr import rank_to_string
 
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
@@ -3333,6 +3493,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if player.get('telegram_id') == update.effective_user.id:
                 user_pos = i
                 break
+
+        # If user not in top 10, get their actual rank
+        if user_pos is None:
+            user_pos = get_dota_week_rank(update.effective_user.id)
 
         # Initialize user position variables
         user_is_in_top = False
@@ -3376,16 +3540,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Build the top MMR text in the requested format (without title)
             lines = []
 
-            # Helper function to format rank tier
-            def format_rank_tier(rt):
-                if not rt or rt < 10:
-                    return "Без ранга"
-                ranks = ["Рекрут", "Страж", "Рыцарь", "Герой", "Легенда", "Властелин", "Божество", "Титан"]
-                tier = min(rt // 10, 8)
-                star = rt % 10
-                if tier == 8:
-                    return ranks[7]  # Титан
-                return f"{ranks[tier - 1]} {star}"
+            # Helper function to convert number to emoji digits
+            def number_to_emojis(num: int) -> str:
+                emoji_digits = {
+                    '0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣',
+                    '4': '4️⃣', '5': '5️⃣', '6': '6️⃣', '7': '7️⃣',
+                    '8': '8️⃣', '9': '9️⃣'
+                }
+                return ''.join(emoji_digits[d] for d in str(num))
 
             for i, player in enumerate(top_users, 1):
                 username = player.get('steam_nickname') or player.get('username') or 'Unknown'
@@ -3395,7 +3557,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 week_losses = week_games - week_wins
 
                 # Format rank using helper function
-                rank_str = format_rank_tier(rank_tier)
+                rank_str = rank_to_string(rank_tier)
 
                 # Medal emoji
                 medals = ["🥇", "🥈", "🥉"]
@@ -3451,7 +3613,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Add the current user's position (always show it at the bottom)
             if user and user_week_games > 0:
                 user_wr = round((user_week_wins / user_week_games) * 100, 1)
-                user_rank_str = format_rank_tier(user.get('rank_tier', 0))
+                user_rank_str = rank_to_string(user.get('rank_tier', 0))
                 if user_is_in_top:
                     top_text += f"\n\n<b>{get_emoji_num(user_pos)} {user_username}: {user_rank_str}</b>\n"
                     top_text += f" └ В топе • {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
@@ -3488,14 +3650,16 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in topmmr: {e}", exc_info=True)
         try:
-            await context.bot.send_message(
+            msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text="❌ Ошибка получения топа",
                 reply_markup=main_menu()
             )
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
         except Exception:
             pass
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка получения топа MMR", reply_markup=main_menu())
+        msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка получения топа MMR", reply_markup=main_menu())
+        schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.application.job_queue)
 
 
 async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3545,7 +3709,8 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.1)
         except Exception as e:
             logger.error(f"Error in link: {e}", exc_info=True)
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Dota аккаунта", reply_markup=main_menu())
+            msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Dota аккаунта", reply_markup=main_menu())
+            schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.application.job_queue)
         return
 
     # Если нет аргумента - отправляем инструкцию
@@ -3652,15 +3817,16 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             return
 
         text = update.message.text.strip()
-        logger.info(f"menu_handler: text='{text}' (len={len(text)})")
-
         menu_buttons = {
             "🎲 Ролл Фиссуры": "🎲 Ролл Фиссуры",
             "👤 Профиль": "👤 Профиль",
             "🏆 Топ Фиссур": "🏆 Топ Фиссур",
             "🏆 Топ MMR": "🏆 Топ MMR",
+            "🔎 Аналитика": "🔎 Аналитика",
             "🔑 Привязать Аккаунт": "🔑 Привязать Аккаунт"
         }
+
+        logger.info(f"menu_handler: text='{text}' (len={len(text)}), menu_buttons_keys={list(menu_buttons.keys())}")
 
         # Try exact match first
         button_found = menu_buttons.get(text)
@@ -3714,6 +3880,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             await top(update, context)
         elif button_found == "🏆 Топ MMR":
             await topmmr(update, context)
+        elif button_found == "🔎 Аналитика":
+            await analyze_command(update, context)
         elif button_found == "🔑 Привязать Аккаунт":
             await link(update, context)
 
@@ -3965,6 +4133,7 @@ async def main():
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CallbackQueryHandler(button_callback))
+        app.add_handler(CallbackQueryHandler(analytics_callback, pattern="^analytics_"))
         app.add_handler(CommandHandler(("fissure", "fissura"), fissure))
         app.add_handler(CommandHandler("profile", stats))
         app.add_handler(CommandHandler("top", top))
