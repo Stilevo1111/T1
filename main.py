@@ -986,7 +986,7 @@ async def dota_digest_job(context):
         else:
             streak_part = "🔸—"
 
-        text = f"<b>{top_part}\n{bottom_part}\n{streak_part}</b>\n\n🦞 Дота Дайджест"
+        text = f"<b>{top_part}\n{bottom_part}\n{streak_part}</b>\n\n🦞 Дота Дайджест."
 
         bot = context.application.bot
 
@@ -1197,40 +1197,28 @@ async def alternate_digest_job(context):
                         except Exception as e:
                             logger.warning(f"Не удалось загрузить кеш фиссур-дайджеста: {e}")
 
-                growth_player, growth_pos = stats.get("top_growth", ("None", 0))
-                drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
-                streak_player, streak_len = stats.get("top_streak", ("None", 0))
-                growth_id = stats.get("top_growth_id")
-                drop_id = stats.get("top_drop_id")
-                streak_id = stats.get("top_streak_id")
+                top_15 = stats.get("top_15", [])
 
                 # Сохраняем в кеш если есть данные
-                if growth_player != "None" or drop_player != "None" or streak_player != "None":
+                if top_15:
                     try:
                         set_config('fissure_digest_cache', json.dumps(stats))
                         logger.info("Сохранены данные фиссур-дайджеста в кеш")
                     except Exception as e:
                         logger.warning(f"Не удалось сохранить кеш фиссур-дайджеста: {e}")
 
-                growth_display = make_clickable(growth_player, growth_id)
-                drop_display = make_clickable(drop_player, drop_id)
-                streak_display = make_clickable(streak_player, streak_id)
-
-                parts = []
-                if growth_player and growth_player != "None":
-                    parts.append(f"🔺{growth_display} +{growth_pos} см")
+                if top_15:
+                    lines = []
+                    for i, (name, cm, uid) in enumerate(top_15, 1):
+                        if i == 10:
+                            medal = "🔟"
+                        else:
+                            medal = f"{i}️⃣"
+                        lines.append(f"{medal} {make_clickable(name, uid)}: {cm:.1f} см")
+                    combined = "\n".join(lines)
+                    text = f"<b>{combined} подряд</b>\n\n🗿 Фиссура Дайджест."
                 else:
-                    parts.append("🔺—")
-                if drop_player and drop_player != "None":
-                    parts.append(f"🔻{drop_display} {drop_cm:.0f} см")
-                else:
-                    parts.append("🔻—")
-                if streak_player and streak_player != "None" and streak_len > 0:
-                    parts.append(f"🍀{streak_display}: {streak_len}")
-                else:
-                    parts.append("🍀—")
-
-                text = f"<b>{chr(10).join(parts)} подряд</b>\n\n🍆 Фиссура Дайджест."
+                    text = "<b>Нет данных для дайджеста</b>\n\n🍆 Фиссура Дайджест."
 
             else:
                 # Dota-дайджест
@@ -1303,7 +1291,7 @@ async def alternate_digest_job(context):
                             else:
                                 streak_part = "🔸—"
 
-                            dota_text = f"<b>{top_part}\n{bottom_part}\n{streak_part}</b>\n\n🦞 Дота Дайджест"
+                            dota_text = f"<b>{top_part}\n{bottom_part}\n{streak_part}</b>\n\n🦞 Дота Дайджест."
 
                         if dota_text is None:
                             next_type = "0"
@@ -3251,13 +3239,20 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     text += f"{emoji_nums.get(i, f'{i}.')} {clickable_name}: {fissure:.1f} см\n"
 
+            def get_emoji_num(n):
+                if n <= 10:
+                    nums = {1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
+                    return nums.get(n, str(n))
+                else:
+                    emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣', '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
+                    return ''.join(emoji_digits[d] for d in str(n))
+
             # Всегда показываем позицию пользователя, даже если он не в топе
+            user_fissure = user.get('fissure', 0) if user else 0
             if user_rank:
-                user_fissure = user.get('fissure', 0) if user else 0
-                text += f"\n<b>👤 Твоя позиция: #{user_rank} ({user_fissure:.1f} см)</b>"
+                text += f"\n<b>{get_emoji_num(user_rank)} {username}: {user_fissure:.1f} см</b>"
             else:
-                user_fissure = user.get('fissure', 0) if user else 0
-                text += f"\n<b>👤 Твоя позиция: — ({user_fissure:.1f} см)</b>"
+                text += f"\n<b>— {username}: {user_fissure:.1f} см</b>"
 
         # Add banner and send
         top_banner_url = "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
@@ -3428,20 +3423,29 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not process digest chat: {e}")
 
+            def get_emoji_num(n):
+                if n is None or n == '?':
+                    return "?"
+                n = int(n)
+                if n <= 10:
+                    nums = {1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
+                    return nums.get(n, str(n))
+                else:
+                    emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣', '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
+                    return ''.join(emoji_digits[d] for d in str(n))
+
             # Add the current user's position (always show it at the bottom)
             if user and user_week_games > 0:
                 user_wr = round((user_week_wins / user_week_games) * 100, 1)
                 user_rank_str = format_rank_tier(user.get('rank_tier', 0))
-                clickable_name = make_clickable(user_username, update.effective_user.id)
                 if user_is_in_top:
-                    top_text += f"\n\n👤 <b>{clickable_name}</b>: #{user_pos or '?'} - {user_rank_str}\n"
+                    top_text += f"\n\n<b>{get_emoji_num(user_pos)} {user_username}: {user_rank_str}</b>\n"
                     top_text += f" └ В топе • {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
                 else:
-                    top_text += f"\n\n👤 <b>{clickable_name}</b>: #{user_pos or '?'} - {user_rank_str}\n"
+                    top_text += f"\n\n<b>{get_emoji_num(user_pos)} {user_username}: {user_rank_str}</b>\n"
                     top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
             elif user and user_week_games == 0:
-                clickable_name = make_clickable(user_username, update.effective_user.id)
-                top_text += f"\n\n👤 <b>{clickable_name}</b>\n"
+                top_text += f"\n\n<b>— {user_username}</b>\n"
                 top_text += f" └ Нет игр за неделю"
 
             # Delete previous bot message before sending new one

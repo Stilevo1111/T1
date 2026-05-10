@@ -1377,6 +1377,13 @@ class Database:
             users_sorted = sorted(users, key=lambda u: u["fissure"], reverse=True)
             current_pos_by_id = {u["telegram_id"]: i + 1 for i, u in enumerate(users_sorted)}
 
+            # Top 15
+            top_15 = []
+            for i, u in enumerate(users_sorted[:15]):
+                name = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
+                cm = u["fissure"]
+                top_15.append((name, cm, u["telegram_id"]))
+
             # Рост: самый большой прирост см за сутки (current - digest)
             top_growth_user = None
             top_growth_cm = 0.0
@@ -1458,17 +1465,19 @@ class Database:
                 "top_drop_id": top_drop_id,
                 "top_streak_id": top_streak_id,
                 "streak_username": streak_username,
+                "top_15": top_15,
             }
         except Exception as e:
             logger.error(f"Error getting digest stats: {e}")
             return {
-                "top_growth": ("None", 0), 
-                "top_drop": ("None", 0.0), 
-                "top_streak": ("None", 0), 
+                "top_growth": ("None", 0),
+                "top_drop": ("None", 0.0),
+                "top_streak": ("None", 0),
                 "top_growth_id": None,
                 "top_drop_id": None,
                 "top_streak_id": None,
-                "streak_username": None
+                "streak_username": None,
+                "top_15": []
             }
     
     def update_player_positions(self):
