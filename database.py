@@ -2723,9 +2723,7 @@ def _get_dota_week_top_query(limit):
                                CASE WHEN week_games > 0 
                                     THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
                                     ELSE 0 END as winrate,
-                               COALESCE(week_current_streak, 0) as week_current_streak,
-                               CASE WHEN week_games > 0 THEN week_wins::numeric / NULLIF(week_games, 0) ELSE 0 END as wr,
-                               CASE WHEN week_games > 0 THEN CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) ELSE 0 END as wr_int
+                               COALESCE(week_current_streak, 0) as week_current_streak
                         FROM users 
                         WHERE steam_id IS NOT NULL AND in_chat = TRUE
                     )
@@ -2770,8 +2768,7 @@ def _get_dota_week_top_query(limit):
                            CASE WHEN week_games > 0 
                                 THEN ROUND(week_wins * 100.0 / week_games, 1) 
                                 ELSE 0 END as winrate,
-                           COALESCE(week_current_streak, 0) as week_current_streak,
-                           CASE WHEN week_games > 0 THEN CAST(week_wins * 100.0 / NULLIF(week_games, 0) AS INTEGER) ELSE 0 END as wr_int
+                          COALESCE(week_current_streak, 0) as week_current_streak
                     FROM users 
                     WHERE steam_id IS NOT NULL AND (in_chat IS NULL OR in_chat = 1)
                 )
