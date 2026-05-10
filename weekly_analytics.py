@@ -820,7 +820,7 @@ async def create_visual_chart(history: list, dates: list = None):
     fig.add_hrect(
         y0=0,
         y1=CENTER,
-        fillcolor="rgba(239,68,68,0.10)",
+        fillcolor="rgba(239,68,68,0.15)",
         line_width=0
     )
 
@@ -828,7 +828,7 @@ async def create_visual_chart(history: list, dates: list = None):
     fig.add_hrect(
         y0=CENTER,
         y1=max(1.8, max(impacts) + 0.2),
-        fillcolor="rgba(34,197,94,0.10)",
+        fillcolor="rgba(34,197,94,0.15)",
         line_width=0
     )
 
