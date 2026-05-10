@@ -107,25 +107,39 @@ def _clear_cache():
     _cache = {}
 
 
-def _api_get(url: str, params: dict = None) -> dict:
-    """Универсальная функция для API-запросов с обработкой ошибок и кешем"""
+def _api_get(url: str, params: dict = None, max_retries: int = 2) -> dict:
+    """Универсальная функция для API-запросов с обработкой ошибок, кешем и повторными попытками"""
     _check_rate_limit()  # Применяем rate limiting
-    timeout = 5
-    try:
-        r = requests.get(url, params=params or {}, timeout=timeout)
-        if r.status_code == 200:
-            return r.json()
-        elif r.status_code == 429:
-            logger.warning(f"Rate limited by OpenDota API, waiting...")
-            time.sleep(3)
+
+    for attempt in range(max_retries + 1):
+        timeout = 15 if attempt == 0 else 30  # Увеличиваем таймаут при повторных попытках
+        try:
+            r = requests.get(url, params=params or {}, timeout=timeout)
+            if r.status_code == 200:
+                return r.json()
+            elif r.status_code == 429:
+                logger.warning(f"Rate limited by OpenDota API, waiting...")
+                time.sleep(3)
+                return None
+            elif r.status_code >= 500:
+                # Серверная ошибка, попробуем ещё раз
+                if attempt < max_retries:
+                    logger.warning(f"Server error {r.status_code}, retrying in {attempt + 1}s...")
+                    time.sleep(attempt + 1)
+                    continue
             return None
-        return None
-    except requests.exceptions.ReadTimeout as e:
-        logger.error(f"API request timeout ({timeout}s): {e}")
-        return None
-    except Exception as e:
-        logger.error(f"API request error: {e}", exc_info=True)
-        return None
+        except requests.exceptions.ReadTimeout as e:
+            if attempt < max_retries:
+                logger.warning(f"API request timeout ({timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
+                continue
+            else:
+                logger.error(f"API request timeout ({timeout}s) after {max_retries + 1} attempts: {e}")
+                return None
+        except Exception as e:
+            logger.error(f"API request error: {e}", exc_info=True)
+            return None
+
+    return None
 
 
 _async_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
