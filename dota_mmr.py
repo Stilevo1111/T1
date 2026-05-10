@@ -4,6 +4,7 @@ import time
 import requests
 import logging
 import aiohttp
+import asyncio
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from database import get_user, update_user_fields_batch

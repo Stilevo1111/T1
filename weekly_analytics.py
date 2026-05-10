@@ -756,8 +756,12 @@ async def generate_weekly_analytics(telegram_id: int):
 
 async def create_visual_chart(history):
 
-    import matplotlib.pyplot as plt
-    import matplotlib.patheffects as pe
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib.patheffects as pe
+    except ImportError:
+        logger.warning("matplotlib not available, skipping chart generation")
+        return None
 
     impacts = [
         g["imp"]
