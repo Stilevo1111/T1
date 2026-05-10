@@ -398,7 +398,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from weekly_analytics import generate_weekly_analytics
         data = await generate_weekly_analytics(update.effective_user.id)
 
-        if data:
+        if data and data.get("image"):
             photo_buf = io.BytesIO(data["image"])
             photo_buf.name = "weekly_analytics.png"
 
@@ -415,6 +415,39 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 photo=photo_buf,
                 caption="🧠 Импакт в 10 последних матчах",
                 reply_markup=reply_markup
+            )
+        elif data:
+            # Send text-only analytics if no image could be generated
+            text = f"🧠 Аналитика игрока {username}\n\n"
+            text += f"Роль: {data.get('role', 'Не определена')}\n\n"
+
+            # Add basic stats
+            stats = data.get("stats", {})
+            if stats:
+                text += f"Средний GPM: {stats.get('gpm', 0):.1f}\n"
+                text += f"Средний XPM: {stats.get('xpm', 0):.1f}\n"
+                text += f"Средние смерти: {stats.get('deaths', 0):.1f}\n"
+                text += f"Винрейт: {stats.get('wr', 0)}%\n"
+                text += f"Средний KDA: {stats.get('kda', '0/0/0')}\n"
+
+            keyboard = [
+                [
+                    InlineKeyboardButton("🆚 Сравнение с ПРО", callback_data="analytics_pro"),
+                    InlineKeyboardButton("🔍 Детальное сравнение 🔍", callback_data="analytics_detailed")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=reply_markup
+            )
+        else:
+            # No analytics data available
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="❌ Недостаточно данных для аналитики. Сыграйте больше матчей за неделю."
             )
 
             # Delete loading message
@@ -3185,6 +3218,16 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             from dota_mmr import get_top_heroes_async, generate_heroes_image
+
+            # Get top heroes data if Steam is linked
+            top_heroes = []
+            if target_user.get('steam_id'):
+                try:
+                    top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
+                    logger.info(f"Fetched top_heroes for steam_id {target_user['steam_id']}: {len(top_heroes)} heroes")
+                except Exception as e:
+                    logger.warning(f"Could not get top heroes: {e}")
+                    top_heroes = []
 
             try:
                 img_bytes = generate_heroes_image(top_heroes)
