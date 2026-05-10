@@ -620,6 +620,25 @@ def generate_detailed_metrics_table(role: str, user_stats: dict) -> str:
 
 async def generate_weekly_analytics(telegram_id: int):
 
+    # Check cache
+    from database import get_user, Database
+    import json
+    from datetime import datetime, timezone
+
+    user = get_user(telegram_id)
+    if user and user.get('analytics_cache') and user.get('analytics_updated_at'):
+        updated_at = user['analytics_updated_at']
+        if isinstance(updated_at, str):
+            updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+        now = datetime.now(timezone.utc)
+        if (now - updated_at).total_seconds() < 3600:  # 1 hour cache
+            logger.info(f"Using cached analytics for {telegram_id}")
+            cached = json.loads(user['analytics_cache'])
+            # Regenerate image from cached history
+            chart_image = await create_visual_chart(cached["history"])
+            cached["image"] = chart_image
+            return cached
+
     matches = await get_weekly_matches(telegram_id)
 
     if len(matches) < 5:
@@ -744,13 +763,35 @@ async def generate_weekly_analytics(telegram_id: int):
     # График
     chart_image = await create_visual_chart(game_history)
 
-    return {
+    data = {
         "image": chart_image,
+        "history": game_history,
         "pro_text": pro_text,
         "detailed_text": detailed_text,
         "role": role,
         "stats": user_stats
     }
+
+    # Save to cache (without image)
+    try:
+        cache_dict = {
+            "history": game_history,
+            "pro_text": pro_text,
+            "detailed_text": detailed_text,
+            "role": role,
+            "stats": user_stats
+        }
+        cache_data = json.dumps(cache_dict)
+        db = Database()
+        db.execute_query(
+            "UPDATE users SET analytics_cache = ?, analytics_updated_at = ? WHERE telegram_id = ?",
+            (cache_data, datetime.now(timezone.utc), telegram_id)
+        )
+        logger.info(f"Saved analytics cache for {telegram_id}")
+    except Exception as e:
+        logger.exception(f"Failed to save analytics cache for {telegram_id}")
+
+    return data
 
 # =========================================================
 # CHART
