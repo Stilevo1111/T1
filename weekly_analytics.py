@@ -130,19 +130,30 @@ IMP_WEIGHTS = {
 # ROLE DETECTION
 # =========================================================
 
-def detect_role(m: dict) -> str:
+def detect_role(match: dict) -> str:
 
-    lane = m.get("lane_role", 0)
-    gpm = m.get("gold_per_min", 0)
-    lh = m.get("last_hits", 0)
+    lane = match.get("lane_role", 0)
+    gpm = match.get("gold_per_min", 0)
+    xpm = match.get("xp_per_min", 0)
+    lh = match.get("last_hits", 0)
+    obs = match.get("observer_uses", 0)
+    sen = match.get("sentry_uses", 0)
+    hero_dmg = match.get("hero_damage", 0)
 
-    if lane == 2:
+    # MID
+    if lane == 2 and xpm > 550:
         return "MID"
 
-    if lane == 3:
+    # OFFLANE
+    if lane == 3 and hero_dmg > 15000:
         return "OFFLANE"
 
-    if gpm > 600 and lh > 200:
+    # SUPPORT
+    if obs + sen >= 8:
+        return "SUPPORT"
+
+    # CARRY
+    if gpm >= 600 and lh >= 220:
         return "CARRY"
 
     return "SUPPORT"
@@ -466,6 +477,12 @@ async def generate_weekly_analytics(telegram_id: int):
     if len(matches) < 5:
         return None
 
+    # Sort by start_time ascending (oldest first)
+    matches = sorted(
+        matches,
+        key=lambda x: x.get("start_time", 0)
+    )
+
     roles = [detect_role(m) for m in matches]
 
     role = max(set(roles), key=roles.count)
@@ -486,7 +503,6 @@ async def generate_weekly_analytics(telegram_id: int):
     total_wins = 0
 
     game_history = []
-    match_dates = []
 
     for m in matches:
 
@@ -521,14 +537,6 @@ async def generate_weekly_analytics(telegram_id: int):
             "hero_id": m.get("hero_id", 0)
         })
 
-        # Store date for x-axis label
-        ts = m.get("start_time", 0)
-        try:
-            dt = datetime.fromtimestamp(ts, tz=timezone.utc)
-            match_dates.append(dt)
-        except Exception:
-            match_dates.append(None)
-
         total_gpm += gpm
         total_kills += kills
         total_deaths += deaths
@@ -555,23 +563,28 @@ async def generate_weekly_analytics(telegram_id: int):
     avg_t_dmg = total_t_dmg / match_count / 1000
     avg_utility = total_utility / match_count
     avg_deaths = total_deaths / match_count
+    avg_kills = total_kills / match_count
+    avg_assists = total_assists / match_count
 
     wr = (total_wins / match_count) * 100
 
+    real_kda = (avg_kills + avg_assists) / max(avg_deaths, 1)
+
     user_stats = {
-        "wr": int(wr),
-        "lh": avg_lh,
-        "deny": avg_denies,
-        "gpm": avg_gpm,
-        "kda": f"{int(total_kills/match_count)}/{int(avg_deaths)}/{int(total_assists/match_count)}",
-        "xpm": avg_xpm,
-        "h_dmg": avg_h_dmg,
-        "t_dmg": avg_t_dmg,
-        "util": avg_utility,
-        "apm": avg_apm,
-        "lh10": avg_lh,
-        "deny10": avg_denies,
-        "deaths": avg_deaths
+        "wr": round(wr, 1),
+        "lh": round(avg_lh, 1),
+        "deny": round(avg_denies, 1),
+        "gpm": round(avg_gpm, 1),
+        "xpm": round(avg_xpm, 1),
+        "h_dmg": round(avg_h_dmg, 1),
+        "t_dmg": round(avg_t_dmg, 1),
+        "util": round(avg_utility, 1),
+        "apm": round(avg_apm, 1),
+        "lh10": round(avg_lh * 0.32, 1),
+        "deny10": round(avg_denies * 0.55, 1),
+        "deaths": round(avg_deaths, 1),
+        "kda_number": round(real_kda, 2),
+        "kda": f"{round(avg_kills,1)}/{round(avg_deaths,1)}/{round(avg_assists,1)}"
     }
 
     # Генерация таблиц
@@ -580,7 +593,7 @@ async def generate_weekly_analytics(telegram_id: int):
     detailed_text = tables["detailed"]
 
     # График
-    chart_image = await create_visual_chart(game_history, match_dates)
+    chart_image = await create_visual_chart(game_history)
 
     return {
         "image": chart_image,
@@ -594,143 +607,208 @@ async def generate_weekly_analytics(telegram_id: int):
 # CHART
 # =========================================================
 
-async def create_visual_chart(history: list, dates: list = None):
+async def create_visual_chart(history: list):
 
-    impacts = [g["imp"] for g in history]
-    n = len(history)
+    if not history:
+        return None
+
+    impacts = [x["imp"] for x in history]
+    games = list(range(1, len(history) + 1))
+
+    y_min = min(impacts)
+    y_max = max(impacts)
+
+    padding = 0.25
 
     fig = go.Figure()
 
     # =====================================================
-    # MAIN LINE
+    # MAIN PERFORMANCE LINE
     # =====================================================
 
     fig.add_trace(
         go.Scatter(
-            x=list(range(n)),
+            x=games,
             y=impacts,
-            mode="lines+markers",
+            mode="lines",
             line=dict(
                 color="#f59e0b",
-                width=6,
+                width=5,
                 shape="spline",
-                smoothing=1.1
+                smoothing=1.15
             ),
+            fill="tozeroy",
+            fillcolor="rgba(245,158,11,0.10)"
+        )
+    )
+
+    # =====================================================
+    # GLOW LAYER
+    # =====================================================
+
+    fig.add_trace(
+        go.Scatter(
+            x=games,
+            y=impacts,
+            mode="markers",
             marker=dict(
-                size=14,
+                size=26,
+                color="rgba(245,158,11,0.18)"
+            ),
+            hoverinfo="skip"
+        )
+    )
+
+    # =====================================================
+    # MAIN POINTS
+    # =====================================================
+
+    fig.add_trace(
+        go.Scatter(
+            x=games,
+            y=impacts,
+            mode="markers",
+            marker=dict(
+                size=12,
                 color="#f59e0b",
                 line=dict(
                     color="white",
                     width=2
                 )
             ),
-            fill="tozeroy",
-            fillcolor="rgba(245,158,11,0.12)"
+            hovertemplate=(
+                "<b>Game %{x}</b><br>"
+                "IMP: %{y}<extra></extra>"
+            )
         )
     )
 
     # =====================================================
-    # PRE-CALCULATIONS FOR ASPECT RATIO (circles, not ovals)
+    # HERO ICONS
     # =====================================================
 
-    y_min = min(impacts) if impacts else 0
-    y_max = max(impacts) if impacts else 1
-    padding = 0.25
-
-    # Data ranges
-    x_range = n if n > 1 else 1
-    y_range = (y_max + padding) - (max(0, y_min - padding))
-
-    # Plot area in pixels (canvas minus margins)
-    plot_width_px = 1200 - 80 - 80   # left/right margins 80px
-    plot_height_px = 800 - 80 - 80   # top/bottom margins 80px
-
-    # Data units per pixel
-    x_per_pixel = x_range / plot_width_px
-    y_per_pixel = y_range / plot_height_px
-
-    # Desired circle radius on screen (pixels)
-    desired_radius_px = 28
-
-    # Convert to data coordinates
-    radius_x = desired_radius_px * x_per_pixel
-    radius_y = desired_radius_px * y_per_pixel
-
-    # =====================================================
-    # HERO ICONS WITH CIRCLES
-    # =====================================================
-
-    for i, g in enumerate(history):
+    for idx, game in enumerate(history):
 
         try:
 
-            img = await get_hero_icon(g["hero_id"])
+            hero_img = await get_hero_icon(game["hero_id"])
 
-            if img:
+            if not hero_img:
+                continue
 
-                # Circle background with orange border
-                fig.add_shape(
-                    type="circle",
+            fig.add_layout_image(
+                dict(
+                    source=hero_img,
                     xref="x",
                     yref="y",
-                    x0=i - radius_x,
-                    y0=g["imp"] - radius_y,
-                    x1=i + radius_x,
-                    y1=g["imp"] + radius_y,
-                    line=dict(color="#f59e0b", width=3),
-                    fillcolor="rgba(17,17,17,0.9)"
+                    x=games[idx],
+                    y=impacts[idx],
+                    sizex=0.42,
+                    sizey=0.42,
+                    xanchor="center",
+                    yanchor="middle",
+                    layer="above"
                 )
-
-                # Hero icon (slightly larger than circle interior)
-                fig.add_layout_image(
-                    dict(
-                        source=img,
-                        xref="x",
-                        yref="y",
-                        x=i,
-                        y=g["imp"],
-                        sizex=radius_x * 1.2,
-                        sizey=radius_y * 1.2,
-                        xanchor="center",
-                        yanchor="middle",
-                        layer="above"
-                    )
-                )
+            )
 
         except Exception:
             logger.exception("Hero image failed")
+
+    # =====================================================
+    # PERFORMANCE ZONES
+    # =====================================================
+
+    fig.add_hrect(
+        y0=1.0,
+        y1=max(y_max + padding, 1.3),
+        fillcolor="rgba(34,197,94,0.08)",
+        line_width=0
+    )
+
+    fig.add_hrect(
+        y0=0,
+        y1=0.8,
+        fillcolor="rgba(239,68,68,0.06)",
+        line_width=0
+    )
+
+    # =====================================================
+    # AVERAGE LINE
+    # =====================================================
+
+    avg_imp = round(sum(impacts) / len(impacts), 2)
+
+    fig.add_hline(
+        y=avg_imp,
+        line_dash="dash",
+        line_color="rgba(255,255,255,0.25)",
+        annotation_text=f"AVG IMP {avg_imp}",
+        annotation_position="top right"
+    )
 
     # =====================================================
     # LAYOUT
     # =====================================================
 
     fig.update_layout(
+
         width=1200,
         height=800,
+
         template="plotly_dark",
-        paper_bgcolor="#111111",
-        plot_bgcolor="#111111",
+
+        paper_bgcolor="#0f0f10",
+        plot_bgcolor="#0f0f10",
+
         showlegend=False,
-        margin=dict(t=40, b=80, l=80, r=80),
-        xaxis=dict(
-            range=[-0.5, n - 0.5],
-            tickmode="array",
-            tickvals=list(range(n)),
-            ticktext=[str(i+1) for i in range(n)],
-            showgrid=False,
-            tickfont=dict(size=16)
+
+        margin=dict(
+            t=50,
+            b=70,
+            l=70,
+            r=50
         ),
+
+        title=dict(
+            text="WEEKLY PERFORMANCE",
+            x=0.5,
+            font=dict(
+                size=28
+            )
+        ),
+
+        xaxis=dict(
+            title="MATCH",
+            range=[0.5, len(games) + 0.5],
+
+            tickmode="array",
+            tickvals=games,
+
+            showgrid=False,
+
+            tickfont=dict(size=15),
+
+            zeroline=False
+        ),
+
         yaxis=dict(
-            range=[max(0, y_min - padding), y_max + padding],
-            showgrid=True,
+            title="IMP SCORE",
+
+            range=[
+                max(0, y_min - padding),
+                y_max + padding
+            ],
+
             gridcolor="rgba(255,255,255,0.06)",
-            zeroline=False,
-            tickfont=dict(size=15)
+
+            tickfont=dict(size=14),
+
+            zeroline=False
         )
     )
 
     # =====================================================
-    # EXPORT (high-res)
+    # EXPORT
     # =====================================================
 
     img_bytes = await asyncio.to_thread(
@@ -740,9 +818,4 @@ async def create_visual_chart(history: list, dates: list = None):
         scale=2
     )
 
-    img = Image.open(io.BytesIO(img_bytes))
-
-    out = io.BytesIO()
-    img.save(out, format="PNG")
-    out.seek(0)
-    return out.getvalue()
+    return img_bytes
