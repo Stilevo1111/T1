@@ -46,6 +46,10 @@ _cache = {}
 CACHE_TTL = 300  # 5 минут
 CACHE_MAX_SIZE = 100  # максимальное количество записей в кеше
 
+# Кеш для изображений героев (1 час)
+_heroes_image_cache = {}
+_heroes_image_cache_ttl = 3600  # 1 час
+
 
 def _check_rate_limit():
     """Проверить и обновить rate limiting"""
