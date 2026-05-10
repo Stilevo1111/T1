@@ -103,9 +103,9 @@ def generate_pro_table(role: str, user_stats: dict) -> str:
     table = "```\n          WR   LH  Deny  GPM   KDA\n"
     table += "--------------------------------------\n"
     for name, stats in pros.items():
-        table += f"{name:<9} {stats['wr']:>3}% {stats['lh']:>4} {stats['deny']:>4} {stats['gpm']:>5} {stats['kda']}\n"
+        table += f"{name:<9}{stats['wr']:>3}% {stats['lh']:>4} {stats['deny']:>4} {stats['gpm']:>5} {stats['kda']}\n"
     table += "--------------------------------------\n"
-    # PRO AVG (примерно, нужно рассчитать)
+    # PRO AVG
     avg_wr = sum(stats['wr'] for stats in pros.values()) // len(pros)
     avg_lh = sum(stats['lh'] for stats in pros.values()) / len(pros)
     avg_deny = sum(stats['deny'] for stats in pros.values()) / len(pros)
