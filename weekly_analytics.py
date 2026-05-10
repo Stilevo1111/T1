@@ -271,11 +271,11 @@ async def generate_weekly_analytics(telegram_id: int) -> dict | None:
     # Текст в MarkdownV2
     text = f"🎯 Еженедельная аналитика\n\nРоль: {role}\n\n"
     text += "```\n"
-    text += "Метрика | Значение | Дельта | Статус\n"
-    text += "--------|----------|--------|--------\n"
+    text += "Метрика\tТы\tPRO\tДельта\tСтатус\n"
     for metric, data in comparison.items():
         if "error" not in data:
-            text += f"{metric.upper()} | {data['value']} | {data['delta']}% | {data['emoji']}\n"
+            pro_val = PRO_DATA[role].get(metric, 0)
+            text += f"{metric.upper()}\t{data['value']}\t{pro_val}\t{data['delta']}%\t{data['emoji']}\n"
     text += "```\n\n"
     text += "📊 График IMP по 10 матчам\\. PRO Target \\= 1\\.0"
 
