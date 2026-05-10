@@ -242,7 +242,7 @@ def _build_grid(hero_stats):
         if len(grid[pos]) < 5:
             # Fill remaining slots with top heroes from other positions
             for h in all_heroes_sorted:
-                if h['position'] != pos and h not in [grid[p] for p in range(1, 6) for grid[p] in grid[p]]:
+                if h['position'] != pos and h not in {hero for pos_list in grid.values() for hero in pos_list}:
                     if h not in grid[pos]:
                         grid[pos].append(h)
                 if len(grid[pos]) >= 5:

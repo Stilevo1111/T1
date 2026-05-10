@@ -1122,9 +1122,7 @@ class Database:
                 self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, win, lose, win, win, lose, telegram_id))
         except Exception as e:
             logger.error(f"Error updating fissure: {e}")
-        except Exception as e:
-            logger.error(f"Error updating fissure: {e}")
-    
+
     def update_last_message_id(self, telegram_id, message_id):
         """Обновление ID последнего сообщения пользователя"""
         try:

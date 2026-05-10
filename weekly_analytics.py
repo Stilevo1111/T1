@@ -578,6 +578,26 @@ def generate_detailed_metrics_table(role: str, user_stats: dict) -> str:
     return f"{header}\n\n{table}\n\n{feedback}"
 
 
+def get_analytics_pages(role: str, stats: dict) -> list:
+    """Generate a list of analytics pages for pagination.
+
+    Each page is a dict with 'title' and 'text' keys.
+    Page 0: PRO comparison
+    Page 1: Detailed comparison
+    Page 2: Detailed metrics with AI feedback
+    """
+    tables = generate_report_text(role, stats)
+    pro_text = tables["pro"]
+    detailed_text = tables["detailed"]
+    metrics_text = generate_detailed_metrics_table(role, stats)
+
+    return [
+        {"title": "🆚 Сравнение с ПРО", "text": pro_text},
+        {"title": "🔍 Детальное сравнение", "text": detailed_text},
+        {"title": "📈 Метрики и AI-обратная связь", "text": metrics_text},
+    ]
+
+
 # =========================================================
 # MAIN ANALYTICS
 # =========================================================

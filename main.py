@@ -406,13 +406,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text="⏳ Генерирую аналитику..."
         )
 
-        from weekly_analytics import generate_weekly_analytics
+        from weekly_analytics import generate_weekly_analytics, get_analytics_pages
         data = await generate_weekly_analytics(update.effective_user.id)
-
-        # Store analytics data for button callbacks
-        if data:
-            context.user_data['analytics_stats'] = data.get('stats')
-            context.user_data['analytics_role'] = data.get('role')
 
         # Delete loading message
         try:
@@ -420,52 +415,46 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.debug(f"Could not delete loading message: {e}")
 
-        if data and data.get("image"):
-            # Send analytics with chart
-            photo_buf = io.BytesIO(data["image"])
-            photo_buf.name = "weekly_analytics.png"
-
-            keyboard = [
-                [
-                    InlineKeyboardButton("🆚 Сравнение с ПРО", callback_data="analytics_pro"),
-                    InlineKeyboardButton("🔍 Детальное сравнение 🔍", callback_data="analytics_detailed")
-                ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-            result_msg = await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=photo_buf,
-                caption="🧠 Импакт в 10 последних матчах",
-                reply_markup=reply_markup
-            )
-        elif data:
-            # Send text-based analytics if no chart available
-            text = f"🧠 Аналитика игрока {username}\n\n"
-            text += f"Роль: {data.get('role', 'Не определена')}\n\n"
-
-            # Add basic stats
+        if data:
             stats = data.get("stats", {})
-            if stats:
-                text += f"Средний GPM: {stats.get('gpm', 0):.1f}\n"
-                text += f"Средний XPM: {stats.get('xpm', 0):.1f}\n"
-                text += f"Средние смерти: {stats.get('deaths', 0):.1f}\n"
-                text += f"Винрейт: {stats.get('wr', 0)}%\n"
-                text += f"Средний KDA: {stats.get('kda', '0/0/0')}\n"
+            role = data.get("role", "CARRY")
 
-            keyboard = [
-                [
-                    InlineKeyboardButton("🆚 Сравнение с ПРО", callback_data="analytics_pro"),
-                    InlineKeyboardButton("🔍 Детальное сравнение 🔍", callback_data="analytics_detailed")
-                ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            # Compute all pages and store in user_data
+            pages = get_analytics_pages(role, stats)
+            context.user_data['analytics_pages'] = pages
+            context.user_data['analytics_page'] = 0
+            context.user_data['analytics_stats'] = stats
+            context.user_data['analytics_role'] = role
 
-            result_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                reply_markup=reply_markup
-            )
+            first_page = pages[0]
+
+            if data.get("image"):
+                # Send analytics with chart as photo
+                photo_buf = io.BytesIO(data["image"])
+                photo_buf.name = "weekly_analytics.png"
+
+                reply_markup = _build_analytics_keyboard(0, len(pages))
+
+                result_msg = await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo_buf,
+                    caption=first_page["text"],
+                    reply_markup=reply_markup,
+                    parse_mode="MarkdownV2"
+                )
+            else:
+                # Send text-based analytics if no chart available
+                header_text = f"🧠 Аналитика игрока {username}\n\nРоль: {role}\n\n"
+                full_text = header_text + first_page["text"]
+
+                reply_markup = _build_analytics_keyboard(0, len(pages))
+
+                result_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=full_text,
+                    reply_markup=reply_markup,
+                    parse_mode="MarkdownV2"
+                )
         else:
             # No analytics data available
             result_msg = await context.bot.send_message(
@@ -2295,6 +2284,35 @@ def main_menu():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 
+def _build_analytics_keyboard(page_idx: int, total_pages: int) -> InlineKeyboardMarkup:
+    """Build inline keyboard for analytics pagination.
+
+    page_idx: 0-based current page index
+    total_pages: total number of pages
+    """
+    rows = []
+
+    # Row of page selector buttons
+    page_buttons = []
+    labels = ["🆚 С ПРО", "🔍 Детально", "📈 Метрики"]
+    for i in range(total_pages):
+        if i == page_idx:
+            page_buttons.append(InlineKeyboardButton(f"✅ {labels[i]}", callback_data=f"analytics_page_{i}"))
+        else:
+            page_buttons.append(InlineKeyboardButton(labels[i], callback_data=f"analytics_page_{i}"))
+    rows.append(page_buttons)
+
+    # Row of navigation buttons
+    nav_buttons = []
+    if total_pages > 1:
+        nav_buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data="analytics_prev"))
+        nav_buttons.append(InlineKeyboardButton("➡️ Далее", callback_data="analytics_next"))
+    nav_buttons.append(InlineKeyboardButton("❌ Закрыть", callback_data="analytics_close"))
+    rows.append(nav_buttons)
+
+    return InlineKeyboardMarkup(rows)
+
+
 def format_time(seconds):
     h = seconds // 3600
     m = (seconds % 3600) // 60
@@ -2437,9 +2455,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
                 except Exception:
                     break
-                    await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
-                except Exception:
-                    break
 
         except Exception as e:
             logger.debug(f"Could not send loading message: {e}")
@@ -2550,45 +2565,107 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle button callbacks"""
+    """Handle button callbacks with pagination support for analytics."""
     callback_query = update.callback_query
-    if callback_query:
-        data = callback_query.data
+    if not callback_query:
+        return
+
+    data = callback_query.data
+
+    # Answer immediately for instant feedback
+    await callback_query.answer()
+
+    try:
+        # === LINK HANDLER ===
         if data == "link":
-            await callback_query.answer()
             await link(update, context)
-        elif data == "analytics_pro":
-            from weekly_analytics import generate_report_text
-            stats = context.user_data.get('analytics_stats')
-            role = context.user_data.get('analytics_role')
-            if stats and role:
-                pro_text = generate_report_text(role, stats)["pro"]
-                msg = await context.bot.send_message(
-                    chat_id=callback_query.message.chat.id,
-                    text=pro_text,
+            return
+
+        # === ANALYTICS CLOSE ===
+        if data == "analytics_close":
+            try:
+                await callback_query.message.delete()
+            except Exception as e:
+                logger.debug(f"Could not delete analytics message: {e}")
+            return
+
+        # === ANALYTICS PAGE (analytics_page_N) ===
+        if data and data.startswith("analytics_page_"):
+            page_idx = int(data.split("_")[-1])
+            await _show_analytics_page(callback_query, page_idx, context)
+            return
+
+        # === ANALYTICS NEXT ===
+        if data == "analytics_next":
+            current_page = context.user_data.get('analytics_page', 0)
+            pages = context.user_data.get('analytics_pages', [])
+            if pages:
+                next_page = (current_page + 1) % len(pages)
+                context.user_data['analytics_page'] = next_page
+                await _show_analytics_page(callback_query, next_page, context)
+            return
+
+        # === ANALYTICS PREV ===
+        if data == "analytics_prev":
+            current_page = context.user_data.get('analytics_page', 0)
+            pages = context.user_data.get('analytics_pages', [])
+            if pages:
+                prev_page = (current_page - 1) % len(pages)
+                context.user_data['analytics_page'] = prev_page
+                await _show_analytics_page(callback_query, prev_page, context)
+            return
+
+    except Exception as e:
+        logger.error(f"Error in button_callback: {e}", exc_info=True)
+        await callback_query.answer(text="Ошибка при обработке кнопки", show_alert=True)
+
+
+async def _show_analytics_page(callback_query, page_idx: int, context: ContextTypes.DEFAULT_TYPE):
+    """Edit the existing message to show the requested analytics page."""
+    from weekly_analytics import get_analytics_pages
+
+    pages = context.user_data.get('analytics_pages', [])
+    if not pages:
+        await callback_query.answer(text="Нет данных аналитики. Запросите заново.", show_alert=True)
+        return
+
+    if page_idx < 0 or page_idx >= len(pages):
+        await callback_query.answer(text="Неверная страница.", show_alert=True)
+        return
+
+    # Обновляем текущую страницу в user_data для корректной работы навигации
+    context.user_data['analytics_page'] = page_idx
+
+    page = pages[page_idx]
+    text = page["text"]
+    total_pages = len(pages)
+    keyboard = _build_analytics_keyboard(page_idx, total_pages)
+
+    try:
+        msg = callback_query.message
+        # Try editing caption first (for photo messages), then fall back to text
+        try:
+            if msg.caption is not None:
+                await msg.edit_caption(
+                    caption=text,
+                    reply_markup=keyboard,
                     parse_mode="MarkdownV2"
                 )
-                schedule_delete(context.bot, callback_query.message.chat.id, msg.message_id, 30, context.application.job_queue)
             else:
-                await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
-            await callback_query.answer()
-        elif data == "analytics_detailed":
-            from weekly_analytics import generate_detailed_metrics_table
-            stats = context.user_data.get('analytics_stats')
-            role = context.user_data.get('analytics_role')
-            if stats and role:
-                detailed_text = generate_detailed_metrics_table(role, stats)
-                msg = await context.bot.send_message(
-                    chat_id=callback_query.message.chat.id,
-                    text=detailed_text,
+                await msg.edit_text(
+                    text=text,
+                    reply_markup=keyboard,
                     parse_mode="MarkdownV2"
                 )
-                schedule_delete(context.bot, callback_query.message.chat.id, msg.message_id, 30, context.application.job_queue)
-            else:
-                await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
-            await callback_query.answer()
-        else:
-            await callback_query.answer()
+        except Exception as edit_err:
+            err_str = str(edit_err).lower()
+            if "not modified" in err_str:
+                # Content is the same, no need to edit
+                return
+            raise
+    except Exception as e:
+        logger.error(f"Error editing analytics message: {e}", exc_info=True)
+        await callback_query.answer(text="Не удалось обновить сообщение. Попробуйте запросить аналитику заново.", show_alert=True)
 
 
 async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3602,9 +3679,15 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
         except Exception:
-            pass
-        msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка получения топа MMR", reply_markup=main_menu())
-        schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.application.job_queue)
+            try:
+                msg = await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="❌ Ошибка получения топа MMR",
+                    reply_markup=main_menu()
+                )
+                schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.application.job_queue)
+            except Exception:
+                pass
 
 
 async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
