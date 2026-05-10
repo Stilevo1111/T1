@@ -3262,10 +3262,11 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Всегда показываем позицию пользователя, даже если он не в топе
             user_fissure = user.get('fissure', 0) if user else 0
+            clickable_username = make_clickable(username, update.effective_user.id)
             if user_rank:
-                text += f"\n<b>{get_emoji_num(user_rank)} {username}: {user_fissure:.1f} см</b>"
+                text += f"\n<b>{get_emoji_num(user_rank)} {clickable_username}: {user_fissure:.1f} см</b>"
             else:
-                text += f"\n<b>— {username}: {user_fissure:.1f} см</b>"
+                text += f"\n<b>— {clickable_username}: {user_fissure:.1f} см</b>"
 
         # Add banner and send
         top_banner_url = "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
