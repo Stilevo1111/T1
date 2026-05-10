@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, BACKUP_DATABASE_URL, DATABASE_URL, reset_all_fissure_data, cleanup_left_users
+from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, get_dota_week_rank, BACKUP_DATABASE_URL, DATABASE_URL, reset_all_fissure_data, cleanup_left_users
 from dota_mmr import update_user_mmr
 from database import get_all_users_with_steam, user_cache, update_dota_week_top_cache
 import aiohttp
@@ -3359,6 +3359,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_pos = i
                 break
 
+        # If user not in top 10, get their actual rank
+        if user_pos is None:
+            user_pos = get_dota_week_rank(update.effective_user.id)
+
         # Initialize user position variables
         user_is_in_top = False
         user_week_games = 0
@@ -3401,16 +3405,21 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Build the top MMR text in the requested format (without title)
             lines = []
 
-            # Helper function to format rank tier
-            def format_rank_tier(rt):
-                if not rt or rt < 10:
-                    return "Без ранга"
-                ranks = ["Рекрут", "Страж", "Рыцарь", "Герой", "Легенда", "Властелин", "Божество", "Титан"]
-                tier = min(rt // 10, 8)
-                star = rt % 10
-                if tier == 8:
-                    return ranks[7]  # Титан
-                return f"{ranks[tier - 1]} {star}"
+def number_to_emojis(num: int) -> str:
+    """Преобразует число в последовательность эмодзи-цифр"""
+    emoji_digits = {
+        '0': '0️⃣',
+        '1': '1️⃣',
+        '2': '2️⃣',
+        '3': '3️⃣',
+        '4': '4️⃣',
+        '5': '5️⃣',
+        '6': '6️⃣',
+        '7': '7️⃣',
+        '8': '8️⃣',
+        '9': '9️⃣'
+    }
+    return ''.join(emoji_digits[d] for d in str(num))
 
             for i, player in enumerate(top_users, 1):
                 username = player.get('steam_nickname') or player.get('username') or 'Unknown'

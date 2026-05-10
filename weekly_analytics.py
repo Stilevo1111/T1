@@ -594,22 +594,71 @@ async def generate_weekly_analytics(telegram_id: int):
 # CHART
 # =========================================================
 
-async def create_visual_chart(history: list):
+async def create_visual_chart(history: list, dates: list = None):
 
     impacts = [g["imp"] for g in history]
     n = len(history)
 
     fig = go.Figure()
 
+    # =====================================================
+    # MAIN LINE
+    # =====================================================
+
     fig.add_trace(
         go.Scatter(
+            x=list(range(n)),
             y=impacts,
             mode="lines+markers",
-            line=dict(color="#ff9900", width=4),
+            line=dict(
+                color="#f59e0b",
+                width=6,
+                shape="spline",
+                smoothing=1.1
+            ),
+            marker=dict(
+                size=14,
+                color="#f59e0b",
+                line=dict(
+                    color="white",
+                    width=2
+                )
+            ),
             fill="tozeroy",
-            fillcolor="rgba(255,153,0,0.15)"
+            fillcolor="rgba(245,158,11,0.12)"
         )
     )
+
+    # =====================================================
+    # PRE-CALCULATIONS FOR ASPECT RATIO (circles, not ovals)
+    # =====================================================
+
+    y_min = min(impacts) if impacts else 0
+    y_max = max(impacts) if impacts else 1
+    padding = 0.25
+
+    # Data ranges
+    x_range = n if n > 1 else 1
+    y_range = (y_max + padding) - (max(0, y_min - padding))
+
+    # Plot area in pixels (canvas minus margins)
+    plot_width_px = 1200 - 80 - 80   # left/right margins 80px
+    plot_height_px = 800 - 80 - 80   # top/bottom margins 80px
+
+    # Data units per pixel
+    x_per_pixel = x_range / plot_width_px
+    y_per_pixel = y_range / plot_height_px
+
+    # Desired circle radius on screen (pixels)
+    desired_radius_px = 28
+
+    # Convert to data coordinates
+    radius_x = desired_radius_px * x_per_pixel
+    radius_y = desired_radius_px * y_per_pixel
+
+    # =====================================================
+    # HERO ICONS WITH CIRCLES
+    # =====================================================
 
     for i, g in enumerate(history):
 
@@ -619,6 +668,20 @@ async def create_visual_chart(history: list):
 
             if img:
 
+                # Circle background with orange border
+                fig.add_shape(
+                    type="circle",
+                    xref="x",
+                    yref="y",
+                    x0=i - radius_x,
+                    y0=g["imp"] - radius_y,
+                    x1=i + radius_x,
+                    y1=g["imp"] + radius_y,
+                    line=dict(color="#f59e0b", width=3),
+                    fillcolor="rgba(17,17,17,0.9)"
+                )
+
+                # Hero icon (slightly larger than circle interior)
                 fig.add_layout_image(
                     dict(
                         source=img,
@@ -626,74 +689,55 @@ async def create_visual_chart(history: list):
                         yref="y",
                         x=i,
                         y=g["imp"],
-                        sizex=0.6,
-                        sizey=0.6,
+                        sizex=radius_x * 1.2,
+                        sizey=radius_y * 1.2,
                         xanchor="center",
-                        yanchor="middle"
+                        yanchor="middle",
+                        layer="above"
                     )
                 )
-
-                # Circle around icon based on performance
-                imp_val = g["imp"]
-                if imp_val >= 1.0:
-                    color = "rgba(34, 197, 94, 0.9)"   # green
-                elif imp_val < 0.8:
-                    color = "rgba(239, 68, 68, 0.9)"   # red
-                else:
-                    color = None
-
-                if color:
-                    radius = 0.3  # tight around 0.6-sized icon
-                    fig.add_shape(
-                        type="circle",
-                        xref="x",
-                        yref="y",
-                        x0=i - radius,
-                        y0=imp_val - radius,
-                        x1=i + radius,
-                        y1=imp_val + radius,
-                        line=dict(color=color, width=2),
-                        fillcolor="rgba(0,0,0,0)"
-                    )
 
         except Exception:
             logger.exception("Hero image failed")
 
-    # Y-axis range with padding
-    y_min = min(impacts) if impacts else 0
-    y_max = max(impacts) if impacts else 1
-    y_pad = (y_max - y_min) * 0.15 if y_max > y_min else 0.2
-    y_range = [max(0, y_min - y_pad), y_max + y_pad]
-
-    # X-axis: simple numbers 1..n
-    x_tick_vals = list(range(n))
-    x_tick_text = [str(i+1) for i in range(n)]
+    # =====================================================
+    # LAYOUT
+    # =====================================================
 
     fig.update_layout(
+        width=1200,
+        height=800,
         template="plotly_dark",
-        paper_bgcolor="#18181b",
-        plot_bgcolor="#18181b",
-        margin=dict(t=40, b=60, l=60, r=60),
-        height=400,
-        width=800,
+        paper_bgcolor="#111111",
+        plot_bgcolor="#111111",
         showlegend=False,
+        margin=dict(t=40, b=80, l=80, r=80),
         xaxis=dict(
-            range=[-0.5, max(9.5, n - 0.5)],
+            range=[-0.5, n - 0.5],
             tickmode="array",
-            tickvals=x_tick_vals,
-            ticktext=x_tick_text,
-            tickfont=dict(size=12)
+            tickvals=list(range(n)),
+            ticktext=[str(i+1) for i in range(n)],
+            showgrid=False,
+            tickfont=dict(size=16)
         ),
         yaxis=dict(
-            range=y_range,
-            gridcolor='rgba(255,255,255,0.05)',
-            zeroline=False
+            range=[max(0, y_min - padding), y_max + padding],
+            showgrid=True,
+            gridcolor="rgba(255,255,255,0.06)",
+            zeroline=False,
+            tickfont=dict(size=15)
         )
     )
 
-    img_bytes = fig.to_image(
+    # =====================================================
+    # EXPORT (high-res)
+    # =====================================================
+
+    img_bytes = await asyncio.to_thread(
+        fig.to_image,
         format="png",
-        engine="kaleido"
+        engine="kaleido",
+        scale=2
     )
 
     img = Image.open(io.BytesIO(img_bytes))
