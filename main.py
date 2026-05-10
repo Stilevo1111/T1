@@ -1230,7 +1230,7 @@ async def alternate_digest_job(context):
                 else:
                     parts.append("🍀—")
 
-                text = f"<b>{chr(10).join(parts)} подряд</b>\n\n🗿 Фиссура Дайджест."
+                text = f"<b>{chr(10).join(parts)}</b>\n\n🗿 Фиссура Дайджест."
 
             else:
                 # Dota-дайджест
@@ -3223,6 +3223,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         top_users = get_fissure_top(10)
         user_rank = get_fissure_rank(update.effective_user.id)
         user = get_user(update.effective_user.id, update.effective_user.username)
+        username = update.effective_user.username or update.effective_user.first_name
 
         if not top_users:
             text = "😶 Пока нет игроков. Будь первым!"
