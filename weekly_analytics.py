@@ -371,6 +371,50 @@ async def detect_role_from_history(matches: list) -> str:
     return final_role
 
 # =========================================================
+# MATCH DETAILS
+# =========================================================
+
+async def get_player_match_details(match_id: int, account_id: int) -> dict:
+    """Fetch detailed match data and extract player's stats"""
+    try:
+        url = f"{OPENDOTA_API_URL}/matches/{match_id}"
+        match_data = await _api_get_async(url, timeout=10)
+
+        if not match_data or "players" not in match_data:
+            return {}
+
+        # Find the player's data in the match
+        for player in match_data["players"]:
+            if player.get("account_id") == account_id:
+                return {
+                    "gold_per_min": player.get("gold_per_min", 0),
+                    "xp_per_min": player.get("xp_per_min", 0),
+                    "last_hits": player.get("last_hits", 0),
+                    "denies": player.get("denies", 0),
+                    "hero_damage": player.get("hero_damage", 0),
+                    "tower_damage": player.get("tower_damage", 0),
+                    "actions_per_min": player.get("actions_per_min", 0),
+                    "kills": player.get("kills", 0),
+                    "deaths": player.get("deaths", 0),
+                    "assists": player.get("assists", 0),
+                    "win": 1 if player.get("win", 0) == 1 else 0,
+                    "lane_role": player.get("lane_role", 0),
+                    "observer_uses": player.get("observer_uses", 0),
+                    "sentry_uses": player.get("sentry_uses", 0),
+                    "stuns": player.get("stuns", 0.0),
+                    "hero_healing": player.get("hero_healing", 0),
+                    "creeps_stacked": player.get("creeps_stacked", 0),
+                    "hero_id": player.get("hero_id", 0),
+                    "start_time": match_data.get("start_time", 0)
+                }
+
+        return {}
+
+    except Exception as e:
+        logger.exception(f"Failed to get match details for {match_id}")
+        return {}
+
+# =========================================================
 # MATCHES
 # =========================================================
 
@@ -415,7 +459,10 @@ async def get_weekly_matches(telegram_id: int):
         )
 
         if match_time >= week_start:
-            weekly_matches.append(m)
+            # Fetch detailed match data for the player
+            match_details = await get_player_match_details(m["match_id"], account_id)
+            if match_details:
+                weekly_matches.append(match_details)
 
         if len(weekly_matches) >= 10:
             break
