@@ -353,7 +353,7 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
         f"{'YOU':<11}"
         f"{user_stats['wr']:>3}% "
         f"{int(user_stats['lh']):>4} "
-        f"{int(user_stats['deny']):3} "
+        f"{int(user_stats['deny']):>3} "
         f"{int(user_stats['gpm']):>5} "
         f"{user_stats['kda']}\n"
     )
@@ -616,32 +616,32 @@ async def create_visual_chart(history: list):
                         yref="y",
                         x=i,
                         y=g["imp"],
-                        sizex=0.5,
-                        sizey=0.5,
+                        sizex=0.4,
+                        sizey=0.4,
                         xanchor="center",
                         yanchor="middle"
                     )
                 )
 
                 # Circle around icon based on performance
-                imp = g["imp"]
-                if imp >= 1.0:
-                    color = "rgba(34, 197, 94, 0.9)"  # green
-                elif imp < 0.8:
-                    color = "rgba(239, 68, 68, 0.9)"  # red
+                imp_val = g["imp"]
+                if imp_val >= 1.0:
+                    color = "rgba(34, 197, 94, 0.9)"   # green
+                elif imp_val < 0.8:
+                    color = "rgba(239, 68, 68, 0.9)"   # red
                 else:
                     color = None
 
                 if color:
-                    radius = 0.35  # radius around the 0.5-sized icon
+                    radius = 0.28
                     fig.add_shape(
                         type="circle",
                         xref="x",
                         yref="y",
                         x0=i - radius,
-                        y0=imp - radius,
+                        y0=imp_val - radius,
                         x1=i + radius,
-                        y1=imp + radius,
+                        y1=imp_val + radius,
                         line=dict(color=color, width=3),
                         fillcolor="rgba(0,0,0,0)"
                     )
@@ -653,10 +653,11 @@ async def create_visual_chart(history: list):
         template="plotly_dark",
         paper_bgcolor="#18181b",
         plot_bgcolor="#18181b",
-        margin=dict(t=40, b=20, l=40, r=40),
+        margin=dict(t=40, b=40, l=60, r=60),
         height=400,
         width=800,
-        showlegend=False
+        showlegend=False,
+        xaxis=dict(range=[-0.5, max(9.5, len(history) - 0.5)])
     )
 
     img_bytes = fig.to_image(
