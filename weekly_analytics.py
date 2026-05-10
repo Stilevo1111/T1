@@ -759,6 +759,7 @@ async def create_visual_chart(history):
         matplotlib.use('Agg')  # Use non-GUI backend
         import matplotlib.pyplot as plt
         import matplotlib.patheffects as pe
+        import numpy as np
     except ImportError:
         logger.warning("matplotlib not available, skipping chart generation")
         return None
@@ -773,111 +774,155 @@ async def create_visual_chart(history):
 
     x = list(range(1, len(impacts) + 1))
 
-    avg = sum(impacts) / len(impacts)
+    # Calculate average
+    avg_value = sum(impacts) / len(impacts)
 
+    # Create figure with specified dimensions (1200x800)
     fig, ax = plt.subplots(
-        figsize=(12, 7),
-        dpi=140
+        figsize=(12, 8),  # 1200x800 at 100 DPI
+        dpi=100
     )
 
-    fig.patch.set_facecolor("#050505")
-    ax.set_facecolor("#050505")
+    # Create gradient background from dark green to brown
+    gradient = np.linspace(0, 1, 256).reshape(1, -1)
+    gradient = np.vstack((gradient, gradient))
 
-    # =========================
-    # RED/GREEN ZONES
-    # =========================
+    from matplotlib.colors import LinearSegmentedColormap
+    cmap = LinearSegmentedColormap.from_list("custom", ["#0a1f0f", "#2c1f14"])
+    ax.imshow(gradient, extent=[0, 1, 0, 1], aspect='auto',
+              cmap=cmap, alpha=1.0, zorder=-10,
+              transform=ax.transAxes)
 
-    ax.axhspan(
-        0,
-        avg,
-        color="#3a1010",
-        alpha=0.45
-    )
+    fig.patch.set_facecolor("#0a1f0f")
+    ax.set_facecolor("none")  # Transparent to show gradient
 
-    ax.axhspan(
-        avg,
-        2,
-        color="#103a1f",
-        alpha=0.45
-    )
+    # Fill area under the curve with semi-transparent brown
+    ax.fill_between(x, impacts, 0, color="#8B4513", alpha=0.3)
 
-    # =========================
-    # AVG LINE
-    # =========================
-
-    ax.axhline(
-        avg,
-        linestyle="--",
-        linewidth=2,
-        color="white",
-        alpha=0.3
-    )
-
-    # =========================
-    # MAIN LINE
-    # =========================
-
+    # Plot the main line with glow effect
     line = ax.plot(
         x,
         impacts,
-        linewidth=5,
-        color="#ffb000"
+        linewidth=6,
+        color="#f4c430",
+        solid_capstyle='round'
     )[0]
 
+    # Add glow effect
     line.set_path_effects([
-        pe.Stroke(
-            linewidth=9,
-            foreground="orange",
-            alpha=0.25
-        ),
-        pe.Normal()
+        matplotlib.patheffects.Stroke(linewidth=10, foreground="#f4c430", alpha=0.3),
+        matplotlib.patheffects.Normal()
     ])
 
-    # =========================
-    # HERO ICONS
-    # =========================
+    # Add dashed average line
+    ax.axhline(
+        y=avg_value,
+        color="#CCCCCC",
+        linestyle="--",
+        linewidth=2,
+        alpha=0.7
+    )
 
-    for idx, g in enumerate(history):
+    # Add average text
+    ax.text(
+        len(x) - 0.5, avg_value + 0.05,
+        f"AVG {avg_value:.2f}",
+        color="#CCCCCC",
+        fontsize=12,
+        fontweight="bold",
+        ha="right",
+        va="bottom",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="#1a1a1a", alpha=0.8)
+    )
 
-        hero_img = await get_hero_icon(
-            g["hero_id"]
-        )
+    # Get hero icons
+    tasks = [
+        get_hero_icon(g["hero_id"])
+        for g in history
+    ]
 
-        if not hero_img:
+    icons = await asyncio.gather(*tasks)
+
+    # Color mapping based on performance relative to average
+    for idx, icon in enumerate(icons):
+
+        if not icon:
             continue
 
-        imp = g["imp"]
+        imp = history[idx]["imp"]
 
-        img = hero_img.resize((64, 64))
+        # Determine border color based on performance
+        if imp > avg_value + 0.2:  # Significantly above average - green
+            border_color = "#00FF00"
+        elif imp < avg_value - 0.2:  # Significantly below average - red
+            border_color = "#FF0000"
+        else:  # Around average - yellow
+            border_color = "#FFFF00"
+
+        # Special case for point 10 (last point) - always red
+        if idx == len(icons) - 1:
+            border_color = "#FF0000"
+
+        img = icon.resize((64, 64))
+
+        # Create circular mask
+        from PIL import ImageDraw
+        mask = Image.new("L", (64, 64), 0)
+        draw = ImageDraw.Draw(mask)
+        draw.ellipse((0, 0, 64, 64), fill=255)
+
+        # Create circular icon with border
+        bordered_icon = Image.new("RGBA", (72, 72), (0, 0, 0, 0))
+        icon_draw = ImageDraw.Draw(bordered_icon)
+
+        # Draw border circle
+        icon_draw.ellipse((0, 0, 72, 72), outline=border_color, width=3)
+        # Draw inner circle for icon
+        icon_draw.ellipse((4, 4, 68, 68), fill=(0, 0, 0, 255))
+
+        # Paste icon with circular mask
+        bordered_icon.paste(img, (4, 4), mask)
+
+        # Add glow effect to border
+        glow_icon = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
+        glow_draw = ImageDraw.Draw(glow_icon)
+        glow_draw.ellipse((0, 0, 80, 80), outline=border_color, width=1)
+        glow_draw.ellipse((1, 1, 79, 79), outline=border_color, width=1)
+
+        # Composite glow under main icon
+        final_icon = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
+        final_icon.paste(glow_icon, (0, 0))
+        final_icon.paste(bordered_icon, (4, 4), bordered_icon)
 
         ax.imshow(
-            img,
+            final_icon,
             extent=(
-                idx + 1 - 0.18,
-                idx + 1 + 0.18,
+                idx + 1 - 0.2,
+                idx + 1 + 0.2,
                 imp - 0.08,
                 imp + 0.08
             ),
-            zorder=10
+            zorder=15
         )
 
-    # =========================
-    # STYLE
-    # =========================
-
+    # Configure axes
     ax.set_xlim(0.5, len(x) + 0.5)
+    ax.set_ylim(0, max(2.0, max(impacts) + 0.2))
 
-    ax.set_ylim(
-        0,
-        max(1.6, max(impacts) + 0.2)
-    )
+    # Set ticks and labels with clean, modern font
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(i) for i in x], color="#CCCCCC", fontsize=12, fontweight="bold", fontfamily='sans-serif')
+    ax.set_yticks([0, 0.5, 1.0, 1.5, 2.0])
+    ax.set_yticklabels(["0", "0.5", "1.0", "1.5", "2.0"], color="#CCCCCC", fontsize=12, fontweight="bold", fontfamily='sans-serif')
 
-    ax.set_xticks([])
-    ax.set_yticks([])
+    # Add grid
+    ax.grid(axis='y', color="#333333", linestyle="-", linewidth=0.5, alpha=0.3)
 
+    # Remove spines for clean look
     for spine in ax.spines.values():
         spine.set_visible(False)
 
+    # Set layout
     plt.tight_layout()
 
     buf = io.BytesIO()
@@ -886,7 +931,8 @@ async def create_visual_chart(history):
         buf,
         format="png",
         bbox_inches="tight",
-        facecolor=fig.get_facecolor()
+        facecolor=fig.get_facecolor(),
+        dpi=100
     )
 
     plt.close(fig)
