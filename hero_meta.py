@@ -221,7 +221,6 @@ def _build_grid(hero_stats):
         grid[pos] = heroes[:5]
 
     return grid
-    return grid
 
 
 async def create_infographic(hero_stats):
