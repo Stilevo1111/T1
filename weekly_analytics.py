@@ -6,14 +6,13 @@ import plotly.graph_objects as go
 from PIL import Image, ImageDraw, ImageFont
 import io
 import os
+import base64
 from datetime import datetime, timezone, timedelta
 from dota_mmr import steam64_to_account_id, OPENDOTA_API_URL, _api_get_async
 from database import get_user
 import logging
 
 logger = logging.getLogger(__name__)
-
-# На Render локальный кэш не сохраняется, поэтому загружаем напрямую из CDN
 
 # ПОЛНАЯ БАЗА ДАННЫХ РОЛЕЙ И ПРО-ИГРОКОВ
 PRO_DB = {
@@ -96,9 +95,31 @@ def calculate_imp(gpm: float, kda: float, utility: float, apm: float, role: str)
     imp = (p_gpm * weights["gpm"]) + (p_kda * weights["kda"]) + (p_utility * weights["utility"]) + (p_apm * weights["apm"])
     return round(imp, 2)
 
-def get_hero_icon(hero_id: int):
-    """Получение URL иконки героя (без кэша на Render)"""
-    return f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{hero_id}.png"
+def get_hero_icon(hero_id: int) -> Image.Image | None:
+    """Получение иконки героя с кэшем в config (persistent на Render)"""
+    from main import get_config, set_config
+    cache_key = f"icon_{hero_id}"
+    cached = get_config(cache_key)
+    if cached:
+        try:
+            data = base64.b64decode(cached)
+            return Image.open(io.BytesIO(data))
+        except Exception as e:
+            logger.warning(f"Failed to decode cached icon {hero_id}: {e}")
+
+    # Загрузить из CDN
+    url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{hero_id}.png"
+    try:
+        resp = requests.get(url, timeout=5)
+        if resp.status_code == 200:
+            data = resp.content
+            # Сохранить в кэш
+            encoded = base64.b64encode(data).decode()
+            set_config(cache_key, encoded)
+            return Image.open(io.BytesIO(data))
+    except Exception as e:
+        logger.error(f"Failed to load icon {hero_id}: {e}")
+    return None
 
 async def get_weekly_matches(telegram_id: int) -> list[dict]:
     """Получает 10 последних матчей за неделю"""
@@ -253,11 +274,12 @@ def create_visual_chart(history: list):
     ))
 
     for i, g in enumerate(history):
-        url = get_hero_icon(g['hero_id'])
-        fig.add_layout_image(dict(
-            source=url, xref="x", yref="y",
-            x=i, y=g['imp'], sizex=0.5, sizey=0.5, xanchor="center", yanchor="middle"
-        ))
+        img = get_hero_icon(g['hero_id'])
+        if img:
+            fig.add_layout_image(dict(
+                source=img, xref="x", yref="y",
+                x=i, y=g['imp'], sizex=0.5, sizey=0.5, xanchor="center", yanchor="middle"
+            ))
 
     fig.update_layout(
         template="plotly_dark", paper_bgcolor='#18181b', plot_bgcolor='#18181b',
