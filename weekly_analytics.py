@@ -208,7 +208,7 @@ async def get_weekly_matches(telegram_id: int) -> list[dict]:
     url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
     params = {"limit": 50, "sort": "-start_time"}  # Новые первыми
 
-    matches = await _api_get_async(url, params)
+    matches = await _api_get_async(url, params, timeout=10)  # Увеличить timeout
     if not matches:
         return []
 

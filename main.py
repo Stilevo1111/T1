@@ -402,11 +402,17 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="MarkdownV2"
             )
         else:
-            await update.message.reply_text("Недостаточно данных для анализа (минимум 5 матчей за неделю).")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="Недостаточно данных для анализа (минимум 5 матчей за неделю)."
+            )
 
     except Exception as e:
         logger.error(f"Error in analyze_command: {e}")
-        await update.message.reply_text(f"Ошибка анализа: {e}")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"Ошибка анализа: {e}"
+        )
 
 
 def _get_player_stats_wrapper(steam_id, use_cache):

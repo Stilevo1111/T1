@@ -149,10 +149,9 @@ async def _check_rate_limit_async():
     _async_rate_limit["last_request"] = time.time()
 
 
-async def _api_get_async(url: str, params: dict = None, use_session: bool = True) -> dict:
+async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 5) -> dict:
     """Асинхронная функция для API-запросов с переиспользованием сессии"""
     await _check_rate_limit_async()
-    timeout = 5
     try:
         if use_session:
             from database import get_aiohttp_session
