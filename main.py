@@ -393,7 +393,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = await generate_weekly_analytics(update.effective_user.id)
 
         if data:
-            # Сначала график с подписью
+            # Send chart photo
             photo_buf = io.BytesIO(data["image"])
             photo_buf.name = "weekly_analytics.png"
             await context.bot.send_photo(
@@ -401,11 +401,21 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 photo=photo_buf,
                 caption="📊 График IMP по 10 матчам\\. PRO Target \\= 1\\.0"
             )
-            # Потом текст с таблицами
+
+            # Store table texts in user_data for callbacks
+            context.user_data['analytics_pro'] = data["pro_text"]
+            context.user_data['analytics_detailed'] = data["detailed_text"]
+
+            # Send message with inline buttons
+            keyboard = [
+                [InlineKeyboardButton("📊 Сравнение с PRO", callback_data="analytics_pro")],
+                [InlineKeyboardButton("🔍 Детальное сравнение", callback_data="analytics_detailed")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=data["text"],
-                parse_mode="MarkdownV2"
+                text="Выберите раздел аналитики:",
+                reply_markup=reply_markup
             )
         else:
             await context.bot.send_message(
@@ -2481,6 +2491,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if data == "link":
             await callback_query.answer()
             await link(update, context)
+        elif data == "analytics_pro":
+            pro_text = context.user_data.get('analytics_pro')
+            if pro_text:
+                await callback_query.message.reply_text(pro_text, parse_mode="MarkdownV2")
+            else:
+                await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
+            await callback_query.answer()
+        elif data == "analytics_detailed":
+            detailed_text = context.user_data.get('analytics_detailed')
+            if detailed_text:
+                await callback_query.message.reply_text(detailed_text, parse_mode="MarkdownV2")
+            else:
+                await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
+            await callback_query.answer()
         else:
             await callback_query.answer()
 

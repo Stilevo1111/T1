@@ -330,16 +330,16 @@ async def get_weekly_matches(telegram_id: int):
 # REPORT TEXT
 # =========================================================
 
-def generate_report_text(role: str, user_stats: dict):
+def generate_report_text(role: str, user_stats: dict) -> dict:
+    """Генерация текстовых таблиц в стиле референса"""
 
     db = PRO_DB.get(role, PRO_DB["CARRY"])
 
+    # Таблица 1: Сравнение с PRO игроками
     t1 = "```\n"
     t1 += "PLAYER       WR   LH  DN   GPM   KDA\n"
     t1 += "--------------------------------------\n"
-
     for name, s in db["players"].items():
-
         t1 += (
             f"{name:<11}"
             f"{s['wr']:>3}% "
@@ -348,9 +348,7 @@ def generate_report_text(role: str, user_stats: dict):
             f"{s['gpm']:>5} "
             f"{s['kda']}\n"
         )
-
     t1 += "--------------------------------------\n"
-
     t1 += (
         f"{'YOU':<11}"
         f"{user_stats['wr']:>3}% "
@@ -359,12 +357,38 @@ def generate_report_text(role: str, user_stats: dict):
         f"{int(user_stats['gpm']):>5} "
         f"{user_stats['kda']}\n"
     )
-
     t1 += "```"
 
-    # Escape parentheses for MarkdownV2
-    header = f"📊 ANALYTICS \\({role}\\)"
-    return f"{header}\n\n{t1}"
+    # Таблица 2: Детальное сравнение
+    t2 = "```\n"
+    t2 += "Метрика          Ты      PRO      Δ \n"
+    t2 += "------------------------------------\n"
+    bench = db["benchmarks"]
+    metrics = [
+        ("LH@10", user_stats['lh10'], bench['lh10']),
+        ("Denies@10", user_stats['deny10'], bench['deny10']),
+        ("GPM", user_stats['gpm'], bench['gpm']),
+        ("XPM", user_stats['xpm'], bench['xpm']),
+        ("Deaths", user_stats['deaths'], bench['deaths']),
+        ("Hero DMG", user_stats['h_dmg'], bench['h_dmg']),
+        ("Tower DMG", user_stats['t_dmg'], bench['t_dmg']),
+        ("Utility", user_stats['util'], bench['utility']),
+        ("APM", user_stats['apm'], bench['apm'])
+    ]
+    for label, u, p in metrics:
+        diff = u - p
+        is_bad = diff > 0 if "Deaths" in label else diff < 0
+        arrow = "↓" if is_bad else "↑"
+        u_str = f"{u:.1f}k" if "DMG" in label else f"{u:.1f}"
+        p_str = f"{p:.1f}k" if "DMG" in label else f"{p:.1f}"
+        t2 += f"{label:<14} {u_str:>6} {p_str:>8} {arrow:>4}\n"
+    t2 += "```"
+
+    header_pro = f"📊 ANALYTICS \\({role}\\)"
+    pro_full = f"{header_pro}\n\n{t1}"
+    detailed_full = f"🔍 Детальное сравнение\n{t2}"
+
+    return {"pro": pro_full, "detailed": detailed_full}
 
 # =========================================================
 # MAIN ANALYTICS
@@ -473,17 +497,19 @@ async def generate_weekly_analytics(telegram_id: int):
         "apm": avg_apm
     }
 
-    text = generate_report_text(role, user_stats)
+    # Генерация таблиц
+    tables = generate_report_text(role, user_stats)
+    pro_text = tables["pro"]
+    detailed_text = tables["detailed"]
 
-    try:
-        chart = await create_visual_chart(game_history)
-    except Exception:
-        logger.exception("Chart generation failed")
-        chart = None
+    # График
+    chart_image = await create_visual_chart(game_history)
 
     return {
-        "text": text,
-        "image": chart
+        "image": chart_image,
+        "pro_text": pro_text,
+        "detailed_text": detailed_text,
+        "role": role
     }
 
 # =========================================================
