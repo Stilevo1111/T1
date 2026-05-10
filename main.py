@@ -2493,7 +2493,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             role = context.user_data.get('analytics_role')
             if stats and role:
                 pro_text = generate_report_text(role, stats)
-                await callback_query.message.reply_text(pro_text, parse_mode="MarkdownV2")
+                msg = await callback_query.message.reply_text(pro_text, parse_mode="MarkdownV2")
+                schedule_delete(context.bot, callback_query.message.chat.id, msg.message_id, 30, context.application.job_queue)
             else:
                 await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
             await callback_query.answer()
@@ -2503,7 +2504,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             role = context.user_data.get('analytics_role')
             if stats and role:
                 detailed_text = generate_detailed_metrics_table(role, stats)
-                await callback_query.message.reply_text(detailed_text, parse_mode="MarkdownV2")
+                msg = await callback_query.message.reply_text(detailed_text, parse_mode="MarkdownV2")
+                schedule_delete(context.bot, callback_query.message.chat.id, msg.message_id, 30, context.application.job_queue)
             else:
                 await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
             await callback_query.answer()
@@ -3743,13 +3745,19 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
         elif button_found == "🏆 Топ MMR":
             await topmmr(update, context)
         elif button_found == "🔎 Аналитика":
-            # Send loading message (will stay until analytics is sent)
-            await context.bot.send_message(
+            # Send loading message
+            loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text="⏳ Провожу исследования..."
             )
-            # Call analyze (it will send its own message after this)
+            # Call analyze (it will send its own message)
             await analyze_command(update, context)
+            # Delete loading message after analytics is sent
+            await asyncio.sleep(1)
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception:
+                pass
         elif button_found == "🔑 Привязать Аккаунт":
             await link(update, context)
 
