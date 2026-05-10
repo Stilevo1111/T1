@@ -740,7 +740,7 @@ async def generate_weekly_analytics(telegram_id: int):
         db = Database()
         db.execute_query(
             "UPDATE users SET analytics_cache = ?, analytics_updated_at = ? WHERE telegram_id = ?",
-            (cache_data, datetime.now(timezone.utc), telegram_id)
+            (cache_data, datetime.now(timezone.utc).isoformat(), telegram_id)
         )
         logger.info(f"Saved analytics cache for {telegram_id}")
     except Exception as e:
