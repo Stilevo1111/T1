@@ -570,9 +570,6 @@ async def create_visual_chart(history: list):
     )
 
     out = io.BytesIO()
-
     img.save(out, format="PNG")
-
     out.seek(0)
-
-    return out
+    return out.getvalue()
