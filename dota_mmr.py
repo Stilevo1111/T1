@@ -949,7 +949,38 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
             logger.info(f"Player stats result: {stats is not None}")
 
             if not stats:
-                return {"success": False, "message": "❌ Игрок не найден или профиль приватный\n\n💡 Причины:\n• Профиль закрыт для публики\n• Мало сыгранных матчей\n• Проблемы с API OpenDota\n\nПопробуйте позже или используйте никнейм"}
+                # Try to verify SteamID exists via Steam API or allow placeholder linking
+                # This handles cases where profile is private but SteamID is valid
+                try:
+                    from database import get_user_by_steam_id
+                    existing_user = get_user_by_steam_id(steam_id)
+                    if existing_user and existing_user.get('telegram_id') == telegram_id:
+                        return {"success": True, "message": "✅ Аккаунт уже привязан к вам"}
+                    if existing_user:
+                        return {"success": False, "message": f"❌ Этот Steam аккаунт уже привязан к другому пользователю"}
+                except Exception:
+                    pass
+
+                # Allow linking with placeholder data - stats will be fetched when profile becomes public
+                stats = {
+                    "nickname": "Неизвестный игрок",
+                    "avatar": None,
+                    "mmr": 0,
+                    "rank_tier": 0,
+                    "wins": 0,
+                    "losses": 0,
+                    "winrate": 0.0
+                }
+                update_user_fields_batch(telegram_id, {
+                    "steam_id": steam_id,
+                    "steam_nickname": "Неизвестный игрок",
+                    "mmr": 0,
+                    "rank_tier": 0,
+                    "wins": 0,
+                    "losses": 0,
+                    "week_start_date": datetime.now(timezone.utc).date().isoformat()
+                })
+                return {"success": True, "message": "✅ Аккаунт привязан! Статистика будет доступна, когда профиль станет публичным (Steam → Settings → Privacy → Game Details → Public)"}
         else:
             # иначе ищем по никнейму через OpenDota
             logger.info(f"Searching player by nickname: {identifier}")

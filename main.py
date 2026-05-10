@@ -380,15 +380,26 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = user_obj.username or user_obj.first_name
     chat_id = update.message.chat_id
 
-    # Delete user message in groups
-    if update.message.chat.type in ['group', 'supergroup', 'channel']:
-        if await bot_can_delete(context.bot, chat_id):
+    # Try to get chat_type safely
+    chat_type = 'private'
+    if update.message and update.message.chat:
+        chat_type = update.message.chat.type
+
+    # Delete user message only in groups/channels
+    if chat_type in ['group', 'supergroup', 'channel']:
+        if update.message and await bot_can_delete(context.bot, chat_id):
             try:
                 await context.bot.delete_message(chat_id, update.message.message_id)
-            except Exception as e:
-                logger.debug(f"Could not delete user message: {e}")
+            except Exception:
+                pass
 
     try:
+        # Delete previous bot message before sending new one
+        try:
+            await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+        except Exception as e:
+            logger.debug(f"Could not delete last bot message: {e}")
+
         # Send loading message
         loading_msg = await context.bot.send_message(
             chat_id=chat_id,
@@ -403,6 +414,12 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['analytics_stats'] = data.get('stats')
             context.user_data['analytics_role'] = data.get('role')
 
+        # Delete loading message
+        try:
+            await context.bot.delete_message(chat_id, loading_msg.message_id)
+        except Exception as e:
+            logger.debug(f"Could not delete loading message: {e}")
+
         if data and data.get("image"):
             # Send analytics with chart
             photo_buf = io.BytesIO(data["image"])
@@ -416,7 +433,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
-            await context.bot.send_photo(
+            result_msg = await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo_buf,
                 caption="🧠 Импакт в 10 последних матчах",
@@ -444,26 +461,40 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
-            await context.bot.send_message(
+            result_msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text=text,
                 reply_markup=reply_markup
             )
         else:
             # No analytics data available
-            msg = await context.bot.send_message(
+            result_msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text="❌ Недостаточно данных для аналитики. Сыграйте больше матчей за неделю."
             )
-            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
 
+        # Track this message for future deletion
+        set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+        update_last_message_id(update.effective_user.id, result_msg.message_id)
+
+        # Small delay to ensure message is visible
+        await asyncio.sleep(0.1)
     except Exception as e:
         logger.error(f"Error in analyze_command: {e}")
+        # Delete previous bot message before sending error
+        try:
+            await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+        except Exception:
+            pass
+
         msg = await context.bot.send_message(
             chat_id=chat_id,
             text=f"Ошибка анализа: {e}"
         )
+        set_last_bot_message(chat_id, update.effective_user.id, msg.message_id)
         schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+        update_last_message_id(update.effective_user.id, msg.message_id)
 
 
 def _get_player_stats_wrapper(steam_id, use_cache):

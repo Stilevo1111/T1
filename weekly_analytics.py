@@ -786,27 +786,43 @@ async def create_visual_chart(history):
 
     # Create figure with specified dimensions (1200x800)
     fig, ax = plt.subplots(
-        figsize=(12, 8),  # 1200x800 at 100 DPI
+        figsize=(15, 10),  # Increased size for better proportions
         dpi=100
     )
 
     # Load custom background image
     bg_loaded = False
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://i.ibb.co/39KgbrCY/photo-2026-05-10-21-24-42.png", timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status == 200:
-                    bg_data = await resp.read()
-                    bg_image = Image.open(io.BytesIO(bg_data)).convert("RGBA").resize((1200, 800), Image.Resampling.LANCZOS)
-                    # Cover full axes area
-                    ax.imshow(bg_image, extent=[0, 1, 0, 1], aspect='auto', zorder=-10, transform=ax.transAxes)
-                    fig.patch.set_facecolor("#0a1f0f")
-                    ax.set_facecolor("none")
-                    bg_loaded = True
-                    logger.info("Custom background image loaded successfully")
-                else:
-                    logger.warning(f"Background image HTTP {resp.status}")
-                    raise Exception(f"HTTP {resp.status}")
+        # Try multiple URLs in case one fails
+        background_urls = [
+            "https://i.ibb.co/39KgbrCY/photo-2026-05-10-21-24-42.png",
+            "https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png",  # Fallback from dota_mmr.py
+            "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"  # Another fallback
+        ]
+
+        for url in background_urls:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        if resp.status == 200:
+                            bg_data = await resp.read()
+                            bg_image = Image.open(io.BytesIO(bg_data)).convert("RGBA").resize((1500, 1000), Image.LANCZOS)
+                            # Cover full axes area
+                            ax.imshow(bg_image, extent=[0, 1, 0, 1], aspect='auto', zorder=-10, transform=ax.transAxes)
+                            fig.patch.set_facecolor("#0a1f0f")
+                            ax.set_facecolor("none")
+                            bg_loaded = True
+                            logger.info(f"Custom background image loaded successfully from {url}")
+                            break
+                        else:
+                            logger.warning(f"Background image HTTP {resp.status} for {url}")
+            except Exception as e:
+                logger.warning(f"Failed to load background from {url}: {e}")
+                continue
+
+        if not bg_loaded:
+            raise Exception("All background URLs failed")
+
     except Exception as e:
         logger.warning(f"Failed to load custom background, using gradient: {e}")
         bg_loaded = False
