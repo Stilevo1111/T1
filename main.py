@@ -3242,16 +3242,22 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not delete user message: {e}")
 
     try:
-        from database import get_dota_mmr_top
+        from database import get_dota_week_top_from_db, get_dota_mmr_top
         user = get_user(update.effective_user.id)
 
         # Banner URL
         topmmr_banner_url = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
 
-        # Получаем топ по MMR
-        logger.info(f"topmmr: before get_dota_mmr_top")
-        top_users = get_dota_mmr_top(10)
-        logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from DB")
+        # Сначала пытаемся получить недельный топ
+        logger.info(f"topmmr: before get_dota_week_top_from_db")
+        top_users = get_dota_week_top_from_db(10, force_refresh=True)
+        logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from weekly DB")
+
+        # Если недельный топ пустой, используем MMR топ
+        if not top_users or len(top_users) == 0:
+            logger.info(f"topmmr: weekly top empty, using MMR top")
+            top_users = get_dota_mmr_top(10)
+            logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from MMR DB")
 
         # Find user's position
         user_pos = None
