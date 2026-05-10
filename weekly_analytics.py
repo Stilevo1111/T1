@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 # =========================================================
 
 _HERO_NAME_CACHE = {}
+_HERO_ROLE_CACHE = {}
 
 # =========================================================
 # PRO DATABASE
@@ -130,33 +131,7 @@ IMP_WEIGHTS = {
 # ROLE DETECTION
 # =========================================================
 
-def detect_role(match: dict) -> str:
-
-    lane = match.get("lane_role", 0)
-    gpm = match.get("gold_per_min", 0)
-    xpm = match.get("xp_per_min", 0)
-    lh = match.get("last_hits", 0)
-    obs = match.get("observer_uses", 0)
-    sen = match.get("sentry_uses", 0)
-    hero_dmg = match.get("hero_damage", 0)
-
-    # MID
-    if lane == 2 and xpm > 550:
-        return "MID"
-
-    # OFFLANE
-    if lane == 3 and hero_dmg > 15000:
-        return "OFFLANE"
-
-    # SUPPORT
-    if obs + sen >= 8:
-        return "SUPPORT"
-
-    # CARRY
-    if gpm >= 600 and lh >= 220:
-        return "CARRY"
-
-    return "SUPPORT"
+# (Replaced by detect_role_from_history using OpenDota hero roles)
 
 # =========================================================
 # UTILITY
@@ -284,6 +259,116 @@ async def get_hero_icon(hero_id: int):
         logger.exception("Failed load hero icon")
 
     return None
+
+# =========================================================
+# HERO ROLE CACHE & LOADING
+# =========================================================
+
+async def load_hero_roles():
+
+    global _HERO_ROLE_CACHE
+
+    if _HERO_ROLE_CACHE:
+        return _HERO_ROLE_CACHE
+
+    url = f"{OPENDOTA_API_URL}/heroStats"
+
+    data = await _api_get_async(url, timeout=15)
+
+    if not data:
+        return {}
+
+    for hero in data:
+
+        hero_id = hero["id"]
+        roles = hero.get("roles", [])
+        _HERO_ROLE_CACHE[hero_id] = roles
+
+    logger.info("Loaded hero role database")
+
+    return _HERO_ROLE_CACHE
+
+
+def convert_opendota_roles(opendota_roles: list) -> str:
+
+    roles = set(opendota_roles)
+
+    # SUPPORT
+    if "Support" in roles or "Disabler" in roles:
+        return "SUPPORT"
+
+    # MID
+    if "Nuker" in roles and "Escape" in roles:
+        return "MID"
+
+    # OFFLANE
+    if "Durable" in roles and "Initiator" in roles:
+        return "OFFLANE"
+
+    # CARRY
+    if "Carry" in roles:
+        return "CARRY"
+
+    return "SUPPORT"
+
+
+async def detect_role_from_history(matches: list) -> str:
+
+    hero_roles = await load_hero_roles()
+
+    role_scores = {
+        "CARRY": 0,
+        "MID": 0,
+        "OFFLANE": 0,
+        "SUPPORT": 0
+    }
+
+    for match in matches:
+
+        hero_id = match.get("hero_id")
+        gpm = match.get("gold_per_min", 0)
+        xpm = match.get("xp_per_min", 0)
+        lh = match.get("last_hits", 0)
+        kills = match.get("kills", 0)
+        assists = match.get("assists", 0)
+        hero_dmg = match.get("hero_damage", 0)
+        obs = match.get("observer_uses", 0)
+        sen = match.get("sentry_uses", 0)
+        lane = match.get("lane_role", 0)
+
+        # Hero base role from OpenDota
+        od_roles = hero_roles.get(hero_id, [])
+        predicted_role = convert_opendota_roles(od_roles)
+        role_scores[predicted_role] += 3
+
+        # MID corrections
+        if lane == 2:
+            role_scores["MID"] += 2
+        if xpm >= 600 and hero_dmg >= 18000:
+            role_scores["MID"] += 1
+
+        # OFFLANE corrections
+        if lane == 3:
+            role_scores["OFFLANE"] += 2
+        if hero_dmg >= 18000 and assists >= kills:
+            role_scores["OFFLANE"] += 1
+
+        # CARRY corrections
+        if gpm >= 650 and lh >= 220:
+            role_scores["CARRY"] += 2
+
+        # SUPPORT corrections
+        if obs + sen >= 10:
+            role_scores["SUPPORT"] += 2
+        if assists > kills and gpm < 450:
+            role_scores["SUPPORT"] += 1
+
+    logger.info(f"Role scores: {role_scores}")
+
+    final_role = max(role_scores, key=role_scores.get)
+    logger.info(f"Detected role: {final_role}")
+
+    return final_role
 
 # =========================================================
 # MATCHES
@@ -483,9 +568,8 @@ async def generate_weekly_analytics(telegram_id: int):
         key=lambda x: x.get("start_time", 0)
     )
 
-    roles = [detect_role(m) for m in matches]
-
-    role = max(set(roles), key=roles.count)
+    # Advanced role detection using OpenDota hero roles + match stats
+    role = await detect_role_from_history(matches)
 
     # averages
 
