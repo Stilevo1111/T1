@@ -1235,26 +1235,21 @@ async def alternate_digest_job(context):
                     next_type = "0"
                 else:
                     valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
-                    if not valid_players:
-                        logger.info("Нет игроков с 3+ играми для Dota дайджеста")
+                    if not valid_players or len(valid_players) < 2:
+                        logger.info("Нет игроков с 3+ играми или менее 2 игроков для Dota дайджеста")
                         next_type = "0"
                     else:
                         valid_players_sorted = sorted(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)), reverse=True)
 
-                        if len(valid_players_sorted) >= 2:
-                            top_by_net = valid_players_sorted[0]
-                            for p in reversed(valid_players_sorted):
-                                if p.get('telegram_id') != top_by_net.get('telegram_id'):
-                                    bottom_by_net = p
-                                    break
-                            else:
-                                bottom_by_net = valid_players_sorted[-1]
-                        elif len(valid_players_sorted) == 1:
-                            top_by_net = valid_players_sorted[0]
-                            bottom_by_net = valid_players_sorted[0]
+                        top_by_net = valid_players_sorted[0]
+                        # Для bottom выбираем игрока с наименьшим net wins, отличного от top
+                        for p in reversed(valid_players_sorted):
+                            if p.get('telegram_id') != top_by_net.get('telegram_id'):
+                                bottom_by_net = p
+                                break
                         else:
-                            top_by_net = None
-                            bottom_by_net = None
+                            # Если все одинаковые, берём последнего
+                            bottom_by_net = valid_players_sorted[-1]
 
                         players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
                         top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
