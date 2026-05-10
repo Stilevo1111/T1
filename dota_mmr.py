@@ -191,6 +191,9 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
 # ========================
 
 HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes"
+
+HERO_CACHE_DIR = Path(__file__).parent / "hero_cache" / "portraits"
+HERO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
 HEROES_STRIP_BG_URL = "https://i.ibb.co/4Zr4fgNb/image.png"
 HEROES_STRIP_BG_CACHE = "heroes_strip_stat_1744.png"
@@ -252,6 +255,43 @@ def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | 
     except Exception:
         pass
     return None
+
+
+async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
+    """Async load hero portrait with disk cache."""
+    if not hero_short_name:
+        return None
+
+    cache_file = HERO_CACHE_DIR / f"{hero_short_name}.png"
+
+    # Load from cache
+    if cache_file.exists():
+        try:
+            return Image.open(cache_file).convert("RGBA")
+        except Exception:
+            logger.exception("Failed to load cached hero portrait")
+
+    # Download and cache
+    url = f"{HERO_IMAGE_BASE}/{hero_short_name}.png"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.read()
+
+        # Save to cache
+        try:
+            cache_file.write_bytes(data)
+        except Exception:
+            logger.exception("Failed to save hero portrait to cache")
+
+        # Return PIL image
+        return Image.open(io.BytesIO(data)).convert("RGBA")
+
+    except Exception:
+        logger.exception("Failed to download hero portrait")
+        return None
 
 
 def _heroes_strip_gradient(canvas_width: int, canvas_height: int):
@@ -509,23 +549,10 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
         return None
 
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-
-_heroes_image_cache = {}
-_heroes_image_cache_ttl = 86400
-
-
-def _fetch_hero_portrait(hero_short: str) -> tuple[str, bytes | None]:
-    """Загрузить портрет героя (для параллельной загрузки)"""
-    data = get_hero_portrait_cached(hero_short) or get_hero_icon_cached(hero_short)
-    return hero_short, data
-
-
-def generate_heroes_image(top_heroes: list) -> bytes | None:
+async def generate_heroes_image(top_heroes: list) -> bytes | None:
     """Сгенерировать картинку с иконками топ-героев: центральный крупнее, к краям меньше."""
     global _heroes_image_cache
-    
+
     try:
         import time
         cache_key = ",".join(str(h.get("id", "")) for h in sorted(top_heroes, key=lambda x: x.get("id", "")))
@@ -533,10 +560,9 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             cached_data, cached_time = _heroes_image_cache[cache_key]
             if time.time() - cached_time < _heroes_image_cache_ttl:
                 return cached_data
-        
+
         from PIL import Image, ImageDraw, ImageFont
         import io
-        import requests as req
         
         if not top_heroes:
             return None
@@ -576,17 +602,18 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         draw = ImageDraw.Draw(img)
         
         hero_short_names = [h.get("short_name", "") for h in top_heroes]
-        icon_data_map = {}
-        
-        with ThreadPoolExecutor(max_workers=min(5, n)) as executor:
-            futures = {executor.submit(_fetch_hero_portrait, sh): sh for sh in hero_short_names if sh}
-            for future in as_completed(futures):
-                try:
-                    sh, data = future.result()
-                    if data:
-                        icon_data_map[sh] = data
-                except Exception:
-                    pass
+
+        # Async parallel loading
+        tasks = [get_cached_hero_portrait(sh) for sh in hero_short_names if sh]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        icon_map = {}
+        for sh, result in zip([sh for sh in hero_short_names if sh], results):
+            if isinstance(result, Exception):
+                logger.exception(f"Failed to load hero icon: {sh}")
+                icon_map[sh] = None
+            else:
+                icon_map[sh] = result
         
         x = start_x
         for i, hero in enumerate(top_heroes):
@@ -594,11 +621,10 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             y = (target_height - icon_size) // 2
             
             hero_short = hero.get("short_name", "")
-            icon_data = icon_data_map.get(hero_short)
-            
-            if icon_data:
+            icon = icon_map.get(hero_short)
+
+            if icon:
                 try:
-                    icon = Image.open(io.BytesIO(icon_data)).convert("RGBA")
                     w, h = icon.size
                     side = min(w, h)
                     left = (w - side) // 2
@@ -607,7 +633,7 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                     icon = icon.resize((icon_size, icon_size), Image.Resampling.LANCZOS)
                     img.paste(icon, (x, y), icon)
                 except Exception as e:
-                    logger.debug(f"Could not load hero icon: {e}")
+                    logger.debug(f"Could not process hero icon: {e}")
                     draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
             else:
                 draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
@@ -616,8 +642,7 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             x += icon_size + gap
         
         buf = io.BytesIO()
-        img_rgb = img.convert("RGB")
-        img_rgb.save(buf, format="JPEG", quality=85)
+        img.save(buf, format="PNG")
         buf.seek(0)
         result = buf.read()
         
