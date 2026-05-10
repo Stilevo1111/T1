@@ -3405,19 +3405,12 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Build the top MMR text in the requested format (without title)
             lines = []
 
+            # Helper function to convert number to emoji digits
             def number_to_emojis(num: int) -> str:
-                """Преобразует число в последовательность эмодзи-цифр"""
                 emoji_digits = {
-                    '0': '0️⃣',
-                    '1': '1️⃣',
-                    '2': '2️⃣',
-                    '3': '3️⃣',
-                    '4': '4️⃣',
-                    '5': '5️⃣',
-                    '6': '6️⃣',
-                    '7': '7️⃣',
-                    '8': '8️⃣',
-                    '9': '9️⃣'
+                    '0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣',
+                    '4': '4️⃣', '5': '5️⃣', '6': '6️⃣', '7': '7️⃣',
+                    '8': '8️⃣', '9': '9️⃣'
                 }
                 return ''.join(emoji_digits[d] for d in str(num))
 
