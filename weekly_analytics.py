@@ -559,7 +559,10 @@ async def generate_weekly_analytics(telegram_id: int):
         "h_dmg": avg_h_dmg,
         "t_dmg": avg_t_dmg,
         "util": avg_utility,
-        "apm": avg_apm
+        "apm": avg_apm,
+        "lh10": avg_lh,
+        "deny10": avg_denies,
+        "deaths": avg_deaths
     }
 
     # Генерация таблиц
