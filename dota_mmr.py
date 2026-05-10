@@ -750,8 +750,8 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
         
-        # Сортируем по start_time (по умолчанию по возрастанию - старые первыми)
-        matches = _api_get(url, {"limit": limit, "sort": "start_time"})
+        # Сортируем по start_time descending (новые первыми)
+        matches = _api_get(url, {"limit": limit, "sort": "-start_time"})
         return matches or []
     except Exception as e:
         logger.error(f"get_recent_matches error: {e}", exc_info=True)
@@ -766,7 +766,7 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
         
-        matches = await _api_get_async(url, {"limit": limit, "sort": "start_time"})
+        matches = await _api_get_async(url, {"limit": limit, "sort": "-start_time"})
         return matches or []
     except Exception as e:
         logger.error(f"get_recent_matches_async error: {e}", exc_info=True)
@@ -981,16 +981,16 @@ def update_user_mmr(telegram_id: int) -> dict:
                         logger.info(f"topmmr:   -> radiant={player_is_radiant}, radiant_win={radiant_win}, is_win={is_win}")
         else:
             logger.warning("topmmr: no matches received from API")
-        
+
         week_games = 0
         week_wins = 0
         current_streak = 0
         max_streak = 0
         week_current_streak = 0
-        
+
         if matches:
-            # Идём от старых к новым, чтобы current_streak в конце = текущий стрик
-            for match in reversed(matches):
+            # Идём от новых к старым, чтобы current_streak в конце = текущий стрик
+            for match in matches:
                 try:
                     match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=timezone.utc)
                     if match_date >= week_start_utc:
