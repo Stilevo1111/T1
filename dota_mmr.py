@@ -952,15 +952,15 @@ def update_user_mmr(telegram_id: int) -> dict:
             return {"success": False, "rank_up": None}
 
         # Получаем последние матчи для расчёта недельной статистики
-        # Фиксированная неделя: с воскресенья по субботу
+        # Фиксированная неделя: с понедельника по воскресенье
         # Используем МСК (UTC+3) для расчёта начала недели
         MSK = timezone(timedelta(hours=3))
         today_msk = datetime.now(MSK)
-        sunday_msk = today_msk - timedelta(days=(today_msk.weekday() + 1) % 7)
-        week_start_msk = sunday_msk.replace(hour=0, minute=0, second=0, microsecond=0)
+        monday_msk = today_msk - timedelta(days=today_msk.weekday())
+        week_start_msk = monday_msk.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start_utc = week_start_msk.astimezone(timezone.utc)
-        logger.info(f"topmmr: week start (MSK) = {week_start_msk} (Sunday)")
-        logger.info(f"topmmr: week start (UTC) = {week_start_utc} (Sunday)")
+        logger.info(f"topmmr: week start (MSK) = {week_start_msk} (Monday)")
+        logger.info(f"topmmr: week start (UTC) = {week_start_utc} (Monday)")
         
         # Получаем последние 50 матчей
         matches = get_recent_matches(user["steam_id"], limit=50)
