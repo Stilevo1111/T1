@@ -393,18 +393,13 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = await generate_weekly_analytics(update.effective_user.id)
 
         if data:
-            # Сначала отправляем текст
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=data["text"],
-                parse_mode="MarkdownV2"
-            )
-            # Потом график без подписи
             photo_buf = io.BytesIO(data["image"])
             photo_buf.name = "weekly_analytics.png"
             await context.bot.send_photo(
                 chat_id=chat_id,
-                photo=photo_buf
+                photo=photo_buf,
+                caption=data["text"],
+                parse_mode="MarkdownV2"
             )
         else:
             await context.bot.send_message(
