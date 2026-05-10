@@ -398,7 +398,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             keyboard = [
                 [
-                    InlineKeyboardButton("📊 Сравнение с PRO 📊", callback_data="analytics_pro"),
+                    InlineKeyboardButton("🆚 Сравнение с ПРО", callback_data="analytics_pro"),
                     InlineKeyboardButton("🔍 Детальное сравнение 🔍", callback_data="analytics_detailed")
                 ]
             ]
@@ -407,7 +407,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo_buf,
-                caption="📊 График IMP по 10 матчам\\. PRO Target \\= 1\\.0",
+                caption="🎯 ТВОЙ ИМПАКТ В 10 МАТЧАХ",
                 reply_markup=reply_markup
             )
 
