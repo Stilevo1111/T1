@@ -398,26 +398,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from weekly_analytics import generate_weekly_analytics
         data = await generate_weekly_analytics(update.effective_user.id)
 
-        if data and data.get("image"):
-            photo_buf = io.BytesIO(data["image"])
-            photo_buf.name = "weekly_analytics.png"
-
-            keyboard = [
-                [
-                    InlineKeyboardButton("🆚 Сравнение с ПРО", callback_data="analytics_pro"),
-                    InlineKeyboardButton("🔍 Детальное сравнение 🔍", callback_data="analytics_detailed")
-                ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-            await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=photo_buf,
-                caption="🧠 Импакт в 10 последних матчах",
-                reply_markup=reply_markup
-            )
-        elif data:
-            # Send text-only analytics if no image could be generated
+        if data:
+            # Send text-based analytics (matplotlib not available)
             text = f"🧠 Аналитика игрока {username}\n\n"
             text += f"Роль: {data.get('role', 'Не определена')}\n\n"
 
@@ -445,29 +427,9 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         else:
             # No analytics data available
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="❌ Недостаточно данных для аналитики. Сыграйте больше матчей за неделю."
-            )
-
-            # Delete loading message
-            try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-            except Exception as e:
-                logger.debug(f"Could not delete loading message: {e}")
-
-            context.user_data['analytics_stats'] = data["stats"]
-            context.user_data['analytics_role'] = data["role"]
-        else:
-            # Delete loading message
-            try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-            except Exception as e:
-                logger.debug(f"Could not delete loading message: {e}")
-
             msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="Недостаточно данных для анализа (минимум 5 матчей за неделю)."
+                text="❌ Недостаточно данных для аналитики. Сыграйте больше матчей за неделю."
             )
             schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
 
