@@ -828,18 +828,10 @@ async def create_visual_chart(history: list, dates: list = None):
     )
 
     # =====================================================
-    # CENTER LINE
+    # CENTER LINE (removed, drawn on background)
     # =====================================================
 
     CENTER = 1.0
-
-    # Center line at IMP = 1.0
-    fig.add_hline(
-        y=CENTER,
-        line_dash="solid",
-        line_color="rgba(255,255,255,0.15)",
-        line_width=2
-    )
 
     # =====================================================
     # AVERAGE LINE
