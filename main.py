@@ -3341,6 +3341,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Топ игроков по MMR за неделю"""
     logger.info(f"User {update.effective_user.id} called topmmr")
 
+    from dota_mmr import rank_to_string
+
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
     chat_id = update.message.chat_id
@@ -3441,7 +3443,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 week_losses = week_games - week_wins
 
                 # Format rank using helper function
-                rank_str = format_rank_tier(rank_tier)
+                rank_str = rank_to_string(rank_tier)
 
                 # Medal emoji
                 medals = ["🥇", "🥈", "🥉"]
@@ -3497,7 +3499,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Add the current user's position (always show it at the bottom)
             if user and user_week_games > 0:
                 user_wr = round((user_week_wins / user_week_games) * 100, 1)
-                user_rank_str = format_rank_tier(user.get('rank_tier', 0))
+                user_rank_str = rank_to_string(user.get('rank_tier', 0))
                 if user_is_in_top:
                     top_text += f"\n\n<b>{get_emoji_num(user_pos)} {user_username}: {user_rank_str}</b>\n"
                     top_text += f" └ В топе • {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
