@@ -1377,17 +1377,17 @@ class Database:
             users_sorted = sorted(users, key=lambda u: u["fissure"], reverse=True)
             current_pos_by_id = {u["telegram_id"]: i + 1 for i, u in enumerate(users_sorted)}
 
-            # Рост: насколько позиций вверх за сутки (digest_position - current_position)
+            # Рост: самый большой прирост см за сутки (current - digest)
             top_growth_user = None
-            top_growth_positions = 0
+            top_growth_cm = 0.0
             top_growth_id = None
             for u in users:
-                prev_pos = u["digest_position"]
-                cur_pos = current_pos_by_id.get(u["telegram_id"], 0)
-                if cur_pos > 0:
-                    moved_up = prev_pos - cur_pos if prev_pos > 0 else 0
-                    if moved_up > top_growth_positions:
-                        top_growth_positions = moved_up
+                prev_f = u["digest_fissure"]
+                cur_f = u["fissure"]
+                if prev_f is not None and prev_f > 0:
+                    delta = cur_f - prev_f
+                    if delta > top_growth_cm:
+                        top_growth_cm = delta
                         cached = user_cache.get(u["telegram_id"])
                         if cached:
                             top_growth_user = cached.get('steam_nickname') or cached.get('username') or str(u["telegram_id"])
