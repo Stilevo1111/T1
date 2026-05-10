@@ -2693,16 +2693,10 @@ def _get_dota_week_top_query(limit):
         cursor = conn.cursor()
         
         # Сначала проверим, есть ли вообще данные
-        if "postgres" in scheme:
-            cursor.execute("""
-                SELECT COUNT(*) FROM users 
-                WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = TRUE
-            """)
-        else:
-            cursor.execute("""
-                SELECT COUNT(*) FROM users 
-                WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
-            """)
+        cursor.execute("""
+            SELECT COUNT(*) FROM users
+            WHERE steam_id IS NOT NULL AND week_games > 0
+        """)
         total_with_steam = cursor.fetchone()[0]
         cursor.execute("""
             SELECT COUNT(*) FROM users 
@@ -2724,8 +2718,8 @@ def _get_dota_week_top_query(limit):
                                     THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
                                     ELSE 0 END as winrate,
                                COALESCE(week_current_streak, 0) as week_current_streak
-                        FROM users 
-                        WHERE steam_id IS NOT NULL AND in_chat = TRUE
+                        FROM users
+                        WHERE steam_id IS NOT NULL
                     )
                     SELECT telegram_id, username, steam_nickname, mmr, 
                            week_games, week_wins, rank_tier, winrate, week_current_streak
@@ -2769,8 +2763,8 @@ def _get_dota_week_top_query(limit):
                                 THEN ROUND(week_wins * 100.0 / week_games, 1) 
                                 ELSE 0 END as winrate,
                           COALESCE(week_current_streak, 0) as week_current_streak
-                    FROM users 
-                    WHERE steam_id IS NOT NULL AND (in_chat IS NULL OR in_chat = 1)
+                    FROM users
+                    WHERE steam_id IS NOT NULL
                 )
                 SELECT telegram_id, username, steam_nickname, mmr, 
                        week_games, week_wins, rank_tier, winrate, week_current_streak
