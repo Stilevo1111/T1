@@ -18,43 +18,43 @@ logger = logging.getLogger(__name__)
 PRO_DB = {
     "CARRY": {
         "players": {
-            "Watson":  {"wr": 68, "lh": 72, "gpm": 725, "kda": "8/2.9/8"},
-            "skiter":  {"wr": 65, "lh": 72, "gpm": 693, "kda": "7/3.0/9"},
-            "Pure":    {"wr": 63, "lh": 67, "gpm": 742, "kda": "8/3.7/9"},
-            "Satanic": {"wr": 61, "lh": 81, "gpm": 825, "kda": "8/2.8/7"},
-            "Ame":     {"wr": 60, "lh": 78, "gpm": 743, "kda": "7/3.2/7"}
+            "Watson":  {"wr": 68, "lh": 72, "deny": 12, "gpm": 725, "kda": "8/2.9/8"},
+            "skiter":  {"wr": 65, "lh": 72, "deny": 13, "gpm": 693, "kda": "7/3.0/9"},
+            "Pure":    {"wr": 63, "lh": 67, "deny": 11, "gpm": 742, "kda": "8/3.7/9"},
+            "Satanic": {"wr": 61, "lh": 81, "deny": 14, "gpm": 825, "kda": "8/2.8/7"},
+            "Ame":     {"wr": 60, "lh": 78, "deny": 9,  "gpm": 743, "kda": "7/3.2/7"}
         },
-        "benchmarks": {"lh10": 73.8, "gpm": 732, "xpm": 855, "deaths": 3.1, "h_dmg": 28.0, "t_dmg": 9.3, "stacks": 2.3, "utility": 1.0, "apm": 310}
+        "benchmarks": {"lh10": 73.8, "deny10": 10.2, "gpm": 732, "xpm": 855, "deaths": 3.1, "h_dmg": 28.0, "t_dmg": 9.3, "stacks": 2.3, "utility": 1.0, "apm": 310}
     },
     "MID": {
         "players": {
-            "Malr1ne": {"wr": 64, "lh": 75, "gpm": 715, "kda": "9/3.1/8"},
-            "Quinn":   {"wr": 62, "lh": 70, "gpm": 690, "kda": "8/3.4/9"},
-            "Nisha":   {"wr": 63, "lh": 73, "gpm": 705, "kda": "9/2.8/7"},
-            "gpk~":    {"wr": 60, "lh": 68, "gpm": 685, "kda": "8/3.5/10"},
-            "No[o]ne": {"wr": 61, "lh": 74, "gpm": 710, "kda": "10/3.2/8"}
+            "Malr1ne": {"wr": 64, "lh": 75, "deny": 24, "gpm": 715, "kda": "9/3.1/8"},
+            "Quinn":   {"wr": 62, "lh": 70, "deny": 20, "gpm": 690, "kda": "8/3.4/9"},
+            "Nisha":   {"wr": 63, "lh": 73, "deny": 22, "gpm": 705, "kda": "9/2.8/7"},
+            "gpk~":    {"wr": 60, "lh": 68, "deny": 25, "gpm": 685, "kda": "8/3.5/10"},
+            "No[o]ne": {"wr": 61, "lh": 74, "deny": 21, "gpm": 710, "kda": "10/3.2/8"}
         },
-        "benchmarks": {"lh10": 71.5, "gpm": 702, "xpm": 810, "deaths": 3.2, "h_dmg": 32.0, "t_dmg": 4.5, "stacks": 1.2, "utility": 1.5, "apm": 340}
+        "benchmarks": {"lh10": 71.5, "deny10": 21.8, "gpm": 702, "xpm": 810, "deaths": 3.2, "h_dmg": 32.0, "t_dmg": 4.5, "stacks": 1.2, "utility": 1.5, "apm": 340}
     },
     "OFFLANE": {
         "players": {
-            "Collapse": {"wr": 62, "lh": 62, "gpm": 590, "kda": "5/3.8/12"},
-            "33":       {"wr": 65, "lh": 58, "gpm": 610, "kda": "4/3.2/14"},
-            "Ace":      {"wr": 63, "lh": 65, "gpm": 580, "kda": "5/3.5/15"},
-            "ATF":      {"wr": 60, "lh": 70, "gpm": 640, "kda": "7/4.1/10"},
-            "Wisper":   {"wr": 58, "lh": 63, "gpm": 595, "kda": "6/4.0/11"}
+            "Collapse": {"wr": 62, "lh": 62, "deny": 18, "gpm": 590, "kda": "5/3.8/12"},
+            "33":       {"wr": 65, "lh": 58, "deny": 15, "gpm": 610, "kda": "4/3.2/14"},
+            "Ace":      {"wr": 63, "lh": 65, "deny": 20, "gpm": 580, "kda": "5/3.5/15"},
+            "ATF":      {"wr": 60, "lh": 70, "deny": 14, "gpm": 640, "kda": "7/4.1/10"},
+            "Wisper":   {"wr": 58, "lh": 63, "deny": 16, "gpm": 595, "kda": "6/4.0/11"}
         },
-        "benchmarks": {"lh10": 61.2, "gpm": 595, "xpm": 680, "deaths": 3.8, "h_dmg": 24.5, "t_dmg": 6.2, "stacks": 3.5, "utility": 4.2, "apm": 290}
+        "benchmarks": {"lh10": 61.2, "deny10": 17.5, "gpm": 595, "xpm": 680, "deaths": 3.8, "h_dmg": 24.5, "t_dmg": 6.2, "stacks": 3.5, "utility": 4.2, "apm": 290}
     },
     "SUPPORT": {
         "players": {
-            "Miposhka": {"wr": 62, "lh": 12, "gpm": 380, "kda": "3/4.2/18"},
-            "Save-":    {"wr": 60, "lh": 18, "gpm": 410, "kda": "4/3.8/15"},
-            "Sneyking": {"wr": 64, "lh": 14, "gpm": 395, "kda": "2/4.5/20"},
-            "Puppey":   {"wr": 58, "lh": 10, "gpm": 350, "kda": "1/5.1/14"},
-            "Fishman":  {"wr": 59, "lh": 15, "gpm": 370, "kda": "2/4.9/16"}
+            "Miposhka": {"wr": 62, "lh": 12, "deny": 4, "gpm": 380, "kda": "3/4.2/18"},
+            "Save-":    {"wr": 60, "lh": 18, "deny": 6, "gpm": 410, "kda": "4/3.8/15"},
+            "Sneyking": {"wr": 64, "lh": 14, "deny": 3, "gpm": 395, "kda": "2/4.5/20"},
+            "Puppey":   {"wr": 58, "lh": 10, "deny": 2, "gpm": 350, "kda": "1/5.1/14"},
+            "Fishman":  {"wr": 59, "lh": 15, "deny": 5, "gpm": 370, "kda": "2/4.9/16"}
         },
-        "benchmarks": {"lh10": 14.5, "gpm": 385, "xpm": 420, "deaths": 4.8, "h_dmg": 12.0, "t_dmg": 0.8, "stacks": 5.2, "utility": 8.5, "apm": 270}
+        "benchmarks": {"lh10": 14.5, "deny10": 4.8, "gpm": 385, "xpm": 420, "deaths": 4.8, "h_dmg": 12.0, "t_dmg": 0.8, "stacks": 5.2, "utility": 8.5, "apm": 270}
     }
 }
 
@@ -161,12 +161,12 @@ def generate_report_text(role: str, user_stats: dict) -> str:
     db = PRO_DB.get(role, PRO_DB["CARRY"])
 
     # Таблица 1
-    t1 = "```\n          WR   LH  GPM   KDA\n"
-    t1 += "-----------------------------\n"
+    t1 = "```\n          WR   LH  Deny  GPM   KDA\n"
+    t1 += "--------------------------------------\n"
     for name, s in db["players"].items():
-        t1 += f"{name:<9} {s['wr']}% {s['lh']:>4} {s['gpm']:>5} {s['kda']}\n"
-    t1 += "-----------------------------\n"
-    t1 += f"YOU ✨    {user_stats['wr']}% {user_stats['lh']:>4} {user_stats['gpm']:>5} {user_stats['kda']}\n```"
+        t1 += f"{name:<9} {s['wr']}% {s['lh']:>4} {s['deny']:>4} {s['gpm']:>5} {s['kda']}\n"
+    t1 += "--------------------------------------\n"
+    t1 += f"YOU ✨    {user_stats['wr']}% {user_stats['lh']:>4} {user_stats['deny']:>4} {user_stats['gpm']:>5} {user_stats['kda']}\n```"
 
     # Таблица 2
     t2 = "```\nМетрика          Ты      PRO      Δ \n"
@@ -174,6 +174,7 @@ def generate_report_text(role: str, user_stats: dict) -> str:
     bench = db["benchmarks"]
     metrics = [
         ("LH@10", user_stats['lh10'], bench['lh10']),
+        ("Denies@10", user_stats['deny10'], bench['deny10']),
         ("GPM", user_stats['gpm'], bench['gpm']),
         ("XPM", user_stats['xpm'], bench['xpm']),
         ("Deaths", user_stats['deaths'], bench['deaths']),
@@ -219,6 +220,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict | None:
     total_heals = sum(m.get("hero_healing", 0) for m in matches)
     total_stacks = sum(m.get("creeps_stacked", 0) for m in matches)
     total_wards = sum(m.get("observer_uses", 0) + m.get("sentry_uses", 0) for m in matches)
+    total_denies = sum(m.get("denies", 0) for m in matches)
 
     avg_gpm = total_gpm / len(matches)
     avg_kda = (total_kills + total_assists) / (total_deaths + 1)  # +1 чтобы избежать деления на 0
@@ -226,6 +228,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict | None:
     avg_apm = total_apm / len(matches)
     wr = (total_wins / len(matches)) * 100
     avg_utility = calculate_utility(total_stuns, total_heals, total_stacks, total_wards) / len(matches)
+    avg_denies = total_denies / len(matches)
 
     # Подготовка данных для таблиц
     avg_xpm = sum(m.get("xp_per_min", 0) for m in matches) / len(matches)
@@ -236,9 +239,11 @@ async def generate_weekly_analytics(telegram_id: int) -> dict | None:
     user_table_stats = {
         'wr': int(wr),
         'lh': avg_lh,
+        'deny': avg_denies,
         'gpm': avg_gpm,
         'kda': f"{int(total_kills / len(matches))}/{int(avg_deaths)}/{int(total_assists / len(matches))}",
         'lh10': avg_lh,
+        'deny10': avg_denies,
         'xpm': avg_xpm,
         'deaths': avg_deaths,
         'h_dmg': avg_h_dmg / 1000,  # В к
