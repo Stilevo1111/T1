@@ -98,28 +98,36 @@ def generate_pro_table(role: str, user_stats: dict) -> str:
 
     config = PRO_DB[role]
     pros = config["players"]
-    avg = config["benchmarks"]
 
-    table = "```\n          WR   LH  Deny  GPM   KDA\n"
-    table += "--------------------------------------\n"
+    lines = []
+    lines.append("          WR   LH  Deny  GPM   KDA")
+    lines.append("--------------------------------------")
     for name, stats in pros.items():
-        table += f"{name:<9}{stats['wr']:>3}% {stats['lh']:>4} {stats['deny']:>4} {stats['gpm']:>5} {stats['kda']}\n"
-    table += "--------------------------------------\n"
+        line = f"{name:<9}{stats['wr']:>3}% {stats['lh']:>4} {stats['deny']:>4} {stats['gpm']:>5} {stats['kda']}"
+        lines.append(line)
+    lines.append("--------------------------------------")
     # PRO AVG
     avg_wr = sum(stats['wr'] for stats in pros.values()) // len(pros)
     avg_lh = sum(stats['lh'] for stats in pros.values()) / len(pros)
     avg_deny = sum(stats['deny'] for stats in pros.values()) / len(pros)
     avg_gpm = sum(stats['gpm'] for stats in pros.values()) // len(pros)
     avg_kda = "8/3.1/8" if role == "CARRY" else "2/4.5/17"
-    table += f"PRO AVG   {avg_wr:>3}% {avg_lh:>4.1f} {avg_deny:>4.1f} {avg_gpm:>5} {avg_kda}\n\n"
-
+    line = f"PRO AVG   {avg_wr:>3}% {avg_lh:>4.1f} {avg_deny:>4.1f} {avg_gpm:>5} {avg_kda}"
+    lines.append(line)
+    lines.append("")
     # YOU
     u_wr = user_stats.get('wr', 0)
     u_lh = user_stats.get('lh', 0)
     u_deny = user_stats.get('deny', 0)
     u_gpm = user_stats.get('gpm', 0)
     u_kda = user_stats.get('kda', "0/0/0")
-    table += f"YOU ✨    {u_wr:>3}% {u_lh:>4.1f} {u_deny:>4.1f} {int(u_gpm):>5} {u_kda}\n```"
+    line = f"YOU ✨    {u_wr:>3}% {u_lh:>4.1f} {u_deny:>4.1f} {int(u_gpm):>5} {u_kda}"
+    lines.append(line)
+
+    # Выровнять все строки по максимальной длине
+    max_len = max(len(line) for line in lines)
+    aligned_lines = [line.ljust(max_len) for line in lines]
+    table = "```\n" + "\n".join(aligned_lines) + "\n```"
 
     return table
 
@@ -131,9 +139,11 @@ def compare_with_pro(player_stats: dict, role: str) -> str:
 
     bench = PRO_DB[role]["benchmarks"]
 
-    table = "```\n🔍 Детальное сравнение\n\n"
-    table += "Метрика          Ты      PRO      Δ \n"
-    table += "------------------------------------\n"
+    lines = []
+    lines.append("🔍 Детальное сравнение")
+    lines.append("")
+    lines.append("Метрика          Ты      PRO      Δ ")
+    lines.append("------------------------------------")
 
     metrics = [
         ("LH@10", "lh10", 1),
@@ -162,11 +172,17 @@ def compare_with_pro(player_stats: dict, role: str) -> str:
                 p_val = f"{player_val:.1f}" if decimal else f"{int(player_val)}"
                 p_pro = f"{pro_val:.1f}" if decimal else f"{int(pro_val)}"
                 d_str = f"{delta:+.1f}" if decimal else f"{int(delta):+d}"
-            table += f"{label:<15} {p_val:>7} {p_pro:>7} {d_str:>6} {arrow}\n"
+            line = f"{label:<15} {p_val:>7} {p_pro:>7} {d_str:>6} {arrow}"
+            lines.append(line)
         else:
-            table += f"{label:<15} {player_val:>7} -      -      -\n"
+            line = f"{label:<15} {player_val:>7} -      -      -"
+            lines.append(line)
 
-    table += "```"
+    # Выровнять все строки по максимальной длине
+    max_len = max(len(line) for line in lines)
+    aligned_lines = [line.ljust(max_len) for line in lines]
+    table = "```\n" + "\n".join(aligned_lines) + "\n```"
+
     return table
 
 
