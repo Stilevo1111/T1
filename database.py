@@ -1384,7 +1384,7 @@ class Database:
             for u in users:
                 prev_f = u["digest_fissure"]
                 cur_f = u["fissure"]
-                if prev_f is not None and prev_f > 0:
+                if prev_f is not None:
                     delta = cur_f - prev_f
                     if delta > top_growth_cm:
                         top_growth_cm = delta
@@ -1404,7 +1404,7 @@ class Database:
             for u in users:
                 prev_f = u["digest_fissure"]
                 cur_f = u["fissure"]
-                if prev_f is not None and prev_f > 0:
+                if prev_f is not None:
                     delta = cur_f - prev_f
                     if delta < top_drop_cm:
                         top_drop_cm = delta
