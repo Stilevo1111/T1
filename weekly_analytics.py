@@ -440,15 +440,15 @@ def generate_detailed_metrics_table(role: str, user_stats: dict) -> str:
 
     feedback = []
     if user_stats["gpm"] < bench["gpm"] * 0.85:
-        feedback.append("• Low GPM → improve farming patterns and lane efficiency")
+        feedback.append("• Низкий GPM → улучшите фарминг и работу на линии")
     if user_stats["deaths"] > bench["deaths"] * 1.2:
-        feedback.append("• Too many deaths → improve map awareness")
+        feedback.append("• Слишком много смертей → работайте над карточкой и позиционированием")
     if user_stats["apm"] < bench["apm"] * 0.85:
-        feedback.append("• Low APM → increase active map participation")
+        feedback.append("• Низкий APM → участвуйте активнее в игровых моментах")
     if user_stats["util"] < bench["utility"] * 0.75:
-        feedback.append("• Low utility impact → improve team contribution")
+        feedback.append("• Мало утилити → больше помощи команде (стаки, варды, контроли)")
     if not feedback:
-        feedback.append("• Strong performance relative to PRO benchmarks")
+        feedback.append("• Отличные показатели по сравнению с PRO-игроками")
 
     feedback_text = "\n".join(feedback)
 
