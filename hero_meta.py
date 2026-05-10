@@ -5,13 +5,18 @@ import aiohttp
 import io
 import os
 import logging
+import math
 from urllib.parse import urlparse
+from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 logger = logging.getLogger(__name__)
 
 BACKGROUND_PATH = "background_new.png"
+
+ICON_CACHE_DIR = Path("cache/meta_icons")
+ICON_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 FONT_PATHS = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -40,166 +45,32 @@ if FONT_PATH is None:
     logger.warning("Using default PIL font as no system fonts found")
 
 
-# Primary role mapping for Dota 2 heroes
-ROLE_MAP = {
-    # Position 1 - Carry
-    "Anti-Mage": 1,
-    "Bloodseeker": 1,
-    "Bounty Hunter": 1,
-    "Broodmother": 1,
-    "Clinkz": 1,
-    "Drow Ranger": 1,
-    "Faceless Void": 1,
-    "Gyrocopter": 1,
-    "Juggernaut": 1,
-    "Lone Druid": 1,
-    "Luna": 1,
-    "Medusa": 1,
-    "Meepo": 1,
-    "Mirana": 1,
-    "Monkey King": 1,
-    "Morphling": 1,
-    "Naga Siren": 1,
-    "Phantom Assassin": 1,
-    "Phantom Lancer": 1,
-    "Razor": 1,
-    "Riki": 1,
-    "Slark": 1,
-    "Sniper": 1,
-    "Spectre": 1,
-    "Templar Assassin": 1,
-    "Terrorblade": 1,
-    "Troll Warlord": 1,
-    "Ursa": 1,
-    "Vengeful Spirit": 1,
-    "Venomancer": 1,
-    "Viper": 1,
-    "Weaver": 1,
 
-    # Position 2 - Mid
-    "Alchemist": 2,
-    "Arc Warden": 2,
-    "Batrider": 2,
-    "Death Prophet": 2,
-    "Dragon Knight": 2,
-    "Ember Spirit": 2,
-    "Huskar": 2,
-    "Invoker": 2,
-    "Kunkka": 2,
-    "Leshrac": 2,
-    "Lina": 2,
-    "Lycan": 2,
-    "Magnus": 2,
-    "Necrophos": 2,
-    "Outworld Destroyer": 2,
-    "Puck": 2,
-    "Queen of Pain": 2,
-    "Shadow Fiend": 2,
-    "Storm Spirit": 2,
-    "Tinker": 2,
-    "Void Spirit": 2,
-    "Zeus": 2,
-
-    # Position 3 - Offlane
-    "Axe": 3,
-    "Beastmaster": 3,
-    "Brewmaster": 3,
-    "Centaur Warrunner": 3,
-    "Chaos Knight": 3,
-    "Clockwerk": 3,
-    "Dark Seer": 3,
-    "Dawnbreaker": 3,
-    "Doom": 3,
-    "Earth Spirit": 3,
-    "Earthshaker": 3,
-    "Elder Titan": 3,
-    "Enigma": 3,
-    "Legion Commander": 3,
-    "Mars": 3,
-    "Night Stalker": 3,
-    "Omniknight": 3,
-    "Primal Beast": 3,
-    "Pudge": 3,
-    "Sand King": 3,
-    "Slardar": 3,
-    "Spirit Breaker": 3,
-    "Sven": 3,
-    "Tidehunter": 3,
-    "Timbersaw": 3,
-    "Treant Protector": 3,
-    "Tusk": 3,
-    "Underlord": 3,
-    "Wraith King": 3,
-
-    # Position 4 - Soft Support
-    "Abaddon": 4,
-    "Ancient Apparition": 4,
-    "Bane": 4,
-    "Bristleback": 4,
-    "Chen": 4,
-    "Crystal Maiden": 4,
-    "Dark Willow": 4,
-    "Dazzle": 4,
-    "Disruptor": 4,
-    "Enchantress": 4,
-    "Grimstroke": 4,
-    "Hoodwink": 4,
-    "Io": 4,
-    "Jakiro": 4,
-    "Keeper of the Light": 4,
-    "Lich": 4,
-    "Lina": 4,
-    "Lion": 4,
-    "Nature's Prophet": 4,
-    "Necrophos": 4,
-    "Ogre Magi": 4,
-    "Oracle": 4,
-    "Phoenix": 4,
-    "Pugna": 4,
-    "Rubick": 4,
-    "Shadow Demon": 4,
-    "Silencer": 4,
-    "Skywrath Mage": 4,
-    "Snapfire": 4,
-    "Techies": 4,
-    "Tinker": 4,
-    "Tiny": 4,
-    "Venomancer": 4,
-    "Viper": 4,
-    "Warlock": 4,
-    "Windranger": 4,
-    "Winter Wyvern": 4,
-    "Witch Doctor": 4,
-    "Zeus": 4,
-
-    # Position 5 - Hard Support (Tanky supports)
-    "Abaddon": 5,
-    "Earthshaker": 5,
-    "Omniknight": 5,
-    "Phoenix": 5,
-    "Treant Protector": 5,
-    "Undying": 5,
-    "Witch Doctor": 5,
-    "Oracle": 5,
-    "Silencer": 5,
-    "Venomancer": 5,
-}
 
 def detect_hero_position(hero_data):
-    """Get hero position from ROLE_MAP, fallback to max pick detection."""
-    hero_name = hero_data.get("localized_name", "")
-    if hero_name in ROLE_MAP:
-        return ROLE_MAP[hero_name]
 
-    # Fallback: use max pick position
-    max_picks = 0
-    best_position = 2
+    best_pos = 1
+    best_score = 0
+
     for pos in range(1, 6):
+
         picks = hero_data.get(f"{pos}_pick", 0)
-        if picks > max_picks:
-            max_picks = picks
-            best_position = pos
-    return best_position
+
+        wins = hero_data.get(f"{pos}_win", 0)
+
+        if picks <= 0:
+            continue
+
+        wr = wins / picks
+
+        score = picks * wr
+
+        if score > best_score:
+
+            best_score = score
+            best_pos = pos
+
+    return best_pos
 
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
@@ -219,20 +90,69 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
 
 
 async def fetch_hero_icon(session, icon_path):
+
+    # ==========================================
+    # BUILD URL
+    # ==========================================
+
     if icon_path.startswith('/'):
-        icon_url = "https://cdn.cloudflare.steamstatic.com%s" % icon_path
+        icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
+
     elif not icon_path.startswith('http'):
-        icon_url = "https://cdn.cloudflare.steamstatic.com/%s" % icon_path
+        icon_url = f"https://cdn.cloudflare.steamstatic.com/{icon_path}"
+
     else:
         icon_url = icon_path
+
+    # ==========================================
+    # CACHE FILE NAME
+    # ==========================================
+
+    filename = os.path.basename(
+        urlparse(icon_url).path
+    )
+
+    cache_path = ICON_CACHE_DIR / filename
+
+    # ==========================================
+    # LOAD FROM CACHE
+    # ==========================================
+
+    if cache_path.exists():
+
+        try:
+            return Image.open(cache_path).convert("RGBA")
+
+        except Exception:
+            logger.exception("Failed open cached icon")
+
+    # ==========================================
+    # DOWNLOAD
+    # ==========================================
+
     try:
-        async with session.get(icon_url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+
+        async with session.get(
+            icon_url,
+            timeout=aiohttp.ClientTimeout(total=5)
+        ) as resp:
+
             resp.raise_for_status()
+
             content = await resp.read()
-            return Image.open(io.BytesIO(content)).convert("RGBA")
+
+            with open(cache_path, "wb") as f:
+                f.write(content)
+
+            return Image.open(
+                io.BytesIO(content)
+            ).convert("RGBA")
+
     except Exception as e:
+
         logger.error("Failed to load icon: %s", e)
-        raise
+
+        return None
 
 
 async def get_dota_data(days=7):
@@ -271,8 +191,10 @@ def _build_grid(hero_stats):
         wins = hero.get("pub_win", hero.get("pro_win", 0))
         winrate = (wins / matches) if matches > 0 else 0
 
-        # Use winrate as score (higher winrate = better)
-        score = winrate
+        score = (
+            winrate *
+            math.log10(matches + 1)
+        )
 
         # Use position from role detection (not max picks)
         pos = detect_hero_position(hero)
@@ -362,13 +284,32 @@ async def create_infographic(hero_stats):
                 all_heroes.append(h)
 
     async with aiohttp.ClientSession() as session:
-        tasks = [fetch_hero_icon(session, h['img']) for h in all_heroes]
+
+        tasks = [
+            fetch_hero_icon(session, h['img'])
+            for h in all_heroes
+        ]
+
+        results = await asyncio.gather(
+            *tasks,
+            return_exceptions=True
+        )
+
         icons = {}
-        for i, hero in enumerate(all_heroes):
-            try:
-                icons[hero['id']] = await tasks[i]
-            except Exception:
+
+        for hero, result in zip(all_heroes, results):
+
+            if isinstance(result, Exception):
+
+                logger.exception(
+                    "Failed load hero icon"
+                )
+
                 icons[hero['id']] = None
+
+            else:
+
+                icons[hero['id']] = result
 
     for col_idx in range(5):
         pos = col_idx + 1

@@ -543,6 +543,12 @@ def init_db():
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr_updated_at TIMESTAMP
             """)
             cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS analytics_cache TEXT
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS analytics_updated_at TIMESTAMP
+            """)
+            cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS rank_tier INTEGER DEFAULT 0
             """)
             cursor.execute("""
@@ -627,6 +633,12 @@ def init_db():
             """)
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr_updated_at TIMESTAMP
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS analytics_cache TEXT
+            """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS analytics_updated_at TIMESTAMP
             """)
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS rank_tier INTEGER DEFAULT 0
@@ -987,6 +999,8 @@ class Database:
                         "week_current_streak": user.get("week_current_streak", 0),
                         "week_updated_at": user.get("week_updated_at"),
                         "mmr_updated_at": user.get("mmr_updated_at"),
+                        "analytics_cache": user.get("analytics_cache"),
+                        "analytics_updated_at": user.get("analytics_updated_at"),
                         "last_dota_games": user.get("last_dota_games", 0),
                         "last_dota_wins": user.get("last_dota_wins", 0),
                         "week_start_date": user.get("week_start_date"),
@@ -1051,6 +1065,8 @@ class Database:
                                 "week_current_streak": 0,
                                 "week_updated_at": None,
                                 "mmr_updated_at": None,
+                                "analytics_cache": None,
+                                "analytics_updated_at": None,
                                 "message_count": 0
                             }
                         else:
@@ -1384,7 +1400,7 @@ class Database:
             for u in users:
                 prev_f = u["digest_fissure"]
                 cur_f = u["fissure"]
-                if prev_f is not None and prev_f > 0:
+                if prev_f is not None:
                     delta = cur_f - prev_f
                     if delta > top_growth_cm:
                         top_growth_cm = delta
@@ -1404,7 +1420,7 @@ class Database:
             for u in users:
                 prev_f = u["digest_fissure"]
                 cur_f = u["fissure"]
-                if prev_f is not None and prev_f > 0:
+                if prev_f is not None:
                     delta = cur_f - prev_f
                     if delta < top_drop_cm:
                         top_drop_cm = delta
@@ -1710,6 +1726,8 @@ def get_user(telegram_id, username=None):
             user.setdefault('week_current_streak', 0)
             user.setdefault('dota_total_games', 0)
             user.setdefault('dota_wins', 0)
+            user.setdefault('analytics_cache', None)
+            user.setdefault('analytics_updated_at', None)
             user.setdefault('message_count', 0)
             user_cache.set(telegram_id, user)
         else:
