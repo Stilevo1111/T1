@@ -2221,8 +2221,8 @@ async def fetch_hero_icon(url, session=None, size=96):
 def main_menu():
     keyboard = [
         [KeyboardButton("🎲 Ролл Фиссуры"), KeyboardButton("👤 Профиль")],
-        [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR"), KeyboardButton("🔎 Аналитика")],
-        [KeyboardButton("🔑 Привязать Аккаунт")],
+        [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
+        [KeyboardButton("🔑 Привязать Аккаунт"), KeyboardButton("🔎 Аналитика")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
