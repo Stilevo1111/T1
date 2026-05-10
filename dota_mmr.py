@@ -4,6 +4,7 @@ import time
 import requests
 import logging
 import aiohttp
+import asyncio
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from database import get_user, update_user_fields_batch
@@ -45,6 +46,10 @@ API_MIN_INTERVAL = 3  # минимум 3 секунды между запрос�
 _cache = {}
 CACHE_TTL = 300  # 5 минут
 CACHE_MAX_SIZE = 100  # максимальное количество записей в кеше
+
+# Кеш для изображений героев (1 час)
+_heroes_image_cache = {}
+_heroes_image_cache_ttl = 3600  # 1 час
 
 
 def _check_rate_limit():
@@ -102,25 +107,39 @@ def _clear_cache():
     _cache = {}
 
 
-def _api_get(url: str, params: dict = None) -> dict:
-    """Универсальная функция для API-запросов с обработкой ошибок и кешем"""
+def _api_get(url: str, params: dict = None, max_retries: int = 2) -> dict:
+    """Универсальная функция для API-запросов с обработкой ошибок, кешем и повторными попытками"""
     _check_rate_limit()  # Применяем rate limiting
-    timeout = 5
-    try:
-        r = requests.get(url, params=params or {}, timeout=timeout)
-        if r.status_code == 200:
-            return r.json()
-        elif r.status_code == 429:
-            logger.warning(f"Rate limited by OpenDota API, waiting...")
-            time.sleep(3)
+
+    for attempt in range(max_retries + 1):
+        timeout = 15 if attempt == 0 else 30  # Увеличиваем таймаут при повторных попытках
+        try:
+            r = requests.get(url, params=params or {}, timeout=timeout)
+            if r.status_code == 200:
+                return r.json()
+            elif r.status_code == 429:
+                logger.warning(f"Rate limited by OpenDota API, waiting...")
+                time.sleep(3)
+                return None
+            elif r.status_code >= 500:
+                # Серверная ошибка, попробуем ещё раз
+                if attempt < max_retries:
+                    logger.warning(f"Server error {r.status_code}, retrying in {attempt + 1}s...")
+                    time.sleep(attempt + 1)
+                    continue
             return None
-        return None
-    except requests.exceptions.ReadTimeout as e:
-        logger.error(f"API request timeout ({timeout}s): {e}")
-        return None
-    except Exception as e:
-        logger.error(f"API request error: {e}", exc_info=True)
-        return None
+        except requests.exceptions.ReadTimeout as e:
+            if attempt < max_retries:
+                logger.warning(f"API request timeout ({timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
+                continue
+            else:
+                logger.error(f"API request timeout ({timeout}s) after {max_retries + 1} attempts: {e}")
+                return None
+        except Exception as e:
+            logger.error(f"API request error: {e}", exc_info=True)
+            return None
+
+    return None
 
 
 _async_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
@@ -149,34 +168,21 @@ async def _check_rate_limit_async():
     _async_rate_limit["last_request"] = time.time()
 
 
-async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 5) -> dict:
-    """Асинхронная функция для API-запросов с переиспользованием сессии"""
+async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15) -> dict:
+    """Асинхронная функция для API-запросов с переиспользованием сессии и увеличенным таймаутом"""
     await _check_rate_limit_async()
     try:
-        if use_session:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
-                if resp.status == 200:
-                    return await resp.json()
-                elif resp.status == 429:
-                    logger.warning(f"Rate limited by OpenDota API, waiting...")
-                    import asyncio
-                    await asyncio.sleep(3)
-                    return None
+        from database import get_aiohttp_session
+        session = await get_aiohttp_session()
+        async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+            if resp.status == 200:
+                return await resp.json()
+            elif resp.status == 429:
+                logger.warning(f"Rate limited by OpenDota API, waiting...")
+                import asyncio
+                await asyncio.sleep(3)
                 return None
-        else:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
-                if resp.status == 200:
-                    return await resp.json()
-                elif resp.status == 429:
-                    logger.warning(f"Rate limited by OpenDota API, waiting...")
-                    import asyncio
-                    await asyncio.sleep(3)
-                    return None
-                return None
+            return None
     except Exception as e:
         logger.error(f"Async API request error: {e}", exc_info=True)
         return None
@@ -191,6 +197,9 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
 # ========================
 
 HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes"
+
+HERO_CACHE_DIR = Path(__file__).parent / "hero_cache" / "portraits"
+HERO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
 HEROES_STRIP_BG_URL = "https://i.ibb.co/4Zr4fgNb/image.png"
 HEROES_STRIP_BG_CACHE = "heroes_strip_stat_1744.png"
@@ -252,6 +261,43 @@ def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | 
     except Exception:
         pass
     return None
+
+
+async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
+    """Async load hero portrait with disk cache."""
+    if not hero_short_name:
+        return None
+
+    cache_file = HERO_CACHE_DIR / f"{hero_short_name}.png"
+
+    # Load from cache
+    if cache_file.exists():
+        try:
+            return Image.open(cache_file).convert("RGBA")
+        except Exception:
+            logger.exception("Failed to load cached hero portrait")
+
+    # Download and cache
+    url = f"{HERO_IMAGE_BASE}/{hero_short_name}.png"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.read()
+
+        # Save to cache
+        try:
+            cache_file.write_bytes(data)
+        except Exception:
+            logger.exception("Failed to save hero portrait to cache")
+
+        # Return PIL image
+        return Image.open(io.BytesIO(data)).convert("RGBA")
+
+    except Exception:
+        logger.exception("Failed to download hero portrait")
+        return None
 
 
 def _heroes_strip_gradient(canvas_width: int, canvas_height: int):
@@ -525,7 +571,7 @@ def _fetch_hero_portrait(hero_short: str) -> tuple[str, bytes | None]:
 def generate_heroes_image(top_heroes: list) -> bytes | None:
     """Сгенерировать картинку с иконками топ-героев: центральный крупнее, к краям меньше."""
     global _heroes_image_cache
-    
+
     try:
         import time
         cache_key = ",".join(str(h.get("id", "")) for h in sorted(top_heroes, key=lambda x: x.get("id", "")))
@@ -533,25 +579,25 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             cached_data, cached_time = _heroes_image_cache[cache_key]
             if time.time() - cached_time < _heroes_image_cache_ttl:
                 return cached_data
-        
+
         from PIL import Image, ImageDraw, ImageFont
         import io
         import requests as req
-        
+
         if not top_heroes:
             return None
-        
+
         target_width = 1744
         target_height = 592
         img = _compose_heroes_strip_background(target_width, target_height)
         padding = 100
         gap = 18
         min_side, max_side = 210, 368
-        
+
         n = len(top_heroes)
-        
+
         top_heroes = sorted(top_heroes, key=lambda h: h.get("picks", 0), reverse=True)
-        
+
         center = (n - 1) / 2.0
         max_dist = max(abs(i - center) for i in range(n))
         if max_dist < 1e-9:
@@ -562,7 +608,7 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             ratio = 1.0 - (dist / max_dist)
             sz = int(round(min_side + (max_side - min_side) * ratio))
             sizes.append(max(96, sz))
-        
+
         available = target_width - 2 * padding
         total_w = sum(sizes) + gap * max(0, n - 1)
         if total_w > available > 0:
@@ -570,14 +616,14 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             sizes = [max(88, int(round(s * scale))) for s in sizes]
             gap = max(8, int(round(gap * scale)))
             total_w = sum(sizes) + gap * max(0, n - 1)
-        
+
         start_x = max(padding, (target_width - total_w) // 2)
-        
+
         draw = ImageDraw.Draw(img)
-        
+
         hero_short_names = [h.get("short_name", "") for h in top_heroes]
         icon_data_map = {}
-        
+
         with ThreadPoolExecutor(max_workers=min(5, n)) as executor:
             futures = {executor.submit(_fetch_hero_portrait, sh): sh for sh in hero_short_names if sh}
             for future in as_completed(futures):
@@ -587,15 +633,15 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                         icon_data_map[sh] = data
                 except Exception:
                     pass
-        
+
         x = start_x
         for i, hero in enumerate(top_heroes):
             icon_size = sizes[i]
             y = (target_height - icon_size) // 2
-            
+
             hero_short = hero.get("short_name", "")
             icon_data = icon_data_map.get(hero_short)
-            
+
             if icon_data:
                 try:
                     icon = Image.open(io.BytesIO(icon_data)).convert("RGBA")
@@ -604,23 +650,23 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                     left = (w - side) // 2
                     top = (h - side) // 2
                     icon = icon.crop((left, top, left + side, top + side))
-                    icon = icon.resize((icon_size, icon_size), Image.Resampling.LANCZOS)
+                    icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
                     img.paste(icon, (x, y), icon)
                 except Exception as e:
                     logger.debug(f"Could not load hero icon: {e}")
                     draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
             else:
                 draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
-            
+
             draw.rectangle([x - 2, y - 2, x + icon_size, y + icon_size], outline=(215, 175, 85), width=2)
             x += icon_size + gap
-        
+
         buf = io.BytesIO()
         img_rgb = img.convert("RGB")
         img_rgb.save(buf, format="JPEG", quality=85)
         buf.seek(0)
         result = buf.read()
-        
+
         _heroes_image_cache[cache_key] = (result, time.time())
         return result
     except Exception as e:
