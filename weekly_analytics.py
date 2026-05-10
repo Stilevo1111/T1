@@ -789,7 +789,7 @@ async def generate_weekly_analytics(telegram_id: int):
         )
         logger.info(f"Saved analytics cache for {telegram_id}")
     except Exception as e:
-        logger.exception(f"Failed to save analytics cache for {telegram_id}")
+        logger.warning(f"Failed to save analytics cache for {telegram_id}: {e}")
 
     return data
 
