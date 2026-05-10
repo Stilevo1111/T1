@@ -3103,6 +3103,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show stats — свой или чужой профиль: /profile или /profile @username"""
     logger.info(f"User {update.effective_user.id} called stats")
+    logger.info(f"Stats command called with args: {context.args}")
 
     chat_id = update.message.chat_id
     chat_type = update.message.chat.type
@@ -3260,7 +3261,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += "\n\n💡 /profile ＠ник — чужой профиль"
 
         # Banner URL - для Steam использовать картинку с героями
-        profile_banner_url = "https://i.ibb.co/n8g8yQYt/dasdsadasdsadasdsad.png"
+        profile_banner_url = None
 
         try:
             from dota_mmr import get_top_heroes_async, generate_heroes_image
@@ -3276,19 +3277,21 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     top_heroes = []
 
             try:
+                logger.info(f"Generating heroes image for {len(top_heroes)} heroes")
                 img_bytes = generate_heroes_image(top_heroes)
-                if img_bytes:
+                if img_bytes and len(img_bytes) > 0:
                     profile_banner_url = io.BytesIO(img_bytes)
                     logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
                 else:
-                    logger.warning("generate_heroes_image returned None or empty bytes")
+                    logger.warning(f"generate_heroes_image returned None or empty bytes (type: {type(img_bytes)}, len: {len(img_bytes) if img_bytes else 'N/A'})")
                     profile_banner_url = None
             except Exception as e:
                 logger.error(f"Could not generate heroes image: {e}", exc_info=True)
                 profile_banner_url = None
             
             # Only send photo if we have valid image data
-            if profile_banner_url:
+            if profile_banner_url and isinstance(profile_banner_url, io.BytesIO):
+                logger.info("Sending profile with generated hero banner")
                 result_msg = await context.bot.send_photo(
                     chat_id=update.message.chat_id,
                     photo=profile_banner_url,
@@ -3297,7 +3300,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=main_menu()
                 )
                 logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
-                
+
                 # Delete loading message immediately after successful send
                 if loading_msg:
                     logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
@@ -3310,6 +3313,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.error(f"ERROR: loading_msg is None! Cannot delete.")
             else:
                 # Send text-only message if no image could be generated
+                logger.info("Sending text-only profile (no hero banner)")
                 result_msg = await context.bot.send_message(
                     chat_id=update.message.chat_id,
                     text=text,
@@ -3317,7 +3321,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=main_menu()
                 )
                 logger.info(f"Text-only stats message sent successfully, result_msg_id={result_msg.message_id}")
-                
+
                 # Delete loading message
                 if loading_msg:
                     logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
