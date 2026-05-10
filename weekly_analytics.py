@@ -811,26 +811,27 @@ async def create_visual_chart(history: list, dates: list = None):
     fig = go.Figure()
 
     # =====================================================
-    # BACKGROUND ZONES (symmetrical around 1.0)
+    # BACKGROUND IMAGE
+    # =====================================================
+
+    fig.add_layout_image(
+        dict(
+            source="https://i.ibb.co/4n3Nv4vT/photo-2026-05-10-17-02-44.png",
+            xref="paper",
+            yref="paper",
+            x=0,
+            y=0,
+            sizex=1,
+            sizey=1,
+            layer="below"
+        )
+    )
+
+    # =====================================================
+    # CENTER LINE
     # =====================================================
 
     CENTER = 1.0
-
-    # Red zone: 0 → 1.0
-    fig.add_hrect(
-        y0=0,
-        y1=CENTER,
-        fillcolor="rgba(239,68,68,0.10)",
-        line_width=0
-    )
-
-    # Green zone: 1.0 → top
-    fig.add_hrect(
-        y0=CENTER,
-        y1=max(1.8, max(impacts) + 0.2),
-        fillcolor="rgba(34,197,94,0.10)",
-        line_width=0
-    )
 
     # Center line at IMP = 1.0
     fig.add_hline(
@@ -998,7 +999,7 @@ async def create_visual_chart(history: list, dates: list = None):
         template="plotly_dark",
 
         paper_bgcolor="#050505",
-        plot_bgcolor="#050505",
+        plot_bgcolor="rgba(0,0,0,0)",
 
         showlegend=False,
 
@@ -1011,16 +1012,10 @@ async def create_visual_chart(history: list, dates: list = None):
 
         xaxis=dict(
             range=[-0.5, n - 0.5],
-            tickmode="array",
-            tickvals=list(range(n)),
-            ticktext=[str(i + 1) for i in range(n)],
+            showticklabels=False,
             showgrid=False,
             zeroline=False,
-            title=None,
-            tickfont=dict(
-                size=20,
-                color="rgba(255,255,255,0.8)"
-            )
+            title=None
         ),
 
         yaxis=dict(
@@ -1028,14 +1023,10 @@ async def create_visual_chart(history: list, dates: list = None):
                 0,
                 max(2.0, y_max + 0.2)
             ],
-            showgrid=True,
-            gridcolor="rgba(255,255,255,0.05)",
+            showticklabels=False,
+            showgrid=False,
             zeroline=False,
-            title=None,
-            tickfont=dict(
-                size=18,
-                color="rgba(255,255,255,0.65)"
-            )
+            title=None
         )
     )
 
