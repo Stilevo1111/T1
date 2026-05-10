@@ -16,6 +16,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 # =========================================================
+# MARKDOWN ESCAPE
+# =========================================================
+
+def escape_markdown_v2(text: str) -> str:
+    """Escape special characters for Telegram MarkdownV2"""
+    escape_chars = r"_*[]()~`>#+-=|{}.!"
+    return "".join(f"\\{c}" if c in escape_chars else c for c in text)
+
+# =========================================================
 # HERO CACHE
 # =========================================================
 
@@ -536,7 +545,7 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
     pro_full = f"{header_pro}\n\n{t1}"
     detailed_full = f"🔍 Детальное сравнение\n{t2}"
 
-    return {"pro": pro_full, "detailed": detailed_full}
+    return {"pro": escape_markdown_v2(pro_full), "detailed": escape_markdown_v2(detailed_full)}
 
 
 def generate_detailed_metrics_table(role: str, user_stats: dict) -> str:
@@ -600,7 +609,7 @@ def generate_detailed_metrics_table(role: str, user_stats: dict) -> str:
 
     feedback_text = "\n".join(feedback)
 
-    return f"📈 DETAILED METRICS \\({role}\\)\n\n{table}\n\n🧠 AI FEEDBACK\n{feedback_text}"
+    return escape_markdown_v2(f"📈 DETAILED METRICS \\({role}\\)\n\n{table}\n\n🧠 AI FEEDBACK\n{feedback_text}")
 
 
 # =========================================================
