@@ -790,18 +790,30 @@ async def create_visual_chart(history):
         dpi=100
     )
 
-    # Create gradient background from dark green to brown
-    gradient = np.linspace(0, 1, 256).reshape(1, -1)
-    gradient = np.vstack((gradient, gradient))
-
-    from matplotlib.colors import LinearSegmentedColormap
-    cmap = LinearSegmentedColormap.from_list("custom", ["#0a1f0f", "#2c1f14"])
-    ax.imshow(gradient, extent=[0, 1, 0, 1], aspect='auto',
-              cmap=cmap, alpha=1.0, zorder=-10,
-              transform=ax.transAxes)
-
-    fig.patch.set_facecolor("#0a1f0f")
-    ax.set_facecolor("none")  # Transparent to show gradient
+    # Load custom background image
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://i.ibb.co/39KgbrCY/photo-2026-05-10-21-24-42.png", timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    bg_data = await resp.read()
+                    bg_image = Image.open(io.BytesIO(bg_data)).convert("RGBA").resize((1200, 800), Image.Resampling.LANCZOS)
+                    ax.imshow(bg_image, extent=[0.5, len(x) + 0.5, 0, max(2.0, max(impacts) + 0.2)], aspect='auto', zorder=-10)
+                    fig.patch.set_facecolor("#0a1f0f")
+                    ax.set_facecolor("none")
+                else:
+                    raise Exception("Failed to load background")
+    except Exception as e:
+        logger.warning(f"Failed to load custom background, using gradient: {e}")
+        # Fallback to gradient background
+        gradient = np.linspace(0, 1, 256).reshape(1, -1)
+        gradient = np.vstack((gradient, gradient))
+        from matplotlib.colors import LinearSegmentedColormap
+        cmap = LinearSegmentedColormap.from_list("custom", ["#0a1f0f", "#2c1f14"])
+        ax.imshow(gradient, extent=[0, 1, 0, 1], aspect='auto',
+                  cmap=cmap, alpha=1.0, zorder=-10,
+                  transform=ax.transAxes)
+        fig.patch.set_facecolor("#0a1f0f")
+        ax.set_facecolor("none")
 
     # Fill area under the curve with semi-transparent brown
     ax.fill_between(x, impacts, 0, color="#8B4513", alpha=0.3)
