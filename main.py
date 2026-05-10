@@ -411,8 +411,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=reply_markup
             )
 
-            context.user_data['analytics_pro'] = data["pro_text"]
-            context.user_data['analytics_detailed'] = data["detailed_text"]
             context.user_data['analytics_stats'] = data["stats"]
             context.user_data['analytics_role'] = data["role"]
         else:
@@ -2490,8 +2488,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await callback_query.answer()
             await link(update, context)
         elif data == "analytics_pro":
-            pro_text = context.user_data.get('analytics_pro')
-            if pro_text:
+            from weekly_analytics import generate_report_text
+            stats = context.user_data.get('analytics_stats')
+            role = context.user_data.get('analytics_role')
+            if stats and role:
+                pro_text = generate_report_text(role, stats)
                 await callback_query.message.reply_text(pro_text, parse_mode="MarkdownV2")
             else:
                 await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
