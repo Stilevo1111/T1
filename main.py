@@ -3243,9 +3243,6 @@ else:
         except Exception as e:
             logger.error(f"Could not generate heroes image: {e}", exc_info=True)
 
-        except Exception as e:
-            logger.error(f"Could not generate heroes image: {e}", exc_info=True)
-
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
