@@ -486,6 +486,7 @@ async def generate_weekly_analytics(telegram_id: int):
     total_wins = 0
 
     game_history = []
+    match_dates = []
 
     for m in matches:
 
@@ -519,6 +520,14 @@ async def generate_weekly_analytics(telegram_id: int):
             "imp": imp,
             "hero_id": m.get("hero_id", 0)
         })
+
+        # Store date for x-axis label
+        ts = m.get("start_time", 0)
+        try:
+            dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+            match_dates.append(dt)
+        except Exception:
+            match_dates.append(None)
 
         total_gpm += gpm
         total_kills += kills
@@ -571,7 +580,7 @@ async def generate_weekly_analytics(telegram_id: int):
     detailed_text = tables["detailed"]
 
     # График
-    chart_image = await create_visual_chart(game_history)
+    chart_image = await create_visual_chart(game_history, match_dates)
 
     return {
         "image": chart_image,
@@ -585,9 +594,10 @@ async def generate_weekly_analytics(telegram_id: int):
 # CHART
 # =========================================================
 
-async def create_visual_chart(history: list):
+async def create_visual_chart(history: list, match_dates: list = None):
 
     impacts = [g["imp"] for g in history]
+    n = len(history)
 
     fig = go.Figure()
 
@@ -616,8 +626,8 @@ async def create_visual_chart(history: list):
                         yref="y",
                         x=i,
                         y=g["imp"],
-                        sizex=0.4,
-                        sizey=0.4,
+                        sizex=0.6,
+                        sizey=0.6,
                         xanchor="center",
                         yanchor="middle"
                     )
@@ -633,7 +643,7 @@ async def create_visual_chart(history: list):
                     color = None
 
                 if color:
-                    radius = 0.28
+                    radius = 0.42
                     fig.add_shape(
                         type="circle",
                         xref="x",
@@ -649,15 +659,44 @@ async def create_visual_chart(history: list):
         except Exception:
             logger.exception("Hero image failed")
 
+    # Y-axis range with padding
+    y_min = min(impacts) if impacts else 0
+    y_max = max(impacts) if impacts else 1
+    y_pad = (y_max - y_min) * 0.15 if y_max > y_min else 0.2
+    y_range = [max(0, y_min - y_pad), y_max + y_pad]
+
+    # X-axis date labels
+    x_tick_vals = list(range(n))
+    x_tick_text = []
+    if match_dates:
+        for dt in match_dates:
+            if isinstance(dt, datetime):
+                x_tick_text.append(dt.strftime("%m.%d"))
+            else:
+                x_tick_text.append(str(dt))
+    else:
+        x_tick_text = [str(i+1) for i in range(n)]
+
     fig.update_layout(
         template="plotly_dark",
         paper_bgcolor="#18181b",
         plot_bgcolor="#18181b",
-        margin=dict(t=40, b=40, l=60, r=60),
+        margin=dict(t=40, b=60, l=60, r=60),
         height=400,
         width=800,
         showlegend=False,
-        xaxis=dict(range=[-0.5, max(9.5, len(history) - 0.5)])
+        xaxis=dict(
+            range=[-0.5, max(9.5, n - 0.5)],
+            tickmode="array",
+            tickvals=x_tick_vals,
+            ticktext=x_tick_text,
+            tickfont=dict(size=12)
+        ),
+        yaxis=dict(
+            range=y_range,
+            gridcolor='rgba(255,255,255,0.05)',
+            zeroline=False
+        )
     )
 
     img_bytes = fig.to_image(
@@ -666,26 +705,6 @@ async def create_visual_chart(history: list):
     )
 
     img = Image.open(io.BytesIO(img_bytes))
-
-    draw = ImageDraw.Draw(img)
-
-    try:
-        font = ImageFont.truetype("DejaVuSans.ttf", 20)
-    except Exception:
-        font = ImageFont.load_default()
-
-    draw.rounded_rectangle(
-        [620, 20, 790, 60],
-        radius=14,
-        fill="#22c55e"
-    )
-
-    draw.text(
-        (640, 30),
-        "Прогрес импакта",
-        fill="white",
-        font=font
-    )
 
     out = io.BytesIO()
     img.save(out, format="PNG")
