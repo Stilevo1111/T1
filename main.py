@@ -2495,12 +2495,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             role = context.user_data.get('analytics_role')
             if stats and role:
                 pro_text = generate_report_text(role, stats)
-                # Delete old message and send new one
-                await callback_query.message.delete()
+                msg = await callback_query.message.reply_text(pro_text, parse_mode=None)
+                schedule_delete(context.bot, callback_query.message.chat.id, msg.message_id, 30, context.application.job_queue)
+            else:
+                await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
+            await callback_query.answer()
+        elif data == "analytics_detailed":
+            from weekly_analytics import generate_detailed_metrics_table
+            stats = context.user_data.get('analytics_stats')
+            role = context.user_data.get('analytics_role')
+            if stats and role:
+                detailed_text = generate_detailed_metrics_table(role, stats)
                 msg = await context.bot.send_message(
                     chat_id=callback_query.message.chat.id,
-                    text=pro_text,
-                    parse_mode="MarkdownV2"
+                    text=detailed_text,
+                    parse_mode=None
                 )
                 schedule_delete(context.bot, callback_query.message.chat.id, msg.message_id, 30, context.application.job_queue)
             else:
