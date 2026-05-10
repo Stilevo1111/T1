@@ -2438,14 +2438,27 @@ def update_weekly_digest_snapshot():
     return result
 
 def get_dota_mmr_top(limit=10):
-    """Получение топа игроков Dota 2 по MMR"""
+    """Получение топа игроков Dota 2 по MMR с кешем"""
+    import json
+    from main import get_config, set_config
+
+    # Попытка загрузить из кеша config
+    cached = get_config('mmr_top_cache')
+    if cached:
+        try:
+            cached_top = json.loads(cached)
+            logger.info(f"get_dota_mmr_top: loaded from cache, {len(cached_top)} users")
+            return cached_top[:limit]
+        except Exception as e:
+            logger.warning(f"Failed to load MMR top cache: {e}")
+
     try:
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
-        
+
         cursor = conn.cursor()
-        
+
         if "postgres" in scheme:
             cursor.execute("""
                 SELECT telegram_id, username, steam_nickname, mmr, 
@@ -2456,19 +2469,27 @@ def get_dota_mmr_top(limit=10):
                                ELSE 0 END as winrate
                   FROM users
                   WHERE steam_id IS NOT NULL AND rank_tier > 0
-             ORDER BY 
-                 CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                 (wins - losses) DESC,
-                 week_games DESC,
-                 mmr DESC
+              ORDER BY 
+                  rank_tier DESC,
+                  mmr DESC,
+                  wins DESC
              LIMIT %s
-             """, (limit,))
+            """, (limit,))
             users = cursor.fetchall()
             cursor.close()
-            return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
+            result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
                     "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
                     "week_games": u[6], "week_wins": u[7],
                     "rank_tier": u[8], "wins": u[9], "losses": u[10]} for u in users]
+
+            # Сохранить в кеш config
+            try:
+                set_config('mmr_top_cache', json.dumps(result))
+                logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
+            except Exception as e:
+                logger.warning(f"Failed to save MMR top cache: {e}")
+
+            return result
         else:
             cursor.execute("""
                 SELECT telegram_id, username, steam_nickname, mmr, 
@@ -2479,19 +2500,27 @@ def get_dota_mmr_top(limit=10):
                              ELSE 0 END as winrate
                 FROM users
                 WHERE steam_id IS NOT NULL AND rank_tier > 0
-                ORDER BY 
-                    CASE WHEN week_games > 0 THEN 0 ELSE 1 END,
-                    (wins - losses) DESC,
-                    week_games DESC,
-                    mmr DESC
+                 ORDER BY 
+                     rank_tier DESC,
+                     mmr DESC,
+                     wins DESC
                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
             cursor.close()
-            return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], 
+            result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
                     "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
                     "week_games": u[6], "week_wins": u[7],
                     "rank_tier": u[8], "wins": u[9], "losses": u[10]} for u in users]
+
+            # Сохранить в кеш config
+            try:
+                set_config('mmr_top_cache', json.dumps(result))
+                logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
+            except Exception as e:
+                logger.warning(f"Failed to save MMR top cache: {e}")
+
+            return result
     except Exception as e:
         logger.error(f"Error get_dota_mmr_top: {e}")
         return []
