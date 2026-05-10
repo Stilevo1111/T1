@@ -390,6 +390,71 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
 
     return {"pro": pro_full, "detailed": detailed_full}
 
+
+def generate_detailed_metrics_table(role: str, user_stats: dict) -> str:
+    """Отдельная detailed metrics table для кнопки 'Детальное сравнение🔥'"""
+
+    db = PRO_DB.get(role, PRO_DB["CARRY"])
+    bench = db["benchmarks"]
+
+    metrics = [
+        ("GPM", user_stats["gpm"], bench["gpm"]),
+        ("XPM", user_stats["xpm"], bench["xpm"]),
+        ("Deaths", user_stats["deaths"], bench["deaths"]),
+        ("Hero DMG", user_stats["h_dmg"], bench["h_dmg"]),
+        ("Tower DMG", user_stats["t_dmg"], bench["t_dmg"]),
+        ("Utility", user_stats["util"], bench["utility"]),
+        ("APM", user_stats["apm"], bench["apm"]),
+        ("Win Rate", user_stats["wr"], 60.0),
+    ]
+
+    table = "```\n"
+    table += "METRIC         YOU      PRO      Δ      STATUS\n"
+    table += "------------------------------------------------\n"
+
+    for label, user_value, pro_value in metrics:
+        diff = user_value - pro_value
+        better = diff < 0 if label == "Deaths" else diff > 0
+        arrow = "↑" if better else "↓"
+
+        ratio = user_value / pro_value if pro_value > 0 else 1
+
+        if ratio >= 1.10:
+            status = "🔥 ELITE"
+        elif ratio >= 0.95:
+            status = "✅ GOOD"
+        elif ratio >= 0.80:
+            status = "⚠️ AVG"
+        else:
+            status = "❌ LOW"
+
+        table += (
+            f"{label:<14}"
+            f"{user_value:>7.1f} "
+            f"{pro_value:>8.1f} "
+            f"{arrow:>4} "
+            f"{status:<10}\n"
+        )
+
+    table += "```"
+
+    feedback = []
+    if user_stats["gpm"] < bench["gpm"] * 0.85:
+        feedback.append("• Low GPM → improve farming patterns and lane efficiency")
+    if user_stats["deaths"] > bench["deaths"] * 1.2:
+        feedback.append("• Too many deaths → improve map awareness")
+    if user_stats["apm"] < bench["apm"] * 0.85:
+        feedback.append("• Low APM → increase active map participation")
+    if user_stats["util"] < bench["utility"] * 0.75:
+        feedback.append("• Low utility impact → improve team contribution")
+    if not feedback:
+        feedback.append("• Strong performance relative to PRO benchmarks")
+
+    feedback_text = "\n".join(feedback)
+
+    return f"📈 DETAILED METRICS \\({role}\\)\n\n{table}\n\n🧠 AI FEEDBACK\n{feedback_text}"
+
+
 # =========================================================
 # MAIN ANALYTICS
 # =========================================================
@@ -509,7 +574,8 @@ async def generate_weekly_analytics(telegram_id: int):
         "image": chart_image,
         "pro_text": pro_text,
         "detailed_text": detailed_text,
-        "role": role
+        "role": role,
+        "stats": user_stats
     }
 
 # =========================================================

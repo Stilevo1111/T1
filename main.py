@@ -393,30 +393,26 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = await generate_weekly_analytics(update.effective_user.id)
 
         if data:
-            # Send chart photo
             photo_buf = io.BytesIO(data["image"])
             photo_buf.name = "weekly_analytics.png"
+
+            keyboard = [
+                [InlineKeyboardButton("📊 Сравнение с PRO", callback_data="analytics_pro")],
+                [InlineKeyboardButton("Детальное сравнение🔥", callback_data="analytics_detailed")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo_buf,
-                caption="📊 График IMP по 10 матчам\\. PRO Target \\= 1\\.0"
-            )
-
-            # Store table texts in user_data for callbacks
-            context.user_data['analytics_pro'] = data["pro_text"]
-            context.user_data['analytics_detailed'] = data["detailed_text"]
-
-            # Send message with inline buttons
-            keyboard = [
-                [InlineKeyboardButton("📊 Сравнение с PRO", callback_data="analytics_pro")],
-                [InlineKeyboardButton("🔍 Детальное сравнение", callback_data="analytics_detailed")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="Выберите раздел аналитики:",
+                caption="📊 График IMP по 10 матчам\\. PRO Target \\= 1\\.0",
                 reply_markup=reply_markup
             )
+
+            context.user_data['analytics_pro'] = data["pro_text"]
+            context.user_data['analytics_detailed'] = data["detailed_text"]
+            context.user_data['analytics_stats'] = data["stats"]
+            context.user_data['analytics_role'] = data["role"]
         else:
             await context.bot.send_message(
                 chat_id=chat_id,
@@ -2499,8 +2495,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
             await callback_query.answer()
         elif data == "analytics_detailed":
-            detailed_text = context.user_data.get('analytics_detailed')
-            if detailed_text:
+            from weekly_analytics import generate_detailed_metrics_table
+            stats = context.user_data.get('analytics_stats')
+            role = context.user_data.get('analytics_role')
+            if stats and role:
+                detailed_text = generate_detailed_metrics_table(role, stats)
                 await callback_query.message.reply_text(detailed_text, parse_mode="MarkdownV2")
             else:
                 await callback_query.answer("Данные устарели. Запросите аналитику снова.", show_alert=True)
