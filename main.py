@@ -3261,79 +3261,56 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += "\n\n💡 /profile ＠ник — чужой профиль"
 
         # Banner URL - для Steam использовать картинку с героями
-        logger.info("Setting profile_banner_url to None")
-        profile_banner_url = None
+        profile_banner_url = "https://i.ibb.co/n8g8yQYt/dasdsadasdsadasdsad.png"
 
         try:
             from dota_mmr import get_top_heroes_async, generate_heroes_image
-
-            # Get top heroes data if Steam is linked
-            top_heroes = []
-            if target_user.get('steam_id'):
-                try:
-                    top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
-                    logger.info(f"Fetched top_heroes for steam_id {target_user['steam_id']}: {len(top_heroes)} heroes")
-                except Exception as e:
-                    logger.warning(f"Could not get top heroes: {e}")
-                    top_heroes = []
-
-            try:
-                logger.info(f"Generating heroes image for {len(top_heroes)} heroes")
-                img_bytes = generate_heroes_image(top_heroes)
-                if img_bytes and len(img_bytes) > 0:
+            top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
+            logger.info(f"Fetched top_heroes for steam_id {target_user.get('steam_id')}: {len(top_heroes)} heroes")
+            if top_heroes:
+                img_bytes = await asyncio.to_thread(generate_heroes_image, top_heroes)
+                if img_bytes:
                     profile_banner_url = io.BytesIO(img_bytes)
                     logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
                 else:
-                    logger.warning(f"generate_heroes_image returned None or empty bytes (type: {type(img_bytes)}, len: {len(img_bytes) if img_bytes else 'N/A'})")
-                    profile_banner_url = None
-            except Exception as e:
-                logger.error(f"Could not generate heroes image: {e}", exc_info=True)
-                profile_banner_url = None
-            
-            # Only send photo if we have valid image data
-            logger.info(f"Final profile_banner_url check: {type(profile_banner_url)}, value: {profile_banner_url is not None}")
-            if profile_banner_url and isinstance(profile_banner_url, io.BytesIO):
-                logger.info("Sending profile with generated hero banner")
-                result_msg = await context.bot.send_photo(
-                    chat_id=update.message.chat_id,
-                    photo=profile_banner_url,
-                    caption=text,
-                    parse_mode="HTML",
-                    reply_markup=main_menu()
-                )
-                logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
-
-                # Delete loading message immediately after successful send
-                if loading_msg:
-                    logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
-                    try:
-                        await context.bot.delete_message(chat_id, loading_msg.message_id)
-                        logger.error(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
-                    except Exception as del_e:
-                        logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
-                else:
-                    logger.error(f"ERROR: loading_msg is None! Cannot delete.")
+                    logger.warning("generate_heroes_image returned None")
             else:
-                # Send text-only message if no image could be generated
-                logger.info(f"Sending text-only profile (no hero banner available). profile_banner_url type: {type(profile_banner_url)}")
-                result_msg = await context.bot.send_message(
-                    chat_id=update.message.chat_id,
-                    text=text,
-                    parse_mode="HTML",
-                    reply_markup=main_menu()
-                )
-                logger.info(f"Text-only stats message sent successfully, result_msg_id={result_msg.message_id}")
+                logger.warning("get_top_heroes_async returned empty list")
+        except Exception as e:
+            logger.error(f"Could not generate heroes image: {e}", exc_info=True)
 
-                # Delete loading message
-                if loading_msg:
-                    logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
-                    try:
-                        await context.bot.delete_message(chat_id, loading_msg.message_id)
-                        logger.error(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
-                    except Exception as del_e:
-                        logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
-                else:
-                    logger.error(f"ERROR: loading_msg is None! Cannot delete.")
+        try:
+            result_msg = await context.bot.send_photo(
+                chat_id=update.message.chat_id,
+                photo=profile_banner_url,
+                caption=text,
+                parse_mode="HTML",
+                reply_markup=main_menu()
+            )
+            logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
+
+            # Delete loading message immediately after successful send
+            if loading_msg:
+                logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
+                try:
+                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                    logger.error(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
+                except Exception as del_e:
+                    logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
+            else:
+                logger.error(f"ERROR: loading_msg is None! Cannot delete.")
+
+        except Exception as e:
+            logger.error(f"Failed to send photo: {e}")
+            if loading_msg:
+                try:
+                    msg_id = loading_msg.message_id
+                    logger.info(f"Deleting loading message in stats: chat_id={chat_id}, msg_id={msg_id}")
+                    await context.bot.delete_message(chat_id, msg_id)
+                    logger.info(f"Successfully deleted loading message {msg_id}")
+                except Exception as del_e:
+                    logger.error(f"Failed to delete loading message in stats: {del_e}")
+            return
 
         except Exception as e:
             logger.error(f"Could not generate heroes image: {e}", exc_info=True)
@@ -3691,38 +3668,11 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     identifier = args[0] if args else None
 
-    # Если аргументов нет - показываем инструкцию
-    if not identifier:
-        help_text = """🎮 Привязка Steam аккаунта
-
-<b>Как найти Steam ID:</b>
-1. Зайдите на сайт: https://steamid.io/
-2. Введите свой ник или ссылку на профиль
-3. Скопируйте <b>steamID64</b> (начинается с 7656119...)
-
-<b>Примеры команд:</b>
-• /link 76561198000000000
-• /link your_nickname
-
-<b>Важно:</b>
-• Профиль должен быть открыт для всех
-• Нужно сыграть минимум 1 игру в Dota 2
-• Используйте SteamID64, а не короткий ID"""
-
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=help_text,
-            parse_mode="HTML"
-        )
-        return
-
-    # Если есть аргумент - привязываем
+    # Если есть аргумент - сразу привязываем
     if identifier:
-        logger.info(f"Link command called with identifier: {identifier}")
         try:
             from dota_mmr import register_steam
             result = register_steam(update.effective_user.id, identifier)
-            logger.info(f"Register steam result: {result}")
 
             # Delete previous bot message before sending new one
             try:
@@ -3743,9 +3693,40 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.1)
         except Exception as e:
             logger.error(f"Error in link: {e}", exc_info=True)
-            msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Dota аккаунта", reply_markup=main_menu())
-            schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.application.job_queue)
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Dota аккаунта", reply_markup=main_menu())
         return
+
+    # Если нет аргумента - отправляем инструкцию
+    # Delete previous bot message before sending new one
+    try:
+        await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+    except Exception as e:
+        logger.debug(f"Could not delete last bot message: {e}")
+
+    link_banner_url = "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"
+    link_text = ("🦞 *Привязать Аккаунт Dota 2*\n\n"
+    "Добавить в друзья → Ваш ID → копировать →\n"
+    "`/link 347614947`\n\n"
+    "Или ссылку на dotabuff →\n"
+    "`/link https://ru.dotabuff.com/players/347614699`\n\n"
+    "⚠️ в игре:\n"
+    "Настройки → расширенные → сообщество → общедоступная история матчей (вкл)")
+
+    result_msg = await context.bot.send_photo(
+        chat_id=update.effective_chat.id,
+        photo=link_banner_url,
+        caption=link_text,
+        parse_mode='Markdown',
+        reply_markup=main_menu()
+    )
+    # Track this message for future deletion
+    set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+    add_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+    schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+    update_last_message_id(update.effective_user.id, result_msg.message_id)
+
+    # Small delay to ensure message is visible
+    await asyncio.sleep(0.1)
 
     # Если нет аргумента - отправляем инструкцию
     # Delete previous bot message before sending new one
