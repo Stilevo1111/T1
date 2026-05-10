@@ -362,10 +362,9 @@ def generate_report_text(role: str, user_stats: dict):
 
     t1 += "```"
 
-    return (
-        f"📊 ANALYTICS ({role})\n\n"
-        f"{t1}"
-    )
+    # Escape parentheses for MarkdownV2
+    header = f"📊 ANALYTICS \\({role}\\)"
+    return f"{header}\n\n{t1}"
 
 # =========================================================
 # MAIN ANALYTICS
