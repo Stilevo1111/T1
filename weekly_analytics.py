@@ -691,104 +691,183 @@ async def generate_weekly_analytics(telegram_id: int):
 # CHART
 # =========================================================
 
-async def create_visual_chart(history: list):
+async def create_visual_chart(history: list, dates: list = None):
 
-    if not history:
+    impacts = [g["imp"] for g in history]
+
+    if not impacts:
         return None
 
-    impacts = [x["imp"] for x in history]
-    games = list(range(1, len(history) + 1))
+    n = len(history)
 
-    y_min = min(impacts)
-    y_max = max(impacts)
-
-    padding = 0.25
+    avg_imp = sum(impacts) / len(impacts)
 
     fig = go.Figure()
 
     # =====================================================
-    # MAIN PERFORMANCE LINE
+    # BACKGROUND ZONES (symmetrical around 1.0)
     # =====================================================
 
-    fig.add_trace(
-        go.Scatter(
-            x=games,
-            y=impacts,
-            mode="lines",
-            line=dict(
-                color="#f59e0b",
-                width=5,
-                shape="spline",
-                smoothing=1.15
-            ),
-            fill="tozeroy",
-            fillcolor="rgba(245,158,11,0.10)"
+    CENTER = 1.0
+
+    # Red zone: 0 → 1.0
+    fig.add_hrect(
+        y0=0,
+        y1=CENTER,
+        fillcolor="rgba(239,68,68,0.10)",
+        line_width=0
+    )
+
+    # Green zone: 1.0 → top
+    fig.add_hrect(
+        y0=CENTER,
+        y1=max(1.8, max(impacts) + 0.2),
+        fillcolor="rgba(34,197,94,0.10)",
+        line_width=0
+    )
+
+    # Center line at IMP = 1.0
+    fig.add_hline(
+        y=CENTER,
+        line_dash="solid",
+        line_color="rgba(255,255,255,0.15)",
+        line_width=2
+    )
+
+    # =====================================================
+    # AVERAGE LINE
+    # =====================================================
+
+    fig.add_hline(
+        y=avg_imp,
+        line_dash="dash",
+        line_color="rgba(255,255,255,0.35)",
+        line_width=2
+    )
+
+    fig.add_annotation(
+        x=n - 0.5,
+        y=avg_imp + 0.015,
+        text=f"AVG {avg_imp:.2f}",
+        showarrow=False,
+        font=dict(
+            size=18,
+            color="rgba(255,255,255,0.75)"
         )
     )
 
     # =====================================================
-    # GLOW LAYER
+    # MAIN LINE GLOW
     # =====================================================
 
     fig.add_trace(
         go.Scatter(
-            x=games,
+            x=list(range(n)),
             y=impacts,
-            mode="markers",
-            marker=dict(
-                size=26,
-                color="rgba(245,158,11,0.18)"
+            mode="lines",
+            line=dict(
+                color="rgba(255,170,0,0.25)",
+                width=16,
+                shape="spline",
+                smoothing=1.0
             ),
             hoverinfo="skip"
         )
     )
 
     # =====================================================
-    # MAIN POINTS
+    # MAIN LINE
     # =====================================================
 
     fig.add_trace(
         go.Scatter(
-            x=games,
+            x=list(range(n)),
             y=impacts,
-            mode="markers",
-            marker=dict(
-                size=12,
-                color="#f59e0b",
-                line=dict(
-                    color="white",
-                    width=2
-                )
+            mode="lines+markers",
+            line=dict(
+                color="#ffb000",
+                width=6,
+                shape="spline",
+                smoothing=1.0
             ),
-            hovertemplate=(
-                "<b>Game %{x}</b><br>"
-                "IMP: %{y}<extra></extra>"
-            )
+            marker=dict(
+                size=10,
+                color="#ffb000"
+            ),
+            fill="tozeroy",
+            fillcolor="rgba(255,176,0,0.12)",
+            hoverinfo="skip"
         )
     )
 
     # =====================================================
-    # HERO ICONS
+    # HERO ICONS WITH COLORED BORDERS & GLOW
     # =====================================================
 
-    for idx, game in enumerate(history):
+    for i, g in enumerate(history):
 
         try:
 
-            hero_img = await get_hero_icon(game["hero_id"])
+            img = await get_hero_icon(g["hero_id"])
 
-            if not hero_img:
+            if not img:
                 continue
 
+            imp = g["imp"]
+
+            # Border color based on performance
+            if imp >= 1.0:
+                border = "#22c55e"  # green
+            elif imp >= 0.8:
+                border = "#f59e0b"  # orange
+            else:
+                border = "#ef4444"  # red
+
+            # Glow effect (large transparent marker)
+            fig.add_trace(
+                go.Scatter(
+                    x=[i],
+                    y=[imp],
+                    mode="markers",
+                    marker=dict(
+                        size=38,
+                        color=border,
+                        opacity=0.22
+                    ),
+                    hoverinfo="skip",
+                    showlegend=False
+                )
+            )
+
+            # Border ring (transparent fill, colored stroke)
+            fig.add_trace(
+                go.Scatter(
+                    x=[i],
+                    y=[imp],
+                    mode="markers",
+                    marker=dict(
+                        size=30,
+                        color="rgba(0,0,0,0)",
+                        line=dict(
+                            color=border,
+                            width=4
+                        )
+                    ),
+                    hoverinfo="skip",
+                    showlegend=False
+                )
+            )
+
+            # Hero icon
             fig.add_layout_image(
                 dict(
-                    source=hero_img,
+                    source=img,
                     xref="x",
                     yref="y",
-                    x=games[idx],
-                    y=impacts[idx],
-                    sizex=0.42,
-                    sizey=0.42,
+                    x=i,
+                    y=imp,
+                    sizex=0.28,
+                    sizey=0.28,
                     xanchor="center",
                     yanchor="middle",
                     layer="above"
@@ -799,40 +878,11 @@ async def create_visual_chart(history: list):
             logger.exception("Hero image failed")
 
     # =====================================================
-    # PERFORMANCE ZONES
+    # AXIS
     # =====================================================
 
-    fig.add_hrect(
-        y0=1.0,
-        y1=max(y_max + padding, 1.3),
-        fillcolor="rgba(34,197,94,0.08)",
-        line_width=0
-    )
-
-    fig.add_hrect(
-        y0=0,
-        y1=0.8,
-        fillcolor="rgba(239,68,68,0.06)",
-        line_width=0
-    )
-
-    # =====================================================
-    # AVERAGE LINE
-    # =====================================================
-
-    avg_imp = round(sum(impacts) / len(impacts), 2)
-
-    fig.add_hline(
-        y=avg_imp,
-        line_dash="dash",
-        line_color="rgba(255,255,255,0.25)",
-        annotation_text=f"AVG IMP {avg_imp}",
-        annotation_position="top right"
-    )
-
-    # =====================================================
-    # LAYOUT
-    # =====================================================
+    y_min = min(impacts)
+    y_max = max(impacts)
 
     fig.update_layout(
 
@@ -841,53 +891,45 @@ async def create_visual_chart(history: list):
 
         template="plotly_dark",
 
-        paper_bgcolor="#0f0f10",
-        plot_bgcolor="#0f0f10",
+        paper_bgcolor="#050505",
+        plot_bgcolor="#050505",
 
         showlegend=False,
 
         margin=dict(
-            t=50,
-            b=70,
-            l=70,
-            r=50
-        ),
-
-        title=dict(
-            text="WEEKLY PERFORMANCE",
-            x=0.5,
-            font=dict(
-                size=28
-            )
+            t=40,
+            b=40,
+            l=40,
+            r=40
         ),
 
         xaxis=dict(
-            title="MATCH",
-            range=[0.5, len(games) + 0.5],
-
+            range=[-0.5, n - 0.5],
             tickmode="array",
-            tickvals=games,
-
+            tickvals=list(range(n)),
+            ticktext=[str(i + 1) for i in range(n)],
             showgrid=False,
-
-            tickfont=dict(size=15),
-
-            zeroline=False
+            zeroline=False,
+            title=None,
+            tickfont=dict(
+                size=20,
+                color="rgba(255,255,255,0.8)"
+            )
         ),
 
         yaxis=dict(
-            title="IMP SCORE",
-
             range=[
-                max(0, y_min - padding),
-                y_max + padding
+                0,
+                max(2.0, y_max + 0.2)
             ],
-
-            gridcolor="rgba(255,255,255,0.06)",
-
-            tickfont=dict(size=14),
-
-            zeroline=False
+            showgrid=True,
+            gridcolor="rgba(255,255,255,0.05)",
+            zeroline=False,
+            title=None,
+            tickfont=dict(
+                size=18,
+                color="rgba(255,255,255,0.65)"
+            )
         )
     )
 
@@ -902,4 +944,6 @@ async def create_visual_chart(history: list):
         scale=2
     )
 
-    return img_bytes
+    out = io.BytesIO(img_bytes)
+
+    return out.getvalue()
