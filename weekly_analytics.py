@@ -1004,10 +1004,10 @@ async def create_visual_chart(history: list, dates: list = None):
         showlegend=False,
 
         margin=dict(
-            t=40,
-            b=40,
-            l=40,
-            r=40
+            t=0,
+            b=0,
+            l=0,
+            r=0
         ),
 
         xaxis=dict(

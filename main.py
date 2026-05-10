@@ -2513,8 +2513,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             role = context.user_data.get('analytics_role')
             if stats and role:
                 pro_text = generate_report_text(role, stats)["pro"]
-                # Delete old message and send new one
-                await callback_query.message.delete()
                 msg = await context.bot.send_message(
                     chat_id=callback_query.message.chat.id,
                     text=pro_text,
@@ -2530,8 +2528,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             role = context.user_data.get('analytics_role')
             if stats and role:
                 detailed_text = generate_detailed_metrics_table(role, stats)
-                # Delete old message and send new one
-                await callback_query.message.delete()
                 msg = await context.bot.send_message(
                     chat_id=callback_query.message.chat.id,
                     text=detailed_text,
