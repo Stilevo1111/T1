@@ -791,19 +791,27 @@ async def create_visual_chart(history):
     )
 
     # Load custom background image
+    bg_loaded = False
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get("https://i.ibb.co/39KgbrCY/photo-2026-05-10-21-24-42.png", timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status == 200:
                     bg_data = await resp.read()
                     bg_image = Image.open(io.BytesIO(bg_data)).convert("RGBA").resize((1200, 800), Image.Resampling.LANCZOS)
-                    ax.imshow(bg_image, extent=[0.5, len(x) + 0.5, 0, max(2.0, max(impacts) + 0.2)], aspect='auto', zorder=-10)
+                    # Cover full axes area
+                    ax.imshow(bg_image, extent=[0, 1, 0, 1], aspect='auto', zorder=-10, transform=ax.transAxes)
                     fig.patch.set_facecolor("#0a1f0f")
                     ax.set_facecolor("none")
+                    bg_loaded = True
+                    logger.info("Custom background image loaded successfully")
                 else:
-                    raise Exception("Failed to load background")
+                    logger.warning(f"Background image HTTP {resp.status}")
+                    raise Exception(f"HTTP {resp.status}")
     except Exception as e:
         logger.warning(f"Failed to load custom background, using gradient: {e}")
+        bg_loaded = False
+
+    if not bg_loaded:
         # Fallback to gradient background
         gradient = np.linspace(0, 1, 256).reshape(1, -1)
         gradient = np.vstack((gradient, gradient))
