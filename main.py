@@ -407,7 +407,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo_buf,
-                caption="🎯 ТВОЙ ИМПАКТ В 10 МАТЧАХ",
+                caption="🧠 Импакт в 10 последних матчах",
                 reply_markup=reply_markup
             )
 

@@ -830,7 +830,7 @@ async def create_visual_chart(history: list, dates: list = None):
                     y=[imp],
                     mode="markers",
                     marker=dict(
-                        size=38,
+                        size=76,
                         color=border,
                         opacity=0.22
                     ),
@@ -846,11 +846,11 @@ async def create_visual_chart(history: list, dates: list = None):
                     y=[imp],
                     mode="markers",
                     marker=dict(
-                        size=30,
+                        size=60,
                         color="rgba(0,0,0,0)",
                         line=dict(
                             color=border,
-                            width=4
+                            width=8
                         )
                     ),
                     hoverinfo="skip",
@@ -866,8 +866,8 @@ async def create_visual_chart(history: list, dates: list = None):
                     yref="y",
                     x=i,
                     y=imp,
-                    sizex=0.28,
-                    sizey=0.28,
+                    sizex=0.56,
+                    sizey=0.56,
                     xanchor="center",
                     yanchor="middle",
                     layer="above"
