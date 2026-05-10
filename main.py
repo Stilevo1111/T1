@@ -3237,7 +3237,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         logger.error(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
                     except Exception as del_e:
                         logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
-else:
+                else:
                     logger.error(f"ERROR: loading_msg is None! Cannot delete.")
 
         except Exception as e:
