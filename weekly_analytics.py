@@ -811,34 +811,27 @@ async def create_visual_chart(history: list, dates: list = None):
     fig = go.Figure()
 
     # =====================================================
-    # BACKGROUND ZONES
+    # BACKGROUND IMAGE
+    # =====================================================
+
+    fig.add_layout_image(
+        dict(
+            source="https://i.ibb.co/8Lt8vPv5/photo-2026-05-10-17-02-44.png",
+            xref="paper",
+            yref="paper",
+            x=0,
+            y=0,
+            sizex=1,
+            sizey=1,
+            layer="below"
+        )
+    )
+
+    # =====================================================
+    # CENTER LINE (removed, drawn on background)
     # =====================================================
 
     CENTER = 1.0
-
-    # Red zone: 0 → 1.0
-    fig.add_hrect(
-        y0=0,
-        y1=CENTER,
-        fillcolor="rgba(239,68,68,0.15)",
-        line_width=0
-    )
-
-    # Green zone: 1.0 → top
-    fig.add_hrect(
-        y0=CENTER,
-        y1=max(1.8, max(impacts) + 0.2),
-        fillcolor="rgba(34,197,94,0.15)",
-        line_width=0
-    )
-
-    # Center line at IMP = 1.0
-    fig.add_hline(
-        y=CENTER,
-        line_dash="solid",
-        line_color="rgba(255,255,255,0.15)",
-        line_width=2
-    )
 
     # =====================================================
     # AVERAGE LINE
@@ -998,15 +991,15 @@ async def create_visual_chart(history: list, dates: list = None):
         template="plotly_dark",
 
         paper_bgcolor="#050505",
-        plot_bgcolor="#050505",
+        plot_bgcolor="rgba(0,0,0,0)",
 
         showlegend=False,
 
         margin=dict(
-            t=40,
-            b=40,
-            l=40,
-            r=40
+            t=0,
+            b=0,
+            l=0,
+            r=0
         ),
 
         xaxis=dict(
