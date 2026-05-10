@@ -448,8 +448,8 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
     t1 += (
         f"{'YOU':<11}"
         f"{user_stats['wr']:>3}% "
-        f"{int(user_stats['lh']):>4} "
-        f"{int(user_stats['deny']):>3} "
+        f"{int(user_stats['lh10']):>4} "
+        f"{int(user_stats['deny10']):>3} "
         f"{int(user_stats['gpm']):>5} "
         f"{user_stats['kda']}\n"
     )
@@ -635,6 +635,8 @@ async def generate_weekly_analytics(telegram_id: int):
 
         if m.get("win", 0) == 1:
             total_wins += 1
+
+    logger.info(f"User {telegram_id} totals: gpm={total_gpm}, lh={total_lh}, denies={total_denies}, kills={total_kills}, deaths={total_deaths}, assists={total_assists}, wins={total_wins}, match_count={len(matches)}")
 
     match_count = len(matches)
 
