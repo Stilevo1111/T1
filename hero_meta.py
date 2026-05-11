@@ -5,10 +5,9 @@ import aiohttp
 import io
 import os
 import math
-import aiohttp
-import asyncio
 import logging
 from pathlib import Path
+from urllib.parse import urlparse
 from PIL import Image, ImageDraw, ImageFont
 from hero_positions import hero_positions
 
@@ -113,6 +112,9 @@ async def fetch_hero_icon(session, icon_path):
     # BUILD URL
     # ==========================================
 
+    # Clean the path - remove trailing ? or query params that might cause issues
+    icon_path = icon_path.split("?")[0].rstrip("/")
+
     if icon_path.startswith('/'):
         icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
 
@@ -168,19 +170,81 @@ async def fetch_hero_icon(session, icon_path):
 
     except Exception as e:
 
-        logger.error("Failed to load icon: %s", e)
+        logger.error("Failed to load icon from CDN: %s", e)
+
+        filename = os.path.basename(urlparse(icon_url).path)
+        hero_name = filename.replace("_sb.png", "").replace(".png", "")
+        local_path = Path("assets/heroes") / f"{hero_name}.png"
+        if local_path.exists():
+            try:
+                return Image.open(local_path).convert("RGBA")
+            except Exception:
+                pass
 
         return None
 
 
 async def get_dota_data(days=7):
-    url = "https://api.opendota.com/api/heroStats"
+    import time
+    now = int(time.time())
+    week_ago = now - (days * 24 * 60 * 60)
+    
+    sql = f"""
+        SELECT 
+            hero_id,
+            COUNT(*) as pub_pick,
+            SUM(
+                CASE 
+                    WHEN (radiant_win = TRUE AND player_slot < 128) OR 
+                         (radiant_win = FALSE AND player_slot >= 128) 
+                    THEN 1 ELSE 0 
+                END
+            ) as pub_win
+        FROM public_player_matches 
+        WHERE start_time >= {week_ago}
+        GROUP BY hero_id
+        HAVING COUNT(*) >= 10
+    """
+    
+    async def try_explorer():
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.opendota.com/api/explorer",
+                    data={"sql": sql},
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if data and "rows" in data and data["rows"]:
+                            return data["rows"]
+        except Exception as e:
+            logger.warning("Explorer failed: %s", e)
+        return None
+    
+    rows = await try_explorer()
+    
+    if rows:
+        hero_stats = []
+        for row in rows:
+            hero_stats.append({
+                "id": row["hero_id"],
+                "localized_name": f"Hero {row['hero_id']}",
+                "roles": [],
+                "pub_pick": row["pub_pick"],
+                "pub_win": row["pub_win"],
+                "img": f"/apps/dota2/images/dota/heroes/{row['hero_id']}_sb.png"
+            })
+        logger.info("Loaded %d heroes from last %d days via Explorer", len(hero_stats), days)
+        return await _enrich_with_hero_data(hero_stats)
+    
+    logger.warning("Using fallback to heroStats (all-time data)")
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+            async with session.get("https://api.opendota.com/api/heroStats", timeout=aiohttp.ClientTimeout(total=5)) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    logger.info("Loaded %d heroes from heroStats", len(data))
+                    logger.info("Loaded %d heroes from heroStats (all-time)", len(data))
                     return data
                 else:
                     logger.error("heroStats HTTP %d", resp.status)
@@ -188,6 +252,24 @@ async def get_dota_data(days=7):
     except Exception as e:
         logger.error("heroStats error: %s", e)
         return None
+
+
+async def _enrich_with_hero_data(hero_stats):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.opendota.com/api/heroes", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                if resp.status == 200:
+                    heroes = await resp.json()
+                    hero_map = {h["id"]: h for h in heroes}
+                    for hs in hero_stats:
+                        if hs["id"] in hero_map:
+                            hero = hero_map[hs["id"]]
+                            hs["localized_name"] = hero["localized_name"]
+                            hs["roles"] = hero.get("roles", [])
+                            hs["img"] = hero.get("img", hs["img"])
+    except Exception as e:
+        logger.warning("Could not enrich hero data: %s", e)
+    return hero_stats
 
 
 def _build_grid(hero_stats):
@@ -228,19 +310,19 @@ def _build_grid(hero_stats):
             'roles': hero.get("roles", []),
         })
 
-    # Group by position and sort by score
+    # Group by position and sort by winrate (highest first)
     by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
     for hero in processed_heroes:
         by_position[hero['position']].append(hero)
 
-    # Take top 5 by score for each position
+    # Take top 5 by winrate for each position (highest at top)
     grid = {}
     for pos in range(1, 6):
-        heroes = sorted(by_position[pos], key=lambda h: -h['score'])
+        heroes = sorted(by_position[pos], key=lambda h: -h['winrate'])
         grid[pos] = heroes[:5]
 
     # Ensure we have enough heroes - fill with heroes that can play the role if needed
-    all_heroes_sorted = sorted(processed_heroes, key=lambda h: -h['score'])
+    all_heroes_sorted = sorted(processed_heroes, key=lambda h: -h['winrate'])
 
     pos_role_map = {
         1: ["Carry"],
