@@ -274,9 +274,9 @@ def convert_opendota_roles(opendota_roles: list) -> str:
 
     roles = set(opendota_roles)
 
-    # SUPPORT
-    if "Support" in roles or "Disabler" in roles:
-        return "SUPPORT"
+    # CARRY - highest priority if Carry exists
+    if "Carry" in roles:
+        return "CARRY"
 
     # MID
     if "Nuker" in roles and "Escape" in roles:
@@ -286,9 +286,9 @@ def convert_opendota_roles(opendota_roles: list) -> str:
     if "Durable" in roles and "Initiator" in roles:
         return "OFFLANE"
 
-    # CARRY
-    if "Carry" in roles:
-        return "CARRY"
+    # SUPPORT
+    if "Support" in roles or "Disabler" in roles:
+        return "SUPPORT"
 
     return "SUPPORT"
 
