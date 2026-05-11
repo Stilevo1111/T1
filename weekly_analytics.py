@@ -860,7 +860,7 @@ async def create_visual_chart(history):
     ax.fill_between(
         x,
         impacts,
-        0,
+        min(impacts),
         color="#f4c430",
         alpha=0.50,
         zorder=3
