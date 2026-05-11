@@ -223,6 +223,7 @@ def _build_grid(hero_stats):
             'score': score,
             'winrate': winrate,
             'matches': matches,
+            'roles': hero.get("roles", []),
         })
 
     # Group by position and sort by score
@@ -236,7 +237,28 @@ def _build_grid(hero_stats):
         heroes = sorted(by_position[pos], key=lambda h: -h['score'])
         grid[pos] = heroes[:5]
 
-    # Do not fill from other positions to keep heroes in their roles
+    # Ensure we have enough heroes - fill with heroes that can play the role if needed
+    all_heroes_sorted = sorted(processed_heroes, key=lambda h: -h['score'])
+
+    pos_role_map = {
+        1: ["Carry"],
+        2: ["Mid"],
+        3: ["Offlane"],
+        4: ["Support", "Soft Support"],
+        5: ["Support", "Hard Support"]
+    }
+
+    for pos in range(1, 6):
+        if len(grid[pos]) < 5:
+            # Fill remaining slots with top heroes that have the role
+            needed_roles = pos_role_map[pos]
+            for h in all_heroes_sorted:
+                if h['id'] not in {hero['id'] for pos_list in grid.values() for hero in pos_list}:
+                    hero_roles = h.get('roles', [])
+                    if any(role in needed_roles for role in hero_roles):
+                        grid[pos].append(h)
+                        if len(grid[pos]) >= 5:
+                            break
 
     return grid
 
