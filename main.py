@@ -504,20 +504,14 @@ async def weekly_champion_announcement_job(context):
         logger.error(f"Ошибка в weekly_champion_announcement_job: {e}")
 
 
-async def announce_weekly_mmr_winner(bot):
-    """Отправляет поздравление победителю недельного топа MMR при смене недели."""
+async def weekly_mmr_reset_job(context):
+    """Сброс еженедельной статистики MMR в 00:00 MSK."""
     from datetime import datetime as dt, timezone, timedelta
     MSK = timezone(timedelta(hours=3))
     today_msk = dt.now(MSK)
     sunday_msk = today_msk - timedelta(days=(today_msk.weekday() + 1) % 7)
     current_week_start = sunday_msk.strftime("%Y-%m-%d")
 
-    last_announced = get_config('mmr_week_top_announced')
-    if last_announced == current_week_start:
-        return False
-
-    # Сброс еженедельной статистики ДО отправки поздравления,
-    # чтобы код сброса никогда не был мёртвым
     try:
         from database import get_connection, DATABASE_URL
         conn_reset = get_connection()
@@ -548,9 +542,21 @@ async def announce_weekly_mmr_winner(bot):
         cursor_reset.close()
         user_cache.clear()
         top_cache.clear()
-        logger.info("announce_weekly_mmr_winner: еженедельная статистика MMR сброшена")
+        logger.info("weekly_mmr_reset_job: еженедельная статистика MMR сброшена в 00:00 MSK")
     except Exception as e:
-        logger.error(f"announce_weekly_mmr_winner: ошибка при сбросе статистики: {e}")
+        logger.error(f"weekly_mmr_reset_job: ошибка при сбросе статистики: {e}")
+
+async def announce_weekly_mmr_winner(bot):
+    """Отправляет поздравление победителю недельного топа MMR при смене недели."""
+    from datetime import datetime as dt, timezone, timedelta
+    MSK = timezone(timedelta(hours=3))
+    today_msk = dt.now(MSK)
+    sunday_msk = today_msk - timedelta(days=(today_msk.weekday() + 1) % 7)
+    current_week_start = sunday_msk.strftime("%Y-%m-%d")
+
+    last_announced = get_config('mmr_week_top_announced')
+    if last_announced == current_week_start:
+        return False
 
     # Проверяем, есть ли игроки с данными за ПРОШЛУЮ неделю
     from database import get_connection as gc2
@@ -4153,10 +4159,17 @@ async def main():
             days=(0, 1, 2, 3, 4, 5, 6)
         )
 
-        # ✅ Объявление чемпиона недели в воскресенье 23:00 MSK (за час до конца недели)
+        # ✅ Объявление чемпиона недели в воскресенье 23:30 MSK
         job_queue.run_daily(
             weekly_champion_announcement_job,
-            time=datetime.time(hour=20, minute=0),  # 20:00 UTC = 23:00 MSK
+            time=datetime.time(hour=20, minute=30),  # 20:30 UTC = 23:30 MSK
+            days=(6,)  # Только воскресенье
+        )
+
+        # ✅ Сброс MMR статистики в воскресенье 00:00 MSK
+        job_queue.run_daily(
+            weekly_mmr_reset_job,
+            time=datetime.time(hour=21, minute=0),  # 21:00 UTC = 00:00 MSK
             days=(6,)  # Только воскресенье
         )
 
