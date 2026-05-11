@@ -825,7 +825,7 @@ async def create_visual_chart(history):
                     async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                         if resp.status == 200:
                             bg_data = await resp.read()
-                            bg_image = Image.open(io.BytesIO(bg_data)).convert("RGBA").resize((1500, 1000), Image.LANCZOS)
+                            bg_image = Image.open(io.BytesIO(bg_data)).convert("RGBA").resize((1200, 800), Image.LANCZOS)
                             # Cover full axes area
                             ax.imshow(bg_image, extent=[0, 1, 0, 1], aspect='auto', zorder=-10, transform=ax.transAxes)
                             fig.patch.set_facecolor("#0a1f0f")
@@ -989,6 +989,7 @@ async def create_visual_chart(history):
         buf,
         format="png",
         bbox_inches="tight",
+        pad_inches=0.0,
         facecolor=fig.get_facecolor(),
         dpi=100
     )
