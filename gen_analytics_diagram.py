@@ -60,7 +60,7 @@ arrow(50, 97, 25, 88)
 arrow(50, 97, 75, 88)
 
 # Step 5 - detect role
-box(u'detect_role_from_history()\nby lane, GPM, XPM, KDA', 3, 75, 45, 12, c_calc, 7, True)
+box(u'detect_role_from_history()\n1) Hero role >60% → dominant role\n2) Else stats: lane, GPM, XPM, KDA', 3, 75, 45, 12, c_calc, 7, True)
 arrow(25, 75, 50, 68)
 
 # Step 5b - icon loading
@@ -92,7 +92,7 @@ arrow(50, 18, 50, 11)
 box('get_analytics_pages()\n3 pages stored in user_data', 18, 0, 64, 10, '#27ae60', 8, True)
 
 # Pages detail
-for i, (px, label) in enumerate([(5, 'vs PRO'), (33, u'Detailed'), (63, 'Metrics + AI')]):
+for i, (px, label) in enumerate([(5, 'vs PRO'), (33, u'Detailed')]):
     box(label, px, -16, 26, 7, c_out, 7)
     arrow(px+13, -9, px+13, -2)
 

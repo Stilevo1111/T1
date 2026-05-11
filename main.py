@@ -418,14 +418,16 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if chart_data:
             history = chart_data.get("history", [])
             matches = chart_data.get("matches", [])
+            chart_image = chart_data.get("image")
             
-            # Calculate stats for text pages (lazy loaded later)
-            from weekly_analytics import get_analytics_pages, PRO_DB, IMP_WEIGHTS
+            # Ensure charts directory exists for potential caching
+            import os
+            os.makedirs("charts", exist_ok=True)
             
-            # Default stats - will be recalculated on button press
-            stats = {"wr": 50.0, "gpm": 500, "xpm": 600, "deaths": 4.0, 
-                     "h_dmg": 15.0, "t_dmg": 5.0, "util": 5.0, "apm": 250, "kda": "5/4/5"}
-            role = "CARRY"
+            from weekly_analytics import detect_role_from_history, calculate_player_stats
+            role = await detect_role_from_history(matches)
+            
+            stats = calculate_player_stats(matches)
             
             # Сохраняем данные для ленивой генерации страниц
             context.user_data['analytics_stats'] = stats
@@ -433,37 +435,20 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['analytics_page'] = 0
             context.user_data['analytics_history'] = history
             context.user_data['analytics_matches'] = matches
+            context.user_data['analytics_pages'] = [None, None]  # Placeholder - не генерируем сразу
+            context.user_data['analytics_generated'] = set()
 
-            # Генерируем только первую страницу сразу (без текста - только плейсхолдер)
-            tables_all = get_analytics_pages(role, stats)
-            first_page = tables_all[0]
-            context.user_data['analytics_pages'] = [first_page, None, None]
-            context.user_data['analytics_generated'] = {0}
-
-            if chart_data.get("image"):
-                # Send analytics with chart as photo - только график
-                photo_buf = io.BytesIO(chart_data["image"])
+            if chart_image:
+                # Send analytics with chart as photo - ТОЛЬКО ГРАФИК, без текста
+                photo_buf = io.BytesIO(chart_image)
                 photo_buf.name = "weekly_analytics.png"
 
-                reply_markup = _build_analytics_keyboard(0, len(tables_all), context.user_data['analytics_generated'])
+                reply_markup = _build_analytics_keyboard(0, 2, set())
 
                 result_msg = await context.bot.send_photo(
                     chat_id=chat_id,
                     photo=photo_buf,
-                    caption=first_page["text"],
-                    reply_markup=reply_markup,
-                    parse_mode="MarkdownV2"
-                )
-            else:
-                # Send text-based analytics if no chart available
-                header_text = f"🧠 Аналитика игрока {username}\n\nРоль: {role}\n\n"
-                full_text = header_text + first_page["text"]
-
-                reply_markup = _build_analytics_keyboard(0, len(tables_all), context.user_data['analytics_generated'])
-
-                result_msg = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=full_text,
+                    caption="📊 Аналитика готова. Нажмите кнопку для просмотра таблиц.",
                     reply_markup=reply_markup,
                     parse_mode="MarkdownV2"
                 )
@@ -2306,7 +2291,7 @@ def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: set = 
     """Build inline keyboard for analytics pagination."""
     rows = []
     page_buttons = []
-    labels = ["🆚 С ПРО", "🔍 Детально", "📈 Метрики"]
+    labels = ["🆚 С ПРО", "🔍 Детально"]
     for i in range(total_pages):
         label = f"⏳ {labels[i]}" if generated and i not in generated else labels[i]
         if i == page_idx:
@@ -2613,13 +2598,8 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         stats = context.user_data.get('analytics_stats', {})
         role = context.user_data.get('analytics_role', 'CARRY')
         all_pages = get_analytics_pages(role, stats)
-        # Заполняем пропуски в pages (может быть [page0, None, None])
-        for i, p in enumerate(all_pages):
-            if i < len(pages):
-                pages[i] = p
-            else:
-                pages.append(p)
-            generated.add(i)
+        pages = all_pages  # Replace placeholder with real pages
+        generated = set(range(len(pages)))
         context.user_data['analytics_pages'] = pages
         context.user_data['analytics_generated'] = generated
 
