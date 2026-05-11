@@ -1141,11 +1141,16 @@ async def alternate_digest_job(context):
                 _digest_state["dota_data"] = None
                 _digest_state["last_data_update"] = now
 
-            # При первом запуске после деплоя сбрасываем тип на "0"
-            if _digest_state.get("last_data_update") == 0:
+            # При первом запуске после деплоя - проверяем есть ли существующий пост
+            last_message_id = get_config('alternate_digest_message_id')
+            if last_message_id:
+                # Используем существующий пост, не сбрасываем тип
+                logger.info("alternate_digest_job: найден существующий пост, используем его")
+            elif _digest_state.get("last_data_update") == 0:
+                # Только если нет старого поста - сбрасываем тип
                 _digest_state["type"] = "0"
                 set_config('alternate_digest_type', "0")
-                logger.info("alternate_digest_job: сброшен тип на 0 после перезапуска")
+                logger.info("alternate_digest_job: сброшен тип на 0 после перезапуска (нет старого поста)")
 
             logger.info("Запуск alternate_digest_job")
 
@@ -1171,10 +1176,16 @@ async def alternate_digest_job(context):
         current_data_hash = get_digest_data_hash()
         data_changed = current_data_hash != cache.get("data_hash")
 
-        # 1. Если кеш пустой - генерируем
+        # 1. Если кеш пустой - проверяем есть ли существующий пост
+        last_message_id = get_config('alternate_digest_message_id')
         if cache["text"] is None:
-            should_regenerate = True
-            logger.info("Кеш дайджеста пуст, генерируем новый")
+            # Если есть существующий пост - используем его, не генерируем новый
+            if last_message_id:
+                logger.info("Кеш пуст, но есть существующий пост - используем его")
+                should_regenerate = False
+            else:
+                should_regenerate = True
+                logger.info("Кеш дайджеста пуст и нет существующего поста, генерируем новый")
 
         # 2. Если данные изменились - генерируем
         elif data_changed:
