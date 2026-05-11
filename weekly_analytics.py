@@ -752,9 +752,21 @@ async def create_visual_chart(history):
         logger.warning("matplotlib not available, skipping chart generation")
         return None
 
-    # =========================================
+    # =====================================================
+    # CANVAS SIZE EXACTLY 1200x800
+    # =====================================================
+
+    WIDTH = 1200
+    HEIGHT = 800
+
+    DPI = 100
+
+    FIG_W = WIDTH / DPI
+    FIG_H = HEIGHT / DPI
+
+    # =====================================================
     # LOAD BACKGROUND
-    # =========================================
+    # =====================================================
 
     background_url = (
         "https://i.ibb.co/FLpR1xDq/"
@@ -767,54 +779,70 @@ async def create_visual_chart(history):
         BytesIO(response.content)
     ).convert("RGB")
 
-    # =========================================
-    # DATA
-    # =========================================
+    # EXACT SIZE
+    bg = bg.resize(
+        (WIDTH, HEIGHT),
+        Image.LANCZOS
+    )
 
-    impacts = [
+    # =====================================================
+    # PREPARE DATA
+    # =====================================================
+
+    raw_impacts = [
         round(g["imp"], 2)
         for g in history[:10]
     ]
 
-    while len(impacts) < 10:
-        impacts.append(0.30)
+    while len(raw_impacts) < 10:
+        raw_impacts.append(0.4)
 
-    impacts = impacts[:10]
+    raw_impacts = raw_impacts[:10]
+
+    # =====================================================
+    # FORCE BIGGER MOVEMENT
+    # =====================================================
+
+    # old values compressed graph too much
+    # now remap into full 0.2 → 1.8 range
+
+    min_imp = min(raw_impacts)
+    max_imp = max(raw_impacts)
+
+    impacts = []
+
+    for value in raw_impacts:
+
+        normalized = (
+            (value - min_imp)
+            / max(max_imp - min_imp, 0.01)
+        )
+
+        scaled = 0.25 + (normalized * 1.45)
+
+        impacts.append(round(scaled, 2))
 
     x = np.arange(1, 11)
 
     avg = 0.61
 
-    # =========================================
-    # FIGURE 1200x800 EXACT
-    # =========================================
+    # =====================================================
+    # FIGURE
+    # =====================================================
 
     fig = plt.figure(
-        figsize=(12, 8),
-        dpi=100
+        figsize=(FIG_W, FIG_H),
+        dpi=DPI
     )
 
-    # УБИРАЕМ ВСЕ ОТСТУПЫ
-    fig.subplots_adjust(
-        left=0,
-        right=1,
-        top=1,
-        bottom=0
-    )
+    # FULL SIZE AXIS
+    ax = plt.axes([0, 0, 1, 1])
 
-    # axes на весь экран
-    ax = fig.add_axes([0, 0, 1, 1])
+    fig.patch.set_facecolor("#000000")
 
-    # =========================================
-    # BACKGROUND FULLSCREEN
-    # =========================================
-
-    # IMPORTANT:
-    # aspect='auto'
-    # interpolation='bilinear'
-    # alpha=1.0
-    # чтобы фон НЕ был прозрачным
-    # и растягивался на ВЕСЬ график
+    # =====================================================
+    # FULL BACKGROUND
+    # =====================================================
 
     ax.imshow(
         bg,
@@ -825,54 +853,65 @@ async def create_visual_chart(history):
         zorder=0
     )
 
-    # =========================================
-    # REMOVE BLACK MARGINS
-    # =========================================
+    # =====================================================
+    # DARK OVERLAY
+    # =====================================================
 
-    plt.margins(0)
+    ax.axhspan(
+        0,
+        2,
+        color="black",
+        alpha=0.42,
+        zorder=1
+    )
 
-    # =========================================
-    # LIGHT GAME OVERLAY
-    # =========================================
+    # =====================================================
+    # GREEN ZONE
+    # =====================================================
 
     ax.axhspan(
         1.0,
         2.0,
         color="#003d1a",
         alpha=0.12,
-        zorder=1
+        zorder=2
     )
+
+    # =====================================================
+    # RED ZONE
+    # =====================================================
 
     ax.axhspan(
         0,
         1.0,
         color="#3d0000",
         alpha=0.10,
-        zorder=1
+        zorder=2
     )
 
-    # =========================================
+    # =====================================================
     # UNDER GRAPH AREA
-    # =========================================
+    # =====================================================
 
     ax.fill_between(
         x,
         impacts,
         0,
-        color="#ff9900",
-        alpha=0.22,
-        zorder=2
+        color="#6f3e12",
+        alpha=0.25,
+        zorder=3
     )
 
-    # =========================================
-    # MAIN LINE
-    # =========================================
+    # =====================================================
+    # MAIN GRAPH LINE
+    # =====================================================
 
     line = ax.plot(
         x,
         impacts,
         color="#f4c430",
         linewidth=6,
+        solid_capstyle='round',
         zorder=5
     )[0]
 
@@ -885,9 +924,9 @@ async def create_visual_chart(history):
         pe.Normal()
     ])
 
-    # =========================================
-    # POINTS
-    # =========================================
+    # =====================================================
+    # GRAPH POINTS
+    # =====================================================
 
     ax.scatter(
         x,
@@ -895,37 +934,37 @@ async def create_visual_chart(history):
         s=200,
         color="#ffd54f",
         edgecolors="#fff2a8",
-        linewidths=2,
+        linewidths=2.5,
         zorder=6
     )
 
-    # =========================================
+    # =====================================================
     # AVG LINE
-    # =========================================
+    # =====================================================
 
     ax.axhline(
         avg,
         linestyle=(0, (5, 5)),
         color="#e0e0e0",
-        linewidth=1.5,
-        alpha=0.75,
+        linewidth=1.8,
+        alpha=0.80,
         zorder=4
     )
 
     ax.text(
-        10.15,
-        avg + 0.01,
+        10.3,
+        avg,
         "AVG 0.61",
-        color="white",
         fontsize=20,
+        color="white",
         weight="bold",
         va="center",
-        zorder=20
+        zorder=10
     )
 
-    # =========================================
-    # HEROES ON GRAPH
-    # =========================================
+    # =====================================================
+    # HEROES
+    # =====================================================
 
     for idx, g in enumerate(history[:10]):
 
@@ -938,9 +977,9 @@ async def create_visual_chart(history):
 
         imp = impacts[idx]
 
-        # =====================================
-        # BORDER COLOR
-        # =====================================
+        # =================================================
+        # BORDER COLORS
+        # =================================================
 
         if imp >= 1.0:
             border = "#00ff66"
@@ -951,12 +990,13 @@ async def create_visual_chart(history):
         else:
             border = "#ff3b3b"
 
-        # =====================================
-        # HERO IMAGE
-        # =====================================
+        # =================================================
+        # HERO IMAGE EXACT SIZE
+        # =================================================
 
         hero_img = hero_img.resize(
-            (72, 72)
+            (72, 72),
+            Image.LANCZOS
         )
 
         imagebox = OffsetImage(
@@ -972,17 +1012,17 @@ async def create_visual_chart(history):
                 edgecolor=border,
                 linewidth=4,
                 boxstyle="circle,pad=0.12",
-                facecolor="#101010",
-                alpha=1
+                facecolor="#111111",
+                alpha=0.95
             ),
             zorder=10
         )
 
         ax.add_artist(ab)
 
-        # =====================================
+        # =================================================
         # GLOW
-        # =====================================
+        # =================================================
 
         ax.scatter(
             idx + 1,
@@ -993,46 +1033,47 @@ async def create_visual_chart(history):
             zorder=8
         )
 
-    # =========================================
+    # =====================================================
     # TITLES
-    # =========================================
+    # =====================================================
 
     ax.text(
         5.5,
-        1.93,
+        1.92,
         "IMPACT PERFORMANCE",
         ha="center",
-        color="white",
         fontsize=34,
+        color="white",
         weight="bold",
-        zorder=30
+        zorder=20
     )
 
     ax.text(
         5.5,
-        1.83,
+        1.82,
         "LAST 10 MATCHES",
         ha="center",
-        color="#f4c430",
         fontsize=18,
+        color="#f4c430",
         weight="bold",
-        zorder=30
+        zorder=20
     )
 
-    # =========================================
+    # =====================================================
     # AXES
-    # =========================================
+    # =====================================================
 
-    ax.set_xlim(0.5, 10.5)
+    ax.set_xlim(0, 11)
 
-    ax.set_ylim(0, 2.0)
+    ax.set_ylim(0, 2)
 
     ax.set_xticks(x)
 
     ax.set_xticklabels(
         [str(i) for i in x],
         fontsize=22,
-        color="white"
+        color="white",
+        weight="bold"
     )
 
     ax.set_yticks([
@@ -1044,14 +1085,14 @@ async def create_visual_chart(history):
     ])
 
     ax.set_yticklabels(
-        ["0", "0.5", "1", "1.5", "2"],
+        ["0", "0.5", "1.0", "1.5", "2.0"],
         fontsize=18,
         color="white"
     )
 
-    # =========================================
+    # =====================================================
     # GRID
-    # =========================================
+    # =====================================================
 
     ax.grid(
         axis="y",
@@ -1060,29 +1101,24 @@ async def create_visual_chart(history):
         linewidth=1
     )
 
-    # =========================================
+    # =====================================================
     # REMOVE BORDERS
-    # =========================================
+    # =====================================================
 
     for spine in ax.spines.values():
         spine.set_visible(False)
 
-    # =========================================
-    # REMOVE BLACK MARGINS
-    # =========================================
-
-    plt.margins(0)
-
-    # =========================================
-    # SAVE
-    # =========================================
+    # =====================================================
+    # SAVE EXACTLY 1200x800
+    # =====================================================
 
     buf = io.BytesIO()
 
     plt.savefig(
         buf,
         format="png",
-        dpi=100,
+        dpi=DPI,
+        facecolor=fig.get_facecolor(),
         bbox_inches=None,
         pad_inches=0
     )
