@@ -754,8 +754,10 @@ async def create_visual_chart(history):
 
     try:
         from scipy.interpolate import make_interp_spline
+        from scipy.ndimage import gaussian_filter1d
     except ImportError:
         make_interp_spline = None
+        gaussian_filter1d = None
 
     # =====================================================
     # CANVAS SIZE EXACTLY 1200x800
@@ -832,13 +834,16 @@ async def create_visual_chart(history):
     avg = 0.61
 
     # =====================================================
-    # SMOOTH INTERPOLATION
+    # SMOOTH INTERPOLATION - extra smooth with more points
     # =====================================================
 
     if make_interp_spline:
-        x_smooth = np.linspace(1, 10, 200)
+        x_smooth = np.linspace(1, 10, 500)
         spl = make_interp_spline(x, impacts, k=3)
         y_smooth = spl(x_smooth)
+        # Additional smoothing with gaussian filter
+        if gaussian_filter1d:
+            y_smooth = gaussian_filter1d(y_smooth, sigma=2.0)
     else:
         x_smooth = x
         y_smooth = impacts
