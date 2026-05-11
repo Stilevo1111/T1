@@ -50,42 +50,55 @@ if FONT_PATH is None:
 def detect_hero_position(hero_data):
 
     roles = set(hero_data.get("roles", []))
-    if roles:
-        # Приоритет ролей
-        if "Carry" in roles:
-            return 1
-        elif "Mid" in roles:
-            return 2
-        elif "Offlane" in roles:
-            return 3
-        elif "Hard Support" in roles:
-            return 5
-        elif "Support" in roles or "Soft Support" in roles:
-            return 4
 
-    # Fallback to picks if no roles
-    best_pos = 1
+    # Use OpenDota role logic similar to weekly_analytics
+    if "Support" in roles or "Disabler" in roles:
+        base_role = "SUPPORT"
+    elif "Nuker" in roles and "Escape" in roles:
+        base_role = "MID"
+    elif "Durable" in roles and "Initiator" in roles:
+        base_role = "OFFLANE"
+    elif "Carry" in roles:
+        base_role = "CARRY"
+    else:
+        base_role = "SUPPORT"
+
+    # Map to positions
+    role_to_pos = {
+        "CARRY": 1,
+        "MID": 2,
+        "OFFLANE": 3,
+        "SUPPORT": 4  # Default to soft support, adjust below
+    }
+
+    pos = role_to_pos.get(base_role, 4)
+
+    # For support, distinguish hard/soft based on position picks
+    if base_role == "SUPPORT":
+        p4_picks = hero_data.get("4_pick", 0)
+        p5_picks = hero_data.get("5_pick", 0)
+        if p5_picks > p4_picks:
+            pos = 5
+        else:
+            pos = 4
+
+    # If has position picks, adjust if the hero is actually played there
+    best_pos = pos
     best_score = 0
 
-    for pos in range(1, 6):
+    for p in range(1, 6):
+        picks = hero_data.get(f"{p}_pick", 0)
+        wins = hero_data.get(f"{p}_win", 0)
+        if picks > 0:
+            wr = wins / picks
+            score = picks * wr
+            if score > best_score:
+                best_score = score
+                best_pos = p
 
-        picks = hero_data.get(f"{pos}_pick", 0)
+    # But keep within role group? No, if played a lot in another lane, perhaps allow.
 
-        wins = hero_data.get(f"{pos}_win", 0)
-
-        if picks <= 0:
-            continue
-
-        wr = wins / picks
-
-        score = picks * wr
-
-        if score > best_score:
-
-            best_score = score
-            best_pos = pos
-
-    return best_pos
+    return pos  # Stick to role-based
 
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
