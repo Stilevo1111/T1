@@ -424,18 +424,13 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             import os
             os.makedirs("charts", exist_ok=True)
             
-            from weekly_analytics import detect_role_from_history, calculate_player_stats
-            role = await detect_role_from_history(matches)
-            
-            stats = calculate_player_stats(matches)
-            
-            # Сохраняем данные для ленивой генерации страниц
-            context.user_data['analytics_stats'] = stats
-            context.user_data['analytics_role'] = role
+            # Сохраняем только matches для полной ленивой генерации
+            context.user_data['analytics_stats'] = None
+            context.user_data['analytics_role'] = None
             context.user_data['analytics_page'] = 0
             context.user_data['analytics_history'] = history
             context.user_data['analytics_matches'] = matches
-            context.user_data['analytics_pages'] = [None, None]  # Placeholder - не генерируем сразу
+            context.user_data['analytics_pages'] = [None, None]
             context.user_data['analytics_generated'] = set()
 
             if chart_image:
@@ -2600,8 +2595,20 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
 
     # Ленивая генерация: если страница ещё не создана — генерируем все страницы
     if page_idx not in generated:
-        stats = context.user_data.get('analytics_stats', {})
-        role = context.user_data.get('analytics_role', 'CARRY')
+        # Вычисляем статистику и роль только при первом нажатии
+        stats = context.user_data.get('analytics_stats')
+        role = context.user_data.get('analytics_role')
+        matches = context.user_data.get('analytics_matches', [])
+        
+        if stats is None or role is None:
+            # Show loading while computing
+            await callback_query.answer(text="⏳ Готовлю таблицы...", show_alert=False)
+            from weekly_analytics import detect_role_from_history, calculate_player_stats
+            role = await detect_role_from_history(matches)
+            stats = calculate_player_stats(matches)
+            context.user_data['analytics_stats'] = stats
+            context.user_data['analytics_role'] = role
+        
         all_pages = get_analytics_pages(role, stats)
         pages = all_pages  # Replace placeholder with real pages
         generated = set(range(len(pages)))
