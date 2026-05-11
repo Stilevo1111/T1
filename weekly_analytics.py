@@ -218,22 +218,27 @@ async def get_hero_icon(hero_id: int):
 
     hero_name = heroes.get(hero_id)
 
-    if not hero_name:
-        return None
+    if hero_name:
+        path = f"assets/heroes/{hero_name}.png"
 
-    path = f"assets/heroes/{hero_name}.png"
+        try:
 
+            return Image.open(path).convert("RGBA")
+
+        except Exception:
+
+            logger.warning(
+                f"Failed load icon: {hero_name}"
+            )
+
+    # Fallback to default icon
     try:
-
-        return Image.open(path).convert("RGBA")
-
+        # Create a gray placeholder icon
+        img = Image.new("RGBA", (64, 64), (128, 128, 128, 255))
+        return img
     except Exception:
-
-        logger.exception(
-            f"Failed load icon: {hero_name}"
-        )
-
-    return None
+        logger.exception("Failed to create default icon")
+        return None
 
 # =========================================================
 # HERO ROLE CACHE & LOADING
