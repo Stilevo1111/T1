@@ -713,7 +713,7 @@ async def generate_weekly_analytics(telegram_id: int):
             if last_hits > 0:
                 gpm = last_hits * 60
 
-kills = m.get("kills", 0)
+        kills = m.get("kills", 0)
         deaths = m.get("deaths", 0)
         assists = m.get("assists", 0)
 
