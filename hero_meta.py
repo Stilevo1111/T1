@@ -49,6 +49,21 @@ if FONT_PATH is None:
 
 def detect_hero_position(hero_data):
 
+    roles = set(hero_data.get("roles", []))
+    if roles:
+        # Приоритет ролей
+        if "Carry" in roles:
+            return 1
+        elif "Mid" in roles:
+            return 2
+        elif "Offlane" in roles:
+            return 3
+        elif "Hard Support" in roles:
+            return 5
+        elif "Support" in roles or "Soft Support" in roles:
+            return 4
+
+    # Fallback to picks if no roles
     best_pos = 1
     best_score = 0
 
@@ -69,22 +84,6 @@ def detect_hero_position(hero_data):
 
             best_score = score
             best_pos = pos
-
-    # Если все позиции имеют 0 пиков, используем роли из API с приоритетом
-    if best_score == 0:
-        roles = set(hero_data.get("roles", []))
-        if "Carry" in roles:
-            best_pos = 1
-        elif "Mid" in roles:
-            best_pos = 2
-        elif "Offlane" in roles:
-            best_pos = 3
-        elif "Hard Support" in roles:
-            best_pos = 5
-        elif "Support" in roles or "Soft Support" in roles:
-            best_pos = 4
-        else:
-            best_pos = 1  # default
 
     return best_pos
 
