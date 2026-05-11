@@ -737,6 +737,7 @@ async def create_visual_chart(history):
 
         import matplotlib.pyplot as plt
         import matplotlib.patheffects as pe
+        from scipy.interpolate import make_interp_spline
 
         from matplotlib.offsetbox import (
             OffsetImage,
@@ -827,6 +828,14 @@ async def create_visual_chart(history):
     avg = 0.61
 
     # =====================================================
+    # SMOOTH INTERPOLATION
+    # =====================================================
+
+    x_smooth = np.linspace(1, 10, 200)
+    spl = make_interp_spline(x, impacts, k=3)
+    y_smooth = spl(x_smooth)
+
+    # =====================================================
     # FIGURE
     # =====================================================
 
@@ -858,9 +867,9 @@ async def create_visual_chart(history):
     # =====================================================
 
     ax.fill_between(
-        x,
-        impacts,
-        min(impacts),
+        x_smooth,
+        y_smooth,
+        np.min(y_smooth),
         color="#f4c430",
         alpha=0.50,
         zorder=3
@@ -871,8 +880,8 @@ async def create_visual_chart(history):
     # =====================================================
 
     line = ax.plot(
-        x,
-        impacts,
+        x_smooth,
+        y_smooth,
         color="#f4c430",
         linewidth=6,
         solid_capstyle='round',
@@ -910,13 +919,13 @@ async def create_visual_chart(history):
         avg,
         linestyle=(0, (5, 5)),
         color="#e0e0e0",
-        linewidth=1.8,
+        linewidth=3.0,
         alpha=0.80,
         zorder=4
     )
 
     ax.text(
-        0.3,
+        9.7,
         avg,
         "AVG 0.61",
         fontsize=20,
