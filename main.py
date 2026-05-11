@@ -409,14 +409,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from weekly_analytics import generate_chart_only, get_analytics_pages
         chart_data = await generate_chart_only(update.effective_user.id)
 
-        # Delete loading message
-        try:
-            if loading_msg and hasattr(loading_msg, 'message_id') and loading_msg.message_id:
-                await asyncio.sleep(0.1)
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-                logger.debug(f"Deleted loading message {loading_msg.message_id}")
-        except Exception as e:
-            logger.warning(f"Could not delete loading message: {e}")
+        # Note: loading message stays visible until chart is sent
 
         if chart_data:
             history = chart_data.get("history", [])
