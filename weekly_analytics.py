@@ -769,8 +769,8 @@ async def create_visual_chart(history):
     # =====================================================
 
     background_url = (
-        "https://i.ibb.co/FLpR1xDq/"
-        "photo-2026-05-10-21-24-42.png"
+        "https://i.ibb.co/jkTWqcHn/"
+        "pngdsadsad.png"
     )
 
     response = requests.get(background_url)
@@ -861,7 +861,7 @@ async def create_visual_chart(history):
         x,
         impacts,
         0,
-        color="#6f3e12",
+        color="#f4c430",
         alpha=0.50,
         zorder=3
     )
@@ -916,7 +916,7 @@ async def create_visual_chart(history):
     )
 
     ax.text(
-        10.3,
+        0.3,
         avg,
         "AVG 0.61",
         fontsize=20,
@@ -997,31 +997,7 @@ async def create_visual_chart(history):
             zorder=8
         )
 
-    # =====================================================
-    # TITLES
-    # =====================================================
-
-    ax.text(
-        5.5,
-        1.92,
-        "IMPACT PERFORMANCE",
-        ha="center",
-        fontsize=34,
-        color="white",
-        weight="bold",
-        zorder=20
-    )
-
-    ax.text(
-        5.5,
-        1.82,
-        "LAST 10 MATCHES",
-        ha="center",
-        fontsize=18,
-        color="#f4c430",
-        weight="bold",
-        zorder=20
-    )
+    
 
     # =====================================================
     # AXES
