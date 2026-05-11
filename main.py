@@ -411,9 +411,12 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Delete loading message
         try:
-            await context.bot.delete_message(chat_id, loading_msg.message_id)
+            if loading_msg and hasattr(loading_msg, 'message_id') and loading_msg.message_id:
+                await asyncio.sleep(0.1)
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+                logger.debug(f"Deleted loading message {loading_msg.message_id}")
         except Exception as e:
-            logger.debug(f"Could not delete loading message: {e}")
+            logger.warning(f"Could not delete loading message: {e}")
 
         if chart_data:
             history = chart_data.get("history", [])
