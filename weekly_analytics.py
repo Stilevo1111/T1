@@ -2,6 +2,7 @@
 
 import asyncio
 import aiohttp
+import json
 from PIL import Image, ImageDraw, ImageFont
 import io
 from datetime import datetime, timezone, timedelta
@@ -9,6 +10,7 @@ import requests
 
 from dota_mmr import steam64_to_account_id, OPENDOTA_API_URL, _api_get_async
 from database import get_user
+from hero_positions import hero_positions
 
 import logging
 
@@ -294,7 +296,16 @@ def convert_opendota_roles(opendota_roles: list) -> str:
 
 
 async def detect_role_from_hero_counts(matches: list) -> str:
-    await load_hero_roles()
+    heroes = await load_heroes()
+    
+    # Mapping: position 1-5 -> role
+    POS_TO_ROLE = {
+        1: "CARRY",
+        2: "MID", 
+        3: "OFFLANE",
+        4: "SUPPORT",
+        5: "SUPPORT"
+    }
     
     role_counts = {
         "CARRY": 0,
@@ -307,17 +318,15 @@ async def detect_role_from_hero_counts(matches: list) -> str:
     
     for m in matches:
         hero_id = m.get("hero_id", 0)
-        hero_roles = _HERO_ROLE_CACHE.get(hero_id, [])
+        hero_name = heroes.get(hero_id, "")
         
-        # Count each role tag separately (no priority)
-        if "Carry" in hero_roles:
-            role_counts["CARRY"] += 1
-        if "Nuker" in hero_roles and "Escape" in hero_roles:
-            role_counts["MID"] += 1
-        if "Durable" in hero_roles and "Initiator" in hero_roles:
-            role_counts["OFFLANE"] += 1
-        if "Support" in hero_roles or "Disabler" in hero_roles:
-            role_counts["SUPPORT"] += 1
+        # Look up position from local hero_positions database
+        position = hero_positions.get(hero_name, 0)
+        
+        # Map position to role
+        if position in POS_TO_ROLE:
+            role = POS_TO_ROLE[position]
+            role_counts[role] += 1
     
     if total_matches == 0:
         return "CARRY"
@@ -335,34 +344,111 @@ async def detect_role_from_hero_counts(matches: list) -> str:
 
 
 async def detect_role_from_history(matches: list):
-    return await detect_role_from_hero_counts(matches) or "SUPPORT"
+    role = await detect_role_from_hero_counts(matches)
+    if role:
+        return role
+    
+    # Fallback: determine role by stats (GPM, KDA)
+    total_gpm = sum(m.get("gold_per_min", 0) for m in matches[:10])
+    total_lh = sum(m.get("last_hits", 0) for m in matches[:10])
+    # Estimate GPM from last_hits if missing
+    if total_gpm == 0 and total_lh > 0:
+        total_gpm = total_lh * 60
+    total_kills = sum(m.get("kills", 0) for m in matches[:10])
+    total_deaths = sum(m.get("deaths", 0) for m in matches[:10])
+    total_assists = sum(m.get("assists", 0) for m in matches[:10])
+    avg_gpm = total_gpm / max(len(matches[:10]), 1)
+    avg_kda = (total_kills + total_assists) / max(total_deaths, 1)
+    
+    # High GPM + KDA = CARRY/MID, low = SUPPORT
+    if avg_gpm >= 500 and avg_kda >= 3.0:
+        return "CARRY"
+    elif avg_gpm >= 350 and avg_kda >= 2.5:
+        return "MID"
+    else:
+        return "SUPPORT"
 
 
 def calculate_player_stats(matches: list) -> dict:
     if not matches:
-        return {"wr": 50.0, "gpm": 500, "xpm": 600, "deaths": 4.0, "h_dmg": 15.0, "t_dmg": 5.0, "util": 5.0, "apm": 250, "kda": "5/4/5"}
+        return {"wr": 50.0, "gpm": 400, "xpm": 500, "deaths": 5.0, "h_dmg": 10.0, "t_dmg": 2.0, "util": 8.0, "apm": 250, "kda": "3/4/8"}
     n = len(matches)
-    total_gpm = sum(m.get("gold_per_min", 0) for m in matches)
-    total_xpm = sum(m.get("xp_per_min", 0) for m in matches)
-    total_deaths = sum(m.get("deaths", 0) for m in matches)
-    total_kills = sum(m.get("kills", 0) for m in matches)
-    total_assists = sum(m.get("assists", 0) for m in matches)
-    total_h_dmg = sum(m.get("hero_damage", 0) for m in matches)
-    total_t_dmg = sum(m.get("tower_damage", 0) for m in matches)
-    total_apm = sum(m.get("actions_per_min", 0) for m in matches)
-    total_stuns = sum(m.get("stuns", 0) for m in matches)
-    total_heals = sum(m.get("hero_healing", 0) for m in matches)
-    total_wins = sum(1 for m in matches if m.get("win", False))
+    
+    # Get raw values
+    raw_gpm = [m.get("gold_per_min", 0) for m in matches]
+    raw_xpm = [m.get("xp_per_min", 0) for m in matches]
+    raw_lh = [m.get("last_hits", 0) for m in matches]
+    raw_kills = [m.get("kills", 0) for m in matches]
+    raw_deaths = [m.get("deaths", 0) for m in matches]
+    raw_assists = [m.get("assists", 0) for m in matches]
+    raw_h_dmg = [m.get("hero_damage", 0) for m in matches]
+    raw_t_dmg = [m.get("tower_damage", 0) for m in matches]
+    raw_apm = [m.get("actions_per_min", 0) for m in matches]
+    raw_stuns = [m.get("stuns", 0) for m in matches]
+    raw_heals = [m.get("hero_healing", 0) for m in matches]
+    raw_wins = [1 if m.get("win", False) else 0 for m in matches]
+    
+    # Calculate valid values with fallbacks
+    # GPM fallback: estimate from last_hits (~60 gold per last hit)
+    total_gpm = sum(raw_gpm)
+    if total_gpm == 0:
+        total_gpm = sum(raw_lh) * 60
+    avg_gpm = total_gpm / n
+    
+    # XPM fallback: estimate from last_hits (~50% of GPM * 60/100 ratio, ~0.5 ratio)
+    total_xpm = sum(raw_xpm)
+    if total_xpm == 0:
+        total_xpm = sum(raw_lh) * 0.5 * 60  # XPM ~ last_hits * 30
+    avg_xpm = total_xpm / n
+    
+    total_deaths = sum(raw_deaths)
+    avg_deaths = total_deaths / n
+    
+    total_kills = sum(raw_kills)
+    avg_kills = total_kills / n
+    
+    total_assists = sum(raw_assists)
+    avg_assists = total_assists / n
+    
+    # Hero DMG fallback: estimate from kills (~200 damage per kill avg)
+    total_h_dmg = sum(raw_h_dmg)
+    if total_h_dmg == 0:
+        total_h_dmg = total_kills * 200
+    avg_h_dmg = total_h_dmg / n / 1000
+    
+    # Tower DMG fallback: estimate from duration (~100 damage per minute avg)
+    total_t_dmg = sum(raw_t_dmg)
+    if total_t_dmg == 0:
+        total_t_dmg = total_kills * 50  # rough estimate
+    avg_t_dmg = total_t_dmg / n / 1000
+    
+    # APM fallback: use typical values based on role (will be refined later)
+    total_apm = sum(raw_apm)
+    if total_apm == 0:
+        total_apm = n * 250  # default
+    avg_apm = total_apm / n
+    
+    # Utility from stuns/heals/stacks
+    total_stuns = sum(raw_stuns)
+    total_heals = sum(raw_heals)
+    total_utility = (total_stuns * 0.3 + total_heals / 1000) / n
+    
+    total_wins = sum(raw_wins)
+    wr = (total_wins / n) * 100
+    
+    real_kda = (avg_kills + avg_assists) / max(avg_deaths, 0.1)
+
     return {
-        "wr": round(total_wins / n * 100, 1),
-        "gpm": round(total_gpm / n, 1),
-        "xpm": round(total_xpm / n, 1),
-        "deaths": round(total_deaths / n, 1),
-        "h_dmg": round(total_h_dmg / n / 1000, 1),
-        "t_dmg": round(total_t_dmg / n / 1000, 1),
-        "util": round((total_stuns * 0.3 + total_heals / 1000) / n, 1),
-        "apm": round(total_apm / n, 0),
-        "kda": f"{round(total_kills/n)}/{round(total_deaths/n)}/{round(total_assists/n)}"
+        "wr": round(wr, 1),
+        "gpm": round(avg_gpm, 1),
+        "xpm": round(avg_xpm, 1),
+        "deaths": round(avg_deaths, 1),
+        "h_dmg": round(avg_h_dmg, 1),
+        "t_dmg": round(avg_t_dmg, 1),
+        "util": round(total_utility, 1),
+        "apm": round(avg_apm, 0),
+        "kda_number": round(real_kda, 2),
+        "kda": f"{round(avg_kills,1)}/{round(avg_deaths,1)}/{round(avg_assists,1)}"
     }
 
 
@@ -468,10 +554,11 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
             f"{s['kda']}\n"
         )
     t1 += "----------------------------\n"
+    gpm_val = int(user_stats['gpm']) if user_stats['gpm'] > 0 else 0
     t1 += (
         f"{'YOU':<11}"
         f"{user_stats['wr']:>3}% "
-        f"{int(user_stats['gpm']):>5} "
+        f"{gpm_val:>5} "
         f"{user_stats['kda']}\n"
     )
     t1 += "```"
@@ -560,6 +647,10 @@ async def generate_chart_only(telegram_id: int):
     game_history = []
     for m in matches[:10]:
         gpm = m.get("gold_per_min", 0)
+        # Fallback: estimate GPM from last_hits (~60 gold per last hit as rough estimate)
+        last_hits = m.get("last_hits", 0)
+        if gpm == 0 and last_hits > 0:
+            gpm = last_hits * 60
         kills = m.get("kills", 0)
         deaths = m.get("deaths", 0)
         assists = m.get("assists", 0)
@@ -582,6 +673,7 @@ async def generate_chart_only(telegram_id: int):
 
 
 async def generate_weekly_analytics(telegram_id: int):
+    matches = await get_weekly_matches(telegram_id)
 
     if len(matches) < 5:
         return None
@@ -615,8 +707,13 @@ async def generate_weekly_analytics(telegram_id: int):
     for m in matches:
 
         gpm = m.get("gold_per_min", 0)
+        # Fallback: estimate GPM from last_hits if missing
+        if gpm == 0:
+            last_hits = m.get("last_hits", 0)
+            if last_hits > 0:
+                gpm = last_hits * 60
 
-        kills = m.get("kills", 0)
+kills = m.get("kills", 0)
         deaths = m.get("deaths", 0)
         assists = m.get("assists", 0)
 
@@ -631,7 +728,10 @@ async def generate_weekly_analytics(telegram_id: int):
         )
 
         apm = m.get("actions_per_min", 0)
-
+        # Fallback for APM - use typical value
+        if apm == 0:
+            apm = 250  # default
+        
         imp = calculate_imp(
             gpm,
             kda,
@@ -652,9 +752,25 @@ async def generate_weekly_analytics(telegram_id: int):
         total_lh += m.get("last_hits", 0)
         total_apm += apm
         total_denies += m.get("denies", 0)
-        total_xpm += m.get("xp_per_min", 0)
-        total_h_dmg += m.get("hero_damage", 0)
-        total_t_dmg += m.get("tower_damage", 0)
+        
+        # Fallback for XPM from last_hits
+        xpm = m.get("xp_per_min", 0)
+        if xpm == 0:
+            xpm = m.get("last_hits", 0) * 30  # ~30 XPM per last hit
+        total_xpm += xpm
+        
+        # Fallback for hero_damage from kills
+        h_dmg = m.get("hero_damage", 0)
+        if h_dmg == 0:
+            h_dmg = kills * 200  # ~200 damage per kill
+        total_h_dmg += h_dmg
+        
+        # Fallback for tower_damage 
+        t_dmg = m.get("tower_damage", 0)
+        if t_dmg == 0:
+            t_dmg = kills * 50  # rough estimate
+        total_t_dmg += t_dmg
+        
         total_utility += utility
 
         if m.get("win", False):
@@ -985,7 +1101,7 @@ async def create_visual_chart(history):
         else:
             border = "#ff3b3b"
 
-        # =================================================
+# =================================================
         # HERO IMAGE EXACT SIZE
         # =================================================
 
@@ -1007,8 +1123,8 @@ async def create_visual_chart(history):
                 edgecolor=border,
                 linewidth=4,
                 boxstyle="circle,pad=0.12",
-                facecolor="#111111",
-                alpha=0.95
+                facecolor="none",
+                alpha=1.0
             ),
             zorder=10
         )
@@ -1022,13 +1138,11 @@ async def create_visual_chart(history):
         ax.scatter(
             idx + 1,
             imp,
-            s=2200,
+            s=1800,
             color=border,
-            alpha=0.10,
+            alpha=0.15,
             zorder=8
         )
-
-    
 
     # =====================================================
     # AXES

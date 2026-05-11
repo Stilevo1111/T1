@@ -400,13 +400,11 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.debug(f"Could not delete last bot message: {e}")
 
-        # Send loading message
+        from weekly_analytics import generate_chart_only, get_analytics_pages
         loading_msg = await context.bot.send_message(
             chat_id=chat_id,
             text="⏳ Генерирую аналитику..."
         )
-
-        from weekly_analytics import generate_chart_only, get_analytics_pages
         chart_data = await generate_chart_only(update.effective_user.id)
 
         # Note: loading message stays visible until chart is sent
@@ -430,6 +428,12 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['analytics_generated'] = set()
 
             if chart_image:
+                # Delete loading message before sending result
+                if loading_msg:
+                    try:
+                        await context.bot.delete_message(chat_id, loading_msg.message_id)
+                    except Exception:
+                        pass
                 # Send analytics with chart as photo - ТОЛЬКО ГРАФИК, без текста
                 photo_buf = io.BytesIO(chart_image)
                 photo_buf.name = "weekly_analytics.png"
@@ -444,11 +448,23 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="MarkdownV2"
                 )
             else:
+                # Delete loading message before sending error
+                if loading_msg:
+                    try:
+                        await context.bot.delete_message(chat_id, loading_msg.message_id)
+                    except Exception:
+                        pass
                 result_msg = await context.bot.send_message(
                     chat_id=chat_id,
                     text="❌ Ошибка генерации графика. Попробуйте позже."
                 )
         else:
+            # Delete loading message before sending error
+            if loading_msg:
+                try:
+                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                except Exception:
+                    pass
             # No analytics data available
             result_msg = await context.bot.send_message(
                 chat_id=chat_id,
