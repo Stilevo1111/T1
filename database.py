@@ -6,6 +6,7 @@ import psycopg2.extras
 import logging
 import urllib.parse as urlparse
 import threading
+import json
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -2402,9 +2403,42 @@ def get_digest_stats():
     if cached:
         logger.info("get_digest_stats: returning from cache")
         return cached
-    
+
     db = Database()
     result = db.get_digest_stats()
+
+    # Persist last known values
+    if result["top_growth"][0] == "None":
+        last = get_config('last_top_growth')
+        if last:
+            try:
+                result["top_growth"] = tuple(json.loads(last))
+            except:
+                pass
+    else:
+        set_config('last_top_growth', json.dumps(result["top_growth"]))
+
+    if result["top_drop"][0] == "None":
+        last = get_config('last_top_drop')
+        if last:
+            try:
+                result["top_drop"] = tuple(json.loads(last))
+            except:
+                pass
+    else:
+        set_config('last_top_drop', json.dumps(result["top_drop"]))
+
+    if result["top_streak"][0] == "None":
+        last = get_config('last_top_streak')
+        if last:
+            try:
+                result["top_streak"] = tuple(json.loads(last))
+                result["top_streak_id"] = json.loads(last)[2] if len(json.loads(last)) > 2 else None
+            except:
+                pass
+    else:
+        set_config('last_top_streak', json.dumps(result["top_streak"] + (result["top_streak_id"],)))
+
     user_cache.set('digest_stats', result)
     return result
 
@@ -2455,7 +2489,6 @@ def update_weekly_digest_snapshot():
 
 def get_dota_mmr_top(limit=10):
     """Получение топа игроков Dota 2 по MMR с кешем"""
-    import json
     from main import get_config, set_config
 
     # Попытка загрузить из кеша config
