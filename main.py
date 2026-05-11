@@ -452,6 +452,11 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=reply_markup,
                     parse_mode="MarkdownV2"
                 )
+            else:
+                result_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="❌ Ошибка генерации графика. Попробуйте позже."
+                )
         else:
             # No analytics data available
             result_msg = await context.bot.send_message(
