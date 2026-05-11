@@ -993,8 +993,6 @@ async def create_visual_chart(history):
     plt.savefig(
         buf,
         format="png",
-        bbox_inches="tight",
-        pad_inches=0.0,
         facecolor=fig.get_facecolor(),
         dpi=100
     )
