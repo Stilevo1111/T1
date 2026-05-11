@@ -443,7 +443,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 result_msg = await context.bot.send_photo(
                     chat_id=chat_id,
                     photo=photo_buf,
-                    caption="📊 Аналитика готова\\. Нажмите кнопку для просмотра таблиц\\.",
+                    caption="🧠 Импакт в последних 10 играх\\.",
                     reply_markup=reply_markup,
                     parse_mode="MarkdownV2"
                 )
