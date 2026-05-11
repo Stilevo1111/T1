@@ -236,17 +236,7 @@ def _build_grid(hero_stats):
         heroes = sorted(by_position[pos], key=lambda h: -h['score'])
         grid[pos] = heroes[:5]
 
-    # Ensure we have enough heroes - fill from other positions if needed
-    all_heroes_sorted = sorted(processed_heroes, key=lambda h: -h['score'])
-    for pos in range(1, 6):
-        if len(grid[pos]) < 5:
-            # Fill remaining slots with top heroes from other positions
-            for h in all_heroes_sorted:
-                if h['position'] != pos and h['id'] not in {hero['id'] for pos_list in grid.values() for hero in pos_list}:
-                    if h not in grid[pos]:
-                        grid[pos].append(h)
-                if len(grid[pos]) >= 5:
-                    break
+    # Do not fill from other positions to keep heroes in their roles
 
     return grid
 
