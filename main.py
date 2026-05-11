@@ -406,8 +406,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text="⏳ Генерирую аналитику..."
         )
 
-        from weekly_analytics import generate_weekly_analytics, get_analytics_pages
-        data = await generate_weekly_analytics(update.effective_user.id)
+        from weekly_analytics import generate_chart_only, get_analytics_pages
+        chart_data = await generate_chart_only(update.effective_user.id)
 
         # Delete loading message
         try:
@@ -415,25 +415,34 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.debug(f"Could not delete loading message: {e}")
 
-        if data:
-            stats = data.get("stats", {})
-            role = data.get("role", "CARRY")
-
+        if chart_data:
+            history = chart_data.get("history", [])
+            matches = chart_data.get("matches", [])
+            
+            # Calculate stats for text pages (lazy loaded later)
+            from weekly_analytics import get_analytics_pages, PRO_DB, IMP_WEIGHTS
+            
+            # Default stats - will be recalculated on button press
+            stats = {"wr": 50.0, "gpm": 500, "xpm": 600, "deaths": 4.0, 
+                     "h_dmg": 15.0, "t_dmg": 5.0, "util": 5.0, "apm": 250, "kda": "5/4/5"}
+            role = "CARRY"
+            
             # Сохраняем данные для ленивой генерации страниц
             context.user_data['analytics_stats'] = stats
             context.user_data['analytics_role'] = role
             context.user_data['analytics_page'] = 0
+            context.user_data['analytics_history'] = history
+            context.user_data['analytics_matches'] = matches
 
-            # Генерируем только первую страницу сразу, остальные — None (ленивая загрузка)
+            # Генерируем только первую страницу сразу (без текста - только плейсхолдер)
             tables_all = get_analytics_pages(role, stats)
             first_page = tables_all[0]
-            # Храним все 3 слота: [page0, None, None]
             context.user_data['analytics_pages'] = [first_page, None, None]
             context.user_data['analytics_generated'] = {0}
 
-            if data.get("image"):
-                # Send analytics with chart as photo
-                photo_buf = io.BytesIO(data["image"])
+            if chart_data.get("image"):
+                # Send analytics with chart as photo - только график
+                photo_buf = io.BytesIO(chart_data["image"])
                 photo_buf.name = "weekly_analytics.png"
 
                 reply_markup = _build_analytics_keyboard(0, len(tables_all), context.user_data['analytics_generated'])

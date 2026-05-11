@@ -603,31 +603,60 @@ def get_analytics_pages(role: str, stats: dict) -> list:
 
 
 # =========================================================
-# MAIN ANALYTICS
+# MAIN ANALYTICS - CHART ONLY
 # =========================================================
 
-async def generate_weekly_analytics(telegram_id: int):
-
-    # Check cache
-    from database import get_user, Database
-    import json
-    from datetime import datetime, timezone
-
+async def generate_chart_only(telegram_id: int):
+    """Generate only the chart and game history - no text pages."""
+    
+    from database import get_user
+    from datetime import datetime, timezone, timedelta
+    
     user = get_user(telegram_id)
     if user and user.get('analytics_cache') and user.get('analytics_updated_at'):
         updated_at = user['analytics_updated_at']
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
         now = datetime.now(timezone.utc)
-        if (now - updated_at).total_seconds() < 3600:  # 1 hour cache
-            logger.info(f"Using cached analytics for {telegram_id}")
+        if (now - updated_at).total_seconds() < 3600:
+            import json
             cached = json.loads(user['analytics_cache'])
-            # Regenerate image from cached history
-            chart_image = await create_visual_chart(cached["history"])
-            cached["image"] = chart_image
-            return cached
+            chart = await create_visual_chart(cached.get("history", []))
+            return {"image": chart, "history": cached.get("history", [])}
 
     matches = await get_weekly_matches(telegram_id)
+
+    if len(matches) < 5:
+        return None
+
+    matches = sorted(matches, key=lambda x: x.get("start_time", 0))
+
+    # Calculate only what's needed for chart
+    game_history = []
+    for m in matches[:10]:
+        gpm = m.get("gold_per_min", 0)
+        kills = m.get("kills", 0)
+        deaths = m.get("deaths", 0)
+        assists = m.get("assists", 0)
+        kda = (kills + assists) / max(deaths, 1)
+        
+        utility = calculate_utility(
+            m.get("stuns", 0),
+            m.get("hero_healing", 0),
+            m.get("creeps_stacked", 0),
+            m.get("observer_uses", 0) + m.get("sentry_uses", 0)
+        )
+        apm = m.get("actions_per_min", 0)
+        
+        imp = calculate_imp(gpm, kda, utility, apm, "CARRY")
+        
+        game_history.append({"imp": imp, "hero_id": m.get("hero_id", 0)})
+
+    chart = await create_visual_chart(game_history)
+    return {"image": chart, "history": game_history, "matches": matches}
+
+
+async def generate_weekly_analytics(telegram_id: int):
 
     if len(matches) < 5:
         return None
