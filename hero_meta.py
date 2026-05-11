@@ -70,21 +70,21 @@ def detect_hero_position(hero_data):
             best_score = score
             best_pos = pos
 
-    # Если все позиции имеют 0 пиков, используем роли из API
+    # Если все позиции имеют 0 пиков, используем роли из API с приоритетом
     if best_score == 0:
-        roles = hero_data.get("roles", [])
-        role_map = {
-            "Carry": 1,
-            "Mid": 2,
-            "Offlane": 3,
-            "Support": 4,
-            "Hard Support": 5,
-            "Soft Support": 4
-        }
-        for role in roles:
-            if role in role_map:
-                best_pos = role_map[role]
-                break
+        roles = set(hero_data.get("roles", []))
+        if "Carry" in roles:
+            best_pos = 1
+        elif "Mid" in roles:
+            best_pos = 2
+        elif "Offlane" in roles:
+            best_pos = 3
+        elif "Hard Support" in roles:
+            best_pos = 5
+        elif "Support" in roles or "Soft Support" in roles:
+            best_pos = 4
+        else:
+            best_pos = 1  # default
 
     return best_pos
 
@@ -245,7 +245,7 @@ def _build_grid(hero_stats):
         2: ["Mid"],
         3: ["Offlane"],
         4: ["Support", "Soft Support"],
-        5: ["Support", "Hard Support"]
+        5: ["Hard Support"]
     }
 
     for pos in range(1, 6):
