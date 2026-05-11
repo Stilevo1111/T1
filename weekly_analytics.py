@@ -594,7 +594,6 @@ def get_analytics_pages(role: str, stats: dict) -> list:
     return [
         {"title": "🆚 Сравнение с ПРО", "text": pro_text},
         {"title": "🔍 Детальное сравнение", "text": detailed_text},
-        {"title": "📈 Метрики и AI-обратная связь", "text": metrics_text},
     ]
 
 
@@ -806,7 +805,7 @@ async def create_visual_chart(history):
 
     # Create figure with specified dimensions (1200x800)
     fig, ax = plt.subplots(
-        figsize=(15, 10),  # Increased size for better proportions
+        figsize=(12, 8),  # Adjusted size for proper proportions
         dpi=100
     )
 
@@ -922,47 +921,47 @@ async def create_visual_chart(history):
         else:  # Around average - yellow
             border_color = "#FFFF00"
 
-    img = icon.resize((64, 64))
+        img = icon.resize((80, 80))
 
-    # Create circular mask
-    from PIL import ImageDraw
-    mask = Image.new("L", (64, 64), 0)
-    draw = ImageDraw.Draw(mask)
-    draw.ellipse((0, 0, 64, 64), fill=255)
+        # Create circular mask
+        from PIL import ImageDraw
+        mask = Image.new("L", (80, 80), 0)
+        draw = ImageDraw.Draw(mask)
+        draw.ellipse((0, 0, 80, 80), fill=255)
 
-    # Create circular icon with border
-    bordered_icon = Image.new("RGBA", (72, 72), (0, 0, 0, 0))
-    icon_draw = ImageDraw.Draw(bordered_icon)
+        # Create circular icon with border
+        bordered_icon = Image.new("RGBA", (88, 88), (0, 0, 0, 0))
+        icon_draw = ImageDraw.Draw(bordered_icon)
 
-    # Draw border circle
-    icon_draw.ellipse((0, 0, 72, 72), outline=border_color, width=3)
-    # Draw inner circle for icon
-    icon_draw.ellipse((4, 4, 68, 68), fill=(0, 0, 0, 255))
+        # Draw border circle
+        icon_draw.ellipse((0, 0, 88, 88), outline=border_color, width=4)
+        # Draw inner circle for icon
+        icon_draw.ellipse((4, 4, 84, 84), fill=(0, 0, 0, 255))
 
-    # Paste icon with circular mask
-    bordered_icon.paste(img, (4, 4), mask)
+        # Paste icon with circular mask
+        bordered_icon.paste(img, (4, 4), mask)
 
-    # Add glow effect to border
-    glow_icon = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
-    glow_draw = ImageDraw.Draw(glow_icon)
-    glow_draw.ellipse((0, 0, 80, 80), outline=border_color, width=1)
-    glow_draw.ellipse((1, 1, 79, 79), outline=border_color, width=1)
+        # Add glow effect to border
+        glow_icon = Image.new("RGBA", (96, 96), (0, 0, 0, 0))
+        glow_draw = ImageDraw.Draw(glow_icon)
+        glow_draw.ellipse((0, 0, 96, 96), outline=border_color, width=1)
+        glow_draw.ellipse((1, 1, 95, 95), outline=border_color, width=1)
 
-    # Composite glow under main icon
-    final_icon = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
-    final_icon.paste(glow_icon, (0, 0))
-    final_icon.paste(bordered_icon, (4, 4), bordered_icon)
+        # Composite glow under main icon
+        final_icon = Image.new("RGBA", (96, 96), (0, 0, 0, 0))
+        final_icon.paste(glow_icon, (0, 0))
+        final_icon.paste(bordered_icon, (4, 4), bordered_icon)
 
-    ax.imshow(
-        final_icon,
-        extent=(
-            idx + 1 - 0.2,
-            idx + 1 + 0.2,
-            imp - 0.08,
-            imp + 0.08
-        ),
-        zorder=15
-    )
+        ax.imshow(
+            final_icon,
+            extent=(
+                idx + 1 - 0.25,
+                idx + 1 + 0.25,
+                imp - 0.1,
+                imp + 0.1
+            ),
+            zorder=15
+        )
 
     # Configure axes
     ax.set_xlim(0.5, len(x) + 0.5)
