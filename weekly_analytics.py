@@ -906,63 +906,63 @@ async def create_visual_chart(history):
 
     icons = await asyncio.gather(*tasks)
 
-        # Color mapping based on performance relative to average
-        for idx, icon in enumerate(icons):
+    # Color mapping based on performance relative to average
+    for idx, icon in enumerate(icons):
 
-            if not icon:
-                continue
+        if not icon:
+            continue
 
-            imp = history[idx]["imp"]
+        imp = history[idx]["imp"]
 
-            # Determine border color based on performance
-            if imp > avg_value + 0.2:  # Significantly above average - green
-                border_color = "#00FF00"
-            elif imp < avg_value - 0.2:  # Significantly below average - red
-                border_color = "#FF0000"
-            else:  # Around average - yellow
-                border_color = "#FFFF00"
+        # Determine border color based on performance
+        if imp > avg_value + 0.2:  # Significantly above average - green
+            border_color = "#00FF00"
+        elif imp < avg_value - 0.2:  # Significantly below average - red
+            border_color = "#FF0000"
+        else:  # Around average - yellow
+            border_color = "#FFFF00"
 
-        img = icon.resize((64, 64))
+    img = icon.resize((64, 64))
 
-        # Create circular mask
-        from PIL import ImageDraw
-        mask = Image.new("L", (64, 64), 0)
-        draw = ImageDraw.Draw(mask)
-        draw.ellipse((0, 0, 64, 64), fill=255)
+    # Create circular mask
+    from PIL import ImageDraw
+    mask = Image.new("L", (64, 64), 0)
+    draw = ImageDraw.Draw(mask)
+    draw.ellipse((0, 0, 64, 64), fill=255)
 
-        # Create circular icon with border
-        bordered_icon = Image.new("RGBA", (72, 72), (0, 0, 0, 0))
-        icon_draw = ImageDraw.Draw(bordered_icon)
+    # Create circular icon with border
+    bordered_icon = Image.new("RGBA", (72, 72), (0, 0, 0, 0))
+    icon_draw = ImageDraw.Draw(bordered_icon)
 
-        # Draw border circle
-        icon_draw.ellipse((0, 0, 72, 72), outline=border_color, width=3)
-        # Draw inner circle for icon
-        icon_draw.ellipse((4, 4, 68, 68), fill=(0, 0, 0, 255))
+    # Draw border circle
+    icon_draw.ellipse((0, 0, 72, 72), outline=border_color, width=3)
+    # Draw inner circle for icon
+    icon_draw.ellipse((4, 4, 68, 68), fill=(0, 0, 0, 255))
 
-        # Paste icon with circular mask
-        bordered_icon.paste(img, (4, 4), mask)
+    # Paste icon with circular mask
+    bordered_icon.paste(img, (4, 4), mask)
 
-        # Add glow effect to border
-        glow_icon = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
-        glow_draw = ImageDraw.Draw(glow_icon)
-        glow_draw.ellipse((0, 0, 80, 80), outline=border_color, width=1)
-        glow_draw.ellipse((1, 1, 79, 79), outline=border_color, width=1)
+    # Add glow effect to border
+    glow_icon = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow_icon)
+    glow_draw.ellipse((0, 0, 80, 80), outline=border_color, width=1)
+    glow_draw.ellipse((1, 1, 79, 79), outline=border_color, width=1)
 
-        # Composite glow under main icon
-        final_icon = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
-        final_icon.paste(glow_icon, (0, 0))
-        final_icon.paste(bordered_icon, (4, 4), bordered_icon)
+    # Composite glow under main icon
+    final_icon = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
+    final_icon.paste(glow_icon, (0, 0))
+    final_icon.paste(bordered_icon, (4, 4), bordered_icon)
 
-        ax.imshow(
-            final_icon,
-            extent=(
-                idx + 1 - 0.2,
-                idx + 1 + 0.2,
-                imp - 0.08,
-                imp + 0.08
-            ),
-            zorder=15
-        )
+    ax.imshow(
+        final_icon,
+        extent=(
+            idx + 1 - 0.2,
+            idx + 1 + 0.2,
+            imp - 0.08,
+            imp + 0.08
+        ),
+        zorder=15
+    )
 
     # Configure axes
     ax.set_xlim(0.5, len(x) + 0.5)
