@@ -308,12 +308,21 @@ async def detect_role_from_hero_counts(matches: list) -> str:
     for m in matches:
         hero_id = m.get("hero_id", 0)
         hero_roles = _HERO_ROLE_CACHE.get(hero_id, [])
-        role = convert_opendota_roles(hero_roles)
-        role_counts[role] += 1
+        
+        # Count each role tag separately (no priority)
+        if "Carry" in hero_roles:
+            role_counts["CARRY"] += 1
+        if "Nuker" in hero_roles and "Escape" in hero_roles:
+            role_counts["MID"] += 1
+        if "Durable" in hero_roles and "Initiator" in hero_roles:
+            role_counts["OFFLANE"] += 1
+        if "Support" in hero_roles or "Disabler" in hero_roles:
+            role_counts["SUPPORT"] += 1
     
     if total_matches == 0:
         return "CARRY"
     
+    # Find dominant role (60% threshold)
     dominant_role = max(role_counts, key=role_counts.get)
     dominant_count = role_counts[dominant_role]
     
