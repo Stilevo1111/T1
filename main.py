@@ -2314,12 +2314,6 @@ def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: set = 
         else:
             page_buttons.append(InlineKeyboardButton(label, callback_data=f"analytics_page_{i}"))
     rows.append(page_buttons)
-    nav_buttons = []
-    if total_pages > 1:
-        nav_buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data="analytics_prev"))
-        nav_buttons.append(InlineKeyboardButton("➡️ Далее", callback_data="analytics_next"))
-    nav_buttons.append(InlineKeyboardButton("❌ Закрыть", callback_data="analytics_close"))
-    rows.append(nav_buttons)
     return InlineKeyboardMarkup(rows)
 
 
@@ -2591,38 +2585,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await link(update, context)
             return
 
-        # === ANALYTICS CLOSE ===
-        if data == "analytics_close":
-            try:
-                await callback_query.message.delete()
-            except Exception as e:
-                logger.debug(f"Could not delete analytics message: {e}")
-            return
-
         # === ANALYTICS PAGE (analytics_page_N) ===
         if data and data.startswith("analytics_page_"):
             page_idx = int(data.split("_")[-1])
             await _show_analytics_page(callback_query, page_idx, context)
-            return
-
-        # === ANALYTICS NEXT ===
-        if data == "analytics_next":
-            current_page = context.user_data.get('analytics_page', 0)
-            pages = context.user_data.get('analytics_pages', [])
-            if pages:
-                next_page = (current_page + 1) % len(pages)
-                context.user_data['analytics_page'] = next_page
-                await _show_analytics_page(callback_query, next_page, context)
-            return
-
-        # === ANALYTICS PREV ===
-        if data == "analytics_prev":
-            current_page = context.user_data.get('analytics_page', 0)
-            pages = context.user_data.get('analytics_pages', [])
-            if pages:
-                prev_page = (current_page - 1) % len(pages)
-                context.user_data['analytics_page'] = prev_page
-                await _show_analytics_page(callback_query, prev_page, context)
             return
 
     except Exception as e:
