@@ -4,12 +4,13 @@ import asyncio
 import aiohttp
 import io
 import os
-import logging
 import math
-from urllib.parse import urlparse
+import aiohttp
+import asyncio
+import logging
 from pathlib import Path
-
 from PIL import Image, ImageDraw, ImageFont
+from hero_positions import hero_positions
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,11 @@ if FONT_PATH is None:
 
 def detect_hero_position(hero_data):
 
+    name = hero_data.get("localized_name")
+    if name and name in hero_positions:
+        return hero_positions[name]
+
+    # Fallback to old logic if not in manual list
     roles = set(hero_data.get("roles", []))
 
     # Use OpenDota role logic similar to weekly_analytics
@@ -68,7 +74,7 @@ def detect_hero_position(hero_data):
         "CARRY": 1,
         "MID": 2,
         "OFFLANE": 3,
-        "SUPPORT": 4  # Default to soft support, adjust below
+        "SUPPORT": 4
     }
 
     pos = role_to_pos.get(base_role, 4)
@@ -82,23 +88,7 @@ def detect_hero_position(hero_data):
         else:
             pos = 4
 
-    # If has position picks, adjust if the hero is actually played there
-    best_pos = pos
-    best_score = 0
-
-    for p in range(1, 6):
-        picks = hero_data.get(f"{p}_pick", 0)
-        wins = hero_data.get(f"{p}_win", 0)
-        if picks > 0:
-            wr = wins / picks
-            score = picks * wr
-            if score > best_score:
-                best_score = score
-                best_pos = p
-
-    # But keep within role group? No, if played a lot in another lane, perhaps allow.
-
-    return pos  # Stick to role-based
+    return pos
 
 
 def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
