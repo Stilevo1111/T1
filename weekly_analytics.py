@@ -737,7 +737,6 @@ async def create_visual_chart(history):
 
         import matplotlib.pyplot as plt
         import matplotlib.patheffects as pe
-        from scipy.interpolate import make_interp_spline
 
         from matplotlib.offsetbox import (
             OffsetImage,
@@ -752,6 +751,11 @@ async def create_visual_chart(history):
     except ImportError:
         logger.warning("matplotlib not available, skipping chart generation")
         return None
+
+    try:
+        from scipy.interpolate import make_interp_spline
+    except ImportError:
+        make_interp_spline = None
 
     # =====================================================
     # CANVAS SIZE EXACTLY 1200x800
@@ -831,9 +835,13 @@ async def create_visual_chart(history):
     # SMOOTH INTERPOLATION
     # =====================================================
 
-    x_smooth = np.linspace(1, 10, 200)
-    spl = make_interp_spline(x, impacts, k=3)
-    y_smooth = spl(x_smooth)
+    if make_interp_spline:
+        x_smooth = np.linspace(1, 10, 200)
+        spl = make_interp_spline(x, impacts, k=3)
+        y_smooth = spl(x_smooth)
+    else:
+        x_smooth = x
+        y_smooth = impacts
 
     # =====================================================
     # FIGURE
