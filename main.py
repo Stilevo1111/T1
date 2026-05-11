@@ -4085,6 +4085,14 @@ async def main():
         return
 
     try:
+        # Pre-warm matplotlib font cache to avoid runtime delays
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.close()
+        logger.info("Matplotlib font cache pre-warmed")
+
         init_db()
         migrate_db()
         cleanup_left_users()
