@@ -492,11 +492,11 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
 
     header = escape_markdown_v2(f"📊 ANALYTICS ({role})")
 
-    text = f"{header}\n\n{t1}"
+    text = f"{header}\n\n{escape_markdown_v2(t1)}"
 
     header_detailed = escape_markdown_v2(f"🔍 Детальное сравнение")
 
-    text_detailed = f"{header_detailed}\n\n{t2}"
+    text_detailed = f"{header_detailed}\n\n{escape_markdown_v2(t2)}"
 
     return {"pro": text, "detailed": text_detailed}
 
