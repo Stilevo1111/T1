@@ -419,21 +419,24 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             stats = data.get("stats", {})
             role = data.get("role", "CARRY")
 
-            # Compute all pages and store in user_data
-            pages = get_analytics_pages(role, stats)
-            context.user_data['analytics_pages'] = pages
-            context.user_data['analytics_page'] = 0
+            # Сохраняем данные для ленивой генерации страниц
             context.user_data['analytics_stats'] = stats
             context.user_data['analytics_role'] = role
+            context.user_data['analytics_page'] = 0
 
-            first_page = pages[0]
+            # Генерируем только первую страницу сразу, остальные — None (ленивая загрузка)
+            tables_all = get_analytics_pages(role, stats)
+            first_page = tables_all[0]
+            # Храним все 3 слота: [page0, None, None]
+            context.user_data['analytics_pages'] = [first_page, None, None]
+            context.user_data['analytics_generated'] = {0}
 
             if data.get("image"):
                 # Send analytics with chart as photo
                 photo_buf = io.BytesIO(data["image"])
                 photo_buf.name = "weekly_analytics.png"
 
-                reply_markup = _build_analytics_keyboard(0, len(pages))
+                reply_markup = _build_analytics_keyboard(0, len(tables_all), context.user_data['analytics_generated'])
 
                 result_msg = await context.bot.send_photo(
                     chat_id=chat_id,
@@ -447,7 +450,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 header_text = f"🧠 Аналитика игрока {username}\n\nРоль: {role}\n\n"
                 full_text = header_text + first_page["text"]
 
-                reply_markup = _build_analytics_keyboard(0, len(pages))
+                reply_markup = _build_analytics_keyboard(0, len(tables_all), context.user_data['analytics_generated'])
 
                 result_msg = await context.bot.send_message(
                     chat_id=chat_id,
@@ -2284,32 +2287,24 @@ def main_menu():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 
-def _build_analytics_keyboard(page_idx: int, total_pages: int) -> InlineKeyboardMarkup:
-    """Build inline keyboard for analytics pagination.
-
-    page_idx: 0-based current page index
-    total_pages: total number of pages
-    """
+def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: set = None) -> InlineKeyboardMarkup:
+    """Build inline keyboard for analytics pagination."""
     rows = []
-
-    # Row of page selector buttons
     page_buttons = []
     labels = ["🆚 С ПРО", "🔍 Детально", "📈 Метрики"]
     for i in range(total_pages):
+        label = f"⏳ {labels[i]}" if generated and i not in generated else labels[i]
         if i == page_idx:
-            page_buttons.append(InlineKeyboardButton(f"✅ {labels[i]}", callback_data=f"analytics_page_{i}"))
+            page_buttons.append(InlineKeyboardButton(f"✅ {label}", callback_data=f"analytics_page_{i}"))
         else:
-            page_buttons.append(InlineKeyboardButton(labels[i], callback_data=f"analytics_page_{i}"))
+            page_buttons.append(InlineKeyboardButton(label, callback_data=f"analytics_page_{i}"))
     rows.append(page_buttons)
-
-    # Row of navigation buttons
     nav_buttons = []
     if total_pages > 1:
         nav_buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data="analytics_prev"))
         nav_buttons.append(InlineKeyboardButton("➡️ Далее", callback_data="analytics_next"))
     nav_buttons.append(InlineKeyboardButton("❌ Закрыть", callback_data="analytics_close"))
     rows.append(nav_buttons)
-
     return InlineKeyboardMarkup(rows)
 
 
@@ -2621,17 +2616,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def _show_analytics_page(callback_query, page_idx: int, context: ContextTypes.DEFAULT_TYPE):
-    """Edit the existing message to show the requested analytics page."""
+    """Edit the existing message to show the requested analytics page.
+    Pages are generated lazily — only when the user actually navigates to them."""
     from weekly_analytics import get_analytics_pages
 
+    generated = context.user_data.get('analytics_generated', set())
     pages = context.user_data.get('analytics_pages', [])
-    if not pages:
-        await callback_query.answer(text="Нет данных аналитики. Запросите заново.", show_alert=True)
-        return
 
     if page_idx < 0 or page_idx >= len(pages):
         await callback_query.answer(text="Неверная страница.", show_alert=True)
         return
+
+    # Ленивая генерация: если страница ещё не создана — генерируем все страницы
+    if page_idx not in generated:
+        stats = context.user_data.get('analytics_stats', {})
+        role = context.user_data.get('analytics_role', 'CARRY')
+        all_pages = get_analytics_pages(role, stats)
+        # Заполняем пропуски в pages (может быть [page0, None, None])
+        for i, p in enumerate(all_pages):
+            if i < len(pages):
+                pages[i] = p
+            else:
+                pages.append(p)
+            generated.add(i)
+        context.user_data['analytics_pages'] = pages
+        context.user_data['analytics_generated'] = generated
 
     # Обновляем текущую страницу в user_data для корректной работы навигации
     context.user_data['analytics_page'] = page_idx
@@ -2639,7 +2648,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
     page = pages[page_idx]
     text = page["text"]
     total_pages = len(pages)
-    keyboard = _build_analytics_keyboard(page_idx, total_pages)
+    keyboard = _build_analytics_keyboard(page_idx, total_pages, generated)
 
     try:
         msg = callback_query.message
