@@ -807,42 +807,28 @@ async def create_visual_chart(history):
 
     # Create figure 1200x800 (figsize=12, dpi=100)
     fig = plt.figure(figsize=(12, 8), dpi=100, facecolor="#0a1f0f")
-    ax = fig.add_axes([0.08, 0.1, 0.87, 0.8])  # [left, bottom, width, height]
+    ax = fig.add_axes([0.08, 0.1, 0.87, 0.8])
 
-    # Load background image
+    # Load background image - single URL
     bg_loaded = False
     try:
-        background_urls = [
-            "https://i.ibb.co/39KgbrCY/photo-2026-05-10-21-24-42.png",
-            "https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png",
-            "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"
-        ]
-
-        for url in background_urls:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                        if resp.status == 200:
-                            bg_data = await resp.read()
-                            bg_image = Image.open(io.BytesIO(bg_data)).convert("RGBA")
-                            bg_image = bg_image.resize((1200, 800), Image.LANCZOS)
-                            ax.imshow(bg_image, aspect='auto', zorder=-10, extent=[0, 12, 0, 8])
-                            bg_loaded = True
-                            logger.info(f"Background loaded from {url}")
-                            break
-            except Exception as e:
-                logger.warning(f"Failed to load background from {url}: {e}")
-                continue
-
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://i.ibb.co/39KgbrCY/photo-2026-05-10-21-24-42.png",
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status == 200:
+                    bg_data = await resp.read()
+                    bg_image = Image.open(io.BytesIO(bg_data)).convert("RGBA")
+                    # Place as cover (maintains aspect ratio, fills entire area)
+                    ax.imshow(bg_image, aspect='auto', zorder=-10, extent=[0, 12, 0, 8])
+                    bg_loaded = True
+                    logger.info("Background loaded")
     except Exception as e:
         logger.warning(f"Background load failed: {e}")
 
     if not bg_loaded:
-        gradient = np.linspace(0, 1, 256).reshape(1, -1)
-        gradient = np.vstack((gradient, gradient))
-        from matplotlib.colors import LinearSegmentedColormap
-        cmap = LinearSegmentedColormap.from_list("custom", ["#0a1f0f", "#2c1f14"])
-        ax.imshow(gradient, aspect='auto', cmap=cmap, alpha=1.0, extent=[0, 12, 0, 8])
+        ax.set_facecolor("#0a1f0f")
 
     ax.set_xlim(0.5, len(x) + 0.5)
     ax.set_ylim(0, max(2.0, max(impacts) + 0.5))
@@ -850,10 +836,11 @@ async def create_visual_chart(history):
     # Fill under curve
     ax.fill_between(x, impacts, 0, color="#8B4513", alpha=0.3)
 
-    # Plot line with glow
-    line = ax.plot(x, impacts, linewidth=6, color="#f4c430", solid_capstyle='round')[0]
+    # Smooth line with rounded caps
+    line = ax.plot(x, impacts, linewidth=5, color="#f4c430", 
+                   solid_capstyle='round', solid_joinstyle='round')[0]
     line.set_path_effects([
-        matplotlib.patheffects.Stroke(linewidth=10, foreground="#f4c430", alpha=0.3),
+        matplotlib.patheffects.Stroke(linewidth=12, foreground="#f4c430", alpha=0.4),
         matplotlib.patheffects.Normal()
     ])
 
@@ -883,20 +870,33 @@ async def create_visual_chart(history):
         else:
             border_color = "#FFFF00"
 
-        # Create circular icon (64x64)
-        icon_img = icon.resize((64, 64))
+        # Create circular icon (56x56) with thicker border and glow
+        icon_img = icon.resize((56, 56))
 
-        mask = Image.new("L", (64, 64), 0)
+        mask = Image.new("L", (56, 56), 0)
         mask_draw = ImageDraw.Draw(mask)
-        mask_draw.ellipse((0, 0, 64, 64), fill=255)
+        mask_draw.ellipse((0, 0, 56, 56), fill=255)
 
+        # Outer circle for border + glow (толще, с радиусом меньше)
         bordered = Image.new("RGBA", (72, 72), (0, 0, 0, 0))
         bd = ImageDraw.Draw(bordered)
-        bd.ellipse((0, 0, 72, 72), outline=border_color, width=2)
+        
+        # Thicker border (width=4)
+        bd.ellipse((0, 0, 72, 72), outline=border_color, width=4)
         bd.ellipse((4, 4, 68, 68), fill=(0, 0, 0, 255))
-        bordered.paste(icon_img, (4, 4), mask)
+        bordered.paste(icon_img, (8, 8), mask)
 
-        offset = OffsetImage(bordered, zoom=1.0)
+        # Add glow effect
+        glow = Image.new("RGBA", (88, 88), (0, 0, 0, 0))
+        glow_draw = ImageDraw.Draw(glow)
+        glow_draw.ellipse((0, 0, 88, 88), outline=border_color, width=2)
+        glow_draw.ellipse((2, 2, 86, 86), outline=border_color, width=1)
+        
+        final = Image.new("RGBA", (88, 88), (0, 0, 0, 0))
+        final.paste(glow, (0, 0))
+        final.paste(bordered, (8, 8), bordered)
+
+        offset = OffsetImage(final, zoom=1.0)
         ab = AnnotationBbox(offset, (idx + 1, imp), frameon=False, xycoords='data')
         ax.add_artist(ab)
 
