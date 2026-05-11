@@ -787,41 +787,32 @@ async def create_visual_chart(history):
 
     try:
         import matplotlib
-        matplotlib.use('Agg')  # Use non-GUI backend
+        matplotlib.use('Agg')
         import matplotlib.pyplot as plt
         import matplotlib.patheffects as pe
+        from matplotlib.offsetbox import OffsetImage, AnnotationBbox
         import numpy as np
     except ImportError:
         logger.warning("matplotlib not available, skipping chart generation")
         return None
 
-    impacts = [
-        g["imp"]
-        for g in history
-    ]
+    impacts = [g["imp"] for g in history]
 
     if not impacts:
         return None
 
     x = list(range(1, len(impacts) + 1))
 
-    # Calculate average
     avg_value = sum(impacts) / len(impacts)
 
-    # Create figure with specified dimensions (1200x800)
-    fig, ax = plt.subplots(
-        figsize=(12, 8),  # Adjusted size for proper proportions
-        dpi=100
-    )
+    fig, ax = plt.subplots(figsize=(12, 8), dpi=100)
 
-    # Load custom background image
     bg_loaded = False
     try:
-        # Try multiple URLs in case one fails
         background_urls = [
             "https://i.ibb.co/39KgbrCY/photo-2026-05-10-21-24-42.png",
-            "https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png",  # Fallback from dota_mmr.py
-            "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"  # Another fallback
+            "https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png",
+            "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"
         ]
 
         for url in background_urls:
@@ -830,9 +821,8 @@ async def create_visual_chart(history):
                     async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                         if resp.status == 200:
                             bg_data = await resp.read()
-                            bg_image = Image.open(io.BytesIO(bg_data)).convert("RGBA").resize((1200, 800), Image.LANCZOS)
-                            # Cover full axes area
-                            ax.imshow(bg_image, extent=[0, 1, 0, 1], aspect='auto', zorder=-10, transform=ax.transAxes)
+                            bg_image = Image.open(io.BytesIO(bg_data)).convert("RGBA")
+                            ax.imshow(bg_image, aspect='auto', zorder=-10, extent=[0, 12, 0, 8], transform=ax.transData)
                             fig.patch.set_facecolor("#0a1f0f")
                             ax.set_facecolor("none")
                             bg_loaded = True
@@ -852,21 +842,17 @@ async def create_visual_chart(history):
         bg_loaded = False
 
     if not bg_loaded:
-        # Fallback to gradient background
         gradient = np.linspace(0, 1, 256).reshape(1, -1)
         gradient = np.vstack((gradient, gradient))
         from matplotlib.colors import LinearSegmentedColormap
         cmap = LinearSegmentedColormap.from_list("custom", ["#0a1f0f", "#2c1f14"])
-        ax.imshow(gradient, extent=[0, 1, 0, 1], aspect='auto',
-                  cmap=cmap, alpha=1.0, zorder=-10,
-                  transform=ax.transAxes)
+        ax.imshow(gradient, extent=[0, 12, 0, 8], aspect='auto',
+                  cmap=cmap, alpha=1.0, zorder=-10)
         fig.patch.set_facecolor("#0a1f0f")
         ax.set_facecolor("none")
 
-    # Fill area under the curve with semi-transparent brown
     ax.fill_between(x, impacts, 0, color="#8B4513", alpha=0.3)
 
-    # Plot the main line with glow effect
     line = ax.plot(
         x,
         impacts,
@@ -875,13 +861,11 @@ async def create_visual_chart(history):
         solid_capstyle='round'
     )[0]
 
-    # Add glow effect
     line.set_path_effects([
         matplotlib.patheffects.Stroke(linewidth=10, foreground="#f4c430", alpha=0.3),
         matplotlib.patheffects.Normal()
     ])
 
-    # Add dashed average line
     ax.axhline(
         y=avg_value,
         color="#CCCCCC",
@@ -890,19 +874,17 @@ async def create_visual_chart(history):
         alpha=0.7
     )
 
-    # Add average text
     ax.text(
-        len(x) - 0.5, avg_value + 0.05,
+        len(x) - 0.3, avg_value + 0.05,
         f"AVG {avg_value:.2f}",
         color="#CCCCCC",
-        fontsize=12,
+        fontsize=14,
         fontweight="bold",
         ha="right",
         va="bottom",
         bbox=dict(boxstyle="round,pad=0.3", facecolor="#1a1a1a", alpha=0.8)
     )
 
-    # Get hero icons
     tasks = [
         get_hero_icon(g["hero_id"])
         for g in history
@@ -910,7 +892,6 @@ async def create_visual_chart(history):
 
     icons = await asyncio.gather(*tasks)
 
-    # Color mapping based on performance relative to average
     for idx, icon in enumerate(icons):
 
         if not icon:
@@ -918,84 +899,47 @@ async def create_visual_chart(history):
 
         imp = history[idx]["imp"]
 
-        # Determine border color based on performance
-        if imp > avg_value + 0.2:  # Significantly above average - green
+        if imp > avg_value + 0.2:
             border_color = "#00FF00"
-        elif imp < avg_value - 0.2:  # Significantly below average - red
+        elif imp < avg_value - 0.2:
             border_color = "#FF0000"
-        else:  # Around average - yellow
+        else:
             border_color = "#FFFF00"
 
-        img = icon.resize((80, 80))
+        img = icon.resize((64, 64))
 
-        # Create circular mask
-        from PIL import ImageDraw
-        mask = Image.new("L", (80, 80), 0)
+        mask = Image.new("L", (64, 64), 0)
         draw = ImageDraw.Draw(mask)
-        draw.ellipse((0, 0, 80, 80), fill=255)
+        draw.ellipse((0, 0, 64, 64), fill=255)
 
-        # Create circular icon with border
-        bordered_icon = Image.new("RGBA", (88, 88), (0, 0, 0, 0))
+        bordered_icon = Image.new("RGBA", (72, 72), (0, 0, 0, 0))
         icon_draw = ImageDraw.Draw(bordered_icon)
 
-        # Draw border circle
-        icon_draw.ellipse((0, 0, 88, 88), outline=border_color, width=4)
-        # Draw inner circle for icon
-        icon_draw.ellipse((4, 4, 84, 84), fill=(0, 0, 0, 255))
+        icon_draw.ellipse((0, 0, 72, 72), outline=border_color, width=3)
+        icon_draw.ellipse((4, 4, 68, 68), fill=(0, 0, 0, 255))
 
-        # Paste icon with circular mask
         bordered_icon.paste(img, (4, 4), mask)
 
-        # Add glow effect to border
-        glow_icon = Image.new("RGBA", (96, 96), (0, 0, 0, 0))
-        glow_draw = ImageDraw.Draw(glow_icon)
-        glow_draw.ellipse((0, 0, 96, 96), outline=border_color, width=1)
-        glow_draw.ellipse((1, 1, 95, 95), outline=border_color, width=1)
+        offset_img = OffsetImage(bordered_icon, zoom=1.0)
+        ab = AnnotationBbox(offset_img, (idx + 1, imp), frameon=False, xycoords='data')
+        ax.add_artist(ab)
 
-        # Composite glow under main icon
-        final_icon = Image.new("RGBA", (96, 96), (0, 0, 0, 0))
-        final_icon.paste(glow_icon, (0, 0))
-        final_icon.paste(bordered_icon, (4, 4), bordered_icon)
-
-        ax.imshow(
-            final_icon,
-            extent=(
-                idx + 1 - 0.25,
-                idx + 1 + 0.25,
-                imp - 0.1,
-                imp + 0.1
-            ),
-            zorder=15
-        )
-
-    # Configure axes
     ax.set_xlim(0.5, len(x) + 0.5)
-    ax.set_ylim(0, max(2.0, max(impacts) + 0.2))
+    ax.set_ylim(0, max(2.0, max(impacts) + 0.3))
 
-    # Set ticks and labels with clean, modern font
     ax.set_xticks(x)
-    ax.set_xticklabels([str(i) for i in x], color="#CCCCCC", fontsize=12, fontweight="bold", fontfamily='sans-serif')
+    ax.set_xticklabels([str(i) for i in x], color="#CCCCCC", fontsize=14, fontweight="bold")
     ax.set_yticks([0, 0.5, 1.0, 1.5, 2.0])
-    ax.set_yticklabels(["0", "0.5", "1.0", "1.5", "2.0"], color="#CCCCCC", fontsize=12, fontweight="bold", fontfamily='sans-serif')
+    ax.set_yticklabels(["0", "0.5", "1.0", "1.5", "2.0"], color="#CCCCCC", fontsize=14, fontweight="bold")
 
-    # Add grid
     ax.grid(axis='y', color="#333333", linestyle="-", linewidth=0.5, alpha=0.3)
 
-    # Remove spines for clean look
     for spine in ax.spines.values():
         spine.set_visible(False)
 
-    # Set layout
-    plt.tight_layout()
-
     buf = io.BytesIO()
 
-    plt.savefig(
-        buf,
-        format="png",
-        facecolor=fig.get_facecolor(),
-        dpi=100
-    )
+    fig.savefig(buf, format="png", facecolor=fig.get_facecolor(), dpi=100)
 
     plt.close(fig)
 
