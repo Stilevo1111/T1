@@ -730,6 +730,8 @@ async def generate_weekly_analytics(telegram_id: int):
 
 async def create_visual_chart(history):
     try:
+        import io
+        import numpy as np
         import matplotlib
         matplotlib.use("Agg")
 
@@ -750,6 +752,25 @@ async def create_visual_chart(history):
         logger.warning("matplotlib not available, skipping chart generation")
         return None
 
+    # =========================================
+    # LOAD BACKGROUND
+    # =========================================
+
+    background_url = (
+        "https://i.ibb.co/FLpR1xDq/"
+        "photo-2026-05-10-21-24-42.png"
+    )
+
+    response = requests.get(background_url)
+
+    bg = Image.open(
+        BytesIO(response.content)
+    ).convert("RGB")
+
+    # =========================================
+    # DATA
+    # =========================================
+
     impacts = [
         round(g["imp"], 2)
         for g in history[:10]
@@ -760,61 +781,189 @@ async def create_visual_chart(history):
 
     impacts = impacts[:10]
 
-    x = list(range(1, 11))
+    x = np.arange(1, 11)
+
     avg = 0.61
 
-    fig = plt.figure(figsize=(12, 8), dpi=100)
-    ax = fig.add_axes([0, 0, 1, 1])
+    # =========================================
+    # FIGURE 1200x800 EXACT
+    # =========================================
 
-    fig.patch.set_facecolor("black")
-
-    background_url = (
-        "https://i.ibb.co/FLpR1xDq/"
-        "photo-2026-05-10-21-24-42.png"
+    fig = plt.figure(
+        figsize=(12, 8),
+        dpi=100
     )
 
-    try:
-        response = requests.get(background_url, timeout=10)
-        bg = Image.open(BytesIO(response.content)).convert("RGB")
-        bg = bg.resize((1200, 800))
-        ax.imshow(bg, extent=[0.5, 10.5, 0, 2.0], aspect='auto', zorder=0)
-    except Exception as e:
-        logger.warning(f"Background load failed: {e}")
-        ax.set_facecolor("black")
+    # УБИРАЕМ ВСЕ ОТСТУПЫ
+    fig.subplots_adjust(
+        left=0,
+        right=1,
+        top=1,
+        bottom=0
+    )
 
-    ax.axhspan(0, 2, color="black", alpha=0.40, zorder=1)
+    # axes на весь экран
+    ax = fig.add_axes([0, 0, 1, 1])
 
-    ax.axhspan(1.0, 2.0, color="#003d1a", alpha=0.35, zorder=2)
-    ax.axhspan(0, 1.0, color="#3d0000", alpha=0.35, zorder=2)
+    # =========================================
+    # BACKGROUND FULLSCREEN
+    # =========================================
 
-    ax.fill_between(x, impacts, 0, color="#ff8800", alpha=0.18, zorder=3)
+    # IMPORTANT:
+    # aspect='auto'
+    # interpolation='bilinear'
+    # alpha=1.0
+    # чтобы фон НЕ был прозрачным
+    # и растягивался на ВЕСЬ график
 
-    line = ax.plot(x, impacts, color="#f4c430", linewidth=5, zorder=5)[0]
+    ax.imshow(
+        bg,
+        extent=[0, 11, 0, 2],
+        aspect='auto',
+        interpolation='bilinear',
+        alpha=1.0,
+        zorder=0
+    )
+
+    # =========================================
+    # REMOVE BLACK MARGINS
+    # =========================================
+
+    plt.margins(0)
+
+    # =========================================
+    # LIGHT GAME OVERLAY
+    # =========================================
+
+    ax.axhspan(
+        1.0,
+        2.0,
+        color="#003d1a",
+        alpha=0.12,
+        zorder=1
+    )
+
+    ax.axhspan(
+        0,
+        1.0,
+        color="#3d0000",
+        alpha=0.10,
+        zorder=1
+    )
+
+    # =========================================
+    # UNDER GRAPH AREA
+    # =========================================
+
+    ax.fill_between(
+        x,
+        impacts,
+        0,
+        color="#ff9900",
+        alpha=0.22,
+        zorder=2
+    )
+
+    # =========================================
+    # MAIN LINE
+    # =========================================
+
+    line = ax.plot(
+        x,
+        impacts,
+        color="#f4c430",
+        linewidth=6,
+        zorder=5
+    )[0]
+
     line.set_path_effects([
-        pe.Stroke(linewidth=11, foreground="#ff8800", alpha=0.35),
+        pe.Stroke(
+            linewidth=12,
+            foreground="#ff8800",
+            alpha=0.40
+        ),
         pe.Normal()
     ])
 
-    ax.scatter(x, impacts, s=180, color="#ffd54f", edgecolors="#fff2a8", linewidths=2, zorder=6)
+    # =========================================
+    # POINTS
+    # =========================================
 
-    ax.axhline(avg, linestyle=(0, (5, 5)), color="#d9d9d9", linewidth=1.5, alpha=0.75, zorder=4)
-    ax.text(10.15, avg + 0.01, "AVG 0.61", color="#e0e0e0", fontsize=18, weight="bold", va="center", zorder=20)
+    ax.scatter(
+        x,
+        impacts,
+        s=200,
+        color="#ffd54f",
+        edgecolors="#fff2a8",
+        linewidths=2,
+        zorder=6
+    )
 
-    icons = await asyncio.gather(*[get_hero_icon(g["hero_id"]) for g in history[:10]])
+    # =========================================
+    # AVG LINE
+    # =========================================
 
-    for idx, (imp, hero_img) in enumerate(zip(impacts, icons)):
+    ax.axhline(
+        avg,
+        linestyle=(0, (5, 5)),
+        color="#e0e0e0",
+        linewidth=1.5,
+        alpha=0.75,
+        zorder=4
+    )
+
+    ax.text(
+        10.15,
+        avg + 0.01,
+        "AVG 0.61",
+        color="white",
+        fontsize=20,
+        weight="bold",
+        va="center",
+        zorder=20
+    )
+
+    # =========================================
+    # HEROES ON GRAPH
+    # =========================================
+
+    for idx, g in enumerate(history[:10]):
+
+        hero_img = await get_hero_icon(
+            g["hero_id"]
+        )
+
         if not hero_img:
             continue
 
+        imp = impacts[idx]
+
+        # =====================================
+        # BORDER COLOR
+        # =====================================
+
         if imp >= 1.0:
             border = "#00ff66"
+
         elif imp >= 0.6:
             border = "#ffd000"
+
         else:
             border = "#ff3b3b"
 
-        hero_img = hero_img.resize((70, 70))
-        imagebox = OffsetImage(hero_img, zoom=0.7)
+        # =====================================
+        # HERO IMAGE
+        # =====================================
+
+        hero_img = hero_img.resize(
+            (72, 72)
+        )
+
+        imagebox = OffsetImage(
+            hero_img,
+            zoom=0.72
+        )
+
         ab = AnnotationBbox(
             imagebox,
             (idx + 1, imp),
@@ -822,34 +971,124 @@ async def create_visual_chart(history):
             bboxprops=dict(
                 edgecolor=border,
                 linewidth=4,
-                boxstyle="circle,pad=0.15",
+                boxstyle="circle,pad=0.12",
                 facecolor="#101010",
-                alpha=0.95
+                alpha=1
             ),
             zorder=10
         )
+
         ax.add_artist(ab)
 
-        ax.scatter(idx + 1, imp, s=1800, color=border, alpha=0.10, zorder=8)
+        # =====================================
+        # GLOW
+        # =====================================
 
-    ax.text(5.5, 1.92, "IMPACT PERFORMANCE", ha="center", color="white", fontsize=34, weight="bold", zorder=20)
-    ax.text(5.5, 1.83, "LAST 10 MATCHES", ha="center", color="#f7b733", fontsize=18, weight="bold", zorder=20)
+        ax.scatter(
+            idx + 1,
+            imp,
+            s=2200,
+            color=border,
+            alpha=0.10,
+            zorder=8
+        )
+
+    # =========================================
+    # TITLES
+    # =========================================
+
+    ax.text(
+        5.5,
+        1.93,
+        "IMPACT PERFORMANCE",
+        ha="center",
+        color="white",
+        fontsize=34,
+        weight="bold",
+        zorder=30
+    )
+
+    ax.text(
+        5.5,
+        1.83,
+        "LAST 10 MATCHES",
+        ha="center",
+        color="#f4c430",
+        fontsize=18,
+        weight="bold",
+        zorder=30
+    )
+
+    # =========================================
+    # AXES
+    # =========================================
 
     ax.set_xlim(0.5, 10.5)
-    ax.set_ylim(0, 2.0)
-    ax.set_xticks(x)
-    ax.set_xticklabels([str(i) for i in x], fontsize=20, color="#e0e0e0")
-    ax.set_yticks([0, 0.5, 1.0, 1.5, 2.0])
-    ax.set_yticklabels(["0", "0.5", "1", "1.5", "2"], fontsize=18, color="#d0d0d0")
 
-    ax.grid(axis="y", color="white", alpha=0.08, linewidth=1)
+    ax.set_ylim(0, 2.0)
+
+    ax.set_xticks(x)
+
+    ax.set_xticklabels(
+        [str(i) for i in x],
+        fontsize=22,
+        color="white"
+    )
+
+    ax.set_yticks([
+        0,
+        0.5,
+        1.0,
+        1.5,
+        2.0
+    ])
+
+    ax.set_yticklabels(
+        ["0", "0.5", "1", "1.5", "2"],
+        fontsize=18,
+        color="white"
+    )
+
+    # =========================================
+    # GRID
+    # =========================================
+
+    ax.grid(
+        axis="y",
+        color="white",
+        alpha=0.08,
+        linewidth=1
+    )
+
+    # =========================================
+    # REMOVE BORDERS
+    # =========================================
 
     for spine in ax.spines.values():
         spine.set_visible(False)
 
+    # =========================================
+    # REMOVE BLACK MARGINS
+    # =========================================
+
+    plt.margins(0)
+
+    # =========================================
+    # SAVE
+    # =========================================
+
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", facecolor=fig.get_facecolor(), bbox_inches="tight")
+
+    plt.savefig(
+        buf,
+        format="png",
+        dpi=100,
+        bbox_inches=None,
+        pad_inches=0
+    )
+
     plt.close(fig)
+
     buf.seek(0)
 
     return buf.getvalue()
