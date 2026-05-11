@@ -805,8 +805,11 @@ async def create_visual_chart(history):
 
     avg_value = sum(impacts) / len(impacts)
 
-    fig, ax = plt.subplots(figsize=(12, 8), dpi=100)
+    # Create figure 1200x800 (figsize=12, dpi=100)
+    fig = plt.figure(figsize=(12, 8), dpi=100, facecolor="#0a1f0f")
+    ax = fig.add_axes([0.08, 0.1, 0.87, 0.8])  # [left, bottom, width, height]
 
+    # Load background image
     bg_loaded = False
     try:
         background_urls = [
@@ -822,78 +825,52 @@ async def create_visual_chart(history):
                         if resp.status == 200:
                             bg_data = await resp.read()
                             bg_image = Image.open(io.BytesIO(bg_data)).convert("RGBA")
-                            ax.imshow(bg_image, aspect='auto', zorder=-10, extent=[0, 12, 0, 8], transform=ax.transData)
-                            fig.patch.set_facecolor("#0a1f0f")
-                            ax.set_facecolor("none")
+                            bg_image = bg_image.resize((1200, 800), Image.LANCZOS)
+                            ax.imshow(bg_image, aspect='auto', zorder=-10, extent=[0, 12, 0, 8])
                             bg_loaded = True
-                            logger.info(f"Custom background image loaded successfully from {url}")
+                            logger.info(f"Background loaded from {url}")
                             break
-                        else:
-                            logger.warning(f"Background image HTTP {resp.status} for {url}")
             except Exception as e:
                 logger.warning(f"Failed to load background from {url}: {e}")
                 continue
 
-        if not bg_loaded:
-            raise Exception("All background URLs failed")
-
     except Exception as e:
-        logger.warning(f"Failed to load custom background, using gradient: {e}")
-        bg_loaded = False
+        logger.warning(f"Background load failed: {e}")
 
     if not bg_loaded:
         gradient = np.linspace(0, 1, 256).reshape(1, -1)
         gradient = np.vstack((gradient, gradient))
         from matplotlib.colors import LinearSegmentedColormap
         cmap = LinearSegmentedColormap.from_list("custom", ["#0a1f0f", "#2c1f14"])
-        ax.imshow(gradient, extent=[0, 12, 0, 8], aspect='auto',
-                  cmap=cmap, alpha=1.0, zorder=-10)
-        fig.patch.set_facecolor("#0a1f0f")
-        ax.set_facecolor("none")
+        ax.imshow(gradient, aspect='auto', cmap=cmap, alpha=1.0, extent=[0, 12, 0, 8])
 
+    ax.set_xlim(0.5, len(x) + 0.5)
+    ax.set_ylim(0, max(2.0, max(impacts) + 0.5))
+
+    # Fill under curve
     ax.fill_between(x, impacts, 0, color="#8B4513", alpha=0.3)
 
-    line = ax.plot(
-        x,
-        impacts,
-        linewidth=6,
-        color="#f4c430",
-        solid_capstyle='round'
-    )[0]
-
+    # Plot line with glow
+    line = ax.plot(x, impacts, linewidth=6, color="#f4c430", solid_capstyle='round')[0]
     line.set_path_effects([
         matplotlib.patheffects.Stroke(linewidth=10, foreground="#f4c430", alpha=0.3),
         matplotlib.patheffects.Normal()
     ])
 
-    ax.axhline(
-        y=avg_value,
-        color="#CCCCCC",
-        linestyle="--",
-        linewidth=2,
-        alpha=0.7
-    )
+    # Average line
+    ax.axhline(y=avg_value, color="#CCCCCC", linestyle="--", linewidth=2, alpha=0.7)
 
-    ax.text(
-        len(x) - 0.3, avg_value + 0.05,
-        f"AVG {avg_value:.2f}",
-        color="#CCCCCC",
-        fontsize=14,
-        fontweight="bold",
-        ha="right",
-        va="bottom",
-        bbox=dict(boxstyle="round,pad=0.3", facecolor="#1a1a1a", alpha=0.8)
-    )
+    # Average text
+    ax.text(len(x) - 0.3, avg_value + 0.08, f"AVG {avg_value:.2f}",
+            color="#CCCCCC", fontsize=12, fontweight="bold",
+            ha="right", va="bottom",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="#1a1a1a", alpha=0.8))
 
-    tasks = [
-        get_hero_icon(g["hero_id"])
-        for g in history
-    ]
-
+    # Load hero icons
+    tasks = [get_hero_icon(g["hero_id"]) for g in history]
     icons = await asyncio.gather(*tasks)
 
     for idx, icon in enumerate(icons):
-
         if not icon:
             continue
 
@@ -906,31 +883,28 @@ async def create_visual_chart(history):
         else:
             border_color = "#FFFF00"
 
-        img = icon.resize((64, 64))
+        # Create circular icon (64x64)
+        icon_img = icon.resize((64, 64))
 
         mask = Image.new("L", (64, 64), 0)
-        draw = ImageDraw.Draw(mask)
-        draw.ellipse((0, 0, 64, 64), fill=255)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.ellipse((0, 0, 64, 64), fill=255)
 
-        bordered_icon = Image.new("RGBA", (72, 72), (0, 0, 0, 0))
-        icon_draw = ImageDraw.Draw(bordered_icon)
+        bordered = Image.new("RGBA", (72, 72), (0, 0, 0, 0))
+        bd = ImageDraw.Draw(bordered)
+        bd.ellipse((0, 0, 72, 72), outline=border_color, width=2)
+        bd.ellipse((4, 4, 68, 68), fill=(0, 0, 0, 255))
+        bordered.paste(icon_img, (4, 4), mask)
 
-        icon_draw.ellipse((0, 0, 72, 72), outline=border_color, width=3)
-        icon_draw.ellipse((4, 4, 68, 68), fill=(0, 0, 0, 255))
-
-        bordered_icon.paste(img, (4, 4), mask)
-
-        offset_img = OffsetImage(bordered_icon, zoom=1.0)
-        ab = AnnotationBbox(offset_img, (idx + 1, imp), frameon=False, xycoords='data')
+        offset = OffsetImage(bordered, zoom=1.0)
+        ab = AnnotationBbox(offset, (idx + 1, imp), frameon=False, xycoords='data')
         ax.add_artist(ab)
 
-    ax.set_xlim(0.5, len(x) + 0.5)
-    ax.set_ylim(0, max(2.0, max(impacts) + 0.3))
-
+    # Configure axes
     ax.set_xticks(x)
-    ax.set_xticklabels([str(i) for i in x], color="#CCCCCC", fontsize=14, fontweight="bold")
+    ax.set_xticklabels([str(i) for i in x], color="#CCCCCC", fontsize=12, fontweight="bold")
     ax.set_yticks([0, 0.5, 1.0, 1.5, 2.0])
-    ax.set_yticklabels(["0", "0.5", "1.0", "1.5", "2.0"], color="#CCCCCC", fontsize=14, fontweight="bold")
+    ax.set_yticklabels(["0", "0.5", "1.0", "1.5", "2.0"], color="#CCCCCC", fontsize=12)
 
     ax.grid(axis='y', color="#333333", linestyle="-", linewidth=0.5, alpha=0.3)
 
@@ -938,11 +912,8 @@ async def create_visual_chart(history):
         spine.set_visible(False)
 
     buf = io.BytesIO()
-
-    fig.savefig(buf, format="png", facecolor=fig.get_facecolor(), dpi=100)
-
+    fig.savefig(buf, format="png", facecolor="#0a1f0f", dpi=100, pad_inches=0)
     plt.close(fig)
-
     buf.seek(0)
 
     return buf.getvalue()
