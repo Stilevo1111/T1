@@ -1461,7 +1461,7 @@ async def alternate_digest_job(context):
                     except Exception as e_caption:
                         # If text edit fails (photo message), try caption edit
                         error_str = str(e_caption).lower()
-                        if "no text" in error_str or "message is not modified" in error_str:
+                        if "no text" in error_str or "message is not modified" in error_str or "400" in error_str or "bad request" in error_str:
                             try:
                                 await bot.edit_message_caption(
                                     chat_id=int(digest_chat_id),
