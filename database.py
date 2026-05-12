@@ -1410,7 +1410,12 @@ class Database:
                             top_growth_user = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
                         if not top_growth_user:
                             top_growth_user = str(u["telegram_id"])
-                        top_growth_id = u["telegram_id"]
+                        # Only set ID if valid (positive integer)
+                        try:
+                            tid = int(u["telegram_id"]) if u["telegram_id"] else 0
+                            top_growth_id = tid if tid > 0 else None
+                        except (ValueError, TypeError):
+                            top_growth_id = None
 
             # Падение: насколько см уменьшилась фиссура за сутки (current - digest)
             top_drop_user = None
@@ -1430,7 +1435,12 @@ class Database:
                             top_drop_user = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
                         if not top_drop_user:
                             top_drop_user = str(u["telegram_id"])
-                        top_drop_id = u["telegram_id"]
+                        # Only set ID if valid (positive integer)
+                        try:
+                            tid = int(u["telegram_id"]) if u["telegram_id"] else 0
+                            top_drop_id = tid if tid > 0 else None
+                        except (ValueError, TypeError):
+                            top_drop_id = None
 
             # Стрик: текущая серия побед (current_streak)
             top_streak_user = None
@@ -1446,7 +1456,12 @@ class Database:
                         top_streak_user = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
                     if not top_streak_user:
                         top_streak_user = str(u["telegram_id"])
-                    top_streak_id = u["telegram_id"]
+                    # Only set ID if valid (positive integer)
+                    try:
+                        tid = int(u["telegram_id"]) if u["telegram_id"] else 0
+                        top_streak_id = tid if tid > 0 else None
+                    except (ValueError, TypeError):
+                        top_streak_id = None
 
             def get_user_telegram_username(telegram_id):
                 """Получить Telegram username пользователя"""
