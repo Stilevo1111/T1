@@ -1518,12 +1518,14 @@ async def alternate_digest_job(context):
         if not edited:
             # Проверяем анти-спам до генерации баннера (быстрый выход)
             # Новый дайджест создаётся только раз в 48 часов (Telegram лимит редактирования)
-            last_created_str = get_config('alternate_digest_last_created')
-            last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
-            time_since_last = time.time() - last_created
-            if time_since_last < 172800:  # 48 часов = 172800 секунд
-                logger.info(f"Пропускаем - прошло всего {time_since_last/3600:.1f} ч с последнего создания")
-                return
+            # Но если предыдущее сообщение удалено (last_message_id = None), создаём новое независимо
+            if last_message_id is not None:
+                last_created_str = get_config('alternate_digest_last_created')
+                last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
+                time_since_last = time.time() - last_created
+                if time_since_last < 172800:  # 48 часов = 172800 секунд
+                    logger.info(f"Пропускаем - прошло всего {time_since_last/3600:.1f} ч с последнего создания")
+                    return
 
             # Генерируем hero_meta_banner если в кеше нет свежего
             current_time = time.time()
@@ -2702,6 +2704,7 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _digest_state["type"] = "0"
             set_config("alternate_digest_type", "0")
             set_config("alternate_digest_message_id", None)
+            set_config("alternate_digest_last_created", "0")
 
             manual_context = ManualContext(context.application, context.bot)
             await alternate_digest_job(manual_context)
@@ -2714,6 +2717,7 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _digest_state["type"] = "1"
             set_config("alternate_digest_type", "1")
             set_config("alternate_digest_message_id", None)
+            set_config("alternate_digest_last_created", "0")
 
             manual_context = ManualContext(context.application, context.bot)
             await alternate_digest_job(manual_context)

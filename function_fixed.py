@@ -346,12 +346,14 @@ async def alternate_digest_job(context):
                 logger.warning(f"Could not generate hero meta banner: {e}")
 
             # Проверяем анти-спам
-            last_created_str = get_config('alternate_digest_last_created')
-            last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
-            time_since_last = time.time() - last_created
-            if time_since_last < 60:
-                logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
-                return
+            # Если старого сообщения нет (last_message_id = None), создаём новое независимо от таймаута
+            if last_message_id is not None:
+                last_created_str = get_config('alternate_digest_last_created')
+                last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
+                time_since_last = time.time() - last_created
+                if time_since_last < 60:
+                    logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
+                    return
 
             # Удаляем старое сообщение если есть
             if last_message_id:
