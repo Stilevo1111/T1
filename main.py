@@ -1188,16 +1188,11 @@ async def alternate_digest_job(context):
         current_data_hash = get_digest_data_hash()
         data_changed = current_data_hash != cache.get("data_hash")
 
-        # 1. Если кеш пустой - проверяем есть ли существующий пост
-        last_message_id = get_config('alternate_digest_message_id')
+        # 1. Если кеш пустой - всегда генерируем заново, чтобы получить валидный текст
+        # (даже если есть существующий пост - нам нужно текст для редактирования)
         if cache["text"] is None:
-            # Если есть существующий пост - используем его, не генерируем новый
-            if last_message_id:
-                logger.info("Кеш пуст, но есть существующий пост - используем его")
-                should_regenerate = False
-            else:
-                should_regenerate = True
-                logger.info("Кеш дайджеста пуст и нет существующего поста, генерируем новый")
+            should_regenerate = True
+            logger.info("Кеш дайджеста пуст, генерируем новый текст для редактирования существующего поста")
 
         # 2. Если данные изменились - генерируем
         elif data_changed:
