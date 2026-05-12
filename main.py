@@ -1839,18 +1839,22 @@ WELCOME_PHRASES = [
 # =====================
 
 def make_clickable(name, user_id, max_length=12):
-    """Создать кликабельный никнейм для Telegram"""
-    if name and name != "None" and user_id and int(user_id) > 0:
+    """Создать кликабельный никейм для Telegram"""
+    try:
+        uid = int(user_id) if user_id else 0
+    except (ValueError, TypeError):
+        uid = 0
+    if name and name != "None" and uid > 0:
         display_name = name
         try:
             from database import user_cache, get_user
             # Сначала пробуем из кеша
-            cached = user_cache.get(int(user_id))
+            cached = user_cache.get(uid)
             if cached:
                 display_name = cached.get('steam_nickname') or cached.get('username') or name
             else:
                 # Пробуем из БД напрямую
-                db_user = get_user(int(user_id))
+                db_user = get_user(uid)
                 if db_user:
                     display_name = db_user.get('steam_nickname') or db_user.get('username') or name
         except:
@@ -1868,7 +1872,7 @@ def make_clickable(name, user_id, max_length=12):
         if len(display_name) > max_length:
             display_name = display_name[:max_length-1] + "."
 
-        return f"<a href=\"tg://user?id={user_id}\">{display_name}</a>"
+        return f"<a href=\"tg://user?id={uid}\">{display_name}</a>"
     return name if name and name != "None" else "—"
 
 # Track last bot message per user per chat for cleanup
