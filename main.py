@@ -43,14 +43,14 @@ _user_fissure_processing = {}  # Request lock: user_id -> timestamp (for fissure
 _USER_START_COOLDOWN = {}  # Spam protection for /start: user_id -> timestamp
 _START_COOLDOWN = 5  # 5 seconds cooldown for /start command
 
-_digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run": 0, "last_text": None, "last_hero_meta_update": 0, "hero_meta_image": None}
+_digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run": 0, "last_text": None, "last_hero_meta_update": 0, "hero_meta_image": None, "last_edited": 0}
 _digest_state_lock = asyncio.Lock()  # Lock for thread-safe access to _digest_state
 _digest_cache = {
     "text": None,           # Кешированный текст дайджеста
     "type": None,          # Тип дайджеста для кеша
     "created_at": 0,       # Время создания кеша
     "cache_ttl": 300,      # Время жизни кеша в секундах (5 минут)
-    "rotation_interval": 15,  # Интервал смены типа в секундах (15 секунд)
+    "rotation_interval": 172800,  # Интервал смены типа в секундах (48 часов)
     "data_hash": None,     # Хеш данных для быстрого сравнения изменений
     "last_data_check": 0   # Время последней проверки данных
 }
@@ -1413,11 +1413,10 @@ async def alternate_digest_job(context):
 
         # === ОТПРАВКА ДАЙДЖЕСТА ===
         # Анти-спам: проверяем, не было ли недавнего обновления дайджеста
-        last_created_str = get_config('alternate_digest_last_created')
-        last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
-        time_since_last = time.time() - last_created
-        if time_since_last < 10:  # 10 секунд защиты от гонки
-            logger.info(f"Пропускаем - дайджест обновлен {time_since_last:.0f} сек назад")
+        # Используем last_edited для защиты от гонки (отдельно от last_created)
+        last_edited = _digest_state.get("last_edited", 0)
+        if now - last_edited < 10:  # 10 секунд защиты от гонки
+            logger.info(f"Пропускаем - дайджест обновлен {now - last_edited:.0f} сек назад")
             return
 
         # Пропускаем редактирование если текст не изменился
@@ -1462,7 +1461,7 @@ async def alternate_digest_job(context):
                     _digest_state["type"] = next_type
                     set_config('alternate_digest_type', next_type)
                     _digest_state["last_text"] = text
-                    set_config('alternate_digest_last_created', str(time.time()))
+                    _digest_state["last_edited"] = now
             except Exception as e:
                 error_str = str(e).lower()
                 logger.debug(f"Caption edit failed: {e}")
@@ -1480,7 +1479,7 @@ async def alternate_digest_job(context):
                         _digest_state["type"] = next_type
                         set_config('alternate_digest_type', next_type)
                         _digest_state["last_text"] = text
-                        set_config('alternate_digest_last_created', str(time.time()))
+                        _digest_state["last_edited"] = now
                     except Exception as e2:
                         logger.debug(f"Text edit also failed: {e2}")
         
@@ -1501,7 +1500,7 @@ async def alternate_digest_job(context):
                     _digest_state["type"] = next_type
                     set_config('alternate_digest_type', next_type)
                     _digest_state["last_text"] = text
-                    set_config('alternate_digest_last_created', str(time.time()))
+                    _digest_state["last_edited"] = now
             except Exception as e:
                 error_str = str(e).lower()
                 logger.debug(f"Text edit failed (probably photo message): {e}")
@@ -1518,11 +1517,12 @@ async def alternate_digest_job(context):
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
             # Проверяем анти-спам до генерации баннера (быстрый выход)
+            # Новый дайджест создаётся только раз в 48 часов (Telegram лимит редактирования)
             last_created_str = get_config('alternate_digest_last_created')
             last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
             time_since_last = time.time() - last_created
-            if time_since_last < 60:
-                logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
+            if time_since_last < 172800:  # 48 часов = 172800 секунд
+                logger.info(f"Пропускаем - прошло всего {time_since_last/3600:.1f} ч с последнего создания")
                 return
 
             # Генерируем hero_meta_banner если в кеше нет свежего
@@ -1583,6 +1583,7 @@ async def alternate_digest_job(context):
                 set_config('alternate_digest_type', next_type)
                 _digest_state["type"] = next_type
                 _digest_state["last_text"] = text
+                _digest_state["last_edited"] = time.time()
                 logger.info(f"alternate_digest_job: saved new message_id = {msg.message_id}")
 
                 # Закрепляем новое сообщение
