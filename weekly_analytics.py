@@ -454,8 +454,16 @@ def calculate_player_stats(matches: list) -> dict:
     # Calculate valid values with fallbacks
     # GPM fallback: estimate from last_hits (~60 gold per last hit)
     total_gpm = sum(raw_gpm)
-    if total_gpm == 0:
-        total_gpm = sum(raw_lh) * 60
+    total_lh = sum(raw_lh)
+    if total_gpm == 0 and total_lh > 0:
+        total_gpm = total_lh * 60
+    elif total_gpm == 0:
+        # Final fallback: estimate from KDA (higher KDA = higher GPM)
+        avg_kills = sum(raw_kills) / max(n, 1)
+        avg_deaths = max(sum(raw_deaths) / max(n, 1), 1)
+        avg_assists = sum(raw_assists) / max(n, 1)
+        avg_kda = (avg_kills + avg_assists) / avg_deaths
+        total_gpm = avg_kda * 150  # rough estimate: KDA * ~150 = GPM for carry
     avg_gpm = total_gpm / n
     
     # XPM fallback: estimate from last_hits (~50% of GPM * 60/100 ratio, ~0.5 ratio)
