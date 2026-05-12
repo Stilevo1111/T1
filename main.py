@@ -668,7 +668,7 @@ async def announce_weekly_mmr_winner(bot):
     else:
         rank_str = "Без ранга"
 
-    name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id else username
+    name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id and int(telegram_id) > 0 else username
 
     tag_info = ""
     if tag_set:
@@ -902,12 +902,12 @@ async def update_all_mmr_job(context):
                     )
 
                     if card_data:
-                        name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id else username
+                        name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id and int(telegram_id) > 0 else username
                         text = f"🎉 {name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
                         await context.bot.send_photo(chat_id=digest_chat_id, photo=card_data, caption=text, parse_mode="HTML")
                     else:
                         # Fallback
-                        name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id else username
+                        name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id and int(telegram_id) > 0 else username
                         text = f"{name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
                         rank_up_banner_url = "https://i.ibb.co/HLF6JJTw/ji8hy.jpg"
                         await context.bot.send_photo(chat_id=digest_chat_id, photo=rank_up_banner_url, caption=text, parse_mode="HTML")
@@ -1635,30 +1635,8 @@ async def alternate_digest_job(context):
                             if not found:
                                 logger.info("Системное сообщение о закрепе не найдено среди следующих сообщений")
 
-                            # Дополнительно: удаляем другие дайджесты бота в узком диапазоне ID вокруг только что созданного
-                            # Это очищает возможные дубликаты от гонки
-                            # Но сохраняем текущее сообщение из БД (ID из момента входа в блок), чтобы не удалить его в гонке
-                            try:
-                                saved_orig_msg_id = int(stored_msg_id_for_cleanup) if stored_msg_id_for_cleanup else None
-                                for offset in range(-20, 0):  # проверяем до 20 сообщений до
-                                    old_id = msg.message_id + offset
-                                    # Не удаляем текущее сохранённое в БД сообщение
-                                    if saved_orig_msg_id and old_id == saved_orig_msg_id:
-                                        continue
-                                    if old_id <= 0:
-                                        continue
-                                    try:
-                                        old_msg = await bot.get_message(chat_id=int(digest_chat_id), message_id=old_id)
-                                        if hasattr(old_msg, 'from_user') and old_msg.from_user and old_msg.from_user.is_bot:
-                                            if hasattr(old_msg, 'text') and old_msg.text:
-                                                txt = old_msg.text.lower()
-                                                if ('фиссур' in txt and ('дайджест' in txt or 'dota' in txt)) or ('dota' in txt and 'дайджест' in txt):
-                                                    await bot.delete_message(chat_id=int(digest_chat_id), message_id=old_id)
-                                                    logger.info(f"Удалён дублирующий дайджест {old_id} (offset {offset})")
-                                    except Exception:
-                                        pass  # ignore not found etc.
-                            except Exception as e:
-                                logger.debug(f"Ошибка при cleanup соседних дайджестов: {e}")
+                            # Cleanup disabled - previous logic deleted our own digest during race conditions
+                             # Исправление: не удаляем сообщения в диапазоне, чтобы не удалить наш дайджест
 
                         except Exception as e:
                             logger.info(f"Ошибка при удалении системного сообщения: {e}", exc_info=True)
@@ -1862,7 +1840,7 @@ WELCOME_PHRASES = [
 
 def make_clickable(name, user_id, max_length=12):
     """Создать кликабельный никнейм для Telegram"""
-    if name and name != "None" and user_id:
+    if name and name != "None" and user_id and int(user_id) > 0:
         display_name = name
         try:
             from database import user_cache, get_user

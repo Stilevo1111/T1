@@ -218,6 +218,46 @@ async def load_heroes():
 # HERO ICON
 # =========================================================
 
+# Mapping from OpenDota internal names to file names
+# load_heroes() returns names like "anti_mage", "npc_dota_hero_necrophos" etc
+HERO_NAME_MAP = {
+    "anti_mage": "antimage",
+    "npc_dota_hero_necrophos": "necrophos",
+    "queenofpain": "queenofpain",
+    "skywrath_mage": "skywrath_mage",
+    "outworld_destroyer": "outworld_destroyer",
+    "lone_druid": "lone_druid",
+    "centaur": "centaur",
+    "magnataur": "magnataur",  # File is magnataur.png
+    "doom_bringer": "doom_bringer",
+    "witchdoctor": "witch_doctor",
+    "keeper_of_the_light": "keeper_of_the_light",
+    "nightstalker": "night_stalker",
+    "shadow_shaman": "shadow_shaman",
+    "life_stealer": "life_stealer",
+    "abyssal_underlord": "abyssal_underlord",
+}
+
+def normalize_hero_file_name(internal_name: str) -> str:
+    """Convert OpenDota internal name to file name"""
+    # Remove npc_dota_hero_ prefix if present
+    name = internal_name.replace("npc_dota_hero_", "")
+    
+    # Check mapping first
+    if name in HERO_NAME_MAP:
+        return HERO_NAME_MAP[name]
+    
+    # Handle specific name transformations
+    # doom_bringer -> doom_bringer (same, but check for doom)
+    if name == "doom_bringer":
+        return "doom_bringer"
+    if name == "doom":
+        return "doom_bringer"
+    
+    # Return as-is for most heroes
+    return name
+
+
 async def get_hero_icon(hero_id: int):
     global _HERO_ICON_CACHE
 
@@ -229,7 +269,8 @@ async def get_hero_icon(hero_id: int):
     hero_name = heroes.get(hero_id)
 
     if hero_name:
-        path = f"assets/heroes/{hero_name}.png"
+        file_name = normalize_hero_file_name(hero_name)
+        path = f"assets/heroes/{file_name}.png"
 
         try:
             icon = Image.open(path).convert("RGBA")
