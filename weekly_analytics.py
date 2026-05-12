@@ -303,6 +303,58 @@ def convert_opendota_roles(opendota_roles: list) -> str:
     return "SUPPORT"
 
 
+def normalize_hero_name(internal_name: str) -> str:
+    """Convert internal hero name (anti_mage) to display name (Anti-Mage)"""
+    import re
+    # Handle special cases first
+    name_map = {
+        "npc_dota_hero_necrophos": "Necrophos",
+        "npc_dota_hero_queenofpain": "Queen of Pain",
+        "npc_dota_hero_skywrath_mage": "Skywrath Mage",
+        "npc_dota_hero_outworld_destroyer": "Outworld Destroyer",
+        "npc_dota_hero_lone_druid": "Lone Druid",
+        "npc_dota_hero_centaur": "Centaur Warrunner",
+        "npc_dota_hero_magnataur": "Magnus",
+        "npc_dota_hero_axe": "Axe",
+        "npc_dota_hero_doom_bringer": "Doom",
+        "npc_dota_hero_witchdoctor": "Witch Doctor",
+        "npc_dota_hero_keeper_of_the_light": "Keeper of the Light",
+        "npc_dota_hero_nightstalker": "Night Stalker",
+        "npc_dota_hero_shadow_shaman": "Shadow Shaman",
+        "npc_dota_hero_life_stealer": "Lifestealer",
+        "npc_dota_hero_abyssal_underlord": "Underlord",
+    }
+    
+    if internal_name in name_map:
+        return name_map[internal_name]
+    
+    # Replace npc_dota_hero_ prefix
+    name = internal_name.replace("npc_dota_hero_", "")
+    
+    # Convert snake_case to Title Case with spaces
+    # e.g., "anti_mage" -> "Anti Mage" -> handle special cases
+    parts = name.split("_")
+    result = " ".join(p.capitalize() for p in parts)
+    
+    # Fix known multi-word hero names
+    multi_word_fixes = {
+        "Anti Mage": "Anti-Mage",
+        "Drow Ranger": "Drow Ranger",  # already correct
+        "Faceless Void": "Faceless Void",  # already correct
+        "Phantom Assassin": "Phantom Assassin",  # already correct
+        "Phantom Lancer": "Phantom Lancer",  # already correct
+        "Shadow Fiend": "Shadow Fiend",  # already correct
+        "Treant Protector": "Treant Protector",  # already correct
+        "Winter Wyvern": "Winter Wyvern",  # already correct
+        "Queen Of Pain": "Queen of Pain",
+        "Skywrath Mage": "Skywrath Mage",
+        "Outworld Destroyer": "Outworld Destroyer",
+        "Dust II": "Dust II",  # handle edge cases
+    }
+    
+    return multi_word_fixes.get(result, result)
+
+
 async def detect_role_from_hero_counts(matches: list) -> str:
     heroes = await load_heroes()
     
@@ -326,7 +378,10 @@ async def detect_role_from_hero_counts(matches: list) -> str:
     
     for m in matches:
         hero_id = m.get("hero_id", 0)
-        hero_name = heroes.get(hero_id, "")
+        internal_name = heroes.get(hero_id, "")
+        
+        # Normalize hero name for lookup in hero_positions
+        hero_name = normalize_hero_name(internal_name)
         
         # Look up position from local hero_positions database
         position = hero_positions.get(hero_name, 0)
@@ -552,53 +607,54 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
 
     # Таблица 1: Сравнение с PRO игроками
     t1 = "```\n"
-    t1 += "PLAYER       WR   GPM   KDA\n"
-    t1 += "----------------------------\n"
+    t1 += f"{'PLAYER':<12} {'WR':>5}  {'GPM':>5}  {'KDA':>8}\n"
+    t1 += "--------------------------------\n"
     for name, s in db["players"].items():
         t1 += (
-            f"{name:<11}"
-            f"{s['wr']:>3}% "
+            f"{name:<12} "
+            f"{s['wr']:>4}% "
             f"{s['gpm']:>5} "
-            f"{s['kda']}\n"
+            f"{s['kda']:>8}\n"
         )
-    t1 += "----------------------------\n"
-    gpm_val = int(user_stats['gpm']) if user_stats['gpm'] > 0 else 0
-    t1 += (
-        f"{'YOU':<11}"
-        f"{user_stats['wr']:>3}% "
+    t1 += "--------------------------------\n"
+    gpm_val = int(user_stats['gpm']) if user_stats.get('gpm', 0) > 0 else 0
+    you_line = (
+        f"{'YOU':<12} "
+        f"{user_stats['wr']:>4}% "
         f"{gpm_val:>5} "
-        f"{user_stats['kda']}\n"
+        f"{user_stats['kda']:>8}\n"
     )
+    t1 += you_line
     t1 += "```"
 
     # Таблица 2: Детальное сравнение
     t2 = "```\n"
-    t2 += "Метрика          Ты      PRO      Δ \n"
-    t2 += "------------------------------------\n"
+    t2 += f"{'Metric':<10} {'You':>8} {'PRO':>8}\n"
+    t2 += "--------------------------\n"
     bench = db["benchmarks"]
     metrics = [
-        ("GPM", user_stats['gpm'], bench['gpm']),
-        ("XPM", user_stats['xpm'], bench['xpm']),
-        ("Deaths", user_stats['deaths'], bench['deaths']),
-        ("Hero DMG", user_stats['h_dmg'], bench['h_dmg']),
-        ("Tower DMG", user_stats['t_dmg'], bench['t_dmg']),
-        ("Utility", user_stats['util'], bench['utility']),
-        ("APM", user_stats['apm'], bench['apm'])
+        ("GPM", user_stats.get('gpm', 0), bench['gpm']),
+        ("XPM", user_stats.get('xpm', 0), bench['xpm']),
+        ("Deaths", user_stats.get('deaths', 0), bench['deaths']),
+        ("H DMG", user_stats.get('h_dmg', 0), bench['h_dmg']),
+        ("T DMG", user_stats.get('t_dmg', 0), bench['t_dmg']),
+        ("Util", user_stats.get('util', 0), bench['utility']),
+        ("APM", user_stats.get('apm', 0), bench['apm'])
     ]
     for label, u, p in metrics:
+        u_str = f"{u:.0f}" if u >= 100 else f"{u:.1f}"
+        p_str = f"{p:.0f}" if p >= 100 else f"{p:.1f}"
         diff = u - p
         is_bad = diff > 0 if "Deaths" in label else diff < 0
         arrow = "↓" if is_bad else "↑"
-        u_str = f"{u:.1f}k" if "DMG" in label else f"{u:.1f}"
-        p_str = f"{p:.1f}k" if "DMG" in label else f"{p:.1f}"
-        t2 += f"{label:<14} {u_str:>6} {p_str:>8} {arrow:>4}\n"
+        t2 += f"{label:<10} {u_str:>6}  {p_str:>6} {arrow}\n"
     t2 += "```"
 
     header = escape_markdown_v2(f"📊 ANALYTICS ({role})")
 
     text = f"{header}\n\n{t1}"
 
-    header_detailed = escape_markdown_v2(f"🔍 Детальное сравнение")
+    header_detailed = escape_markdown_v2(f"🔍 Detailed comparison")
 
     text_detailed = f"{header_detailed}\n\n{t2}"
 
