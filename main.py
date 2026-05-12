@@ -1434,17 +1434,40 @@ async def alternate_digest_job(context):
         # Сохраняем ID текущего сообщения из БД для защиты от удаления в cleanup
         stored_msg_id_for_cleanup = last_message_id
         edited = False
-        # Try to edit existing message
-        if last_message_id:
-            logger.info(f"alternate_digest_job: attempting to edit message {last_message_id}")
+        
+        # Проверяем кеш hero_meta_banner
+        cached_image = _digest_state.get("hero_meta_image")
+        last_meta_update = _digest_state.get("last_hero_meta_update", 0)
+        current_time = time.time()
+        hero_meta_banner = None
+        
+        if cached_image is not None and (current_time - last_meta_update) < HERO_META_REFRESH_INTERVAL:
+            hero_meta_banner = cached_image
+            logger.info(f"Using cached hero meta banner (age: {current_time - last_meta_update:.0f}s)")
+        
+        # Если hero_meta_banner есть - пробуем отредактировать caption (сообщение фото)
+        if last_message_id and hero_meta_banner is not None:
+            logger.info(f"Existing message is likely a photo (hero_meta cached), trying caption edit first")
             try:
                 msg_id_int = int(last_message_id)
-                if msg_id_int <= 0:
-                    logger.warning(f"Invalid alternate_digest_message_id: {last_message_id}")
-                    set_config('alternate_digest_message_id', None)
-                    last_message_id = None
-                else:
-                    # Try to edit - start with text edit
+                if msg_id_int > 0:
+                    await bot.edit_message_caption(
+                        chat_id=int(digest_chat_id),
+                        message_id=msg_id_int,
+                        caption=text,
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"Updated caption alternate digest {last_message_id}")
+                    edited = True
+                    _digest_state["type"] = next_type
+                    set_config('alternate_digest_type', next_type)
+                    _digest_state["last_text"] = text
+                    set_config('alternate_digest_last_created', str(time.time()))
+            except Exception as e:
+                error_str = str(e).lower()
+                logger.debug(f"Caption edit failed: {e}")
+                # Если caption edit не сработал - пробуем text edit (сообщение текстовое)
+                if "no text" not in error_str and "message is not modified" not in error_str:
                     try:
                         await bot.edit_message_text(
                             chat_id=int(digest_chat_id),
@@ -1458,57 +1481,39 @@ async def alternate_digest_job(context):
                         set_config('alternate_digest_type', next_type)
                         _digest_state["last_text"] = text
                         set_config('alternate_digest_last_created', str(time.time()))
-                    except Exception as e_caption:
-                        # If text edit fails (photo message), try caption edit
-                        error_str = str(e_caption).lower()
-                        if "no text" in error_str or "message is not modified" in error_str or "400" in error_str or "bad request" in error_str:
-                            try:
-                                await bot.edit_message_caption(
-                                    chat_id=int(digest_chat_id),
-                                    message_id=msg_id_int,
-                                    caption=text,
-                                    parse_mode="HTML"
-                                )
-                                logger.info(f"Updated caption alternate digest {last_message_id}")
-                                edited = True
-                                _digest_state["type"] = next_type
-                                set_config('alternate_digest_type', next_type)
-                                _digest_state["last_text"] = text
-                                set_config('alternate_digest_last_created', str(time.time()))
-                            except Exception as e2:
-                                logger.warning(f"Caption edit also failed: {e2}")
-                                edited = False
-                        else:
-                            # Re-raise if it's another error
-                            raise
-            except (ValueError, TypeError) as e:
-                logger.warning(f'Invalid alternate_digest_message_id format: {last_message_id}, error: {e}')
-                set_config('alternate_digest_message_id', None)
-                last_message_id = None
+                    except Exception as e2:
+                        logger.debug(f"Text edit also failed: {e2}")
+        
+        # Если hero_meta_banner = None - пробуем text edit или удаляем фото
+        if last_message_id and not edited and hero_meta_banner is None:
+            logger.info(f"No hero_meta in cache, trying text edit or removing old photo")
+            try:
+                msg_id_int = int(last_message_id)
+                if msg_id_int > 0:
+                    await bot.edit_message_text(
+                        chat_id=int(digest_chat_id),
+                        message_id=msg_id_int,
+                        text=text,
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"Updated text alternate digest {last_message_id}")
+                    edited = True
+                    _digest_state["type"] = next_type
+                    set_config('alternate_digest_type', next_type)
+                    _digest_state["last_text"] = text
+                    set_config('alternate_digest_last_created', str(time.time()))
             except Exception as e:
                 error_str = str(e).lower()
-                is_rate_limit = '429' in error_str or 'too many requests' in error_str or 'retry after' in error_str
-                logger.info(f'Edit error: {e}')
-                if is_rate_limit:
-                    logger.warning(f'Rate limited by Telegram, skipping edit')
-                    _digest_state['last_text'] = text
-                    _digest_state['last_run'] = 0
-                    return
-                if 'bad request' in error_str:
-                    logger.warning(f'Bad request for message {last_message_id}, resetting message_id')
+                logger.debug(f"Text edit failed (probably photo message): {e}")
+                # Это фото - удаляем и будем создавать новое сообщение
+                if "no text" in error_str or "bad request" in error_str or "400" in error_str:
+                    try:
+                        await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
+                        logger.info(f"Deleted old photo message {last_message_id}")
+                    except Exception as e_del:
+                        logger.debug(f"Could not delete old message: {e_del}")
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
-                    edited = False
-                elif 'message to edit not found' in error_str or 'message can\'t be edited' in error_str:
-                    logger.info(f'Old message {last_message_id} deleted, creating new')
-                    set_config('alternate_digest_message_id', None)
-                    last_message_id = None
-                elif 'message is not modified' in error_str:
-                    logger.info(f'Message not modified, skipping')
-                    edited = True
-                    _digest_state['type'] = next_type
-                    set_config('alternate_digest_type', next_type)
-                    _digest_state['last_text'] = text
 
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
@@ -1520,50 +1525,37 @@ async def alternate_digest_job(context):
                 logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
                 return
 
-            # Генерируем или используем кешированный геро-мета баннер (обновление раз в 48 часов)
-            hero_meta_banner = None
+            # Генерируем hero_meta_banner если в кеше нет свежего
             current_time = time.time()
-            last_meta_update = _digest_state.get("last_hero_meta_update", 0)
-            cached_image = _digest_state.get("hero_meta_image")
-
-            if cached_image is not None and (current_time - last_meta_update) < HERO_META_REFRESH_INTERVAL:
-                hero_meta_banner = cached_image
-                logger.info(f"Using cached hero meta banner (age: {current_time - last_meta_update:.0f}s, refresh in {HERO_META_REFRESH_INTERVAL - (current_time - last_meta_update):.0f}s)")
-            else:
-                try:
-                    from hero_meta import get_hero_meta_image
-                    import asyncio
-                    try:
-                        hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=45.0)
-                    except asyncio.TimeoutError:
-                        logger.warning("Hero meta banner generation timed out after 45 seconds")
-                        hero_meta_banner = None
-                    if hero_meta_banner:
-                        logger.info("Hero meta banner generated for digest")
-                        # Обновляем кеш и timestamp
-                        _digest_state["hero_meta_image"] = hero_meta_banner
-                        _digest_state["last_hero_meta_update"] = current_time
-                    else:
-                        logger.warning("Hero meta banner generation returned None")
-                except Exception as e:
-                    logger.warning(f"Could not generate hero meta banner: {e}")
-                    hero_meta_banner = None
-
-                # Fallback на старый кеш, если генерация не удалась
-                if hero_meta_banner is None and cached_image is not None:
-                    logger.warning("Using stale cached hero meta image due to generation failure")
+            if hero_meta_banner is None:
+                last_meta_update = _digest_state.get("last_hero_meta_update", 0)
+                cached_image = _digest_state.get("hero_meta_image")
+                
+                if cached_image is not None and (current_time - last_meta_update) < HERO_META_REFRESH_INTERVAL:
                     hero_meta_banner = cached_image
-
-            # Удаляем старое сообщение если есть
-            if last_message_id:
-                try:
-                    msg_id_int = int(last_message_id)
-                    if msg_id_int > 0:
-                        await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
-                        logger.info(f"Удалено старое сообщение {last_message_id}")
-                except Exception as e:
-                    logger.debug(f"Старое сообщение уже удалено: {e}")
-            set_config('alternate_digest_message_id', None)
+                    logger.info(f"Using cached hero meta banner (age: {current_time - last_meta_update:.0f}s)")
+                else:
+                    try:
+                        from hero_meta import get_hero_meta_image
+                        import asyncio
+                        try:
+                            hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=45.0)
+                        except asyncio.TimeoutError:
+                            logger.warning("Hero meta banner generation timed out after 45 seconds")
+                            hero_meta_banner = None
+                        if hero_meta_banner:
+                            logger.info("Hero meta banner generated for digest")
+                            _digest_state["hero_meta_image"] = hero_meta_banner
+                            _digest_state["last_hero_meta_update"] = current_time
+                        else:
+                            logger.warning("Hero meta banner generation returned None")
+                    except Exception as e:
+                        logger.warning(f"Could not generate hero meta banner: {e}")
+                        hero_meta_banner = None
+                        # Fallback на старый кеш, если генерация не удалась
+                        if cached_image is not None:
+                            logger.warning("Using stale cached hero meta image due to generation failure")
+                            hero_meta_banner = cached_image
 
             # Создаём новое сообщение
             try:
