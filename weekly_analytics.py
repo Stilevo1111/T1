@@ -6,7 +6,6 @@ import json
 from PIL import Image, ImageDraw, ImageFont
 import io
 from datetime import datetime, timezone, timedelta
-import requests
 
 from dota_mmr import steam64_to_account_id, OPENDOTA_API_URL, _api_get_async
 from database import get_user
@@ -15,6 +14,10 @@ from hero_positions import hero_positions
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Cache for background image and hero icons
+_CHART_BG_CACHE = None
+_HERO_ICON_CACHE = {}
 
 # =========================================================
 # MARKDOWN ESCAPE
@@ -216,6 +219,10 @@ async def load_heroes():
 # =========================================================
 
 async def get_hero_icon(hero_id: int):
+    global _HERO_ICON_CACHE
+
+    if hero_id in _HERO_ICON_CACHE:
+        return _HERO_ICON_CACHE[hero_id]
 
     heroes = await load_heroes()
 
@@ -225,8 +232,9 @@ async def get_hero_icon(hero_id: int):
         path = f"assets/heroes/{hero_name}.png"
 
         try:
-
-            return Image.open(path).convert("RGBA")
+            icon = Image.open(path).convert("RGBA")
+            _HERO_ICON_CACHE[hero_id] = icon
+            return icon
 
         except Exception:
 
@@ -854,8 +862,8 @@ async def generate_weekly_analytics(telegram_id: int):
 # =========================================================
 
 async def create_visual_chart(history):
+    global _CHART_BG_CACHE
     try:
-        import io
         import numpy as np
         import matplotlib
         matplotlib.use("Agg")
@@ -868,11 +876,8 @@ async def create_visual_chart(history):
             AnnotationBbox
         )
 
-        import requests
-
         from PIL import Image
 
-        from io import BytesIO
     except ImportError:
         logger.warning("matplotlib not available, skipping chart generation")
         return None
@@ -897,25 +902,31 @@ async def create_visual_chart(history):
     FIG_H = HEIGHT / DPI
 
     # =====================================================
-    # LOAD BACKGROUND
+    # LOAD BACKGROUND (cached to avoid blocking)
     # =====================================================
 
+    global _CHART_BG_CACHE
     background_url = (
         "https://i.ibb.co/jkTWqcHn/"
         "pngdsadsad.png"
     )
 
-    response = requests.get(background_url)
+    if _CHART_BG_CACHE is None:
+        try:
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+            async with session.get(background_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    content = await resp.read()
+                    _CHART_BG_CACHE = Image.open(io.BytesIO(content)).convert("RGB")
+                    _CHART_BG_CACHE = _CHART_BG_CACHE.resize((WIDTH, HEIGHT), Image.LANCZOS)
+                else:
+                    raise Exception(f"Failed to load background: {resp.status}")
+        except Exception as e:
+            logger.warning(f"Could not load background image, using fallback: {e}")
+            _CHART_BG_CACHE = Image.new("RGB", (WIDTH, HEIGHT), (20, 20, 30))
 
-    bg = Image.open(
-        BytesIO(response.content)
-    ).convert("RGB")
-
-    # EXACT SIZE
-    bg = bg.resize(
-        (WIDTH, HEIGHT),
-        Image.LANCZOS
-    )
+    bg = _CHART_BG_CACHE
 
     # =====================================================
     # PREPARE DATA
