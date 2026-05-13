@@ -503,6 +503,7 @@ def calculate_player_stats(matches: list) -> dict:
     
     # Collect raw data
     raw_lh = [m.get("last_hits", 0) for m in matches]
+    raw_lh_per_10min = [m.get("last_hits", 0) / max(m.get("duration", 600) / 600, 0.33) for m in matches]  # normalize to 10min
     raw_kills = [m.get("kills", 0) for m in matches]
     raw_deaths = [m.get("deaths", 0) for m in matches]
     raw_assists = [m.get("assists", 0) for m in matches]
@@ -543,7 +544,8 @@ def calculate_player_stats(matches: list) -> dict:
     
     avg_gpm = total_gpm / n
     avg_lh = total_lh / n
-    
+    avg_lh_10min = sum(raw_lh_per_10min) / n
+
     total_deaths = sum(raw_deaths)
     avg_deaths = total_deaths / n
     
@@ -596,7 +598,7 @@ def calculate_player_stats(matches: list) -> dict:
         "wr": round(wr, 1),
         "gpm": round(avg_gpm, 1),
         "xpm": round(avg_xpm, 1),
-        "lh": round(avg_lh, 1),
+        "lh": round(avg_lh_10min, 1),
         "deny": round(avg_denies, 1),
         "stacks": round(avg_stacks, 1),
         "deaths": round(avg_deaths, 1),
@@ -903,7 +905,7 @@ async def generate_weekly_analytics(telegram_id: int):
     total_kills = 0
     total_deaths = 0
     total_assists = 0
-    total_lh = 0
+    total_lh_10min = 0
     total_apm = 0
     total_denies = 0
     total_stacks = 0
@@ -961,7 +963,10 @@ async def generate_weekly_analytics(telegram_id: int):
         total_kills += kills
         total_deaths += deaths
         total_assists += assists
-        total_lh += m.get("last_hits", 0)
+        # LH@10: normalize last_hits to 10 minutes (duration in seconds)
+        duration = m.get("duration", 600)
+        lh_per_10min = m.get("last_hits", 0) / max(duration / 600, 0.33) if duration > 0 else 0
+        total_lh_10min += lh_per_10min
         total_apm += apm
         total_denies += m.get("denies", 0)
         total_stacks += m.get("creeps_stacked", 0)
@@ -989,7 +994,7 @@ async def generate_weekly_analytics(telegram_id: int):
     match_count = len(matches)
 
     avg_gpm = total_gpm / match_count
-    avg_lh = total_lh / match_count
+    avg_lh = total_lh_10min / match_count
     avg_apm = total_apm / match_count
     avg_denies = total_denies / match_count
     avg_xpm = total_xpm / match_count
