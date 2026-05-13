@@ -416,6 +416,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             history = chart_data.get("history", [])
             matches = chart_data.get("matches", [])
             chart_image = chart_data.get("image")
+            logger.info(f"Analytics: got chart_data with {len(matches)} matches, image={chart_image is not None}")
             
             # Ensure charts directory exists for potential caching
             import os
@@ -2793,11 +2794,15 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
     if is_first_generation:
         # Вычисляем статистику и роль только при первом нажатии
         matches = context.user_data.get('analytics_matches', [])
+        logger.info(f"Analytics: is_first_generation=True, matches={len(matches) if matches else 0}")
         
         # Check if matches exist
         if not matches:
-            logger.warning("No matches found for analytics generation")
-            await callback_query.answer(text="No match data available", show_alert=True)
+            await callback_query.answer(text="❌ Нет данных матчей для аналитики", show_alert=True)
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception:
+                pass
             return
         
         # Fetch full details for matches that have match_id
