@@ -1531,11 +1531,19 @@ async def alternate_digest_job(context):
                 logger.debug(f"Text edit failed (probably photo message): {e}")
                 # Это фото - удаляем и будем создавать новое сообщение
                 if "no text" in error_str or "bad request" in error_str or "400" in error_str:
+                    # Проверяем, что сообщение существует и не является свежесозданным (защита от удаления при деплое)
                     try:
-                        await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
-                        logger.info(f"Deleted old photo message {last_message_id}")
-                    except Exception as e_del:
-                        logger.debug(f"Could not delete old message: {e_del}")
+                        msg_check = await bot.get_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
+                        if msg_check and not recent_message:
+                            try:
+                                await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
+                                logger.info(f"Deleted old photo message {last_message_id}")
+                            except Exception as e_del:
+                                logger.debug(f"Could not delete old message: {e_del}")
+                        else:
+                            logger.debug(f"Skipping delete - message too recent or not found")
+                    except Exception as e_check:
+                        logger.debug(f"Could not verify message before delete: {e_check}")
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
 
