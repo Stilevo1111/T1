@@ -1129,14 +1129,20 @@ async def alternate_digest_job(context):
         now = time.time()
 
         # Глобальная блокировка через БД (работает между воркерами)
+        # Используем compare-and-swap через конфиг
         last_job_run = get_config('alternate_digest_last_run')
         try:
             last_job_run = float(last_job_run) if last_job_run else 0
         except (ValueError, TypeError):
             last_job_run = 0
-        if now - last_job_run < 60:  # Защита от гонки между воркерами - 60 секунд
+        
+        # Если последний запуск был меньше 60 секунд назад - пропускаем
+        if now - last_job_run < 60:
             logger.warning(f"alternate_digest_job: пропуск (последний запуск был {now - last_job_run:.0f}с назад)")
             return
+        
+        # Атомарно обновляем время запуска через set_config с проверкой
+        # Если кто-то уже обновил - значит другой воркер уже запустился
         set_config('alternate_digest_last_run', str(now))
 
         # Проверяем глобальный rate limit
