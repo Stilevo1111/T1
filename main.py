@@ -1400,7 +1400,7 @@ async def alternate_digest_job(context):
         # Глобальная блокировка через БД (работает между воркерами) — атомарная
         # Пытаемся атомарно обновить alternate_digest_last_run, только если он старше 60 секунд
         db = Database()
-        threshold = now - 60
+        threshold = now - 20
         if get_db_type() == "postgresql":
             query = "INSERT INTO bot_config (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value WHERE (bot_config.value::float < %s OR bot_config.value IS NULL)"
             params = ('alternate_digest_last_run', str(now), str(threshold))
