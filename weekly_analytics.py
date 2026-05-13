@@ -812,10 +812,10 @@ async def generate_chart_only(telegram_id: int):
         duration = m.get("duration", 0)
         gold = m.get("gold", 0)
         gold_spent = m.get("gold_spent", 0)
-        if duration > 0:
+        if duration > 0 and (gold + gold_spent) > 0:
             gpm = (gold + gold_spent) * 60 / duration
         else:
-            gpm = 0
+            gpm = m.get("gold_per_min", 0)
         # Fallback: if GPM still zero, estimate from last_hits
         if gpm == 0:
             last_hits = m.get("last_hits", 0)
