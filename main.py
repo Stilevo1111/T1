@@ -960,9 +960,6 @@ async def backup_database_job(context):
         tables = [row[0] for row in main_cursor.fetchall()]
         logger.info(f"Found {len(tables)} PostgreSQL tables to backup: {tables}")
 
-        # Disable foreign key checks for clean copy
-        backup_cursor.execute("SET session_replication_role = 'replica'")
-
         total_copied = 0
         for table in tables:
             try:
@@ -987,9 +984,9 @@ async def backup_database_job(context):
                     placeholders = ','.join(['%s'] * len(columns))
                     column_names = ','.join(columns)
 
-                    # Clear and insert (or use DELETE + INSERT)
-                    backup_cursor.execute(f"DELETE FROM {table}")
-
+                    # Clear table with TRUNCATE CASCADE (handles FK constraints)
+                    backup_cursor.execute(f"TRUNCATE TABLE {table} CASCADE")
+                    
                     for row in rows:
                         backup_cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", row)
 
@@ -1001,9 +998,6 @@ async def backup_database_job(context):
             except Exception as e:
                 logger.warning(f"Error copying table {table}: {e}")
                 backup_conn.rollback()
-
-        # Re-enable foreign key checks
-        backup_cursor.execute("SET session_replication_role = 'origin'")
 
         main_cursor.close()
         backup_cursor.close()
