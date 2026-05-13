@@ -422,7 +422,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         pass
                 result_msg = await context.bot.send_message(
                     chat_id=chat_id,
-                    text=chart_data.get("message", "⚠️ OpenDota API временно недоступен (лимит запросов). Попробуйте через ~5 минут.")
+                    text=chart_data.get("message", get_opendota_rate_limit_message())
                 )
                 set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
                 schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)

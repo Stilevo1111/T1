@@ -68,7 +68,7 @@ def get_opendota_rate_limit_time_remaining():
 
 def get_opendota_rate_limit_message():
     """Получить сообщение об ошибке"""
-    return "⚠️ OpenDota API временно недоступен. Вернётся, когда кто-то купит варды."
+    return "⚠️ OpenDota API временно недоступен. Вернётся, когда кто-то купит варды 👁️"
 
 def set_opendota_rate_limited(wait_seconds=60):
     """Установить время до которого OpenDota API недоступен"""
