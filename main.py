@@ -2660,7 +2660,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Handle analytics_show separately with loading indicator (as chat message)
     if data == "analytics_show":
-        await callback_query.answer()  # Acknowledge callback immediately to prevent hanging
+        await callback_query.answer()  # Acknowledge callback immediately (no visual loading indicator)
         loading_msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Загружаю детали матчей...")
         try:
             await _show_analytics_page(callback_query, 0, context)
