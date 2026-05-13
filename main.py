@@ -761,8 +761,8 @@ async def backup_database_job(context):
         # Import psycopg2 locally to avoid any shadowing issues
         import psycopg2
 
-        main_url = urlparse(DATABASE_URL)
-        backup_url = urlparse(BACKUP_DATABASE_URL)
+        main_url = urlparse.urlparse(DATABASE_URL)
+        backup_url = urlparse.urlparse(BACKUP_DATABASE_URL)
 
         main_conn = psycopg2.connect(
             host=main_url.hostname,
@@ -1136,10 +1136,10 @@ async def alternate_digest_job(context):
         db = Database()
         threshold = now - 60
         if get_db_type() == "postgresql":
-            query = "INSERT INTO bot_config (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value WHERE (value::float < %s OR value IS NULL)"
+            query = "INSERT INTO bot_config (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value WHERE (bot_config.value::float < %s OR bot_config.value IS NULL)"
             params = ('alternate_digest_last_run', str(now), str(threshold))
         else:
-            query = "INSERT INTO bot_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE (CAST(value AS REAL) < ? OR value IS NULL)"
+            query = "INSERT INTO bot_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE (CAST(bot_config.value AS REAL) < ? OR bot_config.value IS NULL)"
             params = ('alternate_digest_last_run', str(now), str(threshold))
         rows = db.execute_query(query, params)
         if rows is None or rows == 0:
