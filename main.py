@@ -2816,18 +2816,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             loading_msg = None
 
         if steam_id and steam_nickname:
-            from dota_mmr import generate_start_card, get_player_stats
+            from dota_mmr import generate_start_card, get_player_stats, is_opendota_rate_limited
 
-            # Get avatar and heroes - run blocking calls in thread pool
+            # Get avatar - prefer cached, fallback to Telegram
             avatar_url = user.get("avatar")
             if not avatar_url:
-                stats = await asyncio.to_thread(get_player_stats, steam_id)
-                if stats and stats.get("avatar"):
-                    avatar_url = stats["avatar"]
-                    update_user_fields_batch(user_id, {"avatar": avatar_url}, save_to_db=False)
-
-            if not avatar_url:
-                avatar_url = await get_user_avatar_url(context.bot, user_id)
+                # If OpenDota API is rate limited, use Telegram avatar directly
+                if is_opendota_rate_limited():
+                    logger.info(f"OpenDota API rate limited, using Telegram avatar for user {user_id}")
+                    avatar_url = await get_user_avatar_url(context.bot, user_id)
+                else:
+                    try:
+                        stats = await asyncio.to_thread(get_player_stats, steam_id)
+                        if stats and stats.get("avatar"):
+                            avatar_url = stats["avatar"]
+                        else:
+                            avatar_url = await get_user_avatar_url(context.bot, user_id)
+                    except Exception as e:
+                        logger.warning(f"Could not get Steam avatar: {e}")
+                        avatar_url = await get_user_avatar_url(context.bot, user_id)
 
             weekly_mvp, weekly_top2, weekly_top3 = 0, 0, 0
 
