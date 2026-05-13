@@ -2725,7 +2725,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         if existing_msg_id:
             # Try to edit the existing table message (for page navigation)
             try:
-                await callback_query.bot.edit_message_text(
+                await context.bot.edit_message_text(
                     chat_id=callback_query.message.chat_id,
                     message_id=existing_msg_id,
                     text=text,
@@ -2743,7 +2743,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
 
         # Send a NEW message with the analytics table (first click or previous was deleted)
         chat_id = callback_query.message.chat_id
-        new_msg = await callback_query.bot.send_message(
+        new_msg = await context.bot.send_message(
             chat_id=chat_id,
             text=text,
             reply_markup=keyboard,
