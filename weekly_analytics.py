@@ -637,10 +637,7 @@ async def get_weekly_matches(telegram_id: int):
 
     matches = await _api_get_async(
         url,
-        params={
-            "limit": 30,
-            "fields": "match_id,start_time,duration,gold,gold_spent,gold_per_min,xp_per_min,last_hits,kills,deaths,assists,hero_id,radiant_win,player_slot,denies,actions_per_min,hero_damage,tower_damage,stuns,hero_healing,creeps_stacked,observer_uses,sentry_uses"
-        },
+        params={"limit": 30},
         timeout=15
     )
 
@@ -656,8 +653,8 @@ async def get_weekly_matches(telegram_id: int):
 
     filtered = []
 
+    # Get full match data for each match to get gold_per_min, xp_per_min, last_hits
     for m in matches:
-
         ts = m.get("start_time", 0)
 
         match_time = datetime.fromtimestamp(
@@ -668,29 +665,64 @@ async def get_weekly_matches(telegram_id: int):
         if match_time < week_start:
             continue
 
+        match_id = m.get("match_id")
+        hero_id = m.get("hero_id", 0)
+        duration = m.get("duration", 0)
+        player_slot = m.get("player_slot", 0)
+
+        # Get full match data to extract player stats
+        match_data = None
+        if match_id:
+            try:
+                match_url = f"{OPENDOTA_API_URL}/matches/{match_id}"
+                match_data = await _api_get_async(match_url, timeout=10)
+            except Exception as e:
+                logger.debug(f"Failed to get match {match_id}: {e}")
+
+        # Extract player stats from match data
+        player_stats = {}
+        if match_data and "players" in match_data:
+            for p in match_data["players"]:
+                if p.get("account_id") == int(account_id):
+                    player_stats = p
+                    break
+            # Also check for steam_account_id (64-bit)
+            if not player_stats and "players" in match_data:
+                for p in match_data["players"]:
+                    if p.get("steam_account_id") == int(account_id) or p.get("account_id") == account_id:
+                        player_stats = p
+                        break
+
+        # Get radiant_win from match data or fallback to false
+        radiant_win = match_data.get("radiant_win", False) if match_data else False
+
+        # Determine if player was on radiant (slot < 128)
+        is_radiant = player_slot < 128 if player_slot else True
+        is_win = radiant_win if is_radiant else not radiant_win
+
         filtered.append({
-            "hero_id": m.get("hero_id", 0),
-            "kills": m.get("kills", 0),
-            "deaths": m.get("deaths", 0),
-            "assists": m.get("assists", 0),
-            "gold_per_min": m.get("gold_per_min", 0),
-            "duration": m.get("duration", 0),
-            "gold": m.get("gold", 0),
-            "gold_spent": m.get("gold_spent", 0),
-            "xp_per_min": m.get("xp_per_min", 0),
-            "last_hits": m.get("last_hits", 0),
-            "hero_damage": m.get("hero_damage", 0),
-            "tower_damage": m.get("tower_damage", 0),
-            "lane_role": m.get("lane_role", 0),
+            "hero_id": hero_id,
+            "kills": player_stats.get("kills", 0),
+            "deaths": player_stats.get("deaths", 0),
+            "assists": player_stats.get("assists", 0),
+            "gold_per_min": player_stats.get("gold_per_min", 0),
+            "duration": duration,
+            "gold": player_stats.get("gold_per_min", 0) * (duration // 60) if player_stats.get("gold_per_min") else 0,
+            "gold_spent": player_stats.get("gold_spent", 0),
+            "xp_per_min": player_stats.get("xp_per_min", 0),
+            "last_hits": player_stats.get("last_hits", 0),
+            "hero_damage": player_stats.get("hero_damage", 0),
+            "tower_damage": player_stats.get("tower_damage", 0),
+            "lane_role": player_stats.get("lane_role", 0),
             "start_time": ts,
-            "win": m.get("radiant_win", False),
-            "denies": m.get("denies", 0),
-            "actions_per_min": m.get("actions_per_min", 0),
-            "stuns": m.get("stuns", 0),
-            "hero_healing": m.get("hero_healing", 0),
-            "creeps_stacked": m.get("creeps_stacked", 0),
-            "observer_uses": m.get("observer_uses", 0),
-            "sentry_uses": m.get("sentry_uses", 0)
+            "win": is_win,
+            "denies": player_stats.get("denies", 0),
+            "actions_per_min": player_stats.get("actions_per_min", 0),
+            "stuns": player_stats.get("stuns", 0.0) if isinstance(player_stats.get("stuns"), (int, float)) else 0,
+            "hero_healing": player_stats.get("hero_healing", 0),
+            "creeps_stacked": player_stats.get("creeps_stacked", 0),
+            "observer_uses": player_stats.get("observer_uses", 0),
+            "sentry_uses": player_stats.get("sentry_uses", 0)
         })
 
         if len(filtered) >= 10:

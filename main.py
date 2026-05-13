@@ -1473,9 +1473,12 @@ async def alternate_digest_job(context):
             hero_meta_banner = cached_image
             logger.info(f"Using cached hero meta banner (age: {current_time - last_meta_update:.0f}s)")
         
+        # Проверяем, было ли предыдущее сообщение фото (из БД, чтобы удерживать после деплоя)
+        prev_was_photo = get_config('alternate_digest_has_photo') == 'true'
+        
         # Если hero_meta_banner есть - пробуем отредактировать caption (сообщение фото)
-        if last_message_id and hero_meta_banner is not None:
-            logger.info(f"Existing message is likely a photo (hero_meta cached), trying caption edit first")
+        if last_message_id and (hero_meta_banner is not None or prev_was_photo):
+            logger.info(f"Existing message is likely a photo, trying caption edit first")
             try:
                 msg_id_int = int(last_message_id)
                 if msg_id_int > 0:
@@ -1664,6 +1667,7 @@ async def alternate_digest_job(context):
                 set_config('alternate_digest_last_created', str(time.time()))
                 set_config('alternate_digest_type', next_type)
                 set_config('alternate_digest_text_hash', str(hash(text[:100]) if text else 0))
+                set_config('alternate_digest_has_photo', 'true' if hero_meta_banner else 'false')
                 _digest_state["type"] = next_type
                 _digest_state["last_text"] = text
                 _digest_state["last_edited"] = time.time()
