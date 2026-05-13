@@ -51,9 +51,12 @@ PRO_DB = {
         "benchmarks": {
             "gpm": 732,
             "xpm": 855,
+            "lh": 74,
+            "deny": 12,
             "deaths": 3.1,
             "h_dmg": 28.0,
             "t_dmg": 9.3,
+            "stacks": 5,
             "utility": 8.0,
             "apm": 310,
             "kda": 5.5
@@ -71,9 +74,12 @@ PRO_DB = {
         "benchmarks": {
             "gpm": 702,
             "xpm": 810,
+            "lh": 72,
+            "deny": 22,
             "deaths": 3.2,
             "h_dmg": 32.0,
             "t_dmg": 4.5,
+            "stacks": 8,
             "utility": 5.0,
             "apm": 340,
             "kda": 5.0
@@ -91,9 +97,12 @@ PRO_DB = {
         "benchmarks": {
             "gpm": 595,
             "xpm": 680,
+            "lh": 64,
+            "deny": 17,
             "deaths": 3.8,
             "h_dmg": 24.5,
             "t_dmg": 6.2,
+            "stacks": 12,
             "utility": 10.0,
             "apm": 290,
             "kda": 4.5
@@ -111,9 +120,12 @@ PRO_DB = {
         "benchmarks": {
             "gpm": 385,
             "xpm": 420,
+            "lh": 14,
+            "deny": 4,
             "deaths": 4.8,
             "h_dmg": 12.0,
             "t_dmg": 0.8,
+            "stacks": 20,
             "utility": 15.0,
             "apm": 270,
             "kda": 3.5
@@ -453,9 +465,18 @@ async def detect_role_from_history(matches: list):
         return role
     
     # Fallback: determine role by stats (GPM, KDA)
-    total_gpm = sum(m.get("gold_per_min", 0) for m in matches[:10])
-    total_lh = sum(m.get("last_hits", 0) for m in matches[:10])
-    # Estimate GPM from last_hits if missing
+    total_gpm = 0
+    total_lh = 0
+    for m in matches[:10]:
+        duration = m.get("duration", 0)
+        gold = m.get("gold", 0)
+        gold_spent = m.get("gold_spent", 0)
+        if duration > 0:
+            gpm_val = (gold + gold_spent) * 60 / duration
+        else:
+            gpm_val = 0
+        total_gpm += gpm_val
+        total_lh += m.get("last_hits", 0)
     if total_gpm == 0 and total_lh > 0:
         total_gpm = total_lh * 60
     total_kills = sum(m.get("kills", 0) for m in matches[:10])
@@ -475,12 +496,10 @@ async def detect_role_from_history(matches: list):
 
 def calculate_player_stats(matches: list) -> dict:
     if not matches:
-        return {"wr": 50.0, "gpm": 400, "xpm": 500, "deaths": 5.0, "h_dmg": 10.0, "t_dmg": 2.0, "util": 8.0, "apm": 250, "kda": "3/4/8"}
+        return {"wr": 50.0, "gpm": 400, "xpm": 500, "lh": 0, "deny": 0, "stacks": 0, "deaths": 5.0, "h_dmg": 10.0, "t_dmg": 2.0, "util": 8.0, "apm": 250, "kda": "3/4/8"}
     n = len(matches)
     
-    # Get raw values
-    raw_gpm = [m.get("gold_per_min", 0) for m in matches]
-    raw_xpm = [m.get("xp_per_min", 0) for m in matches]
+    # Collect raw data
     raw_lh = [m.get("last_hits", 0) for m in matches]
     raw_kills = [m.get("kills", 0) for m in matches]
     raw_deaths = [m.get("deaths", 0) for m in matches]
@@ -491,27 +510,37 @@ def calculate_player_stats(matches: list) -> dict:
     raw_stuns = [m.get("stuns", 0) for m in matches]
     raw_heals = [m.get("hero_healing", 0) for m in matches]
     raw_wins = [1 if m.get("win", False) else 0 for m in matches]
+    raw_denies = [m.get("denies", 0) for m in matches]
+    raw_stacks = [m.get("creeps_stacked", 0) for m in matches]
+    raw_xpm = [m.get("xp_per_min", 0) for m in matches]
     
-    # Calculate valid values with fallbacks
-    # GPM fallback: estimate from last_hits (~60 gold per last hit)
+    # Compute GPM per match from gold and gold_spent (more reliable than gold_per_min)
+    raw_gpm = []
+    for m in matches:
+        duration = m.get("duration", 0)
+        gold = m.get("gold", 0)
+        gold_spent = m.get("gold_spent", 0)
+        if duration > 0:
+            total_gold = gold + gold_spent
+            gpm_val = total_gold * 60 / duration
+        else:
+            gpm_val = 0
+        raw_gpm.append(gpm_val)
+    
     total_gpm = sum(raw_gpm)
+    # Fallbacks if GPM data is zero (e.g., missing gold info)
     total_lh = sum(raw_lh)
     if total_gpm == 0 and total_lh > 0:
         total_gpm = total_lh * 60
     elif total_gpm == 0:
-        # Final fallback: estimate from KDA (higher KDA = higher GPM)
         avg_kills = sum(raw_kills) / max(n, 1)
         avg_deaths = max(sum(raw_deaths) / max(n, 1), 1)
         avg_assists = sum(raw_assists) / max(n, 1)
         avg_kda = (avg_kills + avg_assists) / avg_deaths
-        total_gpm = avg_kda * 150  # rough estimate: KDA * ~150 = GPM for carry
-    avg_gpm = total_gpm / n
+        total_gpm = avg_kda * 150
     
-    # XPM fallback: estimate from last_hits (~50% of GPM * 60/100 ratio, ~0.5 ratio)
-    total_xpm = sum(raw_xpm)
-    if total_xpm == 0:
-        total_xpm = sum(raw_lh) * 0.5 * 60  # XPM ~ last_hits * 30
-    avg_xpm = total_xpm / n
+    avg_gpm = total_gpm / n
+    avg_lh = total_lh / n
     
     total_deaths = sum(raw_deaths)
     avg_deaths = total_deaths / n
@@ -522,22 +551,33 @@ def calculate_player_stats(matches: list) -> dict:
     total_assists = sum(raw_assists)
     avg_assists = total_assists / n
     
+    total_denies = sum(raw_denies)
+    avg_denies = total_denies / n
+    
+    total_stacks = sum(raw_stacks)
+    avg_stacks = total_stacks / n
+    
+    total_xpm = sum(raw_xpm)
+    avg_xpm = total_xpm / n
+    
+
+    
     # Hero DMG fallback: estimate from kills (~200 damage per kill avg)
     total_h_dmg = sum(raw_h_dmg)
     if total_h_dmg == 0:
         total_h_dmg = total_kills * 200
     avg_h_dmg = total_h_dmg / n / 1000
     
-    # Tower DMG fallback: estimate from duration (~100 damage per minute avg)
+    # Tower DMG fallback: estimate from kills
     total_t_dmg = sum(raw_t_dmg)
     if total_t_dmg == 0:
-        total_t_dmg = total_kills * 50  # rough estimate
+        total_t_dmg = total_kills * 50
     avg_t_dmg = total_t_dmg / n / 1000
     
-    # APM fallback: use typical values based on role (will be refined later)
+    # APM fallback
     total_apm = sum(raw_apm)
     if total_apm == 0:
-        total_apm = n * 250  # default
+        total_apm = n * 250
     avg_apm = total_apm / n
     
     # Utility from stuns/heals/stacks
@@ -549,11 +589,14 @@ def calculate_player_stats(matches: list) -> dict:
     wr = (total_wins / n) * 100
     
     real_kda = (avg_kills + avg_assists) / max(avg_deaths, 0.1)
-
+    
     return {
         "wr": round(wr, 1),
         "gpm": round(avg_gpm, 1),
         "xpm": round(avg_xpm, 1),
+        "lh": round(avg_lh, 1),
+        "deny": round(avg_denies, 1),
+        "stacks": round(avg_stacks, 1),
         "deaths": round(avg_deaths, 1),
         "h_dmg": round(avg_h_dmg, 1),
         "t_dmg": round(avg_t_dmg, 1),
@@ -624,6 +667,9 @@ async def get_weekly_matches(telegram_id: int):
             "deaths": m.get("deaths", 0),
             "assists": m.get("assists", 0),
             "gold_per_min": m.get("gold_per_min", 0),
+            "duration": m.get("duration", 0),
+            "gold": m.get("gold", 0),
+            "gold_spent": m.get("gold_spent", 0),
             "xp_per_min": m.get("xp_per_min", 0),
             "last_hits": m.get("last_hits", 0),
             "hero_damage": m.get("hero_damage", 0),
@@ -654,39 +700,42 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
 
     db = PRO_DB.get(role, PRO_DB["CARRY"])
 
-    # Таблица 1: Сравнение с PRO игроками
+    # Table 1: PRO comparison
     t1 = "```\n"
-    t1 += f"{'PLAYER':<12} {'WR':>5}  {'GPM':>5}  {'KDA':>8}\n"
+    t1 += f"{'PLAYER':<12} {'WR':>4} {'GPM':>5} {'KDA':>11}\n"
     t1 += "--------------------------------\n"
     for name, s in db["players"].items():
         t1 += (
             f"{name:<12} "
-            f"{s['wr']:>4}% "
+            f"{s['wr']:>3}% "
             f"{s['gpm']:>5} "
-            f"{s['kda']:>8}\n"
+            f"{s['kda']:>11}\n"
         )
     t1 += "--------------------------------\n"
     gpm_val = int(user_stats['gpm']) if user_stats.get('gpm', 0) > 0 else 0
     you_line = (
         f"{'YOU':<12} "
-        f"{user_stats['wr']:>4}% "
+        f"{user_stats['wr']:>3}% "
         f"{gpm_val:>5} "
-        f"{user_stats['kda']:>8}\n"
+        f"{user_stats['kda']:>11}\n"
     )
     t1 += you_line
     t1 += "```"
 
     # Таблица 2: Детальное сравнение
     t2 = "```\n"
-    t2 += f"{'Metric':<10} {'You':>8} {'PRO':>8}\n"
-    t2 += "--------------------------\n"
+    t2 += f"{'Metric':<10} {'You':>6} {'PRO':>6}\n"
+    t2 += "----------------------------\n"
     bench = db["benchmarks"]
     metrics = [
+        ("LH@10", user_stats.get('lh', 0), bench.get('lh', 0)),
+        ("Denies@10", user_stats.get('deny', 0), bench.get('deny', 0)),
         ("GPM", user_stats.get('gpm', 0), bench['gpm']),
         ("XPM", user_stats.get('xpm', 0), bench['xpm']),
         ("Deaths", user_stats.get('deaths', 0), bench['deaths']),
         ("H DMG", user_stats.get('h_dmg', 0), bench['h_dmg']),
         ("T DMG", user_stats.get('t_dmg', 0), bench['t_dmg']),
+        ("Stacks", user_stats.get('stacks', 0), bench.get('stacks', 0)),
         ("Util", user_stats.get('util', 0), bench['utility']),
         ("APM", user_stats.get('apm', 0), bench['apm'])
     ]
@@ -696,7 +745,7 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
         diff = u - p
         is_bad = diff > 0 if "Deaths" in label else diff < 0
         arrow = "↓" if is_bad else "↑"
-        t2 += f"{label:<10} {u_str:>6}  {p_str:>6} {arrow}\n"
+        t2 += f"{label:<10} {u_str:>6} {p_str:>6} {arrow}\n"
     t2 += "```"
 
     header = escape_markdown_v2(f"📊 ANALYTICS ({role})")
@@ -759,11 +808,19 @@ async def generate_chart_only(telegram_id: int):
     # Calculate only what's needed for chart
     game_history = []
     for m in matches[:10]:
-        gpm = m.get("gold_per_min", 0)
-        # Fallback: estimate GPM from last_hits (~60 gold per last hit as rough estimate)
-        last_hits = m.get("last_hits", 0)
-        if gpm == 0 and last_hits > 0:
-            gpm = last_hits * 60
+        # Compute GPM from gold earned and duration
+        duration = m.get("duration", 0)
+        gold = m.get("gold", 0)
+        gold_spent = m.get("gold_spent", 0)
+        if duration > 0:
+            gpm = (gold + gold_spent) * 60 / duration
+        else:
+            gpm = 0
+        # Fallback: if GPM still zero, estimate from last_hits
+        if gpm == 0:
+            last_hits = m.get("last_hits", 0)
+            if last_hits > 0:
+                gpm = last_hits * 60
         kills = m.get("kills", 0)
         deaths = m.get("deaths", 0)
         assists = m.get("assists", 0)
@@ -809,6 +866,7 @@ async def generate_weekly_analytics(telegram_id: int):
     total_lh = 0
     total_apm = 0
     total_denies = 0
+    total_stacks = 0
     total_xpm = 0
     total_h_dmg = 0
     total_t_dmg = 0
@@ -819,8 +877,15 @@ async def generate_weekly_analytics(telegram_id: int):
 
     for m in matches:
 
-        gpm = m.get("gold_per_min", 0)
-        # Fallback: estimate GPM from last_hits if missing
+        # Compute GPM from gold earned and duration
+        duration = m.get("duration", 0)
+        gold = m.get("gold", 0)
+        gold_spent = m.get("gold_spent", 0)
+        if duration > 0:
+            gpm = (gold + gold_spent) * 60 / duration
+        else:
+            gpm = 0
+        # Fallback if GPM zero, estimate from last_hits
         if gpm == 0:
             last_hits = m.get("last_hits", 0)
             if last_hits > 0:
@@ -865,6 +930,7 @@ async def generate_weekly_analytics(telegram_id: int):
         total_lh += m.get("last_hits", 0)
         total_apm += apm
         total_denies += m.get("denies", 0)
+        total_stacks += m.get("creeps_stacked", 0)
         
         # Fallback for XPM from last_hits
         xpm = m.get("xp_per_min", 0)
@@ -898,6 +964,7 @@ async def generate_weekly_analytics(telegram_id: int):
     avg_apm = total_apm / match_count
     avg_denies = total_denies / match_count
     avg_xpm = total_xpm / match_count
+    avg_stacks = total_stacks / match_count
     avg_h_dmg = total_h_dmg / match_count / 1000
     avg_t_dmg = total_t_dmg / match_count / 1000
     avg_utility = total_utility / match_count
@@ -913,6 +980,7 @@ async def generate_weekly_analytics(telegram_id: int):
         "wr": round(wr, 1),
         "lh": round(avg_lh, 1),
         "deny": round(avg_denies, 1),
+        "stacks": round(avg_stacks, 1),
         "gpm": round(avg_gpm, 1),
         "xpm": round(avg_xpm, 1),
         "h_dmg": round(avg_h_dmg, 1),
