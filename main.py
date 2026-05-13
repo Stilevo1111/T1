@@ -2674,17 +2674,20 @@ def format_time(seconds):
     return f"{int(h)}ч {int(m)}м"
 
 
+DEFAULT_AVATAR_URL = "https://i.ibb.co/Jj3vwbWB/ANQkz.jpg"
+
 async def get_user_avatar_url(bot, user_id: int) -> str | None:
-    """Get Telegram user profile photo URL"""
+    """Get Telegram user profile photo URL with fallback"""
     try:
         photos = await bot.get_user_profile_photos(user_id, limit=1)
         if photos and photos.photos:
             photo = photos.photos[0][-1]  # Get biggest photo
             file = await bot.get_file(photo.file_id)
             return file.file_path
+        logger.debug(f"No profile photos for user {user_id}")
     except Exception as e:
-        logger.debug(f"Could not get user avatar: {e}")
-    return None
+        logger.warning(f"Could not get user avatar: {e}")
+    return DEFAULT_AVATAR_URL
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):

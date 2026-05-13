@@ -1262,6 +1262,7 @@ def generate_start_card(
         # Центрирование авататная
         avatar_y = int((height - avatar_size) // 2 - 10)
         
+        avatar_loaded = False
         if avatar_url:
             try:
                 logger.info(f"Loading avatar from: {avatar_url}")
@@ -1282,10 +1283,13 @@ def generate_start_card(
                     # Gold border like /profil
                     draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(215, 175, 85), width=int(4*scale))
                     img.paste(avatar, (avatar_x, avatar_y))
+                    avatar_loaded = True
+                else:
+                    logger.warning(f"Avatar download returned no image: {avatar_url}")
             except Exception as e:
                 logger.warning(f"Exception loading avatar: {e}")
         
-        if not avatar_url:
+        if not avatar_loaded:
             draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(215, 175, 85), width=int(4*scale))
             # Default icon placeholder
             draw.ellipse([avatar_x + int(45*scale), avatar_y + int(35*scale), avatar_x + int(95*scale), avatar_y + int(105*scale)], fill=(80, 100, 130))
