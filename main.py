@@ -807,7 +807,7 @@ async def backup_database_job(context):
             main_cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = [row[0] for row in main_cursor.fetchall()]
             logger.info(f"Found {len(tables)} SQLite tables to backup: {tables}")
-
+            
             total_copied = 0
             for table in tables:
                 try:
@@ -833,6 +833,80 @@ async def backup_database_job(context):
                     columns = [desc[1] for desc in main_cursor.fetchall()]
                     column_names = ','.join(columns)
                     placeholders = ','.join(['%s'] * len(columns))
+                    
+                    backup_cursor.execute(f"DELETE FROM {table}")
+                    
+                    for row in rows:
+                        backup_cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", row)
+                    
+                    backup_conn.commit()
+                    total_copied += len(rows)
+                    logger.info(f"Table {table}: copied {len(rows)} rows")
+                except Exception as e:
+                    logger.warning(f"Error copying table {table}: {e}")
+                    backup_conn.rollback()
+            
+            main_cursor.close()
+            backup_cursor.close()
+            main_conn.close()
+            backup_conn.close()
+            logger.info(f"Скопировано {total_copied} записей в backup БД")
+            return
+
+        main_is_postgres = "postgres" in DATABASE_URL.lower()
+        backup_is_sqlite = "sqlite" in BACKUP_DATABASE_URL.lower()
+
+        if main_is_postgres and backup_is_sqlite:
+            # PostgreSQL -> SQLite backup
+            import sqlite3
+            import psycopg2
+            
+            main_url = urlparse.urlparse(DATABASE_URL)
+            main_conn = psycopg2.connect(
+                host=main_url.hostname,
+                port=main_url.port or 5432,
+                dbname=main_url.path[1:],
+                user=main_url.username,
+                password=main_url.password
+            )
+            
+            backup_path = BACKUP_DATABASE_URL.replace("sqlite:///", "")
+            backup_conn = sqlite3.connect(backup_path)
+            
+            main_cursor = main_conn.cursor()
+            backup_cursor = backup_conn.cursor()
+            
+            # Get all tables
+            main_cursor.execute("""
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """)
+            tables = [row[0] for row in main_cursor.fetchall()]
+            logger.info(f"Found {len(tables)} PostgreSQL tables to backup: {tables}")
+            
+            total_copied = 0
+            for table in tables:
+                try:
+                    # Check if table exists in backup
+                    backup_cursor.execute("""
+                        SELECT name FROM sqlite_master 
+                        WHERE type='table' AND name = ?
+                    """, (table,))
+                    if not backup_cursor.fetchone():
+                        logger.warning(f"Table {table} does not exist in backup DB, skipping")
+                        continue
+
+                    main_cursor.execute(f"SELECT * FROM {table}")
+                    rows = main_cursor.fetchall()
+                    
+                    if not rows:
+                        logger.info(f"Table {table}: empty, skipping")
+                        continue
+                    
+                    main_cursor.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}'")
+                    columns = [desc[0] for desc in main_cursor.fetchall()]
+                    column_names = ','.join(columns)
+                    placeholders = ','.join(['?'] * len(columns))
                     
                     backup_cursor.execute(f"DELETE FROM {table}")
                     
