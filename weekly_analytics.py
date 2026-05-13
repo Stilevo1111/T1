@@ -520,11 +520,11 @@ def calculate_player_stats(matches: list) -> dict:
         duration = m.get("duration", 0)
         gold = m.get("gold", 0)
         gold_spent = m.get("gold_spent", 0)
-        if duration > 0:
+        if duration > 0 and (gold + gold_spent) > 0:
             total_gold = gold + gold_spent
             gpm_val = total_gold * 60 / duration
         else:
-            gpm_val = 0
+            gpm_val = m.get("gold_per_min", 0)
         raw_gpm.append(gpm_val)
     
     total_gpm = sum(raw_gpm)
@@ -881,10 +881,10 @@ async def generate_weekly_analytics(telegram_id: int):
         duration = m.get("duration", 0)
         gold = m.get("gold", 0)
         gold_spent = m.get("gold_spent", 0)
-        if duration > 0:
+        if duration > 0 and (gold + gold_spent) > 0:
             gpm = (gold + gold_spent) * 60 / duration
         else:
-            gpm = 0
+            gpm = m.get("gold_per_min", 0)
         # Fallback if GPM zero, estimate from last_hits
         if gpm == 0:
             last_hits = m.get("last_hits", 0)
