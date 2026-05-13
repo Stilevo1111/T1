@@ -430,6 +430,15 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['analytics_pages'] = [None, None]
             context.user_data['analytics_generated'] = set()
 
+            # Delete old analytics table if exists
+            old_table_msg_id = context.user_data.get('analytics_table_msg_id')
+            if old_table_msg_id:
+                try:
+                    await context.bot.delete_message(chat_id, old_table_msg_id)
+                except Exception:
+                    pass
+                context.user_data['analytics_table_msg_id'] = None
+
             if chart_image:
                 # Delete loading message before sending result
                 if loading_msg:
