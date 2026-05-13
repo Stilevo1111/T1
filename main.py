@@ -1507,10 +1507,19 @@ async def alternate_digest_job(context):
             last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
         except (ValueError, TypeError):
             last_created = 0
-        # recent_message = True если сообщение создано в течение 5 минут
-        recent_message = last_created > 0 and (time.time() - last_created) < 300
+        # recent_message = True если сообщение создано в течение 5 минут (и не 0)
+        # Если last_created = 0, сообщение может быть старым - удаляем только если уверены
+        # Проверяем также хеш текста сообщения
+        current_hash = hash(text[:100]) if text else 0
+        stored_hash = None
+        try:
+            stored_hash = int(get_config('alternate_digest_text_hash') or '0')
+        except (ValueError, TypeError):
+            stored_hash = 0
+        # Если хеши совпадают - сообщение уже существует, не удаляем
+        same_message = stored_hash == current_hash and last_created > 0
         
-        if last_message_id and not edited and hero_meta_banner is None and not recent_message:
+        if last_message_id and not edited and hero_meta_banner is None and not same_message:
             logger.info(f"No hero_meta in cache, trying text edit or removing old photo")
             try:
                 msg_id_int = int(last_message_id)
@@ -1617,6 +1626,7 @@ async def alternate_digest_job(context):
                 set_config('alternate_digest_message_id', str(msg.message_id))
                 set_config('alternate_digest_last_created', str(time.time()))
                 set_config('alternate_digest_type', next_type)
+                set_config('alternate_digest_text_hash', str(hash(text[:100]) if text else 0))
                 _digest_state["type"] = next_type
                 _digest_state["last_text"] = text
                 _digest_state["last_edited"] = time.time()
