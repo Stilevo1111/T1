@@ -707,7 +707,7 @@ async def get_weekly_matches(telegram_id: int):
             "assists": player_stats.get("assists", 0),
             "gold_per_min": player_stats.get("gold_per_min", 0),
             "duration": duration,
-            "gold": player_stats.get("gold_per_min", 0) * (duration // 60) if player_stats.get("gold_per_min") else 0,
+            "gold": player_stats.get("gold", 0),
             "gold_spent": player_stats.get("gold_spent", 0),
             "xp_per_min": player_stats.get("xp_per_min", 0),
             "last_hits": player_stats.get("last_hits", 0),
@@ -854,14 +854,8 @@ async def generate_chart_only(telegram_id: int):
     # Calculate only what's needed for chart
     game_history = []
     for m in matches[:10]:
-        # Compute GPM from gold earned and duration
-        duration = m.get("duration", 0)
-        gold = m.get("gold", 0)
-        gold_spent = m.get("gold_spent", 0)
-        if duration > 0 and (gold + gold_spent) > 0:
-            gpm = (gold + gold_spent) * 60 / duration
-        else:
-            gpm = m.get("gold_per_min", 0)
+        # Use gold_per_min directly from match data
+        gpm = m.get("gold_per_min", 0)
         # Fallback: if GPM still zero, estimate from last_hits
         if gpm == 0:
             last_hits = m.get("last_hits", 0)
@@ -923,15 +917,9 @@ async def generate_weekly_analytics(telegram_id: int):
 
     for m in matches:
 
-        # Compute GPM from gold earned and duration
-        duration = m.get("duration", 0)
-        gold = m.get("gold", 0)
-        gold_spent = m.get("gold_spent", 0)
-        if duration > 0 and (gold + gold_spent) > 0:
-            gpm = (gold + gold_spent) * 60 / duration
-        else:
-            gpm = m.get("gold_per_min", 0)
-        # Fallback if GPM zero, estimate from last_hits
+        # Use gold_per_min directly from match data (it's already computed by OpenDota)
+        gpm = m.get("gold_per_min", 0)
+        # Fallback: if GPM zero, estimate from last_hits
         if gpm == 0:
             last_hits = m.get("last_hits", 0)
             if last_hits > 0:
