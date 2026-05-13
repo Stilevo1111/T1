@@ -979,16 +979,33 @@ async def backup_database_job(context):
                 rows = main_cursor.fetchall()
 
                 if rows:
-                    # Get column names
-                    columns = [desc[0] for desc in main_cursor.description]
-                    placeholders = ','.join(['%s'] * len(columns))
-                    column_names = ','.join(columns)
+                    # Get column names from main DB
+                    main_columns = [desc[0] for desc in main_cursor.description]
+                    
+                    # Get column names from backup DB to find intersection
+                    backup_cursor.execute(f"""
+                        SELECT column_name FROM information_schema.columns 
+                        WHERE table_name = '{table}'
+                    """)
+                    backup_columns = [row[0] for row in backup_cursor.fetchall()]
+                    
+                    # Use only columns that exist in both tables
+                    common_columns = [col for col in main_columns if col in backup_columns]
+                    if not common_columns:
+                        logger.warning(f"Table {table}: no common columns, skipping")
+                        continue
+                    
+                    placeholders = ','.join(['%s'] * len(common_columns))
+                    column_names = ','.join(common_columns)
 
                     # Clear table with TRUNCATE CASCADE (handles FK constraints)
                     backup_cursor.execute(f"TRUNCATE TABLE {table} CASCADE")
                     
                     for row in rows:
-                        backup_cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", row)
+                        # Extract only common column values
+                        row_dict = dict(zip(main_columns, row))
+                        common_values = [row_dict[col] for col in common_columns]
+                        backup_cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", common_values)
 
                     backup_conn.commit()
                     total_copied += len(rows)
