@@ -1572,16 +1572,40 @@ async def alternate_digest_job(context):
 
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
-            # Проверяем анти-спам до генерации баннера (быстрый выход)
-            # Новый дайджест создаётся только раз в 48 часов (Telegram лимит редактирования)
-            # Но если предыдущее сообщение удалено (last_message_id = None), создаём новое независимо
+            # Если есть last_message_id - пытаемся отредактировать, даже если не удалось ранее
+            # Новый дайджест создаётся только если сообщение удалено или слишком старое (>48ч)
             if last_message_id is not None:
                 last_created_str = get_config('alternate_digest_last_created')
                 last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
                 time_since_last = time.time() - last_created
+                # Если сообщение не старше 48 часов - пытаемся отредактировать вместо создания
                 if time_since_last < 172800:  # 48 часов = 172800 секунд
-                    logger.info(f"Пропускаем - прошло всего {time_since_last/3600:.1f} ч с последнего создания")
-                    return
+                    logger.info(f"Повторная попытка редактирования - сообщение {last_message_id} не старше 48 часов")
+                    # Прямая попытка редактирования текста
+                    try:
+                        msg_id_int = int(last_message_id)
+                        if msg_id_int > 0:
+                            await bot.edit_message_text(
+                                chat_id=int(digest_chat_id),
+                                message_id=msg_id_int,
+                                text=text,
+                                parse_mode="HTML"
+                            )
+                            logger.info(f"Успешно отредактирован дайджест {last_message_id}")
+                            _digest_state["type"] = next_type
+                            set_config('alternate_digest_type', next_type)
+                            _digest_state["last_text"] = text
+                            _digest_state["last_edited"] = now
+                            return
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        logger.debug(f"Повторное редактирование не удалось: {e}")
+                        # Если сообщение удалено - убираем ID и создаём новое
+                        if "message to edit not found" in error_str or "message_id_invalid" in error_str:
+                            set_config('alternate_digest_message_id', None)
+                            last_message_id = None
+                        else:
+                            return
 
             # Генерируем hero_meta_banner если в кеше нет свежего
             current_time = time.time()
