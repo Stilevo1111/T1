@@ -637,7 +637,10 @@ async def get_weekly_matches(telegram_id: int):
 
     matches = await _api_get_async(
         url,
-        params={"limit": 30},  # Get more matches to ensure we have enough with full details
+        params={
+            "limit": 30,
+            "fields": "match_id,start_time,duration,gold,gold_spent,gold_per_min,xp_per_min,last_hits,kills,deaths,assists,hero_id,radiant_win,player_slot,denies,actions_per_min,hero_damage,tower_damage,stuns,hero_healing,creeps_stacked,observer_uses,sentry_uses"
+        },
         timeout=15
     )
 
