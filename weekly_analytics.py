@@ -909,17 +909,7 @@ async def generate_weekly_analytics(telegram_id: int):
         # Fallback for APM - use typical value
         if apm == 0:
             apm = 250  # default
-        
-        # Fallback for last_hits if 0 (private profile) - estimate from GPM
-        last_hits = m.get("last_hits", 0)
-        if last_hits == 0 and gpm > 0:
-            last_hits = int(gpm * duration / 60 * 0.7)  # Estimate: ~70% of GPM goes to last hits
-        
-        # Fallback for xpm if 0 (private profile) - estimate from GPM
-        xpm = m.get("xp_per_min", 0)
-        if xpm == 0 and gpm > 0:
-            xpm = int(gpm * 0.4)  # Estimate: XPM ~ 40% of GPM
-        
+
         imp = calculate_imp(
             gpm,
             kda,
@@ -937,11 +927,11 @@ async def generate_weekly_analytics(telegram_id: int):
         total_kills += kills
         total_deaths += deaths
         total_assists += assists
-        total_lh += last_hits
+        total_lh += m.get("last_hits", 0)
         total_apm += apm
         total_denies += m.get("denies", 0)
         total_stacks += m.get("creeps_stacked", 0)
-        total_xpm += xpm
+        total_xpm += m.get("xp_per_min", 0)
         
         total_utility += utility
 
