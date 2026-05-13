@@ -2664,7 +2664,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def _show_analytics_page(callback_query, page_idx: int, context: ContextTypes.DEFAULT_TYPE):
     """Edit the existing message to show the requested analytics page.
     Pages are generated lazily — only when the user actually navigates to them."""
-    from weekly_analytics import get_analytics_pages
+    from weekly_analytics import get_analytics_pages, fetch_match_details, calculate_player_stats
 
     generated = context.user_data.get('analytics_generated', set())
     pages = context.user_data.get('analytics_pages', [])
@@ -2676,14 +2676,24 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
     # Ленивая генерация: если страница ещё не создана — генерируем все страницы
     if page_idx not in generated:
         # Вычисляем статистику и роль только при первом нажатии
-        stats = context.user_data.get('analytics_stats')
-        role = context.user_data.get('analytics_role')
         matches = context.user_data.get('analytics_matches', [])
         
+        # Lazy load full match details when user clicks a button
+        await callback_query.answer(text="⏳ Загружаю детали матчей...", show_alert=False)
+        
+        # Fetch full details for matches that have match_id
+        telegram_id = callback_query.from_user.id
+        user = get_user(telegram_id)
+        if user and user.get('steam_id'):
+            steam_id = user.get('steam_id')
+            matches = await fetch_match_details(matches, steam_id)
+            context.user_data['analytics_matches'] = matches
+        
+        stats = context.user_data.get('analytics_stats')
+        role = context.user_data.get('analytics_role')
+        
         if stats is None or role is None:
-            # Show loading while computing
-            await callback_query.answer(text="⏳ Готовлю таблицы...", show_alert=False)
-            from weekly_analytics import detect_role_from_history, calculate_player_stats
+            from weekly_analytics import detect_role_from_history
             role = await detect_role_from_history(matches)
             stats = calculate_player_stats(matches)
             context.user_data['analytics_stats'] = stats

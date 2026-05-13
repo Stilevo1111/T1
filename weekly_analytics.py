@@ -621,6 +621,60 @@ def calculate_player_stats(matches: list) -> dict:
 # MATCHES
 # =========================================================
 
+async def fetch_match_details(matches: list, steam_id: str) -> list:
+    """Fetch full match details for matches that have minimal data."""
+    account_id = steam64_to_account_id(steam_id)
+    enriched = []
+    
+    for m in matches:
+        # If match already has all needed data, keep it
+        if m.get("gold_per_min", 0) > 0 and m.get("last_hits", 0) > 0:
+            enriched.append(m)
+            continue
+        
+        match_id = m.get("match_id")
+        if not match_id:
+            enriched.append(m)
+            continue
+        
+        try:
+            match_url = f"{OPENDOTA_API_URL}/matches/{match_id}"
+            match_data = await _api_get_async(match_url, timeout=10)
+            
+            player_stats = {}
+            if match_data and "players" in match_data:
+                for p in match_data["players"]:
+                    if p.get("account_id") == int(account_id):
+                        player_stats = p
+                        break
+            
+            # Enrich the match data
+            m["kills"] = player_stats.get("kills", m.get("kills", 0))
+            m["deaths"] = player_stats.get("deaths", m.get("deaths", 0))
+            m["assists"] = player_stats.get("assists", m.get("assists", 0))
+            m["gold_per_min"] = player_stats.get("gold_per_min", 0)
+            m["xp_per_min"] = player_stats.get("xp_per_min", 0)
+            m["last_hits"] = player_stats.get("last_hits", 0)
+            m["gold"] = player_stats.get("gold", 0)
+            m["gold_spent"] = player_stats.get("gold_spent", 0)
+            m["hero_damage"] = player_stats.get("hero_damage", 0)
+            m["tower_damage"] = player_stats.get("tower_damage", 0)
+            m["denies"] = player_stats.get("denies", 0)
+            m["actions_per_min"] = player_stats.get("actions_per_min", 0)
+            m["stuns"] = player_stats.get("stuns", 0.0) if isinstance(player_stats.get("stuns"), (int, float)) else 0
+            m["hero_healing"] = player_stats.get("hero_healing", 0)
+            m["creeps_stacked"] = player_stats.get("creeps_stacked", 0)
+            m["observer_uses"] = player_stats.get("observer_uses", 0)
+            m["sentry_uses"] = player_stats.get("sentry_uses", 0)
+            
+        except Exception as e:
+            logger.debug(f"Failed to fetch match {match_id}: {e}")
+        
+        enriched.append(m)
+    
+    return enriched
+
+
 async def get_weekly_matches(telegram_id: int):
 
     user = get_user(telegram_id)
@@ -655,7 +709,7 @@ async def get_weekly_matches(telegram_id: int):
 
     filtered = []
 
-    # Get full match data for each match to get gold_per_min, xp_per_min, last_hits
+    # Use only basic match data from /players/{account_id}/matches (no individual match API calls)
     for m in matches:
         ts = m.get("start_time", 0)
 
@@ -672,31 +726,11 @@ async def get_weekly_matches(telegram_id: int):
         duration = m.get("duration", 0)
         player_slot = m.get("player_slot", 0)
 
-        # Get full match data to extract player stats
-        match_data = None
-        if match_id:
-            try:
-                match_url = f"{OPENDOTA_API_URL}/matches/{match_id}"
-                match_data = await _api_get_async(match_url, timeout=10)
-            except Exception as e:
-                logger.debug(f"Failed to get match {match_id}: {e}")
-
-        # Extract player stats from match data
-        player_stats = {}
-        if match_data and "players" in match_data:
-            for p in match_data["players"]:
-                if p.get("account_id") == int(account_id):
-                    player_stats = p
-                    break
-            # Also check for steam_account_id (64-bit)
-            if not player_stats and "players" in match_data:
-                for p in match_data["players"]:
-                    if p.get("steam_account_id") == int(account_id) or p.get("account_id") == account_id:
-                        player_stats = p
-                        break
-
-        # Get radiant_win from match data or fallback to false
-        radiant_win = match_data.get("radiant_win", False) if match_data else False
+        # Use basic data from match list (no full match API calls)
+        kills = m.get("kills", 0)
+        deaths = m.get("deaths", 0)
+        assists = m.get("assists", 0)
+        radiant_win = m.get("radiant_win", False)
 
         # Determine if player was on radiant (slot < 128)
         is_radiant = player_slot < 128 if player_slot else True
@@ -704,38 +738,32 @@ async def get_weekly_matches(telegram_id: int):
 
         filtered.append({
             "hero_id": hero_id,
-            "kills": player_stats.get("kills", 0),
-            "deaths": player_stats.get("deaths", 0),
-            "assists": player_stats.get("assists", 0),
-            "gold_per_min": player_stats.get("gold_per_min", 0),
+            "kills": kills,
+            "deaths": deaths,
+            "assists": assists,
+            "gold_per_min": 0,  # Will be fetched lazily when needed
             "duration": duration,
-            "gold": player_stats.get("gold", 0),
-            "gold_spent": player_stats.get("gold_spent", 0),
-            "xp_per_min": player_stats.get("xp_per_min", 0),
-            "last_hits": player_stats.get("last_hits", 0),
-            "hero_damage": player_stats.get("hero_damage", 0),
-            "tower_damage": player_stats.get("tower_damage", 0),
-            "lane_role": player_stats.get("lane_role", 0),
+            "gold": 0,
+            "gold_spent": 0,
+            "xp_per_min": 0,
+            "last_hits": 0,
+            "hero_damage": 0,
+            "tower_damage": 0,
+            "lane_role": 0,
             "start_time": ts,
             "win": is_win,
-            "denies": player_stats.get("denies", 0),
-            "actions_per_min": player_stats.get("actions_per_min", 0),
-            "stuns": player_stats.get("stuns", 0.0) if isinstance(player_stats.get("stuns"), (int, float)) else 0,
-            "hero_healing": player_stats.get("hero_healing", 0),
-            "creeps_stacked": player_stats.get("creeps_stacked", 0),
-            "observer_uses": player_stats.get("observer_uses", 0),
-            "sentry_uses": player_stats.get("sentry_uses", 0)
+            "denies": 0,
+            "actions_per_min": 0,
+            "stuns": 0.0,
+            "hero_healing": 0,
+            "creeps_stacked": 0,
+            "observer_uses": 0,
+            "sentry_uses": 0,
+            "match_id": match_id  # Keep for lazy loading later
         })
 
         if len(filtered) >= 10:
             break
-
-    # Debug: log what data we actually got
-    if filtered:
-        sample = filtered[0]
-        logger.info(f"get_weekly_matches: sample match fields: gold_per_min={sample.get('gold_per_min')}, last_hits={sample.get('last_hits')}, xp_per_min={sample.get('xp_per_min')}, duration={sample.get('duration')}")
-    else:
-        logger.warning("get_weekly_matches: no matches in last 7 days")
 
     return filtered
 
@@ -853,32 +881,16 @@ async def generate_chart_only(telegram_id: int):
 
     matches = sorted(matches, key=lambda x: x.get("start_time", 0))
 
-    # Calculate only what's needed for chart
+    # Calculate only what's needed for chart - minimal data
     game_history = []
     for m in matches[:10]:
-        # Use gold_per_min directly from match data
-        gpm = m.get("gold_per_min", 0)
-        # Fallback: if GPM still zero, estimate from last_hits
-        if gpm == 0:
-            last_hits = m.get("last_hits", 0)
-            if last_hits > 0:
-                gpm = last_hits * 60
         kills = m.get("kills", 0)
         deaths = m.get("deaths", 0)
         assists = m.get("assists", 0)
         kda = (kills + assists) / max(deaths, 1)
-        
-        utility = calculate_utility(
-            m.get("stuns", 0),
-            m.get("hero_healing", 0),
-            m.get("creeps_stacked", 0),
-            m.get("observer_uses", 0) + m.get("sentry_uses", 0)
-        )
-        apm = m.get("actions_per_min", 0)
-        
-        imp = calculate_imp(gpm, kda, utility, apm, "CARRY")
-        
-        game_history.append({"imp": imp, "hero_id": m.get("hero_id", 0)})
+        # Simple IMP based only on KDA (much faster, no utility/apm/gpm needed)
+        imp = min(kda * 15, 50)  # max 50
+        game_history.append({"imp": round(imp, 1), "hero_id": m.get("hero_id", 0)})
 
     chart = await create_visual_chart(game_history)
     return {"image": chart, "history": game_history, "matches": matches}
