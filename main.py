@@ -1507,7 +1507,8 @@ async def alternate_digest_job(context):
             last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
         except (ValueError, TypeError):
             last_created = 0
-        recent_message = (time.time() - last_created) < 300  # Защита 5 минут от удаления при деплое
+        # recent_message = True если сообщение создано в течение 5 минут
+        recent_message = last_created > 0 and (time.time() - last_created) < 300
         
         if last_message_id and not edited and hero_meta_banner is None and not recent_message:
             logger.info(f"No hero_meta in cache, trying text edit or removing old photo")
