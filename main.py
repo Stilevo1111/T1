@@ -441,7 +441,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 photo_buf = io.BytesIO(chart_image)
                 photo_buf.name = "weekly_analytics.png"
 
-                reply_markup = _build_analytics_keyboard(0, 2, set())
+                reply_markup = _build_stats_button_keyboard()
 
                 result_msg = await context.bot.send_photo(
                     chat_id=chat_id,
@@ -2382,6 +2382,11 @@ def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: set = 
     return InlineKeyboardMarkup(rows)
 
 
+def _build_stats_button_keyboard() -> InlineKeyboardMarkup:
+    """Build inline keyboard with single 'Статистика🧠' button under chart."""
+    return InlineKeyboardMarkup([[InlineKeyboardButton("Статистика🧠", callback_data="analytics_show")]])
+
+
 def format_time(seconds):
     h = seconds // 3600
     m = (seconds % 3600) // 60
@@ -2641,19 +2646,32 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = callback_query.data
 
-    # Answer immediately for instant feedback
+    # Handle analytics_show separately with loading indicator
+    if data == "analytics_show":
+        await callback_query.answer(text="⏳ Загружаю детали матчей...", show_alert=False)
+        try:
+            await _show_analytics_page(callback_query, 0, context)
+        except Exception as e:
+            logger.error(f"Error in button_callback: {e}", exc_info=True)
+        return
+
+    # Handle analytics_page_N - no loading indicator (pages already generated or will show error)
+    if data and data.startswith("analytics_page_"):
+        await callback_query.answer()  # Just acknowledge the callback
+        try:
+            page_idx = int(data.split("_")[-1])
+            await _show_analytics_page(callback_query, page_idx, context)
+        except Exception as e:
+            logger.error(f"Error in button_callback: {e}", exc_info=True)
+        return
+
+    # Answer immediately for other button types
     await callback_query.answer()
 
     try:
         # === LINK HANDLER ===
         if data == "link":
             await link(update, context)
-            return
-
-        # === ANALYTICS PAGE (analytics_page_N) ===
-        if data and data.startswith("analytics_page_"):
-            page_idx = int(data.split("_")[-1])
-            await _show_analytics_page(callback_query, page_idx, context)
             return
 
     except Exception as e:
@@ -2673,15 +2691,11 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
     pages = context.user_data.get('analytics_pages', [])
 
     if page_idx < 0 or page_idx >= len(pages):
-        await callback_query.answer(text="Неверная страница.", show_alert=True)
+        logger.warning(f"Invalid page index: {page_idx}, pages: {len(pages)}")
         return
 
-    # Show loading indicator immediately for first click
-    is_first_generation = page_idx not in generated
-    if is_first_generation:
-        await callback_query.answer(text="⏳ Загружаю детали матчей...", show_alert=False)
-
     # Ленивая генерация: если страница ещё не создана — генерируем все страницы
+    is_first_generation = page_idx not in generated
     if is_first_generation:
         # Вычисляем статистику и роль только при первом нажатии
         matches = context.user_data.get('analytics_matches', [])
@@ -2753,7 +2767,6 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         context.user_data['analytics_table_msg_id'] = new_msg.message_id
     except Exception as e:
         logger.error(f"Error sending analytics table message: {e}", exc_info=True)
-        await callback_query.answer(text="Не удалось отправить таблицу. Попробуйте запросить аналитику заново.", show_alert=True)
 
 
 async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
