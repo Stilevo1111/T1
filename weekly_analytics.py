@@ -36,28 +36,84 @@ _HERO_NAME_CACHE = {}
 _HERO_ROLE_CACHE = {}
 
 # =========================================================
-# PRO DATABASE
-# =========================================================
-
-PRO_DB = {
-    "CARRY": {
-        "players": {
-            "Watson": {"wr": 68, "lh": 72, "deny": 12, "gpm": 725, "kda": "8/2.9/8"},
-            "skiter": {"wr": 65, "lh": 72, "deny": 13, "gpm": 693, "kda": "7/3.0/9"},
-            "Pure": {"wr": 63, "lh": 67, "deny": 11, "gpm": 742, "kda": "8/3.7/9"},
-            "Satanic": {"wr": 61, "lh": 81, "deny": 14, "gpm": 825, "kda": "8/2.8/7"},
-            "Ame": {"wr": 60, "lh": 78, "deny": 9, "gpm": 743, "kda": "7/3.2/7"}
+    # PRO DATABASE
+    PRO_DB = {
+        "CARRY": {
+            "players": {
+                "Watson": {"wr": 68, "lh": 72, "deny": 12, "gpm": 725, "kda": "8/2.9/8"},
+                "skiter": {"wr": 65, "lh": 72, "deny": 13, "gpm": 693, "kda": "7/3.0/9"},
+                "Pure": {"wr": 63, "lh": 67, "deny": 11, "gpm": 742, "kda": "8/3.7/9"},
+                "Satanic": {"wr": 61, "lh": 81, "deny": 14, "gpm": 825, "kda": "8/2.8/7"},
+                "Ame": {"wr": 60, "lh": 78, "deny": 9, "gpm": 743, "kda": "7/3.2/7"}
+            },
+            "benchmarks": {
+                "gpm": 732,
+                "deaths": 3.1,
+                "h_dmg": 28.0,
+                "t_dmg": 9.3,
+                "utility": 8.0,
+                "apm": 310,
+                "kda": 5.5
+            }
         },
-        "benchmarks": {
-            "gpm": 732,
-            "xpm": 855,
-            "deaths": 3.1,
-            "h_dmg": 28.0,
-            "t_dmg": 9.3,
-            "utility": 8.0,
-            "apm": 310,
-            "kda": 5.5
+
+        "MID": {
+            "players": {
+                "Malr1ne": {"wr": 64, "lh": 75, "deny": 24, "gpm": 715, "kda": "9/3.1/8"},
+                "Quinn": {"wr": 62, "lh": 70, "deny": 20, "gpm": 690, "kda": "8/3.4/9"},
+                "Nisha": {"wr": 63, "lh": 73, "deny": 22, "gpm": 705, "kda": "9/2.8/7"},
+                "gpk~": {"wr": 60, "lh": 68, "deny": 25, "gpm": 685, "kda": "8/3.5/10"},
+                "No[o]ne": {"wr": 61, "lh": 74, "deny": 21, "gpm": 710, "kda": "10/3.2/8"}
+            },
+            "benchmarks": {
+                "gpm": 702,
+                "deaths": 3.2,
+                "h_dmg": 32.0,
+                "t_dmg": 4.5,
+                "utility": 5.0,
+                "apm": 340,
+                "kda": 5.0
+            }
+        },
+
+        "OFFLANE": {
+            "players": {
+                "Collapse": {"wr": 62, "lh": 62, "deny": 18, "gpm": 590, "kda": "5/3.8/12"},
+                "33": {"wr": 65, "lh": 58, "deny": 15, "gpm": 610, "kda": "4/3.2/14"},
+                "Ace": {"wr": 63, "lh": 65, "deny": 20, "gpm": 580, "kda": "5/3.5/15"},
+                "ATF": {"wr": 60, "lh": 70, "deny": 14, "gpm": 640, "kda": "7/4.1/10"},
+                "Wisper": {"wr": 58, "lh": 63, "deny": 16, "gpm": 595, "kda": "6/4.0/11"}
+            },
+            "benchmarks": {
+                "gpm": 595,
+                "deaths": 3.8,
+                "h_dmg": 24.5,
+                "t_dmg": 6.2,
+                "utility": 10.0,
+                "apm": 290,
+                "kda": 4.5
+            }
+        },
+
+        "SUPPORT": {
+            "players": {
+                "Miposhka": {"wr": 62, "lh": 12, "deny": 4, "gpm": 380, "kda": "3/4.2/18"},
+                "Save-": {"wr": 60, "lh": 18, "deny": 6, "gpm": 410, "kda": "4/3.8/15"},
+                "Sneyking": {"wr": 64, "lh": 14, "deny": 3, "gpm": 395, "kda": "2/4.5/20"},
+                "Puppey": {"wr": 58, "lh": 10, "deny": 2, "gpm": 350, "kda": "1/5.1/14"},
+                "Fishman": {"wr": 59, "lh": 15, "deny": 5, "gpm": 370, "kda": "2/4.9/16"}
+            },
+            "benchmarks": {
+                "gpm": 385,
+                "deaths": 4.8,
+                "h_dmg": 12.0,
+                "t_dmg": 0.8,
+                "utility": 15.0,
+                "apm": 270,
+                "kda": 3.5
+            }
         }
+    }
     },
 
     "MID": {
@@ -70,7 +126,6 @@ PRO_DB = {
         },
         "benchmarks": {
             "gpm": 702,
-            "xpm": 810,
             "deaths": 3.2,
             "h_dmg": 32.0,
             "t_dmg": 4.5,
@@ -90,7 +145,6 @@ PRO_DB = {
         },
         "benchmarks": {
             "gpm": 595,
-            "xpm": 680,
             "deaths": 3.8,
             "h_dmg": 24.5,
             "t_dmg": 6.2,
@@ -110,7 +164,6 @@ PRO_DB = {
         },
         "benchmarks": {
             "gpm": 385,
-            "xpm": 420,
             "deaths": 4.8,
             "h_dmg": 12.0,
             "t_dmg": 0.8,
@@ -136,7 +189,7 @@ IMP_WEIGHTS = {
 # ROLE DETECTION
 # =========================================================
 
-# Priority: 1) Hero role dominance (>60% games on one role), 2) Stats (GPM, XPM, lane, KDA)
+# Priority: 1) Hero role dominance (>60% games on one role), 2) Stats (GPM, lane, KDA)
 
 # =========================================================
 # UTILITY
@@ -475,12 +528,11 @@ async def detect_role_from_history(matches: list):
 
 def calculate_player_stats(matches: list) -> dict:
     if not matches:
-        return {"wr": 50.0, "gpm": 400, "xpm": 500, "deaths": 5.0, "h_dmg": 10.0, "t_dmg": 2.0, "util": 8.0, "apm": 250, "kda": "3/4/8"}
+        return {"wr": 50.0, "gpm": 400, "deaths": 5.0, "h_dmg": 10.0, "t_dmg": 2.0, "util": 8.0, "apm": 250, "kda": "3/4/8"}
     n = len(matches)
     
     # Get raw values
     raw_gpm = [m.get("gold_per_min", 0) for m in matches]
-    raw_xpm = [m.get("xp_per_min", 0) for m in matches]
     raw_lh = [m.get("last_hits", 0) for m in matches]
     raw_kills = [m.get("kills", 0) for m in matches]
     raw_deaths = [m.get("deaths", 0) for m in matches]
@@ -506,12 +558,6 @@ def calculate_player_stats(matches: list) -> dict:
         avg_kda = (avg_kills + avg_assists) / avg_deaths
         total_gpm = avg_kda * 150  # rough estimate: KDA * ~150 = GPM for carry
     avg_gpm = total_gpm / n
-    
-    # XPM fallback: estimate from last_hits (~50% of GPM * 60/100 ratio, ~0.5 ratio)
-    total_xpm = sum(raw_xpm)
-    if total_xpm == 0:
-        total_xpm = sum(raw_lh) * 0.5 * 60  # XPM ~ last_hits * 30
-    avg_xpm = total_xpm / n
     
     total_deaths = sum(raw_deaths)
     avg_deaths = total_deaths / n
@@ -553,7 +599,6 @@ def calculate_player_stats(matches: list) -> dict:
     return {
         "wr": round(wr, 1),
         "gpm": round(avg_gpm, 1),
-        "xpm": round(avg_xpm, 1),
         "deaths": round(avg_deaths, 1),
         "h_dmg": round(avg_h_dmg, 1),
         "t_dmg": round(avg_t_dmg, 1),
@@ -624,7 +669,6 @@ async def get_weekly_matches(telegram_id: int):
             "deaths": m.get("deaths", 0),
             "assists": m.get("assists", 0),
             "gold_per_min": m.get("gold_per_min", 0),
-            "xp_per_min": m.get("xp_per_min", 0),
             "last_hits": m.get("last_hits", 0),
             "hero_damage": m.get("hero_damage", 0),
             "tower_damage": m.get("tower_damage", 0),
@@ -683,7 +727,6 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
     bench = db["benchmarks"]
     metrics = [
         ("GPM", user_stats.get('gpm', 0), bench['gpm']),
-        ("XPM", user_stats.get('xpm', 0), bench['xpm']),
         ("Deaths", user_stats.get('deaths', 0), bench['deaths']),
         ("H DMG", user_stats.get('h_dmg', 0), bench['h_dmg']),
         ("T DMG", user_stats.get('t_dmg', 0), bench['t_dmg']),
@@ -809,7 +852,6 @@ async def generate_weekly_analytics(telegram_id: int):
     total_lh = 0
     total_apm = 0
     total_denies = 0
-    total_xpm = 0
     total_h_dmg = 0
     total_t_dmg = 0
     total_utility = 0
@@ -866,12 +908,6 @@ async def generate_weekly_analytics(telegram_id: int):
         total_apm += apm
         total_denies += m.get("denies", 0)
         
-        # Fallback for XPM from last_hits
-        xpm = m.get("xp_per_min", 0)
-        if xpm == 0:
-            xpm = m.get("last_hits", 0) * 30  # ~30 XPM per last hit
-        total_xpm += xpm
-        
         # Fallback for hero_damage from kills
         h_dmg = m.get("hero_damage", 0)
         if h_dmg == 0:
@@ -897,7 +933,6 @@ async def generate_weekly_analytics(telegram_id: int):
     avg_lh = total_lh / match_count
     avg_apm = total_apm / match_count
     avg_denies = total_denies / match_count
-    avg_xpm = total_xpm / match_count
     avg_h_dmg = total_h_dmg / match_count / 1000
     avg_t_dmg = total_t_dmg / match_count / 1000
     avg_utility = total_utility / match_count
@@ -914,7 +949,6 @@ async def generate_weekly_analytics(telegram_id: int):
         "lh": round(avg_lh, 1),
         "deny": round(avg_denies, 1),
         "gpm": round(avg_gpm, 1),
-        "xpm": round(avg_xpm, 1),
         "h_dmg": round(avg_h_dmg, 1),
         "t_dmg": round(avg_t_dmg, 1),
         "util": round(avg_utility, 1),
