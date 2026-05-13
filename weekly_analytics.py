@@ -15,6 +15,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+
 # Cache for background image and hero icons
 _CHART_BG_CACHE = None
 _HERO_ICON_CACHE = {}
@@ -641,6 +643,8 @@ async def get_weekly_matches(telegram_id: int):
 
     if not matches:
         return []
+    
+    logger.info(f"get_weekly_matches: got {len(matches)} matches from API for account {account_id}")
 
     week_start = (
         datetime.now(timezone.utc)
@@ -688,6 +692,13 @@ async def get_weekly_matches(telegram_id: int):
 
         if len(filtered) >= 10:
             break
+
+    # Debug: log what data we actually got
+    if filtered:
+        sample = filtered[0]
+        logger.info(f"get_weekly_matches: sample match fields: gold_per_min={sample.get('gold_per_min')}, last_hits={sample.get('last_hits')}, xp_per_min={sample.get('xp_per_min')}, duration={sample.get('duration')}")
+    else:
+        logger.warning("get_weekly_matches: no matches in last 7 days")
 
     return filtered
 
