@@ -830,14 +830,31 @@ async def backup_database_job(context):
                         continue
                     
                     main_cursor.execute(f"PRAGMA table_info({table})")
-                    columns = [desc[1] for desc in main_cursor.fetchall()]
-                    column_names = ','.join(columns)
-                    placeholders = ','.join(['%s'] * len(columns))
+                    sqlite_columns = [desc[1] for desc in main_cursor.fetchall()]
                     
-                    backup_cursor.execute(f"DELETE FROM {table}")
+                    # Get PostgreSQL backup columns to find intersection
+                    backup_cursor.execute("""
+                        SELECT column_name FROM information_schema.columns 
+                        WHERE table_schema = 'public' AND table_name = %s
+                    """, (table,))
+                    pg_columns = [row[0] for row in backup_cursor.fetchall()]
+                    
+                    # Use only columns that exist in both tables
+                    common_columns = [col for col in sqlite_columns if col in pg_columns]
+                    if not common_columns:
+                        logger.warning(f"Table {table}: no common columns, skipping")
+                        continue
+                    
+                    column_names = ','.join(common_columns)
+                    placeholders = ','.join(['%s'] * len(common_columns))
+                    
+                    backup_cursor.execute(f"TRUNCATE TABLE {table} CASCADE")
                     
                     for row in rows:
-                        backup_cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", row)
+                        # Extract only common column values (by position)
+                        sqlite_col_dict = dict(zip(sqlite_columns, row))
+                        common_values = [sqlite_col_dict[col] for col in common_columns]
+                        backup_cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", common_values)
                     
                     backup_conn.commit()
                     total_copied += len(rows)
@@ -903,15 +920,32 @@ async def backup_database_job(context):
                         logger.info(f"Table {table}: empty, skipping")
                         continue
                     
+                    # Get PostgreSQL column list
                     main_cursor.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}'")
-                    columns = [desc[0] for desc in main_cursor.fetchall()]
-                    column_names = ','.join(columns)
-                    placeholders = ','.join(['?'] * len(columns))
+                    pg_columns = [desc[0] for desc in main_cursor.fetchall()]
+                    
+                    # Get SQLite backup columns to find intersection
+                    backup_cursor.execute("PRAGMA table_info(sqlite_temp_master)")
+                    # Get columns from the actual table
+                    backup_cursor.execute(f"PRAGMA table_info({table})")
+                    sqlite_columns = [row[1] for row in backup_cursor.fetchall()]
+                    
+                    # Use only columns that exist in both tables
+                    common_columns = [col for col in pg_columns if col in sqlite_columns]
+                    if not common_columns:
+                        logger.warning(f"Table {table}: no common columns, skipping")
+                        continue
+                    
+                    column_names = ','.join(common_columns)
+                    placeholders = ','.join(['?'] * len(common_columns))
                     
                     backup_cursor.execute(f"DELETE FROM {table}")
                     
                     for row in rows:
-                        backup_cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", row)
+                        # Extract only common column values (by position)
+                        pg_col_dict = dict(zip(pg_columns, row))
+                        common_values = [pg_col_dict[col] for col in common_columns]
+                        backup_cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", common_values)
                     
                     backup_conn.commit()
                     total_copied += len(rows)
