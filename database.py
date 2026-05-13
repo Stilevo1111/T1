@@ -1405,9 +1405,11 @@ class Database:
                         top_growth_cm = delta
                         cached = user_cache.get(u["telegram_id"])
                         if cached:
-                            top_growth_user = cached.get('steam_nickname') or cached.get('username') or str(u["telegram_id"])
+                            nick = cached.get('steam_nickname') or cached.get('username') or str(u["telegram_id"])
+                            top_growth_user = nick if nick and nick != "None" else None
                         else:
-                            top_growth_user = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
+                            nick = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
+                            top_growth_user = nick if nick and nick != "None" else None
                         if not top_growth_user:
                             top_growth_user = str(u["telegram_id"])
                         # Only set ID if valid (positive integer)
@@ -1430,9 +1432,11 @@ class Database:
                         top_drop_cm = delta
                         cached = user_cache.get(u["telegram_id"])
                         if cached:
-                            top_drop_user = cached.get('steam_nickname') or cached.get('username') or str(u["telegram_id"])
+                            nick = cached.get('steam_nickname') or cached.get('username') or str(u["telegram_id"])
+                            top_drop_user = nick if nick and nick != "None" else None
                         else:
-                            top_drop_user = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
+                            nick = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
+                            top_drop_user = nick if nick and nick != "None" else None
                         if not top_drop_user:
                             top_drop_user = str(u["telegram_id"])
                         # Only set ID if valid (positive integer)
@@ -1451,9 +1455,11 @@ class Database:
                     top_streak = u["current_streak"]
                     cached = user_cache.get(u["telegram_id"])
                     if cached:
-                        top_streak_user = cached.get('steam_nickname') or cached.get('username') or str(u["telegram_id"])
+                        nick = cached.get('steam_nickname') or cached.get('username') or str(u["telegram_id"])
+                        top_streak_user = nick if nick and nick != "None" else None
                     else:
-                        top_streak_user = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
+                        nick = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
+                        top_streak_user = nick if nick and nick != "None" else None
                     if not top_streak_user:
                         top_streak_user = str(u["telegram_id"])
                     # Only set ID if valid (positive integer)
