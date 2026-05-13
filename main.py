@@ -19,7 +19,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Con
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, get_dota_week_rank, BACKUP_DATABASE_URL, DATABASE_URL, reset_all_fissure_data, cleanup_left_users
 from dota_mmr import update_user_mmr
-from database import get_all_users_with_steam, user_cache, update_dota_week_top_cache
+from database import get_all_users_with_steam, user_cache, update_dota_week_top_cache, get_db_type, config_cache
 import aiohttp
 from aiohttp import web
 from rate_limiter import telegram_rate_limiter, rate_limit
@@ -1128,22 +1128,31 @@ async def alternate_digest_job(context):
     try:
         now = time.time()
 
-        # Глобальная блокировка через БД (работает между воркерами)
-        # Используем compare-and-swap через конфиг
-        last_job_run = get_config('alternate_digest_last_run')
-        try:
-            last_job_run = float(last_job_run) if last_job_run else 0
-        except (ValueError, TypeError):
-            last_job_run = 0
-        
-        # Если последний запуск был меньше 60 секунд назад - пропускаем
-        if now - last_job_run < 60:
-            logger.warning(f"alternate_digest_job: пропуск (последний запуск был {now - last_job_run:.0f}с назад)")
+        # Глобальная блокировка через БД (работает между воркерами) — атомарная
+        # Пытаемся атомарно обновить alternate_digest_last_run, только если он старше 60 секунд
+        db = Database()
+        threshold = now - 60
+        if get_db_type() == "postgresql":
+            query = "INSERT INTO bot_config (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value WHERE (value::float < %s OR value IS NULL)"
+            params = ('alternate_digest_last_run', str(now), str(threshold))
+        else:
+            query = "INSERT INTO bot_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE (CAST(value AS REAL) < ? OR value IS NULL)"
+            params = ('alternate_digest_last_run', str(now), str(threshold))
+        rows = db.execute_query(query, params)
+        if rows is None or rows == 0:
+            # Логируем информацию о последнем запуске для отладки
+            last_job_run = get_config('alternate_digest_last_run')
+            try:
+                last_job_run_float = float(last_job_run) if last_job_run else 0
+            except (ValueError, TypeError):
+                last_job_run_float = 0
+            if last_job_run_float:
+                logger.warning(f"alternate_digest_job: пропуск (последний запуск был {now - last_job_run_float:.0f}с назад)")
+            else:
+                logger.warning("alternate_digest_job: пропуск (lock not acquired)")
             return
-        
-        # Атомарно обновляем время запуска через set_config с проверкой
-        # Если кто-то уже обновил - значит другой воркер уже запустился
-        set_config('alternate_digest_last_run', str(now))
+        config_cache.delete('alternate_digest_last_run')
+        logger.debug("alternate_digest_job: lock acquired")
 
         # Проверяем глобальный rate limit
         if is_rate_limited():
@@ -1315,9 +1324,9 @@ async def alternate_digest_job(context):
                     except Exception as e:
                         logger.warning(f"Не удалось сохранить кеш фиссур-дайджеста: {e}")
 
-                growth_display = make_clickable(growth_player, growth_id) if growth_id else growth_player
-                drop_display = make_clickable(drop_player, drop_id) if drop_id else drop_player
-                streak_display = make_clickable(streak_player, streak_id) if streak_id else streak_player
+                growth_display = make_clickable(growth_player, growth_id)
+                drop_display = make_clickable(drop_player, drop_id)
+                streak_display = make_clickable(streak_player, streak_id)
 
                 parts = []
                 if growth_player and growth_player != "None":
@@ -1508,6 +1517,7 @@ async def alternate_digest_job(context):
         except (ValueError, TypeError):
             last_created = 0
         # recent_message = True если сообщение создано в течение 5 минут (и не 0)
+        recent_message = last_created > now - 300 and last_created > 0
         # Если last_created = 0, сообщение может быть старым - удаляем только если уверены
         # Проверяем также хеш текста сообщения
         current_hash = hash(text[:100]) if text else 0

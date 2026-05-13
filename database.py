@@ -915,7 +915,7 @@ class Database:
             elif fetch == "all":
                 result = cursor.fetchall()
             else:
-                result = None
+                result = cursor.rowcount
             
             conn.commit()
             cursor.close()
