@@ -356,7 +356,10 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if active_users:
             winner = active_users[0]
-            debug_info += f"MVP: {winner.get('steam_nickname', 'Unknown')} ({winner.get('week_games', 0)} игр, {winner.get('week_wins', 0)} побед)\n"
+            winner_name = winner.get('steam_nickname') or winner.get('username') or 'Игрок'
+            winner_id = winner.get('telegram_id')
+            winner_clickable = make_clickable(winner_name, winner_id)
+            debug_info += f"MVP: {winner_clickable} ({winner.get('week_games', 0)} игр, {winner.get('week_wins', 0)} побед)\n"
 
         await update.message.reply_text(debug_info)
 
@@ -668,7 +671,7 @@ async def announce_weekly_mmr_winner(bot):
     else:
         rank_str = "Без ранга"
 
-    name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id and int(telegram_id) > 0 else username
+    name_display = make_clickable(username, telegram_id)
 
     tag_info = ""
     if tag_set:
@@ -902,12 +905,12 @@ async def update_all_mmr_job(context):
                     )
 
                     if card_data:
-                        name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id and int(telegram_id) > 0 else username
+                        name_display = make_clickable(username, telegram_id)
                         text = f"🎉 {name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
                         await context.bot.send_photo(chat_id=digest_chat_id, photo=card_data, caption=text, parse_mode="HTML")
                     else:
                         # Fallback
-                        name_display = f"<a href=\"tg://user?id={telegram_id}\">{username}</a>" if telegram_id and int(telegram_id) > 0 else username
+                        name_display = make_clickable(username, telegram_id)
                         text = f"{name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
                         rank_up_banner_url = "https://i.ibb.co/HLF6JJTw/ji8hy.jpg"
                         await context.bot.send_photo(chat_id=digest_chat_id, photo=rank_up_banner_url, caption=text, parse_mode="HTML")
@@ -3669,14 +3672,16 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user and user_week_games > 0:
                 user_wr = round((user_week_wins / user_week_games) * 100, 1)
                 user_rank_str = rank_to_string(user.get('rank_tier', 0))
+                user_display = make_clickable(user_username, user.get('telegram_id'))
                 if user_is_in_top:
-                    top_text += f"\n\n<b>{get_emoji_num(user_pos)} {user_username}: {user_rank_str}</b>\n"
+                    top_text += f"\n\n<b>{get_emoji_num(user_pos)} {user_display}: {user_rank_str}</b>\n"
                     top_text += f" └ В топе • {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
                 else:
-                    top_text += f"\n\n<b>{get_emoji_num(user_pos)} {user_username}: {user_rank_str}</b>\n"
+                    top_text += f"\n\n<b>{get_emoji_num(user_pos)} {user_display}: {user_rank_str}</b>\n"
                     top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
             elif user and user_week_games == 0:
-                top_text += f"\n\n<b>— {user_username}</b>\n"
+                user_display = make_clickable(user_username, user.get('telegram_id'))
+                top_text += f"\n\n<b>— {user_display}</b>\n"
                 top_text += f" └ Нет игр за неделю"
 
             # Delete previous bot message before sending new one
