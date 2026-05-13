@@ -2780,6 +2780,8 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         )
         # Store the new message_id for potential cleanup and pagination
         context.user_data['analytics_table_msg_id'] = new_msg.message_id
+        # Schedule auto-delete after 60 seconds
+        schedule_delete(context.bot, chat_id, new_msg.message_id, 60, None)
     except Exception as e:
         logger.error(f"Error sending analytics table message: {e}", exc_info=True)
 
