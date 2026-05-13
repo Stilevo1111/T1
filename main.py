@@ -1128,6 +1128,17 @@ async def alternate_digest_job(context):
     try:
         now = time.time()
 
+        # Глобальная блокировка через БД (работает между воркерами)
+        last_job_run = get_config('alternate_digest_last_run')
+        try:
+            last_job_run = float(last_job_run) if last_job_run else 0
+        except (ValueError, TypeError):
+            last_job_run = 0
+        if now - last_job_run < 60:  # Защита от гонки между воркерами - 60 секунд
+            logger.warning(f"alternate_digest_job: пропуск (последний запуск был {now - last_job_run:.0f}с назад)")
+            return
+        set_config('alternate_digest_last_run', str(now))
+
         # Проверяем глобальный rate limit
         if is_rate_limited():
             logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
