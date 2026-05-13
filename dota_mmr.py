@@ -42,6 +42,9 @@ API_RATE_LIMIT = 20  # максимум запросов в минуту (OpenDo
 API_RATE_WINDOW = 60  # окно в секундах
 API_MIN_INTERVAL = 3  # минимум 3 секунды между запросами
 
+# Глобальное состояние rate limit для сообщений об ошибках
+_opendota_rate_limited_until = 0  # Unix timestamp, пока API недоступен
+
 # Простой кеш для запросов (5 минут)
 _cache = {}
 CACHE_TTL = 300  # 5 минут
@@ -51,6 +54,26 @@ CACHE_MAX_SIZE = 100  # максимальное количество запис
 _heroes_image_cache = {}
 _heroes_image_cache_ttl = 3600  # 1 час
 
+
+def is_opendota_rate_limited():
+    """Проверить, находится ли OpenDota API в состоянии rate limit"""
+    global _opendota_rate_limited_until
+    return time.time() < _opendota_rate_limited_until
+
+def get_opendota_rate_limit_time_remaining():
+    """Получить оставшееся время до восстановления API в секундах"""
+    global _opendota_rate_limited_until
+    remaining = _opendota_rate_limited_until - time.time()
+    return max(0, int(remaining))
+
+def get_opendota_rate_limit_message():
+    """Получить сообщение об ошибке"""
+    return "⚠️ OpenDota API временно недоступен. Вернётся, когда кто-то купит варды."
+
+def set_opendota_rate_limited(wait_seconds=60):
+    """Установить время до которого OpenDota API недоступен"""
+    global _opendota_rate_limited_until
+    _opendota_rate_limited_until = time.time() + wait_seconds
 
 def _check_rate_limit():
     """Проверить и обновить rate limiting"""
@@ -121,6 +144,7 @@ def _api_get(url: str, params: dict = None, max_retries: int = 2) -> dict:
                 # Rate limited - wait longer and retry
                 wait_time = 5 * (attempt + 1)
                 logger.warning(f"Rate limited by OpenDota API, waiting {wait_time}s...")
+                set_opendota_rate_limited(60)  # Блокируем на 60 секунд
                 time.sleep(wait_time)
                 if attempt < max_retries:
                     continue
@@ -187,6 +211,7 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
                 return await resp.json()
             elif resp.status == 429:
                 logger.warning(f"Rate limited by OpenDota API, waiting...")
+                set_opendota_rate_limited(60)  # Блокируем на 60 секунд
                 import asyncio
                 await asyncio.sleep(3)
                 return None

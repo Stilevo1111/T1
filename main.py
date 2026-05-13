@@ -18,7 +18,7 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, Messa
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, get_dota_week_rank, BACKUP_DATABASE_URL, DATABASE_URL, reset_all_fissure_data, cleanup_left_users
-from dota_mmr import update_user_mmr
+from dota_mmr import update_user_mmr, get_opendota_rate_limit_message
 from database import get_all_users_with_steam, user_cache, update_dota_week_top_cache, get_db_type, config_cache
 import aiohttp
 from aiohttp import web
@@ -413,6 +413,22 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Note: loading message stays visible until chart is sent
 
         if chart_data:
+            # Check if it's an API error response
+            if isinstance(chart_data, dict) and chart_data.get("error") == "opendota_rate_limit":
+                if loading_msg:
+                    try:
+                        await context.bot.delete_message(chat_id, loading_msg.message_id)
+                    except Exception:
+                        pass
+                result_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=chart_data.get("message", "⚠️ OpenDota API временно недоступен (лимит запросов). Попробуйте через ~5 минут.")
+                )
+                set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+                schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+                update_last_message_id(update.effective_user.id, result_msg.message_id)
+                return
+            
             history = chart_data.get("history", [])
             matches = chart_data.get("matches", [])
             chart_image = chart_data.get("image")
@@ -481,7 +497,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         pass
                 result_msg = await context.bot.send_message(
                     chat_id=chat_id,
-                    text="❌ Ошибка генерации графика. Попробуйте позже."
+                    text=get_opendota_rate_limit_message()
                 )
         else:
             # Delete loading message before sending error
@@ -493,7 +509,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # No analytics data available
             result_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="❌ Недостаточно данных для аналитики. Сыграйте больше матчей за неделю."
+                text=get_opendota_rate_limit_message()
             )
 
         # Track this message for future deletion
@@ -1095,7 +1111,6 @@ async def update_all_mmr_job(context):
     """Ежечасовое обновление MMR всех пользователей с привязанным Steam (только в кеш)"""
     try:
         logger.info("Запуск ежечасного обновления MMR")
-        from dota_mmr import update_user_mmr
         from database import get_all_users_with_steam, user_cache, BACKUP_DATABASE_URL
 
         # Fetch users in thread to avoid blocking event loop on DB query
@@ -2801,12 +2816,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             loading_msg = None
 
         if steam_id and steam_nickname:
-            from dota_mmr import generate_start_card, get_player_stats
+            from dota_mmr import generate_start_card
 
-            # Get avatar and heroes
+            # Get avatar and heroes - run blocking calls in thread pool
             avatar_url = user.get("avatar")
             if not avatar_url:
-                stats = get_player_stats(steam_id)
+                stats = await asyncio.to_thread(get_player_stats, steam_id)
                 if stats and stats.get("avatar"):
                     avatar_url = stats["avatar"]
                     update_user_fields_batch(user_id, {"avatar": avatar_url}, save_to_db=False)
@@ -2816,7 +2831,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             weekly_mvp, weekly_top2, weekly_top3 = 0, 0, 0
 
-            card_data = generate_start_card(
+            # Run blocking card generation in thread pool to avoid blocking event loop
+            card_data = await asyncio.to_thread(
+                generate_start_card,
                 avatar_url=avatar_url,
                 message_count=message_count,
                 username=display_username,
@@ -2854,7 +2871,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         avatar_url = await get_user_avatar_url(context.bot, user_id)
 
-        card_data = generate_start_card(
+        # Run blocking card generation in thread pool to avoid blocking event loop
+        card_data = await asyncio.to_thread(
+            generate_start_card,
             avatar_url=avatar_url,
             message_count=message_count,
             username=display_username,
