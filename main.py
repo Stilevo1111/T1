@@ -2662,8 +2662,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def _show_analytics_page(callback_query, page_idx: int, context: ContextTypes.DEFAULT_TYPE):
-    """Edit the existing message to show the requested analytics page.
-    Pages are generated lazily — only when the user actually navigates to them."""
+    """Send a new message with analytics table when button is pressed.
+    
+    Pages are generated lazily — only when the user actually navigates to them.
+    Creates a NEW message with the table, does NOT edit the chart message.
+    """
     from weekly_analytics import get_analytics_pages, fetch_match_details, calculate_player_stats
 
     generated = context.user_data.get('analytics_generated', set())
@@ -2673,13 +2676,15 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         await callback_query.answer(text="Неверная страница.", show_alert=True)
         return
 
+    # Show loading indicator immediately for first click
+    is_first_generation = page_idx not in generated
+    if is_first_generation:
+        await callback_query.answer(text="⏳ Загружаю детали матчей...", show_alert=False)
+
     # Ленивая генерация: если страница ещё не создана — генерируем все страницы
-    if page_idx not in generated:
+    if is_first_generation:
         # Вычисляем статистику и роль только при первом нажатии
         matches = context.user_data.get('analytics_matches', [])
-        
-        # Lazy load full match details when user clicks a button
-        await callback_query.answer(text="⏳ Загружаю детали матчей...", show_alert=False)
         
         # Fetch full details for matches that have match_id
         telegram_id = callback_query.from_user.id
@@ -2714,30 +2719,41 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
     keyboard = _build_analytics_keyboard(page_idx, total_pages, generated)
 
     try:
-        msg = callback_query.message
-        # Try editing caption first (for photo messages), then fall back to text
-        try:
-            if msg.caption is not None:
-                await msg.edit_caption(
-                    caption=text,
-                    reply_markup=keyboard,
-                    parse_mode="MarkdownV2"
-                )
-            else:
-                await msg.edit_text(
+        # Check if there's an existing table message to edit (for pagination between pages)
+        existing_msg_id = context.user_data.get('analytics_table_msg_id')
+        
+        if existing_msg_id:
+            # Try to edit the existing table message (for page navigation)
+            try:
+                await callback_query.bot.edit_message_text(
+                    chat_id=callback_query.message.chat_id,
+                    message_id=existing_msg_id,
                     text=text,
                     reply_markup=keyboard,
                     parse_mode="MarkdownV2"
                 )
-        except Exception as edit_err:
-            err_str = str(edit_err).lower()
-            if "not modified" in err_str:
-                # Content is the same, no need to edit
-                return
-            raise
+                return  # Successfully edited, done
+            except Exception as edit_err:
+                err_str = str(edit_err).lower()
+                if "not modified" in err_str:
+                    return  # Same content, nothing to do
+                # Message was deleted or doesn't exist, clear the stored ID
+                logger.debug(f"Could not edit existing table message: {edit_err}")
+                context.user_data['analytics_table_msg_id'] = None
+
+        # Send a NEW message with the analytics table (first click or previous was deleted)
+        chat_id = callback_query.message.chat_id
+        new_msg = await callback_query.bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=keyboard,
+            parse_mode="MarkdownV2"
+        )
+        # Store the new message_id for potential cleanup and pagination
+        context.user_data['analytics_table_msg_id'] = new_msg.message_id
     except Exception as e:
-        logger.error(f"Error editing analytics message: {e}", exc_info=True)
-        await callback_query.answer(text="Не удалось обновить сообщение. Попробуйте запросить аналитику заново.", show_alert=True)
+        logger.error(f"Error sending analytics table message: {e}", exc_info=True)
+        await callback_query.answer(text="Не удалось отправить таблицу. Попробуйте запросить аналитику заново.", show_alert=True)
 
 
 async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
