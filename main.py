@@ -811,6 +811,17 @@ async def backup_database_job(context):
             total_copied = 0
             for table in tables:
                 try:
+                    # Check if table exists in backup
+                    backup_cursor.execute("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_schema = 'public' AND table_name = %s
+                        )
+                    """, (table,))
+                    if not backup_cursor.fetchone()[0]:
+                        logger.warning(f"Table {table} does not exist in backup DB, skipping")
+                        continue
+
                     main_cursor.execute(f"SELECT * FROM {table}")
                     rows = main_cursor.fetchall()
                     
@@ -875,9 +886,23 @@ async def backup_database_job(context):
         tables = [row[0] for row in main_cursor.fetchall()]
         logger.info(f"Found {len(tables)} PostgreSQL tables to backup: {tables}")
 
+        # Disable foreign key checks for clean copy
+        backup_cursor.execute("SET session_replication_role = 'replica'")
+
         total_copied = 0
         for table in tables:
             try:
+                # Check if table exists in backup
+                backup_cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' AND table_name = %s
+                    )
+                """, (table,))
+                if not backup_cursor.fetchone()[0]:
+                    logger.warning(f"Table {table} does not exist in backup DB, skipping")
+                    continue
+
                 # Get all data from table
                 main_cursor.execute(f"SELECT * FROM {table}")
                 rows = main_cursor.fetchall()
@@ -902,6 +927,9 @@ async def backup_database_job(context):
             except Exception as e:
                 logger.warning(f"Error copying table {table}: {e}")
                 backup_conn.rollback()
+
+        # Re-enable foreign key checks
+        backup_cursor.execute("SET session_replication_role = 'origin'")
 
         main_cursor.close()
         backup_cursor.close()
@@ -2824,18 +2852,29 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
             steam_id = user.get('steam_id')
             matches = await fetch_match_details(matches, steam_id)
             context.user_data['analytics_matches'] = matches
+            logger.info(f"Analytics: after fetch_match_details, matches={len(matches)}")
+        else:
+            logger.info("Analytics: no steam_id, using original matches")
         
         stats = context.user_data.get('analytics_stats')
         role = context.user_data.get('analytics_role')
         
         if stats is None or role is None:
             from weekly_analytics import detect_role_from_history
+            logger.info("Analytics: detecting role and calculating stats")
             role = await detect_role_from_history(matches)
             stats = calculate_player_stats(matches)
             context.user_data['analytics_stats'] = stats
             context.user_data['analytics_role'] = role
+            logger.info(f"Analytics: detected role={role}, stats keys={list(stats.keys())}")
         
-        all_pages = get_analytics_pages(role, stats)
+        try:
+            all_pages = get_analytics_pages(role, stats)
+            logger.info(f"Analytics: generated {len(all_pages)} pages")
+        except Exception as e:
+            logger.error(f"Error generating analytics pages: {e}", exc_info=True)
+            await callback_query.answer(text=f"Ошибка: {e}", show_alert=True)
+            return
         pages = all_pages  # Replace placeholder with real pages
         generated = set(range(len(pages)))
         context.user_data['analytics_pages'] = pages
