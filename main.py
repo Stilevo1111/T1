@@ -1008,6 +1008,36 @@ async def backup_database_job(context):
                     logger.warning(f"Table {table} does not exist in backup DB, skipping")
                     continue
 
+                # Get column info from main DB
+                main_cursor.execute(f"""
+                    SELECT column_name, data_type, is_nullable, column_default
+                    FROM information_schema.columns 
+                    WHERE table_schema = 'public' AND table_name = %s
+                    ORDER BY ordinal_position
+                """, (table,))
+                main_cols = {row[0]: row for row in main_cursor.fetchall()}
+                
+                # Get column names from backup DB
+                backup_cursor.execute("""
+                    SELECT column_name FROM information_schema.columns 
+                    WHERE table_schema = 'public' AND table_name = %s
+                """, (table,))
+                backup_columns = {row[0] for row in backup_cursor.fetchall()}
+                
+                # Add missing columns to backup table for 100% copy
+                for col_name, (c_name, c_type, c_nullable, c_default) in main_cols.items():
+                    if col_name not in backup_columns:
+                        nullable = "NULL" if c_nullable == "YES" else "NOT NULL"
+                        default_val = ""
+                        if c_default and c_default not in ("NULL", "null"):
+                            default_val = f" DEFAULT {c_default}"
+                        alter_sql = f"ALTER TABLE {table} ADD COLUMN {col_name} {c_type} {nullable}{default_val}"
+                        logger.info(f"Adding column {col_name} to backup table {table}")
+                        try:
+                            backup_cursor.execute(alter_sql)
+                        except Exception as e:
+                            logger.warning(f"Could not add column {col_name}: {e}")
+
                 # Get all data from table
                 main_cursor.execute(f"SELECT * FROM {table}")
                 rows = main_cursor.fetchall()
