@@ -3696,25 +3696,29 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Получаем последние 10 игр для отображения
             last_10_balls = ""
             try:
-                from dota_mmr import get_recent_matches_async
+                from dota_mmr import get_recent_matches_async, get_top_heroes_async
                 steam_id = target_user.get('steam_id')
+                top_heroes = []
+                
                 if steam_id and week_games > 0:
-                    matches = await get_recent_matches_async(steam_id, limit=50)
+                    # Параллельно получаем матчи и героев
+                    try:
+                        matches, top_heroes = await asyncio.gather(
+                            get_recent_matches_async(steam_id, limit=50),
+                            get_top_heroes_async(steam_id, last_n=20, top_k=5)
+                        )
+                    except Exception:
+                        matches, top_heroes = [], []
+                    
                     matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)
-                    # Берём только сыгранные за неделю игры (максимум week_games)
                     week_match_count = min(len(matches), week_games)
                     matches = matches[:week_match_count]
                     for match in matches:
-                        # OpenDota не возвращает 'win', вычисляем по player_slot и radiant_win
                         player_slot = match.get('player_slot')
                         radiant_win = match.get('radiant_win', False)
-                        if player_slot is not None:
-                            player_was_radiant = player_slot < 127
-                        else:
-                            player_was_radiant = True
+                        player_was_radiant = player_slot < 127 if player_slot is not None else True
                         is_win = (radiant_win and player_was_radiant) or (not radiant_win and not player_was_radiant)
                         last_10_balls += "🟢" if is_win else "🔴"
-                    # Добавляем zero-width joiner чтобы Telegram не переносил строку
                     if last_10_balls:
                         last_10_balls = last_10_balls.replace("🟢", "🟢‍").replace("🔴", "🔴‍")
             except Exception as e:
@@ -3741,51 +3745,33 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         profile_banner_url = "https://i.ibb.co/n8g8yQYt/dasdsadasdsadasdsad.png"
 
         try:
-            from dota_mmr import get_top_heroes_async, generate_heroes_image
-
-            # Get top heroes data if Steam is linked
-            top_heroes = []
-            if target_user.get('steam_id'):
-                try:
-                    top_heroes = await get_top_heroes_async(target_user['steam_id'], last_n=20, top_k=5)
-                    logger.info(f"Fetched top_heroes for steam_id {target_user['steam_id']}: {len(top_heroes)} heroes")
-                except Exception as e:
-                    logger.warning(f"Could not get top heroes: {e}")
-                    top_heroes = []
-
-            try:
-                img_bytes = generate_heroes_image(top_heroes)
-                if img_bytes:
-                    profile_banner_url = io.BytesIO(img_bytes)
-                    logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
-                # else: keep default banner URL for no Steam ID or failed generation
-            except Exception as e:
-                logger.error(f"Could not generate heroes image: {e}", exc_info=True)
-                # keep default banner URL
-            
-            # Send photo with banner
-            result_msg = await context.bot.send_photo(
-                chat_id=update.message.chat_id,
-                photo=profile_banner_url,
-                caption=text,
-                parse_mode="HTML",
-                reply_markup=main_menu()
-)
-            logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
-            
-            # Delete loading message immediately after successful send
-            if loading_msg:
-                logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
-                try:
-                    await context.bot.delete_message(chat_id, loading_msg.message_id)
-                    logger.info(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
-                except Exception as del_e:
-                    logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
-            else:
-                logger.warning(f"loading_msg is None, cannot delete (already deleted during animation)")
-
+            from dota_mmr import generate_heroes_image
+            img_bytes = await asyncio.to_thread(generate_heroes_image, top_heroes)
+            if img_bytes:
+                profile_banner_url = io.BytesIO(img_bytes)
+                logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
         except Exception as e:
             logger.error(f"Could not generate heroes image: {e}", exc_info=True)
+
+        result_msg = await context.bot.send_photo(
+            chat_id=update.message.chat_id,
+            photo=profile_banner_url,
+            caption=text,
+            parse_mode="HTML",
+            reply_markup=main_menu()
+        )
+        logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
+
+        # Delete loading message immediately after successful send
+        if loading_msg:
+            logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+                logger.info(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
+            except Exception as del_e:
+                logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
+        else:
+            logger.warning(f"loading_msg is None, cannot delete (already deleted during animation)")
 
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
