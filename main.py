@@ -18,7 +18,7 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, Messa
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, get_dota_week_rank, BACKUP_DATABASE_URL, DATABASE_URL, reset_all_fissure_data, cleanup_left_users
-from dota_mmr import update_user_mmr, get_opendota_rate_limit_message
+from dota_mmr import update_user_mmr, get_opendota_rate_limit_message, _get_start_card_background
 from database import get_all_users_with_steam, user_cache, update_dota_week_top_cache, get_db_type, config_cache
 import aiohttp
 from aiohttp import web
@@ -4538,6 +4538,15 @@ async def main():
         from database import update_dota_week_top_cache
         update_dota_week_top_cache()
         logger.info("Dota week top cache initialized on startup")
+
+        # Pre-load start card background image (async)
+        async def preload_start_card_bg():
+            try:
+                await asyncio.to_thread(_get_start_card_background)
+                logger.info("Start card background pre-loaded")
+            except Exception as e:
+                logger.warning(f"Could not pre-load start card background: {e}")
+        asyncio.create_task(preload_start_card_bg())
 
         job_queue = JobQueue()
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
