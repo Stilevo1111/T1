@@ -818,10 +818,12 @@ async def backup_database_job(context):
                     for row in rows:
                         backup_cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", row)
 
+                    backup_conn.commit()
                     total_copied += len(rows)
                     logger.info(f"Table {table}: copied {len(rows)} rows")
             except Exception as e:
                 logger.warning(f"Error copying table {table}: {e}")
+                backup_conn.rollback()
 
         main_cursor.close()
         backup_cursor.close()
@@ -2658,6 +2660,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Handle analytics_show separately with loading indicator (as chat message)
     if data == "analytics_show":
+        await callback_query.answer()  # Acknowledge callback immediately to prevent hanging
         loading_msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Загружаю детали матчей...")
         try:
             await _show_analytics_page(callback_query, 0, context)
@@ -2704,6 +2707,10 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
 
     generated = context.user_data.get('analytics_generated', set())
     pages = context.user_data.get('analytics_pages', [])
+
+    # Handle placeholder pages [None, None] - treat as empty
+    if not pages or pages == [None, None]:
+        pages = []
 
     if page_idx < 0 or page_idx >= len(pages):
         logger.warning(f"Invalid page index: {page_idx}, pages: {len(pages)}")
@@ -2780,8 +2787,12 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         )
         # Store the new message_id for potential cleanup and pagination
         context.user_data['analytics_table_msg_id'] = new_msg.message_id
-        # Schedule auto-delete after 60 seconds
-        schedule_delete(context.bot, chat_id, new_msg.message_id, 60, None)
+        # Schedule auto-delete after 60 seconds using job_queue
+        job_queue = context.job_queue
+        if job_queue:
+            schedule_delete(context.bot, chat_id, new_msg.message_id, 60, job_queue)
+        else:
+            schedule_delete(context.bot, chat_id, new_msg.message_id, 60, None)
     except Exception as e:
         logger.error(f"Error sending analytics table message: {e}", exc_info=True)
 

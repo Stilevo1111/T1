@@ -667,6 +667,9 @@ async def fetch_match_details(matches: list, steam_id: str) -> list:
             m["observer_uses"] = player_stats.get("observer_uses", 0)
             m["sentry_uses"] = player_stats.get("sentry_uses", 0)
             
+            # Yield to event loop to prevent blocking
+            await asyncio.sleep(0)
+            
         except Exception as e:
             logger.debug(f"Failed to fetch match {match_id}: {e}")
         
