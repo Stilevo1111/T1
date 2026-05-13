@@ -416,6 +416,18 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             history = chart_data.get("history", [])
             matches = chart_data.get("matches", [])
             chart_image = chart_data.get("image")
+            
+            # If matches empty but cache had old data, fetch fresh matches
+            if not matches:
+                from weekly_analytics import get_weekly_matches
+                try:
+                    fresh_matches = await get_weekly_matches(update.effective_user.id)
+                    if len(fresh_matches) >= 5:
+                        matches = fresh_matches
+                        logger.info(f"Analytics: refetched {len(matches)} fresh matches from API")
+                except Exception as e:
+                    logger.warning(f"Analytics: failed to refetch matches: {e}")
+            
             logger.info(f"Analytics: got chart_data with {len(matches)} matches, image={chart_image is not None}")
             
             # Ensure charts directory exists for potential caching
