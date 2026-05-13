@@ -4512,7 +4512,7 @@ async def main():
             job_queue.run_repeating(
                 backup_database_job,
                 interval=datetime.timedelta(hours=1),
-                first=datetime.datetime.now() + datetime.timedelta(minutes=5)
+                first=datetime.datetime.now() + datetime.timedelta(minutes=1)
             )
 
         app.add_handler(CommandHandler("start", start))
