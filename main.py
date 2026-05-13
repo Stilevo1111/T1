@@ -2645,14 +2645,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     data = callback_query.data
+    chat_id = callback_query.message.chat_id if callback_query.message else None
 
-    # Handle analytics_show separately with loading indicator
+    # Handle analytics_show separately with loading indicator (as chat message)
     if data == "analytics_show":
-        await callback_query.answer(text="⏳ Загружаю детали матчей...", show_alert=False)
+        loading_msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Загружаю детали матчей...")
         try:
             await _show_analytics_page(callback_query, 0, context)
         except Exception as e:
             logger.error(f"Error in button_callback: {e}", exc_info=True)
+        finally:
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception:
+                pass
         return
 
     # Handle analytics_page_N - no loading indicator (pages already generated or will show error)
