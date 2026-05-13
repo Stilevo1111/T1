@@ -1501,7 +1501,15 @@ async def alternate_digest_job(context):
                         logger.debug(f"Text edit also failed: {e2}")
         
         # Если hero_meta_banner = None - пробуем text edit или удаляем фото
-        if last_message_id and not edited and hero_meta_banner is None:
+        # Но НЕ удаляем если сообщение было создано недавно (защита от удаления при деплое)
+        last_created_str = get_config('alternate_digest_last_created')
+        try:
+            last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
+        except (ValueError, TypeError):
+            last_created = 0
+        recent_message = (time.time() - last_created) < 300  # Защита 5 минут от удаления при деплое
+        
+        if last_message_id and not edited and hero_meta_banner is None and not recent_message:
             logger.info(f"No hero_meta in cache, trying text edit or removing old photo")
             try:
                 msg_id_int = int(last_message_id)
