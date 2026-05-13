@@ -693,7 +693,7 @@ async def get_weekly_matches(telegram_id: int):
 
     matches = await _api_get_async(
         url,
-        params={"limit": 30},
+        params={"limit": 15},
         timeout=15
     )
 
