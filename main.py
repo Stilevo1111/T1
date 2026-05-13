@@ -2708,19 +2708,32 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
     generated = context.user_data.get('analytics_generated', set())
     pages = context.user_data.get('analytics_pages', [])
 
-    # Handle placeholder pages [None, None] - treat as empty
-    if not pages or pages == [None, None]:
-        pages = []
+    # Determine if we need to generate pages (lazy loading)
+    is_first_generation = page_idx not in generated or pages == [None, None]
 
-    if page_idx < 0 or page_idx >= len(pages):
+    if page_idx < 0:
+        logger.warning(f"Invalid page index: {page_idx}, pages: {len(pages)}")
+        return
+
+    # Handle empty pages array - need to generate
+    if len(pages) == 0:
+        is_first_generation = True
+
+    # If not first generation and pages exist, validate page index
+    if not is_first_generation and page_idx >= len(pages):
         logger.warning(f"Invalid page index: {page_idx}, pages: {len(pages)}")
         return
 
     # Ленивая генерация: если страница ещё не создана — генерируем все страницы
-    is_first_generation = page_idx not in generated
     if is_first_generation:
         # Вычисляем статистику и роль только при первом нажатии
         matches = context.user_data.get('analytics_matches', [])
+        
+        # Check if matches exist
+        if not matches:
+            logger.warning("No matches found for analytics generation")
+            await callback_query.answer(text="No match data available", show_alert=True)
+            return
         
         # Fetch full details for matches that have match_id
         telegram_id = callback_query.from_user.id

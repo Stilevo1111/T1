@@ -875,7 +875,7 @@ async def generate_chart_only(telegram_id: int):
             import json
             cached = json.loads(user['analytics_cache'])
             chart = await create_visual_chart(cached.get("history", []))
-            return {"image": chart, "history": cached.get("history", [])}
+            return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", [])}
 
     matches = await get_weekly_matches(telegram_id)
 
@@ -1062,6 +1062,7 @@ async def generate_weekly_analytics(telegram_id: int):
     try:
         cache_dict = {
             "history": game_history,
+            "matches": matches,
             "pro_text": pro_text,
             "detailed_text": detailed_text,
             "role": role,
