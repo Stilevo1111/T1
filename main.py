@@ -767,12 +767,74 @@ async def backup_database_job(context):
 
         logger.info("Запуск копирования в backup БД")
 
-        # Import psycopg2 locally to avoid any shadowing issues
-        import psycopg2
+        main_is_sqlite = "sqlite" in DATABASE_URL.lower()
+        backup_is_postgres = "postgres" in BACKUP_DATABASE_URL.lower()
 
+        if main_is_sqlite and backup_is_postgres:
+            # SQLite -> PostgreSQL backup
+            import sqlite3
+            import psycopg2
+            
+            main_path = DATABASE_URL.replace("sqlite:///", "")
+            main_conn = sqlite3.connect(main_path)
+            
+            backup_url = urlparse.urlparse(BACKUP_DATABASE_URL)
+            backup_conn = psycopg2.connect(
+                host=backup_url.hostname,
+                port=backup_url.port or 5432,
+                dbname=backup_url.path[1:],
+                user=backup_url.username,
+                password=backup_url.password
+            )
+            
+            main_cursor = main_conn.cursor()
+            backup_cursor = backup_conn.cursor()
+            
+            # Get all tables
+            main_cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in main_cursor.fetchall()]
+            logger.info(f"Found {len(tables)} SQLite tables to backup: {tables}")
+
+            total_copied = 0
+            for table in tables:
+                try:
+                    main_cursor.execute(f"SELECT * FROM {table}")
+                    rows = main_cursor.fetchall()
+                    
+                    if not rows:
+                        logger.info(f"Table {table}: empty, skipping")
+                        continue
+                    
+                    main_cursor.execute(f"PRAGMA table_info({table})")
+                    columns = [desc[1] for desc in main_cursor.fetchall()]
+                    column_names = ','.join(columns)
+                    placeholders = ','.join(['%s'] * len(columns))
+                    
+                    backup_cursor.execute(f"DELETE FROM {table}")
+                    
+                    for row in rows:
+                        backup_cursor.execute(f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})", row)
+                    
+                    backup_conn.commit()
+                    total_copied += len(rows)
+                    logger.info(f"Table {table}: copied {len(rows)} rows")
+                except Exception as e:
+                    logger.warning(f"Error copying table {table}: {e}")
+                    backup_conn.rollback()
+            
+            main_cursor.close()
+            backup_cursor.close()
+            main_conn.close()
+            backup_conn.close()
+            logger.info(f"Скопировано {total_copied} записей в backup БД")
+            return
+
+        # PostgreSQL -> PostgreSQL backup (original code)
+        import psycopg2
+        
         main_url = urlparse.urlparse(DATABASE_URL)
         backup_url = urlparse.urlparse(BACKUP_DATABASE_URL)
-
+        
         main_conn = psycopg2.connect(
             host=main_url.hostname,
             port=main_url.port or 5432,
@@ -780,7 +842,7 @@ async def backup_database_job(context):
             user=main_url.username,
             password=main_url.password
         )
-
+        
         backup_conn = psycopg2.connect(
             host=backup_url.hostname,
             port=backup_url.port or 5432,
@@ -788,16 +850,17 @@ async def backup_database_job(context):
             user=backup_url.username,
             password=backup_url.password
         )
-
+        
         main_cursor = main_conn.cursor()
         backup_cursor = backup_conn.cursor()
-
+        
         # Get all tables
         main_cursor.execute("""
             SELECT table_name FROM information_schema.tables 
             WHERE table_schema = 'public'
         """)
         tables = [row[0] for row in main_cursor.fetchall()]
+        logger.info(f"Found {len(tables)} PostgreSQL tables to backup: {tables}")
 
         total_copied = 0
         for table in tables:
@@ -821,6 +884,8 @@ async def backup_database_job(context):
                     backup_conn.commit()
                     total_copied += len(rows)
                     logger.info(f"Table {table}: copied {len(rows)} rows")
+                else:
+                    logger.info(f"Table {table}: empty, skipping")
             except Exception as e:
                 logger.warning(f"Error copying table {table}: {e}")
                 backup_conn.rollback()
