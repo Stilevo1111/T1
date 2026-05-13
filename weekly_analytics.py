@@ -635,8 +635,8 @@ async def get_weekly_matches(telegram_id: int):
 
     matches = await _api_get_async(
         url,
-        params={"limit": 20},
-        timeout=10
+        params={"limit": 30},  # Get more matches to ensure we have enough with full details
+        timeout=15
     )
 
     if not matches:
@@ -910,6 +910,16 @@ async def generate_weekly_analytics(telegram_id: int):
         if apm == 0:
             apm = 250  # default
         
+        # Fallback for last_hits if 0 (private profile) - estimate from GPM
+        last_hits = m.get("last_hits", 0)
+        if last_hits == 0 and gpm > 0:
+            last_hits = int(gpm * duration / 60 * 0.7)  # Estimate: ~70% of GPM goes to last hits
+        
+        # Fallback for xpm if 0 (private profile) - estimate from GPM
+        xpm = m.get("xp_per_min", 0)
+        if xpm == 0 and gpm > 0:
+            xpm = int(gpm * 0.4)  # Estimate: XPM ~ 40% of GPM
+        
         imp = calculate_imp(
             gpm,
             kda,
@@ -927,30 +937,25 @@ async def generate_weekly_analytics(telegram_id: int):
         total_kills += kills
         total_deaths += deaths
         total_assists += assists
-        total_lh += m.get("last_hits", 0)
+        total_lh += last_hits
         total_apm += apm
         total_denies += m.get("denies", 0)
         total_stacks += m.get("creeps_stacked", 0)
-        
-        # Fallback for XPM from last_hits
-        xpm = m.get("xp_per_min", 0)
-        if xpm == 0:
-            xpm = m.get("last_hits", 0) * 30  # ~30 XPM per last hit
         total_xpm += xpm
         
+        total_utility += utility
+
         # Fallback for hero_damage from kills
         h_dmg = m.get("hero_damage", 0)
         if h_dmg == 0:
             h_dmg = kills * 200  # ~200 damage per kill
         total_h_dmg += h_dmg
-        
-        # Fallback for tower_damage 
+
+        # Fallback for tower_damage
         t_dmg = m.get("tower_damage", 0)
         if t_dmg == 0:
             t_dmg = kills * 50  # rough estimate
         total_t_dmg += t_dmg
-        
-        total_utility += utility
 
         if m.get("win", False):
             total_wins += 1
