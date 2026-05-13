@@ -2816,7 +2816,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             loading_msg = None
 
         if steam_id and steam_nickname:
-            from dota_mmr import generate_start_card
+            from dota_mmr import generate_start_card, get_player_stats
 
             # Get avatar and heroes - run blocking calls in thread pool
             avatar_url = user.get("avatar")
