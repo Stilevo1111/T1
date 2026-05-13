@@ -1189,11 +1189,11 @@ async def create_visual_chart(history):
     avg = np.mean(impacts)
 
     # =====================================================
-    # SMOOTH INTERPOLATION - extra smooth with more points
+    # SMOOTH INTERPOLATION - optimized for speed
     # =====================================================
 
     if make_interp_spline and len(impacts) >= 4:
-        x_smooth = np.linspace(1, 10, 200)
+        x_smooth = np.linspace(1, 10, 100)
         spl = make_interp_spline(x, impacts, k=3)
         y_smooth = spl(x_smooth)
     else:
