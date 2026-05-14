@@ -2140,7 +2140,7 @@ def _save_user_to_db_immediately(telegram_id, user_data):
             placeholders = "?"
         query = f"""
             UPDATE users SET 
-                steam_id = {placeholders}, steam_nickname = {placeholders}, mmr = {placeholders}, rank_tier = {placeholders},
+                steam_id = {placeholders}, steam_nickname = {placeholders}, avatar = {placeholders}, mmr = {placeholders}, rank_tier = {placeholders},
                 week_games = {placeholders}, week_wins = {placeholders}, 
                 week_best_streak = {placeholders}, week_current_streak = {placeholders}, dota_total_games = {placeholders},
                 dota_wins = {placeholders}, last_dota_games = {placeholders}, last_dota_wins = {placeholders},
@@ -2148,9 +2148,10 @@ def _save_user_to_db_immediately(telegram_id, user_data):
                 message_count = {placeholders}
             WHERE telegram_id = {placeholders}
         """
-        db.execute_query(query, (
+        params = (
             user_data.get('steam_id'),
             user_data.get('steam_nickname'),
+            user_data.get('avatar'),
             user_data.get('mmr', 0),
             user_data.get('rank_tier', 0),
             user_data.get('week_games', 0),
@@ -2166,10 +2167,11 @@ def _save_user_to_db_immediately(telegram_id, user_data):
             user_data.get('week_start_date'),
             user_data.get('message_count', 0),
             telegram_id
-        ))
-        logger.info(f"DB WRITE: user {telegram_id} message_count={user_data.get('message_count', 0)} saved successfully")
+        )
+        result = db.execute_query(query, params)
+        logger.info(f"DB WRITE: user {telegram_id} saved, rowcount={result}, mmr={user_data.get('mmr', 0)}, week_games={user_data.get('week_games', 0)}")
     except Exception as e:
-        logger.error(f"Error saving user to DB immediately: {e}")
+        logger.error(f"Error saving user {telegram_id} to DB immediately: {e}", exc_info=True)
 
 def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
     """Уменьшить fissure для неактивных игроков (вызывается ежедневно)"""
