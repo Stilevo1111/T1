@@ -886,6 +886,9 @@ async def generate_chart_only(telegram_id: int):
 
     matches = sorted(matches, key=lambda x: x.get("start_time", 0))
 
+    # Detect role from hero picks first
+    role = await detect_role_from_hero_counts(matches) or "CARRY"
+    
     # Calculate only what's needed for chart - minimal data
     game_history = []
     for m in matches[:10]:
@@ -893,9 +896,22 @@ async def generate_chart_only(telegram_id: int):
         deaths = m.get("deaths", 0)
         assists = m.get("assists", 0)
         kda = (kills + assists) / max(deaths, 1)
-        # Simple IMP based only on KDA (much faster, no utility/apm/gpm needed)
-        imp = min(kda * 15, 50)  # max 50
-        game_history.append({"imp": round(imp, 1), "hero_id": m.get("hero_id", 0)})
+        
+        # Estimate GPM from gold_last_hits if available (basic data from match list)
+        duration = m.get("duration", 600)
+        last_hits = m.get("last_hits", 0)
+        gpm = last_hits * 60 / max(duration / 60, 1) if last_hits > 0 else 300
+        
+        # Estimate utility from stacks and denies
+        stacks = m.get("creeps_stacked", 0)
+        denies = m.get("denies", 0)
+        utility = stacks * 1.5 + denies * 0.5
+        
+        # Estimate APM (typical values by role)
+        apm = 250
+        
+        imp = calculate_imp(gpm, kda, utility, apm, role)
+        game_history.append({"imp": round(imp, 2), "hero_id": m.get("hero_id", 0)})
 
     chart = await create_visual_chart(game_history)
     return {"image": chart, "history": game_history, "matches": matches}
