@@ -1307,14 +1307,19 @@ async def create_visual_chart(history):
     )
 
     # =====================================================
-    # HEROES
+    # HEROES - parallel preload
     # =====================================================
 
+    # Collect unique hero IDs first
+    unique_hero_ids = list({g["hero_id"] for g in history[:10] if g.get("hero_id")})
+    
+    # Load all hero icons in parallel
+    hero_icons = await asyncio.gather(*[get_hero_icon(hid) for hid in unique_hero_ids])
+    hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
+    
     for idx, g in enumerate(history[:10]):
-
-        hero_img = await get_hero_icon(
-            g["hero_id"]
-        )
+        hero_id = g["hero_id"]
+        hero_img = hero_icon_map.get(hero_id)
 
         if not hero_img:
             continue
@@ -1334,7 +1339,7 @@ async def create_visual_chart(history):
         else:
             border = "#ff3b3b"
 
-# =================================================
+        # =================================================
         # HERO IMAGE EXACT SIZE
         # =================================================
 

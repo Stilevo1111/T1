@@ -4717,7 +4717,7 @@ async def main():
             setup_health_check(app.bot)
             web_app.router.add_get('/health', health_check_handler)
 
-            runner = web.AppRunner(web_app)
+            runner = web.AppRunner(web_app, keepalive_timeout=120, client_max_size=10*1024*1024)
             await runner.setup()
             port = int(os.getenv('PORT', 10000))
             site = web.TCPSite(runner, '0.0.0.0', port)
