@@ -886,14 +886,9 @@ async def generate_chart_only(telegram_id: int):
 
     matches = sorted(matches, key=lambda x: x.get("start_time", 0))
 
-    # Use simple role detection from recent matches stats (no API call)
-    # For chart: use CARRY weights as default, fallback to stats-based detection
-    total_gpm_est = sum(m.get("last_hits", 0) * 60 for m in matches[:5])
-    if total_gpm_est > 15000:  # High farm = CARRY/MID
-        role = "CARRY"
-    else:
-        role = "SUPPORT"  # Low farm = SUPPORT
-    
+    # Detect role from hero picks
+    role = await detect_role_from_hero_counts(matches) or "CARRY"
+
     # Calculate only what's needed for chart - minimal data
     game_history = []
     for m in matches[:10]:
@@ -1192,24 +1187,23 @@ async def create_visual_chart(history):
     # FORCE BIGGER MOVEMENT
     # =====================================================
 
-    # old values compressed graph too much
-    # now remap into full 0.2 → 1.8 range
+# old values compressed graph too much
+     # remap into 0.1 → 2.5 range with more contrast
+     min_imp = min(raw_impacts)
+     max_imp = max(raw_impacts)
 
-    min_imp = min(raw_impacts)
-    max_imp = max(raw_impacts)
+     impacts = []
 
-    impacts = []
+     for value in raw_impacts:
+         normalized = (
+             (value - min_imp)
+             / max(max_imp - min_imp, 0.01)
+         )
 
-    for value in raw_impacts:
+         # Exponential curve for more contrast - good games higher, bad games lower
+         scaled = 0.1 + (normalized ** 1.5 * 2.4)
 
-        normalized = (
-            (value - min_imp)
-            / max(max_imp - min_imp, 0.01)
-        )
-
-        scaled = 0.25 + (normalized * 1.45)
-
-        impacts.append(round(scaled, 2))
+         impacts.append(round(scaled, 2))
 
     x = np.arange(1, 11)
 
