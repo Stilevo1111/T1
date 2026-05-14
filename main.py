@@ -3322,7 +3322,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="⏳ Фармирую профиль..."
+                text="⏳ Формирую профиль..."
             )
             logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id}")
 
@@ -3331,7 +3331,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await asyncio.sleep(0.35)
                 frame = "⌛️" if i % 2 == 1 else "⏳"
                 messages = [
-                    "Фармирую профиль...",
+                    "Формирую профиль...",
                     "Собираю данные...",
                     "Анализирую статы...",
                     "Готово!"
