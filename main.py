@@ -9,11 +9,8 @@ import logging
 import datetime
 import traceback
 import urllib.parse as urlparse
-import psycopg2
-import html
 import hashlib
 from datetime import timezone, timedelta
-from concurrent.futures import ThreadPoolExecutor
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
@@ -4288,13 +4285,7 @@ async def main():
             days=(6,)  # Только воскресенье
         )
 
-        # Копия в backup БД каждый час (отключено - используем только Neon)
-        # if BACKUP_DATABASE_URL:
-        #     job_queue.run_repeating(
-        #         backup_database_job,
-        #         interval=datetime.timedelta(hours=1),
-        #         first=datetime.datetime.now() + datetime.timedelta(minutes=1)
-        #     )
+        
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CallbackQueryHandler(button_callback))
