@@ -1183,27 +1183,27 @@ async def create_visual_chart(history):
 
     raw_impacts = raw_impacts[:10]
 
-    # =====================================================
+# =====================================================
     # FORCE BIGGER MOVEMENT
     # =====================================================
 
-# old values compressed graph too much
-     # remap into 0.1 → 2.5 range with more contrast
-     min_imp = min(raw_impacts)
-     max_imp = max(raw_impacts)
+    # old values compressed graph too much
+    # remap into 0.1 → 2.5 range with more contrast
+    min_imp = min(raw_impacts)
+    max_imp = max(raw_impacts)
 
-     impacts = []
+    impacts = []
 
-     for value in raw_impacts:
-         normalized = (
-             (value - min_imp)
-             / max(max_imp - min_imp, 0.01)
-         )
+    for value in raw_impacts:
+        normalized = (
+            (value - min_imp)
+            / max(max_imp - min_imp, 0.01)
+        )
 
-         # Exponential curve for more contrast - good games higher, bad games lower
-         scaled = 0.1 + (normalized ** 1.5 * 2.4)
+        # Exponential curve for more contrast - good games higher, bad games lower
+        scaled = 0.1 + (normalized ** 1.5 * 2.4)
 
-         impacts.append(round(scaled, 2))
+        impacts.append(round(scaled, 2))
 
     x = np.arange(1, 11)
 
