@@ -256,7 +256,7 @@ async def _check_rate_limit_async():
     _async_rate_limit["last_request"] = time.time()
 
 
-async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 30) -> dict:
+async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 60) -> dict:
     """Асинхронная функция для API-запросов с переиспользованием сессии и увеличенным таймаутом"""
     import asyncio
     

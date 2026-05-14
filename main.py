@@ -3383,7 +3383,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             week_losses = week_games - week_wins
             winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
 
-            # Получаем последние 10 игр для отображения
+# Получаем последние 10 игр для отображения
             last_10_balls = ""
             try:
                 from dota_mmr import get_recent_matches_async, get_top_heroes_async
@@ -3397,7 +3397,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             get_recent_matches_async(steam_id, limit=50),
                             get_top_heroes_async(steam_id, last_n=20, top_k=5)
                         )
-                    except Exception:
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Timeout getting matches/heroes for steam_id={steam_id}, using cache/default")
+                    except Exception as e:
+                        logger.debug(f"Could not get matches/heroes: {e}")
                         matches, top_heroes = [], []
                     
                     matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)
@@ -3440,6 +3443,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if img_bytes:
                 profile_banner_url = io.BytesIO(img_bytes)
                 logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
+        except asyncio.TimeoutError as e:
+            logger.warning(f"Timeout generating heroes image, using default banner")
         except Exception as e:
             logger.error(f"Could not generate heroes image: {e}", exc_info=True)
 
@@ -3467,6 +3472,23 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
 
+    except asyncio.TimeoutError as e:
+        logger.error(f"Timeout in stats: {e}")
+        if loading_msg:
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception:
+                pass
+        try:
+            result_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=main_menu()
+            )
+            set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+        except Exception:
+            pass
     except Exception as e:
         logger.error(f"Error in stats: {e}\n{traceback.format_exc()}")
         if loading_msg:
@@ -3474,14 +3496,15 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.delete_message(chat_id, loading_msg.message_id)
             except Exception:
                 pass
-        try:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"❌ Ошибка: <code>{e}</code>",
-                parse_mode="HTML"
-            )
-        except Exception:
-            pass
+        if "Timed out" not in str(e):
+            try:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"❌ Ошибка: <code>{e}</code>",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
 
 
 @rate_limit(tokens=1)
