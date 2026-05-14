@@ -1091,10 +1091,10 @@ async def alternate_digest_job(context):
     try:
         now = time.time()
 
-# Глобальная блокировка через БД (работает между воркерами) — атомарная
-         # Пытаемся атомарно обновить alternate_digest_last_run, только если он старше 60 секунд
-         db = Database()
-         threshold = now - 60
+        # Глобальная блокировка через БД (работает между воркерами) — атомарная
+        # Пытаемся атомарно обновить alternate_digest_last_run, только если он старше 60 секунд
+        db = Database()
+        threshold = now - 60
         if get_db_type() == "postgresql":
             query = "INSERT INTO bot_config (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value WHERE (bot_config.value::float < %s OR bot_config.value IS NULL)"
             params = ('alternate_digest_last_run', str(now), str(threshold))
@@ -4283,11 +4283,11 @@ async def main():
         )
 
 # Обновление дайджестов каждые 15 секунд (переключение между утренним/Dota)
-         job_queue.run_repeating(
-             alternate_digest_job,
-             interval=datetime.timedelta(seconds=15),
-             first=datetime.datetime.now() + datetime.timedelta(seconds=10)
-         )
+        job_queue.run_repeating(
+            alternate_digest_job,
+            interval=datetime.timedelta(seconds=15),
+            first=datetime.datetime.now() + datetime.timedelta(seconds=10)
+        )
 
         job_queue.run_daily(
             decrease_inactive_job,
