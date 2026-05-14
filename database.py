@@ -587,6 +587,9 @@ def init_db():
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS best_lose_streak INTEGER DEFAULT 0
             """)
             cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT
+            """)
+            cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_growth REAL DEFAULT 0.0
             """)
             cursor.execute("""
@@ -681,6 +684,9 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS best_lose_streak INTEGER DEFAULT 0
             """)
+            cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT
+            """)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -724,10 +730,11 @@ def init_db():
                     last_greeting_date DATE,
                     message_count INTEGER DEFAULT 0,
                     first_name TEXT,
-                    current_win_streak INTEGER DEFAULT 0,
-                    current_lose_streak INTEGER DEFAULT 0,
-                    best_lose_streak INTEGER DEFAULT 0
-                )
+current_win_streak INTEGER DEFAULT 0,
+                     current_lose_streak INTEGER DEFAULT 0,
+                     best_lose_streak INTEGER DEFAULT 0,
+                     avatar TEXT
+                 )
             """)
 # Для SQLite проверяем есть ли колонки и добавляем если нет
             cursor.execute("PRAGMA table_info(users)")
