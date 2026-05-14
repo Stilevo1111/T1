@@ -874,8 +874,8 @@ async def generate_chart_only(telegram_id: int):
         if (now - updated_at).total_seconds() < 3600:
             import json
             cached = json.loads(user['analytics_cache'])
-            # Run blocking chart generation in thread pool
-            chart = await asyncio.to_thread(create_visual_chart, cached.get("history", []))
+            # Run chart generation (async function) directly
+            chart = await create_visual_chart(cached.get("history", []))
             return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", [])}
 
     matches = await get_weekly_matches(telegram_id)
@@ -897,7 +897,7 @@ async def generate_chart_only(telegram_id: int):
         imp = min(kda * 15, 50)  # max 50
         game_history.append({"imp": round(imp, 1), "hero_id": m.get("hero_id", 0)})
 
-    chart = await asyncio.to_thread(create_visual_chart, game_history)
+    chart = await create_visual_chart(game_history)
     return {"image": chart, "history": game_history, "matches": matches}
 
 
@@ -1049,7 +1049,7 @@ async def generate_weekly_analytics(telegram_id: int):
     detailed_text = tables["detailed"]
 
     # График
-    chart_image = await asyncio.to_thread(create_visual_chart, game_history)
+    chart_image = await create_visual_chart(game_history)
 
     data = {
         "image": chart_image,
