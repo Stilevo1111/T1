@@ -16,13 +16,10 @@ logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    print("⚠️ DATABASE_URL не задан! Используем SQLite для локального тестирования.")
     DATABASE_URL = "sqlite:///fissure_bot.db"
     print(f"💡 Используется: {DATABASE_URL}")
 else:
     print(f"Using DATABASE_URL: {DATABASE_URL[:20]}...")
-
-BACKUP_DATABASE_URL = os.getenv("BACKUP_DATABASE_URL")
 
 
 class UserCache:
