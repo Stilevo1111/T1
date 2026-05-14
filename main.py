@@ -3293,6 +3293,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug(f"Could not delete last bot message: {e}")
 
     loading_msg = None
+    top_heroes = []
 
     try:
         # Определяем: свой профиль или чужой
