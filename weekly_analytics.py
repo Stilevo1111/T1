@@ -1188,7 +1188,7 @@ async def create_visual_chart(history):
     # =====================================================
 
     # old values compressed graph too much
-    # remap into 0.1 → 2.5 range with more contrast
+    # now remap into full 0.2 → 1.8 range
     min_imp = min(raw_impacts)
     max_imp = max(raw_impacts)
 
@@ -1200,8 +1200,7 @@ async def create_visual_chart(history):
             / max(max_imp - min_imp, 0.01)
         )
 
-        # Exponential curve for more contrast - good games higher, bad games lower
-        scaled = 0.1 + (normalized ** 1.5 * 2.4)
+        scaled = 0.25 + (normalized * 1.45)
 
         impacts.append(round(scaled, 2))
 
