@@ -886,8 +886,13 @@ async def generate_chart_only(telegram_id: int):
 
     matches = sorted(matches, key=lambda x: x.get("start_time", 0))
 
-    # Detect role from hero picks first
-    role = await detect_role_from_hero_counts(matches) or "CARRY"
+    # Use simple role detection from recent matches stats (no API call)
+    # For chart: use CARRY weights as default, fallback to stats-based detection
+    total_gpm_est = sum(m.get("last_hits", 0) * 60 for m in matches[:5])
+    if total_gpm_est > 15000:  # High farm = CARRY/MID
+        role = "CARRY"
+    else:
+        role = "SUPPORT"  # Low farm = SUPPORT
     
     # Calculate only what's needed for chart - minimal data
     game_history = []
@@ -897,12 +902,12 @@ async def generate_chart_only(telegram_id: int):
         assists = m.get("assists", 0)
         kda = (kills + assists) / max(deaths, 1)
         
-        # Estimate GPM from gold_last_hits if available (basic data from match list)
+        # Estimate GPM from last_hits (basic data from match list, no API)
         duration = m.get("duration", 600)
         last_hits = m.get("last_hits", 0)
         gpm = last_hits * 60 / max(duration / 60, 1) if last_hits > 0 else 300
         
-        # Estimate utility from stacks and denies
+        # Estimate utility from stacks and denies (minimal data)
         stacks = m.get("creeps_stacked", 0)
         denies = m.get("denies", 0)
         utility = stacks * 1.5 + denies * 0.5
