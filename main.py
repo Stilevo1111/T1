@@ -77,7 +77,7 @@ def get_digest_data_hash():
         return None
 
 _last_data_refresh = 0
-_data_refresh_interval = 300  # Обновлять данные каждые 5 минут
+_data_refresh_interval = 600  # Обновлять данные каждые 10 минут
 DIGEST_DATA_REFRESH_INTERVAL = 3600  # Обновлять данные дайджеста раз в час
 HERO_META_REFRESH_INTERVAL = 3600  # Обновлять мета-баннер героя раз в час
 
@@ -1092,9 +1092,9 @@ async def alternate_digest_job(context):
         now = time.time()
 
         # Глобальная блокировка через БД (работает между воркерами) — атомарная
-        # Пытаемся атомарно обновить alternate_digest_last_run, только если он старше 60 секунд
+        # Пытаемся атомарно обновить alternate_digest_last_run, только если он старше 5 минут
         db = Database()
-        threshold = now - 60
+        threshold = now - 300
         if get_db_type() == "postgresql":
             query = "INSERT INTO bot_config (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value WHERE (bot_config.value::float < %s OR bot_config.value IS NULL)"
             params = ('alternate_digest_last_run', str(now), str(threshold))
@@ -1104,7 +1104,9 @@ async def alternate_digest_job(context):
         rows = db.execute_query(query, params)
         if rows is None or rows == 0:
             # Логируем информацию о последнем запуске для отладки
-            last_job_run = get_config('alternate_digest_last_run')
+            last_job_run = config_cache.get('alternate_digest_last_run')
+            if not last_job_run:
+                last_job_run = get_config('alternate_digest_last_run')
             try:
                 last_job_run_float = float(last_job_run) if last_job_run else 0
             except (ValueError, TypeError):
@@ -1114,7 +1116,7 @@ async def alternate_digest_job(context):
             else:
                 logger.warning("alternate_digest_job: пропуск (lock not acquired)")
             return
-        config_cache.delete('alternate_digest_last_run')
+        config_cache.set('alternate_digest_last_run', str(now))
         logger.debug("alternate_digest_job: lock acquired")
 
         # Проверяем глобальный rate limit
@@ -1143,7 +1145,12 @@ async def alternate_digest_job(context):
                 _digest_state["last_data_update"] = now
 
             # При первом запуске после деплоя - проверяем есть ли существующий пост
-            last_message_id = get_config('alternate_digest_message_id')
+            # Используем кеш из _digest_state вместо get_config
+            last_message_id = _digest_state.get("message_id")
+            if not last_message_id:
+                last_message_id = get_config('alternate_digest_message_id')
+                if last_message_id:
+                    _digest_state["message_id"] = last_message_id
             if last_message_id:
                 # Используем существующий пост, не сбрасываем тип
                 logger.info("alternate_digest_job: найден существующий пост, используем его")
@@ -1415,7 +1422,7 @@ async def alternate_digest_job(context):
             return
 
         # Пробуем отредактировать существующее сообщение
-        last_message_id = get_config('alternate_digest_message_id')
+        last_message_id = _digest_state.get("message_id")
         logger.info(f"alternate_digest_job: last_message_id = {last_message_id}")
         logger.info(f"alternate_digest_job: text = {text[:100]}...")
         
@@ -1624,6 +1631,7 @@ async def alternate_digest_job(context):
                     logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
 
                 set_config('alternate_digest_message_id', str(msg.message_id))
+                _digest_state["message_id"] = str(msg.message_id)
                 set_config('alternate_digest_last_created', str(time.time()))
                 set_config('alternate_digest_type', next_type)
                 set_config('alternate_digest_text_hash', str(hash(text[:100]) if text else 0))
@@ -1653,7 +1661,7 @@ async def alternate_digest_job(context):
                     if can_del:
                         try:
                             logger.info("Попытка удаления системного сообщения о закрепе...")
-                            time.sleep(0.5)
+                            await asyncio.sleep(0.5)
                             logger.info("Задержка 0.5с завершена, ищем системное сообщение")
 
                             # Системное сообщение о закрепе имеет message_id = msg.message_id + N (обычно +1 или +2)
@@ -2343,8 +2351,8 @@ def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: set = 
 
 
 def _build_stats_button_keyboard() -> InlineKeyboardMarkup:
-    """Build inline keyboard with single 'Статистика🧠' button under chart."""
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Статистика🧠", callback_data="analytics_show")]])
+    """Build inline keyboard with single 'Сравнить с Pro 🧠' button under chart."""
+    return InlineKeyboardMarkup([[InlineKeyboardButton("Сравнить с Pro 🧠", callback_data="analytics_show")]])
 
 
 def format_time(seconds):
@@ -4282,10 +4290,10 @@ async def main():
             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
         )
 
-# Обновление дайджестов каждые 15 секунд (переключение между утренним/Dota)
+# Обновление дайджестов каждые 60 секунд (переключение между утренним/Dota)
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(seconds=15),
+            interval=datetime.timedelta(seconds=60),
             first=datetime.datetime.now() + datetime.timedelta(seconds=10)
         )
 
