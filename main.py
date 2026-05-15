@@ -603,9 +603,11 @@ async def announce_weekly_mmr_winner(bot):
         return False
 
     # Проверяем, есть ли игроки с данными за ПРОШЛУЮ неделю
-    from database import get_connection as gc2
+    from database import get_connection as gc2, DATABASE_URL
+    import urllib.parse as urlparse
     conn = gc2()
     cursor = conn.cursor()
+    scheme = urlparse.urlparse(DATABASE_URL).scheme
     if "postgres" in scheme:
         cursor.execute(
             "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND (week_start_date IS NULL OR week_start_date::text != %s)",
@@ -2704,10 +2706,6 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         # Check if matches exist
         if not matches:
             await callback_query.answer(text="❌ Нет данных матчей для аналитики", show_alert=True)
-            try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-            except Exception:
-                pass
             return
         
         # Fetch full details for matches that have match_id

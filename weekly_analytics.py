@@ -8,7 +8,7 @@ import io
 from datetime import datetime, timezone, timedelta
 
 from dota_mmr import steam64_to_account_id, OPENDOTA_API_URL, _api_get_async
-from database import get_user
+from database import get_user, Database
 from hero_positions import hero_positions
 
 import logging
@@ -862,7 +862,7 @@ def get_analytics_pages(role: str, stats: dict) -> list:
 async def generate_chart_only(telegram_id: int):
     """Generate only the chart and game history - no text pages."""
     
-    from database import get_user
+    from database import get_user, Database
     from datetime import datetime, timezone, timedelta
     
     user = get_user(telegram_id)
@@ -938,6 +938,7 @@ async def generate_weekly_analytics(telegram_id: int):
     total_kills = 0
     total_deaths = 0
     total_assists = 0
+    total_lh = 0
     total_lh_10min = 0
     total_apm = 0
     total_denies = 0
@@ -996,6 +997,7 @@ async def generate_weekly_analytics(telegram_id: int):
         total_kills += kills
         total_deaths += deaths
         total_assists += assists
+        total_lh += m.get("last_hits", 0)
         # LH@10: normalize last_hits to 10 minutes (duration in seconds)
         duration = m.get("duration", 600)
         lh_per_10min = m.get("last_hits", 0) / max(duration / 600, 0.33) if duration > 0 else 0
