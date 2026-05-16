@@ -138,9 +138,9 @@ class TTLCache:
             self._cache.clear()
 
 
-# Глобальные экземпляры кешей
-config_cache = TTLCache(default_ttl=300)  # 5 минут для конфигурации
-top_cache = TTLCache(default_ttl=60)  # 1 минута для топов и рангов
+# Глобальные экземпляры кешей (оптимизировано для экономии CU в serverless)
+config_cache = TTLCache(default_ttl=600)  # 10 минут для конфигурации (было 5)
+top_cache = TTLCache(default_ttl=300)  # 5 минут для топов и рангов (было 1)
 
 _aiohttp_session = None
 
@@ -183,66 +183,59 @@ def flush_users_cache():
         conn = get_connection()
         cursor = conn.cursor()
         
+        # Подготавливаем данные для batch обновления
+        batch_data = []
         for telegram_id in dirty_users:
             user_data = user_cache.get(telegram_id)
-            if not user_data:
-                continue
+            if user_data:
+                batch_data.append((
+                    user_data.get('username'), user_data.get('fissure', 0),
+                    user_data.get('last_fissure', 0), user_data.get('total_growth', 0),
+                    user_data.get('total_rolls', 0), user_data.get('current_streak', 0),
+                    user_data.get('best_streak', 0), user_data.get('weekly_rolls', 0),
+                    user_data.get('weekly_growth', 0), user_data.get('steam_id'),
+                    user_data.get('steam_nickname'), user_data.get('mmr', 0),
+                    user_data.get('rank_tier', 0), user_data.get('dota_total_games', 0),
+                    user_data.get('dota_wins', 0), user_data.get('last_dota_games', 0),
+                    user_data.get('last_dota_wins', 0), user_data.get('week_games', 0),
+                    user_data.get('week_wins', 0), user_data.get('week_best_streak', 0),
+                    user_data.get('week_start_date'), telegram_id
+                ))
+        
+        # Batch обновление через executemany для экономии CU
+        if batch_data:
+            if db_type == "postgresql":
+                query = """
+                    UPDATE users SET 
+                        username = %s, fissure = %s, last_fissure = %s,
+                        total_growth = %s, total_rolls = %s, current_streak = %s,
+                        best_streak = %s, weekly_rolls = %s, weekly_growth = %s,
+                        steam_id = %s, steam_nickname = %s, mmr = %s, rank_tier = %s,
+                        dota_total_games = %s, dota_wins = %s, last_dota_games = %s,
+                        last_dota_wins = %s, week_games = %s, week_wins = %s,
+                        week_best_streak = %s, week_start_date = %s, last_activity = CURRENT_TIMESTAMP
+                    WHERE telegram_id = %s
+                """
+                psycopg2.extras.execute_batch(cursor, query, batch_data, page_size=100)
+            else:
+                query = """
+                    UPDATE users SET 
+                        username = ?, fissure = ?, last_fissure = ?,
+                        total_growth = ?, total_rolls = ?, current_streak = ?,
+                        best_streak = ?, weekly_rolls = ?, weekly_growth = ?,
+                        steam_id = ?, steam_nickname = ?, mmr = ?, rank_tier = ?,
+                        dota_total_games = ?, dota_wins = ?, last_dota_games = ?,
+                        last_dota_wins = ?, week_games = ?, week_wins = ?,
+week_best_streak = ?, week_start_date = ?, last_activity = CURRENT_TIMESTAMP
+                    WHERE telegram_id = ?
+                """
+                cursor.executemany(query, batch_data)
             
-            try:
-                if db_type == "postgresql":
-                    query = """
-                        UPDATE users SET 
-                            username = %s, fissure = %s, last_fissure = %s,
-                            total_growth = %s, total_rolls = %s, current_streak = %s,
-                            best_streak = %s, weekly_rolls = %s, weekly_growth = %s,
-                            steam_id = %s, steam_nickname = %s, mmr = %s, rank_tier = %s,
-                            dota_total_games = %s, dota_wins = %s, last_dota_games = %s,
-                            last_dota_wins = %s, week_games = %s, week_wins = %s,
-                            week_best_streak = %s, week_start_date = %s, last_activity = CURRENT_TIMESTAMP
-                        WHERE telegram_id = %s
-                    """
-                    cursor.execute(query, (
-                        user_data.get('username'), user_data.get('fissure', 0),
-                        user_data.get('last_fissure', 0), user_data.get('total_growth', 0),
-                        user_data.get('total_rolls', 0), user_data.get('current_streak', 0),
-                        user_data.get('best_streak', 0), user_data.get('weekly_rolls', 0),
-                        user_data.get('weekly_growth', 0), user_data.get('steam_id'),
-                        user_data.get('steam_nickname'), user_data.get('mmr', 0),
-                        user_data.get('rank_tier', 0), user_data.get('dota_total_games', 0),
-                        user_data.get('dota_wins', 0), user_data.get('last_dota_games', 0),
-                        user_data.get('last_dota_wins', 0), user_data.get('week_games', 0),
-                        user_data.get('week_wins', 0), user_data.get('week_best_streak', 0),
-                        user_data.get('week_start_date'), telegram_id
-                    ))
-                else:
-                    query = """
-                        UPDATE users SET 
-                            username = ?, fissure = ?, last_fissure = ?,
-                            total_growth = ?, total_rolls = ?, current_streak = ?,
-                            best_streak = ?, weekly_rolls = ?, weekly_growth = ?,
-                            steam_id = ?, steam_nickname = ?, mmr = ?, rank_tier = ?,
-                            dota_total_games = ?, dota_wins = ?, last_dota_games = ?,
-                            last_dota_wins = ?, week_games = ?, week_wins = ?,
-                            week_best_streak = ?, week_start_date = ?, last_activity = CURRENT_TIMESTAMP
-                        WHERE telegram_id = ?
-                    """
-                    cursor.execute(query, (
-                        user_data.get('username'), user_data.get('fissure', 0),
-                        user_data.get('last_fissure', 0), user_data.get('total_growth', 0),
-                        user_data.get('total_rolls', 0), user_data.get('current_streak', 0),
-                        user_data.get('best_streak', 0), user_data.get('weekly_rolls', 0),
-                        user_data.get('weekly_growth', 0), user_data.get('steam_id'),
-                        user_data.get('steam_nickname'), user_data.get('mmr', 0),
-                        user_data.get('rank_tier', 0), user_data.get('dota_total_games', 0),
-                        user_data.get('dota_wins', 0), user_data.get('last_dota_games', 0),
-                        user_data.get('last_dota_wins', 0), user_data.get('week_games', 0),
-                        user_data.get('week_wins', 0), user_data.get('week_best_streak', 0),
-                        user_data.get('week_start_date'), telegram_id
-                    ))
+            # Очищаем dirty флаги только для успешно обновленных пользователей
+            flushed = len(batch_data)
+            for i in range(flushed):
+                telegram_id = batch_data[i][-1]  # telegram_id is last element
                 user_cache.clear_dirty(telegram_id)
-                flushed += 1
-            except Exception as e:
-                logger.error(f"flush_users_cache: error for {telegram_id}: {e}")
         
         conn.commit()
         
@@ -257,6 +250,7 @@ def flush_users_cache():
             release_connection(conn)
     
     logger.info(f"flush_users_cache: flushed {flushed} users")
+    flush_config_buffer()  # Сбросить буфер конфигурации
     return flushed
 
 
@@ -332,7 +326,9 @@ def update_dota_week_top_cache():
 # Connection pool management
 _pool_lock = threading.Lock()
 _pool = {}  # db_type -> list of connections
-_max_connections = 20  # Max connections per DB type
+_max_connections = 50  # Max connections per DB type (оптимизировано для serverless)
+# Note: DISCARD ALL вызывается автоматически psycopg2 при закрытии соединения
+# Для serverless Neon критично использовать пул соединений (pgbouncer=true в DATABASE_URL)
 
 def get_db_type():
     """Получить тип базы данных"""
@@ -369,22 +365,16 @@ def get_connection():
         print(f"[DB] Creating new connection for {db_type}")
         if db_type == "postgresql":
             try:
-                url = urlparse.urlparse(DATABASE_URL)
-                dbname = url.path[1:] if url.path else ""
-                user = url.username
-                password = url.password
-                host = url.hostname
-                port = url.port
+                # Add pgbouncer=true to DATABASE_URL for Neon serverless optimization
+                # This avoids DISCARD ALL overhead by using PgBouncer connection pooling
+                db_url = DATABASE_URL
+                if '?' in db_url:
+                    if 'pgbouncer' not in db_url:
+                        db_url = db_url + '&pgbouncer=true'
+                else:
+                    db_url = db_url + '?pgbouncer=true'
                 
-                conn = psycopg2.connect(
-                    dbname=dbname,
-                    user=user,
-                    password=password,
-                    host=host,
-                    port=port,
-                    sslmode='require',
-                    connect_timeout=10
-                )
+                conn = psycopg2.connect(db_url, sslmode='require', connect_timeout=10)
                 print("✅ Подключено к PostgreSQL")
             except Exception as e:
                 print(f"❌ PostgreSQL connection failed: {e}")
@@ -2416,13 +2406,77 @@ def get_config(key, default=None):
     
     return result
 
+_config_update_buffer = {}  # key -> (value, timestamp)
+_config_buffer_lock = threading.Lock()
+_CONFIG_BUFFER_INTERVAL = 5  # seconds
+
 def set_config(key, value):
-    """Установить значение конфигурации"""
-    db = Database()
-    result = db.set_config(key, value)
-    # Сбрасываем кеш конфигурации при изменении
-    config_cache.delete(key)
-    return result
+    """Установить значение конфигурации с debouncing"""
+    if value is None:
+        db = Database()
+        result = db.set_config(key, value)
+        config_cache.delete(key)
+        return result
+    
+    # Debouncing: batch config updates
+    current_time = time.time()
+    with _config_buffer_lock:
+        _config_update_buffer[key] = (value, current_time)
+    
+    # Если прошло >5 сек или это критически важные ключи - сразу сохраняем
+    critical_keys = {'digest_chat_id', 'alternate_digest_message_id'}
+    if key in critical_keys or len(_config_update_buffer) > 10:
+        flush_config_buffer()
+
+def flush_config_buffer():
+    """Сбросить буфер конфигурации в БД с batch операциями"""
+    with _config_buffer_lock:
+        if not _config_update_buffer:
+            return
+        buffer_copy = dict(_config_update_buffer)
+        _config_update_buffer.clear()
+    
+    if not buffer_copy:
+        return
+    
+    db_type = get_db_type()
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Batch update for config values
+        batch_data = [(key, str(value)) for key, (value, _) in buffer_copy.items() if value is not None]
+        
+        if batch_data:
+            if db_type == "postgresql":
+                query = """
+                    INSERT INTO bot_config (key, value) VALUES (%s, %s)
+                    ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
+                """
+                psycopg2.extras.execute_batch(cursor, query, batch_data, page_size=50)
+            else:
+                query = """
+                    INSERT INTO bot_config (key, value) VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """
+                cursor.executemany(query, batch_data)
+            
+            conn.commit()
+            
+            # Invalidate cache for updated keys
+            for key in buffer_copy.keys():
+                config_cache.delete(key)
+    except Exception as e:
+        logger.error(f"flush_config_buffer error: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            release_connection(conn)
 
 def get_digest_stats():
     """Получить статистику для дайджеста - из кеша"""
