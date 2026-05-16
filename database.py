@@ -250,7 +250,6 @@ week_best_streak = ?, week_start_date = ?, last_activity = CURRENT_TIMESTAMP
             release_connection(conn)
     
     logger.info(f"flush_users_cache: flushed {flushed} users")
-    flush_config_buffer()  # Сбросить буфер конфигурации
     return flushed
 
 
@@ -327,8 +326,7 @@ def update_dota_week_top_cache():
 _pool_lock = threading.Lock()
 _pool = {}  # db_type -> list of connections
 _max_connections = 50  # Max connections per DB type (оптимизировано для serverless)
-# Note: DISCARD ALL вызывается автоматически psycopg2 при закрытии соединения
-# Для serverless Neon критично использовать пул соединений (pgbouncer=true в DATABASE_URL)
+# Для Neon serverless используйте pooled endpoint (-pooler в hostname)
 
 def get_db_type():
     """Получить тип базы данных"""
@@ -340,6 +338,29 @@ def get_db_type():
         return "sqlite"
     scheme_str = str(scheme)
     return "postgresql" if "postgres" in scheme_str else "sqlite"
+
+
+def _postgres_connect_kwargs():
+    """Разобрать DATABASE_URL для psycopg2 (libpq не понимает pgbouncer=true)."""
+    url = urlparse.urlparse(DATABASE_URL)
+    query = urlparse.parse_qs(url.query, keep_blank_values=True)
+    query.pop("pgbouncer", None)
+
+    sslmode = (query.pop("sslmode", None) or ["require"])[0]
+    kwargs = {
+        "dbname": (url.path or "").lstrip("/"),
+        "user": url.username,
+        "password": url.password,
+        "host": url.hostname,
+        "port": url.port or 5432,
+        "sslmode": sslmode,
+        "connect_timeout": 10,
+    }
+    for key in ("sslrootcert", "sslcert", "sslkey", "options", "application_name"):
+        if key in query and query[key]:
+            kwargs[key] = query[key][0]
+    return kwargs
+
 
 def get_connection():
     """Получение соединения с базой данных с пулом"""
@@ -365,16 +386,8 @@ def get_connection():
         print(f"[DB] Creating new connection for {db_type}")
         if db_type == "postgresql":
             try:
-                # Add pgbouncer=true to DATABASE_URL for Neon serverless optimization
-                # This avoids DISCARD ALL overhead by using PgBouncer connection pooling
-                db_url = DATABASE_URL
-                if '?' in db_url:
-                    if 'pgbouncer' not in db_url:
-                        db_url = db_url + '&pgbouncer=true'
-                else:
-                    db_url = db_url + '?pgbouncer=true'
-                
-                conn = psycopg2.connect(db_url, sslmode='require', connect_timeout=10)
+                # Neon: используйте pooled endpoint (-pooler в hostname), не ?pgbouncer=true
+                conn = psycopg2.connect(**_postgres_connect_kwargs())
                 print("✅ Подключено к PostgreSQL")
             except Exception as e:
                 print(f"❌ PostgreSQL connection failed: {e}")
@@ -2406,77 +2419,12 @@ def get_config(key, default=None):
     
     return result
 
-_config_update_buffer = {}  # key -> (value, timestamp)
-_config_buffer_lock = threading.Lock()
-_CONFIG_BUFFER_INTERVAL = 5  # seconds
-
 def set_config(key, value):
-    """Установить значение конфигурации с debouncing"""
-    if value is None:
-        db = Database()
-        result = db.set_config(key, value)
-        config_cache.delete(key)
-        return result
-    
-    # Debouncing: batch config updates
-    current_time = time.time()
-    with _config_buffer_lock:
-        _config_update_buffer[key] = (value, current_time)
-    
-    # Если прошло >5 сек или это критически важные ключи - сразу сохраняем
-    critical_keys = {'digest_chat_id', 'alternate_digest_message_id'}
-    if key in critical_keys or len(_config_update_buffer) > 10:
-        flush_config_buffer()
-
-def flush_config_buffer():
-    """Сбросить буфер конфигурации в БД с batch операциями"""
-    with _config_buffer_lock:
-        if not _config_update_buffer:
-            return
-        buffer_copy = dict(_config_update_buffer)
-        _config_update_buffer.clear()
-    
-    if not buffer_copy:
-        return
-    
-    db_type = get_db_type()
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        # Batch update for config values
-        batch_data = [(key, str(value)) for key, (value, _) in buffer_copy.items() if value is not None]
-        
-        if batch_data:
-            if db_type == "postgresql":
-                query = """
-                    INSERT INTO bot_config (key, value) VALUES (%s, %s)
-                    ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
-                """
-                psycopg2.extras.execute_batch(cursor, query, batch_data, page_size=50)
-            else:
-                query = """
-                    INSERT INTO bot_config (key, value) VALUES (?, ?)
-                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
-                """
-                cursor.executemany(query, batch_data)
-            
-            conn.commit()
-            
-            # Invalidate cache for updated keys
-            for key in buffer_copy.keys():
-                config_cache.delete(key)
-    except Exception as e:
-        logger.error(f"flush_config_buffer error: {e}")
-        if conn:
-            conn.rollback()
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            release_connection(conn)
+    """Установить значение конфигурации"""
+    db = Database()
+    result = db.set_config(key, value)
+    config_cache.delete(key)
+    return result
 
 def get_digest_stats():
     """Получить статистику для дайджеста - из кеша"""
