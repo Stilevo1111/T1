@@ -204,6 +204,17 @@ async def cleanup_left_users_job(context):
         logger.error(f"cleanup_left_users_job: {e}")
 
 
+async def flush_users_cache_job(context):
+    """Периодический сброс dirty-пользователей из кеша в БД"""
+    try:
+        from database import flush_users_cache
+        flushed = flush_users_cache()
+        if flushed:
+            logger.info(f"flush_users_cache_job: сохранено {flushed} пользователей")
+    except Exception as e:
+        logger.error(f"flush_users_cache_job: {e}")
+
+
 async def decrease_inactive_job(context):
     """Ежедневное задание: уменьшить fissure неактивным игрокам (с кешем)"""
     from datetime import datetime
@@ -4292,6 +4303,12 @@ async def main():
             cleanup_left_users_job,
             time=datetime.time(hour=4, minute=0),  # 07:00 MSK
             days=(0, 1, 2, 3, 4, 5, 6)
+        )
+
+        job_queue.run_repeating(
+            flush_users_cache_job,
+            interval=datetime.timedelta(minutes=30),
+            first=datetime.timedelta(minutes=15),
         )
 
         # morning_digest_job удалён

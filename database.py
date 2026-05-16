@@ -340,6 +340,19 @@ _PG_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_users_rank_tier ON users(rank_tier DESC)",
 )
 
+# Лёгкие миграции — выполняются даже при fast init (ADD IF NOT EXISTS)
+_PG_ENSURE_COLUMNS = (
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_mvp_count INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_top2_count INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_top3_count INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP",
+)
+
+
+def _ensure_pg_columns(cursor):
+    for sql in _PG_ENSURE_COLUMNS:
+        cursor.execute(sql)
+
 def get_db_type():
     """Получить тип базы данных"""
     if DATABASE_URL is None:
@@ -383,7 +396,7 @@ def get_connection():
         with _pool_lock:
             if _persistent_pg_conn is None or _persistent_pg_conn.closed:
                 _persistent_pg_conn = psycopg2.connect(**_postgres_connect_kwargs())
-                print("✅ Подключено к PostgreSQL (persistent)")
+                logger.info("PostgreSQL connected (persistent)")
             return _persistent_pg_conn
 
     print(f"[DB] Getting connection, type: {db_type}")
@@ -409,9 +422,9 @@ def get_connection():
             try:
                 # Neon: используйте pooled endpoint (-pooler в hostname), не ?pgbouncer=true
                 conn = psycopg2.connect(**_postgres_connect_kwargs())
-                print("✅ Подключено к PostgreSQL")
+                logger.info("PostgreSQL connected")
             except Exception as e:
-                print(f"❌ PostgreSQL connection failed: {e}")
+                logger.error(f"PostgreSQL connection failed: {e}")
                 raise
         else:
             if DATABASE_URL is None:
@@ -424,7 +437,7 @@ def get_connection():
                 db_path = DATABASE_URL
             
             conn = sqlite3.connect(db_path, timeout=10)
-            print("✅ Подключено к SQLite")
+            logger.info("SQLite connected")
         
         return conn
 
@@ -510,6 +523,8 @@ def init_db():
             )
         row = cursor.fetchone()
         if row and row[0] == SCHEMA_VERSION:
+            if is_pg:
+                _ensure_pg_columns(cursor)
             conn.commit()
             logger.info("init_db: schema up to date, skipped DDL")
             return
@@ -661,6 +676,7 @@ def init_db():
             cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP
             """)
+            _ensure_pg_columns(cursor)
             for index_sql in _PG_INDEXES:
                 cursor.execute(index_sql)
         else:
@@ -790,7 +806,8 @@ current_win_streak INTEGER DEFAULT 0,
                 cursor.execute("ALTER TABLE users ADD COLUMN last_greeting_date DATE")
             if 'message_count' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN message_count INTEGER DEFAULT 0")
-            cursor.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
+            if 'first_name' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
             
             # Создаём индексы для часто используемых полей (улучшение производительности)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)")
@@ -977,7 +994,10 @@ class Database:
                         "last_dota_games": user.get("last_dota_games", 0),
                         "last_dota_wins": user.get("last_dota_wins", 0),
                         "week_start_date": user.get("week_start_date"),
-                        "message_count": user.get("message_count", 0)
+                        "message_count": user.get("message_count", 0),
+                        "weekly_mvp_count": user.get("weekly_mvp_count", 0),
+                        "weekly_top2_count": user.get("weekly_top2_count", 0),
+                        "weekly_top3_count": user.get("weekly_top3_count", 0),
                     }
                     # Обновляем username если передан не-None и отличается
                     if username is not None and username != result.get('username'):
@@ -1049,7 +1069,7 @@ class Database:
                     release_connection(conn)
         except Exception as e:
             logger.error(f"Error getting user: {e}")
-            return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "week_current_streak": 0, "message_count": 0}
+            return None
     
     def update_fissure(self, telegram_id, fissure, last_fissure, growth=0):
         """Обновление данных пользователя"""
@@ -1697,33 +1717,14 @@ def get_user(telegram_id, username=None):
     if user:
         msg_count = user.get('message_count', 0)
         logger.info(f"get_user: DB hit for {telegram_id}, message_count={msg_count}, keys={list(user.keys()) if isinstance(user, dict) else 'tuple'}")
+        user.setdefault('weekly_mvp_count', 0)
+        user.setdefault('weekly_top2_count', 0)
+        user.setdefault('weekly_top3_count', 0)
+        user.setdefault('analytics_cache', None)
+        user.setdefault('analytics_updated_at', None)
+        user_cache.set(telegram_id, user)
     else:
-        logger.warning(f"get_user: user {telegram_id} NOT found in DB - will be created with message_count=0")
-        
-        # Сохраняем в кеш если пользователь найден
-        if user:
-            user.setdefault('fissure', 0)
-            user.setdefault('last_fissure', 0)
-            user.setdefault('total_growth', 0)
-            user.setdefault('total_rolls', 0)
-            user.setdefault('best_streak', 0)
-            user.setdefault('current_streak', 0)
-            user.setdefault('steam_id', None)
-            user.setdefault('steam_nickname', None)
-            user.setdefault('mmr', 0)
-            user.setdefault('rank_tier', 0)
-            user.setdefault('week_games', 0)
-            user.setdefault('week_wins', 0)
-            user.setdefault('week_best_streak', 0)
-            user.setdefault('week_current_streak', 0)
-            user.setdefault('dota_total_games', 0)
-            user.setdefault('dota_wins', 0)
-            user.setdefault('analytics_cache', None)
-            user.setdefault('analytics_updated_at', None)
-            user.setdefault('message_count', 0)
-            user_cache.set(telegram_id, user)
-        else:
-            logger.info(f"get_user: user {telegram_id} NOT found in cache or DB")
+        logger.warning(f"get_user: user {telegram_id} NOT found in cache or DB")
     
     return user
 
@@ -1746,6 +1747,7 @@ def get_user_by_username(username):
             return get_user(uid)
     
     # Не нашли в кеше — ищем в БД
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -1764,6 +1766,9 @@ def get_user_by_username(username):
             return get_user(tid)
     except Exception as e:
         logger.error(f"get_user_by_username error: {e}")
+    finally:
+        if conn is not None:
+            release_connection(conn)
     
     logger.info(f"get_user_by_username: '{username}' not found in cache or DB")
     return None
@@ -1787,7 +1792,7 @@ def get_user_by_steam_id(steam_id: int):
             logger.info(f"get_user_by_steam_id: found {steam_id} in cache (tid={uid})")
             return get_user(uid)
     
-    # Не нашли в кеше — ищем в БД
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -1805,6 +1810,9 @@ def get_user_by_steam_id(steam_id: int):
             return get_user(tid)
     except Exception as e:
         logger.error(f"get_user_by_steam_id error: {e}")
+    finally:
+        if conn is not None:
+            release_connection(conn)
     
     return None
 
@@ -2047,11 +2055,13 @@ def update_user_field(telegram_id, field, value):
         user_cache.set(telegram_id, user)
         user_cache.mark_dirty(telegram_id)
         
-        # Поля Steam: записываем сразу в БД
-        steam_fields = ['steam_id', 'steam_nickname', 'mmr', 'rank_tier', 
-                        'wins', 'losses',
-                        'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'week_start_date']
-        if field in steam_fields:
+        # Важные поля — сразу в БД
+        immediate_fields = {
+            'steam_id', 'steam_nickname', 'mmr', 'rank_tier', 'wins', 'losses',
+            'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'week_start_date',
+            'weekly_mvp_count', 'weekly_top2_count', 'weekly_top3_count',
+        }
+        if field in immediate_fields:
             _save_user_to_db_immediately(telegram_id, user)
         
         # Сбрасываем кеши дайджестов при изменении данных пользователя
@@ -2117,7 +2127,8 @@ def _save_user_to_db_immediately(telegram_id, user_data):
                 week_best_streak = {placeholders}, week_current_streak = {placeholders}, dota_total_games = {placeholders},
                 dota_wins = {placeholders}, last_dota_games = {placeholders}, last_dota_wins = {placeholders},
                 wins = {placeholders}, losses = {placeholders}, week_start_date = {placeholders},
-                message_count = {placeholders}
+                message_count = {placeholders},
+                weekly_mvp_count = {placeholders}, weekly_top2_count = {placeholders}, weekly_top3_count = {placeholders}
             WHERE telegram_id = {placeholders}
         """
         params = (
@@ -2138,6 +2149,9 @@ def _save_user_to_db_immediately(telegram_id, user_data):
             user_data.get('losses', 0),
             user_data.get('week_start_date'),
             user_data.get('message_count', 0),
+            user_data.get('weekly_mvp_count', 0),
+            user_data.get('weekly_top2_count', 0),
+            user_data.get('weekly_top3_count', 0),
             telegram_id
         )
         result = db.execute_query(query, params)

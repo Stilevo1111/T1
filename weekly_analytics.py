@@ -15,8 +15,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 # Cache for background image and hero icons
 _CHART_BG_CACHE = None
 _HERO_ICON_CACHE = {}
