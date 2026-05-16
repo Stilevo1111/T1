@@ -676,6 +676,78 @@ async def fetch_match_details(matches: list, steam_id: str) -> list:
     return enriched
 
 
+async def get_last_matches(telegram_id: int, limit: int = 10):
+    """Get the last N matches for a user (for chart/analytics)."""
+
+    user = get_user(telegram_id)
+
+    if not user or not user.get("steam_id"):
+        return []
+
+    account_id = steam64_to_account_id(
+        user["steam_id"]
+    )
+
+    url = (
+        f"{OPENDOTA_API_URL}"
+        f"/players/{account_id}/matches"
+    )
+
+    matches = await _api_get_async(
+        url,
+        params={"limit": limit},
+        timeout=15
+    )
+
+    if not matches:
+        return []
+
+    logger.info(f"get_last_matches: got {len(matches)} matches for account {account_id}")
+
+    result = []
+    for m in matches[:limit]:
+        match_id = m.get("match_id")
+        hero_id = m.get("hero_id", 0)
+        duration = m.get("duration", 0)
+        player_slot = m.get("player_slot", 0)
+
+        kills = m.get("kills", 0)
+        deaths = m.get("deaths", 0)
+        assists = m.get("assists", 0)
+        radiant_win = m.get("radiant_win", False)
+
+        is_radiant = player_slot < 128 if player_slot else True
+        is_win = radiant_win if is_radiant else not radiant_win
+
+        result.append({
+            "hero_id": hero_id,
+            "kills": kills,
+            "deaths": deaths,
+            "assists": assists,
+            "gold_per_min": 0,
+            "duration": duration,
+            "gold": 0,
+            "gold_spent": 0,
+            "xp_per_min": 0,
+            "last_hits": 0,
+            "hero_damage": 0,
+            "tower_damage": 0,
+            "lane_role": 0,
+            "start_time": m.get("start_time", 0),
+            "win": is_win,
+            "denies": 0,
+            "actions_per_min": 0,
+            "stuns": 0.0,
+            "hero_healing": 0,
+            "creeps_stacked": 0,
+            "observer_uses": 0,
+            "sentry_uses": 0,
+            "match_id": match_id
+        })
+
+    return result
+
+
 async def get_weekly_matches(telegram_id: int):
 
     user = get_user(telegram_id)
@@ -876,7 +948,7 @@ async def generate_chart_only(telegram_id: int):
             chart = await create_visual_chart(cached.get("history", []))
             return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", [])}
 
-    matches = await get_weekly_matches(telegram_id)
+    matches = await get_last_matches(telegram_id)
 
     if len(matches) < 5:
         from dota_mmr import get_opendota_rate_limit_message
