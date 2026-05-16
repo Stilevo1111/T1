@@ -694,7 +694,7 @@ async def get_weekly_matches(telegram_id: int):
 
     matches = await _api_get_async(
         url,
-        params={"limit": 10},
+        params={"limit": 30},
         timeout=15
     )
 
@@ -882,7 +882,7 @@ async def generate_chart_only(telegram_id: int):
         from dota_mmr import get_opendota_rate_limit_message
         return {"error": "opendota_rate_limit", "message": get_opendota_rate_limit_message()}
 
-    matches = sorted(matches, key=lambda x: x.get("start_time", 0))
+    # Matches are already sorted newest-first from API, keep this order
 
     # Detect role from hero picks
     role = await detect_role_from_hero_counts(matches) or "CARRY"
@@ -921,11 +921,11 @@ async def generate_weekly_analytics(telegram_id: int):
     if len(matches) < 5:
         return None
 
-    # Sort by start_time ascending (oldest first)
-    matches = sorted(
-        matches,
-        key=lambda x: x.get("start_time", 0)
-    )
+    # Matches are already sorted newest-first from API, keep this order
+    # matches = sorted(
+    #     matches,
+    #     key=lambda x: x.get("start_time", 0)
+    # )
 
     # Advanced role detection using OpenDota hero roles + match stats
     role = await detect_role_from_history(matches)
@@ -1173,9 +1173,13 @@ async def create_visual_chart(history):
     # PREPARE DATA
     # =====================================================
 
+    # Reverse history so oldest game is first (left side of chart)
+    # and newest game is last (right side of chart)
+    reversed_history = list(reversed(history))[:10]
+    
     raw_impacts = [
         round(g["imp"], 2)
-        for g in history[:10]
+        for g in reversed_history
     ]
 
     while len(raw_impacts) < 10:
@@ -1324,14 +1328,14 @@ async def create_visual_chart(history):
     # HEROES - parallel preload
     # =====================================================
 
-    # Collect unique hero IDs first
-    unique_hero_ids = list({g["hero_id"] for g in history[:10] if g.get("hero_id")})
+    # Collect unique hero IDs from reversed history
+    unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
     
     # Load all hero icons in parallel
     hero_icons = await asyncio.gather(*[get_hero_icon(hid) for hid in unique_hero_ids])
     hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
     
-    for idx, g in enumerate(history[:10]):
+    for idx, g in enumerate(reversed_history):
         hero_id = g["hero_id"]
         hero_img = hero_icon_map.get(hero_id)
 
