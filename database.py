@@ -326,7 +326,19 @@ def update_dota_week_top_cache():
 _pool_lock = threading.Lock()
 _pool = {}  # db_type -> list of connections
 _max_connections = 50  # Max connections per DB type (оптимизировано для serverless)
-# Для Neon serverless используйте pooled endpoint (-pooler в hostname)
+_persistent_pg_conn = None  # одно соединение на процесс — меньше DISCARD ALL на Neon
+
+SCHEMA_VERSION = "20260516v1"
+SCHEMA_VERSION_KEY = "schema_version"
+
+_PG_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_users_mmr ON users(mmr DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_users_steam_id ON users(steam_id)",
+    "CREATE INDEX IF NOT EXISTS idx_users_week_games ON users(week_games DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_users_current_position ON users(current_position)",
+    "CREATE INDEX IF NOT EXISTS idx_users_rank_tier ON users(rank_tier DESC)",
+)
 
 def get_db_type():
     """Получить тип базы данных"""
@@ -365,6 +377,15 @@ def _postgres_connect_kwargs():
 def get_connection():
     """Получение соединения с базой данных с пулом"""
     db_type = get_db_type()
+
+    if db_type == "postgresql":
+        global _persistent_pg_conn
+        with _pool_lock:
+            if _persistent_pg_conn is None or _persistent_pg_conn.closed:
+                _persistent_pg_conn = psycopg2.connect(**_postgres_connect_kwargs())
+                print("✅ Подключено к PostgreSQL (persistent)")
+            return _persistent_pg_conn
+
     print(f"[DB] Getting connection, type: {db_type}")
     
     with _pool_lock:
@@ -411,6 +432,8 @@ def release_connection(conn):
     """Вернуть соединение в пул"""
     if conn is None:
         return
+    if get_db_type() == "postgresql" and conn is _persistent_pg_conn:
+        return
     db_type = get_db_type()  # Получаем тип вне блокировки
     with _pool_lock:
         if db_type not in _pool:
@@ -439,6 +462,25 @@ def get_db_connection():
     finally:
         release_connection(conn)
 
+def _save_schema_version(cursor, is_pg):
+    if is_pg:
+        cursor.execute(
+            """
+            INSERT INTO bot_config (key, value) VALUES (%s, %s)
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+            """,
+            (SCHEMA_VERSION_KEY, SCHEMA_VERSION),
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO bot_config (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """,
+            (SCHEMA_VERSION_KEY, SCHEMA_VERSION),
+        )
+
+
 def init_db():
     """Initialize database tables and add missing columns."""
     conn = None
@@ -446,9 +488,33 @@ def init_db():
         conn = get_connection()
         cursor = conn.cursor()
         url = urlparse.urlparse(DATABASE_URL)
-        scheme = url.scheme
+        scheme = url.scheme or ""
+        is_pg = "postgres" in scheme
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_config (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+
+        if is_pg:
+            cursor.execute(
+                "SELECT value FROM bot_config WHERE key = %s",
+                (SCHEMA_VERSION_KEY,),
+            )
+        else:
+            cursor.execute(
+                "SELECT value FROM bot_config WHERE key = ?",
+                (SCHEMA_VERSION_KEY,),
+            )
+        row = cursor.fetchone()
+        if row and row[0] == SCHEMA_VERSION:
+            conn.commit()
+            logger.info("init_db: schema up to date, skipped DDL")
+            return
         
-        if "postgres" in scheme:
+        if is_pg:
             # Создаём таблицу если не существует
             cursor.execute("""
                  CREATE TABLE IF NOT EXISTS users (
@@ -593,103 +659,10 @@ def init_db():
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT
             """)
             cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_growth REAL DEFAULT 0.0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_position INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NULL
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS message_count INTEGER DEFAULT 0
-            """)
-            # Dota 2 поля
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS steam_id BIGINT
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS steam_nickname VARCHAR(255)
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS dota_total_games INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS dota_wins INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_games INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_wins INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_dota_games INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_dota_wins INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP
             """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr_updated_at TIMESTAMP
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS analytics_cache TEXT
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS analytics_updated_at TIMESTAMP
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS rank_tier INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS wins INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS losses INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_match_id BIGINT DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_start_date DATE
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_best_streak INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS week_current_streak INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS in_chat BOOLEAN DEFAULT TRUE
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_greeting_date DATE
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS message_count INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT
-            """)
-            # Новые столбцы для раздельных серий побед/поражений
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS current_win_streak INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS current_lose_streak INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS best_lose_streak INTEGER DEFAULT 0
-            """)
-            cursor.execute("""
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT
-            """)
+            for index_sql in _PG_INDEXES:
+                cursor.execute(index_sql)
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -827,16 +800,9 @@ current_win_streak INTEGER DEFAULT 0,
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_current_position ON users(current_position)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_rank_tier ON users(rank_tier DESC)")
         
-        # Создаём таблицу для настроек бота (чат для дайджестов)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS bot_config (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )
-        """)
-        
+        _save_schema_version(cursor, is_pg)
         conn.commit()
-        logger.info("Database initialized")
+        logger.info("Database initialized (full schema apply)")
     except Exception as e:
         logger.error(f"DB init error: {e}")
     finally:
@@ -885,17 +851,16 @@ class Database:
     
     def connect(self):
         """Устанавливаем соединение с проверкой активности"""
-        if not self.conn:
+        if not self.conn or getattr(self.conn, "closed", False):
             self.conn = get_connection()
         else:
-            # Проверяем, что соединение всё ещё активно через ping
             try:
                 if get_db_type() == "postgresql":
-                    self.conn.reset()
+                    with self.conn.cursor() as cur:
+                        cur.execute("SELECT 1")
                 else:
                     self.conn.isolation_level = None
-            except:
-                # Соединение мертво, создаём новое
+            except Exception:
                 self.conn = get_connection()
         return self.conn
     

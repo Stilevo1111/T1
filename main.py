@@ -194,6 +194,16 @@ def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
     asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay))
 
 
+async def cleanup_left_users_job(context):
+    """Ежедневная очистка пользователей, вышедших из чата дайджеста"""
+    try:
+        deleted = cleanup_left_users()
+        if deleted:
+            logger.info(f"cleanup_left_users_job: удалено {deleted} пользователей")
+    except Exception as e:
+        logger.error(f"cleanup_left_users_job: {e}")
+
+
 async def decrease_inactive_job(context):
     """Ежедневное задание: уменьшить fissure неактивным игрокам (с кешем)"""
     from datetime import datetime
@@ -1145,6 +1155,10 @@ async def alternate_digest_job(context):
                 _digest_state["digest_data"] = None
                 _digest_state["dota_data"] = None
                 _digest_state["last_data_update"] = now
+                try:
+                    update_digest_snapshot()
+                except Exception as snap_err:
+                    logger.warning(f"update_digest_snapshot: {snap_err}")
 
             # При первом запуске после деплоя - проверяем есть ли существующий пост
             # Используем кеш из _digest_state вместо get_config
@@ -4230,9 +4244,6 @@ async def main():
 
         init_db()
         migrate_db()
-        cleanup_left_users()
-        update_digest_snapshot()
-        logger.info("Digest snapshot initialized on startup")
 
         from database import get_all_users, get_all_users_with_steam, user_cache
         all_users = get_all_users()
@@ -4277,7 +4288,11 @@ async def main():
             days=(0, 1, 2, 3, 4, 5, 6)
         )
 
-
+        job_queue.run_daily(
+            cleanup_left_users_job,
+            time=datetime.time(hour=4, minute=0),  # 07:00 MSK
+            days=(0, 1, 2, 3, 4, 5, 6)
+        )
 
         # morning_digest_job удалён
 
@@ -4293,12 +4308,6 @@ async def main():
             alternate_digest_job,
             interval=datetime.timedelta(seconds=60),
             first=datetime.datetime.now() + datetime.timedelta(seconds=10)
-        )
-
-        job_queue.run_daily(
-            decrease_inactive_job,
-            time=datetime.time(hour=3, minute=0),  # 03:00 MSK (00:00 UTC)
-            days=(0, 1, 2, 3, 4, 5, 6)
         )
 
         # ✅ Объявление чемпиона недели в воскресенье 23:30 MSK
