@@ -988,22 +988,16 @@ async def generate_chart_only(telegram_id: int):
 
 
 async def generate_weekly_analytics(telegram_id: int):
-    matches = await get_weekly_matches(telegram_id)
+    matches = await get_last_matches(telegram_id)
 
     if len(matches) < 5:
         return None
 
     # Matches are already sorted newest-first from API, keep this order
-    # matches = sorted(
-    #     matches,
-    #     key=lambda x: x.get("start_time", 0)
-    # )
-
-    # Advanced role detection using OpenDota hero roles + match stats
+    # Role detection using OpenDota hero roles + match stats
     role = await detect_role_from_history(matches)
 
-    # averages
-
+    # Averages
     total_gpm = 0
     total_kills = 0
     total_deaths = 0
