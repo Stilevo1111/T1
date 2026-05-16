@@ -453,9 +453,9 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # If matches empty but cache had old data, fetch fresh matches
             if not matches:
-                from weekly_analytics import get_weekly_matches
+                from weekly_analytics import get_last_matches
                 try:
-                    fresh_matches = await get_weekly_matches(update.effective_user.id)
+                    fresh_matches = await get_last_matches(update.effective_user.id)
                     if len(fresh_matches) >= 5:
                         matches = fresh_matches
                         logger.info(f"Analytics: refetched {len(matches)} fresh matches from API")
