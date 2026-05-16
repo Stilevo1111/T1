@@ -746,21 +746,13 @@ async def announce_weekly_mmr_winner(bot):
 
     from dota_mmr import generate_start_card
 
-    # Асинхронно получаем свежий аватар (безопасно для event loop)
-    avatar_url = winner.get('avatar')
-    if winner.get('steam_id'):
-        logger.info(f"Fetching fresh avatar for champion {winner.get('steam_nickname')}")
-        try:
-            fresh_stats = await asyncio.to_thread(
-                _get_player_stats_wrapper, winner.get('steam_id'), False
-            )
-            if fresh_stats and fresh_stats.get('avatar'):
-                avatar_url = fresh_stats.get('avatar')
-                logger.info(f"Using fresh avatar for champion: {avatar_url}")
-            else:
-                logger.info(f"No fresh avatar available for champion, using DB: {avatar_url}")
-        except Exception as e:
-            logger.warning(f"Failed to fetch fresh avatar: {e}")
+    avatar_url = await resolve_avatar_url_for_card(
+        bot,
+        telegram_id=telegram_id,
+        steam_id=winner.get('steam_id'),
+        db_avatar=winner.get('avatar'),
+    )
+    logger.info(f"Champion card avatar for {username}: {avatar_url[:80] if avatar_url else 'none'}...")
 
     # Асинхронно генерируем карточку (безопасно для event loop)
     try:
@@ -849,7 +841,8 @@ async def update_all_mmr_job(context):
                         })
 
                     if result.get('rank_up'):
-                        rank_up_users.append((user, result['rank_up']))
+                        fresh_user = get_user(user['telegram_id']) or user
+                        rank_up_users.append((fresh_user, result['rank_up']))
             except Exception as e:
                 logger.error(f"Ошибка обновления MMR для {user['telegram_id']}: {e}")
 
@@ -872,7 +865,12 @@ async def update_all_mmr_job(context):
                     telegram_id = user.get('telegram_id')
                     message_count = user.get('message_count', 0)
                     rank_tier = user.get('rank_tier', 0)
-                    avatar_url = user.get('avatar')
+                    avatar_url = await resolve_avatar_url_for_card(
+                        context.bot,
+                        telegram_id=telegram_id,
+                        steam_id=user.get('steam_id'),
+                        db_avatar=user.get('avatar'),
+                    )
 
                     # Generate card in thread (blocking image + network ops)
                     card_data = await asyncio.to_thread(
@@ -2391,16 +2389,49 @@ def format_time(seconds):
 DEFAULT_AVATAR_URL = "https://i.ibb.co/Jj3vwbWB/ANQkz.jpg"
 
 async def get_user_avatar_url(bot, user_id: int) -> str | None:
-    """Get Telegram user profile photo URL with fallback"""
+    """Полный URL аватарки Telegram (для загрузки в generate_start_card)."""
     try:
         photos = await bot.get_user_profile_photos(user_id, limit=1)
         if photos and photos.photos:
-            photo = photos.photos[0][-1]  # Get biggest photo
+            photo = photos.photos[0][-1]
             file = await bot.get_file(photo.file_id)
-            return file.file_path
+            if file.file_path:
+                return f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
         logger.debug(f"No profile photos for user {user_id}")
     except Exception as e:
         logger.warning(f"Could not get user avatar: {e}")
+    return DEFAULT_AVATAR_URL
+
+
+async def resolve_avatar_url_for_card(
+    bot,
+    telegram_id: int | None = None,
+    steam_id: int | None = None,
+    db_avatar: str | None = None,
+    fetch_steam: bool = True,
+) -> str:
+    """Steam → БД → Telegram → дефолтная картинка."""
+    if db_avatar:
+        return db_avatar
+    if fetch_steam and steam_id:
+        try:
+            fresh = await asyncio.to_thread(_get_player_stats_wrapper, steam_id, False)
+            if fresh and fresh.get("avatar"):
+                return fresh["avatar"]
+        except Exception as e:
+            logger.warning(f"resolve_avatar_url_for_card steam {steam_id}: {e}")
+    cached = None
+    if telegram_id:
+        cached = user_cache.get(telegram_id)
+        if cached and cached.get("avatar"):
+            return cached["avatar"]
+        db_user = get_user(telegram_id)
+        if db_user and db_user.get("avatar"):
+            return db_user["avatar"]
+    if telegram_id and bot:
+        tg_url = await get_user_avatar_url(bot, telegram_id)
+        if tg_url:
+            return tg_url
     return DEFAULT_AVATAR_URL
 
 

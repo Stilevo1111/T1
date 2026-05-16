@@ -1299,7 +1299,6 @@ def generate_start_card(
     try:
         from PIL import Image, ImageDraw, ImageFont
         import io
-        import requests as req
         import os
 
         # Компактный размер - увеличенный для Retina
@@ -1335,8 +1334,12 @@ def generate_start_card(
                 if os.path.isfile(avatar_url):
                     avatar = Image.open(avatar_url).convert("RGBA")
                 else:
-                    resp = requests.get(avatar_url, timeout=8)
-                    logger.info(f"Avatar request status: {resp.status_code}")
+                    resp = requests.get(
+                        avatar_url,
+                        timeout=10,
+                        headers={"User-Agent": "fissure-bot/1.0"},
+                    )
+                    logger.info(f"Avatar request status: {resp.status_code} url={avatar_url[:80]}")
                     avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA") if resp.status_code == 200 else None
                 if avatar:
                     # Resize and crop to square
@@ -1348,7 +1351,10 @@ def generate_start_card(
                     avatar = avatar.resize((avatar_size, avatar_size), Image.LANCZOS)
                     # Gold border like /profil
                     draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(215, 175, 85), width=int(4*scale))
-                    img.paste(avatar, (avatar_x, avatar_y))
+                    if avatar.mode == "RGBA":
+                        img.paste(avatar, (avatar_x, avatar_y), avatar)
+                    else:
+                        img.paste(avatar, (avatar_x, avatar_y))
                     avatar_loaded = True
                 else:
                     logger.warning(f"Avatar download returned no image: {avatar_url}")

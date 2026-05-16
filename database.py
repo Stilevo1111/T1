@@ -2799,7 +2799,7 @@ def _get_dota_week_top_query(limit):
                 cursor.execute("""
                     WITH wr_calc AS (
                         SELECT telegram_id, username, steam_nickname, mmr, 
-                               week_games, week_wins, rank_tier,
+                               week_games, week_wins, rank_tier, steam_id, avatar,
                                CASE WHEN week_games > 0 
                                     THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
                                     ELSE 0 END as winrate,
@@ -2808,7 +2808,8 @@ def _get_dota_week_top_query(limit):
                         WHERE steam_id IS NOT NULL
                     )
                     SELECT telegram_id, username, steam_nickname, mmr, 
-                           week_games, week_wins, rank_tier, winrate, week_current_streak
+                           week_games, week_wins, rank_tier, steam_id, avatar,
+                           winrate, week_current_streak
                     FROM wr_calc
                     ORDER BY 
                         CASE WHEN week_games = 0 THEN 1 ELSE 0 END,
@@ -2830,8 +2831,10 @@ def _get_dota_week_top_query(limit):
                     'week_games': u[4],
                     'week_wins': u[5],
                     'rank_tier': u[6],
-                    'winrate': u[7],
-                    'week_current_streak': u[8] if len(u) > 8 else 0
+                    'steam_id': u[7],
+                    'avatar': u[8],
+                    'winrate': u[9],
+                    'week_current_streak': u[10] if len(u) > 10 else 0
                 })
             
             logger.info(f"get_dota_week_top: returning {len(result)} users")
@@ -2844,7 +2847,7 @@ def _get_dota_week_top_query(limit):
             cursor.execute("""
                 WITH wr_calc AS (
                     SELECT telegram_id, username, steam_nickname, mmr, 
-                           week_games, week_wins, rank_tier,
+                           week_games, week_wins, rank_tier, steam_id, avatar,
                            CASE WHEN week_games > 0 
                                 THEN ROUND(week_wins * 100.0 / week_games, 1) 
                                 ELSE 0 END as winrate,
@@ -2853,7 +2856,8 @@ def _get_dota_week_top_query(limit):
                     WHERE steam_id IS NOT NULL
                 )
                 SELECT telegram_id, username, steam_nickname, mmr, 
-                       week_games, week_wins, rank_tier, winrate, week_current_streak
+                       week_games, week_wins, rank_tier, steam_id, avatar,
+                       winrate, week_current_streak
                 FROM wr_calc
                 ORDER BY 
                     CASE WHEN week_games = 0 THEN 1 ELSE 0 END,
@@ -2875,8 +2879,10 @@ def _get_dota_week_top_query(limit):
                     'week_games': u[4],
                     'week_wins': u[5],
                     'rank_tier': u[6],
-                    'winrate': u[7],
-                    'week_current_streak': u[8] if len(u) > 8 else 0
+                    'steam_id': u[7],
+                    'avatar': u[8],
+                    'winrate': u[9],
+                    'week_current_streak': u[10] if len(u) > 10 else 0
                 })
             
             logger.info(f"get_dota_week_top: returning {len(result)} users")
@@ -3220,7 +3226,7 @@ def get_all_users_with_steam():
                        total_growth, total_rolls, best_streak, current_streak,
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
                        week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
-                       message_count
+                       message_count, avatar
                 FROM users 
                 WHERE steam_id IS NOT NULL AND in_chat = TRUE
             """)
@@ -3233,7 +3239,7 @@ def get_all_users_with_steam():
                 "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
                 "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
                 "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18], "last_dota_games": u[19],
-                "last_dota_wins": u[20], "message_count": u[21]
+                "last_dota_wins": u[20], "message_count": u[21], "avatar": u[22]
             } for u in users]
         else:
             cursor.execute("""
@@ -3241,7 +3247,7 @@ def get_all_users_with_steam():
                        total_growth, total_rolls, best_streak, current_streak,
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
                        week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
-                       message_count
+                       message_count, avatar
                 FROM users 
                 WHERE steam_id IS NOT NULL AND (in_chat = 1 OR in_chat IS NULL)
             """)
@@ -3254,14 +3260,15 @@ def get_all_users_with_steam():
                 "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
                 "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
                 "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18], "last_dota_games": u[19],
-                "last_dota_wins": u[20], "message_count": u[21] if len(u) > 21 else 0
+                "last_dota_wins": u[20], "message_count": u[21] if len(u) > 21 else 0,
+                "avatar": u[22] if len(u) > 22 else None
             } for u in users]
     except Exception as e:
         logger.error(f"Error get_all_users_with_steam: {e}")
         return []
     finally:
-        if conn:
-            conn.close()
+        if conn is not None:
+            release_connection(conn)
     
     
     
