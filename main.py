@@ -608,7 +608,9 @@ async def weekly_mmr_reset_job(context):
         cursor_reset.close()
         user_cache.clear()
         top_cache.clear()
-        user_cache.delete('dota_week_top')  # Сбрасываем кеш топа
+        user_cache.delete('dota_week_top')
+        from database import set_config
+        set_config('weekly_mmr_reset_date', current_week_start)
         logger.info("weekly_mmr_reset_job: еженедельная статистика MMR сброшена в 00:00 MSK")
     except Exception as e:
         logger.error(f"weekly_mmr_reset_job: ошибка при сбросе статистики: {e}")
@@ -4380,37 +4382,42 @@ async def main():
         MSK = timezone(timedelta(hours=3))
         now_msk = dt.now(MSK)
         if now_msk.weekday() == 0:  # Понедельник
-            try:
-                # Выполняем синхронный сброс
-                from database import get_connection, DATABASE_URL
-                import urllib.parse as urlparse
-                conn = get_connection()
-                cursor = conn.cursor()
-                url_parsed = urlparse.urlparse(DATABASE_URL)
-                scheme = url_parsed.scheme
-                monday_msk = now_msk - timedelta(days=0)  # уже понедельник
-                current_week_start = monday_msk.strftime("%Y-%m-%d")
-                if "postgres" in scheme:
-                    cursor.execute("""
-                        UPDATE users SET week_games = 0, week_wins = 0, week_current_streak = 0,
-                            week_best_streak = GREATEST(week_best_streak, week_current_streak),
-                            week_start_date = %s WHERE steam_id IS NOT NULL
-                    """, (current_week_start,))
-                else:
-                    cursor.execute("""
-                        UPDATE users SET week_games = 0, week_wins = 0, week_current_streak = 0,
-                            week_best_streak = MAX(week_best_streak, week_current_streak),
-                            week_start_date = ? WHERE steam_id IS NOT NULL
-                    """, (current_week_start,))
-                conn.commit()
-                cursor.close()
-                from database import user_cache, top_cache
-                user_cache.clear()
-                top_cache.clear()
-                user_cache.delete('dota_week_top')  # Сбрасываем кеш топа
-                logger.info(f"Startup: weekly stats reset for {current_week_start}")
-            except Exception as e:
-                logger.error(f"Startup weekly reset error: {e}")
+            # Проверяем, не был ли уже сброс сегодня
+            from database import get_config, set_config
+            today = now_msk.strftime("%Y-%m-%d")
+            last_reset = get_config('weekly_mmr_reset_date')
+            if last_reset != today:
+                try:
+                    # Выполняем синхронный сброс
+                    from database import get_connection, DATABASE_URL
+                    import urllib.parse as urlparse
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    url_parsed = urlparse.urlparse(DATABASE_URL)
+                    scheme = url_parsed.scheme
+                    current_week_start = today
+                    if "postgres" in scheme:
+                        cursor.execute("""
+                            UPDATE users SET week_games = 0, week_wins = 0, week_current_streak = 0,
+                                week_best_streak = GREATEST(week_best_streak, week_current_streak),
+                                week_start_date = %s WHERE steam_id IS NOT NULL
+                        """, (current_week_start,))
+                    else:
+                        cursor.execute("""
+                            UPDATE users SET week_games = 0, week_wins = 0, week_current_streak = 0,
+                                week_best_streak = MAX(week_best_streak, week_current_streak),
+                                week_start_date = ? WHERE steam_id IS NOT NULL
+                        """, (current_week_start,))
+                    conn.commit()
+                    cursor.close()
+                    from database import user_cache, top_cache
+                    user_cache.clear()
+                    top_cache.clear()
+                    user_cache.delete('dota_week_top')
+                    set_config('weekly_mmr_reset_date', today)
+                    logger.info(f"Startup: weekly stats reset for {current_week_start}")
+                except Exception as e:
+                    logger.error(f"Startup weekly reset error: {e}")
 
         
 
