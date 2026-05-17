@@ -684,8 +684,10 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         import requests as req
 
         if not top_heroes:
+            logger.warning(f"generate_heroes_image: top_heroes is empty")
             return None
 
+        logger.info(f"generate_heroes_image: generating for {len(top_heroes)} heroes")
         target_width = 1744
         target_height = 592
         img = _compose_heroes_strip_background(target_width, target_height)
