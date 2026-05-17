@@ -4367,12 +4367,48 @@ async def main():
             days=(6,)  # Только воскресенье
         )
 
-        # ✅ Сброс MMR статистики в понедельник 00:00 MSK (начало новой недели)
+# ✅ Сброс MMR статистики в понедельник 00:00 MSK (начало новой недели)
         job_queue.run_daily(
             weekly_mmr_reset_job,
             time=datetime.time(hour=21, minute=0),  # 21:00 UTC = 00:00 MSK
             days=(0,),  # Только понедельник
         )
+
+        # Если бот стартует в понедельник после 00:00 - выполняем сброс немедленно
+        from datetime import datetime as dt, timezone, timedelta
+        MSK = timezone(timedelta(hours=3))
+        now_msk = dt.now(MSK)
+        if now_msk.weekday() == 0:  # Понедельник
+            try:
+                # Выполняем синхронный сброс
+                from database import get_connection, DATABASE_URL
+                import urllib.parse as urlparse
+                conn = get_connection()
+                cursor = conn.cursor()
+                url_parsed = urlparse.urlparse(DATABASE_URL)
+                scheme = url_parsed.scheme
+                monday_msk = now_msk - timedelta(days=0)  # уже понедельник
+                current_week_start = monday_msk.strftime("%Y-%m-%d")
+                if "postgres" in scheme:
+                    cursor.execute("""
+                        UPDATE users SET week_games = 0, week_wins = 0, week_current_streak = 0,
+                            week_best_streak = GREATEST(week_best_streak, week_current_streak),
+                            week_start_date = %s WHERE steam_id IS NOT NULL
+                    """, (current_week_start,))
+                else:
+                    cursor.execute("""
+                        UPDATE users SET week_games = 0, week_wins = 0, week_current_streak = 0,
+                            week_best_streak = MAX(week_best_streak, week_current_streak),
+                            week_start_date = ? WHERE steam_id IS NOT NULL
+                    """, (current_week_start,))
+                conn.commit()
+                cursor.close()
+                from database import user_cache, top_cache
+                user_cache.clear()
+                top_cache.clear()
+                logger.info(f"Startup: weekly stats reset for {current_week_start}")
+            except Exception as e:
+                logger.error(f"Startup weekly reset error: {e}")
 
         
 
