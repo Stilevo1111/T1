@@ -1140,11 +1140,11 @@ class Database:
             scheme = url.scheme
             
             if "postgres" in scheme:
-                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure FROM users WHERE in_chat = TRUE ORDER BY fissure DESC LIMIT %s"
+                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure FROM users WHERE (in_chat = TRUE OR in_chat IS NULL) ORDER BY fissure DESC NULLS LAST LIMIT %s"
                 users = self.execute_query(query, (limit,), fetch="all")
                 return [{"telegram_id": u["telegram_id"], "username": u["username"], "steam_nickname": u["steam_nickname"], "first_name": u["first_name"], "fissure": u["fissure"]} for u in users]
             else:
-                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure FROM users WHERE in_chat = 1 OR in_chat IS NULL ORDER BY fissure DESC LIMIT ?"
+                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure FROM users ORDER BY fissure DESC LIMIT ?"
                 users = self.execute_query(query, (limit,), fetch="all")
                 return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], "first_name": u[3], "fissure": u[4]} for u in users]
         except Exception as e:
@@ -1160,7 +1160,7 @@ class Database:
                 query = """
                     SELECT COUNT(*) + 1 as rank FROM users WHERE mmr > (
                         SELECT mmr FROM users WHERE telegram_id = %s LIMIT 1
-                    ) AND steam_id IS NOT NULL AND in_chat = TRUE
+                    ) AND steam_id IS NOT NULL
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 # Если пользователь первый (нет тех, у кого больше MMR), возвращаем 1
@@ -1173,7 +1173,7 @@ class Database:
                 query = """
                     SELECT COUNT(*) + 1 FROM users WHERE mmr > (
                         SELECT mmr FROM users WHERE telegram_id = ? LIMIT 1
-                    ) AND steam_id IS NOT NULL AND (in_chat = 1 OR in_chat IS NULL)
+                    ) AND steam_id IS NOT NULL
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 # Если пользователь первый (нет тех, у кого больше MMR), возвращаем 1
@@ -2525,12 +2525,43 @@ def get_dota_mmr_top(limit=10):
                                 THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1)
                                 ELSE 0 END as winrate
                   FROM users
-                  WHERE steam_id IS NOT NULL AND rank_tier > 0
+                  WHERE steam_id IS NOT NULL
               ORDER BY
-                  rank_tier DESC,
+                  COALESCE(rank_tier, 0) DESC,
                   mmr DESC,
                   wins DESC
              LIMIT %s
+            """, (limit,))
+            users = cursor.fetchall()
+            cursor.close()
+            result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
+                    "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
+                    "week_games": u[6], "week_wins": u[7],
+"rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11]} for u in users]
+
+            # Сохранить в кеш config
+            try:
+                set_config('mmr_top_cache', json.dumps(result))
+                logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
+            except Exception as e:
+                logger.warning(f"Failed to save MMR top cache: {e}")
+
+            return result
+        else:
+            cursor.execute("""
+                SELECT telegram_id, username, steam_nickname, mmr,
+                       dota_total_games, dota_wins, week_games, week_wins,
+                       rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
+ CASE WHEN week_games > 0
+                               THEN ROUND(week_wins * 100.0 / week_games, 1)
+                               ELSE 0 END as winrate
+                 FROM users
+                 WHERE steam_id IS NOT NULL
+                  ORDER BY
+                      COALESCE(rank_tier, 0) DESC,
+                      mmr DESC,
+                      wins DESC
+                 LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
             cursor.close()
@@ -2547,35 +2578,6 @@ def get_dota_mmr_top(limit=10):
                 logger.warning(f"Failed to save MMR top cache: {e}")
 
             return result
-        else:
-            cursor.execute("""
-                SELECT telegram_id, username, steam_nickname, mmr,
-                       dota_total_games, dota_wins, week_games, week_wins,
-                       rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
- CASE WHEN week_games > 0
-                             THEN ROUND(week_wins * 100.0 / week_games, 1)
-                             ELSE 0 END as winrate
-                FROM users
-                WHERE steam_id IS NOT NULL AND rank_tier > 0
-                 ORDER BY
-                     rank_tier DESC,
-                     mmr DESC,
-                     wins DESC
-                LIMIT ?
-            """, (limit,))
-            users = cursor.fetchall()
-            cursor.close()
-            result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
-                    "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
-                    "week_games": u[6], "week_wins": u[7],
-                    "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11]} for u in users]
-
-            # Сохранить в кеш config
-            try:
-                set_config('mmr_top_cache', json.dumps(result))
-                logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
-            except Exception as e:
-                logger.warning(f"Failed to save MMR top cache: {e}")
 
             return result
     except Exception as e:
@@ -2781,15 +2783,10 @@ def _get_dota_week_top_query(limit):
         # Сначала проверим, есть ли вообще данные
         cursor.execute("""
             SELECT COUNT(*) FROM users
-            WHERE steam_id IS NOT NULL AND week_games > 0
+            WHERE steam_id IS NOT NULL
         """)
         total_with_steam = cursor.fetchone()[0]
-        cursor.execute("""
-            SELECT COUNT(*) FROM users 
-            WHERE steam_id IS NOT NULL AND week_games > 0
-        """)
-        count = cursor.fetchone()[0]
-        logger.info(f"get_dota_week_top: {total_with_steam} users with steam_id, {count} with week_games > 0")
+        logger.info(f"get_dota_week_top: {total_with_steam} users with steam_id")
         
         # Если есть пользователи с steam_id, выполняем запрос
         if total_with_steam > 0:
