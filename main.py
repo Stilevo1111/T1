@@ -570,12 +570,13 @@ async def weekly_champion_announcement_job(context):
 
 
 async def weekly_mmr_reset_job(context):
-    """Сброс еженедельной статистики MMR в 00:00 MSK."""
+    """Сброс еженедельной статистики MMR в понедельник 00:00 MSK."""
     from datetime import datetime as dt, timezone, timedelta
     MSK = timezone(timedelta(hours=3))
     today_msk = dt.now(MSK)
-    sunday_msk = today_msk - timedelta(days=(today_msk.weekday() + 1) % 7)
-    current_week_start = sunday_msk.strftime("%Y-%m-%d")
+    # Понедельник - начало недели (weekday 0 = Monday)
+    monday_msk = today_msk - timedelta(days=today_msk.weekday())
+    current_week_start = monday_msk.strftime("%Y-%m-%d")
 
     try:
         from database import get_connection, DATABASE_URL
@@ -612,12 +613,13 @@ async def weekly_mmr_reset_job(context):
         logger.error(f"weekly_mmr_reset_job: ошибка при сбросе статистики: {e}")
 
 async def announce_weekly_mmr_winner(bot):
-    """Отправляет поздравление победителю недельного топа MMR при смене недели."""
+    """Отправляет поздравление победителю недельного топа MMR в воскресенье."""
     from datetime import datetime as dt, timezone, timedelta
     MSK = timezone(timedelta(hours=3))
     today_msk = dt.now(MSK)
-    sunday_msk = today_msk - timedelta(days=(today_msk.weekday() + 1) % 7)
-    current_week_start = sunday_msk.strftime("%Y-%m-%d")
+    # Понедельник - начало недели (weekday 0 = Monday)
+    monday_msk = today_msk - timedelta(days=today_msk.weekday())
+    current_week_start = monday_msk.strftime("%Y-%m-%d")
 
     last_announced = get_config('mmr_week_top_announced')
     if last_announced == current_week_start:
@@ -4365,11 +4367,11 @@ async def main():
             days=(6,)  # Только воскресенье
         )
 
-        # ✅ Сброс MMR статистики в воскресенье 00:00 MSK
+        # ✅ Сброс MMR статистики в понедельник 00:00 MSK (начало новой недели)
         job_queue.run_daily(
             weekly_mmr_reset_job,
             time=datetime.time(hour=21, minute=0),  # 21:00 UTC = 00:00 MSK
-            days=(6,)  # Только воскресенье
+            days=(0,),  # Только понедельник
         )
 
         

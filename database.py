@@ -3123,6 +3123,10 @@ SELECT telegram_id, username, fissure, last_fissure, last_message_id,
 
 def reset_weekly_stats():
     """Сброс недельной статистики для всех пользователей (вызывается по понедельникам)"""
+    from datetime import datetime as dt, timezone, timedelta
+    MSK = timezone(timedelta(hours=3))
+    monday_msk = dt.now(MSK) - timedelta(days=dt.now(MSK).weekday())
+    current_week_start = monday_msk.strftime("%Y-%m-%d")
     try:
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
@@ -3132,17 +3136,17 @@ def reset_weekly_stats():
         
         if "postgres" in scheme:
             cursor.execute("""
-                UPDATE users SET week_games = 0, week_wins = 0 WHERE steam_id IS NOT NULL
-            """)
+                UPDATE users SET week_games = 0, week_wins = 0, week_current_streak = 0, week_best_streak = GREATEST(week_best_streak, week_current_streak), week_start_date = %s WHERE steam_id IS NOT NULL
+            """, (current_week_start,))
         else:
             cursor.execute("""
-                UPDATE users SET week_games = 0, week_wins = 0 WHERE steam_id IS NOT NULL
-            """)
+                UPDATE users SET week_games = 0, week_wins = 0, week_current_streak = 0, week_best_streak = MAX(week_best_streak, week_current_streak), week_start_date = ? WHERE steam_id IS NOT NULL
+            """, (current_week_start,))
         
         affected = cursor.rowcount
         conn.commit()
         cursor.close()
-        logger.info(f"Сброшена недельная статистика для {affected} пользователей")
+        logger.info(f"Сброшена недельная статистика для {affected} пользователей, week_start_date={current_week_start}")
         return affected
     except Exception as e:
         logger.error(f"Error reset_weekly_stats: {e}")
