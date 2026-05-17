@@ -3457,13 +3457,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 steam_id = target_user.get('steam_id')
                 top_heroes = []
                 
-                if steam_id and week_games > 0:
+                if steam_id:
                     # Параллельно получаем матчи и героев
                     try:
                         matches, top_heroes = await asyncio.gather(
                             get_recent_matches_async(steam_id, limit=50),
                             get_top_heroes_async(steam_id, last_n=10, top_k=5)
                         )
+                        logger.info(f"Steam {steam_id}: got {len(matches)} matches, {len(top_heroes) if top_heroes else 0} heroes")
                     except asyncio.TimeoutError:
                         logger.warning(f"Timeout getting matches/heroes for steam_id={steam_id}, using cache/default")
                     except Exception as e:
