@@ -608,6 +608,7 @@ async def weekly_mmr_reset_job(context):
         cursor_reset.close()
         user_cache.clear()
         top_cache.clear()
+        user_cache.delete('dota_week_top')  # Сбрасываем кеш топа
         logger.info("weekly_mmr_reset_job: еженедельная статистика MMR сброшена в 00:00 MSK")
     except Exception as e:
         logger.error(f"weekly_mmr_reset_job: ошибка при сбросе статистики: {e}")
@@ -4406,6 +4407,7 @@ async def main():
                 from database import user_cache, top_cache
                 user_cache.clear()
                 top_cache.clear()
+                user_cache.delete('dota_week_top')  # Сбрасываем кеш топа
                 logger.info(f"Startup: weekly stats reset for {current_week_start}")
             except Exception as e:
                 logger.error(f"Startup weekly reset error: {e}")
