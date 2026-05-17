@@ -352,8 +352,9 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from datetime import datetime as dt, timezone, timedelta
         MSK = timezone(timedelta(hours=3))
         today_msk = dt.now(MSK)
-        sunday_msk = today_msk - timedelta(days=(today_msk.weekday() + 1) % 7)
-        current_week_start = sunday_msk.strftime("%Y-%m-%d")
+        # Понедельник - начало недели (weekday 0 = Monday)
+        monday_msk = today_msk - timedelta(days=today_msk.weekday())
+        current_week_start = monday_msk.strftime("%Y-%m-%d")
 
         last_announced = get_config('mmr_week_top_announced')
         digest_chat_id = get_config('digest_chat_id')
@@ -3450,7 +3451,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             week_losses = week_games - week_wins
             winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
 
-# Получаем последние 10 игр для отображения
             last_10_balls = ""
             try:
                 from dota_mmr import get_recent_matches_async, get_top_heroes_async
@@ -3462,7 +3462,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                         matches, top_heroes = await asyncio.gather(
                             get_recent_matches_async(steam_id, limit=50),
-                            get_top_heroes_async(steam_id, last_n=20, top_k=5)
+                            get_top_heroes_async(steam_id, last_n=10, top_k=5)
                         )
                     except asyncio.TimeoutError:
                         logger.warning(f"Timeout getting matches/heroes for steam_id={steam_id}, using cache/default")
@@ -3497,7 +3497,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if medals:
                 text += " " + " ".join(medals)
 
-            text += "\n\n🌟 Любимые герои за 20 матчей:"
+            # Добавляем героев только если они есть
+            if top_heroes:
+                text += "\n\n🌟 Любимые герои за 10 матчей:"
         else:
             text += "\n\n💡 /profile ＠ник — чужой профиль"
 
