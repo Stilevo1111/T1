@@ -75,16 +75,22 @@ class UserCache:
         with self._lock:
             self._cache.pop(telegram_id, None)
             self._dirty.pop(telegram_id, None)
-            
+             
     def delete(self, telegram_id):
         """Псевдоним для remove для обратной совместимости"""
         self.remove(telegram_id)
-    
+
     def delete_key(self, key):
         """Удалить конкретный ключ из кеша"""
         with self._lock:
-            if key in self._cache:
-                del self._cache[key]
+            self._cache.pop(key, None)
+            self._dirty.pop(key, None)
+
+    def clear(self):
+        """Очистить весь кеш"""
+        with self._lock:
+            self._cache.clear()
+            self._dirty.clear()
     
     def enforce_limit(self):
         with self._lock:
