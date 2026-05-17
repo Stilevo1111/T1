@@ -642,14 +642,14 @@ async def announce_weekly_mmr_winner(bot):
 
     is_sunday = today_msk.weekday() == 6
 
-    # В воскресенье проверяем, что есть игроки с новыми данными
-    if is_sunday and stale_count == 0:
-        logger.info("announce_weekly_mmr_winner: в воскресенье stale_count == 0 - данных за новую неделю ещё нет")
+    # Объявление только в воскресенье
+    if not is_sunday:
+        logger.info("announce_weekly_mmr_winner: не воскресенье - пропускаем")
         return False
 
-    # Если не воскресенье и нет данных за прошлую неделю — пропускаем
-    if not is_sunday and stale_count == 0:
-        logger.info("announce_weekly_mmr_winner: нет данных за прошлую неделю и не воскресенье")
+    # В воскресенье проверяем, что есть игроки с новыми данными
+    if stale_count == 0:
+        logger.info("announce_weekly_mmr_winner: в воскресенье stale_count == 0 - данных за новую неделю ещё нет")
         return False
 
     digest_chat_id = get_config('digest_chat_id')
