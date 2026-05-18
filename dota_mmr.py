@@ -50,8 +50,8 @@ _circuit_breaker = {
     "state": "CLOSED",  # CLOSED, OPEN, HALF_OPEN
     "failure_count": 0,
     "last_failure_time": 0,
-    "failure_threshold": 5,  # количество неудач перед открытием
-    "recovery_timeout": 300,  # 5 минут до попытки восстановления
+    "failure_threshold": 10,  # количество неудач перед открытием (увеличено для большей толерантности)
+    "recovery_timeout": 60,   # 1 минута до попытки восстановления (уменьшено для более быстрого восстановления)
 }
 
 def _circuit_breaker_can_execute() -> bool:
@@ -87,11 +87,18 @@ def _circuit_breaker_record_failure():
     """Записать неудачный запрос"""
     cb = _circuit_breaker
     cb["failure_count"] += 1
-    cb["last_failure_time"] = time.time()
     
-    if cb["failure_count"] >= cb["failure_threshold"]:
+    if cb["state"] == "CLOSED":
+        if cb["failure_count"] >= cb["failure_threshold"]:
+            cb["state"] = "OPEN"
+            cb["last_failure_time"] = time.time()
+            logger.warning(f"Circuit breaker: OPEN - too many failures ({cb['failure_count']})")
+    elif cb["state"] == "HALF_OPEN":
+        # Failure in half-open state -> immediately open again
         cb["state"] = "OPEN"
-        logger.warning(f"Circuit breaker: OPEN - too many failures ({cb['failure_count']})")
+        cb["last_failure_time"] = time.time()
+        logger.warning(f"Circuit breaker: OPEN - failure in half-open state")
+    # If already OPEN, do nothing - keep the original open time for timeout calculation
 
 # Простой кеш для запросов (5 минут)
 _cache = {}
