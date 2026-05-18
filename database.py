@@ -403,7 +403,19 @@ def get_connection():
         with _pool_lock:
             if _persistent_pg_conn is None or _persistent_pg_conn.closed:
                 _persistent_pg_conn = psycopg2.connect(**_postgres_connect_kwargs())
-                logger.info("PostgreSQL connected (persistent)")
+                _persistent_pg_conn.autocommit = True
+                logger.info("PostgreSQL connected (persistent, autocommit=True)")
+            else:
+                try:
+                    status = _persistent_pg_conn.get_transaction_status()
+                    if status != psycopg2.extensions.TRANSACTION_STATUS_IDLE:
+                        logger.warning("Persistent connection was in non-idle state, rolling back before reuse")
+                        _persistent_pg_conn.rollback()
+                except Exception:
+                    try:
+                        _persistent_pg_conn.rollback()
+                    except Exception:
+                        pass
             return _persistent_pg_conn
 
     print(f"[DB] Getting connection, type: {db_type}")
