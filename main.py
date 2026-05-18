@@ -12,6 +12,7 @@ import urllib.parse as urlparse
 import hashlib
 from datetime import timezone, timedelta
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.request import HTTPXRequest
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, get_dota_week_rank, DATABASE_URL, reset_all_fissure_data, cleanup_left_users
@@ -4300,7 +4301,15 @@ async def main():
         asyncio.create_task(preload_start_card_bg())
 
         job_queue = JobQueue()
-        app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).build()
+        # Create HTTPXRequest with increased timeouts to prevent Telegram API timeouts
+        request = HTTPXRequest(
+            connection_pool_size=8,
+            read_timeout=30.0,
+            write_timeout=30.0,
+            connect_timeout=30.0,
+            pool_timeout=30.0
+        )
+        app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).request(request).build()
         job_queue.set_application(app)
 
         # ✅ Утреннее приветствие 09:00 MSK
