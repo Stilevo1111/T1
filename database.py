@@ -320,7 +320,8 @@ def update_dota_week_top_cache():
     
     logger.info("===== TOP USERS AFTER SORT =====")
     for i, u in enumerate(top_users):
-        logger.info(f"  POS{i+1}. {u.get('steam_nickname')}: {u.get('week_wins')}W/{u.get('week_games')}L, WR={u.get('winrate')}%")
+        week_losses = u.get('week_games', 0) - u.get('week_wins', 0)
+        logger.info(f"  POS{i+1}. {u.get('steam_nickname')}: {u.get('week_wins')}W/{week_losses}L, WR={u.get('winrate')}%")
     logger.info("===== END SORT =====")
     
     # Сохраняем в кеш
@@ -2699,58 +2700,6 @@ def get_dota_week_top(limit=10, force_refresh=False):
             get_dota_week_top._calculating[0] = False
             logger.error(f"get_dota_week_top error: {e}")
             return []
-        return []
-    
-    # Формируем топ из ВСЕХ пользователей с steam_id
-    top_users = []
-    seen_ids = set()  # Убираем дубликаты по telegram_id
-    for telegram_id in all_users:
-        if not isinstance(telegram_id, int):
-            continue
-        if telegram_id in seen_ids:  # Пропускаем дубликаты
-            continue
-        seen_ids.add(telegram_id)
-        
-        user = user_cache.get(telegram_id)
-        if not user or not user.get('steam_id'):
-            continue
-        
-        week_games = user.get('week_games', 0)
-        # Пропускаем пользователей без игр за неделю
-        if week_games == 0:
-            continue
-        
-        week_wins = user.get('week_wins', 0)
-        winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
-        
-        top_users.append({
-            'telegram_id': telegram_id,
-            'username': user.get('username'),
-            'steam_nickname': user.get('steam_nickname'),
-            'mmr': user.get('mmr', 0),
-            'week_games': week_games,
-            'week_wins': week_wins,
-            'rank_tier': user.get('rank_tier', 0),
-            'winrate': winrate,
-            'week_current_streak': user.get('week_current_streak', 0)
-        })
-    
-    # Сохраняем в кеш с timestamp
-    user_cache.set('dota_week_top', top_users)
-    user_cache.set('dota_week_top_ts', current_time)
-    
-    # Сортируем по формуле
-    def get_sort_key(x):
-        g = x.get('week_games', 0)
-        w = x.get('week_wins', 0)
-        l = g - w  # losses
-        if g == 0:
-            return (3, 0, 0)  # Игроки без игр - в САМЫЙ КОНЕЦ (приоритет 3)
-        score = w - l  # победы - поражения
-        return (0, -score, -g)
-
-    top_users.sort(key=get_sort_key)
-    return top_users[:limit]
 
 
 def get_dota_week_top_from_db(limit=10, force_refresh=False):
