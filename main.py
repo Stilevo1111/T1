@@ -823,9 +823,6 @@ async def update_all_mmr_job(context):
         success_count = 0
         rank_up_users = []  # собираем для уведомлений
 
-        # Pre-fetch all user data in one query to avoid N queries
-        users_by_id = {u['telegram_id']: u for u in users}
-
         for user in users:
             try:
                 # Run blocking update_user_mmr in thread pool to avoid blocking event loop
@@ -833,18 +830,6 @@ async def update_all_mmr_job(context):
                 if result and result.get('success'):
                     success_count += 1
                     logger.info(f"MMR updated for {user['telegram_id']}: {result.get('mmr')} MMR")
-
-                    # Sync week stats from pre-fetched data instead of individual DB query
-                    db_user = users_by_id.get(user['telegram_id'])
-                    if db_user:
-                        existing = user_cache.get(user['telegram_id']) or {}
-                        user_cache.set(user['telegram_id'], {
-                            **existing,
-                            'week_games': db_user.get('week_games', 0),
-                            'week_wins': db_user.get('week_wins', 0),
-                            'week_best_streak': db_user.get('week_best_streak', 0),
-                            'week_current_streak': db_user.get('week_current_streak', 0)
-                        })
 
                     if result.get('rank_up'):
                         fresh_user = get_user(user['telegram_id']) or user
