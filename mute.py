@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler, MessageHandler, filters
+from telegram.ext import ContextTypes, CommandHandler, MessageHandler
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +50,6 @@ _gag_auto_release_tasks: dict[int, asyncio.Task] = {}
 
 
 # ─── Вспомогательные методы ──────────────────────────────────────────────────
-
-import random as _random
 
 def _pick_gag_emoji(victim_id: int) -> str:
     """Выбрать смайл кляпа детерминированно по ID жертвы (стабильно между перезапусками)."""
@@ -211,13 +209,15 @@ async def _do_give_gag(
 
     # ── 6. Анонс в чат (отдельным сообщением, не реплай) ───────────────────
     gag_emoji    = _pick_gag_emoji(victim_id)
+    victim_name  = victim.get("username") or victim.get("first_name") or str(victim_id)
+    admin_name   = admin.get("username") or admin.get("first_name") or str(admin_id)
     victim_link  = (
         f"<a href='tg://user?id={victim_id}'>"
-        f"{victim.get('username', victim_name)}</a>"
+        f"{victim_name}</a>"
     )
     admin_link   = (
         f"<a href='tg://user?id={admin_id}'>"
-        f"{admin.get('username', admin_name)}</a>"
+        f"{admin_name}</a>"
     )
     announcement = (
         f"👤 {admin_link} дал(а) кляп {victim_link} {gag_emoji} на 30 секунд!"
