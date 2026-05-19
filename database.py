@@ -871,62 +871,23 @@ def migrate_db():
         logger.error(f"Migration start error: {e}")
         return False
 
+_config_cache = {}
+_config_cache_time = {}
+_CONFIG_CACHE_TTL = 60  # секунд
+
 class Database:
-    """Класс для работы с базой данных с улучшенным управлением соединениями"""
-    _instance = None
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(Database, cls).__new__(cls)
-            cls._instance.conn = None
-        return cls._instance
-    
-    def __init__(self):
-        # Singleton - инициализация только один раз
-        pass
-    
-    def connect(self):
-        """Устанавливаем соединение с проверкой активности"""
-        if not self.conn or getattr(self.conn, "closed", False):
-            self.conn = get_connection()
-        return self.conn
-    
-    def execute_query(self, query, params=None, fetch=None):
-        """Унифицированный метод выполнения запросов"""
+    def get_config(self, key, default=None, use_cache=True):
+        """Получить значение конфигурации с кешированием"""
+        global _config_cache, _config_cache_time
+        
+        if use_cache:
+            cached_val = _config_cache.get(key)
+            cached_time = _config_cache_time.get(key, 0)
+            if cached_val is not None and (time.time() - cached_time) < _CONFIG_CACHE_TTL:
+                if key == 'alternate_digest_type' or (cached_val != '0' and cached_val != ''):
+                    return cached_val if cached_val != '0' else default
+        
         try:
-            conn = self.connect()
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
-            
-            if get_db_type() == "postgresql":
-                # Для PostgreSQL используем RealDictCursor для доступа по ключу
-                cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            else:
-                cursor = conn.cursor()
-            
-            if params:
-                cursor.execute(query, params)
-            else:
-                cursor.execute(query)
-            
-            if fetch == "one":
-                result = cursor.fetchone()
-            elif fetch == "all":
-                result = cursor.fetchall()
-            else:
-                result = cursor.rowcount
-            
-            conn.commit()
-            cursor.close()
-            return result
-        except Exception as e:
-            logger.error(f"Database query failed: {e}")
-            return None
-    
-    def add_user(self, user_id, username, first_name, last_name):
-        """Добавление/обновление пользователя"""
-        try:
-            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             
@@ -1258,53 +1219,51 @@ class Database:
             logger.error(f"Error decreasing inactive fissure: {e}")
             return 0
     
-    def get_config(self, key, default=None):
-        """Получить значение конфигурации"""
+    def get_config(self, key, default=None, use_cache=True):
+        """Получить значение конфигурации с кешированием"""
+        if use_cache and key in _config_cache and (time.time() - _config_cache_time.get(key, 0)) < _CONFIG_CACHE_TTL:
+            return _config_cache[key]
+        
+        result = default
         try:
-            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            logger.debug(f"get_config: key={key}, scheme={scheme}")
             
             if "postgres" in scheme:
                 query = "SELECT value FROM bot_config WHERE key = %s"
-                result = self.execute_query(query, (key,), fetch="one")
-                logger.debug(f"get_config result: {result}, type={type(result)}")
-                if result is None:
-                    logger.debug(f"get_config: result is None, returning default={default}")
-                    return default
-                # PostgreSQL с RealDictCursor возвращает словарь {'value': '...'}
-                if isinstance(result, dict):
-                    val = result.get('value')
-                    logger.debug(f"get_config: dict value = {repr(val)}")
-                    # Для alternate_digest_type разрешаем "0" как валидное значение
+                row = self.execute_query(query, (key,), fetch="one")
+                if row is None:
+                    result = default
+                elif isinstance(row, dict):
+                    val = row.get('value')
                     if key == 'alternate_digest_type' and val in ('0', '1'):
-                        return val
-                    # Проверяем что значение не пустое и не "0"
-                    if val is not None and val != '' and val != '0':
-                        return val
-                    logger.info(f"get_config: empty or zero value, returning default={default}")
-                    return default
-                # result может быть (value,) или просто value
-                if isinstance(result, tuple):
-                    val = result[0]
-                    if val and str(val) != '0':
-                        return val
-                    return default
-                if result and result != '0':
-                    return result
-                return default
+                        result = val
+                    elif val is not None and val != '' and val != '0':
+                        result = val
+                    else:
+                        result = default
+                elif isinstance(row, tuple):
+                    val = row[0]
+                    result = val if val and str(val) != '0' else default
+                else:
+                    result = row if row and row != '0' else default
             else:
                 query = "SELECT value FROM bot_config WHERE key = ?"
-                result = self.execute_query(query, (key,), fetch="one")
-                if result is None:
-                    return default
-                if isinstance(result, tuple):
-                    return result[0] if result[0] else default
-                return result if result else default
+                row = self.execute_query(query, (key,), fetch="one")
+                if row is None:
+                    result = default
+                elif isinstance(row, tuple):
+                    result = row[0] if row[0] else default
+                else:
+                    result = row if row else default
         except Exception as e:
             logger.error(f"Error getting config: {e}")
             return default
+        
+        if use_cache and result != default:
+            _config_cache[key] = result
+            _config_cache_time[key] = time.time()
+        return result
     
     def set_config(self, key, value):
         """Установить значение конфигурации"""
@@ -1337,6 +1296,11 @@ class Database:
                     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
                 """
                 self.execute_query(query, (key, str(value)))
+            
+            # Invalidate cache
+            if key in _config_cache:
+                del _config_cache[key]
+                del _config_cache_time[key]
             
             logger.info(f"set_config completed for key={key}")
             return True
