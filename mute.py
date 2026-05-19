@@ -202,16 +202,17 @@ async def _do_give_gag(
     _gagged_users[victim_id] = expiry
 
     # ── 6. Анонс в чат (отдельным сообщением, не реплай) ───────────────────
-    admin_name   = admin.get("username") or admin.get("first_name") or str(admin_id)
-    victim_name  = victim.get("username") or victim.get("first_name") or str(victim_id)
     gag_emoji    = _pick_gag_emoji(victim_id)
-    # Имя админа кликабельно — ссылка на профиль Telegram
+    victim_link  = (
+        f"<a href='tg://user?id={victim_id}'>"
+        f"{victim.get('username', victim_name)}</a>"
+    )
     admin_link   = (
-        f"<a href='tg://user?id={admin_id}'>{admin_name}</a>"
+        f"<a href='tg://user?id={admin_id}'>"
+        f"{admin.get('username', admin_name)}</a>"
     )
     announcement = (
-        f"👤 {admin_link} дал(а) кляп @{victim.get('username', victim_name)} "
-        f"{gag_emoji} на {_MUTE_DURATION_SEC} секунд!"
+        f"👤 {admin_link} дал(а) кляп {victim_link} {gag_emoji} на 30 секунд!"
     )
     announce_msg = await context.bot.send_message(
         chat_id=chat_id,
