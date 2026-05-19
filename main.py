@@ -2562,15 +2562,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     logger.debug(f"Could not delete user message {user_msg_id}: {e}")
 
-        # Delete last bot message
+# Delete last bot message
         try:
             await delete_last_bot_message(context.bot, chat_id, user_id)
         except:
             pass
 
         loading_msg = None
+        animation_task = None
 
-        # Send animated loading message with ⏳⌛️
+        # Send loading message and start animation in parallel
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
@@ -2578,26 +2579,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             logger.info(f"Created loading message in start: chat_id={chat_id}, msg_id={loading_msg.message_id}")
 
-            # Animate with alternating clocks ⏳⌛️
-            for i in range(3):
-                await asyncio.sleep(0.35)
-                frame = "⌛️" if i % 2 == 1 else "⏳"
-                messages = [
-                    "Загружаю меню...",
-                    "Подготавливаю интерфейс...",
-                    "Строю карточку...",
-                    "Готово!"
-                ]
-                try:
-                    # На последнем кадре не редактируем, а удаляем заглушку
-                    if i == 2:
-                        await loading_msg.delete()
-                        loading_msg = None
+            # Start animation as background task
+            async def animate_loading():
+                for i in range(3):
+                    try:
+                        await asyncio.sleep(0.35)
+                    except asyncio.CancelledError:
+                        return
+                    if loading_msg is None:
                         break
-                    await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
-                except Exception:
-                    break
+                    frame = "⌛️" if i % 2 == 1 else "⏳"
+                    messages = ["Загружаю меню...", "Подготавливаю интерфейс...", "Строю карточку...", "Готово!"]
+                    try:
+                        await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                    except Exception:
+                        pass
 
+            animation_task = asyncio.create_task(animate_loading())
         except Exception as e:
             logger.debug(f"Could not send loading message: {e}")
             loading_msg = None
@@ -2648,9 +2646,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update_last_message_id(user_id, msg.message_id)
                 # Auto-delete after 30 seconds
                 schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
-            else:
-                await menu_handler(update, context)
-            if loading_msg:
+                if animation_task:
+                    animation_task.cancel()
+                if loading_msg:
                     try:
                         msg_id = loading_msg.message_id
                         logger.info(f"Deleting loading message: chat_id={chat_id}, msg_id={msg_id}")
@@ -2658,46 +2656,52 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         logger.info(f"Successfully deleted loading message {msg_id}")
                     except Exception as e:
                         logger.error(f"Failed to delete loading message: {e}")
-            return
-
-        # No Steam - show card with Telegram avatar, no message count
-        from dota_mmr import generate_start_card
-
-        avatar_url = await get_user_avatar_url(context.bot, user_id)
-
-        # Run blocking card generation in thread pool to avoid blocking event loop
-        card_data = await asyncio.to_thread(
-            generate_start_card,
-            avatar_url=avatar_url,
-            message_count=message_count,
-            username=display_username,
-            steam_nickname=None,
-            rank_tier=0,
-            weekly_mvp=0,
-            weekly_top2=0,
-            weekly_top3=0
-        )
-
-        if card_data:
-            msg = await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=card_data,
-                reply_markup=main_menu()
-            )
-            set_last_bot_message(chat_id, user_id, msg.message_id)
-            update_last_message_id(user_id, msg.message_id)
-            # Auto-delete after 30 seconds
-            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+                return
+            else:
+                await menu_handler(update, context)
         else:
-            await menu_handler(update, context)
-        if loading_msg:
-            try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-                logger.info(f"Deleted loading message {loading_msg.message_id} in start (no Steam)")
-            except Exception as e:
-                logger.warning(f"Failed to delete loading message in start: {e}")
+            # No Steam - show card with Telegram avatar, no message count
+            from dota_mmr import generate_start_card
+
+            avatar_url = await get_user_avatar_url(context.bot, user_id)
+
+            # Run blocking card generation in thread pool to avoid blocking event loop
+            card_data = await asyncio.to_thread(
+                generate_start_card,
+                avatar_url=avatar_url,
+                message_count=message_count,
+                username=display_username,
+                steam_nickname=None,
+                rank_tier=0,
+                weekly_mvp=0,
+                weekly_top2=0,
+                weekly_top3=0
+            )
+
+            if card_data:
+                msg = await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=card_data,
+                    reply_markup=main_menu()
+                )
+                set_last_bot_message(chat_id, user_id, msg.message_id)
+                update_last_message_id(user_id, msg.message_id)
+                # Auto-delete after 30 seconds
+                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+            else:
+                await menu_handler(update, context)
+            if animation_task:
+                animation_task.cancel()
+            if loading_msg:
+                try:
+                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                    logger.info(f"Deleted loading message {loading_msg.message_id} in start (no Steam)")
+                except Exception as e:
+                    logger.warning(f"Failed to delete loading message in start: {e}")
 
     except Exception as e:
+        if animation_task:
+            animation_task.cancel()
         error_str = str(e).lower()
         if "flood control" in error_str or "429" in error_str or "too many requests" in error_str:
             retry_after = 60
@@ -3397,7 +3401,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug(f"Could not delete last bot message: {e}")
 
     loading_msg = None
-    top_heroes = []
+    animation_task = None
 
     try:
         # Определяем: свой профиль или чужой
@@ -3423,37 +3427,34 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username = user_obj.username or user_obj.first_name or "Unknown"
             target_user = get_user(user_obj.id, username)
 
-        # Send animated loading message with ⏳⌛️
-        try:
-            loading_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text="⏳ Формирую профиль..."
-            )
-            logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id}")
+            # Send loading message and start animation in parallel
+            try:
+                loading_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="⏳ Формирую профиль..."
+                )
+                logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id}")
 
-# Animate with alternating clocks ⏳⌛️
-            for i in range(3):
-                await asyncio.sleep(0.35)
-                frame = "⌛️" if i % 2 == 1 else "⏳"
-                messages = [
-                    "Формирую профиль...",
-                    "Собираю данные...",
-                    "Анализирую статы...",
-                    "Готово!"
-                ]
-                try:
-                    # На последнем кадре не редактируем, а удаляем заглушку
-                    if i == 2:
-                        await loading_msg.delete()
-                        loading_msg = None
-                        break
-                    await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
-                except Exception:
-                    break
+                # Start animation as background task
+                async def animate_loading():
+                    for i in range(3):
+                        try:
+                            await asyncio.sleep(0.35)
+                        except asyncio.CancelledError:
+                            return
+                        if loading_msg is None:
+                            break
+                        frame = "⌛️" if i % 2 == 1 else "⏳"
+                        messages = ["Формирую профиль...", "Собираю данные...", "Анализирую статы...", "Готово!"]
+                        try:
+                            await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                        except Exception:
+                            pass
 
-        except Exception as e:
-            logger.debug(f"Could not send loading message: {e}")
-            loading_msg = None
+                animation_task = asyncio.create_task(animate_loading())
+            except Exception as e:
+                logger.debug(f"Could not send loading message: {e}")
+                loading_msg = None
 
         last_fissure_time = target_user["last_fissure"]
         now = time.time()
@@ -3534,11 +3535,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if medals:
                 text += " " + " ".join(medals)
 
-            # Добавляем героев только если они есть
+# Добавляем героев только если они есть
             if top_heroes:
                 text += "\n\n🌟 Любимые герои за 10 матчей:"
-        else:
-            text += "\n\n💡 /profile ＠ник — чужой профиль"
+            else:
+                text += "\n\n💡 /profile ＠ник — чужой профиль"
 
         # Banner URL - для Steam использовать картинку с героями
         profile_banner_url = "https://i.ibb.co/n8g8yQYt/dasdsadasdsadasdsad.png"
@@ -3564,6 +3565,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
 
         # Delete loading message immediately after successful send
+        if animation_task:
+            animation_task.cancel()
         if loading_msg:
             logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
             try:
@@ -3579,6 +3582,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_last_message_id(update.effective_user.id, result_msg.message_id)
 
     except asyncio.TimeoutError as e:
+        if animation_task:
+            animation_task.cancel()
         logger.error(f"Timeout in stats: {e}")
         if loading_msg:
             try:
@@ -3596,6 +3601,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
     except Exception as e:
+        if animation_task:
+            animation_task.cancel()
         logger.error(f"Error in stats: {e}\n{traceback.format_exc()}")
         if loading_msg:
             try:

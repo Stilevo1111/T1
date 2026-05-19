@@ -50,8 +50,8 @@ _circuit_breaker = {
     "state": "CLOSED",  # CLOSED, OPEN, HALF_OPEN
     "failure_count": 0,
     "last_failure_time": 0,
-    "failure_threshold": 10,  # количество неудач перед открытием (увеличено для большей толерантности)
-    "recovery_timeout": 60,   # 1 минута до попытки восстановления (уменьшено для более быстрого восстановления)
+    "failure_threshold": 5,  # Количество неудач перед открытием (быстрее реагируем)
+    "recovery_timeout": 30,   # 30 секунд до попытки восстановления
 }
 
 def _circuit_breaker_can_execute() -> bool:
@@ -263,7 +263,7 @@ async def _check_rate_limit_async():
     _async_rate_limit["last_request"] = time.time()
 
 
-async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 60) -> dict:
+async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15) -> dict:
     """Асинхронная функция для API-запросов с переиспользованием сессии и увеличенным таймаутом"""
     import asyncio
     
