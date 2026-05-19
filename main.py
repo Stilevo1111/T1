@@ -2778,6 +2778,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "analytics_show":
         await callback_query.answer()  # Acknowledge callback immediately (no visual loading indicator)
         loading_msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Загружаю детали матчей...")
+        
+        # Start animation as background task
+        animation_task = None
+        async def animate_analytics_loading():
+            for i in range(6):
+                try:
+                    await asyncio.sleep(0.5)
+                except asyncio.CancelledError:
+                    return
+                if loading_msg is None:
+                    break
+                frame = "⌛️" if i % 2 == 1 else "⏳"
+                messages = ["Загружаю детали матчей...", "Анализирую статистику...", "Формирую таблицы...", "Готово!"]
+                try:
+                    await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                except Exception:
+                    pass
+        animation_task = asyncio.create_task(animate_analytics_loading())
+        
         try:
             await _show_analytics_page(callback_query, 0, context, loading_msg=loading_msg)
         except Exception as e:
@@ -2788,6 +2807,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 schedule_delete(context.bot, chat_id, loading_msg.message_id, 30, context.application.job_queue)
             except Exception:
                 pass
+        finally:
+            if animation_task:
+                animation_task.cancel()
         return
 
     # Handle analytics_page_N - no loading indicator (pages already generated or will show error)

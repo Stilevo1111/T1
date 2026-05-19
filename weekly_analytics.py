@@ -812,7 +812,7 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
 
     text = f"{header}\n\n{t1}"
 
-    header_detailed = escape_markdown_v2(f"🔍 Detailed comparison")
+    header_detailed = escape_markdown_v2(f"📈 Подробное сравнение • Детали позиций")
 
     text_detailed = f"{header_detailed}\n\n{t2}"
 
@@ -832,7 +832,7 @@ def get_analytics_pages(role: str, stats: dict) -> list:
 
     return [
         {"title": "🆚Сравнение с Pro", "text": pro_text},
-        {"title": "🔍 Детальное сравнение", "text": detailed_text},
+        {"title": "📊 Подробное сравнение", "text": detailed_text},
     ]
 
 
