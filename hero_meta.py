@@ -206,67 +206,56 @@ async def get_dota_data(days=7):
         HAVING COUNT(*) >= 10
     """
     
-    async def try_explorer():
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.opendota.com/api/explorer",
-                    data={"sql": sql},
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data and "rows" in data and data["rows"]:
-                            return data["rows"]
-        except Exception as e:
-            logger.warning("Explorer failed: %s", e)
-        return None
-    
-    rows = await try_explorer()
-    
-    if rows:
-        hero_stats = []
-        for row in rows:
-            hero_stats.append({
-                "id": row["hero_id"],
-                "localized_name": f"Hero {row['hero_id']}",
-                "roles": [],
-                "pub_pick": row["pub_pick"],
-                "pub_win": row["pub_win"],
-                "img": f"/apps/dota2/images/dota/heroes/{row['hero_id']}_sb.png"
-            })
-        logger.info("Loaded %d heroes from last %d days via Explorer", len(hero_stats), days)
-        return await _enrich_with_hero_data(hero_stats)
-    
-    logger.warning("Using fallback to heroStats (all-time data)")
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.opendota.com/api/heroStats", timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    logger.info("Loaded %d heroes from heroStats (all-time)", len(data))
-                    return data
-                else:
-                    logger.error("heroStats HTTP %d", resp.status)
-                    return None
+        from database import get_aiohttp_session
+        session = await get_aiohttp_session()
+        async with session.post(
+            "https://api.opendota.com/api/explorer",
+            data={"sql": sql},
+            timeout=aiohttp.ClientTimeout(total=30)
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                if data and "rows" in data and data["rows"]:
+                    hero_stats = []
+                    for row in data["rows"]:
+                        hero_stats.append({
+                            "id": row["hero_id"],
+                            "localized_name": f"Hero {row['hero_id']}",
+                            "roles": [],
+                            "pub_pick": row["pub_pick"],
+                            "pub_win": row["pub_win"],
+                            "img": f"/apps/dota2/images/dota/heroes/{row['hero_id']}_sb.png"
+                        })
+                    return await _enrich_with_hero_data(hero_stats)
+    except Exception as e:
+        logger.warning("Explorer failed: %s", e)
+    
+    try:
+        from database import get_aiohttp_session
+        session = await get_aiohttp_session()
+        async with session.get("https://api.opendota.com/api/heroStats", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+            if resp.status == 200:
+                return await resp.json()
     except Exception as e:
         logger.error("heroStats error: %s", e)
-        return None
+    return None
 
 
 async def _enrich_with_hero_data(hero_stats):
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.opendota.com/api/heroes", timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                if resp.status == 200:
-                    heroes = await resp.json()
-                    hero_map = {h["id"]: h for h in heroes}
-                    for hs in hero_stats:
-                        if hs["id"] in hero_map:
-                            hero = hero_map[hs["id"]]
-                            hs["localized_name"] = hero["localized_name"]
-                            hs["roles"] = hero.get("roles", [])
-                            hs["img"] = hero.get("img", hs["img"])
+        from database import get_aiohttp_session
+        session = await get_aiohttp_session()
+        async with session.get("https://api.opendota.com/api/heroes", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+            if resp.status == 200:
+                heroes = await resp.json()
+                hero_map = {h["id"]: h for h in heroes}
+                for hs in hero_stats:
+                    if hs["id"] in hero_map:
+                        hero = hero_map[hs["id"]]
+                        hs["localized_name"] = hero["localized_name"]
+                        hs["roles"] = hero.get("roles", [])
+                        hs["img"] = hero.get("img", hs["img"])
     except Exception as e:
         logger.warning("Could not enrich hero data: %s", e)
     return hero_stats
@@ -406,33 +395,34 @@ async def create_infographic(hero_stats):
                 seen_ids.add(h['id'])
                 all_heroes.append(h)
 
-    async with aiohttp.ClientSession() as session:
+    from database import get_aiohttp_session
+    session = await get_aiohttp_session()
+    
+    tasks = [
+        fetch_hero_icon(session, h['img'])
+        for h in all_heroes
+    ]
 
-        tasks = [
-            fetch_hero_icon(session, h['img'])
-            for h in all_heroes
-        ]
+    results = await asyncio.gather(
+        *tasks,
+        return_exceptions=True
+    )
 
-        results = await asyncio.gather(
-            *tasks,
-            return_exceptions=True
-        )
+    icons = {}
 
-        icons = {}
+    for hero, result in zip(all_heroes, results):
 
-        for hero, result in zip(all_heroes, results):
+        if isinstance(result, Exception):
 
-            if isinstance(result, Exception):
+            logger.exception(
+                "Failed load hero icon"
+            )
 
-                logger.exception(
-                    "Failed load hero icon"
-                )
+            icons[hero['id']] = None
 
-                icons[hero['id']] = None
+        else:
 
-            else:
-
-                icons[hero['id']] = result
+            icons[hero['id']] = result
 
     for col_idx in range(5):
         pos = col_idx + 1
