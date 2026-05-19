@@ -358,9 +358,10 @@ def _can_admin_bypass(
 # ─── Команда /mute ───────────────────────────────────────────────────────────
 
 _MUTE_USAGE = (
-    "Использование:\n"
-    "  • /mute — в ответ на сообщение человека\n"
-    "  • /mute @username — указать юзернейм цели"
+    "🤪 <b>Замутить пользователя</b> — цена 10 фиссур.\n"
+    "<code>/mute @username</code> или <code>/mute</code> в ответ на его сообщение\n\n"
+    "👤 <b>Посмотреть профиль</b>\n"
+    "<code>/profile @username</code>"
 )
 
 
@@ -452,7 +453,7 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except Exception:
         pass
     if update.message:
-        await update.message.reply_text(f"❓ {_MUTE_USAGE}")
+        await update.message.reply_text(f"❓ {_MUTE_USAGE}", parse_mode="HTML")
 
 
 # ─── Вспомогательные проверки ─────────────────────────────────────────────────
