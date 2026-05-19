@@ -4154,16 +4154,26 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # URL баннера
     info_banner_url = "https://i.ibb.co/zWW6DvLW/photo-2026-05-19-02-50-04.png"
 
+    # Текст под баннером
+    info_caption = (
+        "🔇 <b>Замутить пользователя</b> — цена 10 фиссур.\n"
+        "<code>/mute @username</code> или <code>/mute</code> в ответ на его сообщение\n\n"
+        "👤 <b>Посмотреть профиль</b>\n"
+        "<code>/profile @username</code>"
+    )
+
     # Создаем inline клавиатуру с кнопкой
     keyboard = [[
         InlineKeyboardButton("📄 Информация о боте и патчах", url="https://seredin999.onrender.com/patch-fissure")
     ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Отправляем фото с баннером и кнопкой
+    # Отправляем фото с баннером, подписью и кнопкой
     result_msg = await context.bot.send_photo(
         chat_id=chat_id,
         photo=info_banner_url,
+        caption=info_caption,
+        parse_mode="HTML",
         reply_markup=reply_markup
     )
 
