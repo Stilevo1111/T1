@@ -889,15 +889,6 @@ class Database:
         """Устанавливаем соединение с проверкой активности"""
         if not self.conn or getattr(self.conn, "closed", False):
             self.conn = get_connection()
-        else:
-            try:
-                if get_db_type() == "postgresql":
-                    with self.conn.cursor() as cur:
-                        cur.execute("SELECT 1")
-                else:
-                    self.conn.isolation_level = None
-            except Exception:
-                self.conn = get_connection()
         return self.conn
     
     def execute_query(self, query, params=None, fetch=None):
