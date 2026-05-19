@@ -172,26 +172,25 @@ async def _do_give_gag(
 
     # ── 1. Себя нельзя ──────────────────────────────────────────────────────
     if admin_id == victim_id:
+        await context.bot.send_message(chat_id, "🤪 Себя нельзя!")
         try:
             await update.message.delete()
         except Exception:
             pass
-        if update.message:
-            await update.message.reply_text("🤪 Себя нельзя!")
         return False
 
     # ── 2. Проверка баланса ─────────────────────────────────────────────────
     current = get_current_fissure(admin_id)
     if current < _MUTE_COST_CM:
+        await context.bot.send_message(
+            chat_id,
+            f"💸 Недостаточно фиссур! "
+            f"Нужно {_MUTE_COST_CM} см, а у тебя только {current:.1f} см."
+        )
         try:
             await update.message.delete()
         except Exception:
             pass
-        if update.message:
-            await update.message.reply_text(
-                f"💸 Недостаточно фиссур! "
-                f"Нужно {_MUTE_COST_CM} см, а у тебя только {current:.1f} см."
-            )
         return False
 
     # ── 3. Списываем фиссуру ────────────────────────────────────────────────
@@ -370,16 +369,16 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     chat = update.effective_chat
     if chat.type == "private":
+        chat_id = update.effective_chat.id
+        await context.bot.send_message(chat_id, "⛔ Команда работает только в группах и супергруппах!")
         try:
             await update.message.delete()
         except Exception:
             pass
-        await update.message.reply_text(
-            "⛔ Команда работает только в группах и супергруппах!"
-        )
         return
 
     admin_id = update.effective_user.id
+    chat_id = update.effective_chat.id
 
     # ──────────────────────────────────────────────────────────────────────────
     # СПОСОБ 1: /mute в ответ на сообщение
@@ -387,11 +386,11 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if update.message.reply_to_message:
         victim_tg = update.message.reply_to_message.from_user
         if victim_tg is None:
+            await context.bot.send_message(chat_id, "❌ Не удалось определить автора сообщения.")
             try:
                 await update.message.delete()
             except Exception:
                 pass
-            await update.message.reply_text("❌ Не удалось определить автора сообщения.")
             return
         victim = {
             "telegram_id": victim_tg.id,
@@ -435,23 +434,22 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     return
 
         # No @-аргументов найдено — возможно, забыли @
+        await context.bot.send_message(
+            chat_id,
+            "❌ Укажи username с @, например:\n/mute @username"
+        )
         try:
             await update.message.delete()
         except Exception:
             pass
-        if update.message:
-            await update.message.reply_text(
-                "❌ Укажи username с @, например:\n/mute @username"
-            )
         return
 
     # Ничего не подошло — справка
+    await context.bot.send_message(chat_id, f"❓ {_MUTE_USAGE}", parse_mode="HTML")
     try:
         await update.message.delete()
     except Exception:
         pass
-    if update.message:
-        await update.message.reply_text(f"❓ {_MUTE_USAGE}", parse_mode="HTML")
 
 
 # ─── Вспомогательные проверки ─────────────────────────────────────────────────
