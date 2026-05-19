@@ -1245,8 +1245,8 @@ class Database:
                 elif isinstance(row, tuple):
                     val = row[0]
                     result = val if val and str(val) != '0' else default
-                else:
-                    result = row if row and row != '0' else default
+                elif row and row != '0':
+                    result = row
             else:
                 query = "SELECT value FROM bot_config WHERE key = ?"
                 row = self.execute_query(query, (key,), fetch="one")
@@ -1279,11 +1279,6 @@ class Database:
                 logger.debug(f"set_config deleted key={key}")
                 return True
 
-            # Используем execute_query для безопасного выполнения
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
-            logger.debug(f"set_config: key={key}, value={value}, scheme={scheme}")
-            
             if get_db_type() == "postgresql":
                 query = """
                     INSERT INTO bot_config (key, value) VALUES (%s, %s)
@@ -1302,7 +1297,6 @@ class Database:
                 del _config_cache[key]
                 del _config_cache_time[key]
             
-            logger.info(f"set_config completed for key={key}")
             return True
         except Exception as e:
             logger.error(f"Error setting config: {e}")
@@ -2094,9 +2088,9 @@ def _save_user_to_db_immediately(telegram_id, user_data):
             telegram_id
         )
         result = db.execute_query(query, params)
-        logger.info(f"DB WRITE: user {telegram_id} saved, rowcount={result}, mmr={user_data.get('mmr', 0)}, week_games={user_data.get('week_games', 0)}")
     except Exception as e:
         logger.error(f"Error saving user {telegram_id} to DB immediately: {e}", exc_info=True)
+
 
 def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
     """Уменьшить fissure для неактивных игроков (вызывается ежедневно)"""
