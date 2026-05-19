@@ -2581,9 +2581,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Start animation as background task
             async def animate_loading():
-                for i in range(3):
+                for i in range(6):
                     try:
-                        await asyncio.sleep(0.35)
+                        await asyncio.sleep(0.5)
                     except asyncio.CancelledError:
                         return
                     if loading_msg is None:
@@ -3437,9 +3437,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 # Start animation as background task
                 async def animate_loading():
-                    for i in range(3):
+                    for i in range(6):
                         try:
-                            await asyncio.sleep(0.35)
+                            await asyncio.sleep(0.5)
                         except asyncio.CancelledError:
                             return
                         if loading_msg is None:
