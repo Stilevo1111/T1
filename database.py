@@ -1424,12 +1424,8 @@ class Database:
                             top_growth_user = nick if nick and nick != "None" else None
                         if not top_growth_user:
                             top_growth_user = str(u["telegram_id"])
-                        # Only set ID if valid (positive integer)
-                        try:
-                            tid = int(u["telegram_id"]) if u["telegram_id"] else 0
-                            top_growth_id = tid if tid > 0 else None
-                        except (ValueError, TypeError):
-                            top_growth_id = None
+                        # Direct assignment - telegram_id is always valid from DB
+                        top_growth_id = u["telegram_id"]
 
             # Падение: насколько см уменьшилась фиссура за сутки (current - digest)
             top_drop_user = None
@@ -1451,12 +1447,8 @@ class Database:
                             top_drop_user = nick if nick and nick != "None" else None
                         if not top_drop_user:
                             top_drop_user = str(u["telegram_id"])
-                        # Only set ID if valid (positive integer)
-                        try:
-                            tid = int(u["telegram_id"]) if u["telegram_id"] else 0
-                            top_drop_id = tid if tid > 0 else None
-                        except (ValueError, TypeError):
-                            top_drop_id = None
+                        # Direct assignment - telegram_id is always valid from DB
+                        top_drop_id = u["telegram_id"]
 
             # Стрик: текущая серия побед (current_streak)
             top_streak_user = None
@@ -1474,12 +1466,8 @@ class Database:
                         top_streak_user = nick if nick and nick != "None" else None
                     if not top_streak_user:
                         top_streak_user = str(u["telegram_id"])
-                    # Only set ID if valid (positive integer)
-                    try:
-                        tid = int(u["telegram_id"]) if u["telegram_id"] else 0
-                        top_streak_id = tid if tid > 0 else None
-                    except (ValueError, TypeError):
-                        top_streak_id = None
+                    # Direct assignment - telegram_id is always valid from DB
+                    top_streak_id = u["telegram_id"]
 
             def get_user_telegram_username(telegram_id):
                 """Получить Telegram username пользователя"""

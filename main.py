@@ -1908,6 +1908,7 @@ WELCOME_PHRASES = [
 def make_clickable(name, user_id, max_length=12):
     """Создать кликабельный никейм для Telegram"""
     try:
+        # Handle both int and string user_id
         uid = int(user_id) if user_id else 0
     except (ValueError, TypeError):
         uid = 0
