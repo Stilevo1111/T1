@@ -445,7 +445,7 @@ async def detect_role_from_hero_counts(matches: list) -> str:
             role_counts[role] += 1
     
     if total_matches == 0:
-        return "CARRY"
+        return None
     
     # Find dominant role (threshold: at least 2 matches or 50% for small samples)
     dominant_role = max(role_counts, key=role_counts.get)
@@ -487,16 +487,14 @@ async def detect_role_from_history(matches: list):
     avg_kda = (total_kills + total_assists) / max(total_deaths, 1)
     
     # High GPM + KDA = CARRY/MID, low = SUPPORT
-    # But if we have no meaningful data (all zeros), default to CARRY not SUPPORT
     if avg_gpm >= 500 and avg_kda >= 3.0:
         return "CARRY"
     elif avg_gpm >= 350 and avg_kda >= 2.5:
         return "MID"
-    elif avg_gpm > 0 and avg_kda > 0:
+    elif avg_gpm >= 200 and avg_kda >= 1.5:
         return "SUPPORT"
-    else:
-        # Fallback when no meaningful stats data - default to CARRY
-        return "CARRY"
+    
+    return None
 
 
 def calculate_player_stats(matches: list) -> dict:
@@ -863,21 +861,17 @@ async def generate_chart_only(telegram_id: int):
 
     matches = await get_last_matches(telegram_id)
 
-    if len(matches) == 0:
-        from dota_mmr import get_opendota_rate_limit_message
-        return {"error": "opendota_rate_limit", "message": get_opendota_rate_limit_message()}
-
-    # Check if matches have real data (hero_id should be non-zero, duration should be positive)
-    # If all hero_id are 0 or duration missing, API rate limited - show error
-    has_valid_data = any(m.get("hero_id", 0) > 0 and m.get("duration", 0) > 0 for m in matches)
-    if not has_valid_data:
+    if len(matches) < 5:
         from dota_mmr import get_opendota_rate_limit_message
         return {"error": "opendota_rate_limit", "message": get_opendota_rate_limit_message()}
 
     # Matches are already sorted newest-first from API, keep this order
 
-    # Detect role from hero picks (works with any number of matches)
-    role = await detect_role_from_hero_counts(matches) or "CARRY"
+    # Detect role from hero picks
+    role = await detect_role_from_hero_counts(matches)
+    if not role:
+        from dota_mmr import get_opendota_rate_limit_message
+        return {"error": "opendota_rate_limit", "message": get_opendota_rate_limit_message()}
 
     # Calculate only what's needed for chart - minimal data
     game_history = []

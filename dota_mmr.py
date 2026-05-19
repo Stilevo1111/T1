@@ -286,8 +286,14 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
                 _circuit_breaker_record_failure()
                 await asyncio.sleep(3)
                 return None
+            
+            # Timeout also indicates API issues
             _circuit_breaker_record_failure()
             return None
+    except asyncio.TimeoutError:
+        logger.warning(f"API request timeout for {url[:80]}")
+        _circuit_breaker_record_failure()
+        return None
     except Exception as e:
         logger.error(f"Async API request error: {e}", exc_info=True)
         _circuit_breaker_record_failure()
@@ -1375,7 +1381,11 @@ def generate_start_card(
                         headers={"User-Agent": "fissure-bot/1.0"},
                     )
                     logger.info(f"Avatar request status: {resp.status_code} url={avatar_url[:80]}")
-                    avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA") if resp.status_code == 200 else None
+                    if resp.status_code == 200 and resp.content:
+                        avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                    else:
+                        logger.warning(f"Avatar download failed: status={resp.status_code}, url={avatar_url[:80]}")
+                        avatar = None
                 if avatar:
                     # Resize and crop to square
                     w, h = avatar.size

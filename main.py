@@ -449,8 +449,9 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     history = chart_data.get("history", [])
                     matches = chart_data.get("matches", [])
                     chart_image = chart_data.get("image")
+                    role_from_chart = chart_data.get("role", "CARRY")  # Get role from chart data
                     
-                    # If matches empty but cache had old data, fetch fresh matches
+# If matches empty but cache had old data, fetch fresh matches
                     if not matches:
                         try:
                             fresh_matches = await get_last_matches(update.effective_user.id)
@@ -468,7 +469,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     # Сохраняем только matches для полной ленивой генерации
                     context.user_data['analytics_stats'] = None
-                    context.user_data['analytics_role'] = None
+                    context.user_data['analytics_role'] = role_from_chart  # Store role from chart generation
                     context.user_data['analytics_page'] = 0
                     context.user_data['analytics_history'] = history
                     context.user_data['analytics_matches'] = matches
@@ -495,19 +496,25 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             await context.bot.edit_message_media(
                                 chat_id=chat_id,
                                 message_id=loading_msg.message_id,
-                                media=InputMediaPhoto(media=photo_buf, caption="🧠 Импакт в последних 10 играх\\."),
+                                media=InputMediaPhoto(media=photo_buf, caption="🧠 Импакт в последних 10 играх."),
                                 reply_markup=reply_markup
                             )
                         except Exception:
                             # Fallback: delete and send new message
+                            photo_buf.seek(0)  # Reset buffer position after failed edit
                             try:
                                 await context.bot.delete_message(chat_id, loading_msg.message_id)
+                            except Exception:
+                                pass
+                            # Delete previous bot message before sending new one
+                            try:
+                                await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
                             except Exception:
                                 pass
                             result_msg = await context.bot.send_photo(
                                 chat_id=chat_id,
                                 photo=photo_buf,
-                                caption="🧠 Импакт в последних 10 играх\\.",
+                                caption="🧠 Импакт в последних 10 играх.",
                                 reply_markup=reply_markup,
                                 parse_mode="MarkdownV2"
                             )
@@ -2405,7 +2412,7 @@ def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: set = 
 
 def _build_stats_button_keyboard() -> InlineKeyboardMarkup:
     """Build inline keyboard with single 'Сравнить с Pro 🧠' button under chart."""
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Сравнить с Pro 🧠", callback_data="analytics_show")]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("Сравнить c Pro🆚", callback_data="analytics_show")]])
 
 
 def format_time(seconds):
@@ -2414,7 +2421,7 @@ def format_time(seconds):
     return f"{int(h)}ч {int(m)}м"
 
 
-DEFAULT_AVATAR_URL = "https://i.ibb.co/Jj3vwbWB/ANQkz.jpg"
+DEFAULT_AVATAR_URL = "https://i.ibb.co/nMSN7mHM/photo-2025-12-29-00-02-39.jpg"
 
 async def get_user_avatar_url(bot, user_id: int) -> str | None:
     """Полный URL аватарки Telegram (для загрузки в generate_start_card)."""
@@ -2424,7 +2431,11 @@ async def get_user_avatar_url(bot, user_id: int) -> str | None:
             photo = photos.photos[0][-1]
             file = await bot.get_file(photo.file_id)
             if file.file_path:
-                return f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+                # file.file_path is already a full URL in python-telegram-bot v20+
+                if file.file_path.startswith('http'):
+                    return file.file_path
+                # Otherwise construct URL from base_file_url and path
+                return f"{bot.base_file_url}/{file.file_path}"
         logger.debug(f"No profile photos for user {user_id}")
     except Exception as e:
         logger.warning(f"Could not get user avatar: {e}")
@@ -2806,7 +2817,10 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         stats = context.user_data.get('analytics_stats')
         role = context.user_data.get('analytics_role')
         
-        if stats is None or role is None:
+        # Use cached role if available and matches exist
+        if role and matches and len(matches) > 0:
+            logger.info(f"Analytics: using cached role={role}")
+        elif stats is None or role is None:
             from weekly_analytics import detect_role_from_history
             logger.info("Analytics: detecting role and calculating stats")
             role = await detect_role_from_history(matches)
