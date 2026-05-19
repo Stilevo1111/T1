@@ -968,20 +968,27 @@ def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
         if use_cache:
             cached = _get_cached(cache_key)
             if cached:
+                # Возвращаем кешированные данные мгновенно
                 return cached
             
         account_id = steam64_to_account_id(steam_id)
-        
+         
         # Получаем основную информацию об игроке
         player_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}")
         if not player_data:
             logger.warning(f"Player data not found for account_id: {account_id}")
             logger.warning(f"API URL used: {OPENDOTA_API_URL}/players/{account_id}")
+            # Возвращаем кешированные данные если есть, даже если API недоступен
+            if use_cache:
+                cached = _get_cached(cache_key)
+                if cached:
+                    logger.info(f"Returning cached stats for {steam_id} due to API failure")
+                    return cached
             return None
-
+ 
         profile = player_data.get("profile", {})
         rank_tier = player_data.get("rank_tier") or 0
-        
+         
         # Получаем статистику побед/поражений
         wl_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}/wl")
         if wl_data:
@@ -990,17 +997,30 @@ def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
             total_games = wins + losses
         else:
             logger.warning(f"Win/Loss data not found for account_id: {account_id}")
-            total_games = 0
-            wins = 0
-            losses = 0
-        
+            # Пытаемся получить винрейт из кеша если API недоступен
+            if use_cache:
+                cached = _get_cached(cache_key)
+                if cached:
+                    logger.info(f"Using cached win/loss data for {steam_id} due to API failure")
+                    wins = cached.get("wins", 0)
+                    losses = cached.get("losses", 0)
+                    total_games = wins + losses
+                else:
+                    total_games = 0
+                    wins = 0
+                    losses = 0
+            else:
+                total_games = 0
+                wins = 0
+                losses = 0
+         
         # Используем mmr_estimate для более точного MMR
         mmr_estimate = player_data.get("mmr_estimate", {}).get("estimate", 0)
         mmr = mmr_estimate or rank_to_mmr(rank_tier)
-        
+         
         # Вычисляем винрейт
         winrate = safe_winrate(wins, total_games)
-
+ 
         result = {
             "nickname": profile.get("personaname", "Unknown"),
             "avatar": profile.get("avatarfull") or profile.get("avatar"),
@@ -1011,14 +1031,20 @@ def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
             "losses": losses,
             "winrate": winrate,
         }
-        
+         
         # Сохраняем в кеш
         _set_cached(cache_key, result)
-        
+         
         return result
-
+ 
     except Exception as e:
         logger.error(f"stats error: {e}", exc_info=True)
+        # При любой ошибке возвращаем кешированные данные если есть
+        if use_cache:
+            cached = _get_cached(cache_key)
+            if cached:
+                logger.info(f"Returning cached stats for {steam_id} due to exception: {e}")
+                return cached
         return None
 
 

@@ -420,122 +420,138 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.debug(f"Could not delete last bot message: {e}")
 
-        from weekly_analytics import generate_chart_only, get_analytics_pages
+        # Immediately respond with loading message
         loading_msg = await context.bot.send_message(
             chat_id=chat_id,
-            text="⏳ Генерирую аналитику..."
+            text="⏳ Генерирую аналитику... (данные загружаются в фоне)"
         )
-        chart_data = await generate_chart_only(update.effective_user.id)
+        
+        # Start analytics generation in background task
+        async def generate_and_update_analytics():
+            try:
+                from weekly_analytics import generate_chart_only, get_analytics_pages, get_last_matches
+                chart_data = await generate_chart_only(update.effective_user.id)
 
-        # Note: loading message stays visible until chart is sent
-
-        if chart_data:
-            # Check if it's an API error response
-            if isinstance(chart_data, dict) and chart_data.get("error") == "opendota_rate_limit":
-                if loading_msg:
+                if chart_data:
+                    # Check if it's an API error response
+                    if isinstance(chart_data, dict) and chart_data.get("error") == "opendota_rate_limit":
+                        if loading_msg:
+                            try:
+                                await context.bot.edit_message_text(
+                                    chat_id=chat_id,
+                                    message_id=loading_msg.message_id,
+                                    text=chart_data.get("message", get_opendota_rate_limit_message())
+                                )
+                            except Exception:
+                                pass
+                        return
+                    
+                    history = chart_data.get("history", [])
+                    matches = chart_data.get("matches", [])
+                    chart_image = chart_data.get("image")
+                    
+                    # If matches empty but cache had old data, fetch fresh matches
+                    if not matches:
+                        try:
+                            fresh_matches = await get_last_matches(update.effective_user.id)
+                            if len(fresh_matches) >= 5:
+                                matches = fresh_matches
+                                logger.info(f"Analytics: refetched {len(matches)} fresh matches from API")
+                        except Exception as e:
+                            logger.warning(f"Analytics: failed to refetch matches: {e}")
+                    
+                    logger.info(f"Analytics: got chart_data with {len(matches)} matches, image={chart_image is not None}")
+                    
+                    # Ensure charts directory exists for potential caching
+                    import os
+                    os.makedirs("charts", exist_ok=True)
+                    
+                    # Сохраняем только matches для полной ленивой генерации
+                    context.user_data['analytics_stats'] = None
+                    context.user_data['analytics_role'] = None
+                    context.user_data['analytics_page'] = 0
+                    context.user_data['analytics_history'] = history
+                    context.user_data['analytics_matches'] = matches
+                    context.user_data['analytics_pages'] = [None, None]
+                    context.user_data['analytics_generated'] = set()
+                    
+                    # Delete old analytics table if exists
+                    old_table_msg_id = context.user_data.get('analytics_table_msg_id')
+                    if old_table_msg_id:
+                        try:
+                            await context.bot.delete_message(chat_id, old_table_msg_id)
+                        except Exception:
+                            pass
+                        context.user_data['analytics_table_msg_id'] = None
+                    
+                    if chart_image:
+                        # Update loading message with result
+                        photo_buf = io.BytesIO(chart_image)
+                        photo_buf.name = "weekly_analytics.png"
+                        
+                        reply_markup = _build_stats_button_keyboard()
+                        
+                        try:
+                            await context.bot.edit_message_media(
+                                chat_id=chat_id,
+                                message_id=loading_msg.message_id,
+                                media=InputMediaPhoto(media=photo_buf, caption="🧠 Импакт в последних 10 играх\\."),
+                                reply_markup=reply_markup
+                            )
+                        except Exception:
+                            # Fallback: delete and send new message
+                            try:
+                                await context.bot.delete_message(chat_id, loading_msg.message_id)
+                            except Exception:
+                                pass
+                            result_msg = await context.bot.send_photo(
+                                chat_id=chat_id,
+                                photo=photo_buf,
+                                caption="🧠 Импакт в последних 10 играх\\.",
+                                reply_markup=reply_markup,
+                                parse_mode="MarkdownV2"
+                            )
+                            set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+                            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+                            update_last_message_id(update.effective_user.id, result_msg.message_id)
+                    else:
+                        # Update with error message
+                        try:
+                            await context.bot.edit_message_text(
+                                chat_id=chat_id,
+                                message_id=loading_msg.message_id,
+                                text=get_opendota_rate_limit_message()
+                            )
+                        except Exception:
+                            pass
+                else:
+                    # Update with error message
                     try:
-                        await context.bot.delete_message(chat_id, loading_msg.message_id)
+                        await context.bot.edit_message_text(
+                            chat_id=chat_id,
+                            message_id=loading_msg.message_id,
+                            text=get_opendota_rate_limit_message()
+                        )
                     except Exception:
                         pass
-                result_msg = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=chart_data.get("message", get_opendota_rate_limit_message())
-                )
-                set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-                schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
-                update_last_message_id(update.effective_user.id, result_msg.message_id)
-                return
-            
-            history = chart_data.get("history", [])
-            matches = chart_data.get("matches", [])
-            chart_image = chart_data.get("image")
-            
-            # If matches empty but cache had old data, fetch fresh matches
-            if not matches:
-                from weekly_analytics import get_last_matches
+                        
+            except Exception as e:
+                logger.error(f"Error in background analytics generation: {e}")
                 try:
-                    fresh_matches = await get_last_matches(update.effective_user.id)
-                    if len(fresh_matches) >= 5:
-                        matches = fresh_matches
-                        logger.info(f"Analytics: refetched {len(matches)} fresh matches from API")
-                except Exception as e:
-                    logger.warning(f"Analytics: failed to refetch matches: {e}")
-            
-            logger.info(f"Analytics: got chart_data with {len(matches)} matches, image={chart_image is not None}")
-            
-            # Ensure charts directory exists for potential caching
-            import os
-            os.makedirs("charts", exist_ok=True)
-            
-            # Сохраняем только matches для полной ленивой генерации
-            context.user_data['analytics_stats'] = None
-            context.user_data['analytics_role'] = None
-            context.user_data['analytics_page'] = 0
-            context.user_data['analytics_history'] = history
-            context.user_data['analytics_matches'] = matches
-            context.user_data['analytics_pages'] = [None, None]
-            context.user_data['analytics_generated'] = set()
-
-            # Delete old analytics table if exists
-            old_table_msg_id = context.user_data.get('analytics_table_msg_id')
-            if old_table_msg_id:
-                try:
-                    await context.bot.delete_message(chat_id, old_table_msg_id)
+                    await context.bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=loading_msg.message_id,
+                        text=f"Ошибка генерации аналитики: {str(e)[:100]}..."
+                    )
                 except Exception:
                     pass
-                context.user_data['analytics_table_msg_id'] = None
 
-            if chart_image:
-                # Delete loading message before sending result
-                if loading_msg:
-                    try:
-                        await context.bot.delete_message(chat_id, loading_msg.message_id)
-                    except Exception:
-                        pass
-                # Send analytics with chart as photo - ТОЛЬКО ГРАФИК, без текста
-                photo_buf = io.BytesIO(chart_image)
-                photo_buf.name = "weekly_analytics.png"
-
-                reply_markup = _build_stats_button_keyboard()
-
-                result_msg = await context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=photo_buf,
-                    caption="🧠 Импакт в последних 10 играх\\.",
-                    reply_markup=reply_markup,
-                    parse_mode="MarkdownV2"
-                )
-            else:
-                # Delete loading message before sending error
-                if loading_msg:
-                    try:
-                        await context.bot.delete_message(chat_id, loading_msg.message_id)
-                    except Exception:
-                        pass
-                result_msg = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=get_opendota_rate_limit_message()
-                )
-        else:
-            # Delete loading message before sending error
-            if loading_msg:
-                try:
-                    await context.bot.delete_message(chat_id, loading_msg.message_id)
-                except Exception:
-                    pass
-            # No analytics data available
-            result_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text=get_opendota_rate_limit_message()
-            )
-
-        # Track this message for future deletion
-        set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
-        update_last_message_id(update.effective_user.id, result_msg.message_id)
-
-        # Small delay to ensure message is visible
-        await asyncio.sleep(0.1)
+        # Import required classes
+        from telegram import InputMediaPhoto
+        
+        # Start background task
+        context.application.create_task(generate_and_update_analytics())
+        
     except Exception as e:
         logger.error(f"Error in analyze_command: {e}")
         # Delete previous bot message before sending error
@@ -543,7 +559,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
         except Exception:
             pass
-
+        
         msg = await context.bot.send_message(
             chat_id=chat_id,
             text=f"Ошибка анализа: {e}"
