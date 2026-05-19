@@ -16,6 +16,7 @@ from telegram.request import HTTPXRequest
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
 from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, get_dota_week_rank, DATABASE_URL, reset_all_fissure_data, cleanup_left_users
+from mute import register_handlers as register_mute_handlers
 from dota_mmr import update_user_mmr, get_opendota_rate_limit_message, _get_start_card_background
 from database import get_all_users_with_steam, user_cache, update_dota_week_top_cache, get_db_type, config_cache
 import aiohttp
@@ -4643,6 +4644,9 @@ async def main():
         app.add_handler(CommandHandler("analyze", analyze_command))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
+
+        # ── Модуль модерации /mute ──────────────────────────────────────────
+        register_mute_handlers(app)
 
         # Add error handler
         async def error_handler(update, context):
