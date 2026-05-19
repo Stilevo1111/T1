@@ -3963,9 +3963,57 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Small delay to ensure message is visible
     await asyncio.sleep(0.1)
 
+async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Информация с кнопкой перехода на патч заметки"""
+    logger.info(f"Пользователь {update.effective_user.id} вызвал info")
 
+    chat_id = update.effective_chat.id
 
+    # Попытка безопасно получить тип чата
+    chat_type = 'private'
+    if update.message and update.message.chat:
+        chat_type = update.message.chat.type
 
+    # Удаляем сообщение пользователя только в группах/каналах
+    if chat_type in ['group', 'supergroup', 'channel']:
+        if update.message and await bot_can_delete(context.bot, chat_id):
+            try:
+                await context.bot.delete_message(chat_id, update.message.message_id)
+            except Exception:
+                pass
+
+    # Удаляем последнее сообщение бота сразу
+    try:
+        await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
+    except Exception as e:
+        logger.debug(f"Не удалось удалить последнее сообщение бота: {e}")
+
+    # URL баннера
+    info_banner_url = "https://i.ibb.co/zWW6DvLW/photo-2026-05-19-02-50-04.png"
+
+    # Создаем inline клавиатуру с кнопкой
+    keyboard = [[
+        InlineKeyboardButton("📄 Патч заметки", url="https://seredin999.onrender.com/patch-fissure")
+    ]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Отправляем фото с баннером и кнопкой
+    result_msg = await context.bot.send_photo(
+        chat_id=chat_id,
+        photo=info_banner_url,
+        caption="ℹ️ Информация о боте и патчах",
+        parse_mode="HTML",
+        reply_markup=reply_markup
+    )
+
+    # Отслеживаем это сообщение для будущего удаления
+    set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+    add_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+    schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+    update_last_message_id(update.effective_user.id, result_msg.message_id)
+
+    # Небольшая задержка для обеспечения видимости сообщения
+    await asyncio.sleep(0.1)
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow_when_rate_limited=False):
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
@@ -4422,6 +4470,7 @@ async def main():
         app.add_handler(CallbackQueryHandler(button_callback))
         app.add_handler(CommandHandler(("fissure", "fissura"), fissure))
         app.add_handler(CommandHandler("profile", stats))
+        app.add_handler(CommandHandler("info", info))
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("link", link))
