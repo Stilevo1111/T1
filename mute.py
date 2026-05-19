@@ -174,6 +174,10 @@ async def _do_give_gag(
 
     # ── 1. Себя нельзя ──────────────────────────────────────────────────────
     if admin_id == victim_id:
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
         if update.message:
             await update.message.reply_text("🤪 Себя нельзя!")
         return False
@@ -181,6 +185,10 @@ async def _do_give_gag(
     # ── 2. Проверка баланса ─────────────────────────────────────────────────
     current = get_current_fissure(admin_id)
     if current < _MUTE_COST_CM:
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
         if update.message:
             await update.message.reply_text(
                 f"💸 Недостаточно фиссур! "
@@ -363,6 +371,10 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     chat = update.effective_chat
     if chat.type == "private":
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
         await update.message.reply_text(
             "⛔ Команда работает только в группах и супергруппах!"
         )
@@ -376,6 +388,10 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if update.message.reply_to_message:
         victim_tg = update.message.reply_to_message.from_user
         if victim_tg is None:
+            try:
+                await update.message.delete()
+            except Exception:
+                pass
             await update.message.reply_text("❌ Не удалось определить автора сообщения.")
             return
         victim = {
@@ -420,6 +436,10 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     return
 
         # No @-аргументов найдено — возможно, забыли @
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
         if update.message:
             await update.message.reply_text(
                 "❌ Укажи username с @, например:\n/mute @username"
@@ -427,6 +447,10 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     # Ничего не подошло — справка
+    try:
+        await update.message.delete()
+    except Exception:
+        pass
     if update.message:
         await update.message.reply_text(f"❓ {_MUTE_USAGE}")
 
