@@ -2779,10 +2779,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await callback_query.answer()  # Acknowledge callback immediately (no visual loading indicator)
         loading_msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Загружаю детали матчей...")
         try:
-            await _show_analytics_page(callback_query, 0, context)
+            await _show_analytics_page(callback_query, 0, context, loading_msg=loading_msg)
         except Exception as e:
             logger.error(f"Error in button_callback: {e}", exc_info=True)
-        # Don't delete loading_msg here - _show_analytics_page will edit it with the result
+            # Try to edit loading message with error and schedule deletion
+            try:
+                await context.bot.edit_message_text(chat_id=chat_id, message_id=loading_msg.message_id, text="❌ Ошибка загрузки данных")
+                schedule_delete(context.bot, chat_id, loading_msg.message_id, 30, context.application.job_queue)
+            except Exception:
+                pass
         return
 
     # Handle analytics_page_N - no loading indicator (pages already generated or will show error)
@@ -2809,16 +2814,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await callback_query.answer(text="Ошибка при обработке кнопки", show_alert=True)
 
 
-async def _show_analytics_page(callback_query, page_idx: int, context: ContextTypes.DEFAULT_TYPE):
+async def _show_analytics_page(callback_query, page_idx: int, context: ContextTypes.DEFAULT_TYPE, loading_msg=None):
     """Send a new message with analytics table when button is pressed.
     
     Pages are generated lazily — only when the user actually navigates to them.
     Creates a NEW message with the table, does NOT edit the chart message.
+    If loading_msg is provided, it will be edited with the content instead of sending a new message.
     """
     from weekly_analytics import get_analytics_pages, fetch_match_details, calculate_player_stats
 
     generated = context.user_data.get('analytics_generated', set())
     pages = context.user_data.get('analytics_pages', [])
+    chat_id = callback_query.message.chat_id
 
     # Determine if we need to generate pages (lazy loading)
     is_first_generation = page_idx not in generated or pages == [None, None]
@@ -2845,6 +2852,11 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         # Check if matches exist
         if not matches:
             await callback_query.answer(text="❌ Нет данных матчей для аналитики", show_alert=True)
+            if loading_msg:
+                try:
+                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                except Exception:
+                    pass
             return
         
         # Fetch full details for matches that have match_id
@@ -2878,6 +2890,11 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         # Ensure stats is valid before generating pages
         if not stats:
             await callback_query.answer(text="❌ Ошибка анализа статистики", show_alert=True)
+            if loading_msg:
+                try:
+                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                except Exception:
+                    pass
             return
         
         try:
@@ -2886,6 +2903,11 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         except Exception as e:
             logger.error(f"Error generating analytics pages: {e}", exc_info=True)
             await callback_query.answer(text=f"Ошибка: {e}", show_alert=True)
+            if loading_msg:
+                try:
+                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                except Exception:
+                    pass
             return
         pages = all_pages  # Replace placeholder with real pages
         generated = set(range(len(pages)))
@@ -2908,7 +2930,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
             # Try to edit the existing table message (for page navigation)
             try:
                 await context.bot.edit_message_text(
-                    chat_id=callback_query.message.chat_id,
+                    chat_id=chat_id,
                     message_id=existing_msg_id,
                     text=text,
                     reply_markup=keyboard,
@@ -2922,9 +2944,23 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
                 # Message was deleted or doesn't exist, clear the stored ID
                 logger.debug(f"Could not edit existing table message: {edit_err}")
                 context.user_data['analytics_table_msg_id'] = None
-
+        
+        if loading_msg:
+            # Edit the loading message with the analytics table content
+            try:
+                await loading_msg.edit_text(text=text, reply_markup=keyboard, parse_mode="MarkdownV2")
+                context.user_data['analytics_table_msg_id'] = loading_msg.message_id
+                job_queue = context.job_queue
+                if job_queue:
+                    schedule_delete(context.bot, chat_id, loading_msg.message_id, 60, job_queue)
+                else:
+                    schedule_delete(context.bot, chat_id, loading_msg.message_id, 60, None)
+                return
+            except Exception as edit_err:
+                logger.debug(f"Could not edit loading message: {edit_err}")
+                # Fall through to send new message
+        
         # Send a NEW message with the analytics table (first click or previous was deleted)
-        chat_id = callback_query.message.chat_id
         new_msg = await context.bot.send_message(
             chat_id=chat_id,
             text=text,
