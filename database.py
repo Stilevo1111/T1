@@ -39,6 +39,10 @@ class UserCache:
     
     def set(self, telegram_id, data):
         """Установить данные пользователя в кеш"""
+        # Prevent SteamID64 from being used as telegram_id key
+        if isinstance(telegram_id, int) and telegram_id > 76561190000000000:
+            logger.warning(f"UserCache.set: rejecting SteamID64 as telegram_id key={telegram_id}")
+            return
         with self._lock:
             self._cache[telegram_id] = data
             # Проверяем лимит при каждой записи
@@ -2033,6 +2037,11 @@ def update_last_message_id(telegram_id, message_id):
 
 def update_user_field(telegram_id, field, value):
     """Обновление любого поля пользователя - пишем в кеш и сразу в БД"""
+    # Validate telegram_id is not SteamID64
+    if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
+        logger.warning(f"update_user_field: invalid telegram_id={telegram_id}, skipping")
+        return False
+    
     user = get_user(telegram_id)
     
     if user:
@@ -2062,6 +2071,11 @@ def update_user_field(telegram_id, field, value):
 
 def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = True):
     """Массовое обновление полей - обновление кеша + опционально БД"""
+    # Validate telegram_id is not SteamID64
+    if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
+        logger.warning(f"update_user_fields_batch: invalid telegram_id={telegram_id}, skipping")
+        return False
+    
     user = get_user(telegram_id)
     if not user:
         return False
