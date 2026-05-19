@@ -29,12 +29,12 @@ logger = logging.getLogger(__name__)
 _MUTE_COST_CM = 10          # стоимость в см фиссуры
 _MUTE_DURATION_SEC = 30     # длительность кляпа
 
-# Разнообразные смайлы кляпа
+# Разнообразные смайлы кляпа (без дубликатов)
 _GAG_EMOJIS = [
     "🤐", "🔇", "🙊", "🧦", "🍌",
     "🤫", "🔕", "🦷", "🎭", "😶",
     "🤪🔇", "🤭", "🗣️", "🗯️", "💤",
-    "🔜", "🙅", "🙆", "🤐", "🤨",
+    "🔜", "🙅", "🙆", "🤨",
 ]
 
 # ─── Хранилища ───────────────────────────────────────────────────────────────
@@ -338,16 +338,7 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    # ── Проверка баланса админа (ранняя, чтобы лишний раз не стучаться в API) ──
     admin_id = update.effective_user.id
-    current  = get_current_fissure(admin_id)
-    if current < _MUTE_COST_CM:
-        if update.message:
-            await update.message.reply_text(
-                f"💸 Недостаточно фиссур! "
-                f"Нужно {_MUTE_COST_CM} см, а у тебя только {current:.1f} см."
-            )
-        return
 
     # ──────────────────────────────────────────────────────────────────────────
     # СПОСОБ 1: /mute в ответ на сообщение
