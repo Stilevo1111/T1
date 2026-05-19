@@ -3993,7 +3993,7 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Создаем inline клавиатуру с кнопкой
     keyboard = [[
-        InlineKeyboardButton("📄 Патч заметки", url="https://seredin999.onrender.com/patch-fissure")
+        InlineKeyboardButton("📄 Информация о боте и патчах", url="https://seredin999.onrender.com/patch-fissure")
     ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -4001,8 +4001,6 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result_msg = await context.bot.send_photo(
         chat_id=chat_id,
         photo=info_banner_url,
-        caption="ℹ️ Информация о боте и патчах",
-        parse_mode="HTML",
         reply_markup=reply_markup
     )
 
