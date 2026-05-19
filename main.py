@@ -419,6 +419,15 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
         except Exception as e:
             logger.debug(f"Could not delete last bot message: {e}")
+        
+        # Delete old analytics chart if exists
+        old_chart_msg_id = context.user_data.get('analytics_chart_msg_id')
+        if old_chart_msg_id:
+            try:
+                await context.bot.delete_message(chat_id, old_chart_msg_id)
+            except Exception:
+                pass
+            context.user_data['analytics_chart_msg_id'] = None
 
         # Immediately respond with loading message
         loading_msg = await context.bot.send_message(
@@ -522,6 +531,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 media=InputMediaPhoto(media=photo_buf, caption="🧠 Импакт в последних 10 играх."),
                                 reply_markup=reply_markup
                             )
+                            # Store chart message ID for future deletion
+                            context.user_data['analytics_chart_msg_id'] = loading_msg.message_id
                             # Schedule deletion after 30 seconds
                             schedule_delete(context.bot, chat_id, loading_msg.message_id, 30, context.application.job_queue)
                         except Exception:
@@ -543,6 +554,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 reply_markup=reply_markup,
                                 parse_mode="MarkdownV2"
                             )
+                            # Store chart message ID for future deletion
+                            context.user_data['analytics_chart_msg_id'] = result_msg.message_id
                             set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
                             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
                             update_last_message_id(update.effective_user.id, result_msg.message_id)
@@ -2769,11 +2782,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await _show_analytics_page(callback_query, 0, context)
         except Exception as e:
             logger.error(f"Error in button_callback: {e}", exc_info=True)
-        finally:
-            try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-            except Exception:
-                pass
+        # Don't delete loading_msg here - _show_analytics_page will edit it with the result
         return
 
     # Handle analytics_page_N - no loading indicator (pages already generated or will show error)
