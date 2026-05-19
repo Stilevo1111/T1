@@ -1415,17 +1415,21 @@ class Database:
                     delta = cur_f - prev_f
                     if delta > top_growth_cm:
                         top_growth_cm = delta
-                        cached = user_cache.get(u["telegram_id"])
+                        telegram_id = u.get("telegram_id")
+                        # Валидация telegram_id (защита от SteamID64)
+                        if telegram_id and not (isinstance(telegram_id, int) and telegram_id < 10**15):
+                            logger.warning(f"get_digest_stats: invalid telegram_id={telegram_id} for user, possibly SteamID64 stored as telegram_id")
+                            telegram_id = None
+                        cached = user_cache.get(telegram_id) if telegram_id else None
                         if cached:
-                            nick = cached.get('steam_nickname') or cached.get('username') or str(u["telegram_id"])
+                            nick = cached.get('steam_nickname') or cached.get('username') or str(u.get("telegram_id", ""))
                             top_growth_user = nick if nick and nick != "None" else None
                         else:
-                            nick = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
+                            nick = u.get("steam_nickname") or u.get("username") or str(u.get("telegram_id", ""))
                             top_growth_user = nick if nick and nick != "None" else None
                         if not top_growth_user:
-                            top_growth_user = str(u["telegram_id"])
-                        # Direct assignment - telegram_id is always valid from DB
-                        top_growth_id = u["telegram_id"]
+                            top_growth_user = str(u.get("telegram_id", ""))
+                        top_growth_id = telegram_id
 
             # Падение: насколько см уменьшилась фиссура за сутки (current - digest)
             top_drop_user = None
@@ -1447,8 +1451,10 @@ class Database:
                             top_drop_user = nick if nick and nick != "None" else None
                         if not top_drop_user:
                             top_drop_user = str(u["telegram_id"])
-                        # Direct assignment - telegram_id is always valid from DB
+                        # Валидация telegram_id (защита от SteamID64)
                         top_drop_id = u["telegram_id"]
+                        if top_drop_id and not (isinstance(top_drop_id, int) and top_drop_id < 10**15):
+                            top_drop_id = None
 
             # Стрик: текущая серия побед (current_streak)
             top_streak_user = None
@@ -1466,8 +1472,10 @@ class Database:
                         top_streak_user = nick if nick and nick != "None" else None
                     if not top_streak_user:
                         top_streak_user = str(u["telegram_id"])
-                    # Direct assignment - telegram_id is always valid from DB
+                    # Валидация telegram_id (защита от SteamID64)
                     top_streak_id = u["telegram_id"]
+                    if top_streak_id and not (isinstance(top_streak_id, int) and top_streak_id < 10**15):
+                        top_streak_id = None
 
             def get_user_telegram_username(telegram_id):
                 """Получить Telegram username пользователя"""
@@ -2613,6 +2621,10 @@ def get_dota_week_top(limit=10, force_refresh=False):
             for telegram_id in all_users:
                 if not isinstance(telegram_id, int):
                     continue
+                # SteamID64 protection - Skip if this looks like a SteamID64 as telegram_id
+                if telegram_id > 76561190000000000:
+                    logger.warning(f"get_dota_week_top: skipping user with SteamID64 as telegram_id={telegram_id}")
+                    continue
                 if telegram_id in seen_ids:  # Пропускаем дубликаты
                     continue
                 seen_ids.add(telegram_id)
@@ -3187,6 +3199,50 @@ def get_all_users_with_steam():
             } for u in users]
     except Exception as e:
         logger.error(f"Error get_all_users_with_steam: {e}")
+        return []
+    finally:
+        if conn is not None:
+            release_connection(conn)
+
+
+def find_users_with_invalid_telegram_id():
+    """Найти пользователей с SteamID64 в колонке telegram_id"""
+    conn = None
+    try:
+        conn = get_connection()
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        cursor = conn.cursor()
+        
+        # SteamID64 values are typically > 76561190000000000 (7656119...) and < 10**15
+        if "postgres" in scheme:
+            cursor.execute("""
+                SELECT telegram_id, username, steam_nickname 
+                FROM users 
+                WHERE telegram_id > 76561190000000000 AND telegram_id < 10000000000000000
+            """)
+        else:
+            cursor.execute("""
+                SELECT telegram_id, username, steam_nickname 
+                FROM users 
+                WHERE telegram_id > 76561190000000000 AND telegram_id < 10000000000000000
+            """)
+        users = cursor.fetchall()
+        cursor.close()
+        result = []
+        for u in users:
+            tid = u[0] if not isinstance(u, dict) else u.get('telegram_id')
+            username = u[1] if not isinstance(u, dict) else u.get('username')
+            steam_nick = u[2] if not isinstance(u, dict) else u.get('steam_nickname')
+            logger.warning(f"find_users_with_invalid_telegram_id: FOUND user with SteamID64 as telegram_id - telegram_id={tid}, username={username}, steam_nickname={steam_nick}")
+            result.append({
+                "telegram_id": tid,
+                "username": username,
+                "steam_nickname": steam_nick
+            })
+        return result
+    except Exception as e:
+        logger.error(f"Error find_users_with_invalid_telegram_id: {e}")
         return []
     finally:
         if conn is not None:
