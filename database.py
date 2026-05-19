@@ -192,6 +192,10 @@ def flush_users_cache():
         # Подготавливаем данные для batch обновления
         batch_data = []
         for telegram_id in dirty_users:
+            # Skip if telegram_id looks like SteamID64 (protection against corrupted cache)
+            if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
+                logger.warning(f"flush_users_cache: skipping user with invalid telegram_id={telegram_id}")
+                continue
             user_data = user_cache.get(telegram_id)
             if user_data:
                 batch_data.append((
