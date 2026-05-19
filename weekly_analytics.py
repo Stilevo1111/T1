@@ -231,10 +231,10 @@ async def load_heroes():
 # =========================================================
 
 # Mapping from OpenDota internal names to file names
-# load_heroes() returns names like "anti_mage", "npc_dota_hero_necrophos" etc
+# load_heroes() returns names like "anti_mage", "necrophos" etc (after removing npc_dota_hero_ prefix)
 HERO_NAME_MAP = {
     "anti_mage": "antimage",
-    "npc_dota_hero_necrophos": "necrophos",
+    "necrophos": "necrolyte",  # OpenDota: necrophos, File: necrolyte.png
     "queenofpain": "queenofpain",
     "skywrath_mage": "skywrath_mage",
     "outworld_destroyer": "outworld_destroyer",
