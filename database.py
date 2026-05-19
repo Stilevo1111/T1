@@ -876,6 +876,58 @@ _config_cache_time = {}
 _CONFIG_CACHE_TTL = 60  # секунд
 
 class Database:
+    def execute_query(self, query, params=None, fetch="none"):
+        """Выполнить SQL запрос с параметрами"""
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        
+        if "postgres" in scheme:
+            conn = get_connection()
+            try:
+                cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                if params:
+                    cursor.execute(query, params)
+                else:
+                    cursor.execute(query)
+                
+                if fetch == "one":
+                    result = cursor.fetchone()
+                elif fetch == "all":
+                    result = cursor.fetchall()
+                else:
+                    result = None
+                conn.commit()
+                return result
+            except Exception as e:
+                logger.error(f"execute_query error: {e}")
+                conn.rollback()
+                raise
+            finally:
+                release_connection(conn)
+        else:
+            conn = get_connection()
+            try:
+                cursor = conn.cursor()
+                if params:
+                    cursor.execute(query, params)
+                else:
+                    cursor.execute(query)
+                
+                if fetch == "one":
+                    result = cursor.fetchone()
+                elif fetch == "all":
+                    result = cursor.fetchall()
+                else:
+                    result = None
+                conn.commit()
+                return result
+            except Exception as e:
+                logger.error(f"execute_query error: {e}")
+                conn.rollback()
+                raise
+            finally:
+                release_connection(conn)
+
     def get_config(self, key, default=None, use_cache=True):
         """Получить значение конфигурации с кешированием"""
         global _config_cache, _config_cache_time
