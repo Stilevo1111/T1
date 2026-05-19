@@ -447,11 +447,12 @@ async def detect_role_from_hero_counts(matches: list) -> str:
     if total_matches == 0:
         return "CARRY"
     
-    # Find dominant role (60% threshold)
+    # Find dominant role (threshold: at least 2 matches or 50% for small samples)
     dominant_role = max(role_counts, key=role_counts.get)
     dominant_count = role_counts[dominant_role]
     
-    if dominant_count >= total_matches * 0.6:
+    threshold = max(2, int(total_matches * 0.5))
+    if dominant_count >= threshold:
         logger.info(f"ROLE BY HERO COUNT: {dominant_role} ({dominant_count}/{total_matches})")
         return dominant_role
     
@@ -486,12 +487,16 @@ async def detect_role_from_history(matches: list):
     avg_kda = (total_kills + total_assists) / max(total_deaths, 1)
     
     # High GPM + KDA = CARRY/MID, low = SUPPORT
+    # But if we have no meaningful data (all zeros), default to CARRY not SUPPORT
     if avg_gpm >= 500 and avg_kda >= 3.0:
         return "CARRY"
     elif avg_gpm >= 350 and avg_kda >= 2.5:
         return "MID"
-    else:
+    elif avg_gpm > 0 and avg_kda > 0:
         return "SUPPORT"
+    else:
+        # Fallback when no meaningful stats data - default to CARRY
+        return "CARRY"
 
 
 def calculate_player_stats(matches: list) -> dict:
@@ -854,17 +859,24 @@ async def generate_chart_only(telegram_id: int):
             cached = json.loads(user['analytics_cache'])
             # Run chart generation (async function) directly
             chart = await create_visual_chart(cached.get("history", []))
-            return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", [])}
+            return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY")}
 
     matches = await get_last_matches(telegram_id)
 
-    if len(matches) < 5:
+    if len(matches) == 0:
+        from dota_mmr import get_opendota_rate_limit_message
+        return {"error": "opendota_rate_limit", "message": get_opendota_rate_limit_message()}
+
+    # Check if matches have real data (hero_id should be non-zero, duration should be positive)
+    # If all hero_id are 0 or duration missing, API rate limited - show error
+    has_valid_data = any(m.get("hero_id", 0) > 0 and m.get("duration", 0) > 0 for m in matches)
+    if not has_valid_data:
         from dota_mmr import get_opendota_rate_limit_message
         return {"error": "opendota_rate_limit", "message": get_opendota_rate_limit_message()}
 
     # Matches are already sorted newest-first from API, keep this order
 
-    # Detect role from hero picks
+    # Detect role from hero picks (works with any number of matches)
     role = await detect_role_from_hero_counts(matches) or "CARRY"
 
     # Calculate only what's needed for chart - minimal data
@@ -892,7 +904,7 @@ async def generate_chart_only(telegram_id: int):
         game_history.append({"imp": round(imp, 2), "hero_id": m.get("hero_id", 0)})
 
     chart = await create_visual_chart(game_history)
-    return {"image": chart, "history": game_history, "matches": matches}
+    return {"image": chart, "history": game_history, "matches": matches, "role": role}
 
 
 async def generate_weekly_analytics(telegram_id: int):
