@@ -359,9 +359,7 @@ def _can_admin_bypass(
 
 _MUTE_USAGE = (
     "🤪 <b>Замутить пользователя</b> — цена 10 фиссур.\n"
-    "<code>/mute @username</code> или <code>/mute</code> в ответ на его сообщение\n\n"
-    "👤 <b>Посмотреть профиль</b>\n"
-    "<code>/profile @username</code>"
+    "<code>/mute @username</code> или <code>/mute</code> в ответ на его сообщение"
 )
 
 
