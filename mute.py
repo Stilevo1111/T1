@@ -403,6 +403,17 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 # ─── Вспомогательные проверки ─────────────────────────────────────────────────
 
+def get_current_fissure(user_id: int) -> float:
+    """Возвращает текущую фиссуру пользователя (из БД)."""
+    try:
+        from database import get_user
+        user = get_user(user_id)
+        if user:
+            return float(user.get("fissure", 0.0))
+    except Exception:
+        logger.debug(f"get_current_fissure error for {user_id}", exc_info=True)
+    return 0.0
+
 
 # ─── Публичный API модуля ─────────────────────────────────────────────────────
 
