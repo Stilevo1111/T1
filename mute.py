@@ -191,28 +191,57 @@ async def _do_give_gag(
     # ── 3. Списываем фиссуру ────────────────────────────────────────────────
     add_fissure(admin_id, -_MUTE_COST_CM)
 
-    # ── 4. «Кладём» кляп на жертву ─────────────────────────────────────────
+    # ── 4. Удаляем команду /mute из чата ────────────────────────────────────
+    try:
+        await update.message.delete()
+    except Exception:
+        logger.debug(f"Could not delete /mute command message in {chat_id}", exc_info=True)
+
+    # ── 5. «Кладём» кляп на жертву ─────────────────────────────────────────
     expiry = datetime.now() + timedelta(seconds=_MUTE_DURATION_SEC)
     _gagged_users[victim_id] = expiry
 
-    # ── 5. Анонс в чат ──────────────────────────────────────────────────────
+    # ── 6. Анонс в чат (отдельным сообщением, не реплай) ───────────────────
     admin_name   = admin.get("username") or admin.get("first_name") or str(admin_id)
     victim_name  = victim.get("username") or victim.get("first_name") or str(victim_id)
-    sender       = (
-        admin.get("username") or admin.get("first_name") or str(admin_id)
-    )
     gag_emoji    = _pick_gag_emoji(victim_id)
+    # Имя админа кликабельно — ссылка на профиль Telegram
+    admin_link   = (
+        f"<a href='tg://user?id={admin_id}'>{admin_name}</a>"
+    )
     announcement = (
-        f"📢 {sender} дал(а) кляп @{victim.get('username', victim_name)} "
+        f"👤 {admin_link} дал(а) кляп @{victim.get('username', victim_name)} "
         f"{gag_emoji} на {_MUTE_DURATION_SEC} секунд!"
     )
-    if update.message:
-        await update.message.reply_text(announcement)
+    announce_msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text=announcement,
+        parse_mode="HTML",
+    )
+    # Удалить анонс тоже через 30 секунд
+    try:
+        from main import schedule_delete
+        schedule_delete(
+            context.bot, chat_id, announce_msg.message_id,
+            _MUTE_DURATION_SEC, context.application.job_queue
+        )
+    except Exception:
+        logger.debug("schedule_delete import failed, using asyncio fallback", exc_info=True)
+        asyncio.create_task(_delayed_delete(context.bot, chat_id, announce_msg.message_id, _MUTE_DURATION_SEC))
 
     # ── 6. Запускаем автоснятие ─────────────────────────────────────────────
     _schedule_gag_release(victim_id, chat_id, chat_type, context)
 
     return True
+
+
+async def _delayed_delete(bot, chat_id: int, msg_id: int, delay: int) -> None:
+    """Fallback: удалить сообщение через delay секунд."""
+    await asyncio.sleep(delay)
+    try:
+        await bot.delete_message(chat_id, msg_id)
+    except Exception:
+        logger.debug(f"Fallback delete failed: {msg_id} in {chat_id}", exc_info=True)
 
 
 def _schedule_gag_release(
