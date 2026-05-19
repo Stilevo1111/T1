@@ -237,9 +237,6 @@ async def decrease_inactive_job(context):
         else:
             logger.info("Нет неактивных игроков для уменьшения fissure")
 
-        # Обновляем позиции игроков
-        update_player_positions()
-
         # Запоминаем что выполнено сегодня
         set_config('last_decrease_inactive_run', datetime.now().strftime("%Y-%m-%d"))
     except Exception as e:
@@ -1157,7 +1154,7 @@ async def alternate_digest_job(context):
                 _digest_state["dota_data"] = None
                 _digest_state["last_data_update"] = now
                 try:
-                    update_digest_snapshot()
+                    db.update_digest_snapshot()
                 except Exception as snap_err:
                     logger.warning(f"update_digest_snapshot: {snap_err}")
 

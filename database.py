@@ -1509,66 +1509,31 @@ class Database:
                 "streak_username": None
             }
     
-    def update_player_positions(self):
-        """Обновить текущие позиции игроков (по fissure DESC)"""
+    def get_user_position(self, telegram_id):
+        """Получить текущую позицию пользователя (динамически, без обновления всех)"""
         try:
-            # Используем execute_query для безопасного выполнения
-            if get_db_type() == "postgresql":
-                query = """
-                    UPDATE users SET current_position = subquery.pos
-                    FROM (SELECT telegram_id, ROW_NUMBER() OVER (ORDER BY fissure DESC) as pos FROM users) subquery
-                    WHERE users.telegram_id = subquery.telegram_id
-                """
-                result = self.execute_query(query)
-                return result if result is not None else 0
-            else:
-                # SQLite: используем скалярный подзапрос
-                query = """
-                    UPDATE users SET current_position = (
-                        SELECT COUNT(*) + 1 FROM users u2 WHERE u2.fissure > users.fissure
-                    )
-                """
-                result = self.execute_query(query)
-                return result if result is not None else 0
+            query = "SELECT COUNT(*) + 1 FROM users WHERE fissure > (SELECT fissure FROM users WHERE telegram_id = %s)"
+            result = self.execute_query(query, (telegram_id,))
+            return result[0][0] if result else 0
         except Exception as e:
-            logger.error(f"Error updating player positions: {e}")
+            logger.error(f"Error getting user position: {e}")
             return 0
 
+    def update_player_positions(self):
+        """Обновить текущие позиции игроков (устаревший метод - используй get_user_position)"""
+        logger.warning("update_player_positions is deprecated - use get_user_position instead")
+        return 0
+
     def update_digest_snapshot(self):
-        """Обновить 'снимок' (позиция/фиссура) после отправки дайджеста"""
+        """Сохранить текущие fissure в digest_fissure для расчета роста (без ROW_NUMBER)"""
         try:
-            # Используем execute_query для безопасного выполнения
             if get_db_type() == "postgresql":
-                query = """
-                    UPDATE users SET 
-                        current_position = subquery.pos,
-                        digest_position = subquery.pos,
-                        digest_fissure = subquery.fissure
-                    FROM (
-                        SELECT telegram_id, fissure, 
-                               ROW_NUMBER() OVER (ORDER BY fissure DESC) as pos 
-                        FROM users
-                    ) subquery
-                    WHERE users.telegram_id = subquery.telegram_id
-                """
-                result = self.execute_query(query)
-                return result if result is not None else 0
+                query = "UPDATE users SET digest_fissure = fissure WHERE in_chat = TRUE"
             else:
-                # SQLite: используем скалярные подзапросы
-                query = """
-                    UPDATE users SET 
-                        current_position = (
-                            SELECT COUNT(*) + 1 FROM users u2 WHERE u2.fissure > users.fissure
-                        ),
-                        digest_position = (
-                            SELECT COUNT(*) + 1 FROM users u2 WHERE u2.fissure > users.fissure
-                        ),
-                        digest_fissure = (
-                            SELECT fissure FROM users u2 WHERE u2.telegram_id = users.telegram_id
-                        )
-                """
-                result = self.execute_query(query)
-                return result if result is not None else 0
+                query = "UPDATE users SET digest_fissure = fissure WHERE in_chat = 1 OR in_chat IS NULL"
+            result = self.execute_query(query)
+            logger.info("Updated digest_fissure for growth tracking")
+            return result
         except Exception as e:
             logger.error(f"Error updating digest snapshot: {e}")
             return 0
