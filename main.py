@@ -426,6 +426,25 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text="⏳ Генерирую аналитику..."
         )
         
+        # Start animation as background task
+        animation_task = None
+        async def animate_loading():
+            for i in range(6):
+                try:
+                    await asyncio.sleep(0.5)
+                except asyncio.CancelledError:
+                    return
+                if loading_msg is None:
+                    break
+                frame = "⌛️" if i % 2 == 1 else "⏳"
+                messages = ["Генерирую аналитику...", "Собираю данные...", "Анализирую статы...", "Готово!"]
+                try:
+                    await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                except Exception:
+                    pass
+        
+        animation_task = asyncio.create_task(animate_loading())
+        
         # Start analytics generation in background task
         async def generate_and_update_analytics():
             try:
@@ -486,6 +505,10 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         context.user_data['analytics_table_msg_id'] = None
                     
                     if chart_image and len(chart_image) > 0:
+                        # Cancel animation and delete loading message
+                        if animation_task:
+                            animation_task.cancel()
+                        
                         # Update loading message with result
                         photo_buf = io.BytesIO(chart_image)
                         photo_buf.name = "weekly_analytics.png"
@@ -499,6 +522,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 media=InputMediaPhoto(media=photo_buf, caption="🧠 Импакт в последних 10 играх."),
                                 reply_markup=reply_markup
                             )
+                            # Schedule deletion after 30 seconds
+                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 30, context.application.job_queue)
                         except Exception:
                             # Fallback: delete and send new message
                             photo_buf.seek(0)  # Reset buffer position after failed edit
@@ -522,7 +547,9 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
                             update_last_message_id(update.effective_user.id, result_msg.message_id)
                     else:
-                        # Update with error message - chart generation failed or returned empty data
+                        # Cancel animation and update with error message
+                        if animation_task:
+                            animation_task.cancel()
                         error_text = "⚠️ Не удалось сгенерировать график аналитики. Попробуйте позже."
                         try:
                             await context.bot.edit_message_text(
@@ -533,7 +560,9 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         except Exception:
                             pass
                 else:
-                    # Update with error message
+                    # Cancel animation and update with error message
+                    if animation_task:
+                        animation_task.cancel()
                     try:
                         await context.bot.edit_message_text(
                             chat_id=chat_id,
@@ -545,6 +574,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
             except Exception as e:
                 logger.error(f"Error in background analytics generation: {e}")
+                if animation_task:
+                    animation_task.cancel()
                 try:
                     await context.bot.edit_message_text(
                         chat_id=chat_id,
@@ -2821,17 +2852,24 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         stats = context.user_data.get('analytics_stats')
         role = context.user_data.get('analytics_role')
         
-        # Use cached role if available and matches exist
-        if role and matches and len(matches) > 0:
+        # Always recalculate stats if None, or if role is set but stats is missing
+        need_recalc = stats is None or role is None
+        
+        if not need_recalc and role and matches and len(matches) > 0:
             logger.info(f"Analytics: using cached role={role}")
-        elif stats is None or role is None:
+        else:
             from weekly_analytics import detect_role_from_history
             logger.info("Analytics: detecting role and calculating stats")
             role = await detect_role_from_history(matches)
             stats = calculate_player_stats(matches)
             context.user_data['analytics_stats'] = stats
             context.user_data['analytics_role'] = role
-            logger.info(f"Analytics: detected role={role}, stats keys={list(stats.keys())}")
+            logger.info(f"Analytics: detected role={role}, stats keys={list(stats.keys()) if stats else 'None'}")
+        
+        # Ensure stats is valid before generating pages
+        if not stats:
+            await callback_query.answer(text="❌ Ошибка анализа статистики", show_alert=True)
+            return
         
         try:
             all_pages = get_analytics_pages(role, stats)
