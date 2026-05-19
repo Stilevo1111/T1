@@ -423,7 +423,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Immediately respond with loading message
         loading_msg = await context.bot.send_message(
             chat_id=chat_id,
-            text="⏳ Генерирую аналитику... (данные загружаются в фоне)"
+            text="⏳ Генерирую аналитику..."
         )
         
         # Start analytics generation in background task
