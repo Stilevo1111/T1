@@ -484,7 +484,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             pass
                         context.user_data['analytics_table_msg_id'] = None
                     
-                    if chart_image:
+                    if chart_image and len(chart_image) > 0:
                         # Update loading message with result
                         photo_buf = io.BytesIO(chart_image)
                         photo_buf.name = "weekly_analytics.png"
@@ -515,12 +515,13 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
                             update_last_message_id(update.effective_user.id, result_msg.message_id)
                     else:
-                        # Update with error message
+                        # Update with error message - chart generation failed or returned empty data
+                        error_text = "⚠️ Не удалось сгенерировать график аналитики. Попробуйте позже."
                         try:
                             await context.bot.edit_message_text(
                                 chat_id=chat_id,
                                 message_id=loading_msg.message_id,
-                                text=get_opendota_rate_limit_message()
+                                text=error_text
                             )
                         except Exception:
                             pass
