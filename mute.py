@@ -213,7 +213,7 @@ async def _do_give_gag(
         f"{admin_name}</a>"
     )
     announcement = (
-        f"👤 {admin_link} дал(а) кляп {victim_link} {gag_emoji} на 30 секунд!"
+        f"👤 {admin_link} дал(а) кляп {gag_emoji} {victim_link} на 30 секунд."
     )
     announce_msg = await context.bot.send_message(
         chat_id=chat_id,
