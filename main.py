@@ -3573,12 +3573,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if viewing_other:
             target_id = target_user.get('telegram_id', 0)
             target_name = target_user.get('username') or target_user.get('steam_nickname') or 'Unknown'
-            display_username = f"<a href=\"tg://user?id={target_id}\">{target_name}</a>"
         else:
             user_obj = update.effective_user
             target_id = user_obj.id
             target_name = user_obj.username or user_obj.first_name
-            display_username = f"<a href=\"tg://user?id={target_id}\">{target_name}</a>"
+        display_username = make_clickable(target_name, target_id)
 
         text = f"👑 {display_username}\n\n🍆 Фиссура: {target_user['fissure']:.1f} см\n🎲 Броски: {target_user.get('total_rolls', 0)} 🍀Стрик: {target_user.get('current_streak', 0)}/{target_user.get('best_streak', 0)}"
 
@@ -3771,7 +3770,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if len(name) > 12:
                     name = name[:12] + "…"
                 telegram_id = user_top.get('telegram_id')
-                clickable_name = f'<b><a href="tg://user?id={telegram_id}">{name}</a></b>'
+                clickable_name = f'<b>{make_clickable(name, telegram_id)}</b>'
                 fissure = user_top.get('fissure', 0)
                 medal = medals.get(i)
                 if medal:
@@ -4446,7 +4445,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     )
                 else:
                     # Fallback для пользователей без username
-                    welcome_text = f"<a href=\"tg://user?id={user_id}\">{name}</a>, {phrase}"
+                    welcome_text = f"{make_clickable(name, user_id)}, {phrase}"
                     result_msg = await context.bot.send_message(
                         chat_id=chat_id,
                         text=welcome_text,
