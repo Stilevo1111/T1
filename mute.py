@@ -170,31 +170,25 @@ async def _do_give_gag(
     chat_id    = update.effective_chat.id
     chat_type  = str(update.effective_chat.type)
 
-    # ── 1. Себя нельзя ──────────────────────────────────────────────────────
-    if admin_id == victim_id:
-        await context.bot.send_message(chat_id, "🤪 Себя нельзя!")
-        try:
-            await update.message.delete()
-        except Exception:
-            pass
-        return False
+    is_self_mute = (admin_id == victim_id)
 
-    # ── 2. Проверка баланса ─────────────────────────────────────────────────
-    current = get_current_fissure(admin_id)
-    if current < _MUTE_COST_CM:
-        await context.bot.send_message(
-            chat_id,
-            f"💸 Недостаточно фиссур! "
-            f"Нужно {_MUTE_COST_CM} см, а у тебя только {current:.1f} см."
-        )
-        try:
-            await update.message.delete()
-        except Exception:
-            pass
-        return False
+    # ── 1. Проверка баланса (не списываем, если мутим себя) ─────────────────────
+    if not is_self_mute:
+        current = get_current_fissure(admin_id)
+        if current < _MUTE_COST_CM:
+            await context.bot.send_message(
+                chat_id,
+                f"💸 Недостаточно фиссур! "
+                f"Нужно {_MUTE_COST_CM} см, а у тебя только {current:.1f} см."
+            )
+            try:
+                await update.message.delete()
+            except Exception:
+                pass
+            return False
 
-    # ── 3. Списываем фиссуру ────────────────────────────────────────────────
-    add_fissure(admin_id, -_MUTE_COST_CM)
+        # ── 2. Списываем фиссуру (только если не мутим себя) ────────────────────
+        add_fissure(admin_id, -_MUTE_COST_CM)
 
     # ── 4. Удаляем команду /mute из чата ────────────────────────────────────
     try:
@@ -299,10 +293,14 @@ async def _gag_timeout_job(
                 or (victim.get("first_name") if victim else None)
                 or str(victim_id)
             )
-            await context.bot.send_message(
+            notify_msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text=f"🗣 Кляп снят у @{name}",
             )
+            # Удаляем уведомление через 10 секунд
+            asyncio.create_task(_delayed_delete(
+                context.bot, chat_id, notify_msg.message_id, 10
+            ))
         except Exception:
             logger.debug(f"Gag release notify failed for {victim_id} in {chat_id}", exc_info=True)
 
