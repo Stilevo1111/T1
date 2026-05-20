@@ -52,10 +52,9 @@ _gag_auto_release_tasks: dict[int, asyncio.Task] = {}
 # ─── Вспомогательные методы ──────────────────────────────────────────────────
 
 def _pick_gag_emoji(victim_id: int) -> str:
-    """Выбрать смайл кляпа детерминированно по ID жертвы (стабильно между перезапусками)."""
-    # Золотое сечение 2654435761 даёт равномерное распределение по модулю списка
-    idx = abs(victim_id * 2654435761) % len(_GAG_EMOJIS)
-    return _GAG_EMOJIS[idx]
+    """Случайный выбор смайла кляпа."""
+    import random
+    return random.choice(_GAG_EMOJIS)
 
 
 def _get_gag_expiry(user_id: int) -> Optional[datetime]:
