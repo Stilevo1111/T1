@@ -1181,8 +1181,9 @@ async def alternate_digest_job(context):
             query = "INSERT INTO bot_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE (CAST(bot_config.value AS REAL) < ? OR bot_config.value IS NULL)"
             params = ('alternate_digest_last_run', str(now), str(threshold))
         rows = db.execute_query(query, params)
-        if rows is None or rows == 0:
-            # Логируем информацию о последнем запуске для отладки
+        if rows is None:
+            # Если запрос вернул None (ошибка в execute_query), логируем и возвращаемся
+            logger.error("alternate_digest_job: lock query вернул None (неожиданно), пропуск")
             last_job_run = config_cache.get('alternate_digest_last_run')
             if not last_job_run:
                 last_job_run = get_config('alternate_digest_last_run')

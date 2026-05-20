@@ -897,13 +897,13 @@ class Database:
                     cursor.execute(query, params)
                 else:
                     cursor.execute(query)
-                
+
                 if fetch == "one":
                     result = cursor.fetchone()
                 elif fetch == "all":
                     result = cursor.fetchall()
                 else:
-                    result = None
+                    result = cursor.rowcount
                 conn.commit()
                 return result
             except Exception as e:
@@ -920,13 +920,13 @@ class Database:
                     cursor.execute(query, params)
                 else:
                     cursor.execute(query)
-                
+
                 if fetch == "one":
                     result = cursor.fetchone()
                 elif fetch == "all":
                     result = cursor.fetchall()
                 else:
-                    result = None
+                    result = cursor.rowcount
                 conn.commit()
                 return result
             except Exception as e:
@@ -1262,7 +1262,7 @@ class Database:
                     AND fissure > 0.1
                 """
                 result = self.execute_query(query, (decrease_amount, days_inactive))
-                return result if result is not None else 0
+                return result if result is not None and result >= 0 else 0
             else:
                 # Для SQLite используем datetime function
                 query = """
@@ -1274,7 +1274,7 @@ class Database:
                 # Форматируем строку для days_inactive
                 days_str = f"-{days_inactive} days"
                 result = self.execute_query(query, (decrease_amount, days_str))
-                return result if result is not None else 0
+                return result if result is not None and result >= 0 else 0
         except Exception as e:
             logger.error(f"Error decreasing inactive fissure: {e}")
             return 0
