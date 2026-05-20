@@ -1180,21 +1180,17 @@ async def alternate_digest_job(context):
         else:
             query = "INSERT INTO bot_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE (CAST(bot_config.value AS REAL) < ? OR bot_config.value IS NULL)"
             params = ('alternate_digest_last_run', str(now), str(threshold))
-        rows = db.execute_query(query, params)
-        if rows is None:
-            # Если запрос вернул None (ошибка в execute_query), логируем и возвращаемся
-            logger.error("alternate_digest_job: lock query вернул None (неожиданно), пропуск")
-            last_job_run = config_cache.get('alternate_digest_last_run')
-            if not last_job_run:
-                last_job_run = get_config('alternate_digest_last_run')
-            try:
-                last_job_run_float = float(last_job_run) if last_job_run else 0
-            except (ValueError, TypeError):
-                last_job_run_float = 0
-            if last_job_run_float:
-                logger.warning(f"alternate_digest_job: пропуск (последний запуск был {now - last_job_run_float:.0f}с назад)")
-            else:
-                logger.warning("alternate_digest_job: пропуск (lock not acquired)")
+        db.execute_query(query, params)
+        # Читаем фактуальное значение из БД чтобы понять, обновился ли замок
+        current_lock = db.get_config('alternate_digest_last_run', use_cache=False)
+        try:
+            current_lock_float = float(current_lock) if current_lock else 0
+        except (ValueError, TypeError):
+            current_lock_float = 0
+        if current_lock_float < threshold:
+            # Не удалось обновить — другой воркер уже обновил замок недавно
+            last_job_run_float = current_lock_float
+            logger.warning(f"alternate_digest_job: пропуск (последний запуск был {now - last_job_run_float:.0f}с назад)")
             return
         config_cache.set('alternate_digest_last_run', str(now))
         logger.debug("alternate_digest_job: lock acquired")
