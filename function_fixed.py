@@ -23,7 +23,7 @@ async def alternate_digest_job(context):
         # Блокировка от параллельного запуска - УДЕРЖИВАЕМ ДО КОНЦА!
         async with _digest_state_lock:
             last_run = _digest_state.get('last_run', 0)
-            if now - last_run < 10:
+            if now - last_run < 5:
                 logger.info(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
                 return
             _digest_state['last_run'] = now
@@ -61,32 +61,34 @@ async def alternate_digest_job(context):
         now = time.time()
         
         # === УМНАЯ СИСТЕМА КЕШИРОВАНИЯ ДАЙДЖЕСТОВ ===
-        # Проверяем, нужно ли обновить кеш
+        # CREATE NEW MESSAGE only on rotation or empty cache + no existing message
+        # EDIT EXISTING when TTL expires or data refreshes
         cache = _digest_cache
-        should_regenerate = False
+        should_create_new = False
+        should_refresh_data = False
         
-        # 1. Если кеш пустой - генерируем
-        if cache["text"] is None:
-            should_regenerate = True
-            logger.info("Кеш дайджеста пуст, генерируем новый")
+        # 1. Rotation interval (48h) - CREATE NEW MESSAGE
+        if now - cache["created_at"] > cache["rotation_interval"]:
+            should_create_new = True
+            logger.info(f"Время ротации дайджеста ({cache['rotation_interval']}с), создаём новое сообщение")
         
-        # 2. Если кеш устарел (TTL) - генерируем новый
+        # 2. Empty cache and no existing message_id - CREATE NEW
+        elif cache["text"] is None and not get_config('alternate_digest_message_id'):
+            should_create_new = True
+            logger.info("Кеш пуст и нет сохранённого сообщения, создаём новое")
+        
+        # 3. Cache expired (TTL) - REFRESH DATA in existing message
         elif now - cache["created_at"] > cache["cache_ttl"]:
-            should_regenerate = True
-            logger.info(f"Кеш дайджеста устарел ({now - cache['created_at']:.0f}с > {cache['cache_ttl']}с), обновляем")
+            should_refresh_data = True
+            logger.info(f"Кеш устарел ({now - cache['created_at']:.0f}с > {cache['cache_ttl']}с), обновляем данные")
         
-        # 3. Если пришло время сменить тип (rotation) - генерируем
-        elif now - cache["created_at"] > cache["rotation_interval"]:
-            should_regenerate = True
-            logger.info(f"Время сменить тип дайджеста ({cache['rotation_interval']}с), обновляем")
-        
-        # 4. Если данные в БД обновились - генерируем
+        # 4. Data refreshed - REFRESH DATA in existing message
         elif now - _digest_state.get("last_data_refresh", 0) > _data_refresh_interval:
-            should_regenerate = True
-            logger.info(f"Данные в БД устарели ({_data_refresh_interval}с), обновляем")
+            should_refresh_data = True
+            logger.info(f"Данные в БД обновились ({_data_refresh_interval}с), обновляем")
         
         # Если кеш валиден - используем его и просто меняем тип для отображения
-        if not should_regenerate:
+        if not should_create_new and not should_refresh_data:
             logger.info(f"Используем кешированный дайджест (создан {now - cache['created_at']:.0f}с назад)")
 
             # Просто меняем тип для следующего раза
@@ -263,12 +265,15 @@ async def alternate_digest_job(context):
                 text = "<b>📊 Данные для дайджеста пока не доступны</b>\n\nПопробуйте позже!"
                 next_type = "0"
             
-            # === СОХРАНЯЕМ В КЕШ ===
-            cache["text"] = text
-            cache["type"] = current_type
-            cache["created_at"] = now
-            
-            logger.info(f"Дайджест сгенерирован и сохранен в кеш (тип: {current_type})")
+            # === СОХРАНЯЕМ В КЕШ ТОЛЬКО ПРИ СОЗДАНИИ НОВОГО СООБЩЕНИЯ ===
+            # При простом обновлении данных НЕ трогаем кеш - чтобы ротация работала корректно
+            if should_create_new:
+                cache["text"] = text
+                cache["type"] = current_type
+                cache["created_at"] = now
+                logger.info(f"Дайджест сгенерирован и сохранен в кеш (тип: {current_type}, новое сообщение)")
+            else:
+                logger.info(f"Дайджест сгенерирован для обновления (тип: {current_type}, редактируем существующее)")
         
         # === ОТПРАВКА ДАЙДЖЕСТА ===
         # Пропускаем редактирование если текст не изменился
@@ -281,7 +286,7 @@ async def alternate_digest_job(context):
         if last_created_str:
             try:
                 last_created = float(last_created_str)
-                if now - last_created < 30:  # 30 second cooldown to prevent dual worker spam
+                if now - last_created < 5:  # 5 second cooldown to prevent dual worker spam
                     logger.info(f"Пропуск - другой воркер создал дайджест {now - last_created:.0f}с назад")
                     return
             except ValueError:
@@ -289,7 +294,21 @@ async def alternate_digest_job(context):
         
         # Пробуем отредактировать существующее сообщение
         last_message_id = get_config('alternate_digest_message_id')
-        logger.info(f"alternate_digest_job: last_message_id = {last_message_id}")
+        logger.info(f"alternate_digest_job: last_message_id = {last_message_id}, should_create_new = {should_create_new}")
+        
+        # Для РОТАЦИИ (новое сообщение) - принудительно удаляем старое перед созданием нового
+        if should_create_new and last_message_id:
+            logger.info("Ротация - принудительно удаляем старое сообщение и создаём новое")
+            try:
+                msg_id_int = int(last_message_id)
+                if msg_id_int > 0:
+                    await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
+                    logger.info(f"Удалено старое сообщение {last_message_id}")
+            except Exception as e:
+                logger.debug(f"Старое сообщение уже удалено: {e}")
+            set_config('alternate_digest_message_id', None)
+            last_message_id = None
+        
         logger.info(f"alternate_digest_job: text = {text[:100]}...")
         edited = False
         if last_message_id:

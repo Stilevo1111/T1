@@ -3940,10 +3940,10 @@ async def main():
             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
         )
 
-# Обновление дайджестов каждые 60 секунд (переключение между утренним/Dota)
+# Обновление дайджестов каждые 15 секунд (чередование Fissure/Dota)
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(seconds=60),
+            interval=datetime.timedelta(seconds=15),
             first=datetime.datetime.now() + datetime.timedelta(seconds=10)
         )
 
