@@ -548,21 +548,16 @@ async def alternate_digest_job(context):
         # Если не удалось редактировать - создаём новое
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
-            # Проверяем анти-спам ДО всего
-            if last_message_id is not None:
-                # Есть старое состояние — используем 60-секундный check
-                last_created_str = get_config('alternate_digest_last_created')
-                last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
-                time_since_last = now - last_created
-                if time_since_last < 60:
-                    logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
-                    return
-            else:
-                # last_message_id = None (БД отвалилась или сообщение удалено) — не создаём дубликат
-                # Ставим last_created = now + 120с, чтобы следующие тики ушли в анти-спам и не генераили баннер
-                set_config('alternate_digest_last_created', str(now + 120))
-                logger.info("last_message_id = None, ставим защитный last_created=now+120, пропускаем создание")
+            # Проверяем анти-спам - защита от дублирования
+            last_created_str = get_config('alternate_digest_last_created')
+            last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
+            time_since_last = now - last_created
+            if time_since_last < 60:
+                logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания (last_message_id={last_message_id})")
                 return
+
+            # last_message_id = None (БД отвалилась или сообщение удалено) — можем создавать новый
+            # Но проверяем, что кеш валиден (чтобы не генерить баннер каждый тик)
 
             # Генерируем геро-мета баннер ТОЛЬКО при создании нового поста (ротация 48ч или первый запуск)
             hero_meta_banner = None
