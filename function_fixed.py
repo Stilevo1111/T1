@@ -1,6 +1,16 @@
+import logging
+import time
+import asyncio
+from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
+
+DOTA_DIGEST_HEADER = "🎮 DOTA ДАЙДЖЕСТ 📊"
+DOTA_DIGEST_FOOTER = "🔺 = лучший винрейт за неделю\n🔻 = худший винрейт за неделю\n🔸 = текущий стрик побед"
+
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов (редактирование существующего, создание нового только при необходимости)"""
-    global _last_data_refresh, _data_refresh_interval
+    global _last_data_refresh
     try:
         now = time.time()
         
@@ -78,20 +88,19 @@ async def alternate_digest_job(context):
         # Если кеш валиден - используем его и просто меняем тип для отображения
         if not should_regenerate:
             logger.info(f"Используем кешированный дайджест (создан {now - cache['created_at']:.0f}с назад)")
-            
+
             # Просто меняем тип для следующего раза
             current_type = cache["type"]
             if current_type == "0":
                 next_type = "1"
             else:
                 next_type = "0"
-            
+
             text = cache["text"]
-            
-            # Обновляем метаданные
+
+            # Обновляем метаданные только в памяти (не пишем в БД каждую минуту)
             _digest_state["type"] = next_type
-            set_config('alternate_digest_type', next_type)
-            
+
             logger.info(f"Переключаем тип: {current_type} -> {next_type} (используем кеш)")
         
         # Иначе - генерируем новый дайджест
@@ -448,8 +457,7 @@ async def alternate_digest_job(context):
                 except Exception as e:
                     logger.debug(f"Не удалось закрепить: {e}")
             finally:
-                # ВСЕГДА очищаем флаг создания, даже если упало исключение
-                set_config('alternate_digest_creating', '')  # очищаем флаг создания
+                pass  # Флаг создания больше не используется
         
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)

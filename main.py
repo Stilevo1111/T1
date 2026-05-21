@@ -3606,8 +3606,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                         updates['username'] = new_telegram_username
                     elif current_username is None and update.effective_user.first_name:
                         updates['username'] = update.effective_user.first_name
-                    update_user_fields_batch(user_id, updates)
-                    logger.info(f"Saved message_count for {user_id}: {new_count}")
+                    # Не сохраняем в БД при каждом сообщении - только в кеш
+                    # БД будет обновлена при завершении работы или ежедневно
+                    update_user_fields_batch(user_id, updates, save_to_db=False)
+                    logger.info(f"Cached message_count for {user_id}: {new_count}")
         except Exception as e:
             logger.error(f"Error updating message_count: {e}")
 
