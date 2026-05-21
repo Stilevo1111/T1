@@ -564,7 +564,6 @@ async def alternate_digest_job(context):
             if should_create_new:
                 try:
                     from hero_meta import get_hero_meta_image
-                    import asyncio
                     try:
                         hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=30.0)
                     except asyncio.TimeoutError:
