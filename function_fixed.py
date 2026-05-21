@@ -1,6 +1,7 @@
 import logging
 import time
 import asyncio
+import os
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,33 @@ async def alternate_digest_job(context):
         if is_rate_limited():
             logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
             return
-        
+
+        # === SINGLE ACTIVE INSTANCE (leader election via DB) ===
+        # На бесплатном Render может быть 2 контейнера. Только один должен реально работать с дайджестом.
+        instance_id = os.getenv("RENDER_INSTANCE_ID") or f"local_{os.getpid()}"
+        LEADER_TIMEOUT = 60  # секунд
+
+        current_leader = get_config('digest_leader_id')
+        last_seen_str = get_config('digest_leader_last_seen')
+        last_seen = float(last_seen_str) if last_seen_str else 0
+
+        is_leader = False
+        if current_leader == instance_id:
+            is_leader = True
+        elif not current_leader or (now - last_seen > LEADER_TIMEOUT):
+            # Захватываем лидерство
+            set_config('digest_leader_id', instance_id)
+            set_config('digest_leader_last_seen', str(now))
+            logger.warning(f"alternate_digest_job: ЗАХВАТИЛ ЛИДЕРСТВО (instance={instance_id})")
+            is_leader = True
+        else:
+            # Другой контейнер — лидер. Пропускаем всю работу.
+            logger.info(f"alternate_digest_job: пропуск (лидер = {current_leader}, я = {instance_id})")
+            return
+
+        # Обновляем heartbeat (чтобы другие знали, что мы живы)
+        set_config('digest_leader_last_seen', str(now))
+
         # Блокировка от параллельного запуска - УДЕРЖИВАЕМ ДО КОНЦА!
         async with _digest_state_lock:
             last_run = _digest_state.get('last_run', 0)
