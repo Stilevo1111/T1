@@ -40,13 +40,6 @@ async def alternate_digest_job(context):
                 _digest_state["dota_data"] = None
                 _digest_state["last_data_update"] = now
             
-            # При первом запуске после деплоя сбрасываем тип на "0"
-            if _digest_state.get("last_data_update") == 0:
-                _digest_state["type"] = "0"
-                logger.info("alternate_digest_job: сброшен тип на 0 после перезапуска")
-            
-            logger.info("Запуск alternate_digest_job")
-            
             # Получаем ID чата для дайджеста (из кеша, не БД)
             digest_chat_id = _digest_state.get("chat_id") or get_config('digest_chat_id')
             if digest_chat_id:
