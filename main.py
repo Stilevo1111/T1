@@ -125,7 +125,7 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
             logger.info(f"Deleted delayed message {msg_id} in chat {chat_id}")
         except Exception as e:
             error_str = str(e).lower()
-            if "message to delete not found" in error_str:
+            if "message to delete not found" in error_str or "bad request" in error_str:
                 logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
             else:
                 logger.warning(f"Failed to delete delayed message {msg_id} in chat {chat_id}: {e}")
@@ -431,29 +431,35 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['analytics_chart_msg_id'] = None
 
         # Immediately respond with loading message
-        loading_msg = await context.bot.send_message(
-            chat_id=chat_id,
-            text="⏳ Генерирую аналитику..."
-        )
-        
-        # Start animation as background task
+        loading_msg = None
         animation_task = None
-        async def animate_loading():
-            for i in range(6):
-                try:
-                    await asyncio.sleep(0.5)
-                except asyncio.CancelledError:
-                    return
-                if loading_msg is None:
-                    break
-                frame = "⌛️" if i % 2 == 1 else "⏳"
-                messages = ["Генерирую аналитику...", "Собираю данные...", "Анализирую статы...", "Готово!"]
-                try:
-                    await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
-                except Exception:
-                    pass
-        
-        animation_task = asyncio.create_task(animate_loading())
+        try:
+            loading_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text="⏳ Генерирую аналитику..."
+            )
+            logger.info(f"Created loading message in analyze: chat_id={chat_id}, msg_id={loading_msg.message_id}")
+
+            # Start animation as background task
+            async def animate_loading():
+                for i in range(6):
+                    try:
+                        await asyncio.sleep(0.5)
+                    except asyncio.CancelledError:
+                        return
+                    if loading_msg is None:
+                        break
+                    frame = "⌛️" if i % 2 == 1 else "⏳"
+                    messages = ["Генерирую аналитику...", "Собираю данные...", "Анализирую статы...", "Готово!"]
+                    try:
+                        await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                    except Exception:
+                        pass
+
+            animation_task = asyncio.create_task(animate_loading())
+        except Exception as e:
+            logger.debug(f"Could not send loading message: {e}")
+            loading_msg = None
         
         # Start analytics generation in background task
         async def generate_and_update_analytics():
@@ -2014,7 +2020,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             animation_task = asyncio.create_task(animate_loading())
         except Exception as e:
-            logger.debug(f"Could not send loading message: {e}")
+            logger.debug(f"Could not send loading message in start: {e}")
             loading_msg = None
 
         if steam_id and steam_nickname:
