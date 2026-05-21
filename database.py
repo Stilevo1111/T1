@@ -2412,20 +2412,22 @@ def get_digest_stats():
         if last:
             try:
                 result["top_growth"] = tuple(json.loads(last))
+                result["top_growth_id"] = json.loads(last)[2] if len(json.loads(last)) > 2 else None
             except:
                 pass
     else:
-        set_config('last_top_growth', json.dumps(result["top_growth"]))
+        set_config('last_top_growth', json.dumps(result["top_growth"] + (result["top_growth_id"],)))
 
     if result["top_drop"][0] == "None":
         last = get_config('last_top_drop')
         if last:
             try:
                 result["top_drop"] = tuple(json.loads(last))
+                result["top_drop_id"] = json.loads(last)[2] if len(json.loads(last)) > 2 else None
             except:
                 pass
     else:
-        set_config('last_top_drop', json.dumps(result["top_drop"]))
+        set_config('last_top_drop', json.dumps(result["top_drop"] + (result["top_drop_id"],)))
 
     if result["top_streak"][0] == "None":
         last = get_config('last_top_streak')
