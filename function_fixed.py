@@ -246,11 +246,11 @@ async def alternate_digest_job(context):
                                 bottom_part = "🔻—"
                             
                             if streak_player and streak_player != "None" and streak_wins > 0:
-                                streak_part = f" 🔸{make_clickable(streak_player, streak_id)}: {streak_wins}"
+                                streak_part = f"🔸{make_clickable(streak_player, streak_id)}: {streak_wins}"
                             else:
-                                streak_part = " 🔸—"
+                                streak_part = "🔸—"
                             
-                            dota_text = f"<b>{top_part} {bottom_part} {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
+                            dota_text = f"<b>{top_part}\n{bottom_part}\n{streak_part}</b>\n\n🦞Дота Дайджест."
                         
                         if dota_text is None:
                             next_type = "0"
