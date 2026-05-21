@@ -42,17 +42,8 @@ _user_fissure_processing = {}  # Request lock: user_id -> timestamp (for fissure
 _USER_START_COOLDOWN = {}  # Spam protection for /start: user_id -> timestamp
 _START_COOLDOWN = 5  # 5 seconds cooldown for /start command
 
-# Digest state is now centralized in digest.py (for better multi-instance safety)
-from digest import (
-    _digest_state,
-    _digest_state_lock,
-    _digest_cache,
-    _last_data_refresh,
-    _data_refresh_interval,
-    DIGEST_DATA_REFRESH_INTERVAL,
-    HERO_META_REFRESH_INTERVAL,
-    get_digest_data_hash,
-)
+# Digest state and logic are now fully centralized in digest.py
+# (leader election + single active instance on Render).
 
 _rate_limit_until = 0  # Unix timestamp - skip API calls until this time after 429
 RATE_LIMIT_COOLDOWN = 60  # 60 seconds cooldown after hitting rate limit
@@ -936,44 +927,35 @@ async def update_all_mmr_job(context):
 
 
 async def refresh_digest_message(bot):
-    """Обновляет кэш дайджеста после каждого броска (только для fissure-дайджеста, тип=0).
-    Редактирование сообщения теперь выполняет alternate_digest_job."""
+    """Обновляет данные fissure-дайджеста в памяти (для типа=0).
+    Фактическое редактирование сообщения выполняет alternate_digest_job в digest.py."""
+    from digest import get_digest_type, set_digest_type, set_fissure_digest_data
+
     try:
         digest_chat_id = get_config('digest_chat_id')
         if not digest_chat_id:
             return
 
-        current_type = _digest_state.get("type")
-        if current_type is None:
+        current_type = get_digest_type()
+        if current_type is None or current_type == "None":
             raw_type = get_config('alternate_digest_type')
             if raw_type is not None:
                 current_type = str(raw_type)
             else:
                 current_type = "0"
-            _digest_state["type"] = current_type
+            set_digest_type(current_type)
 
         if current_type != "0":
             logger.debug(f"refresh_digest_message: пропуск, текущий тип = {current_type} (не fissure-дайджест)")
             return
 
-        # Только обновляем кэш消化 данных, редактирование будет через alternate_digest_job
+        # Только обновляем кэш данных, редактирование будет через alternate_digest_job
         stats = get_digest_stats()
-        _digest_state["digest_data"] = stats
-        _digest_state["last_data_update"] = time.time()
+        set_fissure_digest_data(stats)
         logger.debug("refresh_digest_message: кэш digest_data обновлён, дайджест будет обновлён в следующем тике alternate_digest_job")
-    except Exception as e:
-        logger.error(f"Ошибка в refresh_digest_message: {e}", exc_info=True)
-
-        logger.debug("Нет alternate_digest_message_id для дайджеста, не создаём")
 
     except Exception as e:
         logger.error(f"Ошибка в refresh_digest_message: {e}", exc_info=True)
-
-
-# DEPRECATED: Используйте digest_handler
-# async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     """Ручной запуск утреннего дайджеста в этот чат"""
-#     pass
 
 
 @rate_limit(tokens=1)
@@ -1085,8 +1067,10 @@ async def dota_digest_job(context):
 
         bot = context.application.bot
 
+        from digest import get_dota_last_text, set_dota_last_text
+
         # Пропускаем если текст не изменился
-        if _digest_state.get("dota_last_text") == text:
+        if get_dota_last_text() == text:
             logger.debug("Dota дайджест текст не изменился, пропускаем")
             return
 
@@ -1101,18 +1085,18 @@ async def dota_digest_job(context):
                     parse_mode="HTML"
                 )
                 logger.info(f"Обновлён существующий Dota дайджест {last_message_id}")
-                _digest_state["dota_last_text"] = text  # кэшируем
+                set_dota_last_text(text)  # кэшируем
                 return
             except Exception as e:
                 error_str = str(e)
                 is_rate_limit = "429" in error_str or "too many requests" in error_str
                 if is_rate_limit:
                     logger.warning(f"Rate limited by Telegram in dota_digest, skipping")
-                    _digest_state["dota_last_text"] = text
+                    set_dota_last_text(text)
                     return
                 if "message is not modified" in error_str.lower():
                     logger.info("Dota дайджест не изменился, пропускаем")
-                    _digest_state["dota_last_text"] = text  # кэшируем текущий
+                    set_dota_last_text(text)  # кэшируем текущий
                     return
                 if "Message to edit not found" in error_str or "message can't be edited" in error_str:
                     logger.info(f"Старое сообщение {last_message_id} удалено или нельзя редактировать, создаём новое")
@@ -1123,20 +1107,15 @@ async def dota_digest_job(context):
         # Отправляем новое сообщение
         msg = await bot.send_message(chat_id=digest_chat_id, text=text, parse_mode="HTML")
         set_config('dota_digest_message_id', msg.message_id)
-        _digest_state["dota_last_text"] = text  # кэшируем
+        set_dota_last_text(text)  # кэшируем
         logger.info(f"Создан новый Dota дайджест {msg.message_id}")
 
     except Exception as e:
         logger.error(f"Ошибка в dota_digest_job: {e}", exc_info=True)
 
 
-# DEPRECATED: Используйте digest_handler
-# async def dota_digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     """Ручной запуск Dota дайджеста в этот чат"""
-#     pass
-
-
-# Импортируем упрощённую версию из function_fixed.py
+# alternate_digest_job живёт в digest.py (с лидерской выборкой).
+# function_fixed.py — только тонкий реэкспорт для совместимости.
 from function_fixed import alternate_digest_job
 
 # =====================
@@ -2388,7 +2367,8 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             set_config("digest_chat_id", str(chat_id))
 
         if command == "digestnow":
-            _digest_state["type"] = "0"
+            from digest import set_digest_type
+            set_digest_type("0")
             set_config("alternate_digest_type", "0")
             set_config("alternate_digest_message_id", None)
             set_config("alternate_digest_last_created", "0")
@@ -2401,7 +2381,8 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
 
         elif command == "dotadigestnow":
-            _digest_state["type"] = "1"
+            from digest import set_digest_type
+            set_digest_type("1")
             set_config("alternate_digest_type", "1")
             set_config("alternate_digest_message_id", None)
             set_config("alternate_digest_last_created", "0")
@@ -3923,7 +3904,7 @@ async def main():
             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
         )
 
-# Обновление дайджестов каждые 15 секунд (чередование Fissure/Dota)
+# Дайджест (Fissure + Dota) каждые 15 секунд — реальная работа только у лидера
         job_queue.run_repeating(
             alternate_digest_job,
             interval=datetime.timedelta(seconds=15),

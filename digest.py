@@ -850,3 +850,34 @@ async def alternate_digest_job(context):
         
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
+
+
+# ============================================================
+# Public helpers for main.py (to avoid direct _digest_state access)
+# These are thin wrappers — behavior is 100% identical.
+# ============================================================
+
+def get_digest_type(default: str = "0") -> str:
+    """Возвращает текущий тип дайджеста (0 = fissure, 1 = dota)."""
+    return _digest_state.get("type") or default
+
+
+def set_digest_type(value: str):
+    """Устанавливает текущий тип дайджеста."""
+    _digest_state["type"] = str(value)
+
+
+def set_fissure_digest_data(stats: dict):
+    """Сохраняет данные fissure-дайджеста (вызывается из refresh_digest_message)."""
+    _digest_state["digest_data"] = stats
+    _digest_state["last_data_update"] = time.time()
+
+
+def set_dota_last_text(text: str):
+    """Кэширует последний текст Dota-дайджеста (чтобы не редактировать одинаковый)."""
+    _digest_state["dota_last_text"] = text
+
+
+def get_dota_last_text():
+    """Возвращает последний закешированный текст Dota-дайджеста."""
+    return _digest_state.get("dota_last_text")
