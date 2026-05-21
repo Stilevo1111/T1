@@ -42,7 +42,6 @@ async def alternate_digest_job(context):
             # При первом запуске после деплоя сбрасываем тип на "0"
             if _digest_state.get("last_data_update") == 0:
                 _digest_state["type"] = "0"
-                set_config('alternate_digest_type', "0")
                 logger.info("alternate_digest_job: сброшен тип на 0 после перезапуска")
             
             logger.info("Запуск alternate_digest_job")
@@ -293,7 +292,6 @@ async def alternate_digest_job(context):
                     logger.info(f"Обновлён alternate дайджест {last_message_id}")
                     edited = True
                     _digest_state["type"] = next_type
-                    set_config('alternate_digest_type', next_type)
                     _digest_state["last_text"] = text
                     try:
                         await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
@@ -323,16 +321,15 @@ async def alternate_digest_job(context):
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
                 elif "message is not modified" in error_str:
-                     logger.info(f"Сообщение не изменилось, пропускаем")
-                     edited = True
-                     _digest_state["type"] = next_type
-                     set_config('alternate_digest_type', next_type)
-                     _digest_state["last_text"] = text
-                     try:
-                         await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
-                         logger.info(f"Закреплён дайджест {last_message_id}")
-                     except Exception as e:
-                         logger.debug(f"Не удалось закрепить: {e}")
+                    logger.info(f"Сообщение не изменилось, пропускаем")
+                    edited = True
+                    _digest_state["type"] = next_type
+                    _digest_state["last_text"] = text
+                    try:
+                        await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
+                        logger.info(f"Закреплён дайджест {last_message_id}")
+                    except Exception as e:
+                        logger.debug(f"Не удалось закрепить: {e}")
 
         # Если не удалось редактировать - создаём новое
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
@@ -398,7 +395,6 @@ async def alternate_digest_job(context):
 
                 set_config('alternate_digest_message_id', str(msg.message_id))
                 set_config('alternate_digest_last_created', str(time.time()))
-                set_config('alternate_digest_type', next_type)
                 _digest_state["type"] = next_type
                 _digest_state["last_text"] = text
                 logger.info(f"alternate_digest_job: saved new message_id = {msg.message_id}")

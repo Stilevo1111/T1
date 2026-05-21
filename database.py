@@ -1464,6 +1464,7 @@ class Database:
             for u in users:
                 if u["current_streak"] > top_streak:
                     top_streak = u["current_streak"]
+                    top_streak_id = u["telegram_id"]  # ВСЕГДА устанавливаем ID!
                     cached = user_cache.get(u["telegram_id"])
                     if cached:
                         nick = cached.get('steam_nickname') or cached.get('username') or str(u["telegram_id"])
@@ -1473,7 +1474,6 @@ class Database:
                         top_streak_user = nick if nick and nick != "None" else None
                         if not top_streak_user:
                             top_streak_user = str(u["telegram_id"])
-                        top_streak_id = u["telegram_id"]
 
             def get_user_telegram_username(telegram_id):
                 """Получить Telegram username пользователя"""
