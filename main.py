@@ -42,46 +42,17 @@ _user_fissure_processing = {}  # Request lock: user_id -> timestamp (for fissure
 _USER_START_COOLDOWN = {}  # Spam protection for /start: user_id -> timestamp
 _START_COOLDOWN = 5  # 5 seconds cooldown for /start command
 
-_digest_state = {"type": None, "chat_id": None, "last_data_update": 0, "last_run": 0, "last_text": None, "last_hero_meta_update": 0, "hero_meta_image": None, "last_edited": 0}
-_digest_state_lock = asyncio.Lock()  # Lock for thread-safe access to _digest_state
-_digest_cache = {
-    "text": None,           # Кешированный текст дайджеста
-    "type": None,          # Тип дайджеста для кеша
-    "created_at": 0,       # Время создания кеша
-    "cache_ttl": 300,      # Время жизни кеша в секундах (5 минут)
-    "rotation_interval": 172800,  # Интервал смены типа в секундах (48 часов)
-    "data_hash": None,     # Хеш данных для быстрого сравнения изменений
-    "last_data_check": 0   # Время последней проверки данных
-}
-
-def get_digest_data_hash():
-    """Быстрое хеширование ключевых метрик дайджеста без тяжелых SQL запросов"""
-    try:
-        # Получаем ключевые метрики из кеша или быстрой проверки
-        from database import user_cache
-
-        # Используем кешированные данные если они свежие
-        digest_stats = user_cache.get('digest_stats')
-        dota_stats = user_cache.get('dota_digest_stats')
-
-        if not digest_stats or not dota_stats:
-            # Если нет кеша, делаем быструю проверку без полного запроса
-            return None
-
-        # Создаем хеш из ключевых метрик
-        key_data = f"{digest_stats.get('top_growth', '')}{digest_stats.get('top_drop', '')}{digest_stats.get('top_streak', '')}"
-        key_data += f"{dota_stats.get('top_mmr_player', '')}{dota_stats.get('top_mmr', 0)}{dota_stats.get('total_active', 0)}"
-
-        return hashlib.md5(key_data.encode()).hexdigest()
-
-    except Exception as e:
-        logger.debug(f"Error creating digest data hash: {e}")
-        return None
-
-_last_data_refresh = 0
-_data_refresh_interval = 600  # Обновлять данные каждые 10 минут
-DIGEST_DATA_REFRESH_INTERVAL = 3600  # Обновлять данные дайджеста раз в час
-HERO_META_REFRESH_INTERVAL = 3600  # Обновлять мета-баннер героя раз в час
+# Digest state is now centralized in digest.py (for better multi-instance safety)
+from digest import (
+    _digest_state,
+    _digest_state_lock,
+    _digest_cache,
+    _last_data_refresh,
+    _data_refresh_interval,
+    DIGEST_DATA_REFRESH_INTERVAL,
+    HERO_META_REFRESH_INTERVAL,
+    get_digest_data_hash,
+)
 
 _rate_limit_until = 0  # Unix timestamp - skip API calls until this time after 429
 RATE_LIMIT_COOLDOWN = 60  # 60 seconds cooldown after hitting rate limit
