@@ -3436,11 +3436,22 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     identifier = args[0] if args else None
 
-    # Если есть аргумент - сразу привязываем
+    # Если есть аргумент - привязываем в фоне, чтобы не блокировать event loop
     if identifier:
         try:
+            loading_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text="⏳ Привязываю аккаунт Dota 2…"
+            )
+
             from dota_mmr import register_steam
-            result = register_steam(update.effective_user.id, identifier)
+            result = await asyncio.to_thread(register_steam, update.effective_user.id, identifier)
+
+            # Удалить loading сообщение
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception:
+                pass
 
             # Delete previous bot message before sending new one
             try:
