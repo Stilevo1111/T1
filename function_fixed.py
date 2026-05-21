@@ -571,12 +571,14 @@ async def alternate_digest_job(context):
                     return
             else:
                 # Старое сообщение было удалено (last_message_id = None)
-                # Сбрасываем last_created чтобы предотвратить неожиданные дубликаты
-                # когда анти-спам таймаут истекёт в промежутке между удалением и созданием
+                # Сбрасываем last_created чтобы предотвратить обход анти-спама,
+                # и ВЫХОДИМ чтобы не создавать новое сообщение на подгнившем кеше
                 stale_ts = get_config('alternate_digest_last_created') or "0"
                 try:
                     if now - float(stale_ts) < 120:
                         set_config('alternate_digest_last_created', "0")
+                        logger.info("last_message_id = None, last_created сброшен — пропускаем создание")
+                        return
                 except (ValueError, TypeError):
                     pass
 
