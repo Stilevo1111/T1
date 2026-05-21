@@ -548,7 +548,7 @@ async def alternate_digest_job(context):
         # Если не удалось редактировать - создаём новое
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
-            # Проверяем анти-спам ДО генерации баннера — чтобы не дёргать OpenDota лишний раз
+            # Проверяем анти-спам ДО всего
             if last_message_id is not None:
                 # Есть старое состояние — используем 60-секундный check
                 last_created_str = get_config('alternate_digest_last_created')
@@ -558,27 +558,27 @@ async def alternate_digest_job(context):
                     logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
                     return
             else:
-                # Старое сообщение найдено в БД — не создаём новое,
-                # чтобы не было дубликатов при отвале БД или внешнем удалении
+                # last_message_id = None (БД отвалилась или сообщение удалено) — не создаём дубликат
                 logger.info("last_message_id = None, пропускаем создание (ждём следующего тика)")
                 return
 
-            # Генерируем геро-мета баннер (только если точно будет создаваться новое сообщение)
+            # Генерируем геро-мета баннер ТОЛЬКО при создании нового поста (ротация 48ч или первый запуск)
             hero_meta_banner = None
-            try:
-                from hero_meta import get_hero_meta_image
-                import asyncio
+            if should_create_new:
                 try:
-                    hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=30.0)
-                except asyncio.TimeoutError:
-                    logger.warning("Hero meta banner generation timed out after 30 seconds")
-                    hero_meta_banner = None
-                if hero_meta_banner:
-                    logger.info("Hero meta banner generated for digest")
-                else:
-                    logger.warning("Hero meta banner generation returned None")
-            except Exception as e:
-                logger.warning(f"Could not generate hero meta banner: {e}")
+                    from hero_meta import get_hero_meta_image
+                    import asyncio
+                    try:
+                        hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=30.0)
+                    except asyncio.TimeoutError:
+                        logger.warning("Hero meta banner generation timed out after 30 seconds")
+                        hero_meta_banner = None
+                    if hero_meta_banner:
+                        logger.info("Hero meta banner generated for digest")
+                    else:
+                        logger.warning("Hero meta banner generation returned None")
+                except Exception as e:
+                    logger.warning(f"Could not generate hero meta banner: {e}")
 
             # Удаляем старое сообщение если есть
             if last_message_id:
