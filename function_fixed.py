@@ -166,7 +166,7 @@ async def alternate_digest_job(context):
                 else:
                     streak_part = " 🍀—"
                 
-                text = f"<b>🔺{growth_display} +{growth_pos}\n🔻{drop_display} {drop_cm:.0f} СМ\n🍀{streak_display}: {streak_len}</b>\n\n🗿 ФИССУРА ДАЙДЖЕСТ"
+                text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
             
             else:
                 # Dota-дайджест
@@ -244,7 +244,7 @@ async def alternate_digest_job(context):
                             else:
                                 streak_part = " 🔸—"
                             
-                            dota_text = f"<b>🔺{make_clickable(top_player, top_id)}: {top_wins}W/{top_losses}L ≈{top_winrate}%\n🔻{make_clickable(bottom_player, bottom_id)}: {bottom_wins}W/{bottom_losses}L ≈{bottom_winrate}%\n🔸{make_clickable(streak_player, streak_id)}: {streak_wins}</b>\n\n🦞 DOTA ДАЙДЖЕСТ"
+                            dota_text = f"<b>{top_part} {bottom_part} {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
                         
                         if dota_text is None:
                             next_type = "0"
@@ -284,23 +284,12 @@ async def alternate_digest_job(context):
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
                 else:
-                    try:
-                        await bot.edit_message_text(
-                            chat_id=int(digest_chat_id),
-                            message_id=msg_id_int,
-                            text=text,
-                            parse_mode="HTML"
-                        )
-                    except Exception as e:
-                        if "no text in the message to edit" in str(e).lower():
-                            await bot.edit_message_caption(
-                                chat_id=int(digest_chat_id),
-                                message_id=msg_id_int,
-                                caption=text,
-                                parse_mode="HTML"
-                            )
-                        else:
-                            raise
+                    await bot.edit_message_text(
+                        chat_id=int(digest_chat_id),
+                        message_id=msg_id_int,
+                        text=text,
+                        parse_mode="HTML"
+                    )
                     logger.info(f"Обновлён alternate дайджест {last_message_id}")
                     edited = True
                     _digest_state["type"] = next_type
