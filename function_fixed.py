@@ -548,7 +548,22 @@ async def alternate_digest_job(context):
         # Если не удалось редактировать - создаём новое
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
-            # Генерируем геро-мета баннер
+            # Проверяем анти-спам ДО генерации баннера — чтобы не дёргать OpenDota лишний раз
+            if last_message_id is not None:
+                # Есть старое состояние — используем 60-секундный check
+                last_created_str = get_config('alternate_digest_last_created')
+                last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
+                time_since_last = now - last_created
+                if time_since_last < 60:
+                    logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
+                    return
+            else:
+                # Старое сообщение найдено в БД — не создаём новое,
+                # чтобы не было дубликатов при отвале БД или внешнем удалении
+                logger.info("last_message_id = None, пропускаем создание (ждём следующего тика)")
+                return
+
+            # Генерируем геро-мета баннер (только если точно будет создаваться новое сообщение)
             hero_meta_banner = None
             try:
                 from hero_meta import get_hero_meta_image
@@ -564,21 +579,6 @@ async def alternate_digest_job(context):
                     logger.warning("Hero meta banner generation returned None")
             except Exception as e:
                 logger.warning(f"Could not generate hero meta banner: {e}")
-
-            # Проверяем анти-спам
-            if last_message_id is not None:
-                # Есть старое состояние — используем 60-секундный check
-                last_created_str = get_config('alternate_digest_last_created')
-                last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
-                time_since_last = now - last_created
-                if time_since_last < 60:
-                    logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
-                    return
-            else:
-                # Старое сообщение найдено в БД — не создаём новое,
-                # чтобы не было дубликатов при отвале БД или внешнем удалении
-                logger.info("last_message_id = None, пропускаем создание (ждём следующего тика)")
-                return
 
             # Удаляем старое сообщение если есть
             if last_message_id:
