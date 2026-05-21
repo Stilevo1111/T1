@@ -397,6 +397,8 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @rate_limit(tokens=1)
 async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Еженедельная аналитика игрока"""
+    loading_msg = None
+    animation_task = None
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
     chat_id = update.message.chat_id
@@ -431,8 +433,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['analytics_chart_msg_id'] = None
 
         # Immediately respond with loading message
-        loading_msg = None
-        animation_task = None
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
@@ -1899,6 +1899,8 @@ async def resolve_avatar_url_for_card(
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command - show profile card"""
+    loading_msg = None
+    animation_task = None
     try:
         # Skip if rate limited
         if is_rate_limited():
@@ -1990,9 +1992,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await delete_last_bot_message(context.bot, chat_id, user_id)
         except:
             pass
-
-        loading_msg = None
-        animation_task = None
 
         # Send loading message and start animation in parallel
         try:
