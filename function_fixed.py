@@ -166,7 +166,7 @@ async def alternate_digest_job(context):
                 else:
                     streak_part = " 🍀—"
                 
-                text = f"<b>{growth_part} ┃{drop_part} ┃{streak_part}</b>\n\n🌅ФИССУРА ДАЙДЖЕСТ\n\n🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
+                text = f"<b>🔺{growth_display}\n🔻{drop_display}\n🍀{streak_display} {streak_len} стрик побед</b>\n\n🗿 ФИССУРА ДАЙДЖЕСТ"
             
             else:
                 # Dota-дайджест
@@ -244,7 +244,7 @@ async def alternate_digest_job(context):
                             else:
                                 streak_part = " 🔸—"
                             
-                            dota_text = f"<b>{top_part} {bottom_part} {streak_part}</b>\n\n{DOTA_DIGEST_HEADER}\n\n{DOTA_DIGEST_FOOTER}"
+                            dota_text = f"<b>🔺{make_clickable(top_player, top_id)}\n🔻{make_clickable(bottom_player, bottom_id)}\n🔸{make_clickable(streak_player, streak_id)} {streak_wins} стрик побед</b>\n\n🦞 DOTA ДАЙДЖЕСТ"
                         
                         if dota_text is None:
                             next_type = "0"
