@@ -570,17 +570,18 @@ async def alternate_digest_job(context):
                     logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
                     return
             else:
-                # Старое сообщение было удалено (last_message_id = None)
-                # Сбрасываем last_created чтобы предотвратить обход анти-спама,
-                # и ВЫХОДИМ чтобы не создавать новое сообщение на подгнившем кеше
+                # last_message_id = None — старое сообщение не найдено в БД
+                # Сбрасываем last_created чтобы не обойти анти-спам, и ВЫХОДИМ
+                # Новое сообщение создастся только когда основной цикл (с editing) снова попробует
+                # и не найдёт редактируемого сообщения — а это будет после очередного тика, на новых данных
                 stale_ts = get_config('alternate_digest_last_created') or "0"
                 try:
                     if now - float(stale_ts) < 120:
                         set_config('alternate_digest_last_created', "0")
-                        logger.info("last_message_id = None, last_created сброшен — пропускаем создание")
-                        return
                 except (ValueError, TypeError):
                     pass
+                logger.info("last_message_id = None, пропускаем создание (ждём следующего тика)")
+                return
 
             # Удаляем старое сообщение если есть
             if last_message_id:
