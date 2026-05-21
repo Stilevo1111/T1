@@ -237,7 +237,17 @@ async def alternate_digest_job(context):
             should_refresh_data = True
             logger.info(f"Данные в БД обновились ({_data_refresh_interval}с), обновляем")
         
-# Если кеш валиден - используем его и переключаем тип
+        # Если кеш валиден - используем его и переключаем тип
+        if not should_create_new and not should_refresh_data:
+            # После рестарта контейнера in-memory данные могут быть пустыми,
+            # даже если cache TTL ещё не истёк (из-за safeguard created_at).
+            # В этом случае принудительно идём в ветку загрузки данных.
+            current_type = cache.get("type") or "0"
+            data_key = "digest_data" if current_type == "0" else "dota_data"
+            if _digest_state.get(data_key) is None:
+                should_refresh_data = True
+                logger.info("Данные в памяти пусты (новый контейнер) — принудительно обновляем из БД")
+
         if not should_create_new and not should_refresh_data:
             logger.info(f"Используем кешированный дайджест (создан {now - cache['created_at']:.0f}с назад)")
 
