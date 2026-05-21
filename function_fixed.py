@@ -454,6 +454,10 @@ async def alternate_digest_job(context):
         # Проверяем, является ли сообщение фото или текстом
         is_photo_message = _digest_state.get("is_photo_message", False)
 
+        # Восстанавливаем из config если бот был перезапущен
+        if not is_photo_message:
+            is_photo_message = get_config('alternate_digest_is_photo') == 'true'
+
         if last_message_id:
             logger.info(f"alternate_digest_job: attempting to edit message {last_message_id}")
             try:
@@ -601,6 +605,7 @@ async def alternate_digest_job(context):
                     )
                     logger.info(f"Создан новый дайджест с фото {msg.message_id}")
                     _digest_state["is_photo_message"] = True
+                    set_config('alternate_digest_is_photo', 'true')
                 else:
                     msg = await bot.send_message(
                         chat_id=int(digest_chat_id),
@@ -609,6 +614,7 @@ async def alternate_digest_job(context):
                     )
                     logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
                     _digest_state["is_photo_message"] = False
+                    set_config('alternate_digest_is_photo', 'false')
 
                 set_config('alternate_digest_message_id', str(msg.message_id))
                 set_config('alternate_digest_last_created', str(time.time()))

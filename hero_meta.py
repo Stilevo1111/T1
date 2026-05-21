@@ -488,14 +488,16 @@ async def get_hero_meta_image():
         data = await get_dota_data()
         if not data:
             logger.error("No data from OpenDota")
-            return None
+            logger.info("Using fallback banner")
+            return get_static_fallback_banner()
         banner = await create_infographic(data)
         if banner:
             return banner
-        return None
+        logger.warning("create_infographic returned None, using fallback")
+        return get_static_fallback_banner()
     except Exception as e:
         logger.warning("Hero meta generation failed: %s", e)
-        return None
+        return get_static_fallback_banner()
 
 
 def get_static_fallback_banner():
