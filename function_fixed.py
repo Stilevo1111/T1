@@ -559,7 +559,9 @@ async def alternate_digest_job(context):
                     return
             else:
                 # last_message_id = None (БД отвалилась или сообщение удалено) — не создаём дубликат
-                logger.info("last_message_id = None, пропускаем создание (ждём следующего тика)")
+                # Ставим last_created = now + 120с, чтобы следующие тики ушли в анти-спам и не генераили баннер
+                set_config('alternate_digest_last_created', str(now + 120))
+                logger.info("last_message_id = None, ставим защитный last_created=now+120, пропускаем создание")
                 return
 
             # Генерируем геро-мета баннер ТОЛЬКО при создании нового поста (ротация 48ч или первый запуск)
