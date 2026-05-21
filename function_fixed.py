@@ -53,22 +53,36 @@ async def alternate_digest_job(context):
         
         now = time.time()
         
-        # === УМНАЯ СИСТЕМА КЕШИРОВАНИЯ ДАЙДЖЕСТОВ ===
-        # CREATE NEW MESSAGE only on rotation or empty cache + no existing message
-        # EDIT EXISTING when TTL expires or data refreshes
+        # === ЗАЩИТА ОТ ЛОЖНОЙ РОТАЦИИ ПОСЛЕ РЕСТАРТА ===
+        # Если в БД уже есть alternate_digest_message_id — пост существует,
+        # значит мы должны РЕДАКТИРОВАТЬ его, а не создавать новый.
+        # created_at=0 после импорта модуля больше не должен триггерить should_create_new.
         cache = _digest_cache
+        if get_config('alternate_digest_message_id'):
+            if not cache.get("created_at") or cache.get("created_at", 0) <= 0:
+                cache["created_at"] = time.time() - 30
+                logger.info("alternate_digest_job: existing message_id in config, created_at adjusted to prevent false rotation after restart")
+        
+        # === УМНАЯ СИСТЕМА КЕШИРОВАНИЯ ДАЙДЖЕСТОВ ===
+        # CREATE NEW MESSAGE **only** when there is no saved message_id at all
+        # (first start or old post was deleted). 
+        # In all other cases — edit the existing post.
+        # Rotation (48h) no longer forces a new post — we keep editing the same one.
         should_create_new = False
         should_refresh_data = False
         
-        # 1. Rotation interval (48h) - CREATE NEW MESSAGE
-        if now - cache["created_at"] > cache["rotation_interval"]:
-            should_create_new = True
-            logger.info(f"Время ротации дайджеста ({cache['rotation_interval']}с), создаём новое сообщение")
+        existing_msg_id = get_config('alternate_digest_message_id')
         
-        # 2. Empty cache and no existing message_id - CREATE NEW
-        elif cache["text"] is None and not get_config('alternate_digest_message_id'):
+        # 1. Rotation interval — DISABLED for auto-create (we edit the same post forever)
+        #    Manual /fissuredigestnow or /dotadigestnow still allow forcing a fresh post.
+        if now - cache["created_at"] > cache["rotation_interval"] and not existing_msg_id:
             should_create_new = True
-            logger.info("Кеш пуст и нет сохранённого сообщения, создаём новое")
+            logger.info(f"Время ротации дайджеста, но existing_msg_id отсутствует — создаём новое")
+        
+        # 2. No message_id in config at all (and cache empty) — first time, create new
+        elif cache["text"] is None and not existing_msg_id:
+            should_create_new = True
+            logger.info("Кеш пуст и нет сохранённого сообщения — создаём новое")
         
         # 3. Cache expired (TTL) - REFRESH DATA in existing message
         elif now - cache["created_at"] > cache["cache_ttl"]:
@@ -421,11 +435,12 @@ async def alternate_digest_job(context):
             return
 
         # Check if another worker already created a message recently (prevent dual worker spam)
+        # Increased to 30s for safety on platforms with multiple containers / slow starts
         last_created_str = get_config('alternate_digest_last_created')
         if last_created_str:
             try:
                 last_created = float(last_created_str)
-                if now - last_created < 5:  # 5 second cooldown to prevent dual worker spam
+                if now - last_created < 30:  # 30 second cooldown to prevent dual worker spam
                     logger.info(f"Пропуск - другой воркер создал дайджест {now - last_created:.0f}с назад")
                     return
             except ValueError:
@@ -553,11 +568,13 @@ async def alternate_digest_job(context):
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
             # Проверяем анти-спам - защита от дублирования
+            # Increased to 5 minutes: if two instances race on startup/restart,
+            # the second one will almost always see the recent creation and skip.
             last_created_str = get_config('alternate_digest_last_created')
             last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
             time_since_last = now - last_created
-            if time_since_last < 60:
-                logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания (last_message_id={last_message_id})")
+            if time_since_last < 300:
+                logger.info(f"Пропускаем создание - прошло всего {time_since_last:.0f} сек с последнего создания (last_message_id={last_message_id})")
                 return
 
             # last_message_id = None (БД отвалилась или сообщение удалено) — можем создавать новый
