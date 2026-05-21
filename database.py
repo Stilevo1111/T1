@@ -936,17 +936,8 @@ class Database:
             finally:
                 release_connection(conn)
 
-    def get_config(self, key, default=None, use_cache=True):
-        """Получить значение конфигурации с кешированием"""
-        global _config_cache, _config_cache_time
-        
-        if use_cache:
-            cached_val = _config_cache.get(key)
-            cached_time = _config_cache_time.get(key, 0)
-            if cached_val is not None and (time.time() - cached_time) < _CONFIG_CACHE_TTL:
-                if key == 'alternate_digest_type' or (cached_val != '0' and cached_val != ''):
-                    return cached_val if cached_val != '0' else default
-        
+    def add_user(self, telegram_id, username=None, first_name=None, last_name=None):
+        """Добавить нового пользователя или обновить существующего"""
         try:
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
@@ -966,8 +957,8 @@ class Database:
                         total_rolls = EXCLUDED.total_rolls
                     RETURNING id
                 '''
-                result = self.execute_query(query, (user_id, username, first_name, 0.1, 0, 0, 0, 0), fetch="one")
-                return result[0] if result else user_id
+                result = self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0), fetch="one")
+                return result[0] if result else telegram_id
             else:
                 query = '''
                     INSERT INTO users (telegram_id, username, first_name, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at, message_count)
@@ -981,7 +972,7 @@ class Database:
                         total_growth = excluded.total_growth,
                         total_rolls = excluded.total_rolls
                 '''
-                self.execute_query(query, (user_id, username, first_name, 0.1, 0, 0, 0, 0))
+                self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0))
                 return None
         except Exception as e:
             logger.error(f"Error adding user: {e}")
