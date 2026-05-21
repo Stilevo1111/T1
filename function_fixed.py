@@ -409,12 +409,12 @@ async def alternate_digest_job(context):
             else:
                 logger.info(f"Дайджест сгенерирован для обновления (тип: {current_type}, редактируем существующее)")
         
-        # === ОТПРАВКА ДАЙДЖЕСТА ===
+# === ОТПРАВКА ДАЙДЖЕСТА ===
         # Пропускаем редактирование если текст не изменился
         if _digest_state.get("last_text") == text:
             logger.debug("Текст дайджеста не изменился, пропускаем редактирование")
             return
-        
+
         # Check if another worker already created a message recently (prevent dual worker spam)
         last_created_str = get_config('alternate_digest_last_created')
         if last_created_str:
@@ -425,11 +425,11 @@ async def alternate_digest_job(context):
                     return
             except ValueError:
                 pass
-        
+
         # Пробуем отредактировать существующее сообщение
         last_message_id = get_config('alternate_digest_message_id')
         logger.info(f"alternate_digest_job: last_message_id = {last_message_id}, should_create_new = {should_create_new}")
-        
+
         # Для РОТАЦИИ (новое сообщение) - принудительно удаляем старое перед созданием нового
         if should_create_new and last_message_id:
             logger.info("Ротация - принудительно удаляем старое сообщение и создаём новое")
@@ -442,9 +442,13 @@ async def alternate_digest_job(context):
                 logger.debug(f"Старое сообщение уже удалено: {e}")
             set_config('alternate_digest_message_id', None)
             last_message_id = None
-        
+
         logger.info(f"alternate_digest_job: text = {text[:100]}...")
         edited = False
+
+        # Проверяем, является ли сообщение фото или текстом
+        is_photo_message = _digest_state.get("is_photo_message", False)
+
         if last_message_id:
             logger.info(f"alternate_digest_job: attempting to edit message {last_message_id}")
             try:
@@ -454,12 +458,21 @@ async def alternate_digest_job(context):
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
                 else:
-                    await bot.edit_message_text(
-                        chat_id=int(digest_chat_id),
-                        message_id=msg_id_int,
-                        text=text,
-                        parse_mode="HTML"
-                    )
+                    # Используем editMessageCaption для фото, editMessageText для текста
+                    if is_photo_message:
+                        await bot.edit_message_caption(
+                            chat_id=int(digest_chat_id),
+                            message_id=msg_id_int,
+                            caption=text,
+                            parse_mode="HTML"
+                        )
+                    else:
+                        await bot.edit_message_text(
+                            chat_id=int(digest_chat_id),
+                            message_id=msg_id_int,
+                            text=text,
+                            parse_mode="HTML"
+                        )
                     logger.info(f"Обновлён alternate дайджест {last_message_id}")
                     edited = True
                     _digest_state["type"] = next_type
@@ -501,6 +514,31 @@ async def alternate_digest_job(context):
                         logger.info(f"Закреплён дайджест {last_message_id}")
                     except Exception as e:
                         logger.debug(f"Не удалось закрепить: {e}")
+                elif "there is no text in the message to edit" in error_str:
+                    # Сообщение - фото, нужно использовать editMessageCaption
+                    logger.info(f"Сообщение {last_message_id} - фото, используем editMessageCaption")
+                    try:
+                        await bot.edit_message_caption(
+                            chat_id=int(digest_chat_id),
+                            message_id=msg_id_int,
+                            caption=text,
+                            parse_mode="HTML"
+                        )
+                        logger.info(f"Обновлён alternate дайджест (caption) {last_message_id}")
+                        edited = True
+                        _digest_state["type"] = next_type
+                        _digest_state["last_text"] = text
+                        _digest_state["is_photo_message"] = True
+                        try:
+                            await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
+                            logger.info(f"Закреплён дайджест {last_message_id}")
+                        except Exception as e:
+                            logger.debug(f"Не удалось закрепить: {e}")
+                    except Exception as e2:
+                        logger.warning(f"Не удалось отредактировать caption: {e2}")
+                        set_config('alternate_digest_message_id', None)
+                        last_message_id = None
+                        edited = False
 
         # Если не удалось редактировать - создаём новое
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
@@ -556,6 +594,7 @@ async def alternate_digest_job(context):
                         parse_mode="HTML"
                     )
                     logger.info(f"Создан новый дайджест с фото {msg.message_id}")
+                    _digest_state["is_photo_message"] = True
                 else:
                     msg = await bot.send_message(
                         chat_id=int(digest_chat_id),
@@ -563,6 +602,7 @@ async def alternate_digest_job(context):
                         parse_mode="HTML"
                     )
                     logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
+                    _digest_state["is_photo_message"] = False
 
                 set_config('alternate_digest_message_id', str(msg.message_id))
                 set_config('alternate_digest_last_created', str(time.time()))
