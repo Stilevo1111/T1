@@ -276,6 +276,17 @@ async def alternate_digest_job(context):
             logger.debug("Текст дайджеста не изменился, пропускаем редактирование")
             return
         
+        # Check if another worker already created a message recently (prevent dual worker spam)
+        last_created_str = get_config('alternate_digest_last_created')
+        if last_created_str:
+            try:
+                last_created = float(last_created_str)
+                if now - last_created < 30:  # 30 second cooldown to prevent dual worker spam
+                    logger.info(f"Пропуск - другой воркер создал дайджест {now - last_created:.0f}с назад")
+                    return
+            except ValueError:
+                pass
+        
         # Пробуем отредактировать существующее сообщение
         last_message_id = get_config('alternate_digest_message_id')
         logger.info(f"alternate_digest_job: last_message_id = {last_message_id}")
