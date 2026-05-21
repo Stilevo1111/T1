@@ -1979,11 +1979,11 @@ def is_valid_telegram_id(user_id):
         uid = int(user_id)
     except (ValueError, TypeError):
         return False
-    # Telegram IDs: обычно 7-10 цифр, но могут быть и больше
+    # Telegram IDs: могут быть любого размера, но обычно 6-10 цифр
     # SteamID64: начинается с 7656119... (более 15 цифр)
     if uid > 10**15:  # Защита от SteamID64 (7656119...)
         return False
-    if uid < 100000:  # Telegram ID минимум ~100000
+    if uid < 1:  # Telegram ID должен быть положительным
         return False
     return True
 
@@ -1994,10 +1994,6 @@ def make_clickable(name, user_id, max_length=12):
         uid = int(user_id) if user_id else 0
     except (ValueError, TypeError):
         uid = 0
-    
-    # Валидация Telegram ID (защита от SteamID64)
-    if not is_valid_telegram_id(uid):
-        return name if name and name != "None" else "—"
     
     if name and name != "None" and uid > 0:
         display_name = name

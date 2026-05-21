@@ -1423,14 +1423,7 @@ class Database:
                     delta = cur_f - prev_f
                     if delta > top_growth_cm:
                         top_growth_cm = delta
-                        # Валидация telegram_id (защита от SteamID64 и маленьких ID)
                         telegram_id = u.get("telegram_id")
-                        if telegram_id and isinstance(telegram_id, int) and telegram_id >= 100000 and telegram_id < 10**15:
-                            pass  # валидный Telegram ID
-                        else:
-                            if telegram_id:
-                                logger.warning(f"get_digest_stats: invalid telegram_id={telegram_id} for user, possibly SteamID64 stored as telegram_id")
-                            telegram_id = None
                         cached = user_cache.get(telegram_id) if telegram_id else None
                         if cached:
                             nick = cached.get('steam_nickname') or cached.get('username') or str(u.get("telegram_id", ""))
@@ -1462,12 +1455,7 @@ class Database:
                             top_drop_user = nick if nick and nick != "None" else None
                         if not top_drop_user:
                             top_drop_user = str(u["telegram_id"])
-                        # Валидация telegram_id (защита от SteamID64 и маленьких ID)
                         top_drop_id = u["telegram_id"]
-                        if top_drop_id and isinstance(top_drop_id, int) and top_drop_id >= 100000 and top_drop_id < 10**15:
-                            pass  # валидный Telegram ID
-                        else:
-                            top_drop_id = None
 
             # Стрик: текущая серия побед (current_streak)
             top_streak_user = None
@@ -1483,14 +1471,9 @@ class Database:
                     else:
                         nick = u.get("steam_nickname") or u.get("username") or str(u["telegram_id"])
                         top_streak_user = nick if nick and nick != "None" else None
-                    if not top_streak_user:
-                        top_streak_user = str(u["telegram_id"])
-                    # Валидация telegram_id (защита от SteamID64 и маленьких ID)
-                    top_streak_id = u["telegram_id"]
-                    if top_streak_id and isinstance(top_streak_id, int) and top_streak_id >= 100000 and top_streak_id < 10**15:
-                        pass  # валидный Telegram ID
-                    else:
-                        top_streak_id = None
+                        if not top_streak_user:
+                            top_streak_user = str(u["telegram_id"])
+                        top_streak_id = u["telegram_id"]
 
             def get_user_telegram_username(telegram_id):
                 """Получить Telegram username пользователя"""
