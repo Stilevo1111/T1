@@ -575,16 +575,8 @@ async def alternate_digest_job(context):
                     logger.info(f"Пропускаем - прошло всего {time_since_last:.0f} сек с последнего создания")
                     return
             else:
-                # last_message_id = None — старое сообщение не найдено в БД
-                # Сбрасываем last_created чтобы не обойти анти-спам, и ВЫХОДИМ
-                # Новое сообщение создастся только когда основной цикл (с editing) снова попробует
-                # и не найдёт редактируемого сообщения — а это будет после очередного тика, на новых данных
-                stale_ts = get_config('alternate_digest_last_created') or "0"
-                try:
-                    if now - float(stale_ts) < 120:
-                        set_config('alternate_digest_last_created', "0")
-                except (ValueError, TypeError):
-                    pass
+                # Старое сообщение найдено в БД — не создаём новое,
+                # чтобы не было дубликатов при отвале БД или внешнем удалении
                 logger.info("last_message_id = None, пропускаем создание (ждём следующего тика)")
                 return
 
