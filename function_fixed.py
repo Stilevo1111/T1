@@ -202,7 +202,13 @@ async def alternate_digest_job(context):
                             bottom_part = "🔻—"
 
                         if streak_player and streak_player != "None" and streak_wins > 0:
-                            streak_part = f"🔸{make_clickable(streak_player, streak_id)}: {streak_wins}"
+                            if streak_wins % 10 == 1 and streak_wins % 100 != 11:
+                                streak_label = "победа подряд"
+                            elif 2 <= streak_wins % 10 <= 4 and not (12 <= streak_wins % 100 <= 14):
+                                streak_label = "победы подряд"
+                            else:
+                                streak_label = "побед подряд"
+                            streak_part = f"🔸{make_clickable(streak_player, streak_id)}: {streak_wins} {streak_label}"
                         else:
                             streak_part = "🔸—"
 
@@ -382,7 +388,13 @@ async def alternate_digest_job(context):
                                 bottom_part = "🔻—"
                             
                             if streak_player and streak_player != "None" and streak_wins > 0:
-                                streak_part = f"🔸{make_clickable(streak_player, streak_id)}: {streak_wins}"
+                                if streak_wins % 10 == 1 and streak_wins % 100 != 11:
+                                    streak_label = "победа подряд"
+                                elif 2 <= streak_wins % 10 <= 4 and not (12 <= streak_wins % 100 <= 14):
+                                    streak_label = "победы подряд"
+                                else:
+                                    streak_label = "побед подряд"
+                                streak_part = f"🔸{make_clickable(streak_player, streak_id)}: {streak_wins} {streak_label}"
                             else:
                                 streak_part = "🔸—"
                             
