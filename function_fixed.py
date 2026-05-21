@@ -137,9 +137,15 @@ async def alternate_digest_job(context):
                 else:
                     stats = _digest_state["digest_data"]
                 
-                growth_player, growth_pos = stats.get("top_growth", ("None", 0))
-                drop_player, drop_cm = stats.get("top_drop", ("None", 0.0))
-                streak_player, streak_len = stats.get("top_streak", ("None", 0))
+                growth_data = stats.get("top_growth", ("None", 0))
+                growth_player = growth_data[0] if len(growth_data) > 0 else "None"
+                growth_pos = growth_data[1] if len(growth_data) > 1 else 0
+                drop_data = stats.get("top_drop", ("None", 0.0))
+                drop_player = drop_data[0] if len(drop_data) > 0 else "None"
+                drop_cm = drop_data[1] if len(drop_data) > 1 else 0.0
+                streak_data = stats.get("top_streak", ("None", 0))
+                streak_player = streak_data[0] if len(streak_data) > 0 else "None"
+                streak_len = streak_data[1] if len(streak_data) > 1 else 0
                 growth_id = stats.get("top_growth_id")
                 drop_id = stats.get("top_drop_id")
                 streak_id = stats.get("top_streak_id")
