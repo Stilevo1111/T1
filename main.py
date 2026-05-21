@@ -464,6 +464,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if chart_data:
                     # Check if it's an API error response
                     if isinstance(chart_data, dict) and chart_data.get("error") == "opendota_rate_limit":
+                        if animation_task:
+                            animation_task.cancel()
                         if loading_msg:
                             try:
                                 await context.bot.edit_message_text(
@@ -473,6 +475,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 )
                             except Exception:
                                 pass
+                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.application.job_queue)
                         return
                     
                     history = chart_data.get("history", [])
@@ -571,25 +574,15 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 message_id=loading_msg.message_id,
                                 text=error_text
                             )
+                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.application.job_queue)
                         except Exception:
                             pass
-                else:
-                    # Cancel animation and update with error message
-                    if animation_task:
-                        animation_task.cancel()
-                    try:
-                        await context.bot.edit_message_text(
-                            chat_id=chat_id,
-                            message_id=loading_msg.message_id,
-                            text=get_opendota_rate_limit_message()
-                        )
-                    except Exception:
-                        pass
-                        
+
             except Exception as e:
                 logger.error(f"Error in background analytics generation: {e}")
                 if animation_task:
                     animation_task.cancel()
+                err_msg_id = loading_msg.message_id if loading_msg else None
                 try:
                     await context.bot.edit_message_text(
                         chat_id=chat_id,
@@ -598,6 +591,9 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                 except Exception:
                     pass
+
+                # Schedule deletion of the final loading/error message
+                schedule_delete(context.bot, chat_id, err_msg_id, 10, context.application.job_queue)
 
         # Import required classes
         from telegram import InputMediaPhoto
