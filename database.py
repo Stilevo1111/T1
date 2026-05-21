@@ -2268,9 +2268,9 @@ def batch_save_mmr(users_data: list):
     """
     if not users_data:
         return
+    conn = None
     try:
-        db = Database()
-        conn = db.connect()
+        conn = get_connection()
         cursor = conn.cursor()
         
         url = urlparse.urlparse(DATABASE_URL)
@@ -2329,6 +2329,9 @@ def batch_save_mmr(users_data: list):
         logger.info(f"batch_save_mmr: saved {len(users_data)} users in one transaction")
     except Exception as e:
         logger.error(f"batch_save_mmr error: {e}")
+    finally:
+        if conn is not None:
+            release_connection(conn)
 
 
 def batch_increment_config(key: str, delta: int):
