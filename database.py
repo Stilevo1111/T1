@@ -2333,9 +2333,9 @@ def batch_save_mmr(users_data: list):
 
 def batch_increment_config(key: str, delta: int):
     """Атомарный инкремент значения в bot_config (1 запрос вместо 2)"""
+    conn = None
     try:
-        db = Database()
-        conn = db.connect()
+        conn = get_connection()
         cursor = conn.cursor()
         
         url = urlparse.urlparse(DATABASE_URL)
@@ -2361,6 +2361,9 @@ def batch_increment_config(key: str, delta: int):
         config_cache.delete(key)
     except Exception as e:
         logger.error(f"batch_increment_config error: {e}")
+    finally:
+        if conn is not None:
+            release_connection(conn)
 
 def get_config(key, default=None):
     """Получить значение конфигурации - из кеша"""
