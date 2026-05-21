@@ -10,7 +10,8 @@ DOTA_DIGEST_FOOTER = "🔺 = лучший винрейт за неделю\n🔻
 
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов (редактирование существующего, создание нового только при необходимости)"""
-    global _last_data_refresh
+    from main import is_rate_limited, _digest_state_lock, _digest_cache, _digest_state, DIGEST_DATA_REFRESH_INTERVAL, _data_refresh_interval, make_clickable, bot_can_delete
+    from database import get_config, set_config, get_digest_stats, get_dota_week_top
     try:
         now = time.time()
         
@@ -80,7 +81,7 @@ async def alternate_digest_job(context):
             logger.info(f"Время сменить тип дайджеста ({cache['rotation_interval']}с), обновляем")
         
         # 4. Если данные в БД обновились - генерируем
-        elif now - _last_data_refresh > _data_refresh_interval:
+        elif now - _digest_state.get("last_data_refresh", 0) > _data_refresh_interval:
             should_regenerate = True
             logger.info(f"Данные в БД устарели ({_data_refresh_interval}с), обновляем")
         
@@ -128,11 +129,11 @@ async def alternate_digest_job(context):
             if current_type == "0":
                 # Фиссур-дайджест
                 # Проверяем, нужно ли обновить данные из БД
-                if _digest_state.get("digest_data") is None or now - _last_data_refresh > _data_refresh_interval:
+                if _digest_state.get("digest_data") is None or now - _digest_state.get("last_data_refresh", 0) > _data_refresh_interval:
                     logger.info("Обновляем данные для фиссур-дайджеста из БД")
                     stats = get_digest_stats()
                     _digest_state["digest_data"] = stats
-                    _last_data_refresh = now
+                    _digest_state["last_data_refresh"] = now
                 else:
                     stats = _digest_state["digest_data"]
                 
@@ -170,11 +171,11 @@ async def alternate_digest_job(context):
             else:
                 # Dota-дайджест
                 # Проверяем, нужно ли обновить данные из БД
-                if _digest_state.get("dota_data") is None or now - _last_data_refresh > _data_refresh_interval:
+                if _digest_state.get("dota_data") is None or now - _digest_state.get("last_data_refresh", 0) > _data_refresh_interval:
                     logger.info("Обновляем данные для Dota-дайджеста из БД")
                     mmr_top = get_dota_week_top(limit=10)
                     _digest_state["dota_data"] = mmr_top
-                    _last_data_refresh = now
+                    _digest_state["last_data_refresh"] = now
                 else:
                     mmr_top = _digest_state["dota_data"]
                 
