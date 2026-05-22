@@ -654,7 +654,6 @@ async def announce_weekly_mmr_winner(bot):
     rank_tier = winner.get('rank_tier', 0)
     mmr = winner.get('mmr', 0)
     telegram_id = winner.get('telegram_id')
-    streak = winner.get('week_current_streak', 0)
 
     prev_winner_tg_id = get_config('current_mvp_telegram_id')
     prev_winner_tag = get_config('current_mvp_tag')
@@ -715,8 +714,7 @@ async def announce_weekly_mmr_winner(bot):
         f"Поздравляем чемпиона недели🏆\n"
         f"🥇 {name_display} • 🗡️ {rank_str}\n\n"
         f"📈 Результат за неделю:\n"
-        f" └ {week_wins}W • {week_losses}L • WR {winrate}%\n"
-        f"🔥 Текущий стрик: {streak} побед\n\n"
+        f" └ {week_wins}W • {week_losses}L • WR {winrate}%\n\n"
         f"🏆Этот игрок показал лучший результат в топе MMR за неделю!{tag_info}"
     )
 
@@ -2333,10 +2331,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         text = f"👑 {display_username}\n\n🍆 Фиссура: {target_user['fissure']:.1f} см\n🎲 Броски: {target_user.get('total_rolls', 0)} 🍀Стрик: {target_user.get('current_streak', 0)}/{target_user.get('best_streak', 0)}"
 
-        # Добавляем стрик Dota если привязан Steam
+        # Dota stats (без стрика)
         if target_user.get('steam_id'):
-            week_streak = target_user.get('week_current_streak', 0)
-            week_best = target_user.get('week_best_streak', 0)
             week_games = target_user.get('week_games', 0)
             week_wins = target_user.get('week_wins', 0)
             week_losses = week_games - week_wins
@@ -2376,7 +2372,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not get last matches: {e}")
 
-            text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%\n🔥 Стрик: {week_streak}/{week_best}"
+            text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%"
 
             # Добавляем количество медалей за топ-3 недели
             weekly_mvp = target_user.get('weekly_mvp_count', 0)
@@ -2691,13 +2687,11 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 if week_games > 0:
                     wr = round((week_wins / week_games) * 100, 1)
-                    streak = player.get('week_current_streak', 0)
                     # Make all nicknames clickable and bold
                     player_id = player.get('telegram_id')
                     clickable_name = make_clickable(username, player_id)
                     lines.append(f"{medal} <b>{clickable_name}</b> - {rank_str}")
-                    streak_text = f" • 🔥{streak}" if streak > 0 else ""
-                    lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%{streak_text}")
+                    lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%")
                 else:
                     player_id = player.get('telegram_id')
                     clickable_name = make_clickable(username, player_id)
@@ -2767,8 +2761,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Small delay for message visibility
             await asyncio.sleep(0.1)
-
-        await flush_stat_buffer()
 
     except Exception as e:
         logger.error(f"Error in topmmr: {e}", exc_info=True)

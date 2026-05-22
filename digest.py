@@ -481,9 +481,6 @@ async def alternate_digest_job(context):
                         else:
                             bottom_by_net = valid_players_sorted[-1]
 
-                        players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
-                        top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
-
                         top_player = top_by_net.get('steam_nickname', 'None')
                         top_id = top_by_net.get('telegram_id')
                         top_games = top_by_net.get('week_games', 0)
@@ -498,10 +495,6 @@ async def alternate_digest_job(context):
                         bottom_losses = bottom_games - bottom_wins
                         bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
 
-                        streak_player = top_streak_player.get('steam_nickname', 'None') if top_streak_player else 'None'
-                        streak_wins = top_streak_player.get('week_current_streak', 0) if top_streak_player else 0
-                        streak_id = top_streak_player.get('telegram_id') if top_streak_player else None
-
                         if top_player and top_player != "None":
                             top_part = f"🔺{make_clickable(top_player, top_id)}: {top_wins}W/{top_losses}L ≈{top_winrate}%"
                         else:
@@ -512,18 +505,7 @@ async def alternate_digest_job(context):
                         else:
                             bottom_part = "🔻—"
 
-                        if streak_player and streak_player != "None" and streak_wins > 0:
-                            if streak_wins % 10 == 1 and streak_wins % 100 != 11:
-                                streak_label = "победа подряд"
-                            elif 2 <= streak_wins % 10 <= 4 and not (12 <= streak_wins % 100 <= 14):
-                                streak_label = "победы подряд"
-                            else:
-                                streak_label = "побед подряд"
-                            streak_part = f"🔸{make_clickable(streak_player, streak_id)}: {streak_wins} {streak_label}"
-                        else:
-                            streak_part = "🔸—"
-
-                        text = f"<b>{top_part}\n{bottom_part}\n{streak_part}</b>\n\n🦞Дота Дайджест."
+                        text = f"<b>{top_part}\n{bottom_part}</b>\n\n🦞Дота Дайджест."
 
             # Если не удалось сгенерировать текст - используем fallback
             if text is None:
@@ -663,9 +645,6 @@ async def alternate_digest_job(context):
                             top_by_net = None
                             bottom_by_net = None
                         
-                        players_with_streak = [p for p in valid_players if p.get('week_current_streak', 0) > 0]
-                        top_streak_player = max(players_with_streak, key=lambda p: p.get('week_current_streak', 0)) if players_with_streak else None
-                        
                         if top_by_net:
                             top_player = top_by_net.get('steam_nickname', 'None')
                             top_id = top_by_net.get('telegram_id')
@@ -681,10 +660,6 @@ async def alternate_digest_job(context):
                             bottom_losses = bottom_games - bottom_wins
                             bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
                             
-                            streak_player = top_streak_player.get('steam_nickname', 'None') if top_streak_player else 'None'
-                            streak_wins = top_streak_player.get('week_current_streak', 0) if top_streak_player else 0
-                            streak_id = top_streak_player.get('telegram_id') if top_streak_player else None
-                            
                             if top_player and top_player != "None":
                                 top_part = f"🔺{make_clickable(top_player, top_id)}: {top_wins}W/{top_losses}L ≈{top_winrate}%"
                             else:
@@ -695,18 +670,7 @@ async def alternate_digest_job(context):
                             else:
                                 bottom_part = "🔻—"
                             
-                            if streak_player and streak_player != "None" and streak_wins > 0:
-                                if streak_wins % 10 == 1 and streak_wins % 100 != 11:
-                                    streak_label = "победа подряд"
-                                elif 2 <= streak_wins % 10 <= 4 and not (12 <= streak_wins % 100 <= 14):
-                                    streak_label = "победы подряд"
-                                else:
-                                    streak_label = "побед подряд"
-                                streak_part = f"🔸{make_clickable(streak_player, streak_id)}: {streak_wins} {streak_label}"
-                            else:
-                                streak_part = "🔸—"
-                            
-                            dota_text = f"<b>{top_part}\n{bottom_part}\n{streak_part}</b>\n\n🦞Дота Дайджест."
+                            dota_text = f"<b>{top_part}\n{bottom_part}</b>\n\n🦞Дота Дайджест."
                         
                         if dota_text is None:
                             next_type = "0"
