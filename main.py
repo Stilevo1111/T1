@@ -3278,11 +3278,22 @@ async def main():
             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
         )
 
-# Дайджест (Fissure + Dota) каждые 15 секунд — реальная работа только у лидера
+# Дайджест (Fissure + Dota):
+# - Тяжёлая работа (лидерство + обновление данных из БД) — раз в 20 минут (максимальная экономия Neon часов)
+# - Быстрый 15-секундный тик (только переключение типов) — чисто в памяти, без БД
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(seconds=15),
+            interval=datetime.timedelta(minutes=20),
             first=datetime.datetime.now() + datetime.timedelta(seconds=10)
+        )
+
+        # Обновление кеша Dota Weekly Top раз в час
+        # (для alternate_digest + /topmmr). Позволяет 20-минутному дайджесту
+        # брать данные почти без тяжёлых запросов в БД.
+        job_queue.run_repeating(
+            lambda ctx: update_dota_week_top_cache(),
+            interval=datetime.timedelta(hours=1),
+            first=datetime.datetime.now() + datetime.timedelta(minutes=5)
         )
 
         # ✅ Объявление чемпиона недели в воскресенье 23:30 MSK

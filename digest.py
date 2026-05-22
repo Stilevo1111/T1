@@ -66,6 +66,158 @@ DIGEST_DATA_REFRESH_INTERVAL = 3600
 HERO_META_REFRESH_INTERVAL = 3600
 
 # =====================================================
+# Fast in-memory tick (15s visible switching, ZERO DB calls)
+# Only the current leader runs this background task.
+# =====================================================
+
+_fast_tick_task: asyncio.Task | None = None
+_fast_tick_chat_id: int | None = None
+_fast_tick_message_id: int | None = None
+_fast_tick_is_photo: bool = False
+
+
+async def _fast_digest_tick(bot):
+    """Переключает тип дайджеста каждые 15 секунд, используя только данные в памяти.
+    Никаких обращений к БД или config.
+    """
+    global _fast_tick_message_id, _fast_tick_is_photo
+
+    while True:
+        try:
+            await asyncio.sleep(15)
+
+            if not _fast_tick_chat_id or not _fast_tick_message_id:
+                break
+
+            current_type = _digest_state.get("type") or "0"
+            next_type = "1" if current_type == "0" else "0"
+            _digest_state["type"] = next_type
+
+            # Генерируем текст для нового типа из закешированных данных (без БД)
+            text = _build_digest_text_for_type(next_type)
+
+            if not text:
+                continue
+
+            try:
+                if _fast_tick_is_photo:
+                    await bot.edit_message_caption(
+                        chat_id=_fast_tick_chat_id,
+                        message_id=_fast_tick_message_id,
+                        caption=text,
+                        parse_mode="HTML"
+                    )
+                else:
+                    await bot.edit_message_text(
+                        chat_id=_fast_tick_chat_id,
+                        message_id=_fast_tick_message_id,
+                        text=text,
+                        parse_mode="HTML"
+                    )
+            except Exception as e:
+                err = str(e).lower()
+                if "message to edit not found" in err or "message can't be edited" in err:
+                    # Сообщение исчезло — выходим из fast loop, heavy job пересоздаст
+                    logger.info("Fast tick: message gone, stopping fast loop")
+                    break
+                logger.debug(f"Fast tick edit skipped: {e}")
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.debug(f"Fast tick error: {e}")
+
+
+def _build_digest_text_for_type(digest_type: str) -> str | None:
+    """Генерирует текст дайджеста для указанного типа, используя только данные в памяти."""
+    try:
+        from main import make_clickable
+    except Exception:
+        from bot_utils import make_clickable
+
+    if digest_type == "0":
+        stats = _digest_state.get("digest_data")
+        if not stats:
+            return None
+        growth_data = stats.get("top_growth", ("None", 0))
+        growth_player = growth_data[0] if len(growth_data) > 0 else "None"
+        growth_pos = growth_data[1] if len(growth_data) > 1 else 0
+        drop_data = stats.get("top_drop", ("None", 0.0))
+        drop_player = drop_data[0] if len(drop_data) > 0 else "None"
+        drop_cm = drop_data[1] if len(drop_data) > 1 else 0.0
+        streak_data = stats.get("top_streak", ("None", 0))
+        streak_player = streak_data[0] if len(streak_data) > 0 else "None"
+        streak_len = streak_data[1] if len(streak_data) > 1 else 0
+
+        growth_display = make_clickable(growth_player, stats.get("top_growth_id"))
+        drop_display = make_clickable(drop_player, stats.get("top_drop_id"))
+        streak_display = make_clickable(streak_player, stats.get("top_streak_id"))
+
+        growth_part = f"🔺{growth_display} +{growth_pos}" if growth_player and growth_player != "None" else "🔺—"
+        drop_part = f"🔻{drop_display} {drop_cm:.0f} СМ" if drop_player and drop_player != "None" else "🔻—"
+        streak_part = f" 🍀{streak_display}: {streak_len} побед подряд" if streak_player and streak_player != "None" and streak_len > 0 else " 🍀—"
+
+        return f"<b>{growth_part}\n{drop_part}\n{streak_part}</b>\n\n🗿Фиссура дайджест."
+
+    else:
+        mmr_top = _digest_state.get("dota_data")
+        if not mmr_top:
+            return None
+
+        valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
+        if len(valid_players) < 2:
+            return None
+
+        valid_players_sorted = sorted(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)), reverse=True)
+
+        if len(valid_players_sorted) >= 2:
+            top_by_net = valid_players_sorted[0]
+            for p in reversed(valid_players_sorted):
+                if p.get('telegram_id') != top_by_net.get('telegram_id'):
+                    bottom_by_net = p
+                    break
+            else:
+                bottom_by_net = valid_players_sorted[-1]
+
+            top_name = make_clickable(top_by_net.get('steam_nickname') or top_by_net.get('username'), top_by_net.get('telegram_id'))
+            bottom_name = make_clickable(bottom_by_net.get('steam_nickname') or bottom_by_net.get('username'), bottom_by_net.get('telegram_id'))
+
+            top_wr = round((top_by_net.get('week_wins', 0) / top_by_net.get('week_games', 1)) * 100, 1) if top_by_net.get('week_games') else 0
+            bottom_wr = round((bottom_by_net.get('week_wins', 0) / bottom_by_net.get('week_games', 1)) * 100, 1) if bottom_by_net.get('week_games') else 0
+
+            return f"<b>🔺{top_name}: {top_by_net.get('week_wins', 0)}W/{top_by_net.get('week_games', 0)}L ≈{top_wr}%\n🔻{bottom_name}: {bottom_by_net.get('week_wins', 0)}W/{bottom_by_net.get('week_games', 0)}L ≈{bottom_wr}%</b>\n\n🎮 Dota дайджест."
+
+    return None
+
+
+def start_fast_digest_loop(bot, chat_id: int, message_id: int, is_photo: bool):
+    """Запускает быстрый 15-секундный цикл (только если его ещё нет)."""
+    global _fast_tick_task, _fast_tick_chat_id, _fast_tick_message_id, _fast_tick_is_photo
+
+    _fast_tick_chat_id = chat_id
+    _fast_tick_message_id = message_id
+    _fast_tick_is_photo = is_photo
+
+    if _fast_tick_task and not _fast_tick_task.done():
+        return  # Уже запущен
+
+    _fast_tick_task = asyncio.create_task(_fast_digest_tick(bot))
+    logger.info(f"Fast 15s digest tick started (message {message_id})")
+
+
+def stop_fast_digest_loop():
+    """Останавливает быстрый цикл."""
+    global _fast_tick_task, _fast_tick_chat_id, _fast_tick_message_id
+
+    if _fast_tick_task and not _fast_tick_task.done():
+        _fast_tick_task.cancel()
+        logger.info("Fast 15s digest tick stopped")
+
+    _fast_tick_task = None
+    _fast_tick_chat_id = None
+    _fast_tick_message_id = None
+
+# =====================================================
 # Leader Election (for single active instance on Render free)
 # =====================================================
 
@@ -161,6 +313,7 @@ async def alternate_digest_job(context):
         # === SINGLE ACTIVE INSTANCE (leader election via DB) ===
         # На бесплатном Render может быть 2 контейнера. Только один должен реально работать с дайджестом.
         if not await claim_or_check_digest_leader():
+            stop_fast_digest_loop()
             return
 
         # Блокировка от параллельного запуска - УДЕРЖИВАЕМ ДО КОНЦА!
@@ -476,14 +629,11 @@ async def alternate_digest_job(context):
             
             else:
                 # Dota-дайджест
-                # Проверяем, нужно ли обновить данные из БД
-                if _digest_state.get("dota_data") is None or now - _digest_state.get("last_data_refresh", 0) > _data_refresh_interval:
-                    logger.info("Обновляем данные для Dota-дайджеста из БД")
-                    mmr_top = get_dota_week_top(limit=10)
-                    _digest_state["dota_data"] = mmr_top
-                    _digest_state["last_data_refresh"] = now
-                else:
-                    mmr_top = _digest_state["dota_data"]
+                # Данные обновляются отдельным job'ом раз в час + при старте контейнера.
+                # Здесь просто читаем из кеша (get_dota_week_top почти никогда не будет делать тяжёлый SQL,
+                # потому что кеш поддерживается часовым job'ом).
+                mmr_top = get_dota_week_top(limit=10)
+                _digest_state["dota_data"] = mmr_top
                 
                 dota_text = None
                 if not mmr_top:
@@ -652,6 +802,9 @@ async def alternate_digest_job(context):
                     edited = True
                     _digest_state["type"] = next_type
                     _digest_state["last_text"] = text
+
+                    # Обновляем fast tick с актуальным message_id
+                    start_fast_digest_loop(bot, int(digest_chat_id), msg_id_int, is_photo_message)
                     try:
                         await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
                         logger.info(f"Закреплён дайджест {last_message_id}")
@@ -792,6 +945,9 @@ async def alternate_digest_job(context):
                 _digest_state["type"] = next_type
                 _digest_state["last_text"] = text
                 logger.info(f"alternate_digest_job: saved new message_id = {msg.message_id}")
+
+                # Запускаем быстрый 15-секундный цикл (только в памяти)
+                start_fast_digest_loop(bot, int(digest_chat_id), msg.message_id, _digest_state.get("is_photo_message", False))
 
                 # Закрепляем новое сообщение
                 try:
