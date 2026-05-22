@@ -206,21 +206,19 @@ async def alternate_digest_job(context):
                 cache["created_at"] = time.time() - 30
                 logger.info("alternate_digest_job: existing message_id in config, created_at adjusted to prevent false rotation after restart")
         
-        # === УМНАЯ СИСТЕМА КЕШИРОВАНИЯ ДАЙДЖЕСТОВ ===
-        # CREATE NEW MESSAGE **only** when there is no saved message_id at all
-        # (first start or old post was deleted). 
-        # In all other cases — edit the existing post.
-        # Rotation (48h) no longer forces a new post — we keep editing the same one.
+# === УМНАЯ СИСТЕМА КЕШИРОВАНИЯ ДАЙДЖЕСТОВ ===
+        # Rotation (48h) triggers new post with fresh hero meta banner.
+        # Otherwise we edit the existing post.
         should_create_new = False
         should_refresh_data = False
         
         existing_msg_id = get_config('alternate_digest_message_id')
         
-        # 1. Rotation interval — DISABLED for auto-create (we edit the same post forever)
-        #    Manual /fissuredigestnow or /dotadigestnow still allow forcing a fresh post.
-        if now - cache["created_at"] > cache["rotation_interval"] and not existing_msg_id:
+        # 1. Rotation interval — create new message and regenerate hero meta
+        #    (We delete the old one and create a fresh post with new hero meta)
+        if now - cache["created_at"] > cache["rotation_interval"]:
             should_create_new = True
-            logger.info(f"Время ротации дайджеста, но existing_msg_id отсутствует — создаём новое")
+            logger.info(f"Rotation interval reached, will create new digest")
         
         # 2. No message_id in config at all (and cache empty) — first time, create new
         elif cache["text"] is None and not existing_msg_id:

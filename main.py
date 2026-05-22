@@ -15,10 +15,17 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, Messa
 from telegram.request import HTTPXRequest
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
 from telegram.error import Conflict
-from database import init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database, get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config, get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db, get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username, delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top, get_dota_week_rank, DATABASE_URL, reset_all_fissure_data, cleanup_left_users
+from database import (
+    init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database,
+    get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config,
+    get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db,
+    get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username,
+    delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top,
+    get_dota_week_rank, DATABASE_URL, reset_all_fissure_data, cleanup_left_users,
+    get_all_users_with_steam, user_cache, update_dota_week_top_cache, get_db_type, config_cache
+)
 from mute import register_handlers as register_mute_handlers
 from dota_mmr import update_user_mmr, get_opendota_rate_limit_message, _get_start_card_background
-from database import get_all_users_with_steam, user_cache, update_dota_week_top_cache, get_db_type, config_cache
 import aiohttp
 from aiohttp import web
 from rate_limiter import telegram_rate_limiter, rate_limit
@@ -36,7 +43,7 @@ if not TOKEN:
 else:
     print("BOT_TOKEN found")
 
-COOLDOWN = 86400  # 24 hours
+# COOLDOWN moved to constants.py
 
 _user_fissure_processing = {}  # Request lock: user_id -> timestamp (for fissure processing)
 _USER_START_COOLDOWN = {}  # Spam protection for /start: user_id -> timestamp
@@ -62,73 +69,9 @@ def set_rate_limited(retry_after=None):
     logger.warning(f"Rate limited until {time.strftime('%H:%M:%S', time.localtime(_rate_limit_until))}")
 
 
-@rate_limit(tokens=1)
-async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
-    """Удалить сообщение через delay секунд"""
-    # Skip invalid message IDs
-    if not isinstance(msg_id, int) or msg_id <= 0:
-        logger.debug(f"delete_after_delay: skipping invalid msg_id={msg_id}")
-        return
-
-    if job_queue:
-        # Используем JobQueue для надежного планирования
-        job_queue.run_once(
-            delete_message_job,
-            delay,
-            data={'chat_id': chat_id, 'msg_id': msg_id},  # data для PTB
-            name=f"delete_{chat_id}_{msg_id}"
-        )
-    else:
-        # Fallback - пытаемся удалить сразу (менее надежно)
-        await asyncio.sleep(delay)
-        try:
-            logger.info(f"delete_after_delay: attempting to delete msg_id={msg_id} in chat={chat_id}")
-            await bot.delete_message(chat_id, msg_id)
-            logger.info(f"Deleted delayed message {msg_id} in chat {chat_id}")
-        except Exception as e:
-            error_str = str(e).lower()
-            if "message to delete not found" in error_str or "bad request" in error_str:
-                logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
-            else:
-                logger.warning(f"Failed to delete delayed message {msg_id} in chat {chat_id}: {e}")
-
-
-@rate_limit(tokens=1)
-async def delete_message_job(context):
-    """Job для удаления сообщения"""
-    bot = context.application.bot  # Доступ через context.application.bot в PTB v20+
-    chat_id = context.job.data['chat_id']
-    msg_id = context.job.data['msg_id']
-
-    # Skip invalid message IDs
-    if not isinstance(msg_id, int) or msg_id <= 0:
-        logger.debug(f"delete_message_job: skipping invalid msg_id={msg_id}")
-        return
-
-    try:
-        logger.info(f"delete_message_job: attempting to delete msg_id={msg_id} in chat={chat_id}")
-        await bot.delete_message(chat_id, msg_id)
-        logger.info(f"Deleted scheduled message {msg_id} in chat {chat_id}")
-    except Exception as e:
-        error_str = str(e).lower()
-        if "message to delete not found" in error_str or "bad request" in error_str:
-            # Message already deleted or can't be deleted - this is normal
-            logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
-        else:
-            logger.warning(f"Failed to delete message {msg_id} in chat {chat_id}: {e}")
-
-
-class ManualContext:
-    """Контекст для ручного вызова jobs"""
-    def __init__(self, application, bot):
-        self.application = application
-        self.bot = bot
-        self.manual = True
-
-
-_bot_can_delete_cache = {}
 _bot_can_delete_ttl = 3600  # 1 час
 _BOT_CAN_DELETE_CACHE_MAX = 200
+_bot_can_delete_cache = {}  # chat_id -> (can_delete, timestamp)
 
 async def bot_can_delete(bot, chat_id):
     """Проверить может ли бот удалять сообщения в чате"""
@@ -152,10 +95,6 @@ async def bot_can_delete(bot, chat_id):
     except Exception:
         _bot_can_delete_cache[chat_id] = (False, time.time())
         return False
-
-def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
-    """Запланировать удаление сообщения через delay секунд"""
-    asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay))
 
 
 async def cleanup_left_users_job(context):
@@ -1117,609 +1056,77 @@ async def dota_digest_job(context):
 # alternate_digest_job живёт в digest.py (с лидерской выборкой).
 # function_fixed.py — только тонкий реэкспорт для совместимости.
 from function_fixed import alternate_digest_job
+from rolls import (
+    BASE_ROLLS,
+    FATAL_ROLL,
+    ROLL_TEXTS,
+    ROLL_MEMES,
+    CATEGORY_PHRASES,
+    calculate_fissure_roll,
+    apply_fissure_protection,
+    calculate_new_fissure,
+    MULTICAST_TEXTS,
+    calculate_multicast,
+    check_multicast,
+    MULTICAST_CASCADE,
+    slot_animation,
+    send_multicast_anim,
+)
+from bot_utils import (
+    is_valid_telegram_id,
+    make_clickable,
+    delete_last_bot_message,
+    set_last_bot_message,
+    add_bot_message,
+    last_bot_message,
+    format_time,
+    main_menu,
+    _build_analytics_keyboard,
+    _build_stats_button_keyboard,
+    schedule_delete,
+    delete_after_delay,
+    delete_message_job,
+    ManualContext,
+)
+from stats import (
+    get_event_chances,
+    increment_stat,
+    flush_stat_buffer,
+    get_event_stats_text,
+)
+from constants import (
+    COOLDOWN,
+    COOLDOWN_BANNER_URL,
+    PROFILE_BANNER_URL,
+    TOP_BANNER_URL,
+    TOPMMR_BANNER_URL,
+    LINK_BANNER_URL,
+    SETDIGEST_BANNER_URL,
+    ZEUS_BANNER_URL,
+    DICE_ANIMATION_DELAY,
+    USER_PROCESSING_TTL,
+    BOT_CAN_DELETE_TTL,
+    JOB_COOLDOWN,
+    WEEKLY_JOB_COOLDOWN,
+    WEEKEND_BONUS_MULTIPLIERS,
+    MULTICAST_DEFAULT_CHANCE,
+    ZEUS_DEFAULT_CHANCE,
+    MORNING_DIGEST_HEADER,
+    MORNING_DIGEST_FOOTER,
+    DOTA_DIGEST_HEADER,
+    DOTA_DIGEST_FOOTER,
+    ZEUS_TEXTS,
+    WELCOME_PHRASES,
+)
+
+
+
+# All roll data (ROLL_MEMES, CATEGORY_PHRASES), welcome phrases,
+# multicast/zeus defaults, weekend multipliers and digest headers
+# have been moved to rolls.py and constants.py.
+# Local duplicates removed — using imported versions.
 
-# =====================
-# ROLL SYSTEM
-# =====================
 
-BASE_ROLLS = [-3, -1, 0, 1, 3, 5, 10, 20]
-FATAL_ROLL = -10
-
-# =====================
-# ROLL TEXTS
-# =====================
-
-ROLL_TEXTS = {
-    50: ["🔥🔥🔥 НЕВЕРОЯТНО! +50 см!", "💰 ДЖЕКПОТ! +50 см за раз!", "🦸 ЛЕГЕНДАРНО! +50 СМ!", "👑 ДОМИНИРУЕШЬ! +50 СМ!", "💀 БОЖЕСТВЕННО! +50 СМ!"],
-    30: ["🚀 КОСМОС! +30 см!", "🍀 СУПЕР УДАЧА! +30 см!", "⚡ СИЛА УЛЬТЫ! +30 СМ!", "🔥 МЕГА КИЛЛ! +30 СМ!"],
-    20: ["💪 MEGA УСПЕХ! +20 см!", "🎯 ТОЧНО В ДЕСЯТКУ! +20 см!", "🎯 ДВОЙНОЙ КИЛЛ! +20 СМ!", "💪 НЕУДЕРЖИМ! +20 СМ!"],
-    15: ["🔥 МУЛЬТИБОНУС! +15 СМ!", "💥 ОТЛИЧНЫЙ РЕЗУЛЬТАТ! +15 СМ!", "🚀 РАСТИ! +15 СМ!"],
-    12: ["💪 СИЛЬНО! +12 СМ!", "🎮 УЛУЧШЕНИЕ! +12 СМ!"],
-    10: ["🌟 ЛЕГЕНДА! +10 см!", "🔥 ОГОНЬ! +10 см!", "🌟 ПЕРВАЯ КРОВЬ! +10 СМ!", "🎮 УБИЙСТВЕННАЯ СЕРИЯ! +10 СМ!"],
-    9: ["📈 РАСТИ! +9 СМ!", "💪 НЕПЛОХО! +9 СМ!"],
-    8: ["📈 ХОРОШО! +8 СМ!", "💪 ЕЩЁ! +8 СМ!"],
-    7: ["👍 ЕСТЬ! +7 СМ!", "📈 НАРАЩИВАЕМ! +7 СМ!"],
-    6: ["👍 ЕСТЬ! +6 СМ!", "📈 НАРАЩИВАЕМ! +6 СМ!"],
-    5: ["🎉 УРА! +5 см!", "👍 ОТЛИЧНО! +5 см!", "✅ НОРМ! +5 СМ!", "👍 КРАСАВА! +5 СМ!"],
-    4: ["✅ НЕПЛОХО! +4 СМ!", "💪 ПОТИХОНЬКУ! +4 СМ!"],
-    3: ["😊 НЕПЛОХО! +3 см", "📈 РАСТЁМ! +3 см", "💪 НА! +3 СМ", "🔥 В ОГНЕ! +3 СМ"],
-    2: ["✅ ЕСТЬ! +2 СМ!", "💪 ШАГ! +2 СМ!"],
-    1: ["✅ OK! +1 см", "💪 ЕСТЬ РОСТ! +1 см", "🙄 ПОВЕЗЛО! +1 СМ", "🤔 МОГЛО БЫТЬ ХУЖЕ! +1 СМ"],
-    0: ["❌ БЕЗ ИЗМЕНЕНИЙ", "💤 СТОИМ НА МЕСТЕ", "❌ НИЧЬЯ", "💤 АФК?"],
-    -1: ["🤔 НЕМНОГО -1 см", "📉 МИНУС -1 см", "😬 ОЙ! -1 СМ", "💀 КОРМ! -1 СМ"],
-    -2: ["📉 МИНУС -2 СМ", "😬 НЕМНОГО БОЛЬНО! -2 СМ"],
-    -3: ["😬 ОЙ... -3 см", "⬇️ УПАЛ -3 см", "🤕 ДЕНАЙ! -3 СМ", "☠️ НАРЖАЛ! -3 СМ"],
-    -4: ["⬇️ СКОЛЬЗИМ! -4 СМ", "😬 НЕУДАЧА! -4 СМ"],
-    -5: ["😢 БОЛЬНО -5 см...", "💔 НЕУДАЧА -5 см", "💀 ПОПАЛ! -5 СМ...", "🎮 ГГ ВП... -5 СМ"],
-    -6: ["💀 ПОПАЛ! -6 СМ...", "⬇️ УПАЛ! -6 СМ"],
-    -7: ["😢 ОЙ! -7 СМ...", "💔 БОЛЬНО! -7 СМ"],
-    -8: ["😢 НЕПРИЯТНО! -8 СМ...", "⬇️ КАПУТ! -8 СМ"],
-    -9: ["😢 БОЛЬНО! -9 СМ...", "💀 КРИТИЧЕСКИЙ УРОН! -9 СМ"],
-    -10: ["💥 КАТАСТРОФА! -10 см!!!", "🌋 АПОКАЛИПСИС! -10 см!!!", "😵 СЕРВЕР УПАЛ! -10 СМ!!!", "💥 ДИСКОННЕКТ! -10 СМ!!!"],
-    -11: ["💥 УЖАС! -11 СМ!!!", "☠️ КРАШ! -11 СМ!!!"],
-    -12: ["💀 БОЛЬНО! -12 СМ!!!", "🌋 ВУЛКАН! -12 СМ!!!"],
-    -13: ["💥 ПОЛНЫЙ КРАХ! -13 СМ!!!", "☠️ ФИНАЛ! -13 СМ!!!"],
-    -14: ["💀 НЕВОССТАНОВИМО! -14 СМ!!!", "🌋 АПОКАЛИПСИС! -14 СМ!!!"],
-    -15: ["💀 ФАТАЛЬНЫЙ УРОН! -15 СМ!!!", "🌋 КОНЕЦ! -15 СМ!!!", "☠️ ОТПРАВЛЕН В СТАРТ! -15 СМ!!!"],
-    75: ["🏆 ЛЕГЕНДАРНЫЙ РОЛЛ!!! +75 СМ!!!", "💥 МЕГАДРОП!!! +75 СМ!!!", "🎯 ШОТ! +75 СМ!!!"]
-}
-
-ROLL_MEMES = {
-    75: [
-        "👁️ «Я ВИДЕЛ БУДУЩЕЕ — ТЕБЯ ТАМ НЕТ» (Войд)",
-        "⚔️ «ЗА НАЙТСИЛЬВЕР!» (Мирана)",
-        "🌑 «ИЗ МРАКА!» (НС)"
-    ],
-    50: [
-        "💥 «ХАОС ДАНК!» (СиКей)",
-        "🩹 «РАЗЛОМ ИСЦЕЛЯЕТСЯ!» (СК)",
-        "🩸 «ЦАРСТВО КРОВИ!» (Блад)"
-    ],
-    30: [
-        "🔥 «ДУХАМИ ЗАКЛИНАЮ!» (Эмбер)",
-        "🛡️ «ЗА МОЙ НАРОД!» (Свен)",
-        "⚜️ «КЛЯТВА ПРИНЕСЕНА!» (Омни)"
-    ],
-    20: [
-        "🌹 «ПРОКЛЯТИЕ РОЗЫ!» (КоП)",
-        "🔨 «Я НЕСУ МОЛОТ!» (Омни)",
-        "🗡️ «ОДИН КЛИНОК — ОДНА ЦЕЛЬ» (Джагг)"
-    ],
-    15: [
-        "✨ «Я — СВЕТ!» (КотЛ)",
-        "🏹 «СТРАННИЦА ВОЗВРАЩАЕТСЯ» (ВР)",
-        "😈 «ПЛАЧЬ ЕЩЁ!» (ЛЦ)"
-    ],
-    10: [
-        "🚫 «МАГИЯ — ОТСТОЙ!» (АМ)",
-        "👑 «ЗА ПОСЛЕДНЕГО КОРОЛЯ!» (ВК)",
-        "🕳️ «БЕЗДНА ЗОВЁТ» (Войд)"
-    ],
-    9: [
-        "👻 «ЗА ТВОЕЙ СПИНОЙ!» (Рики)",
-        "🧈 «МЯГКИЙ, КАК МАСЛО» (ПА)",
-        "🕷️ «ГНЕЗДО ЖДЁТ» (Бруд)"
-    ],
-    5: [
-        "🍖 «СВЕЖЕЕ МЯСО!» (Падж)",
-        "🐟 «ОХОТА НАЧИНАЕТСЯ» (Сларк)",
-        "🐻 «КАЛЕЧИТЬ! УБИВАТЬ!» (Урса)"
-    ],
-    1: [
-        "🪨 «БРОСАЙ МЕНЯ!» (Тайни)",
-        "🪙 «ВЕЗУЧАЯ МОНЕТКА» (Гамблер)",
-        "🧪 «МАЛЫЕ НАЧАЛА» (Мипо)"
-    ],
-    0: [
-        "💤 «Я ОТДОХНУ ТЕПЕРЬ» (Висп)",
-        "⏳ «ДРЕВНИЕ ЖДУТ» (Аганим)",
-        "🧘 «СОЗЕРЦАНИЕ» (Элдер Т)"
-    ],
-    -1: [
-        "😔 «Я ПОДВЁЛ» (Свен)",
-        "😩 «НЕ ТАК» (Зевс)",
-        "🌫️ «ВИДЕНИЕ ТУСКНЕЕТ» (Войд)"
-    ],
-    -5: [
-        "🥶 «ПЛАМЯ ПОГАСЛО» (Лина)",
-        "😖 «Я... СПОТКНУЛСЯ» (Эмбер)",
-        "💔 «МОЯ ЧЕСТЬ... РАЗБИТА» (ЛЦ)"
-    ],
-    -10: [
-        "🚨 «ДРЕВНИЙ АТАКУЮТ» (диктор)",
-        "🏃‍♂️💨 «КОМАНДА ТЕБЯ БРОСИЛА» (игра)",
-        "🌚 «ПОБЕДА ТЬМЫ» (Тьма)"
-    ],
-    -15: [
-        "😭 «СВЕТ ПОВЕРЖЕН» (диктор)",
-        "🎭 «ТВОЙ ММР — ЛОЖЬ» (Crownfall)",
-        "🕳️ «ОБРАТНО В РАЗЛОМ» (СК)"
-    ],
-}
-
-CATEGORY_PHRASES = {
-    "up": [
-        "💪 Растём!",
-        "📏 Каждый см важен!",
-        "✅ Фиссура одобряет!",
-        "📈 Положительная динамика!",
-        "🔥 Так держать!",
-        "⬆️ Вверх и только вверх!"
-    ],
-    "down": [
-        "😔 Небольшой откат!",
-        "💪 Фиссура восстановится!",
-        "🌅 Завтра новый день!",
-        "⏳ Временный спад!",
-        "💪 Не сдавайся!",
-        "🎯 Это ещё не конец!"
-    ],
-    "same": [
-        "🛡 Стабильность - это хорошо!",
-        "💪 Держим позиции!",
-        "➡️ Без изменений - тоже результат!",
-        "⚓ Твёрдо как скала!",
-        "📊 Постоянство важно!",
-        "🏗️ Прочный фундамент!"
-    ],
-    "bonus_help": [
-        "✨ СИСТЕМА ПОМОГЛА!",
-        "🍀 Удачный расклад!",
-        "🎁 БОНУС!",
-        "🛡 КРИТИЧЕСКАЯ ПОДДЕРЖКА!",
-        "💰 ДЖЕКПОТ!",
-        "🚀 МНОЖИТЕЛЬ!"
-    ],
-    "fatal": [
-        "💥 КРИТИЧЕСКИЙ УРОН!",
-        "🔥 Но ты устоял!",
-        "🦾 ВЫЖИЛ!",
-        "🎮 Ещё в игре!",
-        "💪 Стойкость!",
-        "🏆 Никогда не сдавайся!"
-    ]
-}
-
-WELCOME_PHRASES = [
-    "Присоединился! Падж облизнулся на тебя, свежее мясо🍖",
-    "Добро пожаловать! Свен хлопнул тебя по плечу👏",
-    "Не зевай! Сларк шепчет тебе на ухо🤫",
-    "Заходи! Бруда раскинула сеть для тебя🕸️",
-    "Открой рундук! Джагернаут, дал тебе клинок⚔️",
-    "Привет! Zeus сверкнул молнией⚡",
-    "Погнали! Spirit Breaker тебя прокатит🚕",
-    "Здарова! Tusk дал тебе в плечо кулачищем🐧",
-    "Ой, а ты кто? Axe почесал тебе затылок секирой🪓",
-    "Ой, а ты кто? Morphling умыл тебе лицо💧",
-    "Не зевай! Phantom Assassin хочет пересчитать твой ребра💀",
-    "Здарова! Slardar брызнул слюной🐟",
-    "Чего уставился? Clinkz натянул тебе тетиву🏹",
-    "Привет! Faceless Void остановил время на секунду🕰️",
-    "Будь как дома! Wisp засветился у тебя за спиной💫",
-    "Не зевай! Techies Три, две, одна — улыбнись🧨",
-    "Чего встал? Primal Beast топнул — пол треснул🦍",
-    "Сладкий! Queen of Pain услышала твой голос👑",
-]
-
-
-# =====================
-# 🔧 УТИЛИТЫ
-# =====================
-
-def is_valid_telegram_id(user_id):
-    """Проверяет, что user_id это валидный Telegram ID (не SteamID64)"""
-    if not user_id:
-        return False
-    try:
-        uid = int(user_id)
-    except (ValueError, TypeError):
-        return False
-    # Telegram IDs: могут быть любого размера, но обычно 6-10 цифр
-    # SteamID64: начинается с 7656119... (более 15 цифр)
-    if uid > 10**15:  # Защита от SteamID64 (7656119...)
-        return False
-    if uid < 1:  # Telegram ID должен быть положительным
-        return False
-    return True
-
-def make_clickable(name, user_id, max_length=12):
-    """Создать кликабельный никейм для Telegram"""
-    try:
-        # Handle both int and string user_id
-        uid = int(user_id) if user_id else 0
-    except (ValueError, TypeError):
-        uid = 0
-    
-    if name and name != "None" and uid > 0:
-        display_name = name
-        try:
-            from database import user_cache, get_user
-            # Сначала пробуем из кеша
-            cached = user_cache.get(uid)
-            if cached:
-                display_name = cached.get('steam_nickname') or cached.get('username') or name
-            else:
-                # Пробуем из БД напрямую
-                db_user = get_user(uid)
-                if db_user:
-                    display_name = db_user.get('steam_nickname') or db_user.get('username') or name
-        except:
-            display_name = name
-
-        # Нормализуем никнейм - убираем @ если есть
-        if display_name and display_name.startswith('@'):
-            display_name = display_name[1:]
-
-        # Если получилось все равно число - показываем как есть
-        if display_name.isdigit():
-            display_name = f"Игрок {display_name}"
-
-        # Обрезаем длинные ники
-        if len(display_name) > max_length:
-            display_name = display_name[:max_length-1] + "."
-
-        return f"<a href=\"tg://user?id={uid}\">{display_name}</a>"
-    return name if name and name != "None" else "—"
-
-# Track last bot message per user per chat for cleanup
-last_bot_message = {}  # {chat_id: {user_id: message_id}}
-
-
-async def delete_last_bot_message(bot, chat_id, user_id):
-    """Delete all tracked bot messages for this user in this chat immediately"""
-    if chat_id in last_bot_message and user_id in last_bot_message[chat_id]:
-        msg_ids = last_bot_message[chat_id][user_id]
-        # Поддерживаем оба формата: список и одиночный ID
-        if not isinstance(msg_ids, list):
-            msg_ids = [msg_ids]
-
-        # Удаляем дубликаты чтобы избежать повторного удаления
-        unique_msg_ids = []
-        seen = set()
-        for msg_id in msg_ids:
-            if msg_id not in seen and isinstance(msg_id, int) and msg_id > 0:
-                unique_msg_ids.append(msg_id)
-                seen.add(msg_id)
-
-        for msg_id in unique_msg_ids:
-            try:
-                logger.info(f"delete_last_bot_message: attempting to delete msg_id={msg_id} in chat={chat_id}")
-                await bot.delete_message(chat_id, msg_id)
-                logger.info(f"Deleted last bot message for user {user_id}: {msg_id}")
-            except Exception as e:
-                error_str = str(e).lower()
-                if "message to delete not found" in error_str or "bad request" in error_str or "not found" in error_str:
-                    logger.debug(f"Message {msg_id} already deleted or invalid in chat {chat_id}: {e}")
-                else:
-                    logger.warning(f"Could not delete last bot message {msg_id}: {e}")
-
-        # Всегда очищаем после попытки (даже если удалить не получилось)
-        try:
-            del last_bot_message[chat_id][user_id]
-            # Очищаем пустые записи чата
-            if not last_bot_message[chat_id]:
-                del last_bot_message[chat_id]
-        except KeyError:
-            pass
-
-
-def set_last_bot_message(chat_id, user_id, message_id):
-    """Set the last bot message for this user in this chat"""
-    # Skip invalid message IDs
-    if not isinstance(message_id, int) or message_id <= 0:
-        logger.debug(f"set_last_bot_message: skipping invalid message_id={message_id}")
-        return
-
-    if chat_id not in last_bot_message:
-        last_bot_message[chat_id] = {}
-    last_bot_message[chat_id][user_id] = message_id
-
-
-def add_bot_message(chat_id, user_id, message_id):
-    """Add bot message to track list for this user in this chat"""
-    # Skip invalid message IDs
-    if not isinstance(message_id, int) or message_id <= 0:
-        logger.debug(f"add_bot_message: skipping invalid message_id={message_id}")
-        return
-
-    if chat_id not in last_bot_message:
-        last_bot_message[chat_id] = {}
-    # Сохраняем последние 2 сообщения для удаления
-    if isinstance(last_bot_message[chat_id].get(user_id), list):
-        msg_list = last_bot_message[chat_id][user_id]
-        msg_list.append(message_id)
-        # Оставляем только последние 2 сообщения
-        last_bot_message[chat_id][user_id] = msg_list[-2:]
-    else:
-        # Конвертируем старый формат в список
-        last_bot_message[chat_id][user_id] = [message_id]
-
-    # Cleanup memory: ограничить размер словаря чтобы не было утечки памяти
-    if len(last_bot_message) > 500:
-        last_bot_message.clear()
-        logger.warning("Cleared last_bot_message cache (exceeded 500 entries)")
-
-
-def calculate_fissure_roll(current_fissure):
-    """
-    Calculates new roll based on current fissure size
-    Returns: (roll_value, message, is_fatal, got_help)
-    """
-    if current_fissure >= 20:
-        fatal_chance = 0.02  # 2% для фиссур 20+ см
-        if random.random() < fatal_chance:
-            return FATAL_ROLL, "FATAL DECREASE!", True, False
-
-    # Единый баланс для всех фиссур
-    if current_fissure < 5:
-        if random.random() < 0.8:
-            bonus_options = [
-                (5, 30), (10, 25), (20, 20), (30, 15), (50, 10)
-            ]
-            values, weights = zip(*bonus_options)
-            roll = random.choices(values, weights=weights)[0]
-            return roll, "✨ МАКСИМАЛЬНАЯ ПОМОЩЬ!", False, True
-
-        protected_rolls = [0, 1, 3, 5, 10, 20]
-        roll = random.choice(protected_rolls)
-        return roll, "🛡 ЗАЩИЩЁННЫЙ РОЛЛ", False, True
-
-    elif current_fissure < 20:
-        if random.random() < 0.4:
-            improved_options = [3, 5, 10, 20]
-            roll = random.choice(improved_options)
-            return roll, "🚀 УЛУЧШЕННЫЙ РОЛЛ!", False, True
-
-    elif current_fissure < 100:
-        if random.random() < 0.2:
-            bonus = random.choice([5, 10, 20])
-            return bonus, "🍀 УДАЧНЫЙ РОЛЛ!", False, False
-
-    else:
-        # Для очень больших фиссур - меньше бонусов
-        if random.random() < 0.1:
-            bonus = random.choice([5, 10, 20])
-            return bonus, "🍀 УДАЧНЫЙ РОЛЛ!", False, False
-
-    # Единый баланс для всех:
-    # Расширенный диапазон: от -15 до +75
-    weighted_rolls = [
-        (-15, 3), (-10, 5), (-7, 7), (-5, 8), (-3, 7), (-1, 5), (0, 5),
-        (1, 5), (3, 7), (5, 8), (7, 7), (10, 8), (15, 6), (20, 5),
-        (30, 4), (50, 2), (75, 1)
-    ]
-    values, weights = zip(*weighted_rolls)
-    roll = random.choices(values, weights=weights)[0]
-    return roll, "", False, False
-
-
-def apply_fissure_protection(current_fissure, roll, is_fatal):
-    """Applies protection for small fissures on fatal rolls"""
-    if is_fatal and current_fissure < 5:
-        reduced_roll = max(-5, roll)
-        protection_msg = f"🛡 УРОН СНИЖЕН! Было {roll}, теперь {reduced_roll}"
-        return reduced_roll, protection_msg
-
-    return roll, ""
-
-
-def calculate_new_fissure(current_fissure, roll):
-    """Calculates new fissure size with minimum 0.1"""
-    new_value = current_fissure + roll
-    return max(0.1, new_value)
-
-
-def calculate_multicast(dice_value: int) -> tuple[int, str]:
-    """Вычисляет множитель и текст для multicast по значению dice (1-64)"""
-    if dice_value == 64:
-        return 4, "\n🎰🎰🎰 <b>ДЖЕКПОТ!!!</b>\n🗣️ Ogre Magi <i>«КАКОВЫ ШАНСЫ?!»</i>"
-    elif dice_value >= 48:  # 49-64
-        return 3, f"\n{random.choice(MULTICAST_TEXTS[3])}"
-    elif dice_value >= 16:  # 16-48
-        return 2, f"\n{random.choice(MULTICAST_TEXTS[2])}"
-    else:  # 1-15 - обычный ролл без мультикаста
-        return 1, ""
-
-
-# ── Мультикаст (каскадный) ───────────────────────────────────────────
-# Шансы загружаются из bot_config, дефолты здесь
-MULTICAST_DEFAULT_CHANCE = 0.15
-MULTICAST_CASCADE = [0.75, 0.50, 0.40]  # [не используется, ×3 шанс, ×4 шанс]
-
-ZEUS_DEFAULT_CHANCE = 0.05
-ZEUS_ICON_URL = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/zuus.png"
-
-# Выходной бонус
-WEEKEND_BONUS_MULTIPLIERS = [1.5, 2, 2.5]
-
-# Тексты дайджестов
-MORNING_DIGEST_HEADER = "🌅ФИССУРА ДАЙДЖЕСТ"
-MORNING_DIGEST_FOOTER = "🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
-DOTA_DIGEST_HEADER = "🎮 DOTA ДАЙДЖЕСТ 📊"
-DOTA_DIGEST_FOOTER = "🔺 = лучший винрейт за неделю\n🔻 = худший винрейт за неделю\n🔸 = текущий стрик побед"
-# # WEEKLY_DIGEST_HEADER удалён
-
-# Ожидание анимации dice
-DICE_ANIMATION_DELAY = 1.0
-
-# URL баннеров
-COOLDOWN_BANNER_URL = "https://i.ibb.co/FkzCZxNG/m-Yqbu.jpg"
-PROFILE_BANNER_URL = "https://i.ibb.co/n8g8yQYt/dasdsadasdsadasdsad.png"
-TOP_BANNER_URL = "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
-TOPMMR_BANNER_URL = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
-LINK_BANNER_URL = "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"
-SETDIGEST_BANNER_URL = "https://i.ibb.co/LXsGsfxZ/213.png"
-
-# Кеш шансов (обновляется раз в минуту)
-_event_chances_cache = {"ts": 0, "multicast": MULTICAST_DEFAULT_CHANCE, "zeus": ZEUS_DEFAULT_CHANCE}
-
-# Spam protection
-USER_PROCESSING_TTL = 30  # секунд
-BOT_CAN_DELETE_TTL = 3600  # 1 час
-JOB_COOLDOWN = 30  # секунд между запусками job
-WEEKLY_JOB_COOLDOWN = 60  # секунд между запусками weekly job
-
-def get_event_chances():
-    """Получить шансы событий из bot_config с кешированием"""
-    now = time.time()
-    if now - _event_chances_cache["ts"] < 60:
-        return _event_chances_cache["multicast"], _event_chances_cache["zeus"]
-
-    try:
-        mc = float(get_config("multicast_chance", MULTICAST_DEFAULT_CHANCE))
-        ze = float(get_config("zeus_chance", ZEUS_DEFAULT_CHANCE))
-        _event_chances_cache.update({"ts": now, "multicast": mc, "zeus": ze})
-        return mc, ze
-    except Exception:
-        return MULTICAST_DEFAULT_CHANCE, ZEUS_DEFAULT_CHANCE
-
-# Счётчики событий (persistent через bot_config)
-STATS_KEYS = ["rolls", "multicast", "zeus", "multicast_x2", "multicast_x3", "multicast_x4"]
-
-# Буфер инкрементов — пишем в БД пачкой
-_stat_buffer = {}
-_stat_flush_timer = None
-
-
-def increment_stat(key):
-    """Инкрементировать счётчик в буфере (пишется в БД после броска)"""
-    if key in STATS_KEYS:
-        _stat_buffer[key] = _stat_buffer.get(key, 0) + 1
-
-
-async def flush_stat_buffer():
-    """Записать накопленные счётчики в БД атомарно"""
-    if not _stat_buffer:
-        return
-    try:
-        for key, delta in _stat_buffer.items():
-            # Атомарный инкремент: UPDATE value = value + delta (без read-modify-write)
-            try:
-                from database import batch_increment_config
-                batch_increment_config(f"stat_{key}", delta)
-            except ImportError:
-                # Fallback: обычный read-modify-write
-                try:
-                    val = int(get_config(f"stat_{key}", 0)) + delta
-                except (ValueError, TypeError):
-                    val = delta
-                set_config(f"stat_{key}", str(val))
-        _stat_buffer.clear()
-    except Exception as e:
-        logger.error(f"flush_stat_buffer error: {e}")
-
-
-def _load_stats():
-    """Загрузить счётчики из буфера + БД"""
-    stats = {}
-    for key in STATS_KEYS:
-        try:
-            buf = _stat_buffer.get(key, 0)
-            db_val = int(get_config(f"stat_{key}", 0))
-            stats[key] = db_val + buf
-        except (ValueError, TypeError):
-            stats[key] = _stat_buffer.get(key, 0)
-    return stats
-
-
-def get_event_stats_text():
-    """Текст со статистикой событий"""
-    stats = _load_stats()
-    total = stats["rolls"]
-    if total == 0:
-        return ""
-    mc = stats["multicast"]
-    ze = stats["zeus"]
-    mc_pct = mc / total * 100 if total else 0
-    ze_pct = ze / total * 100 if total else 0
-    return (
-        f"📊 События (всего бросков: {total}):\n"
-        f"  👹 Мулькаст: {mc} ({mc_pct:.1f}%) — x2: {stats['multicast_x2']}, x3: {stats['multicast_x3']}, x4: {stats['multicast_x4']}\n"
-        f"  ⚡ Зевс: {ze} ({ze_pct:.1f}%)"
-    )
-
-
-MULTICAST_TEXTS = {
-    2: [
-        "🧙‍♂️ «Эй, ты это видел? Ну конечно не видел, ты же тупой!»",
-        "🧙‍♂️ «Одного раза мало? А два раза — в самый раз!»",
-        "🧙‍♂️ «Я сказал — ещё раз! А ты что хотел?»",
-        "🧙‍♂️ «Смотри сюда, сейчас опять будет! Или не будет? Будет!»",
-        "🧙‍♂️ «Это не магия, это чистая удача. А удача — это тоже скилл!»"
-    ],
-    3: [
-        "🧙‍♂️ «Три раза! Три! Считай, если умеешь. Один, два, три! Во!»",
-        "🧙‍♂️ «Огр — сила! А два огра — три силы! Не понял? Сам не понял, но звучит круто!»",
-        "🧙‍♂️ «Где твоя мана? А у нас есть! Потому что мы умные. Ну, умнее тебя точно.»",
-        "🧙‍♂️ «Это не повезло, это мастерство. Мастерство быть везучим! Ха-ха!»",
-        "🧙‍♂️ «Мы говорили, что мы великие? Нет? Ну, теперь говорим. МЫ ВЕЛИКИЕ!»"
-    ],
-    4: [
-        "🧙‍♂️ «Четыре! Четыре раза, дурак! Наша дубина магии круче твоего посоха!»",
-        "🧙‍♂️ «Кто тут главный волшебник? Я! А я? И я! Мы оба! А ты кто? Никто!»",
-        "🧙‍♂️ «Дружба победила! Потому что две головы думают, а одна даже не знает, где уши.»",
-        "🧙‍♂️ «Мы сейчас так ударим, что у тебя мана кончится ещё до того, как мы начали!»",
-        "🧙‍♂️ «Это называется мультикаст. Запомни слово. Повтори. Не смог? То-то же!»"
-    ]
-}
-
-ZEUS_TEXTS = [
-    "⚡ Zeus <i>«Небеса рассвирепели!»</i>",
-    "⚡ Zeus <i>«Вы чувствовали это?»</i>",
-    "⚡ Zeus <i>«Ничто не укроется от моего гнева!»</i>",
-    "⚡ Zeus <i>«Я — молния, что разрывает небеса!»</i>",
-    "⚡ Zeus <i>«Гром и молния! Всё кончено!»</i>",
-    "⚡ Zeus <i>«Каждый из вас будет поражён!»</i>",
-    "⚡ Zeus <i>«Небесный гнев падёт на всех!»</i>",
-]
-
-
-SLOT_SYMBOLS = ["🍒", "🍋", "🍇", "💎", "🔥", "⚡", "7️⃣", "🎰"]
-
-
-def slot_animation(level):
-    """Генерирует слот-анимацию: 3 одинаковых = переход на уровень"""
-    symbol = random.choice(SLOT_SYMBOLS)
-    return f"🎰 {symbol}{symbol}{symbol}"
-
-
-async def send_multicast_anim(chat_id, display_username, level, bot, is_test=False):
-    """Анимация мультикаста с слот-машиной"""
-    prefix = "🧪 ТЕСТ\n" if is_test else ""
-    slot_text = slot_animation(level)
-    return await bot.send_message(
-        chat_id=chat_id,
-        text=f"🎲 {display_username}\n\n{prefix}{slot_text}\n👹⚡ Мультикаст ×{level}!",
-        parse_mode="HTML"
-    )
-
-
-async def edit_multicast_anim(anim_msg, display_username, level, is_test=False):
-    """Редактирование анимации мультикаста"""
-    prefix = "🧪 ТЕСТ\n" if is_test else ""
-    slot_text = slot_animation(level)
-    try:
-        await anim_msg.edit_text(
-            f"🎲 {display_username}\n\n{prefix}{slot_text}\n👹⚡ Мультикаст ×{level}!",
-            parse_mode="HTML"
-        )
-    except Exception:
-        pass
-
-
-def check_multicast(fissure_size):
-    """
-    Каскадный мультикаст (генератор).
-    Вызывается ТОЛЬКО когда мультикаст уже выбран.
-    Yields: (step_number, extra_roll) на каждом шаге каскада.
-    """
-    for i, chance in enumerate(MULTICAST_CASCADE):
-        if random.random() < chance:
-            extra_roll, _, is_fatal, _ = calculate_fissure_roll(fissure_size)
-            if not is_fatal:
-                yield i + 2, extra_roll
-        else:
-            break
 
 
 async def fetch_hero_icon(url, session=None, size=96):
@@ -1759,39 +1166,6 @@ async def fetch_hero_icon(url, session=None, size=96):
     return None
 
 
-def main_menu():
-    keyboard = [
-        [KeyboardButton("🎲 Ролл Фиссуры"), KeyboardButton("👤 Профиль")],
-        [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
-        [KeyboardButton("🔑 Привязать Аккаунт"), KeyboardButton("🔎 Аналитика")],
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
-
-
-def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: set = None) -> InlineKeyboardMarkup:
-    """Build inline keyboard for analytics pagination."""
-    rows = []
-    page_buttons = []
-    labels = ["🆚 С ПРО", "🔍 Детально"]
-    for i in range(total_pages):
-        label = f"⏳ {labels[i]}" if generated and i not in generated else labels[i]
-        if i == page_idx:
-            page_buttons.append(InlineKeyboardButton(f"✅ {label}", callback_data=f"analytics_page_{i}"))
-        else:
-            page_buttons.append(InlineKeyboardButton(label, callback_data=f"analytics_page_{i}"))
-    rows.append(page_buttons)
-    return InlineKeyboardMarkup(rows)
-
-
-def _build_stats_button_keyboard() -> InlineKeyboardMarkup:
-    """Build inline keyboard with single 'Сравнить с Pro 🧠' button under chart."""
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Сравнить c Pro🆚", callback_data="analytics_show")]])
-
-
-def format_time(seconds):
-    h = seconds // 3600
-    m = (seconds % 3600) // 60
-    return f"{int(h)}ч {int(m)}м"
 
 
 DEFAULT_AVATAR_URL = "https://i.ibb.co/nMSN7mHM/photo-2025-12-29-00-02-39.jpg"
