@@ -1975,8 +1975,9 @@ def get_fissure_top(limit=10):
     db = Database()
     result = db.get_fissure_top(limit)
     
-    # Сохраняем в кеш
-    top_cache.set(cache_key, result)
+    # Сохраняем в кеш только непустой результат (иначе пустой [] будет жить вечно)
+    if result:
+        top_cache.set(cache_key, result)
     
     return result
 
@@ -2488,12 +2489,13 @@ def get_dota_mmr_top(limit=10):
                     "week_games": u[6], "week_wins": u[7],
 "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11]} for u in users]
 
-            # Сохранить в кеш config
-            try:
-                set_config('mmr_top_cache', json.dumps(result))
-                logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
-            except Exception as e:
-                logger.warning(f"Failed to save MMR top cache: {e}")
+            # Сохранить в кеш config только если есть данные
+            if result:
+                try:
+                    set_config('mmr_top_cache', json.dumps(result))
+                    logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
+                except Exception as e:
+                    logger.warning(f"Failed to save MMR top cache: {e}")
 
             return result
         else:
@@ -2519,14 +2521,13 @@ def get_dota_mmr_top(limit=10):
                     "week_games": u[6], "week_wins": u[7],
                     "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11]} for u in users]
 
-            # Сохранить в кеш config
-            try:
-                set_config('mmr_top_cache', json.dumps(result))
-                logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
-            except Exception as e:
-                logger.warning(f"Failed to save MMR top cache: {e}")
-
-            return result
+            # Сохранить в кеш config только если есть данные
+            if result:
+                try:
+                    set_config('mmr_top_cache', json.dumps(result))
+                    logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
+                except Exception as e:
+                    logger.warning(f"Failed to save MMR top cache: {e}")
 
             return result
     except Exception as e:
