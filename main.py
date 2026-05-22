@@ -864,6 +864,14 @@ async def update_all_mmr_job(context):
         from database import update_dota_week_top_cache
         update_dota_week_top_cache()
 
+        # Refresh Dota digest cache so the 15-second fast rotation
+        # can reliably flip between Fissure and fresh Dota content.
+        try:
+            from digest import refresh_dota_digest_cache
+            refresh_dota_digest_cache()
+        except Exception as e:
+            logger.warning(f"Could not refresh Dota digest cache from MMR job: {e}")
+
         logger.info(f"MMR обновлён для {success_count}/{len(users)} пользователей")
 
         # Получаем digest_chat_id из конфига

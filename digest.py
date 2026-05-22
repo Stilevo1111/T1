@@ -70,6 +70,21 @@ HERO_META_REFRESH_INTERVAL = 3600
 # Only the current leader runs this background task.
 # =====================================================
 
+
+def refresh_dota_digest_cache():
+    """Refreshes Dota digest data in _digest_state.
+    Called from the hourly MMR job so the 15-second fast rotation
+    always has fresh data to flip between Fissure and Dota.
+    """
+    try:
+        from database import get_dota_week_top
+        dota_top = get_dota_week_top(limit=10)
+        _digest_state["dota_data"] = dota_top
+        _digest_state["last_data_refresh"] = time.time()
+        logger.info("Dota digest cache refreshed from MMR job (fast 15s rotation now has fresh data)")
+    except Exception as e:
+        logger.warning(f"Failed to refresh Dota digest cache: {e}")
+
 _fast_tick_task: asyncio.Task | None = None
 _fast_tick_chat_id: int | None = None
 _fast_tick_message_id: int | None = None
