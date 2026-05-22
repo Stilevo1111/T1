@@ -629,7 +629,7 @@ async def alternate_digest_job(context):
                 # Данные обновляются отдельным job'ом раз в час + при старте контейнера.
                 # Здесь просто читаем из кеша (get_dota_week_top почти никогда не будет делать тяжёлый SQL,
                 # потому что кеш поддерживается часовым job'ом).
-                mmr_top = get_dota_week_top(limit=10)
+                    mmr_top = get_dota_week_top(limit=30)
                 _digest_state["dota_data"] = mmr_top
                 
                 dota_text = None
@@ -643,22 +643,18 @@ async def alternate_digest_job(context):
                         logger.info("Нет игроков с 3+ играми для Dota дайджеста")
                         next_type = "0"
                     else:
-                        valid_players_sorted = sorted(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)), reverse=True)
-                        
-                        if len(valid_players_sorted) >= 2:
-                            top_by_net = valid_players_sorted[0]
-                            for p in reversed(valid_players_sorted):
-                                if p.get('telegram_id') != top_by_net.get('telegram_id'):
-                                    bottom_by_net = p
-                                    break
-                            else:
-                                bottom_by_net = valid_players_sorted[-1]
-                        elif len(valid_players_sorted) == 1:
-                            top_by_net = valid_players_sorted[0]
-                            bottom_by_net = valid_players_sorted[0]
-                        else:
-                            top_by_net = None
-                            bottom_by_net = None
+                        # Top = best by net (2*wins - games)
+                        top_by_net = max(
+                            valid_players,
+                            key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0))
+                        )
+
+                        # Bottom = worst = opposite of best formula (lowest net)
+                        # When nets equal — more games = "worse" (more impressive bad performance)
+                        bottom_by_net = min(
+                            valid_players,
+                            key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), -p.get('week_games', 0))
+                        )
                         
                         if top_by_net:
                             top_player = top_by_net.get('steam_nickname', 'None')
