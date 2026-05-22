@@ -11,6 +11,7 @@ import traceback
 import urllib.parse as urlparse
 import hashlib
 from datetime import timezone, timedelta
+from collections import deque
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.request import HTTPXRequest
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
@@ -48,6 +49,10 @@ else:
 _user_fissure_processing = {}  # Request lock: user_id -> timestamp (for fissure processing)
 _USER_START_COOLDOWN = {}  # Spam protection for /start: user_id -> timestamp
 _START_COOLDOWN = 5  # 5 seconds cooldown for /start command
+
+# In-memory ring buffer for last fissure rolls (for website /api/recent-rolls)
+# Zero DB writes — pure RAM, maxlen 50
+recent_fissure_rolls = deque(maxlen=50)
 
 # Digest state and logic are now fully centralized in digest.py
 # (leader election + single active instance on Render).
@@ -1853,6 +1858,29 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         schedule_delete(context.bot, chat.id, msg.message_id, 30, context.application.job_queue)
 
 
+def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_fissure: float, cascade: int = 1):
+    """Append one fissure roll event to the in-memory ring buffer (no DB write)."""
+    recent_fissure_rolls.append({
+        "ts": time.time(),
+        "user_id": user_id,
+        "username": (username or "unknown")[:25],
+        "growth": round(growth, 1),
+        "fissure": round(new_fissure, 1),
+        "cascade": cascade
+    })
+
+
+async def recent_rolls_handler(request):
+    """Public API: returns last 50 fissure rolls as JSON (for the website widget)."""
+    import json
+    data = list(recent_fissure_rolls)  # snapshot
+    resp = web.Response(text=json.dumps(data, ensure_ascii=False), content_type="application/json")
+    resp.headers['Access-Control-Allow-Origin'] = '*'          # Разрешаем запросы с сайта
+    resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return resp
+
+
 @rate_limit(tokens=1)
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Increase fissure"""
@@ -2111,6 +2139,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         base_fissure = max(0.1, base_fissure)
         new_fissure = calculate_new_fissure(base_fissure, roll)
         growth = new_fissure - old_fissure
+
+        # Record for website live feed (in-memory only, zero DB cost)
+        record_recent_fissure_roll(user_obj.id, username, growth, new_fissure, cascade_count)
 
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
 
@@ -2549,6 +2580,9 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += f"\n<b>{get_emoji_num(user_rank)} {clickable_username}: {user_fissure:.1f} см</b>"
             else:
                 text += f"\n<b>— {clickable_username}: {user_fissure:.1f} см</b>"
+
+            # Ссылка на live логи фиссур внизу топа
+            text += "\n\n<a href=\"https://seredin999.onrender.com/fissure-logs\">📜 Логи</a>"
 
         # Add banner and send
         top_banner_url = "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
@@ -3447,6 +3481,7 @@ async def main():
             web_app = web.Application()
             web_app.router.add_get('/', health_handler)
             web_app.router.add_get('/health', health_handler)
+            web_app.router.add_get('/api/recent-rolls', recent_rolls_handler)
             runner = web.AppRunner(web_app)
             await runner.setup()
             port = int(os.getenv('PORT', 10000))
@@ -3506,6 +3541,7 @@ async def main():
             web_app.router.add_get('/', lambda r: web.Response(text="OK"))
             setup_health_check(app.bot)
             web_app.router.add_get('/health', health_check_handler)
+            web_app.router.add_get('/api/recent-rolls', recent_rolls_handler)
 
             runner = web.AppRunner(web_app, keepalive_timeout=120, client_max_size=10*1024*1024)
             await runner.setup()
