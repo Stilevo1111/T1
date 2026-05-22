@@ -629,7 +629,7 @@ async def alternate_digest_job(context):
                 # Данные обновляются отдельным job'ом раз в час + при старте контейнера.
                 # Здесь просто читаем из кеша (get_dota_week_top почти никогда не будет делать тяжёлый SQL,
                 # потому что кеш поддерживается часовым job'ом).
-                    mmr_top = get_dota_week_top(limit=30)
+                mmr_top = get_dota_week_top(limit=30)
                 _digest_state["dota_data"] = mmr_top
                 
                 dota_text = None
