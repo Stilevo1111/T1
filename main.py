@@ -777,9 +777,52 @@ async def announce_weekly_mmr_winner(bot):
 
 
 @rate_limit(tokens=1)
+async def claim_or_check_mmr_leader():
+    """Leader election for hourly MMR job (prevents duplicate heavy work when 2+ Render instances run the same bot)."""
+    instance_id = os.getenv("RENDER_INSTANCE_ID") or f"local_{os.getpid()}"
+    now = time.time()
+    LEADER_TIMEOUT = 180  # 3 minutes is enough for hourly job
+
+    current_leader = None
+    last_seen = 0.0
+
+    try:
+        current_leader = get_config('mmr_leader_id')
+        last_seen_str = get_config('mmr_leader_last_seen')
+        last_seen = float(last_seen_str) if last_seen_str else 0
+    except Exception:
+        pass
+
+    is_leader = False
+
+    if current_leader == instance_id:
+        is_leader = True
+    elif not current_leader or (now - last_seen > LEADER_TIMEOUT):
+        try:
+            set_config('mmr_leader_id', instance_id)
+            set_config('mmr_leader_last_seen', str(now))
+            logger.warning(f"MMR: ЗАХВАТИЛ ЛИДЕРСТВО (instance={instance_id})")
+            is_leader = True
+        except Exception as e:
+            logger.error(f"MMR: failed to claim leadership: {e}")
+    else:
+        logger.info(f"MMR job: пропуск (лидер = {current_leader}, я = {instance_id})")
+
+    if is_leader:
+        try:
+            set_config('mmr_leader_last_seen', str(now))
+        except Exception:
+            pass
+
+    return is_leader
+
+
 async def update_all_mmr_job(context):
     """Ежечасовое обновление MMR всех пользователей с привязанным Steam (только в кеш)"""
     try:
+        if not await claim_or_check_mmr_leader():
+            return
+
         logger.info("Запуск ежечасного обновления MMR")
         from database import get_all_users_with_steam, user_cache
 
@@ -789,25 +832,37 @@ async def update_all_mmr_job(context):
             logger.info("Нет пользователей с привязанным Steam для обновления MMR")
             return
 
-        logger.info(f"Обновление MMR для {len(users)} пользователей")
+        logger.info(f"Обновление MMR для {len(users)} пользователей (leader)")
         success_count = 0
         rank_up_users = []  # собираем для уведомлений
 
-        for user in users:
-            try:
-                # Run blocking update_user_mmr in thread pool to avoid blocking event loop
-                result = await asyncio.to_thread(update_user_mmr, user['telegram_id'])
-                if result and result.get('success'):
-                    success_count += 1
-                    logger.info(f"MMR updated for {user['telegram_id']}: {result.get('mmr')} MMR")
+        # === BATCHED + PAUSED to spread Neon/OpenDota load ===
+        MMR_BATCH_SIZE = 25
+        MMR_BATCH_PAUSE = 10  # seconds between batches
 
-                    if result.get('rank_up'):
-                        fresh_user = get_user(user['telegram_id']) or user
-                        rank_up_users.append((fresh_user, result['rank_up']))
-            except Exception as e:
-                logger.error(f"Ошибка обновления MMR для {user['telegram_id']}: {e}")
+        for i in range(0, len(users), MMR_BATCH_SIZE):
+            batch = users[i : i + MMR_BATCH_SIZE]
+            for user in batch:
+                try:
+                    # Pass update_top_cache=False so we rebuild the top cache ONLY ONCE after the full loop
+                    result = await asyncio.to_thread(
+                        update_user_mmr, user['telegram_id'], update_top_cache=False
+                    )
+                    if result and result.get('success'):
+                        success_count += 1
+                        logger.info(f"MMR updated for {user['telegram_id']}: {result.get('mmr')} MMR")
 
-        # Обновляем кеш топа MMR (только в памяти, без записи в БД)
+                        if result.get('rank_up'):
+                            fresh_user = get_user(user['telegram_id']) or user
+                            rank_up_users.append((fresh_user, result['rank_up']))
+                except Exception as e:
+                    logger.error(f"Ошибка обновления MMR для {user['telegram_id']}: {e}")
+
+            if i + MMR_BATCH_SIZE < len(users):
+                logger.info(f"MMR batch done ({i + len(batch)}/{len(users)}), sleeping {MMR_BATCH_PAUSE}s to spread load")
+                await asyncio.sleep(MMR_BATCH_PAUSE)
+
+        # Обновляем кеш топа MMR РОВНО ОДИН РАЗ после всех пользователей (не 150 раз из update_user_fields_batch)
         from database import update_dota_week_top_cache
         update_dota_week_top_cache()
 

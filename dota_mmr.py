@@ -1167,11 +1167,17 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
 # 🔄 UPDATE MMR
 # ========================
 
-def update_user_mmr(telegram_id: int) -> dict:
+def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
     try:
         user = get_user(telegram_id)
         if not user or not user.get("steam_id"):
             return {"success": False, "rank_up": None}
+
+        # Simple per-process cache: skip heavy work if we updated this user recently (helps on restart + repeated calls)
+        last_updated = user.get('mmr_last_updated')
+        if last_updated and isinstance(last_updated, (int, float)):
+            if time.time() - last_updated < 4 * 3600:  # 4 hours
+                return {"success": True, "rank_up": None}
 
         logger.info(f"topmmr: calling get_player_stats for steam_id={user['steam_id']}")
         stats = get_player_stats(user["steam_id"], use_cache=False)
@@ -1285,6 +1291,7 @@ def update_user_mmr(telegram_id: int) -> dict:
         logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_streak={max_streak}, week_start={week_start_utc}")
         
         # Обновляем ВСЕ поля одним запросом
+        # Pass update_top_cache so the caller (MMR job) can force exactly ONE rebuild after the whole batch
         update_user_fields_batch(telegram_id, {
             "week_games": week_games,
             "week_wins": week_wins,
@@ -1296,8 +1303,9 @@ def update_user_mmr(telegram_id: int) -> dict:
             "losses": stats.get("losses", 0),
             "mmr": stats["mmr"],
             "avatar": stats.get("avatar"),
-            "steam_nickname": stats.get("nickname")
-        })
+            "steam_nickname": stats.get("nickname"),
+            "mmr_last_updated": time.time()
+        }, update_top_cache=update_top_cache)
 
         return {"success": True, "rank_up": rank_up}
 

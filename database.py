@@ -361,6 +361,7 @@ _PG_ENSURE_COLUMNS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_top2_count INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_top3_count INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr_last_updated REAL",
 )
 
 
@@ -2054,8 +2055,10 @@ def update_user_field(telegram_id, field, value):
     return False
 
 
-def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = True):
-    """Массовое обновление полей - обновление кеша + опционально БД"""
+def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = True, update_top_cache: bool = True):
+    """Массовое обновление полей - обновление кеша + опционально БД.
+    update_top_cache=False allows the caller (MMR job) to do exactly one rebuild after the full loop.
+    """
     # Validate telegram_id is not SteamID64
     if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
         logger.warning(f"update_user_fields_batch: invalid telegram_id={telegram_id}, skipping")
@@ -2076,9 +2079,9 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
     if save_to_db:
         _save_user_to_db_immediately(telegram_id, user)
     
-    # Обновляем кеш топа MMR только 1 раз
+    # Обновляем кеш топа MMR только если caller разрешил (MMR job делает это один раз после всего цикла)
     dota_fields = ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname', 'steam_id']
-    if any(f in dota_fields for f in fields):
+    if update_top_cache and any(f in dota_fields for f in fields):
         update_dota_week_top_cache()
     
     # Сбрасываем кеш топа недели при новом steam_id
@@ -2111,6 +2114,7 @@ def _save_user_to_db_immediately(telegram_id, user_data):
                 week_best_streak = {placeholders}, week_current_streak = {placeholders}, dota_total_games = {placeholders},
                 dota_wins = {placeholders}, last_dota_games = {placeholders}, last_dota_wins = {placeholders},
                 wins = {placeholders}, losses = {placeholders}, week_start_date = {placeholders},
+                mmr_last_updated = {placeholders},
                 message_count = {placeholders},
                 weekly_mvp_count = {placeholders}, weekly_top2_count = {placeholders}, weekly_top3_count = {placeholders}
             WHERE telegram_id = {placeholders}
@@ -2132,6 +2136,7 @@ def _save_user_to_db_immediately(telegram_id, user_data):
             user_data.get('wins', 0),
             user_data.get('losses', 0),
             user_data.get('week_start_date'),
+            user_data.get('mmr_last_updated'),
             user_data.get('message_count', 0),
             user_data.get('weekly_mvp_count', 0),
             user_data.get('weekly_top2_count', 0),
@@ -3122,10 +3127,10 @@ def get_all_users_with_steam():
                 SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
                        total_growth, total_rolls, best_streak, current_streak,
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
-                       week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
-                       message_count, avatar
-                FROM users 
-                WHERE steam_id IS NOT NULL AND in_chat = TRUE
+                        week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
+                        message_count, avatar, mmr_last_updated
+                 FROM users 
+                 WHERE steam_id IS NOT NULL AND in_chat = TRUE
             """)
             users = cursor.fetchall()
             cursor.close()
@@ -3136,17 +3141,18 @@ def get_all_users_with_steam():
                 "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
                 "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
                 "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18], "last_dota_games": u[19],
-                "last_dota_wins": u[20], "message_count": u[21], "avatar": u[22]
+                "last_dota_wins": u[20], "message_count": u[21], "avatar": u[22],
+                "mmr_last_updated": u[23]
             } for u in users]
         else:
             cursor.execute("""
                 SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
                        total_growth, total_rolls, best_streak, current_streak,
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
-                       week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
-                       message_count, avatar
-                FROM users 
-                WHERE steam_id IS NOT NULL AND (in_chat = 1 OR in_chat IS NULL)
+                        week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
+                        message_count, avatar, mmr_last_updated
+                 FROM users 
+                 WHERE steam_id IS NOT NULL AND (in_chat = 1 OR in_chat IS NULL)
             """)
             users = cursor.fetchall()
             cursor.close()
@@ -3158,7 +3164,8 @@ def get_all_users_with_steam():
                 "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
                 "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18], "last_dota_games": u[19],
                 "last_dota_wins": u[20], "message_count": u[21] if len(u) > 21 else 0,
-                "avatar": u[22] if len(u) > 22 else None
+                "avatar": u[22] if len(u) > 22 else None,
+                "mmr_last_updated": u[23] if len(u) > 23 else None
             } for u in users]
     except Exception as e:
         logger.error(f"Error get_all_users_with_steam: {e}")
