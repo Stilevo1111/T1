@@ -183,24 +183,32 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         if len(valid_players) < 2:
             return None
 
-        valid_players_sorted = sorted(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)), reverse=True)
+        # Top = best by net (2*wins - games)
+        top_by_net = max(
+            valid_players,
+            key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0))
+        )
 
-        if len(valid_players_sorted) >= 2:
-            top_by_net = valid_players_sorted[0]
-            for p in reversed(valid_players_sorted):
-                if p.get('telegram_id') != top_by_net.get('telegram_id'):
-                    bottom_by_net = p
-                    break
-            else:
-                bottom_by_net = valid_players_sorted[-1]
+        # Bottom = worst = opposite (lowest net)
+        bottom_by_net = min(
+            valid_players,
+            key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), -p.get('week_games', 0))
+        )
 
-            top_name = make_clickable(top_by_net.get('steam_nickname') or top_by_net.get('username'), top_by_net.get('telegram_id'))
-            bottom_name = make_clickable(bottom_by_net.get('steam_nickname') or bottom_by_net.get('username'), bottom_by_net.get('telegram_id'))
+        top_name = make_clickable(top_by_net.get('steam_nickname') or top_by_net.get('username'), top_by_net.get('telegram_id'))
+        bottom_name = make_clickable(bottom_by_net.get('steam_nickname') or bottom_by_net.get('username'), bottom_by_net.get('telegram_id'))
 
-            top_wr = round((top_by_net.get('week_wins', 0) / top_by_net.get('week_games', 1)) * 100, 1) if top_by_net.get('week_games') else 0
-            bottom_wr = round((bottom_by_net.get('week_wins', 0) / bottom_by_net.get('week_games', 1)) * 100, 1) if bottom_by_net.get('week_games') else 0
+        top_games = top_by_net.get('week_games', 0)
+        top_wins = top_by_net.get('week_wins', 0)
+        top_losses = top_games - top_wins
+        top_wr = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
 
-            return f"<b>🔺{top_name}: {top_by_net.get('week_wins', 0)}W/{top_by_net.get('week_games', 0)}L ≈{top_wr}%\n🔻{bottom_name}: {bottom_by_net.get('week_wins', 0)}W/{bottom_by_net.get('week_games', 0)}L ≈{bottom_wr}%</b>\n\n🎮 Dota дайджест."
+        bottom_games = bottom_by_net.get('week_games', 0)
+        bottom_wins = bottom_by_net.get('week_wins', 0)
+        bottom_losses = bottom_games - bottom_wins
+        bottom_wr = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
+
+        return f"<b>🔺{top_name}: {top_wins}W/{top_losses}L ≈{top_wr}%\n🔻{bottom_name}: {bottom_wins}W/{bottom_losses}L ≈{bottom_wr}%</b>\n\n🎮 Dota дайджест."
 
     return None
 
