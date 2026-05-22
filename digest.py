@@ -324,7 +324,7 @@ def get_digest_data_hash():
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов (редактирование существующего, создание нового только при необходимости)"""
     from main import is_rate_limited, make_clickable, bot_can_delete
-    from database import get_config, set_config, get_digest_stats, get_dota_week_top
+    from database import get_config, set_config, get_digest_stats, get_dota_week_top, update_digest_snapshot, user_cache
     try:
         now = time.time()
         
@@ -586,6 +586,26 @@ async def alternate_digest_job(context):
             
             if current_type == "0":
                 # Фиссур-дайджест
+
+                # === ЕЖЕДНЕВНЫЙ СБРОС SNAPSHOT ===
+                # Чтобы в дайджесте каждый день могли появляться новые лидеры роста/падения,
+                # раз в календарный день мы копируем текущую fissure в digest_fissure.
+                from datetime import date
+                today = date.today().isoformat()
+                last_snapshot = get_config('last_fissure_digest_snapshot')
+
+                if last_snapshot != today:
+                    logger.info(f"Новый день ({today}) — обновляем digest_fissure snapshot для расчёта суточного роста")
+                    update_digest_snapshot()
+                    user_cache.set('digest_stats', None)      # сбрасываем кеш в database.py
+                    _digest_state["digest_data"] = None       # сбрасываем локальный кеш дайджеста
+                    set_config('last_fissure_digest_snapshot', today)
+
+                    # Чистим fallback-значения прошлых победителей, чтобы они не "залипали"
+                    set_config('last_top_growth', None)
+                    set_config('last_top_drop', None)
+                    set_config('last_top_streak', None)
+
                 # Проверяем, нужно ли обновить данные из БД
                 if _digest_state.get("digest_data") is None or now - _digest_state.get("last_data_refresh", 0) > _data_refresh_interval:
                     logger.info("Обновляем данные для фиссур-дайджеста из БД")
