@@ -1088,12 +1088,7 @@ from bot_utils import (
     delete_message_job,
     ManualContext,
 )
-from stats import (
-    get_event_chances,
-    increment_stat,
-    flush_stat_buffer,
-    get_event_stats_text,
-)
+from stats import get_event_chances
 from constants import (
     COOLDOWN,
     COOLDOWN_BANNER_URL,
@@ -1874,13 +1869,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Один рандом: что выпало?
         event_roll = random.random()
         multicast_chance, zeus_chance = get_event_chances()
-        increment_stat("rolls")
         anim_msg = None
 
         if event_roll < zeus_chance:
-            # ⚡ ЗЕВС — отдельное событие, без ролла
+            # ⚡ ЗЕВС — отдельное событие，без ролла
             zeus_triggered = True
-            increment_stat("zeus")
             affected = zeus_strike()
 
             # Фиссура пользователя не меняется (Зевс бьёт всех, но не даёт ролл)
@@ -1909,7 +1902,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
             schedule_delete(context.bot, chat_id, result_msg.message_id, 600, context.application.job_queue)
-            update_last_message_id(user_obj.id, result_msg.message_id)
+            # Записываем только last_message_id (фиссура не изменилась)
+            update_fissure(user_obj.id, user["fissure"], now, 0, last_message_id=result_msg.message_id)
 
             # Small delay to ensure Zeus message is visible
             await asyncio.sleep(0.1)
@@ -1999,13 +1993,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             original_roll = roll
             roll = roll * cascade_count
             logger.info(f"fissure multicast: roll after multiply={roll}, cascade_count={cascade_count}")
-            increment_stat("multicast")
             if cascade_count >= 4:
-                increment_stat("multicast_x4")
+                pass  # multicast_x4
             elif cascade_count >= 3:
-                increment_stat("multicast_x3")
+                pass  # multicast_x3
             elif cascade_count >= 2:
-                increment_stat("multicast_x2")
+                pass  # multicast_x2
             if cascade_count > 1:
                 multicast_text = f"\n{random.choice(MULTICAST_TEXTS[cascade_count])}"
 
@@ -2057,7 +2050,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         base_fissure = max(0.1, base_fissure)
         new_fissure = calculate_new_fissure(base_fissure, roll)
         growth = new_fissure - old_fissure
-        update_fissure(user_obj.id, new_fissure, now, growth)
 
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
 
@@ -2166,9 +2158,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for msg_id in slot_msg_ids:
                 schedule_delete(context.bot, chat_id, msg_id, 30, context.application.job_queue)
 
-        update_last_message_id(user_obj.id, result_msg.message_id)
-
-        await flush_stat_buffer()
+        # Сохраняем fissure + last_message_id одним запросом
+        update_fissure(user_obj.id, new_fissure, now, growth, last_message_id=result_msg.message_id)
 
     except Exception as e:
         tb = traceback.format_exc()

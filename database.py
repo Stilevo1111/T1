@@ -1789,8 +1789,8 @@ def get_user_by_steam_id(steam_id: int):
     return None
 
 
-def update_fissure(telegram_id, fissure, last_fissure, growth=0):
-    """Обновление fissure - сразу пишем в БД"""
+def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id=None):
+    """Обновление fissure + optionally last_message_id in one query"""
     logger.info(f"update_fissure called: telegram_id={telegram_id}, fissure={fissure}, last_fissure={last_fissure}, growth={growth}")
     user = get_user(telegram_id)
     
@@ -1832,10 +1832,11 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
                 current_lose_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END,
                 current_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
                 best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END),
-                best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END)
+                best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END),
+                last_message_id = COALESCE(%s, last_message_id)
                 WHERE telegram_id=%s
             """
-            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, win, win, lose, telegram_id))
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, win, win, lose, last_message_id, telegram_id))
         else:
             query = """
                 UPDATE users SET fissure=?, last_fissure=?, 
@@ -1848,10 +1849,11 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0):
                 current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
                 current_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
                 best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END),
-                best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END)
+                best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END),
+                last_message_id = COALESCE(?, last_message_id)
                 WHERE telegram_id=?
             """
-            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, win, win, lose, telegram_id))
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, win, win, lose, last_message_id, telegram_id))
         logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
         
         # Сбрасываем кеши дайджестов при изменении fissure
@@ -2151,85 +2153,37 @@ def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
     return result
 
 def zeus_strike(percent=0.05):
-    """Удар Зевса: уменьшить fissure ВСЕХ игроков на percent (5% = 0.05). Минимум 0.1 см."""
+    """Удар Зевса: уменьшить fissure ВСЕХ игроков на percent (батчевая версия)."""
     db = Database()
-    url = urlparse.urlparse(DATABASE_URL)
-    scheme = url.scheme
+    scheme = get_db_type()
     
-    # Progressive penalty: smaller players lose more percentage
-    # This makes Zeus strike fairer
-    logger.info(f"zeus_strike: starting with percent={percent}")
-    affected = 0
+    logger.info(f"zeus_strike (batched): percent={percent}")
     
     try:
         if "postgres" in scheme:
-            # Get all users with their fissure values
-            query = "SELECT telegram_id, fissure FROM users WHERE fissure > 0.1"
-            rows = db.execute_query(query, fetch="all")
-            
-            affected = len(rows) if rows else 0
-            
-            # Update each user with progressive penalty
-            for row in rows:
-                telegram_id = row['telegram_id'] if isinstance(row, dict) else row[0]
-                fissure = float(row['fissure']) if isinstance(row, dict) else float(row[1])
-                
-                # Progressive penalty based on fissure size
-                if fissure < 10:
-                    user_multiplier = 1.0 - (percent * 2)  # 2x penalty for small fissures
-                elif fissure < 50:
-                    user_multiplier = 1.0 - (percent * 1.5)  # 1.5x penalty for medium
-                else:
-                    user_multiplier = 1.0 - percent  # Normal penalty for large
-                
-                user_multiplier = max(0.85, user_multiplier)  # Cap at 15% minimum
-                new_fissure = max(0.1, fissure * user_multiplier)
-                
-                update_query = "UPDATE users SET fissure = %s WHERE telegram_id = %s"
-                db.execute_query(update_query, (new_fissure, telegram_id))
-                
-                # Update cache
-                cached = user_cache.get(telegram_id)
-                if cached and isinstance(cached, dict):
-                    cached['fissure'] = new_fissure
-                    user_cache.set(telegram_id, cached)
+            query = """
+                UPDATE users 
+                SET fissure = GREATEST(0.1, fissure * (1 - %s))
+                WHERE fissure > 0.1
+            """
+            affected = db.execute_query(query, (percent,))
         else:
-            # SQLite version
-            query = "SELECT telegram_id, fissure FROM users WHERE fissure > 0.1"
-            rows = db.execute_query(query, fetch="all")
-            
-            affected = len(rows) if rows else 0
-            
-            for row in rows:
-                telegram_id = row[0]
-                fissure = float(row[1])
-                
-                # Progressive penalty
-                if fissure < 10:
-                    user_multiplier = 1.0 - (percent * 2)
-                elif fissure < 50:
-                    user_multiplier = 1.0 - (percent * 1.5)
-                else:
-                    user_multiplier = 1.0 - percent
-                
-                user_multiplier = max(0.85, user_multiplier)
-                new_fissure = max(0.1, fissure * user_multiplier)
-                
-                update_query = "UPDATE users SET fissure = ? WHERE telegram_id = ?"
-                db.execute_query(update_query, (new_fissure, telegram_id))
-                
-                cached = user_cache.get(telegram_id)
-                if cached and isinstance(cached, dict):
-                    cached['fissure'] = new_fissure
-                    user_cache.set(telegram_id, cached)
+            query = """
+                UPDATE users 
+                SET fissure = MAX(0.1, fissure * (1 - ?))
+                WHERE fissure > 0.1
+            """
+            affected = db.execute_query(query, (percent,))
         
+        # Очищаем кеши
+        user_cache.clear()
         top_cache.clear()
-        user_cache.set('digest_stats', None)
-        logger.info(f"Zeus strike: {affected} users affected, progressive penalty applied")
-        return affected
+        
+        return affected or 0
+        
     except Exception as e:
-        logger.error(f"Zeus strike error: {e}")
-        return affected  # Return affected count even on error, not 0
+        logger.error(f"zeus_strike error: {e}")
+        return 0
 
 def reset_all_fissure_data():
     """Сбрасывает cm,rolls и cooldown для всех пользователей"""
