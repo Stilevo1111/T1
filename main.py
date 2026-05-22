@@ -2582,7 +2582,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += f"\n<b>— {clickable_username}: {user_fissure:.1f} см</b>"
 
             # Ссылка на live логи фиссур внизу топа
-            text += "\n\n<a href=\"https://seredin999.onrender.com/fissure-logs\">📜 Логи</a>"
+            text += "\n\n<b><a href=\"https://seredin999.onrender.com/fissure-logs\">Последние роллы</a></b>"
 
         # Add banner and send
         top_banner_url = "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
