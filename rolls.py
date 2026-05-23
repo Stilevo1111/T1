@@ -200,7 +200,7 @@ def calculate_fissure_roll(current_fissure):
             roll = random.choices(values, weights=weights)[0]
             return roll, "✨ МАКСИМАЛЬНАЯ ПОМОЩЬ!", False, True
 
-        protected_rolls = [0, 1, 3, 5, 10, 20]
+        protected_rolls = [1, 3, 5, 10, 20]
         roll = random.choice(protected_rolls)
         return roll, "🛡 ЗАЩИЩЁННЫЙ РОЛЛ", False, True
 
@@ -223,8 +223,9 @@ def calculate_fissure_roll(current_fissure):
 
     # Единый баланс для всех:
     # Расширенный диапазон: от -15 до +75
+    # Уменьшен шанс выпадения -1 (Зевс) и 0
     weighted_rolls = [
-        (-15, 3), (-10, 5), (-7, 7), (-5, 8), (-3, 7), (-1, 5), (0, 5),
+        (-15, 3), (-10, 5), (-7, 7), (-5, 8), (-3, 7), (-1, 2), (0, 2),
         (1, 5), (3, 7), (5, 8), (7, 7), (10, 8), (15, 6), (20, 5),
         (30, 4), (50, 2), (75, 1)
     ]
