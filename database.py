@@ -342,6 +342,8 @@ _pool_lock = threading.Lock()
 _pool = {}  # db_type -> list of connections
 _max_connections = 50  # Max connections per DB type (оптимизировано для serverless)
 _persistent_pg_conn = None  # одно соединение на процесс — меньше DISCARD ALL на Neon
+_last_pg_conn_check = 0
+_PG_CONN_CHECK_INTERVAL = 90  # секунд — не чаще одного лёгкого пинга в 1.5 минуты (минимальный оверхед)
 
 SCHEMA_VERSION = "20260516v1"
 SCHEMA_VERSION_KEY = "schema_version"
@@ -368,6 +370,21 @@ _PG_ENSURE_COLUMNS = (
 def _ensure_pg_columns(cursor):
     for sql in _PG_ENSURE_COLUMNS:
         cursor.execute(sql)
+
+
+def _reset_persistent_pg_conn(reason: str = ""):
+    """Аккуратно закрывает и обнуляет persistent-соединение при обрывах."""
+    global _persistent_pg_conn, _last_pg_conn_check
+    if _persistent_pg_conn is not None:
+        try:
+            _persistent_pg_conn.close()
+        except Exception:
+            pass
+        _persistent_pg_conn = None
+        _last_pg_conn_check = 0
+        if reason:
+            logger.warning(f"Persistent PostgreSQL connection reset: {reason}")
+
 
 def get_db_type():
     """Получить тип базы данных"""
@@ -408,13 +425,29 @@ def get_connection():
     db_type = get_db_type()
 
     if db_type == "postgresql":
-        global _persistent_pg_conn
+        global _persistent_pg_conn, _last_pg_conn_check
         with _pool_lock:
             if _persistent_pg_conn is None or _persistent_pg_conn.closed:
                 _persistent_pg_conn = psycopg2.connect(**_postgres_connect_kwargs())
                 _persistent_pg_conn.autocommit = True
+                _last_pg_conn_check = time.time()
                 logger.info("PostgreSQL connected (persistent, autocommit=True)")
             else:
+                now = time.time()
+                # Лёгкая проверка живости раз в _PG_CONN_CHECK_INTERVAL (не на каждый запрос!)
+                if now - _last_pg_conn_check > _PG_CONN_CHECK_INTERVAL:
+                    try:
+                        with _persistent_pg_conn.cursor() as cur:
+                            cur.execute("SELECT 1")
+                        _last_pg_conn_check = now
+                    except Exception as e:
+                        _reset_persistent_pg_conn(f"liveness check failed: {e}")
+                        # Пересоздаём сразу
+                        _persistent_pg_conn = psycopg2.connect(**_postgres_connect_kwargs())
+                        _persistent_pg_conn.autocommit = True
+                        _last_pg_conn_check = time.time()
+                        logger.info("PostgreSQL reconnected after failed liveness check")
+
                 try:
                     status = _persistent_pg_conn.get_transaction_status()
                     if status != psycopg2.extensions.TRANSACTION_STATUS_IDLE:
@@ -908,8 +941,14 @@ class Database:
                 conn.commit()
                 return result
             except Exception as e:
+                err_str = str(e).lower()
+                if any(x in err_str for x in ("closed", "ssl", "connection", "server closed", "terminating", "eof", "broken")):
+                    _reset_persistent_pg_conn(f"execute_query postgres error: {e}")
                 logger.error(f"execute_query error: {e}")
-                conn.rollback()
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
                 raise
             finally:
                 release_connection(conn)
@@ -931,8 +970,14 @@ class Database:
                 conn.commit()
                 return result
             except Exception as e:
+                err_str = str(e).lower()
+                if any(x in err_str for x in ("closed", "ssl", "connection", "server closed", "terminating", "eof", "broken")):
+                    _reset_persistent_pg_conn(f"execute_query sqlite error: {e}")
                 logger.error(f"execute_query error: {e}")
-                conn.rollback()
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
                 raise
             finally:
                 release_connection(conn)

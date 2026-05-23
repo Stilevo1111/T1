@@ -3370,8 +3370,12 @@ async def main():
         # Обновление кеша Dota Weekly Top раз в час
         # (для alternate_digest + /topmmr). Позволяет 20-минутному дайджесту
         # брать данные почти без тяжёлых запросов в БД.
+        async def _refresh_dota_week_top_cache(context):
+            """Асинхронная обёртка: тяжёлая синхронная работа уходит в thread."""
+            await asyncio.to_thread(update_dota_week_top_cache)
+
         job_queue.run_repeating(
-            lambda ctx: update_dota_week_top_cache(),
+            _refresh_dota_week_top_cache,
             interval=datetime.timedelta(hours=1),
             first=datetime.datetime.now() + datetime.timedelta(minutes=5)
         )
