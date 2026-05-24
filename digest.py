@@ -851,8 +851,8 @@ async def alternate_digest_job(context):
                                     text=text,
                                     parse_mode="HTML"
                                 )
-                                 _digest_state["is_photo_message"] = False
-                                  set_config('alternate_digest_is_photo', 'false')
+                                _digest_state["is_photo_message"] = False
+                                set_config('alternate_digest_is_photo', 'false')
                             else:
                                 # Was trying to edit text, retry with caption
                                 await bot.edit_message_caption(
@@ -861,8 +861,8 @@ async def alternate_digest_job(context):
                                     caption=text,
                                     parse_mode="HTML"
                                 )
-                                 _digest_state["is_photo_message"] = True
-                                  set_config('alternate_digest_is_photo', 'true')
+                                _digest_state["is_photo_message"] = True
+                                set_config('alternate_digest_is_photo', 'true')
                             logger.info(f"Retry with alternate edit method succeeded for {last_message_id}")
                             edited = True
                             _digest_state["type"] = next_type
