@@ -6,6 +6,15 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
+
+def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
+    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
+    if error is None:
+        return False
+    msg = str(error).lower()
+    return any(p.lower() in msg for p in phrases)
+
+
 # =====================================================
 # DIGEST STATE - encapsulated for multi-instance safety
 # =====================================================
@@ -132,7 +141,7 @@ async def _fast_digest_tick(bot):
                         parse_mode="HTML"
                     )
             except Exception as e:
-                err = str(e).lower()
+                err = _telegram_error_contains(e, "bad request", "there is no text in the message to edit", "there is no caption in the message to edit")
                 if "message to edit not found" in err or "message can't be edited" in err:
                     # Сообщение исчезло — выходим из fast loop, heavy job пересоздаст
                     logger.info("Fast tick: message gone, stopping fast loop")
@@ -820,7 +829,7 @@ async def alternate_digest_job(context):
                 set_config('alternate_digest_message_id', None)
                 last_message_id = None
             except Exception as e:
-                error_str = str(e).lower()
+                error_str = _telegram_error_contains(e, "message to edit not found", "message can't be edited")
                 is_rate_limit = "429" in error_str or "too many requests" in error_str or "retry after" in error_str
                 logger.info(f"Ошибка редактирования: {e}")
                 if is_rate_limit:
@@ -1027,7 +1036,7 @@ async def alternate_digest_job(context):
                                             found = True
                                             break
                                 except Exception as e:
-                                    if "message not found" in str(e).lower() or "message to delete not found" in str(e).lower():
+                                    if _telegram_error_contains(e, "message not found", "message to delete not found"):
                                         logger.debug(f"Сообщение {candidate_id} не найдено, прекращаем поиск")
                                         break
                                     else:
