@@ -137,8 +137,8 @@ def refresh_dota_digest_cache():
     try:
         from database import get_dota_week_top
         dota_top = get_dota_week_top(limit=10)
-        _digest_state["dota_data"] = dota_top
-        _digest_state["last_data_refresh"] = time.time()
+        _digest_state_container.set_dota_data(dota_top)
+        _digest_state_container.mark_data_refreshed()
         logger.info("Dota digest cache refreshed from MMR job (fast 15s rotation now has fresh data)")
     except Exception as e:
         logger.warning(f"Failed to refresh Dota digest cache: {e}")
@@ -445,13 +445,13 @@ async def alternate_digest_job(context):
                 user_cache.set('dota_digest_stats', None)
                 # Очищаем локальный кеш дайджестов
                 _digest_state_container.set_digest_data(None)
-                _digest_state["dota_data"] = None
+                _digest_state_container.set_dota_data(None)
                 _digest_state_container.set_last_data_update(now)
             
             # Получаем ID чата для дайджеста (из кеша, не БД)
             digest_chat_id = _digest_state.get("chat_id") or get_config('digest_chat_id')
             if digest_chat_id:
-                _digest_state["chat_id"] = digest_chat_id
+                _digest_state_container.set_chat_id(digest_chat_id)
             logger.info(f"alternate_digest_job: digest_chat_id = {digest_chat_id}")
             if not digest_chat_id:
                 logger.info("Чат для дайджеста не настроен")
@@ -648,23 +648,10 @@ async def alternate_digest_job(context):
                     current_type = str(raw_type)
                 else:
                     current_type = "0"
-                _digest_state["type"] = current_type
-            
-            # Определяем следующий тип (чередуем)
-            if current_type == "0":
-                next_type = "1"
+                _digest_state_container.set_current_type(current_type)
             else:
-                next_type = "0"
-            
-            # Формируем текст в зависимости от типа
-            text = None
-            if current_type is None:
-                raw_type = get_config('alternate_digest_type')
-                if raw_type is not None:
-                    current_type = str(raw_type)
-                else:
-                    current_type = "0"
-                _digest_state["type"] = current_type
+                current_type = "0"
+                _digest_state_container.set_current_type(current_type)
             
             logger.info(f"alternate_digest_job: current_type = {current_type}, генерируем новый дайджест")
             
