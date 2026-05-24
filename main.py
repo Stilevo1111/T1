@@ -38,6 +38,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
+    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
+    if error is None:
+        return False
+    msg = str(error).lower()
+    return any(p.lower() in msg for p in phrases)
+
+
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     print("WARNING: BOT_TOKEN is not set!")
@@ -161,9 +170,8 @@ async def verify_chat_membership_job(context):
                     # Подтверждаем, что пользователь всё ещё в чате
                     set_user_in_chat(tid, True)
             except Exception as e:
-                err = str(e).lower()
                 # Пользователь реально ушёл или забанен / не найден
-                if any(x in err for x in ('user not found', 'chat not found', 'kicked', 'left')):
+                if _telegram_error_contains(e, "user not found", "chat not found", "kicked", "left"):
                     set_user_in_chat(tid, False)
                     marked_left += 1
                 else:
@@ -1431,8 +1439,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await context.bot.delete_message(chat_id, user_msg_id)
             except Exception as e:
-                error_str = str(e).lower()
-                if "not found" in error_str or "bad request" in error_str:
+                if _telegram_error_contains(e, "not found", "bad request"):
                     logger.debug(f"User message {user_msg_id} already deleted: {e}")
                 else:
                     logger.debug(f"Could not delete user message {user_msg_id}: {e}")
@@ -1575,7 +1582,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if animation_task:
             animation_task.cancel()
         error_str = str(e).lower()
-        if "flood control" in error_str or "429" in error_str or "too many requests" in error_str:
+        if _telegram_error_contains(e, "flood control", "429", "too many requests"):
             retry_after = 60
             import re
             match = re.search(r'retry in (\d+) seconds', error_str)

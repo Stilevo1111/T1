@@ -829,8 +829,7 @@ async def alternate_digest_job(context):
                 set_config('alternate_digest_message_id', None)
                 last_message_id = None
             except Exception as e:
-                error_str = _telegram_error_contains(e, "message to edit not found", "message can't be edited")
-                is_rate_limit = "429" in error_str or "too many requests" in error_str or "retry after" in error_str
+                is_rate_limit = _telegram_error_contains(e, "429", "too many requests", "retry after")
                 logger.info(f"Ошибка редактирования: {e}")
                 if is_rate_limit:
                     logger.warning(f"Rate limited by Telegram, skipping edit")
@@ -838,7 +837,7 @@ async def alternate_digest_job(context):
                     _digest_state["last_run"] = 0
                     return
                 # Try to detect if message is text or photo and retry once
-                if "bad request" in error_str or "there is no text in the message to edit" in error_str or "there is no caption in the message to edit" in error_str:
+                if _telegram_error_contains(e, "bad request", "there is no text in the message to edit", "there is no caption in the message to edit"):
                     # Toggle the edit method and retry once
                     if not _digest_state.get("edit_retry_done"):
                         _digest_state["edit_retry_done"] = True
@@ -876,13 +875,13 @@ async def alternate_digest_job(context):
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
                     edited = False
-                elif "message to edit not found" in error_str or "message can't be edited" in error_str:
+                elif _telegram_error_contains(e, "message to edit not found", "message can't be edited"):
                     logger.info(f"Старое сообщение {last_message_id} удалено, создаём новое")
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
                     edited = False
                     should_create_new = True
-                elif "message is not modified" in error_str:
+                elif _telegram_error_contains(e, "message is not modified"):
                     logger.info(f"Сообщение не изменилось, пропускаем")
                     edited = True
                     _digest_state["type"] = next_type
@@ -892,7 +891,7 @@ async def alternate_digest_job(context):
                         logger.info(f"Закреплён дайджест {last_message_id}")
                     except Exception as e:
                         logger.debug(f"Не удалось закрепить: {e}")
-                elif "there is no text in the message to edit" in error_str:
+                elif _telegram_error_contains(e, "there is no text in the message to edit"):
                     # Сообщение - фото, нужно использовать editMessageCaption
                     logger.info(f"Сообщение {last_message_id} - фото, используем editMessageCaption")
                     try:

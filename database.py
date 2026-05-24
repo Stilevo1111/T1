@@ -14,6 +14,15 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
+    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
+    if error is None:
+        return False
+    msg = str(error).lower()
+    return any(p.lower() in msg for p in phrases)
+
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     DATABASE_URL = "sqlite:///fissure_bot.db"
@@ -941,8 +950,7 @@ class Database:
                 conn.commit()
                 return result
             except Exception as e:
-                err_str = str(e).lower()
-                if any(x in err_str for x in ("closed", "ssl", "connection", "server closed", "terminating", "eof", "broken")):
+                if _telegram_error_contains(e, "closed", "ssl", "connection", "server closed", "terminating", "eof", "broken"):
                     _reset_persistent_pg_conn(f"execute_query postgres error: {e}")
                 logger.error(f"execute_query error: {e}")
                 try:
@@ -970,8 +978,7 @@ class Database:
                 conn.commit()
                 return result
             except Exception as e:
-                err_str = str(e).lower()
-                if any(x in err_str for x in ("closed", "ssl", "connection", "server closed", "terminating", "eof", "broken")):
+                if _telegram_error_contains(e, "closed", "ssl", "connection", "server closed", "terminating", "eof", "broken"):
                     _reset_persistent_pg_conn(f"execute_query sqlite error: {e}")
                 logger.error(f"execute_query error: {e}")
                 try:
@@ -1021,10 +1028,9 @@ class Database:
                 self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0))
                 return None
         except Exception as e:
-            err_str = str(e).lower()
             # If the serial sequence for `id` is out of sync (common after data restores),
             # the INSERT may fail on users_pkey before the ON CONFLICT on telegram_id is even checked.
-            if "duplicate key" in err_str and "users_pkey" in err_str:
+            if _telegram_error_contains(e, "duplicate key") and "users_pkey" in str(e).lower():
                 try:
                     # Fallback: fetch the existing user by telegram_id
                     existing = self.execute_query("SELECT id FROM users WHERE telegram_id = %s", (telegram_id,), fetch="one")

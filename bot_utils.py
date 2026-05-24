@@ -12,6 +12,15 @@ from rate_limiter import rate_limit
 
 logger = logging.getLogger(__name__)
 
+
+def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
+    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
+    if error is None:
+        return False
+    msg = str(error).lower()
+    return any(p.lower() in msg for p in phrases)
+
+
 # Track last bot message per user per chat for cleanup
 last_bot_message = {}  # {chat_id: {user_id: message_id or list}}
 
@@ -98,8 +107,7 @@ async def delete_last_bot_message(bot, chat_id, user_id):
                 await bot.delete_message(chat_id, msg_id)
                 logger.info(f"Deleted last bot message for user {user_id}: {msg_id}")
             except Exception as e:
-                error_str = str(e).lower()
-                if "message to delete not found" in error_str or "bad request" in error_str or "not found" in error_str:
+                if _telegram_error_contains(e, "message to delete not found", "bad request", "not found"):
                     logger.debug(f"Message {msg_id} already deleted or invalid in chat {chat_id}: {e}")
                 else:
                     logger.warning(f"Could not delete last bot message {msg_id}: {e}")
@@ -201,8 +209,7 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
             await bot.delete_message(chat_id, msg_id)
             logger.info(f"Deleted delayed message {msg_id} in chat {chat_id}")
         except Exception as e:
-            error_str = str(e).lower()
-            if "message to delete not found" in error_str or "bad request" in error_str:
+            if _telegram_error_contains(e, "message to delete not found", "bad request"):
                 logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
             else:
                 logger.warning(f"Failed to delete delayed message {msg_id} in chat {chat_id}: {e}")
@@ -224,8 +231,7 @@ async def delete_message_job(context):
         await bot.delete_message(chat_id, msg_id)
         logger.info(f"Deleted scheduled message {msg_id} in chat {chat_id}")
     except Exception as e:
-        error_str = str(e).lower()
-        if "message to delete not found" in error_str or "bad request" in error_str:
+        if _telegram_error_contains(e, "message to delete not found", "bad request"):
             logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
         else:
             logger.warning(f"Failed to delete message {msg_id} in chat {chat_id}: {e}")
