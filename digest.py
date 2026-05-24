@@ -252,7 +252,19 @@ def start_fast_digest_loop(bot, chat_id: int, message_id: int, is_photo: bool):
 
     _fast_tick_chat_id = chat_id
     _fast_tick_message_id = message_id
-    _fast_tick_is_photo = is_photo
+
+    # Prefer the persisted value from config when starting (helps after restarts)
+    try:
+        from database import get_config
+        persisted = get_config('alternate_digest_is_photo')
+        if persisted == 'true':
+            _fast_tick_is_photo = True
+        elif persisted == 'false':
+            _fast_tick_is_photo = False
+        else:
+            _fast_tick_is_photo = is_photo
+    except Exception:
+        _fast_tick_is_photo = is_photo
 
     if _fast_tick_task and not _fast_tick_task.done():
         return  # Уже запущен
@@ -272,6 +284,7 @@ def stop_fast_digest_loop():
     _fast_tick_task = None
     _fast_tick_chat_id = None
     _fast_tick_message_id = None
+    _fast_tick_is_photo = False
 
 # =====================================================
 # Leader Election (for single active instance on Render free)
