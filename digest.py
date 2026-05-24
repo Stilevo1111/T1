@@ -690,10 +690,9 @@ async def alternate_digest_job(context):
                 if _digest_state.get("digest_data") is None or now - _digest_state.get("last_data_refresh", 0) > _data_refresh_interval:
                     logger.info("Обновляем данные для фиссур-дайджеста из БД")
                     stats = get_digest_stats()
-                    _digest_state["digest_data"] = stats
-                    _digest_state["last_data_refresh"] = now
-                else:
-                    stats = _digest_state["digest_data"]
+                _digest_state_container.set_digest_data(stats)
+                _digest_state_container.set_last_data_refresh(now)
+                stats = _digest_state_container.get_digest_data()
                 
                 growth_data = stats.get("top_growth", ("None", 0))
                 growth_player = growth_data[0] if len(growth_data) > 0 else "None"
@@ -1147,7 +1146,7 @@ def _get_digest_is_photo() -> bool:
 
 def _set_digest_is_photo(value: bool):
     """Устанавливает тип текущего pinned сообщения и сохраняет в config."""
-    _digest_state["is_photo_message"] = bool(value)
+    _digest_state_container.set_is_photo_message(bool(value))
     try:
         from database import set_config
         set_config('alternate_digest_is_photo', 'true' if value else 'false')
@@ -1162,25 +1161,25 @@ def _set_digest_is_photo(value: bool):
 
 def get_digest_type(default: str = "0") -> str:
     """Возвращает текущий тип дайджеста (0 = fissure, 1 = dota)."""
-    return _digest_state.get("type") or default
+    return _digest_state_container.get_current_type() or default
 
 
 def set_digest_type(value: str):
     """Устанавливает текущий тип дайджеста."""
-    _digest_state["type"] = str(value)
+    _digest_state_container.set_current_type(str(value))
 
 
 def set_fissure_digest_data(stats: dict):
     """Сохраняет данные fissure-дайджеста (вызывается из refresh_digest_message)."""
-    _digest_state["digest_data"] = stats
-    _digest_state["last_data_update"] = time.time()
+    _digest_state_container.set_digest_data(stats)
+    _digest_state_container.set_last_data_update(time.time())
 
 
 def set_dota_last_text(text: str):
     """Кэширует последний текст Dota-дайджеста (чтобы не редактировать одинаковый)."""
-    _digest_state["dota_last_text"] = text
+    _digest_state_container.set_dota_last_text(text)
 
 
 def get_dota_last_text():
     """Возвращает последний закешированный текст Dota-дайджеста."""
-    return _digest_state.get("dota_last_text")
+    return _digest_state_container.get_dota_last_text()
