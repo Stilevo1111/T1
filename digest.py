@@ -123,9 +123,11 @@ async def _fast_digest_tick(bot):
             if not text:
                 continue
 
+            # Re-sync from the single source of truth every tick (helps with multi-instance drift)
+            _fast_tick_is_photo = _get_digest_is_photo()
+
             try:
-                # Always prefer the current state (may have been toggled by retry logic)
-                is_photo = _digest_state.get("is_photo_message", _fast_tick_is_photo)
+                is_photo = _fast_tick_is_photo
                 if is_photo:
                     await bot.edit_message_caption(
                         chat_id=_fast_tick_chat_id,
@@ -156,6 +158,7 @@ async def _fast_digest_tick(bot):
                                 parse_mode="HTML"
                             )
                             _fast_tick_is_photo = False
+                            _set_digest_is_photo(False)
                         else:
                             await bot.edit_message_caption(
                                 chat_id=_fast_tick_chat_id,
@@ -164,6 +167,7 @@ async def _fast_digest_tick(bot):
                                 parse_mode="HTML"
                             )
                             _fast_tick_is_photo = True
+                            _set_digest_is_photo(True)
                         logger.debug("Fast tick recovered by switching edit method")
                         continue
                     except Exception:
@@ -252,19 +256,7 @@ def start_fast_digest_loop(bot, chat_id: int, message_id: int, is_photo: bool):
 
     _fast_tick_chat_id = chat_id
     _fast_tick_message_id = message_id
-
-    # Prefer the persisted value from config when starting (helps after restarts)
-    try:
-        from database import get_config
-        persisted = get_config('alternate_digest_is_photo')
-        if persisted == 'true':
-            _fast_tick_is_photo = True
-        elif persisted == 'false':
-            _fast_tick_is_photo = False
-        else:
-            _fast_tick_is_photo = is_photo
-    except Exception:
-        _fast_tick_is_photo = is_photo
+    _fast_tick_is_photo = _get_digest_is_photo()
 
     if _fast_tick_task and not _fast_tick_task.done():
         return  # Уже запущен
@@ -415,6 +407,10 @@ async def alternate_digest_job(context):
                 return
             
             bot = context.application.bot
+
+        # Re-sync photo/text state from the single source of truth early
+        # (reduces drift between instances after restarts)
+        _get_digest_is_photo()  # warms up the in-memory value from config if needed
         
         now = time.time()
         
@@ -817,11 +813,7 @@ async def alternate_digest_job(context):
         edited = False
 
         # Проверяем, является ли сообщение фото или текстом
-        is_photo_message = _digest_state.get("is_photo_message", False)
-
-        # Восстанавливаем из config если бот был перезапущен
-        if not is_photo_message:
-            is_photo_message = get_config('alternate_digest_is_photo') == 'true'
+        is_photo_message = _get_digest_is_photo()
 
         if last_message_id:
             logger.info(f"alternate_digest_job: attempting to edit message {last_message_id}")
@@ -885,8 +877,7 @@ async def alternate_digest_job(context):
                                     text=text,
                                     parse_mode="HTML"
                                 )
-                                _digest_state["is_photo_message"] = False
-                                set_config('alternate_digest_is_photo', 'false')
+                                _set_digest_is_photo(False)
                             else:
                                 # Was trying to edit text, retry with caption
                                 await bot.edit_message_caption(
@@ -895,8 +886,7 @@ async def alternate_digest_job(context):
                                     caption=text,
                                     parse_mode="HTML"
                                 )
-                                _digest_state["is_photo_message"] = True
-                                set_config('alternate_digest_is_photo', 'true')
+                                _set_digest_is_photo(True)
                             logger.info(f"Retry with alternate edit method succeeded for {last_message_id}")
                             edited = True
                             _digest_state["type"] = next_type
@@ -940,7 +930,7 @@ async def alternate_digest_job(context):
                         edited = True
                         _digest_state["type"] = next_type
                         _digest_state["last_text"] = text
-                        _digest_state["is_photo_message"] = True
+                        _set_digest_is_photo(True)
                         try:
                             await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
                             logger.info(f"Закреплён дайджест {last_message_id}")
@@ -1010,8 +1000,7 @@ async def alternate_digest_job(context):
                         parse_mode="HTML"
                     )
                     logger.info(f"Создан новый дайджест с фото {msg.message_id}")
-                    _digest_state["is_photo_message"] = True
-                    set_config('alternate_digest_is_photo', 'true')
+                    _set_digest_is_photo(True)
                 else:
                     msg = await bot.send_message(
                         chat_id=int(digest_chat_id),
@@ -1019,8 +1008,7 @@ async def alternate_digest_job(context):
                         parse_mode="HTML"
                     )
                     logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
-                    _digest_state["is_photo_message"] = False
-                    set_config('alternate_digest_is_photo', 'false')
+                    _set_digest_is_photo(False)
 
                 set_config('alternate_digest_message_id', str(msg.message_id))
                 set_config('alternate_digest_last_created', str(time.time()))
@@ -1029,7 +1017,7 @@ async def alternate_digest_job(context):
                 logger.info(f"alternate_digest_job: saved new message_id = {msg.message_id}")
 
                 # Запускаем быстрый 15-секундный цикл (только в памяти)
-                start_fast_digest_loop(bot, int(digest_chat_id), msg.message_id, _digest_state.get("is_photo_message", False))
+                start_fast_digest_loop(bot, int(digest_chat_id), msg.message_id, _get_digest_is_photo())
 
                 # Закрепляем новое сообщение
                 try:
@@ -1089,6 +1077,33 @@ async def alternate_digest_job(context):
         
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
+
+
+# ============================================================
+# Internal helpers for photo/text message type (single source of truth)
+# These do NOT change any user-visible behavior.
+# ============================================================
+
+def _get_digest_is_photo() -> bool:
+    """Возвращает, является ли текущее pinned сообщение фото (True) или текстом (False)."""
+    val = _digest_state.get("is_photo_message")
+    if val is not None:
+        return bool(val)
+    try:
+        from database import get_config
+        return get_config('alternate_digest_is_photo') == 'true'
+    except Exception:
+        return False
+
+
+def _set_digest_is_photo(value: bool):
+    """Устанавливает тип текущего pinned сообщения и сохраняет в config."""
+    _digest_state["is_photo_message"] = bool(value)
+    try:
+        from database import set_config
+        set_config('alternate_digest_is_photo', 'true' if value else 'false')
+    except Exception:
+        pass
 
 
 # ============================================================
