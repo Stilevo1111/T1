@@ -60,6 +60,55 @@ class _DigestState:
     def mark_data_refreshed(self):
         self.last_data_refresh = time.time()
 
+    # --- Hot path specific accessors (to finish encapsulation) ---
+    def get_current_type(self):
+        return self.state.get("type")
+
+    def set_current_type(self, value):
+        self.state["type"] = value
+
+    def get_last_text(self):
+        return self.state.get("last_text")
+
+    def set_last_text(self, value):
+        self.state["last_text"] = value
+
+    def get_last_run(self):
+        return self.state.get("last_run", 0)
+
+    def set_last_run(self, value):
+        self.state["last_run"] = value
+
+    def get_edit_retry_done(self):
+        return self.state.get("edit_retry_done", False)
+
+    def set_edit_retry_done(self, value):
+        self.state["edit_retry_done"] = value
+
+    def get_digest_data(self):
+        return self.state.get("digest_data")
+
+    def set_digest_data(self, value):
+        self.state["digest_data"] = value
+
+    def get_dota_data(self):
+        return self.state.get("dota_data")
+
+    def set_dota_data(self, value):
+        self.state["dota_data"] = value
+
+    def get_last_data_update(self):
+        return self.state.get("last_data_update", 0)
+
+    def set_last_data_update(self, value):
+        self.state["last_data_update"] = value
+
+    def get_chat_id(self):
+        return self.state.get("chat_id")
+
+    def set_chat_id(self, value):
+        self.state["chat_id"] = value
+
 # Single instance of the state container
 _digest_state_container = _DigestState()
 
@@ -115,7 +164,7 @@ async def _fast_digest_tick(bot):
 
             current_type = _digest_state.get("type") or "0"
             next_type = "1" if current_type == "0" else "0"
-            _digest_state["type"] = next_type
+            _digest_state_container.set_current_type(next_type)
 
             # Генерируем текст для нового типа из закешированных данных (без БД)
             text = _build_digest_text_for_type(next_type)
@@ -385,7 +434,7 @@ async def alternate_digest_job(context):
             if now - last_run < 5:
                 logger.info(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
                 return
-            _digest_state['last_run'] = now
+            _digest_state_container.set_last_run(now)
             
             # Проверяем, нужно ли обновить данные из БД (раз в час)
             if now - _digest_state.get("last_data_update", 0) >= DIGEST_DATA_REFRESH_INTERVAL:
@@ -395,9 +444,9 @@ async def alternate_digest_job(context):
                 user_cache.set('digest_stats', None)
                 user_cache.set('dota_digest_stats', None)
                 # Очищаем локальный кеш дайджестов
-                _digest_state["digest_data"] = None
+                _digest_state_container.set_digest_data(None)
                 _digest_state["dota_data"] = None
-                _digest_state["last_data_update"] = now
+                _digest_state_container.set_last_data_update(now)
             
             # Получаем ID чата для дайджеста (из кеша, не БД)
             digest_chat_id = _digest_state.get("chat_id") or get_config('digest_chat_id')
@@ -478,7 +527,7 @@ async def alternate_digest_job(context):
 
             # ПРИ СМЕНЕ ТИПА - ГЕНЕРИРУЕМ ТЕКСТ ДЛЯ НОВОГО ТИПА (next_type)
             # Определяем следующий тип (чередуем)
-            _digest_state["type"] = next_type
+            _digest_state_container.set_current_type(next_type)
             logger.info(f"Переключаем тип: {current_type} -> {next_type} (генерируем текст для нового типа)")
             current_type = next_type  # Используем next_type как текущий для генерации текста
 
@@ -642,7 +691,7 @@ async def alternate_digest_job(context):
                     logger.info(f"Новый день ({today}) — обновляем digest_fissure snapshot для расчёта суточного роста")
                     update_digest_snapshot()
                     user_cache.set('digest_stats', None)      # сбрасываем кеш в database.py
-                    _digest_state["digest_data"] = None       # сбрасываем локальный кеш дайджеста
+                    _digest_state_container.set_digest_data(None)       # сбрасываем локальный кеш дайджеста
                     set_config('last_fissure_digest_snapshot', today)
 
                     # Чистим fallback-значения прошлых победителей, чтобы они не "залипали"
@@ -702,7 +751,7 @@ async def alternate_digest_job(context):
                 # Здесь просто читаем из кеша (get_dota_week_top почти никогда не будет делать тяжёлый SQL,
                 # потому что кеш поддерживается часовым job'ом).
                 mmr_top = get_dota_week_top(limit=30)
-                _digest_state["dota_data"] = mmr_top
+                _digest_state_container.set_dota_data(mmr_top)
                 
                 dota_text = None
                 if not mmr_top:
@@ -843,8 +892,8 @@ async def alternate_digest_job(context):
                         )
                     logger.info(f"Обновлён alternate дайджест {last_message_id}")
                     edited = True
-                    _digest_state["type"] = next_type
-                    _digest_state["last_text"] = text
+                    _digest_state_container.set_current_type(next_type)
+                    _digest_state_container.set_last_text(text)
 
                     # Ensure photo state is explicitly recorded via the single source of truth
                     _set_digest_is_photo(is_photo_message)
@@ -865,14 +914,14 @@ async def alternate_digest_job(context):
                 logger.info(f"Ошибка редактирования: {e}")
                 if is_rate_limit:
                     logger.warning(f"Rate limited by Telegram, skipping edit")
-                    _digest_state["last_text"] = text
-                    _digest_state["last_run"] = 0
+                    _digest_state_container.set_last_text(text)
+                    _digest_state_container.set_last_run(0)
                     return
                 # Try to detect if message is text or photo and retry once
                 if _telegram_error_contains(e, "bad request", "there is no text in the message to edit", "there is no caption in the message to edit"):
                     # Toggle the edit method and retry once
                     if not _digest_state.get("edit_retry_done"):
-                        _digest_state["edit_retry_done"] = True
+                        _digest_state_container.set_edit_retry_done(True)
                         try:
                             if is_photo_message:
                                 # Was trying to edit caption, retry with text
@@ -894,13 +943,13 @@ async def alternate_digest_job(context):
                                 _set_digest_is_photo(True)
                             logger.info(f"Retry with alternate edit method succeeded for {last_message_id}")
                             edited = True
-                            _digest_state["type"] = next_type
-                            _digest_state["last_text"] = text
-                            _digest_state["edit_retry_done"] = False
+                            _digest_state_container.set_current_type(next_type)
+                            _digest_state_container.set_last_text(text)
+                            _digest_state_container.set_edit_retry_done(False)
                             return
                         except Exception as e2:
                             logger.warning(f"Retry with alternate edit method also failed: {e2}")
-                            _digest_state["edit_retry_done"] = False
+                            _digest_state_container.set_edit_retry_done(False)
                     logger.warning(f"Bad request for message {last_message_id}, resetting message_id")
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
@@ -914,8 +963,8 @@ async def alternate_digest_job(context):
                 elif _telegram_error_contains(e, "message is not modified"):
                     logger.info(f"Сообщение не изменилось, пропускаем")
                     edited = True
-                    _digest_state["type"] = next_type
-                    _digest_state["last_text"] = text
+                    _digest_state_container.set_current_type(next_type)
+                    _digest_state_container.set_last_text(text)
                     try:
                         await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
                         logger.info(f"Закреплён дайджест {last_message_id}")
@@ -933,8 +982,8 @@ async def alternate_digest_job(context):
                         )
                         logger.info(f"Обновлён alternate дайджест (caption) {last_message_id}")
                         edited = True
-                        _digest_state["type"] = next_type
-                        _digest_state["last_text"] = text
+                        _digest_state_container.set_current_type(next_type)
+                        _digest_state_container.set_last_text(text)
                         _set_digest_is_photo(True)
                         try:
                             await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
@@ -1017,8 +1066,8 @@ async def alternate_digest_job(context):
 
                 set_config('alternate_digest_message_id', str(msg.message_id))
                 set_config('alternate_digest_last_created', str(time.time()))
-                _digest_state["type"] = next_type
-                _digest_state["last_text"] = text
+                _digest_state_container.set_current_type(next_type)
+                _digest_state_container.set_last_text(text)
                 logger.info(f"alternate_digest_job: saved new message_id = {msg.message_id}")
 
                 # Запускаем быстрый 15-секундный цикл (только в памяти)
