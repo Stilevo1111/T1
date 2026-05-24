@@ -611,7 +611,9 @@ def _get_player_stats_wrapper(steam_id, use_cache):
 
 @rate_limit(tokens=1)
 async def weekly_champion_announcement_job(context):
-    """Объявление чемпиона недели в воскресенье 23:00 MSK"""
+    """Объявление чемпиона недели в воскресенье 23:30 MSK (только лидер)."""
+    if not await claim_or_check_weekly_leader():
+        return
     try:
         await announce_weekly_mmr_winner(context.bot)
     except Exception as e:
@@ -619,7 +621,10 @@ async def weekly_champion_announcement_job(context):
 
 
 async def weekly_mmr_reset_job(context):
-    """Сброс еженедельной статистики MMR в понедельник 00:00 MSK."""
+    """Сброс еженедельной статистики MMR в понедельник 00:00 MSK (только лидер)."""
+    if not await claim_or_check_weekly_leader():
+        return
+
     from datetime import datetime as dt, timezone, timedelta
     MSK = timezone(timedelta(hours=3))
     today_msk = dt.now(MSK)
@@ -672,6 +677,10 @@ async def announce_weekly_mmr_winner(bot):
     # Понедельник - начало недели (weekday 0 = Monday)
     monday_msk = today_msk - timedelta(days=today_msk.weekday())
     current_week_start = monday_msk.strftime("%Y-%m-%d")
+
+    # Leader election inside the function too (defense-in-depth)
+    if not await claim_or_check_weekly_leader():
+        return False
 
     last_announced = get_config('mmr_week_top_announced')
     if last_announced == current_week_start:
@@ -887,6 +896,49 @@ async def claim_or_check_mmr_leader():
     if is_leader:
         try:
             set_config('mmr_leader_last_seen', str(now))
+        except Exception:
+            pass
+
+    return is_leader
+
+
+async def claim_or_check_weekly_leader():
+    """Leader election for weekly jobs (champion announcement + MMR reset).
+    Prevents duplicate execution and missed runs when 2+ Render instances are active.
+    Uses longer timeout because these tasks run infrequently and can take time.
+    """
+    instance_id = os.getenv("RENDER_INSTANCE_ID") or f"local_{os.getpid()}"
+    now = time.time()
+    LEADER_TIMEOUT = 300  # 5 minutes — sufficient for weekly champion card + send
+
+    current_leader = None
+    last_seen = 0.0
+
+    try:
+        current_leader = get_config('weekly_leader_id')
+        last_seen_str = get_config('weekly_leader_last_seen')
+        last_seen = float(last_seen_str) if last_seen_str else 0
+    except Exception:
+        pass
+
+    is_leader = False
+
+    if current_leader == instance_id:
+        is_leader = True
+    elif not current_leader or (now - last_seen > LEADER_TIMEOUT):
+        try:
+            set_config('weekly_leader_id', instance_id)
+            set_config('weekly_leader_last_seen', str(now))
+            logger.warning(f"weekly: ЗАХВАТИЛ ЛИДЕРСТВО (instance={instance_id})")
+            is_leader = True
+        except Exception as e:
+            logger.error(f"weekly: failed to claim leadership: {e}")
+    else:
+        logger.info(f"weekly job: пропуск (лидер = {current_leader}, я = {instance_id})")
+
+    if is_leader:
+        try:
+            set_config('weekly_leader_last_seen', str(now))
         except Exception:
             pass
 
@@ -1166,17 +1218,15 @@ async def dota_digest_job(context):
                 set_dota_last_text(text)  # кэшируем
                 return
             except Exception as e:
-                error_str = str(e)
-                is_rate_limit = "429" in error_str or "too many requests" in error_str
-                if is_rate_limit:
+                if _telegram_error_contains(e, "429", "too many requests"):
                     logger.warning(f"Rate limited by Telegram in dota_digest, skipping")
                     set_dota_last_text(text)
                     return
-                if "message is not modified" in error_str.lower():
+                if _telegram_error_contains(e, "message is not modified"):
                     logger.info("Dota дайджест не изменился, пропускаем")
                     set_dota_last_text(text)  # кэшируем текущий
                     return
-                if "Message to edit not found" in error_str or "message can't be edited" in error_str:
+                if _telegram_error_contains(e, "message to edit not found", "message can't be edited"):
                     logger.info(f"Старое сообщение {last_message_id} удалено или нельзя редактировать, создаём новое")
                     set_config('dota_digest_message_id', None)
                 else:
