@@ -1307,7 +1307,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             "mmr_last_updated": time.time()
         }, update_top_cache=update_top_cache)
 
-        return {"success": True, "rank_up": rank_up}
+        return {"success": True, "rank_up": rank_up, "mmr": stats.get("mmr")}
 
     except Exception as e:
         logger.error(f"update error: {e}", exc_info=True)

@@ -112,6 +112,71 @@ async def cleanup_left_users_job(context):
         logger.error(f"cleanup_left_users_job: {e}")
 
 
+async def verify_chat_membership_job(context):
+    """Лёгкая постепенная проверка — без нагрузки на БД и Telegram.
+    Раз в ~12 часов проверяем только небольшую порцию (35) самых "холодных" пользователей.
+    """
+    try:
+        from database import get_connection, get_db_type, set_user_in_chat, release_connection
+
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            return
+
+        # Берём очень маленькую порцию — старых по last_activity
+        conn = get_connection()
+        cursor = conn.cursor()
+        db_type = get_db_type()
+        if "postgres" in db_type:
+            cursor.execute("""
+                SELECT telegram_id FROM users
+                WHERE in_chat = TRUE
+                ORDER BY last_activity ASC NULLS FIRST
+                LIMIT 35
+            """)
+        else:
+            cursor.execute("""
+                SELECT telegram_id FROM users
+                WHERE in_chat = 1
+                ORDER BY last_activity ASC
+                LIMIT 35
+            """)
+        candidates = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        release_connection(conn)
+
+        if not candidates:
+            return
+
+        bot = context.bot
+        marked_left = 0
+
+        for tid in candidates:
+            try:
+                member = await bot.get_chat_member(digest_chat_id, tid)
+                if member.status in ('left', 'kicked', 'banned'):
+                    set_user_in_chat(tid, False)
+                    marked_left += 1
+                else:
+                    # Подтверждаем, что пользователь всё ещё в чате
+                    set_user_in_chat(tid, True)
+            except Exception as e:
+                err = str(e).lower()
+                # Пользователь реально ушёл или забанен / не найден
+                if any(x in err for x in ('user not found', 'chat not found', 'kicked', 'left')):
+                    set_user_in_chat(tid, False)
+                    marked_left += 1
+                else:
+                    # Временная ошибка (rate limit, network) — пропускаем этого пользователя в этот раз
+                    logger.debug(f"verify membership skip {tid}: {e}")
+
+        if marked_left:
+            logger.info(f"verify_chat_membership_job: помечено in_chat=FALSE для {marked_left} пользователей")
+
+    except Exception as e:
+        logger.error(f"verify_chat_membership_job: {e}")
+
+
 async def flush_users_cache_job(context):
     """Периодический сброс dirty-пользователей из кеша в БД"""
     try:
@@ -3015,7 +3080,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                     current_count = db_user.get('message_count', 0)
                     new_count = current_count + 1
                     logger.info(f"message_count: {user_id} old={current_count} new={new_count}, user exists: {db_user is not None}")
-                    updates = {'message_count': new_count}
+                    updates = {'message_count': new_count, 'in_chat': True}
                     # Обновляем username только если есть telegram_username и он отличается;
                     # или если username пуст, а есть first_name — используем first_name как fallback
                     current_username = db_user.get('username')
@@ -3229,11 +3294,15 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
                 # Используем text_mention если есть username
                 if user_obj.username:
+                    # Telegram entities use UTF-16 code unit offsets/lengths.
+                    # Correct length prevents "ends in the middle of a utf-16 symbol" with emojis.
+                    utf16_bytes = name.encode('utf-16-le')
+                    name_utf16_len = len(utf16_bytes) // 2
                     welcome_text = f"{name}, {phrase}"
                     entities = [MessageEntity(
                         type=MessageEntity.TEXT_MENTION,
                         offset=0,
-                        length=len(name),
+                        length=name_utf16_len,
                         user=user_obj
                     )]
                     result_msg = await context.bot.send_message(
@@ -3341,6 +3410,14 @@ async def main():
             cleanup_left_users_job,
             time=datetime.time(hour=4, minute=0),  # 07:00 MSK
             days=(0, 1, 2, 3, 4, 5, 6)
+        )
+
+        # Лёгкая проверка членства в чате (без нагрузки)
+        # Раз в 12 часов проверяем только 35 самых "старых" пользователей
+        job_queue.run_repeating(
+            verify_chat_membership_job,
+            interval=datetime.timedelta(hours=12),
+            first=datetime.timedelta(hours=2),   # первый запуск через 2 часа после старта
         )
 
         job_queue.run_repeating(

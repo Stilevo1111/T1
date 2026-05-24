@@ -1021,6 +1021,18 @@ class Database:
                 self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0))
                 return None
         except Exception as e:
+            err_str = str(e).lower()
+            # If the serial sequence for `id` is out of sync (common after data restores),
+            # the INSERT may fail on users_pkey before the ON CONFLICT on telegram_id is even checked.
+            if "duplicate key" in err_str and "users_pkey" in err_str:
+                try:
+                    # Fallback: fetch the existing user by telegram_id
+                    existing = self.execute_query("SELECT id FROM users WHERE telegram_id = %s", (telegram_id,), fetch="one")
+                    if existing:
+                        logger.warning(f"add_user: recovered from pkey sequence desync for telegram_id={telegram_id}")
+                        return existing[0]
+                except Exception:
+                    pass
             logger.error(f"Error adding user: {e}")
             return None
     

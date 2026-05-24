@@ -115,7 +115,9 @@ async def _fast_digest_tick(bot):
                 continue
 
             try:
-                if _fast_tick_is_photo:
+                # Always prefer the current state (may have been toggled by retry logic)
+                is_photo = _digest_state.get("is_photo_message", _fast_tick_is_photo)
+                if is_photo:
                     await bot.edit_message_caption(
                         chat_id=_fast_tick_chat_id,
                         message_id=_fast_tick_message_id,
@@ -826,7 +828,41 @@ async def alternate_digest_job(context):
                     _digest_state["last_text"] = text
                     _digest_state["last_run"] = 0
                     return
-                if "bad request" in error_str:
+                # Try to detect if message is text or photo and retry once
+                if "bad request" in error_str or "there is no text in the message to edit" in error_str or "there is no caption in the message to edit" in error_str:
+                    # Toggle the edit method and retry once
+                    if not _digest_state.get("edit_retry_done"):
+                        _digest_state["edit_retry_done"] = True
+                        try:
+                            if is_photo_message:
+                                # Was trying to edit caption, retry with text
+                                await bot.edit_message_text(
+                                    chat_id=int(digest_chat_id),
+                                    message_id=msg_id_int,
+                                    text=text,
+                                    parse_mode="HTML"
+                                )
+                                 _digest_state["is_photo_message"] = False
+                                  set_config('alternate_digest_is_photo', 'false')
+                            else:
+                                # Was trying to edit text, retry with caption
+                                await bot.edit_message_caption(
+                                    chat_id=int(digest_chat_id),
+                                    message_id=msg_id_int,
+                                    caption=text,
+                                    parse_mode="HTML"
+                                )
+                                 _digest_state["is_photo_message"] = True
+                                  set_config('alternate_digest_is_photo', 'true')
+                            logger.info(f"Retry with alternate edit method succeeded for {last_message_id}")
+                            edited = True
+                            _digest_state["type"] = next_type
+                            _digest_state["last_text"] = text
+                            _digest_state["edit_retry_done"] = False
+                            return
+                        except Exception as e2:
+                            logger.warning(f"Retry with alternate edit method also failed: {e2}")
+                            _digest_state["edit_retry_done"] = False
                     logger.warning(f"Bad request for message {last_message_id}, resetting message_id")
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
