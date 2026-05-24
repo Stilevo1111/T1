@@ -849,8 +849,8 @@ async def alternate_digest_job(context):
                     # Ensure photo state is explicitly recorded via the single source of truth
                     _set_digest_is_photo(is_photo_message)
 
-                    # Обновляем fast tick с актуальным message_id
-                    start_fast_digest_loop(bot, int(digest_chat_id), msg_id_int, is_photo_message)
+                    # Обновляем fast tick с актуальным message_id (always from the authoritative source)
+                    start_fast_digest_loop(bot, int(digest_chat_id), msg_id_int, _get_digest_is_photo())
                     try:
                         await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
                         logger.info(f"Закреплён дайджест {last_message_id}")
