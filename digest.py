@@ -1086,7 +1086,15 @@ async def alternate_digest_job(context):
 
 # ============================================================
 # Internal helpers for photo/text message type (single source of truth)
-# These do NOT change any user-visible behavior.
+# 
+# This is the centralized mechanism for tracking whether the current
+# pinned alternate digest message is a photo (with caption) or plain text.
+# 
+# All reads and writes MUST go through these two functions to prevent
+# drift between instances, after restarts, or during fast tick <-> job
+# interactions.
+# 
+# These helpers do NOT change any user-visible behavior or message content.
 # ============================================================
 
 def _get_digest_is_photo() -> bool:
