@@ -142,6 +142,8 @@ async def _fast_digest_tick(bot):
                         text=text,
                         parse_mode="HTML"
                     )
+                # Explicitly record the type we just successfully used
+                _set_digest_is_photo(is_photo)
             except Exception as e:
                 if _telegram_error_contains(e, "message to edit not found", "message can't be edited"):
                     # Сообщение исчезло — выходим из fast loop, heavy job пересоздаст
@@ -843,6 +845,9 @@ async def alternate_digest_job(context):
                     edited = True
                     _digest_state["type"] = next_type
                     _digest_state["last_text"] = text
+
+                    # Ensure photo state is explicitly recorded via the single source of truth
+                    _set_digest_is_photo(is_photo_message)
 
                     # Обновляем fast tick с актуальным message_id
                     start_fast_digest_loop(bot, int(digest_chat_id), msg_id_int, is_photo_message)
