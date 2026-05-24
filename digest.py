@@ -141,11 +141,33 @@ async def _fast_digest_tick(bot):
                         parse_mode="HTML"
                     )
             except Exception as e:
-                err = _telegram_error_contains(e, "bad request", "there is no text in the message to edit", "there is no caption in the message to edit")
-                if "message to edit not found" in err or "message can't be edited" in err:
+                if _telegram_error_contains(e, "message to edit not found", "message can't be edited"):
                     # Сообщение исчезло — выходим из fast loop, heavy job пересоздаст
                     logger.info("Fast tick: message gone, stopping fast loop")
                     break
+                # One-time recovery: if we guessed the wrong message type (photo vs text), try the opposite once
+                if _telegram_error_contains(e, "bad request", "there is no text in the message to edit", "there is no caption in the message to edit"):
+                    try:
+                        if is_photo:
+                            await bot.edit_message_text(
+                                chat_id=_fast_tick_chat_id,
+                                message_id=_fast_tick_message_id,
+                                text=text,
+                                parse_mode="HTML"
+                            )
+                            _fast_tick_is_photo = False
+                        else:
+                            await bot.edit_message_caption(
+                                chat_id=_fast_tick_chat_id,
+                                message_id=_fast_tick_message_id,
+                                caption=text,
+                                parse_mode="HTML"
+                            )
+                            _fast_tick_is_photo = True
+                        logger.debug("Fast tick recovered by switching edit method")
+                        continue
+                    except Exception:
+                        pass
                 logger.debug(f"Fast tick edit skipped: {e}")
 
         except asyncio.CancelledError:
