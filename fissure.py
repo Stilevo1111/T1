@@ -83,7 +83,8 @@ async def delete_fissure_user_and_last_messages(bot, chat_id, user_id, user_msg_
     Безопасное удаление сообщений пользователя и последнего бота при /fissure.
     Логика полностью сохранена из main.py.
     """
-    from bot_utils import bot_can_delete, delete_last_bot_message
+    from main import bot_can_delete
+    from bot_utils import delete_last_bot_message
     import asyncio
 
     # Delete user message only in groups/channels (not in private)
