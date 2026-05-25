@@ -12,6 +12,21 @@ from rate_limiter import rate_limit
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    # Public API
+    "is_valid_telegram_id",
+    "make_clickable",
+    "delete_last_bot_message",
+    "set_last_bot_message",
+    "add_bot_message",
+    "main_menu",
+    "delete_after_delay",
+    "delete_message_job",
+    "schedule_delete",
+    "ManualContext",
+    "last_bot_message",
+]
+
 
 def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
     """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""

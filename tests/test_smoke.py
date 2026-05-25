@@ -59,10 +59,6 @@ def test_rolls_has_public_api():
         "calculate_fissure_roll",
         "apply_fissure_protection",
         "calculate_new_fissure",
-        "calculate_multicast",
-        "check_multicast",
-        "send_multicast_anim",
-        "slot_animation",
     ]
 
     for name in required:

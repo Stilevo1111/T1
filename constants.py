@@ -4,6 +4,39 @@ Global constants for the fissure bot.
 Extracted from main.py without changing any behavior.
 """
 
+__all__ = [
+    # Cooldown
+    "COOLDOWN",
+    # Banners
+    "COOLDOWN_BANNER_URL",
+    "PROFILE_BANNER_URL",
+    "TOP_BANNER_URL",
+    "TOPMMR_BANNER_URL",
+    "LINK_BANNER_URL",
+    "SETDIGEST_BANNER_URL",
+    "ZEUS_BANNER_URL",
+    # Timeouts / delays
+    "DICE_ANIMATION_DELAY",
+    "USER_PROCESSING_TTL",
+    "BOT_CAN_DELETE_TTL",
+    "JOB_COOLDOWN",
+    "WEEKLY_JOB_COOLDOWN",
+    # Weekend bonus
+    "WEEKEND_BONUS_MULTIPLIERS",
+    # Default chances (legacy - some also in stats.py)
+    "MULTICAST_DEFAULT_CHANCE",
+    "ZEUS_DEFAULT_CHANCE",
+    # Digest headers/footers
+    "MORNING_DIGEST_HEADER",
+    "MORNING_DIGEST_FOOTER",
+    "DOTA_DIGEST_HEADER",
+    "DOTA_DIGEST_FOOTER",
+    # Zeus
+    "ZEUS_TEXTS",
+    # Welcome
+    "WELCOME_PHRASES",
+]
+
 # Cooldown for fissure rolls (24 hours)
 COOLDOWN = 86400
 

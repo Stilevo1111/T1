@@ -1,10 +1,42 @@
-# weekly_analytics.py - Еженедельная аналитика игрока (fixed version)
+# -*- coding: utf-8 -*-
+"""
+Еженедельная аналитика игроков Dota 2.
+
+Модуль генерирует текстовые отчёты, таблицы сравнения с про-игроками
+и визуальные чарты по последним матчам пользователя.
+
+Публичный API:
+- generate_weekly_analytics
+- generate_chart_only
+- get_analytics_pages
+- get_last_matches
+- fetch_match_details
+- calculate_player_stats
+- detect_role_from_history
+
+Все изменения в этом файле должны сохранять точное поведение
+и текст/изображения, которые видит пользователь.
+"""
+
+from __future__ import annotations
+
+from typing import Any
 
 import asyncio
+
+# Type aliases for clarity (no runtime effect)
+RoleName = str
+PlayerName = str
+ProPlayer = dict[str, str | int | float]
+ProBenchmarks = dict[str, float | int]
+ProRoleData = dict[RoleName, dict[str, dict[PlayerName, ProPlayer] | ProBenchmarks]]
+Weights = dict[str, float]
 import aiohttp
 import json
 from PIL import Image, ImageDraw, ImageFont
 import io
+import json
+import re
 from datetime import datetime, timezone, timedelta
 
 from dota_mmr import steam64_to_account_id, OPENDOTA_API_URL, _api_get_async
@@ -15,6 +47,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    # Public API used by main.py and generate_weekly_chart.py
+    "generate_weekly_analytics",
+    "generate_chart_only",
+    "get_analytics_pages",
+    "get_last_matches",
+    "fetch_match_details",
+    "calculate_player_stats",
+    "detect_role_from_history",
+]
+
 # Cache for background image and hero icons
 _CHART_BG_CACHE = None
 _HERO_ICON_CACHE = {}
@@ -23,7 +66,7 @@ _HERO_ICON_CACHE = {}
 # MARKDOWN ESCAPE
 # =========================================================
 
-def escape_markdown_v2(text: str) -> str:
+def _escape_markdown_v2(text: str) -> str:
     """Escape special characters for Telegram MarkdownV2"""
     escape_chars = r"_*[]()~`>#+-=|{}.!"
     return "".join(f"\\{c}" if c in escape_chars else c for c in text)
@@ -33,13 +76,12 @@ def escape_markdown_v2(text: str) -> str:
 # =========================================================
 
 _HERO_NAME_CACHE = {}
-_HERO_ROLE_CACHE = {}
 
 # =========================================================
 # PRO DATABASE
 # =========================================================
 
-PRO_DB = {
+PRO_DB: ProRoleData = {
     "CARRY": {
         "players": {
             "Watson": {"wr": 68, "lh": 72, "deny": 12, "gpm": 725, "kda": "8/2.9/8"},
@@ -137,7 +179,7 @@ PRO_DB = {
 # IMP WEIGHTS
 # =========================================================
 
-IMP_WEIGHTS = {
+IMP_WEIGHTS: dict[RoleName, Weights] = {
     "CARRY": {"gpm": 0.4, "kda": 0.3, "utility": 0.1, "apm": 0.2},
     "SUPPORT": {"gpm": 0.1, "kda": 0.3, "utility": 0.4, "apm": 0.2},
     "MID": {"gpm": 0.35, "kda": 0.35, "utility": 0.15, "apm": 0.15},
@@ -154,7 +196,7 @@ IMP_WEIGHTS = {
 # UTILITY
 # =========================================================
 
-def calculate_utility(
+def _calculate_utility(
     stuns: float = 0,
     heals: float = 0,
     stacks: int = 0,
@@ -173,7 +215,7 @@ def calculate_utility(
 # IMP
 # =========================================================
 
-def calculate_imp(
+def _calculate_imp(
     gpm: float,
     kda: float,
     utility: float,
@@ -205,7 +247,7 @@ def calculate_imp(
 # HERO DATA
 # =========================================================
 
-async def load_heroes():
+async def _load_heroes() -> dict[int, str]:
 
     global _HERO_NAME_CACHE
 
@@ -231,8 +273,8 @@ async def load_heroes():
 # =========================================================
 
 # Mapping from OpenDota internal names to file names
-# load_heroes() returns names like "anti_mage", "necrophos" etc (after removing npc_dota_hero_ prefix)
-HERO_NAME_MAP = {
+# _load_heroes() returns names like "anti_mage", "necrophos" etc (after removing npc_dota_hero_ prefix)
+HERO_NAME_MAP: dict[str, str] = {
     "anti_mage": "antimage",
     "necrophos": "necrolyte",  # OpenDota: necrophos, File: necrolyte.png
     "queenofpain": "queenofpain",
@@ -250,7 +292,7 @@ HERO_NAME_MAP = {
     "abyssal_underlord": "abyssal_underlord",
 }
 
-def normalize_hero_file_name(internal_name: str) -> str:
+def _normalize_hero_file_name(internal_name: str) -> str:
     """Convert OpenDota internal name to file name"""
     # Remove npc_dota_hero_ prefix if present
     name = internal_name.replace("npc_dota_hero_", "")
@@ -270,18 +312,18 @@ def normalize_hero_file_name(internal_name: str) -> str:
     return name
 
 
-async def get_hero_icon(hero_id: int):
+async def _get_hero_icon(hero_id: int) -> Image.Image | None:
     global _HERO_ICON_CACHE
 
     if hero_id in _HERO_ICON_CACHE:
         return _HERO_ICON_CACHE[hero_id]
 
-    heroes = await load_heroes()
+    heroes = await _load_heroes()
 
     hero_name = heroes.get(hero_id)
 
     if hero_name:
-        file_name = normalize_hero_file_name(hero_name)
+        file_name = _normalize_hero_file_name(hero_name)
         path = f"assets/heroes/{file_name}.png"
 
         try:
@@ -304,61 +346,8 @@ async def get_hero_icon(hero_id: int):
         logger.exception("Failed to create default icon")
         return None
 
-# =========================================================
-# HERO ROLE CACHE & LOADING
-# =========================================================
-
-async def load_hero_roles():
-
-    global _HERO_ROLE_CACHE
-
-    if _HERO_ROLE_CACHE:
-        return _HERO_ROLE_CACHE
-
-    url = f"{OPENDOTA_API_URL}/heroStats"
-
-    data = await _api_get_async(url, timeout=15)
-
-    if not data:
-        return {}
-
-    for hero in data:
-
-        hero_id = hero["id"]
-        roles = hero.get("roles", [])
-        _HERO_ROLE_CACHE[hero_id] = roles
-
-    logger.info("Loaded hero role database")
-
-    return _HERO_ROLE_CACHE
-
-
-def convert_opendota_roles(opendota_roles: list) -> str:
-
-    roles = set(opendota_roles)
-
-    # CARRY - highest priority if Carry exists
-    if "Carry" in roles:
-        return "CARRY"
-
-    # MID
-    if "Nuker" in roles and "Escape" in roles:
-        return "MID"
-
-    # OFFLANE
-    if "Durable" in roles and "Initiator" in roles:
-        return "OFFLANE"
-
-    # SUPPORT
-    if "Support" in roles or "Disabler" in roles:
-        return "SUPPORT"
-
-    return "SUPPORT"
-
-
-def normalize_hero_name(internal_name: str) -> str:
+def _normalize_hero_name(internal_name: str) -> str:
     """Convert internal hero name (anti_mage) to display name (Anti-Mage)"""
-    import re
     # Handle special cases first
     name_map = {
         "npc_dota_hero_necrophos": "Necrophos",
@@ -408,8 +397,8 @@ def normalize_hero_name(internal_name: str) -> str:
     return multi_word_fixes.get(result, result)
 
 
-async def detect_role_from_hero_counts(matches: list) -> str:
-    heroes = await load_heroes()
+async def _detect_role_from_hero_counts(matches: list[dict[str, Any]]) -> str:
+    heroes = await _load_heroes()
     
     # Mapping: position 1-5 -> role
     POS_TO_ROLE = {
@@ -434,7 +423,7 @@ async def detect_role_from_hero_counts(matches: list) -> str:
         internal_name = heroes.get(hero_id, "")
         
         # Normalize hero name for lookup in hero_positions
-        hero_name = normalize_hero_name(internal_name)
+        hero_name = _normalize_hero_name(internal_name)
         
         # Look up position from local hero_positions database
         position = hero_positions.get(hero_name, 0)
@@ -460,8 +449,11 @@ async def detect_role_from_hero_counts(matches: list) -> str:
     return None
 
 
-async def detect_role_from_history(matches: list):
-    role = await detect_role_from_hero_counts(matches)
+async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
+    """
+    Определяет наиболее вероятную роль игрока на основе его недавних матчей.
+    """
+    role = await _detect_role_from_hero_counts(matches)
     if role:
         return role
     
@@ -497,7 +489,11 @@ async def detect_role_from_history(matches: list):
     return None
 
 
-def calculate_player_stats(matches: list) -> dict:
+def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
+    """
+    Рассчитывает средние показатели игрока по последним матчам.
+    """
+
     if not matches:
         return {"wr": 50.0, "gpm": 400, "xpm": 500, "lh": 0, "deny": 0, "stacks": 0, "deaths": 5.0, "h_dmg": 10.0, "t_dmg": 2.0, "util": 8.0, "apm": 250, "kda": "3/4/8"}
     n = len(matches)
@@ -622,7 +618,11 @@ def calculate_player_stats(matches: list) -> dict:
 # MATCHES
 # =========================================================
 
-async def fetch_match_details(matches: list, steam_id: str) -> list:
+async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> list[dict[str, Any]]:
+    """
+    Загружает детальную информацию по каждому матчу (GPM, XPM, actions и т.д.).
+    """
+
     """Fetch full match details for matches that have minimal data."""
     account_id = steam64_to_account_id(steam_id)
     enriched = []
@@ -679,7 +679,11 @@ async def fetch_match_details(matches: list, steam_id: str) -> list:
     return enriched
 
 
-async def get_last_matches(telegram_id: int, limit: int = 10):
+async def get_last_matches(telegram_id: int, limit: int = 10) -> list[dict[str, Any]]:
+    """
+    Загружает последние матчи игрока через OpenDota API.
+    """
+
     """Get the last N matches for a user (for chart/analytics)."""
 
     user = get_user(telegram_id)
@@ -755,7 +759,7 @@ async def get_last_matches(telegram_id: int, limit: int = 10):
 # REPORT TEXT
 # =========================================================
 
-def generate_report_text(role: str, user_stats: dict) -> dict:
+def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, Any]:
     """Генерация текстовых таблиц в стиле референса"""
 
     db = PRO_DB.get(role, PRO_DB["CARRY"])
@@ -808,25 +812,30 @@ def generate_report_text(role: str, user_stats: dict) -> dict:
         t2 += f"{label:<10} {u_str:>6} {p_str:>6} {arrow}\n"
     t2 += "```"
 
-    header = escape_markdown_v2(f"📊 ANALYTICS ({role})")
+    header = _escape_markdown_v2(f"📊 ANALYTICS ({role})")
 
     text = f"{header}\n\n{t1}"
 
-    header_detailed = escape_markdown_v2(f"📈 Подробное сравнение • Детали позиций")
+    header_detailed = _escape_markdown_v2(f"📈 Подробное сравнение • Детали позиций")
 
     text_detailed = f"{header_detailed}\n\n{t2}"
 
     return {"pro": text, "detailed": text_detailed}
 
 
-def get_analytics_pages(role: str, stats: dict) -> list:
+def get_analytics_pages(role: str, stats: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Генерирует страницы (таблицы) сравнения статистики игрока с про-игроками
+    для выбранной роли.
+    """
+
     """Generate a list of analytics pages for pagination.
 
     Each page is a dict with 'title' and 'text' keys.
     Page 0: PRO comparison
     Page 1: Detailed comparison
     """
-    tables = generate_report_text(role, stats)
+    tables = _generate_report_text(role, stats)
     pro_text = tables["pro"]
     detailed_text = tables["detailed"]
 
@@ -840,7 +849,13 @@ def get_analytics_pages(role: str, stats: dict) -> list:
 # MAIN ANALYTICS - CHART ONLY
 # =========================================================
 
-async def generate_chart_only(telegram_id: int):
+async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
+    """
+    Генерирует только чарт аналитики (используется для кэшированных данных).
+
+    Используется когда у пользователя уже есть сохранённый analytics_cache.
+    """
+
     """Generate only the chart and game history - no text pages."""
     
     from database import get_user, Database
@@ -852,12 +867,11 @@ async def generate_chart_only(telegram_id: int):
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
         now = datetime.now(timezone.utc)
-        if (now - updated_at).total_seconds() < 3600:
-            import json
-            cached = json.loads(user['analytics_cache'])
-            # Run chart generation (async function) directly
-            chart = await create_visual_chart(cached.get("history", []))
-            return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY")}
+    if (now - updated_at).total_seconds() < 3600:
+        cached = json.loads(user['analytics_cache'])
+        # Run chart generation (async function) directly
+        chart = await _create_visual_chart(cached.get("history", []))
+        return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY")}
 
     matches = await get_last_matches(telegram_id)
 
@@ -868,7 +882,7 @@ async def generate_chart_only(telegram_id: int):
     # Matches are already sorted newest-first from API, keep this order
 
     # Detect role from hero picks
-    role = await detect_role_from_hero_counts(matches)
+    role = await _detect_role_from_hero_counts(matches)
     if not role:
         from dota_mmr import get_opendota_rate_limit_message
         return {"error": "opendota_rate_limit", "message": get_opendota_rate_limit_message()}
@@ -894,14 +908,24 @@ async def generate_chart_only(telegram_id: int):
         # Estimate APM (typical values by role)
         apm = 250
         
-        imp = calculate_imp(gpm, kda, utility, apm, role)
+        imp = _calculate_imp(gpm, kda, utility, apm, role)
         game_history.append({"imp": round(imp, 2), "hero_id": m.get("hero_id", 0)})
 
-    chart = await create_visual_chart(game_history)
+    chart = await _create_visual_chart(game_history)
     return {"image": chart, "history": game_history, "matches": matches, "role": role}
 
 
-async def generate_weekly_analytics(telegram_id: int):
+async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
+    """
+    Основная точка входа для генерации еженедельной аналитики игрока.
+
+    Загружает последние матчи, определяет роль, рассчитывает статистику,
+    сравнивает с бенчмарками про-игроков и возвращает данные для отчёта
+    (включая изображение чарта если возможно).
+
+    Returns:
+        dict с ключами 'image', 'history', 'matches', 'role' или None если данных мало.
+    """
     matches = await get_last_matches(telegram_id)
 
     if len(matches) < 5:
@@ -945,7 +969,7 @@ async def generate_weekly_analytics(telegram_id: int):
 
         kda = (kills + assists) / max(deaths, 1)
 
-        utility = calculate_utility(
+        utility = _calculate_utility(
             m.get("stuns", 0),
             m.get("hero_healing", 0),
             m.get("creeps_stacked", 0),
@@ -958,7 +982,7 @@ async def generate_weekly_analytics(telegram_id: int):
         if apm == 0:
             apm = 250  # default
 
-        imp = calculate_imp(
+        imp = _calculate_imp(
             gpm,
             kda,
             utility,
@@ -1040,12 +1064,12 @@ async def generate_weekly_analytics(telegram_id: int):
     }
 
     # Генерация таблиц
-    tables = generate_report_text(role, user_stats)
+    tables = _generate_report_text(role, user_stats)
     pro_text = tables["pro"]
     detailed_text = tables["detailed"]
 
     # График
-    chart_image = await create_visual_chart(game_history)
+    chart_image = await _create_visual_chart(game_history)
 
     data = {
         "image": chart_image,
@@ -1082,7 +1106,7 @@ async def generate_weekly_analytics(telegram_id: int):
 # CHART
 # =========================================================
 
-async def create_visual_chart(history):
+async def _create_visual_chart(history: list[dict]) -> bytes | None:
     global _CHART_BG_CACHE
     try:
         import numpy as np
@@ -1312,7 +1336,7 @@ async def create_visual_chart(history):
     unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
     
     # Load all hero icons in parallel
-    hero_icons = await asyncio.gather(*[get_hero_icon(hid) for hid in unique_hero_ids])
+    hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
     hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
     
     for idx, g in enumerate(reversed_history):

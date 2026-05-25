@@ -6,6 +6,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "RateLimiter",
+    "telegram_rate_limiter",
+    "rate_limit",
+]
+
 class RateLimiter:
     """
     Token bucket rate limiter for Telegram API calls.

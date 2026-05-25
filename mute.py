@@ -25,6 +25,10 @@ from telegram.ext import ContextTypes, CommandHandler, MessageHandler
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "register_handlers",
+]
+
 # ─── Настройки ───────────────────────────────────────────────────────────────
 _MUTE_COST_CM = 10          # стоимость в см фиссуры
 _MUTE_DURATION_SEC = 30     # длительность кляпа

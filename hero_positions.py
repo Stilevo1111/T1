@@ -1,5 +1,26 @@
-# Manual hero positions based on meta and swaps
-hero_positions = {
+# -*- coding: utf-8 -*-
+"""
+Manual hero positions database for Dota 2.
+
+This module provides a static mapping of hero names to their preferred positions
+(1=Safe Lane Carry, 2=Mid, 3=Offlane, 4=Soft Support, 5=Hard Support).
+
+Used by:
+- hero_meta.py (for meta images and position detection)
+- weekly_analytics.py (for role distribution stats)
+
+Entries at the bottom (Flexible heroes) intentionally override earlier definitions
+to reflect current meta preferences. Do not change any position values without
+updating the consumers.
+
+All changes must preserve exact hero names and assigned positions.
+"""
+
+from __future__ import annotations
+
+__all__ = ["hero_positions"]
+
+hero_positions: dict[str, int] = {
     # POS 1 — Carry
     "Anti-Mage": 1,
     "Drow Ranger": 1,
@@ -115,7 +136,10 @@ hero_positions = {
     "Winter Wyvern": 5,
     "Grimstroke": 5,
     "Jakiro": 5,
-    # Flexible heroes - assign based on best
+    # === FLEXIBLE / META OVERRIDES ===
+    # These entries override the earlier positional assignments above.
+    # They reflect current patch/meta preferences where a hero's best role differs
+    # from the traditional grouping. Last definition wins (dict order).
     "Nature's Prophet": 3,  # Best Pos 3 now
     "Tiny": 2,  # Best Pos 2
     "Mirana": 4,  # Best Pos 4

@@ -713,9 +713,11 @@ async def alternate_digest_job(context):
                 if _digest_state_container.get_digest_data() is None or now - _digest_state_container.get_last_data_refresh() > _data_refresh_interval:
                     logger.info("Обновляем данные для фиссур-дайджеста из БД")
                     stats = get_digest_stats()
-                _digest_state_container.set_digest_data(stats)
-                _digest_state_container.set_last_data_refresh(now)
-                stats = _digest_state_container.get_digest_data()
+                    _digest_state_container.set_digest_data(stats)
+                    _digest_state_container.set_last_data_refresh(now)
+                else:
+                    stats = _digest_state_container.get_digest_data()
+
                 
                 growth_data = stats.get("top_growth", ("None", 0))
                 growth_player = growth_data[0] if len(growth_data) > 0 else "None"
