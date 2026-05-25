@@ -7,6 +7,23 @@ Extracted from main.py without any behavior changes.
 
 import random
 
+__all__ = [
+    # Constants
+    "BASE_ROLLS",
+    "FATAL_ROLL",
+    "ROLL_TEXTS",
+    "ROLL_MEMES",
+    "CATEGORY_PHRASES",
+    "MULTICAST_TEXTS",
+    "MULTICAST_CASCADE",
+    # Calculation functions
+    "calculate_fissure_roll",
+    "apply_fissure_protection",
+    "calculate_new_fissure",
+    "calculate_multicast",
+    "check_multicast",
+]
+
 
 # =====================
 # ROLL SYSTEM CONSTANTS
@@ -306,111 +323,3 @@ def check_multicast(fissure_size):
                 yield i + 2, extra_roll
         else:
             break
-
-
-# Multicast slot animation helpers
-SLOT_SYMBOLS = ["🍒", "🍋", "🍇", "💎", "🔥", "⚡", "7️⃣", "🎰"]
-
-
-def slot_animation(level):
-    """Генерирует слот-анимацию: 3 одинаковых = переход на уровень"""
-    symbol = random.choice(SLOT_SYMBOLS)
-    return f"🎰 {symbol}{symbol}{symbol}"
-
-
-async def send_multicast_anim(chat_id, display_username, level, bot, is_test=False):
-    """Анимация мультикаста с слот-машиной"""
-    prefix = "🧪 ТЕСТ\n" if is_test else ""
-    slot_text = slot_animation(level)
-    return await bot.send_message(
-        chat_id=chat_id,
-        text=f"🎲 {display_username}\n\n{prefix}{slot_text}\n👹⚡ Мультикаст ×{level}!",
-        parse_mode="HTML"
-    )
-
-
-async def handle_multicast_cascade(bot, chat_id, display_username, roll, event_roll, zeus_chance, multicast_chance, is_weekend, original_roll):
-    """
-    Handles the multicast (x2, x3, x4) slot animation and roll multiplication.
-    Returns: (roll, cascade_count, multicast_text, slot_msg_ids, original_roll)
-    This is extracted logic from the main fissure handler.
-    """
-    slot_msg_ids = []
-    cascade_count = 1
-    multicast_text = ""
-
-    slot_emojis = ["🍒", "🍋", "🍇", "🔔", "💎"]
-
-    if event_roll < zeus_chance + multicast_chance:
-        # 🎰 МУЛЬТИКАСТ — слоты как в казино
-        if random.random() < 0.75:
-            cascade_count = 2
-            jackpot_symbol = random.choice(slot_emojis)
-            slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-
-            msg = await bot.send_message(
-                chat_id=chat_id,
-                text=f"🎰 {' | '.join(slots)} | x2"
-            )
-            slot_msg_ids.append(msg.message_id)
-            await asyncio.sleep(1)
-
-            if random.random() < 0.25:
-                cascade_count = 3
-                jackpot_symbol = random.choice(slot_emojis)
-                slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-
-                msg = await bot.send_message(
-                    chat_id=chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x3"
-                )
-                slot_msg_ids.append(msg.message_id)
-                await asyncio.sleep(1)
-
-                if random.random() < 0.15:
-                    cascade_count = 4
-                    jackpot_symbol = random.choice(slot_emojis)
-                    slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-
-                    msg = await bot.send_message(
-                        chat_id=chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x4"
-                    )
-                    slot_msg_ids.append(msg.message_id)
-                    await asyncio.sleep(0.5)
-                else:
-                    slots = random.sample(slot_emojis, 3)
-                    msg = await bot.send_message(
-                        chat_id=chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x4"
-                    )
-                    slot_msg_ids.append(msg.message_id)
-                    await asyncio.sleep(0.5)
-                    cascade_count = 3
-            else:
-                slots = random.sample(slot_emojis, 3)
-                msg = await bot.send_message(
-                    chat_id=chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x3"
-                )
-                slot_msg_ids.append(msg.message_id)
-                await asyncio.sleep(0.5)
-                cascade_count = 2
-        else:
-            multicast_count = 1
-
-        if original_roll is not None:
-            original_roll = roll
-        roll = roll * cascade_count
-
-        if cascade_count >= 4:
-            increment_stat("multicast_x4")
-        elif cascade_count >= 3:
-            increment_stat("multicast_x3")
-        elif cascade_count >= 2:
-            increment_stat("multicast_x2")
-
-        if cascade_count > 1:
-            multicast_text = f"\n{random.choice(MULTICAST_TEXTS[cascade_count])}"
-
-    return roll, cascade_count, multicast_text, slot_msg_ids, original_roll

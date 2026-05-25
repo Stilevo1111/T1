@@ -1246,8 +1246,6 @@ async def dota_digest_job(context):
 # function_fixed.py — только тонкий реэкспорт для совместимости.
 from function_fixed import alternate_digest_job
 from rolls import (
-    BASE_ROLLS,
-    FATAL_ROLL,
     ROLL_TEXTS,
     ROLL_MEMES,
     CATEGORY_PHRASES,
@@ -1255,11 +1253,7 @@ from rolls import (
     apply_fissure_protection,
     calculate_new_fissure,
     MULTICAST_TEXTS,
-    calculate_multicast,
     check_multicast,
-    MULTICAST_CASCADE,
-    slot_animation,
-    send_multicast_anim,
 )
 from bot_utils import (
     is_valid_telegram_id,
@@ -2069,7 +2063,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.1)
             return
 
-        multicast_count = 1
         multicast_text = ""
         original_roll = None
         zeus_triggered = False
@@ -2197,19 +2190,18 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     cascade_count = 2
             else:
                 # Не попали в x2 - обычный ролл (не мультикаст)
-                multicast_count = 1
-                # Продолжаем выполнение для обычного ролла
+                pass  # multicast_count was dead code, removed safely
 
             # Сохраняем original_roll ДО умножения!
             original_roll = roll
             roll = roll * cascade_count
             logger.info(f"fissure multicast: roll after multiply={roll}, cascade_count={cascade_count}")
             if cascade_count >= 4:
-                pass  # multicast_x4
+                pass  # TODO: increment_stat("multicast_x4") — currently disabled
             elif cascade_count >= 3:
-                pass  # multicast_x3
+                pass  # TODO: increment_stat("multicast_x3") — currently disabled
             elif cascade_count >= 2:
-                pass  # multicast_x2
+                pass  # TODO: increment_stat("multicast_x2") — currently disabled
             if cascade_count > 1:
                 multicast_text = f"\n{random.choice(MULTICAST_TEXTS[cascade_count])}"
 
