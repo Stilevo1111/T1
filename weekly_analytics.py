@@ -862,16 +862,17 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
     from datetime import datetime, timezone, timedelta
     
     user = get_user(telegram_id)
+    now = datetime.now(timezone.utc)
+
     if user and user.get('analytics_cache') and user.get('analytics_updated_at'):
         updated_at = user['analytics_updated_at']
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
-        now = datetime.now(timezone.utc)
-    if (now - updated_at).total_seconds() < 3600:
-        cached = json.loads(user['analytics_cache'])
-        # Run chart generation (async function) directly
-        chart = await _create_visual_chart(cached.get("history", []))
-        return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY")}
+        if (now - updated_at).total_seconds() < 3600:
+            cached = json.loads(user['analytics_cache'])
+            # Run chart generation (async function) directly
+            chart = await _create_visual_chart(cached.get("history", []))
+            return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY")}
 
     matches = await get_last_matches(telegram_id)
 
@@ -1103,6 +1104,161 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
     return data
 
 # =========================================================
+# CHART HELPERS (pure, no side effects)
+# =========================================================
+
+def _prepare_chart_data(history: list[dict], make_interp_spline=None) -> dict:
+    """Подготавливает данные для отрисовки чарта (без изменения логики)."""
+    import numpy as np
+
+    # Reverse history so oldest game is first (left side of chart)
+    # and newest game is last (right side of chart)
+    reversed_history = list(reversed(history))[:10]
+
+    raw_impacts = [
+        round(g["imp"], 2)
+        for g in reversed_history
+    ]
+
+    while len(raw_impacts) < 10:
+        raw_impacts.append(0.4)
+
+    raw_impacts = raw_impacts[:10]
+
+    # old values compressed graph too much
+    # now remap into full 0.2 → 1.8 range
+    min_imp = min(raw_impacts)
+    max_imp = max(raw_impacts)
+
+    impacts = []
+    for value in raw_impacts:
+        normalized = (
+            (value - min_imp)
+            / max(max_imp - min_imp, 0.01)
+        )
+        scaled = 0.25 + (normalized * 1.45)
+        impacts.append(round(scaled, 2))
+
+    x = np.arange(1, 11)
+    avg = np.mean(impacts)
+
+    # SMOOTH INTERPOLATION
+    if make_interp_spline and len(impacts) >= 4:
+        x_smooth = np.linspace(1, 10, 100)
+        spl = make_interp_spline(x, impacts, k=3)
+        y_smooth = spl(x_smooth)
+    else:
+        x_smooth = x
+        y_smooth = impacts
+
+    return {
+        "reversed_history": reversed_history,
+        "impacts": impacts,
+        "x": x,
+        "avg": avg,
+        "x_smooth": x_smooth,
+        "y_smooth": y_smooth,
+    }
+
+
+# =========================================================
+# CHART HELPERS (pure drawing logic, no behavior change)
+# =========================================================
+
+def _load_chart_background() -> 'Image.Image':
+    """Loads or creates the chart background (with caching)."""
+    global _CHART_BG_CACHE
+    background_url = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
+    WIDTH, HEIGHT = 1200, 800
+
+    if _CHART_BG_CACHE is None:
+        try:
+            from database import get_aiohttp_session
+            session = asyncio.get_event_loop().run_until_complete(get_aiohttp_session()) if False else None
+            # Note: background loading is kept async in the main function for now
+            # This helper is prepared for future extraction
+            _CHART_BG_CACHE = Image.new("RGB", (WIDTH, HEIGHT), (20, 20, 30))
+        except Exception:
+            _CHART_BG_CACHE = Image.new("RGB", (WIDTH, HEIGHT), (20, 20, 30))
+    return _CHART_BG_CACHE
+
+
+def _draw_impact_line(ax, x_smooth, y_smooth, impacts, x, avg, pe):
+    """Draws the main impact curve, fill, scatter points and average line."""
+    ax.fill_between(x_smooth, y_smooth, min(y_smooth), color="#f4c430", alpha=0.50, zorder=3)
+
+    line = ax.plot(x_smooth, y_smooth, color="#f4c430", linewidth=6, solid_capstyle='round', zorder=5)[0]
+    line.set_path_effects([
+        pe.Stroke(linewidth=12, foreground="#ff8800", alpha=0.40),
+        pe.Normal()
+    ])
+
+    ax.scatter(x, impacts, s=200, color="#ffd54f", edgecolors="#fff2a8", linewidths=2.5, zorder=6)
+
+    ax.axhline(avg, linestyle=(0, (5, 5)), color="#e0e0e0", linewidth=3.0, alpha=0.80, zorder=4)
+    ax.text(9.7, avg, f"AVG {avg:.2f}", fontsize=20, color="white", weight="bold", va="center", zorder=10)
+
+
+def _add_hero_images(ax, reversed_history, impacts, _get_hero_icon, OffsetImage, AnnotationBbox, Image):
+    """Adds hero images with colored borders and soft glow."""
+    unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
+    hero_icons = asyncio.get_event_loop().run_until_complete(
+        asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
+    ) if False else []  # placeholder - real call stays in main for now
+
+    hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
+
+    for idx, g in enumerate(reversed_history):
+        hero_id = g["hero_id"]
+        hero_img = hero_icon_map.get(hero_id)
+        if not hero_img:
+            continue
+
+        imp = impacts[idx]
+
+        if imp >= 1.0:
+            border = "#00ff66"
+        elif imp >= 0.6:
+            border = "#ffd000"
+        else:
+            border = "#ff3b3b"
+
+        hero_img = hero_img.resize((72, 72), Image.LANCZOS)
+        imagebox = OffsetImage(hero_img, zoom=0.72)
+
+        ab = AnnotationBbox(
+            imagebox,
+            (idx + 1, imp),
+            frameon=True,
+            bboxprops=dict(edgecolor=border, linewidth=4, boxstyle="circle,pad=0.12", facecolor="none", alpha=1.0),
+            zorder=10
+        )
+        ax.add_artist(ab)
+
+        ax.scatter(idx + 1, imp, s=1800, color=border, alpha=0.15, zorder=8)
+
+
+def _finalize_chart(ax, x, fig, DPI):
+    """Sets axes, labels, grid and saves the figure to buffer."""
+    ax.set_xlim(0, 11)
+    ax.set_ylim(0, 2)
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(i) for i in x], fontsize=22, color="white", weight="bold")
+    ax.set_yticks([0, 0.5, 1.0, 1.5, 2.0])
+    ax.set_yticklabels(["0", "0.5", "1.0", "1.5", "2.0"], fontsize=18, color="white")
+
+    ax.grid(axis="y", color="white", alpha=0.08, linewidth=1)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", dpi=DPI, facecolor=fig.get_facecolor(), bbox_inches=None, pad_inches=0)
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+# =========================================================
 # CHART
 # =========================================================
 
@@ -1177,56 +1333,13 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     # PREPARE DATA
     # =====================================================
 
-    # Reverse history so oldest game is first (left side of chart)
-    # and newest game is last (right side of chart)
-    reversed_history = list(reversed(history))[:10]
-    
-    raw_impacts = [
-        round(g["imp"], 2)
-        for g in reversed_history
-    ]
-
-    while len(raw_impacts) < 10:
-        raw_impacts.append(0.4)
-
-    raw_impacts = raw_impacts[:10]
-
-# =====================================================
-    # FORCE BIGGER MOVEMENT
-    # =====================================================
-
-    # old values compressed graph too much
-    # now remap into full 0.2 → 1.8 range
-    min_imp = min(raw_impacts)
-    max_imp = max(raw_impacts)
-
-    impacts = []
-
-    for value in raw_impacts:
-        normalized = (
-            (value - min_imp)
-            / max(max_imp - min_imp, 0.01)
-        )
-
-        scaled = 0.25 + (normalized * 1.45)
-
-        impacts.append(round(scaled, 2))
-
-    x = np.arange(1, 11)
-
-    avg = np.mean(impacts)
-
-    # =====================================================
-    # SMOOTH INTERPOLATION - optimized for speed
-    # =====================================================
-
-    if make_interp_spline and len(impacts) >= 4:
-        x_smooth = np.linspace(1, 10, 100)
-        spl = make_interp_spline(x, impacts, k=3)
-        y_smooth = spl(x_smooth)
-    else:
-        x_smooth = x
-        y_smooth = impacts
+    data = _prepare_chart_data(history, make_interp_spline)
+    reversed_history = data["reversed_history"]
+    impacts = data["impacts"]
+    x = data["x"]
+    avg = data["avg"]
+    x_smooth = data["x_smooth"]
+    y_smooth = data["y_smooth"]
 
     # =====================================================
     # FIGURE
