@@ -35,7 +35,6 @@ import aiohttp
 import json
 from PIL import Image, ImageDraw, ImageFont
 import io
-import json
 import re
 from datetime import datetime, timezone, timedelta
 
@@ -1162,50 +1161,85 @@ def _prepare_chart_data(history: list[dict], make_interp_spline=None) -> dict:
 
 
 # =========================================================
-# CHART HELPERS (pure drawing logic, no behavior change)
+# CHART HELPERS (behavior-preserving extractions)
 # =========================================================
 
-def _load_chart_background() -> 'Image.Image':
-    """Loads or creates the chart background (with caching)."""
+async def _load_chart_background() -> Image.Image:
+    """Load (or create) the 1200x800 chart background with caching. Async-safe."""
     global _CHART_BG_CACHE
-    background_url = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
     WIDTH, HEIGHT = 1200, 800
+    background_url = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
 
     if _CHART_BG_CACHE is None:
         try:
             from database import get_aiohttp_session
-            session = asyncio.get_event_loop().run_until_complete(get_aiohttp_session()) if False else None
-            # Note: background loading is kept async in the main function for now
-            # This helper is prepared for future extraction
-            _CHART_BG_CACHE = Image.new("RGB", (WIDTH, HEIGHT), (20, 20, 30))
-        except Exception:
+            session = await get_aiohttp_session()
+            async with session.get(background_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    content = await resp.read()
+                    _CHART_BG_CACHE = Image.open(io.BytesIO(content)).convert("RGB")
+                    _CHART_BG_CACHE = _CHART_BG_CACHE.resize((WIDTH, HEIGHT), Image.LANCZOS)
+                else:
+                    raise Exception(f"Failed to load background: {resp.status}")
+        except Exception as e:
+            logger.warning(f"Could not load background image, using fallback: {e}")
             _CHART_BG_CACHE = Image.new("RGB", (WIDTH, HEIGHT), (20, 20, 30))
     return _CHART_BG_CACHE
 
 
-def _draw_impact_line(ax, x_smooth, y_smooth, impacts, x, avg, pe):
-    """Draws the main impact curve, fill, scatter points and average line."""
-    ax.fill_between(x_smooth, y_smooth, min(y_smooth), color="#f4c430", alpha=0.50, zorder=3)
+def _draw_impact_line(ax, x_smooth, y_smooth, impacts, x, avg, pe, np) -> None:
+    """Draw fill, main curve with glow, scatter points and average line (exact original behavior)."""
+    ax.fill_between(
+        x_smooth, y_smooth, np.min(y_smooth),
+        color="#f4c430", alpha=0.50, zorder=3
+    )
 
-    line = ax.plot(x_smooth, y_smooth, color="#f4c430", linewidth=6, solid_capstyle='round', zorder=5)[0]
+    line = ax.plot(
+        x_smooth, y_smooth,
+        color="#f4c430",
+        linewidth=6,
+        solid_capstyle='round',
+        zorder=5
+    )[0]
+
     line.set_path_effects([
         pe.Stroke(linewidth=12, foreground="#ff8800", alpha=0.40),
         pe.Normal()
     ])
 
-    ax.scatter(x, impacts, s=200, color="#ffd54f", edgecolors="#fff2a8", linewidths=2.5, zorder=6)
+    ax.scatter(
+        x, impacts,
+        s=200,
+        color="#ffd54f",
+        edgecolors="#fff2a8",
+        linewidths=2.5,
+        zorder=6
+    )
 
-    ax.axhline(avg, linestyle=(0, (5, 5)), color="#e0e0e0", linewidth=3.0, alpha=0.80, zorder=4)
-    ax.text(9.7, avg, f"AVG {avg:.2f}", fontsize=20, color="white", weight="bold", va="center", zorder=10)
+    ax.axhline(
+        avg,
+        linestyle=(0, (5, 5)),
+        color="#e0e0e0",
+        linewidth=3.0,
+        alpha=0.80,
+        zorder=4
+    )
+
+    ax.text(
+        9.7, avg, f"AVG {avg:.2f}",
+        fontsize=20,
+        color="white",
+        weight="bold",
+        va="center",
+        zorder=10
+    )
 
 
-def _add_hero_images(ax, reversed_history, impacts, _get_hero_icon, OffsetImage, AnnotationBbox, Image):
-    """Adds hero images with colored borders and soft glow."""
+async def _add_hero_images(ax, reversed_history, impacts, OffsetImage, AnnotationBbox, Image):
+    """Preload hero icons in parallel and draw bordered images + glow (exact original logic)."""
     unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
-    hero_icons = asyncio.get_event_loop().run_until_complete(
-        asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
-    ) if False else []  # placeholder - real call stays in main for now
 
+    hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
     hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
 
     for idx, g in enumerate(reversed_history):
@@ -1224,46 +1258,82 @@ def _add_hero_images(ax, reversed_history, impacts, _get_hero_icon, OffsetImage,
             border = "#ff3b3b"
 
         hero_img = hero_img.resize((72, 72), Image.LANCZOS)
+
         imagebox = OffsetImage(hero_img, zoom=0.72)
 
         ab = AnnotationBbox(
             imagebox,
             (idx + 1, imp),
             frameon=True,
-            bboxprops=dict(edgecolor=border, linewidth=4, boxstyle="circle,pad=0.12", facecolor="none", alpha=1.0),
+            bboxprops=dict(
+                edgecolor=border,
+                linewidth=4,
+                boxstyle="circle,pad=0.12",
+                facecolor="none",
+                alpha=1.0
+            ),
             zorder=10
         )
         ax.add_artist(ab)
 
-        ax.scatter(idx + 1, imp, s=1800, color=border, alpha=0.15, zorder=8)
+        ax.scatter(
+            idx + 1, imp,
+            s=1800,
+            color=border,
+            alpha=0.15,
+            zorder=8
+        )
 
 
-def _finalize_chart(ax, x, fig, DPI):
-    """Sets axes, labels, grid and saves the figure to buffer."""
+def _finalize_chart(ax, x, fig, DPI) -> bytes:
+    """Configure axes/grid, remove spines and save exactly 1200x800 PNG bytes.
+
+    Returns raw PNG bytes.
+    """
     ax.set_xlim(0, 11)
     ax.set_ylim(0, 2)
+
     ax.set_xticks(x)
-    ax.set_xticklabels([str(i) for i in x], fontsize=22, color="white", weight="bold")
+    ax.set_xticklabels(
+        [str(i) for i in x],
+        fontsize=22,
+        color="white",
+        weight="bold"
+    )
+
     ax.set_yticks([0, 0.5, 1.0, 1.5, 2.0])
-    ax.set_yticklabels(["0", "0.5", "1.0", "1.5", "2.0"], fontsize=18, color="white")
+    ax.set_yticklabels(
+        ["0", "0.5", "1.0", "1.5", "2.0"],
+        fontsize=18,
+        color="white"
+    )
 
     ax.grid(axis="y", color="white", alpha=0.08, linewidth=1)
+
     for spine in ax.spines.values():
         spine.set_visible(False)
 
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=DPI, facecolor=fig.get_facecolor(), bbox_inches=None, pad_inches=0)
+    plt.savefig(
+        buf,
+        format="png",
+        dpi=DPI,
+        facecolor=fig.get_facecolor(),
+        bbox_inches=None,
+        pad_inches=0
+    )
     plt.close(fig)
     buf.seek(0)
     return buf.getvalue()
 
 
 # =========================================================
-# CHART
+# CHART (orchestrator - now thin after extraction)
 # =========================================================
 
 async def _create_visual_chart(history: list[dict]) -> bytes | None:
     global _CHART_BG_CACHE
+
     try:
         import numpy as np
         import matplotlib
@@ -1285,54 +1355,19 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     try:
         from scipy.interpolate import make_interp_spline
-        from scipy.ndimage import gaussian_filter1d
     except ImportError:
         make_interp_spline = None
-        gaussian_filter1d = None
 
-    # =====================================================
-    # CANVAS SIZE EXACTLY 1200x800
-    # =====================================================
-
-    WIDTH = 1200
-    HEIGHT = 800
-
+    # Canvas constants (exact 1200x800)
+    WIDTH, HEIGHT = 1200, 800
     DPI = 72
-
     FIG_W = WIDTH / DPI
     FIG_H = HEIGHT / DPI
 
-    # =====================================================
-    # LOAD BACKGROUND (cached to avoid blocking)
-    # =====================================================
+    # Async background load (uses cache)
+    bg = await _load_chart_background()
 
-    global _CHART_BG_CACHE
-    background_url = (
-        "https://i.ibb.co/jkTWqcHn/"
-        "pngdsadsad.png"
-    )
-
-    if _CHART_BG_CACHE is None:
-        try:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(background_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status == 200:
-                    content = await resp.read()
-                    _CHART_BG_CACHE = Image.open(io.BytesIO(content)).convert("RGB")
-                    _CHART_BG_CACHE = _CHART_BG_CACHE.resize((WIDTH, HEIGHT), Image.LANCZOS)
-                else:
-                    raise Exception(f"Failed to load background: {resp.status}")
-        except Exception as e:
-            logger.warning(f"Could not load background image, using fallback: {e}")
-            _CHART_BG_CACHE = Image.new("RGB", (WIDTH, HEIGHT), (20, 20, 30))
-
-    bg = _CHART_BG_CACHE
-
-    # =====================================================
-    # PREPARE DATA
-    # =====================================================
-
+    # Data preparation (already extracted)
     data = _prepare_chart_data(history, make_interp_spline)
     reversed_history = data["reversed_history"]
     impacts = data["impacts"]
@@ -1341,24 +1376,12 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     x_smooth = data["x_smooth"]
     y_smooth = data["y_smooth"]
 
-    # =====================================================
-    # FIGURE
-    # =====================================================
-
-    fig = plt.figure(
-        figsize=(FIG_W, FIG_H),
-        dpi=DPI
-    )
-
-    # FULL SIZE AXIS
+    # Figure + full-size axis
+    fig = plt.figure(figsize=(FIG_W, FIG_H), dpi=DPI)
     ax = plt.axes([0, 0, 1, 1])
-
     fig.patch.set_facecolor("#000000")
 
-    # =====================================================
-    # FULL BACKGROUND
-    # =====================================================
-
+    # Background image
     ax.imshow(
         bg,
         extent=[0, 11, 0, 2],
@@ -1368,221 +1391,11 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         zorder=0
     )
 
-    # =====================================================
-    # UNDER GRAPH AREA
-    # =====================================================
+    # All curve / fill / avg drawing
+    _draw_impact_line(ax, x_smooth, y_smooth, impacts, x, avg, pe, np)
 
-    ax.fill_between(
-        x_smooth,
-        y_smooth,
-        np.min(y_smooth),
-        color="#f4c430",
-        alpha=0.50,
-        zorder=3
-    )
+    # Hero icons with borders and glow (async preload inside)
+    await _add_hero_images(ax, reversed_history, impacts, OffsetImage, AnnotationBbox, Image)
 
-    # =====================================================
-    # MAIN GRAPH LINE
-    # =====================================================
-
-    line = ax.plot(
-        x_smooth,
-        y_smooth,
-        color="#f4c430",
-        linewidth=6,
-        solid_capstyle='round',
-        zorder=5
-    )[0]
-
-    line.set_path_effects([
-        pe.Stroke(
-            linewidth=12,
-            foreground="#ff8800",
-            alpha=0.40
-        ),
-        pe.Normal()
-    ])
-
-    # =====================================================
-    # GRAPH POINTS
-    # =====================================================
-
-    ax.scatter(
-        x,
-        impacts,
-        s=200,
-        color="#ffd54f",
-        edgecolors="#fff2a8",
-        linewidths=2.5,
-        zorder=6
-    )
-
-    # =====================================================
-    # AVG LINE
-    # =====================================================
-
-    ax.axhline(
-        avg,
-        linestyle=(0, (5, 5)),
-        color="#e0e0e0",
-        linewidth=3.0,
-        alpha=0.80,
-        zorder=4
-    )
-
-    ax.text(
-        9.7,
-        avg,
-        f"AVG {avg:.2f}",
-        fontsize=20,
-        color="white",
-        weight="bold",
-        va="center",
-        zorder=10
-    )
-
-    # =====================================================
-    # HEROES - parallel preload
-    # =====================================================
-
-    # Collect unique hero IDs from reversed history
-    unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
-    
-    # Load all hero icons in parallel
-    hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
-    hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
-    
-    for idx, g in enumerate(reversed_history):
-        hero_id = g["hero_id"]
-        hero_img = hero_icon_map.get(hero_id)
-
-        if not hero_img:
-            continue
-
-        imp = impacts[idx]
-
-        # =================================================
-        # BORDER COLORS
-        # =================================================
-
-        if imp >= 1.0:
-            border = "#00ff66"
-
-        elif imp >= 0.6:
-            border = "#ffd000"
-
-        else:
-            border = "#ff3b3b"
-
-        # =================================================
-        # HERO IMAGE EXACT SIZE
-        # =================================================
-
-        hero_img = hero_img.resize(
-            (72, 72),
-            Image.LANCZOS
-        )
-
-        imagebox = OffsetImage(
-            hero_img,
-            zoom=0.72
-        )
-
-        ab = AnnotationBbox(
-            imagebox,
-            (idx + 1, imp),
-            frameon=True,
-            bboxprops=dict(
-                edgecolor=border,
-                linewidth=4,
-                boxstyle="circle,pad=0.12",
-                facecolor="none",
-                alpha=1.0
-            ),
-            zorder=10
-        )
-
-        ax.add_artist(ab)
-
-        # =================================================
-        # GLOW
-        # =================================================
-
-        ax.scatter(
-            idx + 1,
-            imp,
-            s=1800,
-            color=border,
-            alpha=0.15,
-            zorder=8
-        )
-
-    # =====================================================
-    # AXES
-    # =====================================================
-
-    ax.set_xlim(0, 11)
-
-    ax.set_ylim(0, 2)
-
-    ax.set_xticks(x)
-
-    ax.set_xticklabels(
-        [str(i) for i in x],
-        fontsize=22,
-        color="white",
-        weight="bold"
-    )
-
-    ax.set_yticks([
-        0,
-        0.5,
-        1.0,
-        1.5,
-        2.0
-    ])
-
-    ax.set_yticklabels(
-        ["0", "0.5", "1.0", "1.5", "2.0"],
-        fontsize=18,
-        color="white"
-    )
-
-    # =====================================================
-    # GRID
-    # =====================================================
-
-    ax.grid(
-        axis="y",
-        color="white",
-        alpha=0.08,
-        linewidth=1
-    )
-
-    # =====================================================
-    # REMOVE BORDERS
-    # =====================================================
-
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
-    # =====================================================
-    # SAVE EXACTLY 1200x800
-    # =====================================================
-
-    buf = io.BytesIO()
-
-    plt.savefig(
-        buf,
-        format="png",
-        dpi=DPI,
-        facecolor=fig.get_facecolor(),
-        bbox_inches=None,
-        pad_inches=0
-    )
-
-    plt.close(fig)
-
-    buf.seek(0)
-
-    return buf.getvalue()
+    # Axes, labels, grid, save
+    return _finalize_chart(ax, x, fig, DPI)
