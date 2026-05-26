@@ -104,6 +104,14 @@ GAP_BETWEEN_COLS: int = 15
 DEFAULT_COLUMNS: int = 5
 DEFAULT_ROWS: int = 5
 
+# Small pixel offsets used across the rendering code (preserve exact values)
+ICON_SHIFT_RIGHT: int = 15
+PLACEHOLDER_RECT_LEFT: int = 20
+PLACEHOLDER_TEXT_LEFT: int = 25
+DATE_RIGHT_MARGIN: int = 20
+DATE_TOP_MARGIN: int = 20
+ICON_TEXT_FALLBACK_OFFSET: int = 20
+
 try:
     ICON_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 except Exception as e:
@@ -489,7 +497,7 @@ async def create_infographic(hero_stats: HeroStats) -> bytes | None:
         tw = bbox[2] - bbox[0]
     except Exception:
         tw = 0
-    draw.text((bg_width - tw - 20, 20), date_text, fill=(255, 255, 255), font=date_font)
+    draw.text((bg_width - tw - DATE_RIGHT_MARGIN, DATE_TOP_MARGIN), date_text, fill=(255, 255, 255), font=date_font)
 
     margin_x = MARGIN_X
     margin_y = MARGIN_Y
@@ -555,12 +563,12 @@ async def create_infographic(hero_stats: HeroStats) -> bytes | None:
 
             if icon_raw is None:
                 draw.rounded_rectangle(
-                    [x + 20, y + 5, x + col_width - 5, y + icon_height],
+                    [x + PLACEHOLDER_RECT_LEFT, y + 5, x + col_width - 5, y + icon_height],
                     radius=10, fill=(80, 80, 80)
                 )
                 ph_font = _load_font(16)
 
-                draw.text((x + 25, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
+                draw.text((x + PLACEHOLDER_TEXT_LEFT, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
                 continue
 
             scale = icon_height / icon_raw.height
@@ -576,7 +584,7 @@ async def create_infographic(hero_stats: HeroStats) -> bytes | None:
                                           radius=max(8, nh // 12), border_width=2)
 
             pw = nw + 4
-            icon_x = x + (col_width - pw) // 2 + 15  # Shift right by 15 pixels
+            icon_x = x + (col_width - pw) // 2 + ICON_SHIFT_RIGHT  # Shift right by ICON_SHIFT_RIGHT pixels
             icon_y = y + 5
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
