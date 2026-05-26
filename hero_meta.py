@@ -28,7 +28,7 @@ import math
 import logging
 from pathlib import Path
 from urllib.parse import urlparse
-from typing import Any
+from typing import Any, Dict, List, Optional
 from PIL import Image, ImageDraw, ImageFont
 from hero_positions import hero_positions
 
@@ -332,7 +332,7 @@ async def get_dota_data(days: int = 7) -> HeroStats | None:
 
 
 
-async def _enrich_with_hero_data(hero_stats: list[dict]) -> list[dict]:
+async def _enrich_with_hero_data(hero_stats: HeroStats) -> HeroStats:
     """Fetches hero metadata and enriches hero_stats in place (name, roles, img).
 
     Returns the same list (possibly modified) for convenience.
@@ -356,7 +356,7 @@ async def _enrich_with_hero_data(hero_stats: list[dict]) -> list[dict]:
     return hero_stats
 
 
-def _build_grid(hero_stats: list[dict]) -> dict:
+def _build_grid(hero_stats: HeroStats) -> dict[int, list[dict]]:
     """Builds a 5-column grid of top-5 heroes per role based on winrate and matches.
 
     This function preserves the original behavior and selection criteria.
