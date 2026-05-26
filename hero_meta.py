@@ -32,6 +32,10 @@ from typing import Any
 from PIL import Image, ImageDraw, ImageFont
 from hero_positions import hero_positions
 
+# Type aliases
+HeroStat = dict[str, Any]
+HeroStats = list[HeroStat]
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -215,12 +219,11 @@ async def fetch_hero_icon(session: aiohttp.ClientSession, icon_path: str) -> Ima
         return None
 
 
-async def get_dota_data(days: int = 7):
+async def get_dota_data(days: int = 7) -> HeroStats | None:
     """Fetch weekly hero statistics from OpenDota (explorer fallback).
 
-    Returns JSON-like data or None on failure.
+    Returns a list of hero stat dicts or None on failure.
     """
-    
     import time
     now = int(time.time())
     week_ago = now - (days * 24 * 60 * 60)
@@ -253,7 +256,7 @@ async def get_dota_data(days: int = 7):
             if resp.status == 200:
                 data = await resp.json()
                 if data and "rows" in data and data["rows"]:
-                    hero_stats = []
+                    hero_stats: HeroStats = []
                     for row in data["rows"]:
                         hero_stats.append({
                             "id": row["hero_id"],
@@ -276,6 +279,7 @@ async def get_dota_data(days: int = 7):
     except Exception as e:
         logger.error("heroStats error: %s", e)
     return None
+
 
 
 async def _enrich_with_hero_data(hero_stats: list[dict]) -> list[dict]:
