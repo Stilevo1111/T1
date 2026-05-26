@@ -1132,17 +1132,17 @@ def _prepare_chart_data(history: list[dict], make_interp_spline=None) -> dict:
 
     # Reverse history so oldest game is first (left side of chart)
     # and newest game is last (right side of chart)
-    reversed_history = list(reversed(history))[:10]
+    reversed_history = list(reversed(history))[:CHART_POINTS]
 
     raw_impacts = [
         round(g["imp"], 2)
         for g in reversed_history
     ]
 
-    while len(raw_impacts) < 10:
+    while len(raw_impacts) < CHART_POINTS:
         raw_impacts.append(0.4)
 
-    raw_impacts = raw_impacts[:10]
+    raw_impacts = raw_impacts[:CHART_POINTS]
 
     # old values compressed graph too much
     # now remap into full 0.2 → 1.8 range
@@ -1158,12 +1158,12 @@ def _prepare_chart_data(history: list[dict], make_interp_spline=None) -> dict:
         scaled = 0.25 + (normalized * 1.45)
         impacts.append(round(scaled, 2))
 
-    x = np.arange(1, 11)
+    x = np.arange(1, CHART_POINTS + 1)
     avg = np.mean(impacts)
 
     # SMOOTH INTERPOLATION
     if make_interp_spline and len(impacts) >= 4:
-        x_smooth = np.linspace(1, 10, 100)
+        x_smooth = np.linspace(1, CHART_POINTS, 100)
         spl = make_interp_spline(x, impacts, k=3)
         y_smooth = spl(x_smooth)
     else:
