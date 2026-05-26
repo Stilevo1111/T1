@@ -36,6 +36,37 @@ from hero_positions import hero_positions
 HeroStat = dict[str, Any]
 HeroStats = list[HeroStat]
 
+
+def _load_font(size: int, windows_basenames: list[str] | None = None):
+    """Load a TrueType font preferring FONT_PATH, fallback to common Windows fonts, finally default.
+
+    Returns a PIL ImageFont instance. This helper preserves original fallback order used in the module.
+    """
+    # If FONT_PATH is a path string, prefer it
+    try:
+        if isinstance(FONT_PATH, str):
+            try:
+                return ImageFont.truetype(FONT_PATH, size)
+            except Exception:
+                pass
+        else:
+            # FONT_PATH might already be a loaded font object (ImageFont instance)
+            return FONT_PATH
+    except Exception:
+        pass
+
+    if windows_basenames is None:
+        windows_basenames = ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']
+
+    for bn in windows_basenames:
+        try:
+            return ImageFont.truetype(f"C:/Windows/Fonts/{bn}", size)
+        except Exception:
+            continue
+
+    # Last resort - default PIL font
+    return ImageFont.load_default()
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -412,10 +443,7 @@ async def create_infographic(hero_stats: list[dict]) -> bytes | None:
     now_msk = datetime.now(MSK)
     date_text = now_msk.strftime("%d.%m.%Y %H:%M")
 
-    try:
-        date_font = ImageFont.truetype(FONT_PATH, 24)
-    except Exception:
-        date_font = ImageFont.load_default()
+    date_font = _load_font(24)
     try:
         bbox = draw.textbbox((0, 0), date_text, font=date_font)
         tw = bbox[2] - bbox[0]
@@ -433,16 +461,8 @@ async def create_infographic(hero_stats: list[dict]) -> bytes | None:
     base_icon_height = row_height - 25
     icon_height = min(int(base_icon_height * 1.163), row_height - 5)
 
-    try:
-        font_lg = ImageFont.truetype(FONT_PATH, 28)
-        for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
-            try:
-                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 28)
-                break
-            except Exception:
-                continue
-    except Exception:
-        font_lg = ImageFont.load_default()
+    font_lg = _load_font(28)
+
 
     grid = _build_grid(hero_stats)
 
@@ -498,10 +518,8 @@ async def create_infographic(hero_stats: list[dict]) -> bytes | None:
                     [x + 20, y + 5, x + col_width - 5, y + icon_height],
                     radius=10, fill=(80, 80, 80)
                 )
-                try:
-                    ph_font = ImageFont.truetype(FONT_PATH, 16)
-                except Exception:
-                    ph_font = ImageFont.load_default()
+                ph_font = _load_font(16)
+
                 draw.text((x + 25, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
                 continue
 
@@ -569,10 +587,8 @@ def get_static_fallback_banner() -> bytes | None:
         from datetime import datetime, timezone, timedelta
         MSK = timezone(timedelta(hours=3))
         date_text = datetime.now(MSK).strftime("%d.%m.%Y %H:%M")
-        try:
-            font = ImageFont.truetype(FONT_PATH, 32)
-        except Exception:
-            font = ImageFont.load_default()
+        font = _load_font(32)
+
         # Removed "Dota 2 Hero Meta" label as requested
         draw.text((20, 20), "Updated: %s" % date_text, fill=(200, 200, 200), font=font)
         draw.text((20, 70), "API unavailable", fill=(150, 150, 150), font=font)
