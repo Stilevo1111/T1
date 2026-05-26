@@ -72,6 +72,14 @@ SECONDS_PER_MIN: int = 60
 DEFAULT_APM: int = 250
 CHART_POINTS: int = 10
 
+# Coordinate system for chart plotting (preserve exact values)
+CHART_X_MIN: int = 0
+CHART_X_MAX: int = 11
+CHART_Y_MIN: int = 0
+CHART_Y_MAX: int = 2
+CHART_Y_TICKS: list[float] = [0, 0.5, 1.0, 1.5, 2.0]
+CHART_Y_LABELS: list[str] = ["0", "0.5", "1.0", "1.5", "2.0"]
+
 # =========================================================
 # MARKDOWN ESCAPE
 # =========================================================
