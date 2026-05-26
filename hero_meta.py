@@ -37,20 +37,30 @@ HeroStat = dict[str, Any]
 HeroStats = list[HeroStat]
 
 
+_FONT_CACHE: dict[tuple[int, tuple[str, ...]], ImageFont.ImageFont] = {}
+
 def _load_font(size: int, windows_basenames: list[str] | None = None) -> ImageFont.ImageFont:
     """Load a TrueType font preferring FONT_PATH, fallback to common Windows fonts, finally default.
 
+    Uses an internal cache keyed by (size, tuple(basenames)) to avoid repeated disk loads.
     Returns a PIL ImageFont instance. This helper preserves original fallback order used in the module.
     """
+    key = (size, tuple(windows_basenames) if windows_basenames else ())
+    if key in _FONT_CACHE:
+        return _FONT_CACHE[key]
+
     # If FONT_PATH is a path string, prefer it
     try:
         if isinstance(FONT_PATH, str):
             try:
-                return ImageFont.truetype(FONT_PATH, size)
+                font = ImageFont.truetype(FONT_PATH, size)
+                _FONT_CACHE[key] = font
+                return font
             except Exception:
                 pass
         else:
             # FONT_PATH might already be a loaded font object (ImageFont instance)
+            _FONT_CACHE[key] = FONT_PATH
             return FONT_PATH
     except Exception:
         pass
@@ -60,12 +70,16 @@ def _load_font(size: int, windows_basenames: list[str] | None = None) -> ImageFo
 
     for bn in windows_basenames:
         try:
-            return ImageFont.truetype(f"C:/Windows/Fonts/{bn}", size)
+            font = ImageFont.truetype(f"C:/Windows/Fonts/{bn}", size)
+            _FONT_CACHE[key] = font
+            return font
         except Exception:
             continue
 
     # Last resort - default PIL font
-    return ImageFont.load_default()
+    font = ImageFont.load_default()
+    _FONT_CACHE[key] = font
+    return font
 
 logger = logging.getLogger(__name__)
 
