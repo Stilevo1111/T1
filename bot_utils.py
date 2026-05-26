@@ -6,6 +6,7 @@ Extracted from main.py without any behavior changes.
 
 import logging
 import asyncio
+from typing import Any, Dict, List, Optional, Set
 from database import user_cache, get_user
 from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
 from rate_limiter import rate_limit
@@ -40,14 +41,14 @@ def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
 last_bot_message = {}  # {chat_id: {user_id: message_id or list}}
 
 
-def format_time(seconds):
+def format_time(seconds: int) -> str:
     """Format seconds as HHч MMм"""
     h = seconds // 3600
     m = (seconds % 3600) // 60
     return f"{int(h)}ч {int(m)}м"
 
 
-def is_valid_telegram_id(user_id):
+def is_valid_telegram_id(user_id: Any) -> bool:
     """Проверяет, что user_id это валидный Telegram ID (не SteamID64)"""
     if not user_id:
         return False
@@ -64,8 +65,11 @@ def is_valid_telegram_id(user_id):
     return True
 
 
-def make_clickable(name, user_id, max_length=12):
-    """Создать кликабельный никейм для Telegram"""
+def make_clickable(name: str | None, user_id: Any, max_length: int = 12) -> str:
+    """Создать кликабельный никейм для Telegram.
+
+    Returns an HTML anchor tag with tg://user?id= if resolvable, otherwise a fallback display.
+    """
     try:
         uid = int(user_id) if user_id else 0
     except (ValueError, TypeError):
@@ -83,7 +87,7 @@ def make_clickable(name, user_id, max_length=12):
                 db_user = get_user(uid)
                 if db_user:
                     display_name = db_user.get('steam_nickname') or db_user.get('username') or name
-        except:
+        except Exception:
             display_name = name
 
         # Нормализуем никнейм - убираем @ если есть
@@ -102,8 +106,8 @@ def make_clickable(name, user_id, max_length=12):
     return name if name and name != "None" else "—"
 
 
-async def delete_last_bot_message(bot, chat_id, user_id):
-    """Delete all tracked bot messages for this user in this chat immediately"""
+async def delete_last_bot_message(bot, chat_id: int, user_id: int) -> None:
+    """Delete all tracked bot messages for this user in this chat immediately."""
     if chat_id in last_bot_message and user_id in last_bot_message[chat_id]:
         msg_ids = last_bot_message[chat_id][user_id]
         if not isinstance(msg_ids, list):
@@ -135,8 +139,8 @@ async def delete_last_bot_message(bot, chat_id, user_id):
             pass
 
 
-def set_last_bot_message(chat_id, user_id, message_id):
-    """Set the last bot message for this user in this chat"""
+def set_last_bot_message(chat_id: int, user_id: int, message_id: int) -> None:
+    """Set the last bot message for this user in this chat."""
     if not isinstance(message_id, int) or message_id <= 0:
         logger.debug(f"set_last_bot_message: skipping invalid message_id={message_id}")
         return
@@ -146,8 +150,8 @@ def set_last_bot_message(chat_id, user_id, message_id):
     last_bot_message[chat_id][user_id] = message_id
 
 
-def add_bot_message(chat_id, user_id, message_id):
-    """Add bot message to track list for this user in this chat"""
+def add_bot_message(chat_id: int, user_id: int, message_id: int) -> None:
+    """Add bot message to track list for this user in this chat."""
     if not isinstance(message_id, int) or message_id <= 0:
         logger.debug(f"add_bot_message: skipping invalid message_id={message_id}")
         return
@@ -166,7 +170,7 @@ def add_bot_message(chat_id, user_id, message_id):
         logger.warning("Cleared last_bot_message cache (exceeded 500 entries)")
 
 
-def main_menu():
+def main_menu() -> ReplyKeyboardMarkup:
     keyboard = [
         [KeyboardButton("🎲 Ролл Фиссуры"), KeyboardButton("👤 Профиль")],
         [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
