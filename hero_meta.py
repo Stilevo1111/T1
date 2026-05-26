@@ -84,9 +84,9 @@ BACKGROUND_PATH: str = "background_new.png"
 ICON_CACHE_DIR: Path = Path("cache/meta_icons")
 try:
     ICON_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-except Exception:
-    # If we cannot create cache directory (e.g., read-only FS), continue without failing
-    pass
+except Exception as e:
+    # If we cannot create cache directory (e.g., read-only FS), log and continue without failing
+    logger.warning("Could not create ICON_CACHE_DIR: %s", e)
 
 FONT_PATHS = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -436,7 +436,7 @@ def _build_grid(hero_stats: HeroStats) -> dict[int, list[dict]]:
     return grid
 
 
-async def create_infographic(hero_stats: list[dict]) -> bytes | None:
+async def create_infographic(hero_stats: HeroStats) -> bytes | None:
     """Render the hero meta infographic as PNG bytes.
 
     The rendering layout and pixel coordinates are preserved exactly to avoid any
