@@ -1,4 +1,24 @@
-# hero_meta.py — heroStats API + role-based positions, layout = dc5d7a5 (a32f3e8)
+# -*- coding: utf-8 -*-
+"""
+Генерация изображений Hero Meta (еженедельная статистика героев Dota 2).
+
+Модуль отвечает за:
+- Получение данных из OpenDota (heroStats + explorer)
+- Определение позиции героев
+- Построение инфографики с топ-героями по позициям
+- Генерацию красивых PNG-изображений
+
+Публичный API:
+- get_hero_meta_image
+- get_static_fallback_banner
+- apply_fancy_style
+- detect_hero_position
+
+Все изменения в этом файле должны сохранять точный визуальный результат
+и поведение генерации изображений.
+"""
+
+from __future__ import annotations
 
 import asyncio
 import aiohttp
@@ -8,10 +28,18 @@ import math
 import logging
 from pathlib import Path
 from urllib.parse import urlparse
+from typing import Any
 from PIL import Image, ImageDraw, ImageFont
 from hero_positions import hero_positions
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "get_hero_meta_image",
+    "get_static_fallback_banner",
+    "apply_fancy_style",
+    "detect_hero_position",
+]
 
 BACKGROUND_PATH = "background_new.png"
 
@@ -45,10 +73,7 @@ if FONT_PATH is None:
     logger.warning("Using default PIL font as no system fonts found")
 
 
-
-
-def detect_hero_position(hero_data):
-
+def detect_hero_position(hero_data: dict[str, Any]) -> int:
     name = hero_data.get("localized_name")
     if name and name in hero_positions:
         return hero_positions[name]
@@ -90,7 +115,7 @@ def detect_hero_position(hero_data):
     return pos
 
 
-def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
+def apply_fancy_style(img: Image.Image, size: tuple[int, int] = (188, 100), radius: int = 15, border_width: int = 3) -> Image.Image:
     outer_size = (size[0] + 2 * border_width, size[1] + 2 * border_width)
     img_scaled = img.resize(size, Image.Resampling.LANCZOS)
     mask = Image.new('L', size, 0)
@@ -106,7 +131,13 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     return output
 
 
-async def fetch_hero_icon(session, icon_path):
+async def fetch_hero_icon(session: aiohttp.ClientSession, icon_path: str) -> Image.Image | None:
+    """Fetch hero icon from CDN or cache.
+
+    Returns a Pillow Image in RGBA mode on success, or None on failure.
+    This function does not raise; failures are logged and None is returned.
+    """
+    
 
     # ==========================================
     # BUILD URL
@@ -184,7 +215,12 @@ async def fetch_hero_icon(session, icon_path):
         return None
 
 
-async def get_dota_data(days=7):
+async def get_dota_data(days: int = 7):
+    """Fetch weekly hero statistics from OpenDota (explorer fallback).
+
+    Returns JSON-like data or None on failure.
+    """
+    
     import time
     now = int(time.time())
     week_ago = now - (days * 24 * 60 * 60)
@@ -242,7 +278,12 @@ async def get_dota_data(days=7):
     return None
 
 
-async def _enrich_with_hero_data(hero_stats):
+async def _enrich_with_hero_data(hero_stats: list[dict]) -> list[dict]:
+    """Fetches hero metadata and enriches hero_stats in place (name, roles, img).
+
+    Returns the same list (possibly modified) for convenience.
+    """
+    
     try:
         from database import get_aiohttp_session
         session = await get_aiohttp_session()
@@ -261,7 +302,12 @@ async def _enrich_with_hero_data(hero_stats):
     return hero_stats
 
 
-def _build_grid(hero_stats):
+def _build_grid(hero_stats: list[dict]) -> dict:
+    """Builds a 5-column grid of top-5 heroes per role based on winrate and matches.
+
+    This function preserves the original behavior and selection criteria.
+    """
+    
     """
     Сетка 5 колонок с лучшими героями по позициям за неделю.
     1) Для каждого героя определяем bestPosition по максимальным пикам.
@@ -336,7 +382,12 @@ def _build_grid(hero_stats):
     return grid
 
 
-async def create_infographic(hero_stats):
+async def create_infographic(hero_stats: list[dict]) -> bytes | None:
+    """Render the hero meta infographic as PNG bytes.
+
+    The rendering layout and pixel coordinates are preserved exactly to avoid any
+    change in visual appearance. Returns PNG bytes on success, or None on failure.
+    """
     logger.info("Starting create_infographic")
 
     if not os.path.exists(BACKGROUND_PATH):
@@ -436,14 +487,14 @@ async def create_infographic(hero_stats):
 
             if icon_raw is None:
                 draw.rounded_rectangle(
-                    [x + 20, y + 5, x + col_width - 5, y + icon_height],  # Shift rectangle right by 15
+                    [x + 20, y + 5, x + col_width - 5, y + icon_height],
                     radius=10, fill=(80, 80, 80)
                 )
                 try:
                     ph_font = ImageFont.truetype(FONT_PATH, 16)
                 except:
                     ph_font = ImageFont.load_default()
-                draw.text((x + 25, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)  # Shift text right by 15
+                draw.text((x + 25, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
                 continue
 
             scale = icon_height / icon_raw.height
@@ -482,7 +533,8 @@ async def create_infographic(hero_stats):
     return buf.getvalue()
 
 
-async def get_hero_meta_image():
+async def get_hero_meta_image() -> bytes | None:
+    """Main public entrypoint. Returns PNG bytes for hero meta infographic (or fallback)."""
     logger.info("get_hero_meta_image called")
     try:
         data = await get_dota_data()
@@ -500,7 +552,8 @@ async def get_hero_meta_image():
         return get_static_fallback_banner()
 
 
-def get_static_fallback_banner():
+def get_static_fallback_banner() -> bytes | None:
+    """Returns a static fallback PNG banner when live data is unavailable."""
     logger.info("Generating static fallback banner")
     try:
         base = Image.new("RGBA", (1200, 200), (25, 25, 35, 255))
