@@ -61,6 +61,12 @@ __all__ = [
 _CHART_BG_CACHE = None
 _HERO_ICON_CACHE = {}
 
+# Chart constants
+CHART_WIDTH: int = 1200
+CHART_HEIGHT: int = 800
+CHART_DPI: int = 72
+CHART_BG_URL: str = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
+
 # =========================================================
 # MARKDOWN ESCAPE
 # =========================================================
