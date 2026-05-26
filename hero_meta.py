@@ -439,13 +439,16 @@ def _build_grid(hero_stats: HeroStats) -> dict[int, list[dict]]:
         if len(grid[pos]) < 5:
             # Fill remaining slots with top heroes that have the role
             needed_roles = pos_role_map[pos]
+            used_ids = {hero['id'] for pos_list in grid.values() for hero in pos_list}
             for h in all_heroes_sorted:
-                if h['id'] not in {hero['id'] for pos_list in grid.values() for hero in pos_list}:
-                    hero_roles = h.get('roles', [])
-                    if any(role in needed_roles for role in hero_roles):
-                        grid[pos].append(h)
-                        if len(grid[pos]) >= 5:
-                            break
+                if h['id'] in used_ids:
+                    continue
+                hero_roles = h.get('roles', [])
+                if any(role in needed_roles for role in hero_roles):
+                    grid[pos].append(h)
+                    used_ids.add(h['id'])
+                    if len(grid[pos]) >= 5:
+                        break
 
     return grid
 
