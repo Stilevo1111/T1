@@ -96,6 +96,14 @@ __all__ = [
 BACKGROUND_PATH: str = "background_new.png"
 
 ICON_CACHE_DIR: Path = Path("cache/meta_icons")
+
+# Layout constants (do not change values — they affect exact visual output)
+MARGIN_X: int = 50
+MARGIN_Y: int = 215
+GAP_BETWEEN_COLS: int = 15
+DEFAULT_COLUMNS: int = 5
+DEFAULT_ROWS: int = 5
+
 try:
     ICON_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 except Exception as e:
@@ -483,12 +491,12 @@ async def create_infographic(hero_stats: HeroStats) -> bytes | None:
         tw = 0
     draw.text((bg_width - tw - 20, 20), date_text, fill=(255, 255, 255), font=date_font)
 
-    margin_x = 50
-    margin_y = 215
-    gap_between_cols = 15
+    margin_x = MARGIN_X
+    margin_y = MARGIN_Y
+    gap_between_cols = GAP_BETWEEN_COLS
 
-    col_width = (bg_width - 2 * margin_x - 6 * gap_between_cols) // 5
-    row_height = (bg_height - margin_y - 10) // 5
+    col_width = (bg_width - 2 * margin_x - 6 * gap_between_cols) // DEFAULT_COLUMNS
+    row_height = (bg_height - margin_y - 10) // DEFAULT_ROWS
 
     base_icon_height = row_height - 25
     icon_height = min(int(base_icon_height * 1.163), row_height - 5)
