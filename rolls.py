@@ -210,7 +210,10 @@ CATEGORY_PHRASES = {
 # --- Private helpers (pure, no side effects, behavior unchanged) ---
 
 def _get_early_game_roll(current_fissure: float) -> RollResult | None:
-    """Early game protection and big bonus for very small fissures (< 5)."""
+    """Early game protection and big bonus for very small fissures (< 5).
+
+    Returns a RollResult tuple or None if not applicable.
+    """
     if current_fissure < 5:
         if random.random() < 0.8:
             bonus_options = [
@@ -227,7 +230,10 @@ def _get_early_game_roll(current_fissure: float) -> RollResult | None:
 
 
 def _get_improved_roll(current_fissure: float) -> float | None:
-    """Medium fissure bonus rolls."""
+    """Medium fissure bonus rolls.
+
+    Returns an improved roll value or None.
+    """
     if 5 <= current_fissure < 20 and random.random() < 0.4:
         improved_options = [3, 5, 10, 20]
         return random.choice(improved_options)
@@ -235,7 +241,10 @@ def _get_improved_roll(current_fissure: float) -> float | None:
 
 
 def _get_lucky_bonus(current_fissure: float) -> float | None:
-    """Lucky bonus for large fissures."""
+    """Lucky bonus for large fissures.
+
+    Returns a bonus value or None.
+    """
     if current_fissure >= 20:
         chance = 0.2 if current_fissure < 100 else 0.1
         if random.random() < chance:
@@ -244,7 +253,11 @@ def _get_lucky_bonus(current_fissure: float) -> float | None:
 
 
 def _weighted_choice(weighted: list[tuple[float, int]]) -> float:
-    """Generic weighted random choice."""
+    """Generic weighted random choice.
+
+    `weighted` is a list of (value, weight) tuples.
+    Returns the chosen value.
+    """
     values, weights = zip(*weighted)
     return random.choices(values, weights=weights)[0]
 
