@@ -1196,7 +1196,9 @@ async def _load_chart_background() -> Image.Image:
     return _CHART_BG_CACHE
 
 
-def _draw_impact_line(ax, x_smooth, y_smooth, impacts, x, avg, pe, np) -> None:
+from typing import Any
+
+def _draw_impact_line(ax: Any, x_smooth: Any, y_smooth: Any, impacts: list[float], x: Any, avg: float, pe: Any, np: Any) -> None:
     """Draw fill, main curve with glow, scatter points and average line (exact original behavior)."""
     ax.fill_between(
         x_smooth, y_smooth, np.min(y_smooth),
