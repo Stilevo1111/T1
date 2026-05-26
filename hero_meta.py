@@ -45,10 +45,14 @@ __all__ = [
     "detect_hero_position",
 ]
 
-BACKGROUND_PATH = "background_new.png"
+BACKGROUND_PATH: str = "background_new.png"
 
-ICON_CACHE_DIR = Path("cache/meta_icons")
-ICON_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+ICON_CACHE_DIR: Path = Path("cache/meta_icons")
+try:
+    ICON_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    # If we cannot create cache directory (e.g., read-only FS), continue without failing
+    pass
 
 FONT_PATHS = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
