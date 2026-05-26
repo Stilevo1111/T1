@@ -493,6 +493,11 @@ async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
 
 
 def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compute aggregated player statistics from a list of match dicts.
+
+    Returns a dict with aggregated fields used elsewhere in analytics generation.
+    Behavior and formulas are unchanged.
+    """
     """
     Рассчитывает средние показатели игрока по последним матчам.
     """
