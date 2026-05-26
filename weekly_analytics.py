@@ -1320,15 +1320,25 @@ def _finalize_chart(ax, x, fig, DPI) -> bytes:
 
     Returns raw PNG bytes.
     """
-    ax.set_xlim(0, 11)
-    ax.set_ylim(0, 2)
+    ax.set_xlim(CHART_X_MIN, CHART_X_MAX)
+
+    ax.set_ylim(CHART_Y_MIN, CHART_Y_MAX)
 
     ax.set_xticks(x)
+
     ax.set_xticklabels(
         [str(i) for i in x],
         fontsize=22,
         color="white",
         weight="bold"
+    )
+
+    ax.set_yticks(CHART_Y_TICKS)
+
+    ax.set_yticklabels(
+        CHART_Y_LABELS,
+        fontsize=18,
+        color="white"
     )
 
     ax.set_yticks([0, 0.5, 1.0, 1.5, 2.0])
@@ -1414,7 +1424,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     # Background image
     ax.imshow(
         bg,
-        extent=[0, 11, 0, 2],
+        extent=[CHART_X_MIN, CHART_X_MAX, CHART_Y_MIN, CHART_Y_MAX],
         aspect='auto',
         interpolation='bilinear',
         alpha=1.0,
