@@ -410,12 +410,12 @@ async def create_infographic(hero_stats: list[dict]) -> bytes | None:
 
     try:
         date_font = ImageFont.truetype(FONT_PATH, 24)
-    except:
+    except Exception:
         date_font = ImageFont.load_default()
     try:
         bbox = draw.textbbox((0, 0), date_text, font=date_font)
         tw = bbox[2] - bbox[0]
-    except:
+    except Exception:
         tw = 0
     draw.text((bg_width - tw - 20, 20), date_text, fill=(255, 255, 255), font=date_font)
 
@@ -435,9 +435,9 @@ async def create_infographic(hero_stats: list[dict]) -> bytes | None:
             try:
                 font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 28)
                 break
-            except:
+            except Exception:
                 continue
-    except:
+    except Exception:
         font_lg = ImageFont.load_default()
 
     grid = _build_grid(hero_stats)
@@ -496,7 +496,7 @@ async def create_infographic(hero_stats: list[dict]) -> bytes | None:
                 )
                 try:
                     ph_font = ImageFont.truetype(FONT_PATH, 16)
-                except:
+                except Exception:
                     ph_font = ImageFont.load_default()
                 draw.text((x + 25, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
                 continue
@@ -567,11 +567,12 @@ def get_static_fallback_banner() -> bytes | None:
         date_text = datetime.now(MSK).strftime("%d.%m.%Y %H:%M")
         try:
             font = ImageFont.truetype(FONT_PATH, 32)
-        except:
+        except Exception:
             font = ImageFont.load_default()
         # Removed "Dota 2 Hero Meta" label as requested
         draw.text((20, 20), "Updated: %s" % date_text, fill=(200, 200, 200), font=font)
         draw.text((20, 70), "API unavailable", fill=(150, 150, 150), font=font)
+
         buf = io.BytesIO()
         base.save(buf, format='PNG')
         return buf.getvalue()
