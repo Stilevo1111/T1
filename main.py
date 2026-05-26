@@ -8,6 +8,7 @@ import asyncio
 import logging
 import datetime
 import traceback
+from typing import Any
 import urllib.parse as urlparse
 import hashlib
 from datetime import timezone, timedelta
@@ -65,8 +66,8 @@ _rate_limit_until = 0  # Unix timestamp - skip API calls until this time after 4
 RATE_LIMIT_COOLDOWN = 60  # 60 seconds cooldown after hitting rate limit
 
 
-def is_rate_limited():
-    """Check if bot is currently rate limited"""
+def is_rate_limited() -> bool:
+    """Check if bot is currently rate limited."""
     return time.time() < _rate_limit_until
 
 
