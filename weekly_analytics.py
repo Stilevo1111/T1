@@ -1375,9 +1375,9 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     except ImportError:
         make_interp_spline = None
 
-    # Canvas constants (exact 1200x800)
-    WIDTH, HEIGHT = 1200, 800
-    DPI = 72
+    # Canvas constants (use shared chart constants)
+    WIDTH, HEIGHT = CHART_WIDTH, CHART_HEIGHT
+    DPI = CHART_DPI
     FIG_W = WIDTH / DPI
     FIG_H = HEIGHT / DPI
 
