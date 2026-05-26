@@ -483,7 +483,7 @@ def get_connection():
                 print(f"[DB] Connection failed: {e}")
                 try:
                     conn.close()
-                except:
+                except Exception:
                     pass
         
         # Создаем новое соединение
@@ -526,7 +526,7 @@ def release_connection(conn):
         else:
             try:
                 conn.close()
-            except:
+            except Exception:
                 pass
 
 @contextmanager
@@ -2433,7 +2433,7 @@ def get_digest_stats():
             try:
                 result["top_growth"] = tuple(json.loads(last))
                 result["top_growth_id"] = json.loads(last)[2] if len(json.loads(last)) > 2 else None
-            except:
+            except Exception:
                 pass
     else:
         set_config('last_top_growth', json.dumps(result["top_growth"] + (result["top_growth_id"],)))
@@ -2444,7 +2444,7 @@ def get_digest_stats():
             try:
                 result["top_drop"] = tuple(json.loads(last))
                 result["top_drop_id"] = json.loads(last)[2] if len(json.loads(last)) > 2 else None
-            except:
+            except Exception:
                 pass
     else:
         set_config('last_top_drop', json.dumps(result["top_drop"] + (result["top_drop_id"],)))
@@ -2455,7 +2455,7 @@ def get_digest_stats():
             try:
                 result["top_streak"] = tuple(json.loads(last))
                 result["top_streak_id"] = json.loads(last)[2] if len(json.loads(last)) > 2 else None
-            except:
+            except Exception:
                 pass
     else:
         set_config('last_top_streak', json.dumps(result["top_streak"] + (result["top_streak_id"],)))
