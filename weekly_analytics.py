@@ -1246,7 +1246,7 @@ def _draw_impact_line(ax: Any, x_smooth: Any, y_smooth: Any, impacts: list[float
     )
 
 
-async def _add_hero_images(ax, reversed_history, impacts, OffsetImage, AnnotationBbox, Image):
+async def _add_hero_images(ax: Any, reversed_history: list[dict], impacts: list[float], OffsetImage: Any, AnnotationBbox: Any, Image: Any) -> None:
     """Preload hero icons in parallel and draw bordered images + glow (exact original logic)."""
     unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
 

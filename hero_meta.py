@@ -37,7 +37,7 @@ HeroStat = dict[str, Any]
 HeroStats = list[HeroStat]
 
 
-def _load_font(size: int, windows_basenames: list[str] | None = None):
+def _load_font(size: int, windows_basenames: list[str] | None = None) -> ImageFont.ImageFont:
     """Load a TrueType font preferring FONT_PATH, fallback to common Windows fonts, finally default.
 
     Returns a PIL ImageFont instance. This helper preserves original fallback order used in the module.
