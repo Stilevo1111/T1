@@ -33,7 +33,7 @@ def create_test_chart():
     draw.rounded_rectangle([620, 20, 780, 60], radius=14, fill="#22c55e")
     try:
         font = ImageFont.truetype("DejaVuSans.ttf", 20)
-    except:
+    except Exception:
         font = ImageFont.load_default()
     draw.text((640, 28), "↑ Improvement", fill="white", font=font)
 

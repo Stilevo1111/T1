@@ -83,7 +83,7 @@ _bot_can_delete_ttl = 3600  # 1 час
 _BOT_CAN_DELETE_CACHE_MAX = 200
 _bot_can_delete_cache = {}  # chat_id -> (can_delete, timestamp)
 
-async def bot_can_delete(bot, chat_id):
+async def bot_can_delete(bot: Any, chat_id: int) -> bool:
     """Проверить может ли бот удалять сообщения в чате"""
     current_time = time.time()
     # Cleanup old entries if cache is too large
@@ -1481,7 +1481,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Delete last bot message
         try:
             await delete_last_bot_message(context.bot, chat_id, user_id)
-        except:
+        except Exception:
             pass
 
         # Send loading message and start animation in parallel

@@ -69,6 +69,9 @@ def _load_font(size: int, windows_basenames: list[str] | None = None):
 
 logger = logging.getLogger(__name__)
 
+# Local commit control: when true, changes will be committed locally but not pushed
+_COMMIT_LOCALLY_ONLY = True
+
 __all__ = [
     "get_hero_meta_image",
     "get_static_fallback_banner",

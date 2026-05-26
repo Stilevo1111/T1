@@ -42,7 +42,7 @@ async def main():
 
                         print("Downloaded:", name)
 
-            except:
+            except Exception:
                 print("Failed:", name)
 
 asyncio.run(main())
