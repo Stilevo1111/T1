@@ -67,6 +67,11 @@ CHART_HEIGHT: int = 800
 CHART_DPI: int = 72
 CHART_BG_URL: str = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
 
+# General numeric constants used across analytics
+SECONDS_PER_MIN: int = 60
+DEFAULT_APM: int = 250
+CHART_POINTS: int = 10
+
 # =========================================================
 # MARKDOWN ESCAPE
 # =========================================================
