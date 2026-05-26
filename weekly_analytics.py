@@ -449,6 +449,10 @@ async def _detect_role_from_hero_counts(matches: list[dict[str, Any]]) -> str:
 
 
 async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
+    """Detect player role from match history using hero roles and stats.
+
+    Returns role name one of 'CARRY', 'SUPPORT', 'MID', 'OFFLANE'.
+    """
     """
     Определяет наиболее вероятную роль игрока на основе его недавних матчей.
     """
