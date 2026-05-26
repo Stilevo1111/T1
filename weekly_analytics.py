@@ -1194,7 +1194,7 @@ async def _load_chart_background() -> Image.Image:
         try:
             from database import get_aiohttp_session
             session = await get_aiohttp_session()
-            async with session.get(background_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            async with session.get(CHART_BG_URL, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status == 200:
                     content = await resp.read()
                     _CHART_BG_CACHE = Image.open(io.BytesIO(content)).convert("RGB")
