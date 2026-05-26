@@ -116,6 +116,12 @@ if FONT_PATH is None:
 
 
 def detect_hero_position(hero_data: dict[str, Any]) -> int:
+    """Determine primary role position for a hero.
+
+    Uses manual hero_positions mapping if available, otherwise falls back to
+    OpenDota roles heuristics. Returns an integer position:
+    1=CARRY, 2=MID, 3=OFFLANE, 4=SUPPORT, 5=HARD SUPPORT.
+    """
     name = hero_data.get("localized_name")
     if name and name in hero_positions:
         return hero_positions[name]
@@ -158,6 +164,12 @@ def detect_hero_position(hero_data: dict[str, Any]) -> int:
 
 
 def apply_fancy_style(img: Image.Image, size: tuple[int, int] = (188, 100), radius: int = 15, border_width: int = 3) -> Image.Image:
+    """Apply rounded mask and gold border to an image.
+
+    Resizes the provided image to `size`, applies a rounded-corner mask and draws a
+    golden border. Returns an RGBA Image suitable for pasting onto the infographic.
+    Visual appearance is preserved (same radii, border colors and widths).
+    """
     outer_size = (size[0] + 2 * border_width, size[1] + 2 * border_width)
     img_scaled = img.resize(size, Image.Resampling.LANCZOS)
     mask = Image.new('L', size, 0)
