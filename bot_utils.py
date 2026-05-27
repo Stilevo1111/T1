@@ -8,7 +8,8 @@ import logging
 import asyncio
 from typing import Any, Dict, List, Optional, Set
 from database import user_cache, get_user
-from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram.ext import CallbackContext
 from rate_limiter import rate_limit
 
 logger = logging.getLogger(__name__)
@@ -106,7 +107,7 @@ def make_clickable(name: str | None, user_id: Any, max_length: int = 12) -> str:
     return name if name and name != "None" else "—"
 
 
-async def delete_last_bot_message(bot, chat_id: int, user_id: int) -> None:
+async def delete_last_bot_message(bot: Bot, chat_id: int, user_id: int) -> None:
     """Delete all tracked bot messages for this user in this chat immediately."""
     if chat_id in last_bot_message and user_id in last_bot_message[chat_id]:
         msg_ids = last_bot_message[chat_id][user_id]
@@ -179,7 +180,7 @@ def main_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 
-def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: set = None) -> InlineKeyboardMarkup:
+def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: Optional[Set[int]] = None) -> InlineKeyboardMarkup:
     """Build inline keyboard for analytics pagination."""
     rows = []
     page_buttons = []
@@ -201,14 +202,14 @@ def _build_stats_button_keyboard() -> InlineKeyboardMarkup:
 
 class ManualContext:
     """Контекст для ручного вызова jobs"""
-    def __init__(self, application, bot):
+    def __init__(self, application: Any, bot: Bot) -> None:
         self.application = application
         self.bot = bot
         self.manual = True
 
 
 @rate_limit(tokens=1)
-async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
+async def delete_after_delay(bot: Bot, chat_id: int, msg_id: int, delay: float, job_queue: Any = None):
     """Удалить сообщение через delay секунд"""
     if not isinstance(msg_id, int) or msg_id <= 0:
         logger.debug(f"delete_after_delay: skipping invalid msg_id={msg_id}")
@@ -235,7 +236,7 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
 
 
 @rate_limit(tokens=1)
-async def delete_message_job(context):
+async def delete_message_job(context: CallbackContext):
     """Job для удаления сообщения"""
     bot = context.application.bot
     chat_id = context.job.data['chat_id']
@@ -256,6 +257,6 @@ async def delete_message_job(context):
             logger.warning(f"Failed to delete message {msg_id} in chat {chat_id}: {e}")
 
 
-def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
+def schedule_delete(bot: Bot, chat_id: int, msg_id: int, delay: float = 30, job_queue: Any = None):
     """Запланировать удаление сообщения через delay секунд"""
-    asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay))
+    asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay, job_queue))

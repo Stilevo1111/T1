@@ -10,9 +10,7 @@ import datetime
 import traceback
 from typing import Any
 import urllib.parse as urlparse
-import hashlib
 from datetime import timezone, timedelta
-from collections import deque
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.request import HTTPXRequest
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler

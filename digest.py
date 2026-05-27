@@ -148,7 +148,7 @@ HERO_META_REFRESH_INTERVAL = 3600
 # =====================================================
 
 
-def refresh_dota_digest_cache():
+def refresh_dota_digest_cache() -> None:
     """Refreshes Dota digest data in _digest_state.
     Called from the hourly MMR job so the 15-second fast rotation
     always has fresh data to flip between Fissure and Dota.
@@ -168,7 +168,7 @@ _fast_tick_message_id: int | None = None
 _fast_tick_is_photo: bool = False
 
 
-async def _fast_digest_tick(bot):
+async def _fast_digest_tick(bot: Bot) -> None:
     """Переключает тип дайджеста каждые 15 секунд, используя только данные в памяти.
     Никаких обращений к БД или config.
     """
@@ -321,7 +321,7 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
     return None
 
 
-def start_fast_digest_loop(bot, chat_id: int, message_id: int, is_photo: bool):
+def start_fast_digest_loop(bot: Bot, chat_id: int, message_id: int, is_photo: bool) -> None:
     """Запускает быстрый 15-секундный цикл (только если его ещё нет)."""
     global _fast_tick_task, _fast_tick_chat_id, _fast_tick_message_id, _fast_tick_is_photo
 
@@ -336,7 +336,7 @@ def start_fast_digest_loop(bot, chat_id: int, message_id: int, is_photo: bool):
     logger.info(f"Fast 15s digest tick started (message {message_id})")
 
 
-def stop_fast_digest_loop():
+def stop_fast_digest_loop() -> None:
     """Останавливает быстрый цикл."""
     global _fast_tick_task, _fast_tick_chat_id, _fast_tick_message_id
 

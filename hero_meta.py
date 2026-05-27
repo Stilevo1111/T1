@@ -28,7 +28,7 @@ import math
 import logging
 from pathlib import Path
 from urllib.parse import urlparse
-from typing import Any, Dict, List, Optional
+from typing import Any
 from PIL import Image, ImageDraw, ImageFont
 from hero_positions import hero_positions
 
@@ -82,9 +82,6 @@ def _load_font(size: int, windows_basenames: list[str] | None = None) -> ImageFo
     return font
 
 logger = logging.getLogger(__name__)
-
-# Local commit control: when true, changes will be committed locally but not pushed
-_COMMIT_LOCALLY_ONLY = True
 
 __all__ = [
     "get_hero_meta_image",
