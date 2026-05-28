@@ -9,6 +9,7 @@ import threading
 import json
 from contextlib import contextmanager
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Iterator
 
 # Configure logging for database operations
 logging.basicConfig(level=logging.INFO)
@@ -41,12 +42,12 @@ class UserCache:
         self._dirty = {}  # telegram_id -> True
         self._lock = threading.Lock()
     
-    def get(self, telegram_id):
+    def get(self, telegram_id: int) -> Optional[Dict[str, Any]]:
         """Получить данные пользователя из кеша"""
         with self._lock:
             return self._cache.get(telegram_id)
     
-    def set(self, telegram_id, data):
+    def set(self, telegram_id: int, data: Dict[str, Any]) -> None:
         """Установить данные пользователя в кеш"""
         # Prevent SteamID64 from being used as telegram_id key
         if isinstance(telegram_id, int) and telegram_id > 76561190000000000:
@@ -58,22 +59,22 @@ class UserCache:
             if len(self._cache) > self.MAX_CACHE_SIZE:
                 self.enforce_limit()
     
-    def mark_dirty(self, telegram_id):
+    def mark_dirty(self, telegram_id: int) -> None:
         """Пометить пользователя как изменённого"""
         with self._lock:
             self._dirty[telegram_id] = True
     
-    def is_dirty(self, telegram_id):
+    def is_dirty(self, telegram_id: int) -> bool:
         """Проверить, изменён ли пользователь"""
         with self._lock:
             return self._dirty.get(telegram_id, False)
     
-    def get_all_dirty(self):
+    def get_all_dirty(self) -> List[int]:
         """Получить список всех изменённых пользователей"""
         with self._lock:
             return [tid for tid, is_dirty in self._dirty.items() if is_dirty]
     
-    def clear_dirty(self, telegram_id):
+    def clear_dirty(self, telegram_id: int) -> None:
         """Очистить флаг dirty для пользователя"""
         with self._lock:
             self._dirty[telegram_id] = False
@@ -99,13 +100,14 @@ class UserCache:
             self._cache.pop(key, None)
             self._dirty.pop(key, None)
 
-    def clear(self):
+    def clear(self) -> None:
         """Очистить весь кеш"""
         with self._lock:
             self._cache.clear()
             self._dirty.clear()
     
-    def enforce_limit(self):
+    def enforce_limit(self) -> None:
+        """Enforce cache size limit by removing oldest half of entries."""
         with self._lock:
             if len(self._cache) > self.MAX_CACHE_SIZE:
                 # Удаляем старые записи (первые N / 2)
@@ -122,12 +124,13 @@ user_cache = UserCache()
 class TTLCache:
     """Кеш с автоматическим истечением по времени (TTL)"""
     
-    def __init__(self, default_ttl=60):
+    def __init__(self, default_ttl: int = 60):
+        """Кеш с автоматическим истечением по времени (TTL)"""
         self._cache = {}  # key -> (value, expiry_time)
         self._lock = threading.Lock()
         self._default_ttl = default_ttl  # TTL в секундах
     
-    def get(self, key):
+    def get(self, key: Any) -> Optional[Any]:
         """Получить значение из кеша"""
         with self._lock:
             if key in self._cache:
@@ -139,19 +142,19 @@ class TTLCache:
                     del self._cache[key]
         return None
     
-    def set(self, key, value, ttl=None):
+    def set(self, key: Any, value: Any, ttl: Optional[int] = None) -> None:
         """Установить значение в кеш с TTL"""
         if ttl is None:
             ttl = self._default_ttl
         with self._lock:
             self._cache[key] = (value, time.time() + ttl)
     
-    def delete(self, key):
+    def delete(self, key: Any) -> None:
         """Удалить значение из кеша"""
         with self._lock:
             self._cache.pop(key, None)
     
-    def clear(self):
+    def clear(self) -> None:
         """Очистить весь кеш"""
         with self._lock:
             self._cache.clear()
@@ -163,7 +166,7 @@ top_cache = TTLCache(default_ttl=300)  # 5 минут для топов и ра�
 
 _aiohttp_session = None
 
-async def get_aiohttp_session():
+async def get_aiohttp_session() -> 'aiohttp.ClientSession':
     """Получить переиспользуемую aiohttp сессию для оптимизации соединений"""
     global _aiohttp_session
     if _aiohttp_session is None or _aiohttp_session.closed:
@@ -174,7 +177,7 @@ async def get_aiohttp_session():
         )
     return _aiohttp_session
 
-async def close_aiohttp_session():
+async def close_aiohttp_session() -> None:
     """Закрыть aiohttp сессию при выключении бота"""
     global _aiohttp_session
     if _aiohttp_session and not _aiohttp_session.closed:
@@ -182,7 +185,7 @@ async def close_aiohttp_session():
         _aiohttp_session = None
 
 
-def flush_users_cache():
+def flush_users_cache() -> int:
     """Сброс всех изменённых пользователей в БД с использованием batch операций"""
     dirty_users = user_cache.get_all_dirty()
     if not dirty_users:
@@ -429,7 +432,7 @@ def _postgres_connect_kwargs():
     return kwargs
 
 
-def get_connection():
+def get_connection() -> Any:
     """Получение соединения с базой данных с пулом"""
     db_type = get_db_type()
 
@@ -485,7 +488,7 @@ def get_connection():
                     conn.close()
                 except Exception:
                     pass
-        
+         
         # Создаем новое соединение
         print(f"[DB] Creating new connection for {db_type}")
         if db_type == "postgresql":
@@ -511,7 +514,7 @@ def get_connection():
         
         return conn
 
-def release_connection(conn):
+def release_connection(conn: Any) -> None:
     """Вернуть соединение в пул"""
     if conn is None:
         return
@@ -530,7 +533,7 @@ def release_connection(conn):
                 pass
 
 @contextmanager
-def get_db_connection():
+def get_db_connection() -> Iterator[Any]:
     """Контекстный менеджер для безопасного управления соединениями"""
     conn = None
     try:
