@@ -7,6 +7,7 @@ import aiohttp
 import asyncio
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 from database import get_user, update_user_fields_batch
 import io
 from PIL import Image
@@ -15,15 +16,23 @@ from PIL import Image
 _START_CARD_BACKGROUND_RESIZED = None
 _START_CARD_BACKGROUND_CACHED = False
 
-def _get_start_card_background():
+def _get_start_card_background() -> Optional[Image.Image]:
+    """Load and cache the start card background image.
+
+    Downloads the background image from URL, resizes it to the target size,
+    and caches it in memory to avoid repeated downloads.
+
+    Returns:
+        PIL Image in RGB mode, or None on failure.
+    """
     global _START_CARD_BACKGROUND_RESIZED, _START_CARD_BACKGROUND_CACHED
     if _START_CARD_BACKGROUND_CACHED:
         return _START_CARD_BACKGROUND_RESIZED
     try:
-        resp = requests.get("https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png", timeout=30)
+        resp = requests.get(_START_CARD_BACKGROUND_URL, timeout=_START_CARD_BACKGROUND_TIMEOUT)
         if resp.status_code == 200:
             bg_image = Image.open(io.BytesIO(resp.content)).convert("RGB")
-            bg_image = bg_image.resize((1024, 500), Image.LANCZOS)
+            bg_image = bg_image.resize(_START_CARD_BACKGROUND_SIZE, Image.LANCZOS)
             _START_CARD_BACKGROUND_RESIZED = bg_image
             _START_CARD_BACKGROUND_CACHED = True
             return bg_image
@@ -35,6 +44,11 @@ logger = logging.getLogger(__name__)
 
 OPENDOTA_API_URL = "https://api.opendota.com/api"
 STEAM_OFFSET = 76561197960265728
+
+# Cached background for start card
+_START_CARD_BACKGROUND_URL = "https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png"
+_START_CARD_BACKGROUND_TIMEOUT = 30
+_START_CARD_BACKGROUND_SIZE = (1024, 500)
 
 # Rate limiting для OpenDota API
 _api_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
@@ -75,7 +89,7 @@ def _circuit_breaker_can_execute() -> bool:
     
     return True
 
-def _circuit_breaker_record_success():
+def _circuit_breaker_record_success() -> None:
     """Записать успешный запрос"""
     cb = _circuit_breaker
     if cb["state"] == "HALF_OPEN":
@@ -83,7 +97,7 @@ def _circuit_breaker_record_success():
         logger.info("Circuit breaker: CLOSED - recovery successful")
     cb["failure_count"] = 0
 
-def _circuit_breaker_record_failure():
+def _circuit_breaker_record_failure() -> None:
     """Записать неудачный запрос"""
     cb = _circuit_breaker
     cb["failure_count"] += 1
@@ -130,7 +144,7 @@ def set_opendota_rate_limited(wait_seconds=60):
     global _opendota_rate_limited_until
     _opendota_rate_limited_until = time.time() + wait_seconds
 
-def _check_rate_limit():
+def _check_rate_limit() -> None:
     """Проверить и обновить rate limiting"""
     import time
     now = time.time()
@@ -157,7 +171,7 @@ def _check_rate_limit():
     _api_rate_limit["last_request"] = time.time()
 
 
-def _get_cached(key):
+def _get_cached(key: Any) -> Optional[Any]:
     """Получить значение из кеша с ограничением размера"""
     if key in _cache:
         value, timestamp = _cache[key]
@@ -167,7 +181,7 @@ def _get_cached(key):
     return None
 
 
-def _set_cached(key, value):
+def _set_cached(key: Any, value: Any) -> None:
     """Сохранить значение в кеш с ограничением размера"""
     # Очистка старых записей если кеш переполнен
     if len(_cache) >= CACHE_MAX_SIZE:
