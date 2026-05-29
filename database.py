@@ -1,15 +1,21 @@
+from __future__ import annotations
+
+import json
+import logging
 import os
 import sqlite3
-import psycopg2
-import time
-import psycopg2.extras
-import logging
-import urllib.parse as urlparse
 import threading
-import json
+import time
+import urllib.parse as urlparse
+from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Iterator
+from typing import TYPE_CHECKING, Any
+
+import psycopg2
+import psycopg2.extras
+
+if TYPE_CHECKING:
+    import aiohttp
 
 # Configure logging for database operations
 logging.basicConfig(level=logging.INFO)
@@ -34,20 +40,20 @@ else:
 
 class UserCache:
     """Кеш данных пользователей в памяти с записью в БД раз в сутки"""
-    
+
     MAX_CACHE_SIZE = 3000  # Максимум пользователей в кеше
-    
+
     def __init__(self):
         self._cache = {}  # telegram_id -> user_data
         self._dirty = {}  # telegram_id -> True
         self._lock = threading.Lock()
-    
-    def get(self, telegram_id: int) -> Optional[Dict[str, Any]]:
+
+    def get(self, telegram_id: int) -> dict[str, Any] | None:
         """Получить данные пользователя из кеша"""
         with self._lock:
             return self._cache.get(telegram_id)
-    
-    def set(self, telegram_id: int, data: Dict[str, Any]) -> None:
+
+    def set(self, telegram_id: int, data: dict[str, Any]) -> None:
         """Установить данные пользователя в кеш"""
         # Prevent SteamID64 from being used as telegram_id key
         if isinstance(telegram_id, int) and telegram_id > 76561190000000000:
@@ -58,38 +64,38 @@ class UserCache:
             # Проверяем лимит при каждой записи
             if len(self._cache) > self.MAX_CACHE_SIZE:
                 self.enforce_limit()
-    
+
     def mark_dirty(self, telegram_id: int) -> None:
         """Пометить пользователя как изменённого"""
         with self._lock:
             self._dirty[telegram_id] = True
-    
+
     def is_dirty(self, telegram_id: int) -> bool:
         """Проверить, изменён ли пользователь"""
         with self._lock:
             return self._dirty.get(telegram_id, False)
-    
-    def get_all_dirty(self) -> List[int]:
+
+    def get_all_dirty(self) -> list[int]:
         """Получить список всех изменённых пользователей"""
         with self._lock:
             return [tid for tid, is_dirty in self._dirty.items() if is_dirty]
-    
+
     def clear_dirty(self, telegram_id: int) -> None:
         """Очистить флаг dirty для пользователя"""
         with self._lock:
             self._dirty[telegram_id] = False
-    
+
     def get_all_users(self):
         """Получить всех пользователей из кеша"""
         with self._lock:
             return list(self._cache.keys())
-    
+
     def remove(self, telegram_id):
         """Удалить пользователя из кеша"""
         with self._lock:
             self._cache.pop(telegram_id, None)
             self._dirty.pop(telegram_id, None)
-             
+
     def delete(self, telegram_id):
         """Псевдоним для remove для обратной совместимости"""
         self.remove(telegram_id)
@@ -105,7 +111,7 @@ class UserCache:
         with self._lock:
             self._cache.clear()
             self._dirty.clear()
-    
+
     def enforce_limit(self) -> None:
         """Enforce cache size limit by removing oldest half of entries."""
         with self._lock:
@@ -123,14 +129,14 @@ user_cache = UserCache()
 
 class TTLCache:
     """Кеш с автоматическим истечением по времени (TTL)"""
-    
+
     def __init__(self, default_ttl: int = 60):
         """Кеш с автоматическим истечением по времени (TTL)"""
         self._cache = {}  # key -> (value, expiry_time)
         self._lock = threading.Lock()
         self._default_ttl = default_ttl  # TTL в секундах
-    
-    def get(self, key: Any) -> Optional[Any]:
+
+    def get(self, key: Any) -> Any | None:
         """Получить значение из кеша"""
         with self._lock:
             if key in self._cache:
@@ -141,19 +147,19 @@ class TTLCache:
                     # Кеш истёк, удаляем
                     del self._cache[key]
         return None
-    
-    def set(self, key: Any, value: Any, ttl: Optional[int] = None) -> None:
+
+    def set(self, key: Any, value: Any, ttl: int | None = None) -> None:
         """Установить значение в кеш с TTL"""
         if ttl is None:
             ttl = self._default_ttl
         with self._lock:
             self._cache[key] = (value, time.time() + ttl)
-    
+
     def delete(self, key: Any) -> None:
         """Удалить значение из кеша"""
         with self._lock:
             self._cache.pop(key, None)
-    
+
     def clear(self) -> None:
         """Очистить весь кеш"""
         with self._lock:
@@ -166,7 +172,7 @@ top_cache = TTLCache(default_ttl=300)  # 5 минут для топов и ра�
 
 _aiohttp_session = None
 
-async def get_aiohttp_session() -> 'aiohttp.ClientSession':
+async def get_aiohttp_session() -> aiohttp.ClientSession:
     """Получить переиспользуемую aiohttp сессию для оптимизации соединений"""
     global _aiohttp_session
     if _aiohttp_session is None or _aiohttp_session.closed:
@@ -191,20 +197,20 @@ def flush_users_cache() -> int:
     if not dirty_users:
         logger.info("flush_users_cache: no dirty users")
         return 0
-    
+
     logger.info(f"flush_users_cache: found {len(dirty_users)} dirty users, saving to DB")
-    
+
     update_dota_week_top_cache()
-    
+
     db_type = get_db_type()
     flushed = 0
-    
+
     conn = None
     cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        
+
         # Подготавливаем данные для batch обновления
         batch_data = []
         for telegram_id in dirty_users:
@@ -227,12 +233,12 @@ def flush_users_cache() -> int:
                     user_data.get('week_wins', 0), user_data.get('week_best_streak', 0),
                     user_data.get('week_start_date'), telegram_id
                 ))
-        
+
         # Batch обновление через executemany для экономии CU
         if batch_data:
             if db_type == "postgresql":
                 query = """
-                    UPDATE users SET 
+                    UPDATE users SET
                         username = %s, fissure = %s, last_fissure = %s,
                         total_growth = %s, total_rolls = %s, current_streak = %s,
                         best_streak = %s, weekly_rolls = %s, weekly_growth = %s,
@@ -245,7 +251,7 @@ def flush_users_cache() -> int:
                 psycopg2.extras.execute_batch(cursor, query, batch_data, page_size=100)
             else:
                 query = """
-                    UPDATE users SET 
+                    UPDATE users SET
                         username = ?, fissure = ?, last_fissure = ?,
                         total_growth = ?, total_rolls = ?, current_streak = ?,
                         best_streak = ?, weekly_rolls = ?, weekly_growth = ?,
@@ -256,15 +262,15 @@ week_best_streak = ?, week_start_date = ?, last_activity = CURRENT_TIMESTAMP
                     WHERE telegram_id = ?
                 """
                 cursor.executemany(query, batch_data)
-            
+
             # Очищаем dirty флаги только для успешно обновленных пользователей
             flushed = len(batch_data)
             for i in range(flushed):
                 telegram_id = batch_data[i][-1]  # telegram_id is last element
                 user_cache.clear_dirty(telegram_id)
-        
+
         conn.commit()
-        
+
     except Exception as e:
         logger.error(f"flush_users_cache: batch error: {e}")
         if conn:
@@ -274,7 +280,7 @@ week_best_streak = ?, week_start_date = ?, last_activity = CURRENT_TIMESTAMP
             cursor.close()
         if conn:
             release_connection(conn)
-    
+
     logger.info(f"flush_users_cache: flushed {flushed} users")
     return flushed
 
@@ -282,7 +288,7 @@ week_best_streak = ?, week_start_date = ?, last_activity = CURRENT_TIMESTAMP
 def update_dota_week_top_cache():
     """Обновление кеша топа MMR из данных пользователей"""
     all_users = user_cache.get_all_users()
-    
+
     # Если в кеше нет пользователей - загружаем из БД
     if not all_users:
         logger.info("update_dota_week_top_cache: no users in cache, loading from DB")
@@ -295,25 +301,25 @@ def update_dota_week_top_cache():
             logger.info(f"update_dota_week_top_cache: loaded {len(all_users)} users from DB to cache")
         except Exception as e:
             logger.error(f"update_dota_week_top_cache: error loading users: {e}")
-    
+
     if not all_users:
         logger.info("update_dota_week_top_cache: no users found")
         return
-    
+
     top_users = []
     for telegram_id in all_users:
         # Пропускаем метаданные (не числовые ключи)
         if not isinstance(telegram_id, int):
             continue
-        
+
         user = user_cache.get(telegram_id)
         if not user or not user.get('steam_id'):
             continue
-        
+
         week_games = user.get('week_games', 0)
         week_wins = user.get('week_wins', 0)
         winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
-        
+
         top_users.append({
             'telegram_id': telegram_id,
             'username': user.get('username'),
@@ -325,7 +331,7 @@ def update_dota_week_top_cache():
             'winrate': winrate,
             'week_current_streak': user.get('week_current_streak', 0)
         })
-    
+
     # Сортировка: score = 2 * week_wins - week_games (победы - поражения)
     # Игроки без игр за неделю идут в самый конец
     def get_sort_key(x):
@@ -335,15 +341,15 @@ def update_dota_week_top_cache():
             return (1, 0, 0)  # Помещаем в самый конец
         score = 2 * w - g  # wins - losses
         return (0, -score, -g)  # Сортировка по убыванию score, затем по убыванию игр
-    
+
     top_users.sort(key=get_sort_key)
-    
+
     logger.info("===== TOP USERS AFTER SORT =====")
     for i, u in enumerate(top_users):
         week_losses = u.get('week_games', 0) - u.get('week_wins', 0)
         logger.info(f"  POS{i+1}. {u.get('steam_nickname')}: {u.get('week_wins')}W/{week_losses}L, WR={u.get('winrate')}%")
     logger.info("===== END SORT =====")
-    
+
     # Сохраняем в кеш
     user_cache.set('dota_week_top', top_users)
     logger.info(f"update_dota_week_top_cache: cached {len(top_users)} users")
@@ -473,14 +479,14 @@ def get_connection() -> Any:
             return _persistent_pg_conn
 
     print(f"[DB] Getting connection, type: {db_type}")
-    
+
     with _pool_lock:
         # Проверяем доступные соединения в пуле
         if db_type in _pool and _pool[db_type]:
             conn = _pool[db_type].pop()
             try:
                 conn.isolation_level = None  # Reset isolation level for PostgreSQL
-                print(f"[DB] Reusing connection from pool")
+                print("[DB] Reusing connection from pool")
                 return conn
             except Exception as e:
                 print(f"[DB] Connection failed: {e}")
@@ -488,7 +494,7 @@ def get_connection() -> Any:
                     conn.close()
                 except Exception:
                     pass
-         
+
         # Создаем новое соединение
         print(f"[DB] Creating new connection for {db_type}")
         if db_type == "postgresql":
@@ -508,10 +514,10 @@ def get_connection() -> Any:
                 db_path = DATABASE_URL[9:]
             else:
                 db_path = DATABASE_URL
-            
+
             conn = sqlite3.connect(db_path, timeout=10)
             logger.info("SQLite connected")
-        
+
         return conn
 
 def release_connection(conn: Any) -> None:
@@ -601,7 +607,7 @@ def init_db():
             conn.commit()
             logger.info("init_db: schema up to date, skipped DDL")
             return
-        
+
         if is_pg:
             # Создаём таблицу если не существует
             cursor.execute("""
@@ -881,7 +887,7 @@ current_win_streak INTEGER DEFAULT 0,
                 cursor.execute("ALTER TABLE users ADD COLUMN message_count INTEGER DEFAULT 0")
             if 'first_name' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
-            
+
             # Создаём индексы для часто используемых полей (улучшение производительности)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_mmr ON users(mmr DESC)")
@@ -889,7 +895,7 @@ current_win_streak INTEGER DEFAULT 0,
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_week_games ON users(week_games DESC)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_current_position ON users(current_position)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_rank_tier ON users(rank_tier DESC)")
-        
+
         _save_schema_version(cursor, is_pg)
         conn.commit()
         logger.info("Database initialized (full schema apply)")
@@ -903,18 +909,18 @@ def migrate_db():
     try:
         import subprocess
         import sys
-        
+
         # Check if alembic.ini exists
         alembic_ini_path = os.path.join(os.path.dirname(__file__), 'alembic.ini')
         if not os.path.exists(alembic_ini_path):
             logger.info("Alembic not configured, skipping migrations")
             return True
-        
+
         # Run alembic upgrade head
         result = subprocess.run([
             sys.executable, '-m', 'alembic', 'upgrade', 'head'
         ], capture_output=True, text=True, cwd=os.path.dirname(__file__))
-        
+
         if result.returncode == 0:
             logger.info("Database migrations completed successfully")
             return True
@@ -934,7 +940,7 @@ class Database:
         """Выполнить SQL запрос с параметрами"""
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
-        
+
         if "postgres" in scheme:
             conn = get_connection()
             try:
@@ -997,13 +1003,13 @@ class Database:
         try:
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            
+
             if "postgres" in scheme:
                 query = '''
                     INSERT INTO users (telegram_id, username, first_name, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at, message_count)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, 0)
-                    ON CONFLICT (telegram_id) 
-                    DO UPDATE SET 
+                    ON CONFLICT (telegram_id)
+                    DO UPDATE SET
                         username = EXCLUDED.username,
                         first_name = EXCLUDED.first_name,
                         fissure = EXCLUDED.fissure,
@@ -1044,14 +1050,14 @@ class Database:
                     pass
             logger.error(f"Error adding user: {e}")
             return None
-    
+
     def get_user(self, telegram_id, username=None):
         """Получение пользователя"""
         try:
             # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            
+
             if "postgres" in scheme:
                 query = "SELECT * FROM users WHERE telegram_id = %s"
                 user = self.execute_query(query, (telegram_id,), fetch="one")
@@ -1159,7 +1165,7 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting user: {e}")
             return None
-    
+
     def update_fissure(self, telegram_id, fissure, last_fissure, growth=0):
         """Обновление данных пользователя"""
         try:
@@ -1168,11 +1174,11 @@ class Database:
             scheme = url.scheme
             win = 1 if growth > 0 else 0
             lose = 1 if growth < 0 else 0
-            
+
             weekly_inc = max(0.0, float(growth))
             if "postgres" in scheme:
                 query = """
-                    UPDATE users SET fissure=%s, last_fissure=%s, 
+                    UPDATE users SET fissure=%s, last_fissure=%s,
                     total_growth = total_growth + %s,
                     total_rolls = total_rolls + 1,
                     weekly_rolls = weekly_rolls + 1,
@@ -1188,7 +1194,7 @@ class Database:
                 self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, win, lose, win, win, lose, telegram_id))
             else:
                 query = """
-                    UPDATE users SET fissure=?, last_fissure=?, 
+                    UPDATE users SET fissure=?, last_fissure=?,
                     total_growth = total_growth + ?,
                     total_rolls = total_rolls + 1,
                     weekly_rolls = weekly_rolls + 1,
@@ -1211,7 +1217,7 @@ class Database:
             # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            
+
             if "postgres" in scheme:
                 query = "UPDATE users SET last_message_id=%s WHERE telegram_id=%s"
                 self.execute_query(query, (message_id, telegram_id))
@@ -1220,14 +1226,14 @@ class Database:
                 self.execute_query(query, (message_id, telegram_id))
         except Exception as e:
             logger.error(f"Error updating last message ID: {e}")
-    
+
     def get_fissure_top(self, limit=10):
         """Получение топ пользователей"""
         try:
             # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            
+
             if "postgres" in scheme:
                 query = "SELECT telegram_id, username, steam_nickname, first_name, fissure FROM users WHERE (in_chat = TRUE OR in_chat IS NULL) ORDER BY fissure DESC NULLS LAST LIMIT %s"
                 users = self.execute_query(query, (limit,), fetch="all")
@@ -1239,7 +1245,7 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting fissure top: {e}")
             return []
-    
+
     def get_user_rank(self, telegram_id):
         """Получить позицию игрока в топе по MMR"""
         logger.info(f"DEBUG: get_user_rank called for {telegram_id}")
@@ -1274,15 +1280,15 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting user rank: {e}", exc_info=True)
             return None
-    
+
     def get_fissure_rank(self, telegram_id):
         """Получение позиции игрока в топе по fissure"""
         logger.info(f"DEBUG: get_fissure_rank called for {telegram_id}")
         try:
             if get_db_type() == "postgresql":
                 query = """
-                    SELECT COUNT(*) + 1 as rank FROM users 
-                    WHERE in_chat = TRUE 
+                    SELECT COUNT(*) + 1 as rank FROM users
+                    WHERE in_chat = TRUE
                     AND fissure > COALESCE(
                         (SELECT fissure FROM users WHERE telegram_id = %s LIMIT 1), -1)
                 """
@@ -1294,7 +1300,7 @@ class Database:
                 return None
             else:
                 query = """
-                    SELECT COUNT(*) + 1 FROM users 
+                    SELECT COUNT(*) + 1 FROM users
                     WHERE (in_chat = 1 OR in_chat IS NULL)
                     AND fissure > COALESCE(
                         (SELECT fissure FROM users WHERE telegram_id = ? LIMIT 1), -1)
@@ -1308,13 +1314,13 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting fissure rank: {e}", exc_info=True)
             return None
-    
+
     def decrease_inactive_fissure(self, days_inactive=1, decrease_amount=1.0):
         """Уменьшить fissure для неактивных игроков"""
         try:
             if get_db_type() == "postgresql":
                 query = """
-                    UPDATE users 
+                    UPDATE users
                     SET fissure = GREATEST(0.1, fissure - %s)
                     WHERE last_activity < CURRENT_TIMESTAMP - INTERVAL '%s days'
                     AND fissure > 0.1
@@ -1324,7 +1330,7 @@ class Database:
             else:
                 # Для SQLite используем datetime function
                 query = """
-                    UPDATE users 
+                    UPDATE users
                     SET fissure = MAX(0.1, fissure - ?)
                     WHERE last_activity < datetime('now', ?)
                     AND fissure > 0.1
@@ -1336,17 +1342,17 @@ class Database:
         except Exception as e:
             logger.error(f"Error decreasing inactive fissure: {e}")
             return 0
-    
+
     def get_config(self, key, default=None, use_cache=True):
         """Получить значение конфигурации с кешированием"""
         if use_cache and key in _config_cache and (time.time() - _config_cache_time.get(key, 0)) < _CONFIG_CACHE_TTL:
             return _config_cache[key]
-        
+
         result = default
         try:
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            
+
             if "postgres" in scheme:
                 query = "SELECT value FROM bot_config WHERE key = %s"
                 row = self.execute_query(query, (key,), fetch="one")
@@ -1377,12 +1383,12 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting config: {e}")
             return default
-        
+
         if use_cache and result != default:
             _config_cache[key] = result
             _config_cache_time[key] = time.time()
         return result
-    
+
     def set_config(self, key, value):
         """Установить значение конфигурации"""
         try:
@@ -1409,24 +1415,23 @@ class Database:
                     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
                 """
                 self.execute_query(query, (key, str(value)))
-            
+
             # Invalidate cache
             if key in _config_cache:
                 del _config_cache[key]
                 del _config_cache_time[key]
-            
+
             return True
         except Exception as e:
             logger.error(f"Error setting config: {e}")
             return False
-    
+
     def get_digest_stats(self):
         """Получить статистику для дайджеста"""
         try:
             # Используем execute_query для безопасного выполнения
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
-            
+            urlparse.urlparse(DATABASE_URL)
+
             if get_db_type() == "postgresql":
                 query = """
                     SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, total_growth
@@ -1468,7 +1473,7 @@ class Database:
 
             # Текущие позиции по текущей фиссуре (для ранкинга)
             users_sorted = sorted(users, key=lambda u: u["fissure"], reverse=True)
-            current_pos_by_id = {u["telegram_id"]: i + 1 for i, u in enumerate(users_sorted)}
+            {u["telegram_id"]: i + 1 for i, u in enumerate(users_sorted)}
 
 # Рост: самый большой прирост см за сутки (current - digest)
             top_growth_user = None
@@ -1549,9 +1554,9 @@ class Database:
                     cursor.execute("SELECT username FROM users WHERE telegram_id = ?", (telegram_id,))
                 result = cursor.fetchone()
                 return result[0] if result else None
-            
+
             streak_username = get_user_telegram_username(top_streak_id) if top_streak_id else None
-            
+
             return {
                 "top_growth": (top_growth_user or "None", int(top_growth_cm)),
                 "top_drop": (top_drop_user or "None", float(top_drop_cm)),
@@ -1572,7 +1577,7 @@ class Database:
                 "top_streak_id": None,
                 "streak_username": None
             }
-    
+
     def get_user_position(self, telegram_id):
         """Получить текущую позицию пользователя (динамически, без обновления всех)"""
         try:
@@ -1614,7 +1619,7 @@ class Database:
                     WHERE in_chat = TRUE
                 """
                 rows = self.execute_query(query, fetch="all")
-                
+
                 # Разный синтаксис для дат в PostgreSQL
                 query_count = "SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '7 days'"
                 new_players_week = self.execute_query(query_count, fetch="one")
@@ -1627,7 +1632,7 @@ class Database:
                     WHERE in_chat = 1 OR in_chat IS NULL
                 """
                 rows = self.execute_query(query, fetch="all")
-                
+
                 # Разный синтаксис для дат в SQLite
                 query_count = "SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', '-7 days')"
                 new_players_week = self.execute_query(query_count, fetch="one")
@@ -1703,17 +1708,17 @@ class Database:
             # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
-            
+
             if "postgres" in scheme:
                 query = """
-                    UPDATE users SET 
+                    UPDATE users SET
                         current_position = subquery.pos,
                         weekly_digest_position = subquery.pos,
                         weekly_rolls = 0,
                         weekly_growth = 0
                     FROM (
-                        SELECT telegram_id, 
-                               ROW_NUMBER() OVER (ORDER BY fissure DESC) as pos 
+                        SELECT telegram_id,
+                               ROW_NUMBER() OVER (ORDER BY fissure DESC) as pos
                         FROM users
                     ) subquery
                     WHERE users.telegram_id = subquery.telegram_id
@@ -1723,7 +1728,7 @@ class Database:
             else:
                 # SQLite: используем скалярные подзапросы
                 query = """
-                    UPDATE users SET 
+                    UPDATE users SET
                         current_position = (
                             SELECT COUNT(*) + 1 FROM users u2 WHERE u2.fissure > users.fissure
                         ),
@@ -1748,11 +1753,11 @@ def get_user(telegram_id, username=None):
         msg_count = cached_user.get('message_count', 0)
         logger.info(f"get_user: cache hit for {telegram_id}, message_count={msg_count}")
         return cached_user
-    
+
     # Нет в кеше - читаем из БД
     db = Database()
     user = db.get_user(telegram_id, username)
-    
+
     if user:
         msg_count = user.get('message_count', 0)
         logger.info(f"get_user: DB hit for {telegram_id}, message_count={msg_count}, keys={list(user.keys()) if isinstance(user, dict) else 'tuple'}")
@@ -1764,14 +1769,14 @@ def get_user(telegram_id, username=None):
         user_cache.set(telegram_id, user)
     else:
         logger.warning(f"get_user: user {telegram_id} NOT found in cache or DB")
-    
+
     return user
 
 
 def get_user_by_username(username):
     """Найти пользователя по username (без @). Ищет сначала в кеше, потом в БД."""
     username = username.lstrip("@").lower()
-    
+
     # Сначала ищем в кеше
     all_keys = user_cache.get_all_users()
     for uid in all_keys:
@@ -1784,7 +1789,7 @@ def get_user_by_username(username):
         if cached_name and cached_name.lower() == username:
             logger.info(f"get_user_by_username: found '{username}' in cache (tid={uid})")
             return get_user(uid)
-    
+
     # Не нашли в кеше — ищем в БД
     conn = None
     try:
@@ -1808,7 +1813,7 @@ def get_user_by_username(username):
     finally:
         if conn is not None:
             release_connection(conn)
-    
+
     logger.info(f"get_user_by_username: '{username}' not found in cache or DB")
     return None
 
@@ -1817,7 +1822,7 @@ def get_user_by_steam_id(steam_id: int):
     """Найти пользователя по steam_id. Ищет сначала в кеше, потом в БД."""
     if not steam_id:
         return None
-    
+
     # Сначала ищем в кеше
     all_keys = user_cache.get_all_users()
     for uid in all_keys:
@@ -1830,7 +1835,7 @@ def get_user_by_steam_id(steam_id: int):
         if cached_steam_id == steam_id:
             logger.info(f"get_user_by_steam_id: found {steam_id} in cache (tid={uid})")
             return get_user(uid)
-    
+
     conn = None
     try:
         conn = get_connection()
@@ -1852,7 +1857,7 @@ def get_user_by_steam_id(steam_id: int):
     finally:
         if conn is not None:
             release_connection(conn)
-    
+
     return None
 
 
@@ -1860,7 +1865,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
     """Обновление fissure + optionally last_message_id in one query"""
     logger.info(f"update_fissure called: telegram_id={telegram_id}, fissure={fissure}, last_fissure={last_fissure}, growth={growth}")
     user = get_user(telegram_id)
-    
+
     if user:
         user['fissure'] = fissure
         user['last_fissure'] = last_fissure
@@ -1868,28 +1873,28 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
         user['total_rolls'] = user.get('total_rolls', 0) + 1
         user['weekly_rolls'] = user.get('weekly_rolls', 0) + 1
         user['weekly_growth'] = user.get('weekly_growth', 0) + max(0, growth)
-        
+
         win = 1 if growth > 0 else 0
         lose = 1 if growth < 0 else 0
-        
+
         # Track separate win and lose streaks
         current_win_streak = user.get('current_win_streak', 0) + 1 if win else 0
         current_lose_streak = user.get('current_lose_streak', 0) + 1 if lose else 0
-        
+
         user['current_win_streak'] = current_win_streak
         user['current_lose_streak'] = current_lose_streak
         user['current_streak'] = current_win_streak  # Keep for backward compatibility
         user['best_streak'] = max(user.get('best_streak', 0), current_win_streak)
         user['best_lose_streak'] = max(user.get('best_lose_streak', 0), current_lose_streak)
-        
+
         user_cache.set(telegram_id, user)
-        
+
          # Сразу сохраняем в БД
         db = Database()
         scheme = get_db_type()
         if "postgres" in scheme:
             query = """
-                UPDATE users SET fissure=%s, last_fissure=%s, 
+                UPDATE users SET fissure=%s, last_fissure=%s,
                 total_growth = total_growth + %s,
                 total_rolls = total_rolls + 1,
                 weekly_rolls = weekly_rolls + 1,
@@ -1906,7 +1911,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
             db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, win, win, lose, last_message_id, telegram_id))
         else:
             query = """
-                UPDATE users SET fissure=?, last_fissure=?, 
+                UPDATE users SET fissure=?, last_fissure=?,
                 total_growth = total_growth + ?,
                 total_rolls = total_rolls + 1,
                 weekly_rolls = weekly_rolls + 1,
@@ -1922,7 +1927,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
             """
             db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, win, win, lose, last_message_id, telegram_id))
         logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
-        
+
         # Сбрасываем кеши дайджестов при изменении fissure
         user_cache.set('digest_stats', None)
         # Сбрасываем кеш топа при изменении fissure
@@ -2036,15 +2041,15 @@ def get_fissure_top(limit=10):
     if cached is not None:
         logger.info(f"get_fissure_top: returning from cache for limit={limit}")
         return cached
-    
+
     # Нет в кеше - читаем из БД
     db = Database()
     result = db.get_fissure_top(limit)
-    
+
     # Сохраняем в кеш только непустой результат (иначе пустой [] будет жить вечно)
     if result:
         top_cache.set(cache_key, result)
-    
+
     return result
 
 def get_user_rank(telegram_id):
@@ -2054,15 +2059,15 @@ def get_user_rank(telegram_id):
     if cached is not None:
         logger.info(f"get_user_rank: returning from cache for {telegram_id}")
         return cached
-    
+
     # Нет в кеше - читаем из БД
     db = Database()
     result = db.get_user_rank(telegram_id)
-    
+
     # Сохраняем в кеш (если результат не None)
     if result is not None:
         top_cache.set(cache_key, result)
-    
+
     return result
 
 def get_fissure_rank(telegram_id):
@@ -2072,15 +2077,15 @@ def get_fissure_rank(telegram_id):
     if cached is not None:
         logger.info(f"get_fissure_rank: returning from cache for {telegram_id}")
         return cached
-    
+
     # Нет в кеше - читаем из БД
     db = Database()
     result = db.get_fissure_rank(telegram_id)
-    
+
     # Сохраняем в кеш (если результат не None)
     if result is not None:
         top_cache.set(cache_key, result)
-    
+
     return result
 
 def update_last_message_id(telegram_id, message_id):
@@ -2094,14 +2099,14 @@ def update_user_field(telegram_id, field, value):
     if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
         logger.warning(f"update_user_field: invalid telegram_id={telegram_id}, skipping")
         return False
-    
+
     user = get_user(telegram_id)
-    
+
     if user:
         user[field] = value
         user_cache.set(telegram_id, user)
         user_cache.mark_dirty(telegram_id)
-        
+
         # Важные поля — сразу в БД
         immediate_fields = {
             'steam_id', 'steam_nickname', 'mmr', 'rank_tier', 'wins', 'losses',
@@ -2110,14 +2115,14 @@ def update_user_field(telegram_id, field, value):
         }
         if field in immediate_fields:
             _save_user_to_db_immediately(telegram_id, user)
-        
+
         # Сбрасываем кеши дайджестов при изменении данных пользователя
         user_cache.set('digest_stats', None)
         user_cache.set('weekly_digest_stats', None)
         user_cache.set('dota_digest_stats', None)
         # Сбрасываем кеш топа при изменении данных пользователей
         top_cache.clear()
-        
+
         return True
     return False
 
@@ -2130,38 +2135,38 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
     if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
         logger.warning(f"update_user_fields_batch: invalid telegram_id={telegram_id}, skipping")
         return False
-    
+
     user = get_user(telegram_id)
     if not user:
         return False
-    
+
     # Обновляем все поля в кеше
     for field, value in fields.items():
         user[field] = value
-    
+
     user_cache.set(telegram_id, user)
     user_cache.mark_dirty(telegram_id)
-    
+
     # Сохраняем в БД только если нужно (по умолчанию да)
     if save_to_db:
         _save_user_to_db_immediately(telegram_id, user)
-    
+
     # Обновляем кеш топа MMR только если caller разрешил (MMR job делает это один раз после всего цикла)
     dota_fields = ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname', 'steam_id']
     if update_top_cache and any(f in dota_fields for f in fields):
         update_dota_week_top_cache()
-    
+
     # Сбрасываем кеш топа недели при новом steam_id
     if 'steam_id' in fields and fields['steam_id']:
         user_cache.delete('dota_week_top')
         user_cache.delete('dota_week_top_ts')
-    
+
     # Сбрасываем кеши дайджестов
     user_cache.set('digest_stats', None)
     user_cache.set('weekly_digest_stats', None)
     user_cache.set('dota_digest_stats', None)
     top_cache.clear()
-    
+
     return True
 
 
@@ -2175,9 +2180,9 @@ def _save_user_to_db_immediately(telegram_id, user_data):
         else:
             placeholders = "?"
         query = f"""
-            UPDATE users SET 
+            UPDATE users SET
                 steam_id = {placeholders}, steam_nickname = {placeholders}, avatar = {placeholders}, mmr = {placeholders}, rank_tier = {placeholders},
-                week_games = {placeholders}, week_wins = {placeholders}, 
+                week_games = {placeholders}, week_wins = {placeholders},
                 week_best_streak = {placeholders}, week_current_streak = {placeholders}, dota_total_games = {placeholders},
                 dota_wins = {placeholders}, last_dota_games = {placeholders}, last_dota_wins = {placeholders},
                 wins = {placeholders}, losses = {placeholders}, week_start_date = {placeholders},
@@ -2210,7 +2215,7 @@ def _save_user_to_db_immediately(telegram_id, user_data):
             user_data.get('weekly_top3_count', 0),
             telegram_id
         )
-        result = db.execute_query(query, params)
+        db.execute_query(query, params)
     except Exception as e:
         logger.error(f"Error saving user {telegram_id} to DB immediately: {e}", exc_info=True)
 
@@ -2228,31 +2233,31 @@ def zeus_strike(percent=0.05):
     """Удар Зевса: уменьшить fissure ВСЕХ игроков на percent (батчевая версия)."""
     db = Database()
     scheme = get_db_type()
-    
+
     logger.info(f"zeus_strike (batched): percent={percent}")
-    
+
     try:
         if "postgres" in scheme:
             query = """
-                UPDATE users 
+                UPDATE users
                 SET fissure = GREATEST(0.1, fissure * (1 - %s))
                 WHERE fissure > 0.1
             """
             affected = db.execute_query(query, (percent,))
         else:
             query = """
-                UPDATE users 
+                UPDATE users
                 SET fissure = MAX(0.1, fissure * (1 - ?))
                 WHERE fissure > 0.1
             """
             affected = db.execute_query(query, (percent,))
-        
+
         # Очищаем кеши
         user_cache.clear()
         top_cache.clear()
-        
+
         return affected or 0
-        
+
     except Exception as e:
         logger.error(f"zeus_strike error: {e}")
         return 0
@@ -2298,13 +2303,13 @@ def batch_save_mmr(users_data: list):
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        
+
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
-        
+
         if "postgres" in scheme:
             query = """
-                UPDATE users SET 
+                UPDATE users SET
                     mmr = COALESCE(%s, mmr),
                     steam_nickname = COALESCE(%s, steam_nickname),
                     rank_tier = COALESCE(%s, rank_tier),
@@ -2317,7 +2322,7 @@ def batch_save_mmr(users_data: list):
             """
         else:
             query = """
-                UPDATE users SET 
+                UPDATE users SET
                     mmr = COALESCE(?, mmr),
                     steam_nickname = COALESCE(?, steam_nickname),
                     rank_tier = COALESCE(?, rank_tier),
@@ -2328,7 +2333,7 @@ def batch_save_mmr(users_data: list):
                     week_start_date = COALESCE(?, week_start_date)
                 WHERE telegram_id = ?
             """
-        
+
         rows = []
         for u in users_data:
             rows.append((
@@ -2337,11 +2342,11 @@ def batch_save_mmr(users_data: list):
                 u.get("week_current_streak"), u.get("week_start_date"),
                 u["telegram_id"]
             ))
-        
+
         cursor.executemany(query, rows)
         conn.commit()
         cursor.close()
-        
+
         # Обновляем кеш
         for u in users_data:
             cached = user_cache.get(u["telegram_id"])
@@ -2350,7 +2355,7 @@ def batch_save_mmr(users_data: list):
                     if v is not None and k != "telegram_id":
                         cached[k] = v
                 user_cache.set(u["telegram_id"], cached)
-        
+
         top_cache.clear()
         logger.info(f"batch_save_mmr: saved {len(users_data)} users in one transaction")
     except Exception as e:
@@ -2366,26 +2371,26 @@ def batch_increment_config(key: str, delta: int):
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        
+
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
-        
+
         if "postgres" in scheme:
             cursor.execute("""
-                INSERT INTO bot_config (key, value) 
+                INSERT INTO bot_config (key, value)
                 VALUES (%s, %s)
                 ON CONFLICT (key) DO UPDATE SET value = CAST(CAST(bot_config.value AS INTEGER) + %s AS TEXT)
             """, (key, str(delta), delta))
         else:
             cursor.execute("""
-                INSERT INTO bot_config (key, value) 
+                INSERT INTO bot_config (key, value)
                 VALUES (?, ?)
                 ON CONFLICT (key) DO UPDATE SET value = CAST(CAST(bot_config.value AS INTEGER) + ? AS TEXT)
             """, (key, str(delta), delta))
-        
+
         conn.commit()
         cursor.close()
-        
+
         # Чистим кеш
         config_cache.delete(key)
     except Exception as e:
@@ -2401,15 +2406,15 @@ def get_config(key, default=None):
     if cached is not None:
         logger.info(f"get_config: returning from cache for key={key}")
         return cached
-    
+
     # Нет в кеше - читаем из БД
     db = Database()
     result = db.get_config(key, default)
-    
+
     # Сохраняем в кеш (если значение не None)
     if result is not None:
         config_cache.set(key, result)
-    
+
     return result
 
 def set_config(key, value):
@@ -2494,7 +2499,7 @@ def get_weekly_digest_stats():
     if cached:
         logger.info("get_weekly_digest_stats: returning from cache")
         return cached
-    
+
     db = Database()
     result = db.get_weekly_digest_stats()
     user_cache.set('weekly_digest_stats', result)
@@ -2603,36 +2608,35 @@ def get_dota_mmr_top(limit=10):
 
 def get_dota_week_top(limit=10, force_refresh=False):
     """Получение топа игроков Dota 2 за неделю - с TTL и блокировкой"""
-    import math
     import time
-    
+
     _TOP_CACHE_TTL = 14400  # 4 часа
-    
+
     # Блокировка от дубликатов - использовать threading.Lock
     global _dota_week_top_lock
     if not hasattr(get_dota_week_top, '_lock'):
         get_dota_week_top._lock = threading.Lock()
         get_dota_week_top._calculating = [False]
-    
+
     if get_dota_week_top._calculating[0] and not force_refresh:
         cached_top = user_cache.get('dota_week_top')
         if cached_top:
             return cached_top[:limit]
-    
+
     with get_dota_week_top._lock:
         get_dota_week_top._calculating[0] = True
         try:
             cached_top = user_cache.get('dota_week_top')
             cached_time = user_cache.get('dota_week_top_ts')
             current_time = time.time()
-            
+
             if cached_top and cached_time and not force_refresh:
                 if current_time - cached_time < _TOP_CACHE_TTL:
                     logger.info(f"get_dota_week_top: returning cached top ({len(cached_top)} users)")
                     return cached_top[:limit]
-            
+
             all_users = user_cache.get_all_users()
-            
+
             # Если кеш пустой или force_refresh - загружаем из БД
             if not all_users or force_refresh:
                 logger.info("get_dota_week_top: loading users from DB")
@@ -2646,11 +2650,11 @@ def get_dota_week_top(limit=10, force_refresh=False):
                     logger.error(f"get_dota_week_top: error loading users: {e}")
                     get_dota_week_top._calculating[0] = False
                     return []
-            
+
             if not all_users:
                 get_dota_week_top._calculating[0] = False
                 return []
-            
+
             top_users = []
             seen_ids = set()  # Убираем дубликаты по telegram_id
             for telegram_id in all_users:
@@ -2663,19 +2667,19 @@ def get_dota_week_top(limit=10, force_refresh=False):
                 if telegram_id in seen_ids:  # Пропускаем дубликаты
                     continue
                 seen_ids.add(telegram_id)
-                
+
                 user = user_cache.get(telegram_id)
                 if not user or not user.get('steam_id'):
                     continue
-                
+
                 week_games = user.get('week_games', 0)
                 # Пропускаем пользователей без игр за неделю
                 if week_games == 0:
                     continue
-                
+
                 week_wins = user.get('week_wins', 0)
                 winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
-                
+
                 top_users.append({
                     'telegram_id': telegram_id,
                     'username': user.get('username'),
@@ -2687,26 +2691,25 @@ def get_dota_week_top(limit=10, force_refresh=False):
                     'winrate': winrate,
                     'week_current_streak': user.get('week_current_streak', 0)
                 })
-            
+
             user_cache.set('dota_week_top', top_users)
             user_cache.set('dota_week_top_ts', current_time)
-            
-            import math as math_module
+
             def get_sort_key(x):
                 g = x.get('week_games', 0)
                 w = x.get('week_wins', 0)
-                l = g - w  # losses
+                losses = g - w
                 if g == 0:
                     return (3, 0, 0)
-                score = w - l  # победы - поражения
+                score = w - losses  # победы - поражения
                 return (0, -score, -g)
-            
+
             top_users.sort(key=get_sort_key)
             result = top_users[:limit]
-            
+
             user_cache.set('dota_week_top', result)
             user_cache.set('dota_week_top_ts', time.time())
-            
+
             get_dota_week_top._calculating[0] = False
             return result
         except Exception as e:
@@ -2718,23 +2721,23 @@ def get_dota_week_top(limit=10, force_refresh=False):
 def get_dota_week_top_from_db(limit=10, force_refresh=False):
     """Получение топа игроков Dota 2 за неделю напрямую из БД с кешем 5 минут"""
     import time
-    
+
     _TTL = 300  # 5 минут
-    
+
     # Простой кеш в памяти
     if not hasattr(get_dota_week_top_from_db, '_cache'):
         get_dota_week_top_from_db._cache = (None, 0)
-    
+
     cached_data, cached_time = get_dota_week_top_from_db._cache
     if cached_data and (time.time() - cached_time) < _TTL and not force_refresh:
         logger.info(f"get_dota_week_top_from_db: returning cached top ({len(cached_data)} users)")
         return cached_data[:limit]
-    
+
     result = _get_dota_week_top_query(limit)
-    
+
     # Сохраняем в кеш
     get_dota_week_top_from_db._cache = (result, time.time())
-    
+
     return result
 
 
@@ -2745,9 +2748,9 @@ def _get_dota_week_top_query(limit):
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
         logger.info(f"get_dota_week_top: scheme={scheme}, limit={limit}")
-        
+
         cursor = conn.cursor()
-        
+
         # Сначала проверим, есть ли вообще данные
         cursor.execute("""
             SELECT COUNT(*) FROM users
@@ -2755,7 +2758,7 @@ def _get_dota_week_top_query(limit):
         """)
         total_with_steam = cursor.fetchone()[0]
         logger.info(f"get_dota_week_top: {total_with_steam} users with steam_id")
-        
+
         # Если есть пользователи с steam_id, выполняем запрос
         if total_with_steam > 0:
             # Формула сортировки: score = 2 * week_wins - week_games (победы - поражения)
@@ -2763,20 +2766,20 @@ def _get_dota_week_top_query(limit):
             if "postgres" in scheme:
                 cursor.execute("""
                     WITH wr_calc AS (
-                        SELECT telegram_id, username, steam_nickname, mmr, 
+                        SELECT telegram_id, username, steam_nickname, mmr,
                                week_games, week_wins, rank_tier, steam_id, avatar,
-                               CASE WHEN week_games > 0 
-                                    THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
+                               CASE WHEN week_games > 0
+                                    THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1)
                                     ELSE 0 END as winrate,
                                COALESCE(week_current_streak, 0) as week_current_streak
                         FROM users
                         WHERE steam_id IS NOT NULL
                     )
-                    SELECT telegram_id, username, steam_nickname, mmr, 
+                    SELECT telegram_id, username, steam_nickname, mmr,
                            week_games, week_wins, rank_tier, steam_id, avatar,
                            winrate, week_current_streak
                     FROM wr_calc
-                    ORDER BY 
+                    ORDER BY
                         CASE WHEN week_games = 0 THEN 1 ELSE 0 END,
                         (2 * week_wins - week_games) DESC,
                         week_games DESC,
@@ -2801,30 +2804,31 @@ def _get_dota_week_top_query(limit):
                     'winrate': u[9],
                     'week_current_streak': u[10] if len(u) > 10 else 0
                 })
-            
+
             logger.info(f"get_dota_week_top: returning {len(result)} users")
             for r in result:
                 logger.info(f"  - {r['steam_nickname']}: {r['week_wins']}W / {r['week_games']}G")
-            
+
+            release_connection(conn)
             return result
         else:
             # Формула сортировки: score = 2 * week_wins - week_games
             cursor.execute("""
                 WITH wr_calc AS (
-                    SELECT telegram_id, username, steam_nickname, mmr, 
+                    SELECT telegram_id, username, steam_nickname, mmr,
                            week_games, week_wins, rank_tier, steam_id, avatar,
-                           CASE WHEN week_games > 0 
-                                THEN ROUND(week_wins * 100.0 / week_games, 1) 
+                           CASE WHEN week_games > 0
+                                THEN ROUND(week_wins * 100.0 / week_games, 1)
                                 ELSE 0 END as winrate,
                           COALESCE(week_current_streak, 0) as week_current_streak
                     FROM users
                     WHERE steam_id IS NOT NULL
                 )
-                SELECT telegram_id, username, steam_nickname, mmr, 
+                SELECT telegram_id, username, steam_nickname, mmr,
                        week_games, week_wins, rank_tier, steam_id, avatar,
                        winrate, week_current_streak
                 FROM wr_calc
-                ORDER BY 
+                ORDER BY
                     CASE WHEN week_games = 0 THEN 1 ELSE 0 END,
                     (2 * week_wins - week_games) DESC,
                     week_games DESC,
@@ -2849,17 +2853,22 @@ def _get_dota_week_top_query(limit):
                     'winrate': u[9],
                     'week_current_streak': u[10] if len(u) > 10 else 0
                 })
-            
+
             logger.info(f"get_dota_week_top: returning {len(result)} users")
             for r in result:
                 logger.info(f"  - {r['steam_nickname']}: {r['week_wins']}W / {r['week_games']}G")
-            
+
             # Сохраняем в кеш
             get_dota_week_top_from_db._cache = (result, time.time())
-            
+
+            release_connection(conn)
             return result
     except Exception as e:
         logger.error(f"Error get_dota_week_top: {e}")
+        try:
+            release_connection(conn)
+        except Exception:
+            pass
         return []
 
 
@@ -2869,11 +2878,11 @@ def get_dota_week_rank(telegram_id):
         all_users = _get_dota_week_top_query(1000)
         if not all_users:
             return None
-        
+
         for i, player in enumerate(all_users, 1):
             if player.get('telegram_id') == telegram_id:
                 return i
-        
+
         return None
     except Exception as e:
         logger.error(f"Error get_dota_week_rank: {e}")
@@ -2888,21 +2897,21 @@ def get_dota_digest_stats():
         return cached
     else:
         logger.info("get_dota_digest_stats: cache miss or None, reading from DB")
-    
+
     conn = None
     try:
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
-        
+
         cursor = conn.cursor()
-        
+
         cursor.execute("""
-            SELECT COUNT(*) FROM users 
+            SELECT COUNT(*) FROM users
             WHERE steam_id IS NOT NULL AND week_games > 0
         """)
         count = cursor.fetchone()[0]
-        
+
         if count == 0:
             cursor.close()
             result = {
@@ -2912,29 +2921,29 @@ def get_dota_digest_stats():
             }
             user_cache.set('dota_digest_stats', result)
             return result
-        
+
         # ОПТИМИЗАЦИЯ: один запрос вместо трёх
         if "postgres" in scheme:
             # Один запрос: лучший винрейт, худший винрейт, лучший стрик (по новой формуле)
             cursor.execute("""
                 WITH ranked AS (
-                    SELECT 
+                    SELECT
                         steam_nickname, week_wins, week_games, rank_tier, telegram_id,
                         week_current_streak,
                         (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) as score,
-                        ROW_NUMBER() OVER (ORDER BY 
+                        ROW_NUMBER() OVER (ORDER BY
                             (CAST(ROUND(week_wins::numeric * 100 / NULLIF(week_games, 0), -1) / 10 * 10 AS INTEGER) DESC,
                             (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) DESC
                         ) as rn_top,
-                        ROW_NUMBER() OVER (ORDER BY 
+                        ROW_NUMBER() OVER (ORDER BY
                             (CAST(week_wins::numeric * 100 / NULLIF(week_games, 0) AS INTEGER) / 10 * 10) ASC,
                             (week_wins::numeric / NULLIF(week_games, 0)) * SQRT(week_games::numeric) ASC
                         ) as rn_bottom,
                         ROW_NUMBER() OVER (ORDER BY week_current_streak DESC) as rn_streak
-                    FROM users 
+                    FROM users
                     WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = TRUE
                 )
-                SELECT 
+                SELECT
                     MAX(CASE WHEN rn_top = 1 THEN steam_nickname END) as top_nickname,
                     MAX(CASE WHEN rn_top = 1 THEN rank_tier END) as top_rank,
                     MAX(CASE WHEN rn_top = 1 THEN week_games END) as top_games,
@@ -2951,7 +2960,7 @@ def get_dota_digest_stats():
                 FROM ranked
             """)
             row = cursor.fetchone()
-            
+
             top = (row[0], row[1], row[2], row[3], row[4]) if row and row[0] else None
             bottom = (row[5], row[6], row[7], row[8], row[9]) if row and row[5] else None
             streak = (row[10], row[11], row[12]) if row and row[10] else None
@@ -2959,60 +2968,60 @@ def get_dota_digest_stats():
             # SQLite: используем подзапросы (новая формула)
             # score = WR * sqrt(games) * multiplier (1.2 if >60%, 0.7 if 50-60%, 0.5 if <50%)
             cursor.execute("""
-                SELECT 
+                SELECT
                     (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
                      ORDER BY CAST(ROUND(week_wins * 100.0 / week_games, -1) / 10 * 10 AS INTEGER) DESC,
                           (week_wins * 1.0 / week_games) * SQRT(week_games) DESC LIMIT 1) as top_nickname,
                     (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
-                     ORDER BY CASE 
+                     ORDER BY CASE
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END DESC LIMIT 1) as top_rank,
                     (SELECT week_games FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
-                     ORDER BY CASE 
+                     ORDER BY CASE
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END DESC LIMIT 1) as top_games,
                     (SELECT week_wins FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
-                     ORDER BY CASE 
+                     ORDER BY CASE
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END DESC LIMIT 1) as top_wins,
                     (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
-                     ORDER BY CASE 
+                     ORDER BY CASE
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END DESC LIMIT 1) as top_id,
                     (SELECT steam_nickname FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
-                     ORDER BY CASE 
+                     ORDER BY CASE
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END ASC LIMIT 1) as bottom_nickname,
                     (SELECT rank_tier FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
-                     ORDER BY CASE 
+                     ORDER BY CASE
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END ASC LIMIT 1) as bottom_rank,
                     (SELECT week_games FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
-                     ORDER BY CASE 
+                     ORDER BY CASE
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END ASC LIMIT 1) as bottom_games,
                     (SELECT week_wins FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
-                     ORDER BY CASE 
+                     ORDER BY CASE
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
                      END ASC LIMIT 1) as bottom_wins,
                     (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND in_chat = 1
-                     ORDER BY CASE 
+                     ORDER BY CASE
                         WHEN week_wins * 1.0 / week_games > 0.6 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 1.2
                         WHEN week_wins * 1.0 / week_games >= 0.5 THEN week_wins * 1.0 / week_games * SQRT(week_games) * 0.7
                         ELSE week_wins * 1.0 / week_games * SQRT(week_games) * 0.5
@@ -3022,13 +3031,13 @@ def get_dota_digest_stats():
                     (SELECT telegram_id FROM users WHERE steam_id IS NOT NULL AND week_current_streak > 0 AND in_chat = 1 ORDER BY week_current_streak DESC LIMIT 1) as streak_id
             """)
             row = cursor.fetchone()
-            
+
             top = (row[0], row[1], row[2], row[3], row[4]) if row and row[0] else None
             bottom = (row[5], row[6], row[7], row[8], row[9]) if row and row[5] else None
             streak = (row[10], row[11], row[12]) if row and row[10] else None
-        
+
         cursor.close()
-        
+
         result = {
             # (steam_nickname, rank_tier, week_games, week_wins, telegram_id)
             "top_winrate": (top[0], top[3], top[2], top[1], top[4]) if top else ("None", 0, 0, 0, None),
@@ -3037,7 +3046,7 @@ def get_dota_digest_stats():
             # (steam_nickname, week_current_streak, telegram_id)
             "top_streak": (streak[0], streak[1], streak[2]) if streak else ("None", 0, None)
         }
-        
+
         logger.info(f"Dota digest stats: {result}")
         user_cache.set('dota_digest_stats', result)
         return result
@@ -3059,12 +3068,12 @@ def get_all_users_from_db():
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
-        
+
         cursor = conn.cursor()
-        
+
         if "postgres" in scheme:
             cursor.execute("""
-SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
+SELECT telegram_id, username, fissure, last_fissure, last_message_id,
                        total_growth, total_rolls, best_streak, current_streak,
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
                        week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
@@ -3091,7 +3100,8 @@ SELECT telegram_id, username, fissure, last_fissure, last_message_id,
 
 def reset_weekly_stats():
     """Сброс недельной статистики для всех пользователей (вызывается по понедельникам)"""
-    from datetime import datetime as dt, timezone, timedelta
+    from datetime import datetime as dt
+    from datetime import timedelta, timezone
     MSK = timezone(timedelta(hours=3))
     monday_msk = dt.now(MSK) - timedelta(days=dt.now(MSK).weekday())
     current_week_start = monday_msk.strftime("%Y-%m-%d")
@@ -3099,9 +3109,9 @@ def reset_weekly_stats():
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
-        
+
         cursor = conn.cursor()
-        
+
         if "postgres" in scheme:
             cursor.execute("""
                 UPDATE users SET week_games = 0, week_wins = 0, week_current_streak = 0, week_best_streak = GREATEST(week_best_streak, week_current_streak), week_start_date = %s WHERE steam_id IS NOT NULL
@@ -3110,7 +3120,7 @@ def reset_weekly_stats():
             cursor.execute("""
                 UPDATE users SET week_games = 0, week_wins = 0, week_current_streak = 0, week_best_streak = MAX(week_best_streak, week_current_streak), week_start_date = ? WHERE steam_id IS NOT NULL
             """, (current_week_start,))
-        
+
         affected = cursor.rowcount
         conn.commit()
         cursor.close()
@@ -3129,12 +3139,12 @@ def get_all_users():
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
         cursor = conn.cursor()
-        
+
         logger.info(f"get_all_users: connecting to {scheme} database")
-        
+
         if "postgres" in scheme:
             cursor.execute("""
-                SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
+                SELECT telegram_id, username, fissure, last_fissure, last_message_id,
                        total_growth, total_rolls, best_streak, current_streak,
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
                        week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
@@ -3154,7 +3164,7 @@ def get_all_users():
             } for u in users]
         else:
             cursor.execute("""
-                SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
+                SELECT telegram_id, username, fissure, last_fissure, last_message_id,
                        total_growth, total_rolls, best_streak, current_streak,
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
                        week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
@@ -3177,7 +3187,7 @@ def get_all_users():
         return []
     finally:
         if conn:
-            conn.close()
+            release_connection(conn)
 
 
 def get_all_users_with_steam():
@@ -3188,15 +3198,15 @@ def get_all_users_with_steam():
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
         cursor = conn.cursor()
-        
+
         if "postgres" in scheme:
             cursor.execute("""
-                SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
+                SELECT telegram_id, username, fissure, last_fissure, last_message_id,
                        total_growth, total_rolls, best_streak, current_streak,
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
                         week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
                         message_count, avatar, mmr_last_updated
-                 FROM users 
+                 FROM users
                  WHERE steam_id IS NOT NULL AND in_chat = TRUE
             """)
             users = cursor.fetchall()
@@ -3213,12 +3223,12 @@ def get_all_users_with_steam():
             } for u in users]
         else:
             cursor.execute("""
-                SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
+                SELECT telegram_id, username, fissure, last_fissure, last_message_id,
                        total_growth, total_rolls, best_streak, current_streak,
                        steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
                         week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
                         message_count, avatar, mmr_last_updated
-                 FROM users 
+                 FROM users
                  WHERE steam_id IS NOT NULL AND (in_chat = 1 OR in_chat IS NULL)
             """)
             users = cursor.fetchall()

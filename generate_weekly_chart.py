@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
+﻿"""
 Utility script to generate and save a weekly analytics chart for testing.
 
 Usage:
@@ -21,7 +20,7 @@ __all__ = ["main"]
 
 async def main(telegram_id: int = 123456789) -> dict[str, Any] | None:
     """Generate weekly analytics for the given telegram_id and save chart PNG if successful.
-    Note: default 123456789 is a placeholder — use a real ID with match history for actual testing.
+    Note: default 123456789 is a placeholder вЂ” use a real ID with match history for actual testing.
     """
     print("Generating weekly analytics...")
     data: dict[str, Any] | None = await generate_weekly_analytics(telegram_id)

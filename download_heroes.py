@@ -1,8 +1,10 @@
-import asyncio
-import aiohttp
+﻿import asyncio
 import os
 
+import aiohttp
+
 from dota_mmr import OPENDOTA_API_URL, _api_get_async
+
 
 async def main():
 

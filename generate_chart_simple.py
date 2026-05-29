@@ -1,8 +1,10 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Simple test to generate a sample chart PNG using PIL only (no plotly required)"""
 
-from PIL import Image, ImageDraw, ImageFont
 import os
+
+from PIL import Image, ImageDraw, ImageFont
+
 
 def create_test_chart():
     width, height = 800, 400
@@ -35,7 +37,7 @@ def create_test_chart():
         font = ImageFont.truetype("DejaVuSans.ttf", 20)
     except Exception:
         font = ImageFont.load_default()
-    draw.text((640, 28), "↑ Improvement", fill="white", font=font)
+    draw.text((640, 28), "в†‘ Improvement", fill="white", font=font)
 
     # Draw title
     title = "Weekly Analytics Test Chart"

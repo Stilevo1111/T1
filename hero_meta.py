@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Генерация изображений Hero Meta (еженедельная статистика героев Dota 2).
 
@@ -21,16 +20,25 @@
 from __future__ import annotations
 
 import asyncio
-import aiohttp
 import io
-import os
-import math
 import logging
+import math
+import os
 from pathlib import Path
-from urllib.parse import urlparse
 from typing import Any
+from urllib.parse import urlparse
+
+import aiohttp
 from PIL import Image, ImageDraw, ImageFont
-from hero_positions import hero_positions
+
+from hero_positions import (
+    POS_CARRY,
+    POS_HARD_SUPPORT,
+    POS_MID,
+    POS_OFFLANE,
+    POS_SOFT_SUPPORT,
+    hero_positions,
+)
 
 # Type aliases
 HeroStat = dict[str, Any]
@@ -170,22 +178,22 @@ def detect_hero_position(hero_data: dict[str, Any]) -> int:
 
     # Map to positions
     role_to_pos = {
-        "CARRY": 1,
-        "MID": 2,
-        "OFFLANE": 3,
-        "SUPPORT": 4
+        "CARRY": POS_CARRY,
+        "MID": POS_MID,
+        "OFFLANE": POS_OFFLANE,
+        "SUPPORT": POS_SOFT_SUPPORT
     }
 
-    pos = role_to_pos.get(base_role, 4)
+    pos = role_to_pos.get(base_role, POS_SOFT_SUPPORT)
 
     # For support, distinguish hard/soft based on position picks
     if base_role == "SUPPORT":
         p4_picks = hero_data.get("4_pick", 0)
         p5_picks = hero_data.get("5_pick", 0)
         if p5_picks > p4_picks:
-            pos = 5
+            pos = POS_HARD_SUPPORT
         else:
-            pos = 4
+            pos = POS_SOFT_SUPPORT
 
     return pos
 
@@ -218,7 +226,7 @@ async def fetch_hero_icon(session: aiohttp.ClientSession, icon_path: str) -> Ima
     Returns a Pillow Image in RGBA mode on success, or None on failure.
     This function does not raise; failures are logged and None is returned.
     """
-    
+
 
     # ==========================================
     # BUILD URL
@@ -304,24 +312,24 @@ async def get_dota_data(days: int = 7) -> HeroStats | None:
     import time
     now = int(time.time())
     week_ago = now - (days * 24 * 60 * 60)
-    
+
     sql = f"""
-        SELECT 
+        SELECT
             hero_id,
             COUNT(*) as pub_pick,
             SUM(
-                CASE 
-                    WHEN (radiant_win = TRUE AND player_slot < 128) OR 
-                         (radiant_win = FALSE AND player_slot >= 128) 
-                    THEN 1 ELSE 0 
+                CASE
+                    WHEN (radiant_win = TRUE AND player_slot < 128) OR
+                         (radiant_win = FALSE AND player_slot >= 128)
+                    THEN 1 ELSE 0
                 END
             ) as pub_win
-        FROM public_player_matches 
+        FROM public_player_matches
         WHERE start_time >= {week_ago}
         GROUP BY hero_id
         HAVING COUNT(*) >= 10
     """
-    
+
     try:
         from database import get_aiohttp_session
         session = await get_aiohttp_session()
@@ -346,7 +354,7 @@ async def get_dota_data(days: int = 7) -> HeroStats | None:
                     return await _enrich_with_hero_data(hero_stats)
     except Exception as e:
         logger.warning("Explorer failed: %s", e)
-    
+
     try:
         from database import get_aiohttp_session
         session = await get_aiohttp_session()
@@ -364,7 +372,7 @@ async def _enrich_with_hero_data(hero_stats: HeroStats) -> HeroStats:
 
     Returns the same list (possibly modified) for convenience.
     """
-    
+
     try:
         from database import get_aiohttp_session
         session = await get_aiohttp_session()
@@ -388,7 +396,7 @@ def _build_grid(hero_stats: HeroStats) -> dict[int, list[dict]]:
 
     This function preserves the original behavior and selection criteria.
     """
-    
+
     """
     Сетка 5 колонок с лучшими героями по позициям за неделю.
     1) Для каждого героя определяем bestPosition по максимальным пикам.
@@ -417,7 +425,7 @@ def _build_grid(hero_stats: HeroStats) -> dict[int, list[dict]]:
 
         processed_heroes.append({
             'id': hero["id"],
-            'name': hero.get("localized_name", 'Hero %d' % hero["id"]),
+            'name': hero.get("localized_name", f"Hero {hero['id']}"),
             'img': hero.get("img", ""),
             'position': pos,
             'score': score,
@@ -427,13 +435,13 @@ def _build_grid(hero_stats: HeroStats) -> dict[int, list[dict]]:
         })
 
     # Group by position and sort by winrate (highest first)
-    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
+    by_position = {POS_CARRY: [], POS_MID: [], POS_OFFLANE: [], POS_SOFT_SUPPORT: [], POS_HARD_SUPPORT: []}
     for hero in processed_heroes:
         by_position[hero['position']].append(hero)
 
     # Take top 5 by winrate for each position (highest at top)
     grid = {}
-    for pos in range(1, 6):
+    for pos in [POS_CARRY, POS_MID, POS_OFFLANE, POS_SOFT_SUPPORT, POS_HARD_SUPPORT]:
         heroes = sorted(by_position[pos], key=lambda h: -h['winrate'])
         grid[pos] = heroes[:5]
 
@@ -441,14 +449,14 @@ def _build_grid(hero_stats: HeroStats) -> dict[int, list[dict]]:
     all_heroes_sorted = sorted(processed_heroes, key=lambda h: -h['winrate'])
 
     pos_role_map = {
-        1: ["Carry"],
-        2: ["Mid"],
-        3: ["Offlane"],
-        4: ["Support", "Soft Support"],
-        5: ["Hard Support"]
+        POS_CARRY: ["Carry"],
+        POS_MID: ["Mid"],
+        POS_OFFLANE: ["Offlane"],
+        POS_SOFT_SUPPORT: ["Support", "Soft Support"],
+        POS_HARD_SUPPORT: ["Hard Support"]
     }
 
-    for pos in range(1, 6):
+    for pos in [POS_CARRY, POS_MID, POS_OFFLANE, POS_SOFT_SUPPORT, POS_HARD_SUPPORT]:
         if len(grid[pos]) < 5:
             # Fill remaining slots with top heroes that have the role
             needed_roles = pos_role_map[pos]
@@ -483,7 +491,7 @@ async def create_infographic(hero_stats: HeroStats) -> bytes | None:
 
     draw = ImageDraw.Draw(base)
 
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
     MSK = timezone(timedelta(hours=3))
     now_msk = datetime.now(MSK)
     date_text = now_msk.strftime("%d.%m.%Y %H:%M")
@@ -513,7 +521,7 @@ async def create_infographic(hero_stats: HeroStats) -> bytes | None:
 
     all_heroes = []
     seen_ids = set()
-    for pos in range(1, 6):
+    for pos in [POS_CARRY, POS_MID, POS_OFFLANE, POS_SOFT_SUPPORT, POS_HARD_SUPPORT]:
         for h in grid[pos]:
             if h['id'] not in seen_ids:
                 seen_ids.add(h['id'])
@@ -521,7 +529,7 @@ async def create_infographic(hero_stats: HeroStats) -> bytes | None:
 
     from database import get_aiohttp_session
     session = await get_aiohttp_session()
-    
+
     tasks = [
         fetch_hero_icon(session, h['img'])
         for h in all_heroes
@@ -548,8 +556,7 @@ async def create_infographic(hero_stats: HeroStats) -> bytes | None:
 
             icons[hero['id']] = result
 
-    for col_idx in range(5):
-        pos = col_idx + 1
+    for col_idx, pos in enumerate([POS_CARRY, POS_MID, POS_OFFLANE, POS_SOFT_SUPPORT, POS_HARD_SUPPORT]):
         heroes = grid[pos]
 
         for row_idx, hero in enumerate(heroes[:5]):
@@ -586,7 +593,7 @@ async def create_infographic(hero_stats: HeroStats) -> bytes | None:
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
 
-            wr_text = "%d%%" % round(hero['winrate'] * 100)
+            wr_text = f"{round(hero['winrate'] * 100)}%"
 
             try:
                 bb = draw.textbbox((0, 0), wr_text, font=font_lg)
@@ -629,13 +636,13 @@ def get_static_fallback_banner() -> bytes | None:
     try:
         base = Image.new("RGBA", (1200, 200), (25, 25, 35, 255))
         draw = ImageDraw.Draw(base)
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
         MSK = timezone(timedelta(hours=3))
         date_text = datetime.now(MSK).strftime("%d.%m.%Y %H:%M")
         font = _load_font(32)
 
         # Removed "Dota 2 Hero Meta" label as requested
-        draw.text((20, 20), "Updated: %s" % date_text, fill=(200, 200, 200), font=font)
+        draw.text((20, 20), f"Updated: {date_text}", fill=(200, 200, 200), font=font)
         draw.text((20, 70), "API unavailable", fill=(150, 150, 150), font=font)
 
         buf = io.BytesIO()

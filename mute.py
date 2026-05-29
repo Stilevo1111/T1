@@ -1,27 +1,25 @@
-# -*- coding: utf-8 -*-
-"""
-Модуль модерации: /mute — "молчанка" (кляп) за 10 см фиссуры.
+﻿"""
+РњРѕРґСѓР»СЊ РјРѕРґРµСЂР°С†РёРё: /mute вЂ” "РјРѕР»С‡Р°РЅРєР°" (РєР»СЏРї) Р·Р° 10 СЃРј С„РёСЃСЃСѓСЂС‹.
 
-✨ Два способа выдачи:
-  СПОСОБ 1: /mute в ответ на сообщение
-  СПОСОБ 2: /mute @username
+вњЁ Р”РІР° СЃРїРѕСЃРѕР±Р° РІС‹РґР°С‡Рё:
+  РЎРџРћРЎРћР‘ 1: /mute РІ РѕС‚РІРµС‚ РЅР° СЃРѕРѕР±С‰РµРЅРёРµ
+  РЎРџРћРЎРћР‘ 2: /mute @username
 
-При выдаче:
-  ① Проверка: нельзя дать кляп себе
-  ② Проверка баланса админа (нужно ≥ 10 см фиссуры)
-  ③ Списывается 10 см без упоминания в чате
-  ④ Бот пишет: "📢 {админ} дал(а) кляп {жертве}🤐 на 30 секунд!"
-  ⑤ Сообщения закляпленного удаляются 30 секунд
-  ⑥ Автоматическое снятие кляпа через 30 секунд
+РџСЂРё РІС‹РґР°С‡Рµ:
+  в‘  РџСЂРѕРІРµСЂРєР°: РЅРµР»СЊР·СЏ РґР°С‚СЊ РєР»СЏРї СЃРµР±Рµ
+  в‘Ў РџСЂРѕРІРµСЂРєР° Р±Р°Р»Р°РЅСЃР° Р°РґРјРёРЅР° (РЅСѓР¶РЅРѕ в‰Ґ 10 СЃРј С„РёСЃСЃСѓСЂС‹)
+  в‘ў РЎРїРёСЃС‹РІР°РµС‚СЃСЏ 10 СЃРј Р±РµР· СѓРїРѕРјРёРЅР°РЅРёСЏ РІ С‡Р°С‚Рµ
+  в‘Ј Р‘РѕС‚ РїРёС€РµС‚: "рџ“ў {Р°РґРјРёРЅ} РґР°Р»(Р°) РєР»СЏРї {Р¶РµСЂС‚РІРµ}рџ¤ђ РЅР° 30 СЃРµРєСѓРЅРґ!"
+  в‘¤ РЎРѕРѕР±С‰РµРЅРёСЏ Р·Р°РєР»СЏРїР»РµРЅРЅРѕРіРѕ СѓРґР°Р»СЏСЋС‚СЃСЏ 30 СЃРµРєСѓРЅРґ
+  в‘Ґ РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРѕРµ СЃРЅСЏС‚РёРµ РєР»СЏРїР° С‡РµСЂРµР· 30 СЃРµРєСѓРЅРґ
 """
 
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 
 from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler, MessageHandler
+from telegram.ext import CommandHandler, ContextTypes, MessageHandler
 
 logger = logging.getLogger(__name__)
 
@@ -29,45 +27,45 @@ __all__ = [
     "register_handlers",
 ]
 
-# ─── Настройки ───────────────────────────────────────────────────────────────
-_MUTE_COST_CM = 10          # стоимость в см фиссуры
-_MUTE_DURATION_SEC = 30     # длительность кляпа
+# в”Ђв”Ђв”Ђ РќР°СЃС‚СЂРѕР№РєРё в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+_MUTE_COST_CM = 10          # СЃС‚РѕРёРјРѕСЃС‚СЊ РІ СЃРј С„РёСЃСЃСѓСЂС‹
+_MUTE_DURATION_SEC = 30     # РґР»РёС‚РµР»СЊРЅРѕСЃС‚СЊ РєР»СЏРїР°
 
-# Разнообразные смайлы кляпа (без дубликатов)
+# Р Р°Р·РЅРѕРѕР±СЂР°Р·РЅС‹Рµ СЃРјР°Р№Р»С‹ РєР»СЏРїР° (Р±РµР· РґСѓР±Р»РёРєР°С‚РѕРІ)
 _GAG_EMOJIS = [
-    "🤐", "🔇", "🙊", "🧦", "🍌",
-    "🤫", "🔕", "🦷", "🎭", "😶",
-    "🤪🔇", "🤭", "🗣️", "🗯️", "💤",
-    "🔜", "🙅", "🙆", "🤨",
+    "рџ¤ђ", "рџ”‡", "рџ™Љ", "рџ§¦", "рџЌЊ",
+    "рџ¤«", "рџ”•", "рџ¦·", "рџЋ­", "рџ¶",
+    "рџ¤Єрџ”‡", "рџ¤­", "рџ—ЈпёЏ", "рџ—ЇпёЏ", "рџ’¤",
+    "рџ”њ", "рџ™…", "рџ™†", "рџ¤Ё",
 ]
 
-# ─── Хранилища ───────────────────────────────────────────────────────────────
-# Заакляпленные: {user_id: datetime_окончания}
+# в”Ђв”Ђв”Ђ РҐСЂР°РЅРёР»РёС‰Р° в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# Р—Р°Р°РєР»СЏРїР»РµРЅРЅС‹Рµ: {user_id: datetime_РѕРєРѕРЅС‡Р°РЅРёСЏ}
 _gagged_users: dict[int, datetime] = {}
 
-# Кеш username → (user_id, время_кеширования)
+# РљРµС€ username в†’ (user_id, РІСЂРµРјСЏ_РєРµС€РёСЂРѕРІР°РЅРёСЏ)
 _username_cache: dict[str, tuple[int, datetime]] = {}
 _USERNAME_CACHE_TTL = timedelta(hours=1)
 
-# Текущая задача автоснятия кляпа: victim_id → asyncio.Task
+# РўРµРєСѓС‰Р°СЏ Р·Р°РґР°С‡Р° Р°РІС‚РѕСЃРЅСЏС‚РёСЏ РєР»СЏРїР°: victim_id в†’ asyncio.Task
 _gag_auto_release_tasks: dict[int, asyncio.Task] = {}
 
 
-# ─── Вспомогательные методы ──────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ РјРµС‚РѕРґС‹ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 def _pick_gag_emoji(victim_id: int) -> str:
-    """Случайный выбор смайла кляпа."""
+    """РЎР»СѓС‡Р°Р№РЅС‹Р№ РІС‹Р±РѕСЂ СЃРјР°Р№Р»Р° РєР»СЏРїР°."""
     import random
     return random.choice(_GAG_EMOJIS)
 
 
-def _get_gag_expiry(user_id: int) -> Optional[datetime]:
-    """Возвращает время окончания кляпа или None."""
+def _get_gag_expiry(user_id: int) -> datetime | None:
+    """Р’РѕР·РІСЂР°С‰Р°РµС‚ РІСЂРµРјСЏ РѕРєРѕРЅС‡Р°РЅРёСЏ РєР»СЏРїР° РёР»Рё None."""
     expiry = _gagged_users.get(user_id)
     if expiry is None:
         return None
     if datetime.now() >= expiry:
-        # Устарел — чистим
+        # РЈСЃС‚Р°СЂРµР» вЂ” С‡РёСЃС‚РёРј
         _gagged_users.pop(user_id, None)
         return None
     return expiry
@@ -77,19 +75,22 @@ def _is_gagged(user_id: int) -> bool:
     return _get_gag_expiry(user_id) is not None
 
 
-# ─── Работа с фиссурой ───────────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ Р Р°Р±РѕС‚Р° СЃ С„РёСЃСЃСѓСЂРѕР№ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 def add_fissure(user_id: int, amount_cm: float) -> None:
     """
-    Добавить / отнять фиссуру у пользователя.
+    Р”РѕР±Р°РІРёС‚СЊ / РѕС‚РЅСЏС‚СЊ С„РёСЃСЃСѓСЂСѓ Сѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.
 
-    Использует БД напрямую (как остальной бот), поэтому **не** делает flush
-    кеша — изменения сразу попадают в базу.
+    РСЃРїРѕР»СЊР·СѓРµС‚ Р‘Р” РЅР°РїСЂСЏРјСѓСЋ (РєР°Рє РѕСЃС‚Р°Р»СЊРЅРѕР№ Р±РѕС‚), РїРѕСЌС‚РѕРјСѓ **РЅРµ** РґРµР»Р°РµС‚ flush
+    РєРµС€Р° вЂ” РёР·РјРµРЅРµРЅРёСЏ СЃСЂР°Р·Сѓ РїРѕРїР°РґР°СЋС‚ РІ Р±Р°Р·Сѓ.
     """
-    from database import get_user, update_fissure  # локальный импорт, чтобы не было цикла
+    from database import (  # Р»РѕРєР°Р»СЊРЅС‹Р№ РёРјРїРѕСЂС‚, С‡С‚РѕР±С‹ РЅРµ Р±С‹Р»Рѕ С†РёРєР»Р°
+        get_user,
+        update_fissure,
+    )
 
     user = get_user(user_id)
-    if user is None:       # пользователь ещё не зарегистрирован
+    if user is None:       # РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РµС‰С‘ РЅРµ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅ
         return
 
     current = float(user.get("fissure", 0.0))
@@ -98,21 +99,21 @@ def add_fissure(user_id: int, amount_cm: float) -> None:
     update_fissure(user_id, new_fissure, time.time(), 0)
 
 
-# ─── Поиск пользователя по @username в чате ──────────────────────────────────
+# в”Ђв”Ђв”Ђ РџРѕРёСЃРє РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РїРѕ @username РІ С‡Р°С‚Рµ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 async def get_user_by_username_in_chat(
     chat_id: int,
     username: str,
     context: ContextTypes.DEFAULT_TYPE,
-) -> Optional[dict]:
+) -> dict | None:
     """
-    Найти пользователя Telegram по сокращённому username (без @) среди участников чата.
+    РќР°Р№С‚Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ Telegram РїРѕ СЃРѕРєСЂР°С‰С‘РЅРЅРѕРјСѓ username (Р±РµР· @) СЃСЂРµРґРё СѓС‡Р°СЃС‚РЅРёРєРѕРІ С‡Р°С‚Р°.
 
-    Стратегия поиска:
-      1. Проверить кеш (username → user_id).
-      2. Уточнить через get_chat_member() — пользователь мог переименоваться.
-      3. Если в кеше нет — перебрать администраторов чата (bech <= 50, дешево по API).
-      4. Если админов мало — опросить участников через get_chat_member до обнаружения.
+    РЎС‚СЂР°С‚РµРіРёСЏ РїРѕРёСЃРєР°:
+      1. РџСЂРѕРІРµСЂРёС‚СЊ РєРµС€ (username в†’ user_id).
+      2. РЈС‚РѕС‡РЅРёС‚СЊ С‡РµСЂРµР· get_chat_member() вЂ” РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РјРѕРі РїРµСЂРµРёРјРµРЅРѕРІР°С‚СЊСЃСЏ.
+      3. Р•СЃР»Рё РІ РєРµС€Рµ РЅРµС‚ вЂ” РїРµСЂРµР±СЂР°С‚СЊ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂРѕРІ С‡Р°С‚Р° (bech <= 50, РґРµС€РµРІРѕ РїРѕ API).
+      4. Р•СЃР»Рё Р°РґРјРёРЅРѕРІ РјР°Р»Рѕ вЂ” РѕРїСЂРѕСЃРёС‚СЊ СѓС‡Р°СЃС‚РЅРёРєРѕРІ С‡РµСЂРµР· get_chat_member РґРѕ РѕР±РЅР°СЂСѓР¶РµРЅРёСЏ.
     """
     username = username.lstrip("@").lower().strip()
     if not username:
@@ -120,7 +121,7 @@ async def get_user_by_username_in_chat(
 
     bot = context.bot
 
-    # ① Кеш
+    # в‘  РљРµС€
     cached = _username_cache.get(username)
     if cached:
         cached_uid, cached_at = cached
@@ -133,7 +134,7 @@ async def get_user_by_username_in_chat(
             except Exception:
                 _username_cache.pop(username, None)
 
-    # ② Администраторы — быстрый путь
+    # в‘Ў РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂС‹ вЂ” Р±С‹СЃС‚СЂС‹Р№ РїСѓС‚СЊ
     try:
         admins = await bot.get_chat_administrators(chat_id)
         for admin in admins:
@@ -144,7 +145,7 @@ async def get_user_by_username_in_chat(
     except Exception:
         logger.debug(f"get_chat_administrators failed for chat {chat_id}")
 
-    # ③ чтение из БД по username (если бот уже видел такого)
+    # в‘ў С‡С‚РµРЅРёРµ РёР· Р‘Р” РїРѕ username (РµСЃР»Рё Р±РѕС‚ СѓР¶Рµ РІРёРґРµР» С‚Р°РєРѕРіРѕ)
     try:
         from database import get_user_by_username as db_get_by_username
         user_data = db_get_by_username(username)
@@ -159,7 +160,7 @@ async def get_user_by_username_in_chat(
     return None
 
 
-# ─── Основная логика выдачи кляпа ───────────────────────────────────────────
+# в”Ђв”Ђв”Ђ РћСЃРЅРѕРІРЅР°СЏ Р»РѕРіРёРєР° РІС‹РґР°С‡Рё РєР»СЏРїР° в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 async def _do_give_gag(
     admin: dict,
@@ -167,7 +168,7 @@ async def _do_give_gag(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> bool:
-    """Выдать кляп жертве, списать 10 см фиссуры с админа."""
+    """Р’С‹РґР°С‚СЊ РєР»СЏРї Р¶РµСЂС‚РІРµ, СЃРїРёСЃР°С‚СЊ 10 СЃРј С„РёСЃСЃСѓСЂС‹ СЃ Р°РґРјРёРЅР°."""
     admin_id   = admin["telegram_id"]
     victim_id  = victim["telegram_id"]
     chat_id    = update.effective_chat.id
@@ -175,14 +176,14 @@ async def _do_give_gag(
 
     is_self_mute = (admin_id == victim_id)
 
-    # ── 1. Проверка баланса (не списываем, если мутим себя) ─────────────────────
+    # в”Ђв”Ђ 1. РџСЂРѕРІРµСЂРєР° Р±Р°Р»Р°РЅСЃР° (РЅРµ СЃРїРёСЃС‹РІР°РµРј, РµСЃР»Рё РјСѓС‚РёРј СЃРµР±СЏ) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     if not is_self_mute:
         current = get_current_fissure(admin_id)
         if current < _MUTE_COST_CM:
             await context.bot.send_message(
                 chat_id,
-                f"💸 Недостаточно фиссур! "
-                f"Нужно {_MUTE_COST_CM} см, а у тебя только {current:.1f} см."
+                f"рџ’ё РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ С„РёСЃСЃСѓСЂ! "
+                f"РќСѓР¶РЅРѕ {_MUTE_COST_CM} СЃРј, Р° Сѓ С‚РµР±СЏ С‚РѕР»СЊРєРѕ {current:.1f} СЃРј."
             )
             try:
                 await update.message.delete()
@@ -190,20 +191,20 @@ async def _do_give_gag(
                 pass
             return False
 
-        # ── 2. Списываем фиссуру (только если не мутим себя) ────────────────────
+        # в”Ђв”Ђ 2. РЎРїРёСЃС‹РІР°РµРј С„РёСЃСЃСѓСЂСѓ (С‚РѕР»СЊРєРѕ РµСЃР»Рё РЅРµ РјСѓС‚РёРј СЃРµР±СЏ) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         add_fissure(admin_id, -_MUTE_COST_CM)
 
-    # ── 4. Удаляем команду /mute из чата ────────────────────────────────────
+    # в”Ђв”Ђ 4. РЈРґР°Р»СЏРµРј РєРѕРјР°РЅРґСѓ /mute РёР· С‡Р°С‚Р° в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     try:
         await update.message.delete()
     except Exception:
         logger.debug(f"Could not delete /mute command message in {chat_id}", exc_info=True)
 
-    # ── 5. «Кладём» кляп на жертву ─────────────────────────────────────────
+    # в”Ђв”Ђ 5. В«РљР»Р°РґС‘РјВ» РєР»СЏРї РЅР° Р¶РµСЂС‚РІСѓ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     expiry = datetime.now() + timedelta(seconds=_MUTE_DURATION_SEC)
     _gagged_users[victim_id] = expiry
 
-    # ── 6. Анонс в чат (отдельным сообщением, не реплай) ───────────────────
+    # в”Ђв”Ђ 6. РђРЅРѕРЅСЃ РІ С‡Р°С‚ (РѕС‚РґРµР»СЊРЅС‹Рј СЃРѕРѕР±С‰РµРЅРёРµРј, РЅРµ СЂРµРїР»Р°Р№) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     gag_emoji    = _pick_gag_emoji(victim_id)
     victim_name  = victim.get("username") or victim.get("first_name") or str(victim_id)
     admin_name   = admin.get("username") or admin.get("first_name") or str(admin_id)
@@ -216,14 +217,14 @@ async def _do_give_gag(
         f"{admin_name}</a>"
     )
     announcement = (
-        f"👤 {admin_link} дал(а) кляп {gag_emoji} {victim_link} на 30 секунд."
+        f"рџ‘¤ {admin_link} РґР°Р»(Р°) РєР»СЏРї {gag_emoji} {victim_link} РЅР° 30 СЃРµРєСѓРЅРґ."
     )
     announce_msg = await context.bot.send_message(
         chat_id=chat_id,
         text=announcement,
         parse_mode="HTML",
     )
-    # Удалить анонс тоже через 30 секунд
+    # РЈРґР°Р»РёС‚СЊ Р°РЅРѕРЅСЃ С‚РѕР¶Рµ С‡РµСЂРµР· 30 СЃРµРєСѓРЅРґ
     try:
         from main import schedule_delete
         schedule_delete(
@@ -234,14 +235,14 @@ async def _do_give_gag(
         logger.debug("schedule_delete import failed, using asyncio fallback", exc_info=True)
         asyncio.create_task(_delayed_delete(context.bot, chat_id, announce_msg.message_id, _MUTE_DURATION_SEC))
 
-    # ── 6. Запускаем автоснятие ─────────────────────────────────────────────
+    # в”Ђв”Ђ 6. Р—Р°РїСѓСЃРєР°РµРј Р°РІС‚РѕСЃРЅСЏС‚РёРµ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     _schedule_gag_release(victim_id, chat_id, chat_type, context)
 
     return True
 
 
 async def _delayed_delete(bot, chat_id: int, msg_id: int, delay: int) -> None:
-    """Fallback: удалить сообщение через delay секунд."""
+    """Fallback: СѓРґР°Р»РёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ С‡РµСЂРµР· delay СЃРµРєСѓРЅРґ."""
     await asyncio.sleep(delay)
     try:
         await bot.delete_message(chat_id, msg_id)
@@ -255,8 +256,8 @@ def _schedule_gag_release(
     chat_type: str,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
-    """Запускает фоновую задачу, которая снимет кляп и уведомит чат."""
-    # Отменяем предыдущую задачу, если есть
+    """Р—Р°РїСѓСЃРєР°РµС‚ С„РѕРЅРѕРІСѓСЋ Р·Р°РґР°С‡Сѓ, РєРѕС‚РѕСЂР°СЏ СЃРЅРёРјРµС‚ РєР»СЏРї Рё СѓРІРµРґРѕРјРёС‚ С‡Р°С‚."""
+    # РћС‚РјРµРЅСЏРµРј РїСЂРµРґС‹РґСѓС‰СѓСЋ Р·Р°РґР°С‡Сѓ, РµСЃР»Рё РµСЃС‚СЊ
     old_task = _gag_auto_release_tasks.pop(victim_id, None)
     if old_task and not old_task.done():
         old_task.cancel()
@@ -273,7 +274,7 @@ async def _gag_timeout_job(
     chat_type: str,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
-    """Фоновая задача: ждёт истечения кляпа, потом снимает его."""
+    """Р¤РѕРЅРѕРІР°СЏ Р·Р°РґР°С‡Р°: Р¶РґС‘С‚ РёСЃС‚РµС‡РµРЅРёСЏ РєР»СЏРїР°, РїРѕС‚РѕРј СЃРЅРёРјР°РµС‚ РµРіРѕ."""
     expiry = _gagged_users.get(victim_id)
     if not expiry:
         return
@@ -282,11 +283,11 @@ async def _gag_timeout_job(
     if wait > 0:
         await asyncio.sleep(wait)
 
-    # Снимаем кляп
+    # РЎРЅРёРјР°РµРј РєР»СЏРї
     _gagged_users.pop(victim_id, None)
     _gag_auto_release_tasks.pop(victim_id, None)
 
-    # Уведомляем чат (только в группе/супергруппе)
+    # РЈРІРµРґРѕРјР»СЏРµРј С‡Р°С‚ (С‚РѕР»СЊРєРѕ РІ РіСЂСѓРїРїРµ/СЃСѓРїРµСЂРіСЂСѓРїРїРµ)
     if chat_type in ("group", "supergroup"):
         try:
             from database import get_user
@@ -298,9 +299,9 @@ async def _gag_timeout_job(
             )
             notify_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"🗣 Кляп снят у @{name}",
+                text=f"рџ—Ј РљР»СЏРї СЃРЅСЏС‚ Сѓ @{name}",
             )
-            # Удаляем уведомление через 10 секунд
+            # РЈРґР°Р»СЏРµРј СѓРІРµРґРѕРјР»РµРЅРёРµ С‡РµСЂРµР· 10 СЃРµРєСѓРЅРґ
             asyncio.create_task(_delayed_delete(
                 context.bot, chat_id, notify_msg.message_id, 10
             ))
@@ -308,17 +309,17 @@ async def _gag_timeout_job(
             logger.debug(f"Gag release notify failed for {victim_id} in {chat_id}", exc_info=True)
 
 
-# ─── Фильтр удаления сообщений закляпленных ──────────────────────────────────
+# в”Ђв”Ђв”Ђ Р¤РёР»СЊС‚СЂ СѓРґР°Р»РµРЅРёСЏ СЃРѕРѕР±С‰РµРЅРёР№ Р·Р°РєР»СЏРїР»РµРЅРЅС‹С… в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 GAG_FILTER_FLAG = "mute"
 
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
-    Middleware-фильтр: удаляет сообщения от пользователей с активным кляпом.
-    Подключается как отдельный MessageHandler с низким приоритетом.
+    Middleware-С„РёР»СЊС‚СЂ: СѓРґР°Р»СЏРµС‚ СЃРѕРѕР±С‰РµРЅРёСЏ РѕС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ СЃ Р°РєС‚РёРІРЅС‹Рј РєР»СЏРїРѕРј.
+    РџРѕРґРєР»СЋС‡Р°РµС‚СЃСЏ РєР°Рє РѕС‚РґРµР»СЊРЅС‹Р№ MessageHandler СЃ РЅРёР·РєРёРј РїСЂРёРѕСЂРёС‚РµС‚РѕРј.
     """
-    # Пропускаем сообщения без текста (стикеры, медиа проходят — если нужно
-    # их тоже блокировать, расширьте условия ниже)
+    # РџСЂРѕРїСѓСЃРєР°РµРј СЃРѕРѕР±С‰РµРЅРёСЏ Р±РµР· С‚РµРєСЃС‚Р° (СЃС‚РёРєРµСЂС‹, РјРµРґРёР° РїСЂРѕС…РѕРґСЏС‚ вЂ” РµСЃР»Рё РЅСѓР¶РЅРѕ
+    # РёС… С‚РѕР¶Рµ Р±Р»РѕРєРёСЂРѕРІР°С‚СЊ, СЂР°СЃС€РёСЂСЊС‚Рµ СѓСЃР»РѕРІРёСЏ РЅРёР¶Рµ)
     if not update.effective_message:
         return
 
@@ -326,7 +327,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if user is None:
         return
 
-    # Администраторы с правом удаления сообщений НЕ страдают от кляпа
+    # РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂС‹ СЃ РїСЂР°РІРѕРј СѓРґР°Р»РµРЅРёСЏ СЃРѕРѕР±С‰РµРЅРёР№ РќР• СЃС‚СЂР°РґР°СЋС‚ РѕС‚ РєР»СЏРїР°
     if _can_admin_bypass(context, update):
         return
 
@@ -336,7 +337,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         except Exception:
             logger.debug(f"Failed to delete gagged message from {user.id}", exc_info=True)
     else:
-        # Кляп истёк — чистим
+        # РљР»СЏРї РёСЃС‚С‘Рє вЂ” С‡РёСЃС‚РёРј
         _gagged_users.pop(user.id, None)
 
 
@@ -344,7 +345,7 @@ def _can_admin_bypass(
     context: ContextTypes.DEFAULT_TYPE,
     update: Update,
 ) -> bool:
-    """Администраторы могут обходить кляп."""
+    """РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂС‹ РјРѕРіСѓС‚ РѕР±С…РѕРґРёС‚СЊ РєР»СЏРї."""
     try:
         chat_id  = update.effective_chat.id
         user_id  = update.effective_user.id
@@ -355,23 +356,23 @@ def _can_admin_bypass(
         return False
 
 
-# ─── Команда /mute ───────────────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ РљРѕРјР°РЅРґР° /mute в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 _MUTE_USAGE = (
-    "🤪 <b>Замутить пользователя</b> — цена 10 фиссур.\n"
-    "<code>/mute @username</code> или <code>/mute</code> в ответ на его сообщение"
+    "рџ¤Є <b>Р—Р°РјСѓС‚РёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ</b> вЂ” С†РµРЅР° 10 С„РёСЃСЃСѓСЂ.\n"
+    "<code>/mute @username</code> РёР»Рё <code>/mute</code> РІ РѕС‚РІРµС‚ РЅР° РµРіРѕ СЃРѕРѕР±С‰РµРЅРёРµ"
 )
 
 
 async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик /mute — два способа выдачи кляпа."""
+    """РћР±СЂР°Р±РѕС‚С‡РёРє /mute вЂ” РґРІР° СЃРїРѕСЃРѕР±Р° РІС‹РґР°С‡Рё РєР»СЏРїР°."""
     if not update.message or not update.effective_user:
         return
 
     chat = update.effective_chat
     if chat.type == "private":
         chat_id = update.effective_chat.id
-        await context.bot.send_message(chat_id, "⛔ Команда работает только в группах и супергруппах!")
+        await context.bot.send_message(chat_id, "в›” РљРѕРјР°РЅРґР° СЂР°Р±РѕС‚Р°РµС‚ С‚РѕР»СЊРєРѕ РІ РіСЂСѓРїРїР°С… Рё СЃСѓРїРµСЂРіСЂСѓРїРїР°С…!")
         try:
             await update.message.delete()
         except Exception:
@@ -381,13 +382,13 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     admin_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # СПОСОБ 1: /mute в ответ на сообщение
-    # ──────────────────────────────────────────────────────────────────────────
+    # в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # РЎРџРћРЎРћР‘ 1: /mute РІ РѕС‚РІРµС‚ РЅР° СЃРѕРѕР±С‰РµРЅРёРµ
+    # в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     if update.message.reply_to_message:
         victim_tg = update.message.reply_to_message.from_user
         if victim_tg is None:
-            await context.bot.send_message(chat_id, "❌ Не удалось определить автора сообщения.")
+            await context.bot.send_message(chat_id, "вќЊ РќРµ СѓРґР°Р»РѕСЃСЊ РѕРїСЂРµРґРµР»РёС‚СЊ Р°РІС‚РѕСЂР° СЃРѕРѕР±С‰РµРЅРёСЏ.")
             try:
                 await update.message.delete()
             except Exception:
@@ -410,9 +411,9 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # СПОСОБ 2: /mute @username
-    # ──────────────────────────────────────────────────────────────────────────
+    # в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # РЎРџРћРЎРћР‘ 2: /mute @username
+    # в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     if context.args:
         for arg in context.args:
             if arg.startswith("@"):
@@ -434,10 +435,10 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     )
                     return
 
-        # No @-аргументов найдено — возможно, забыли @
+        # No @-Р°СЂРіСѓРјРµРЅС‚РѕРІ РЅР°Р№РґРµРЅРѕ вЂ” РІРѕР·РјРѕР¶РЅРѕ, Р·Р°Р±С‹Р»Рё @
         await context.bot.send_message(
             chat_id,
-            "❌ Укажи username с @, например:\n/mute @username"
+            "вќЊ РЈРєР°Р¶Рё username СЃ @, РЅР°РїСЂРёРјРµСЂ:\n/mute @username"
         )
         try:
             await update.message.delete()
@@ -445,18 +446,18 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             pass
         return
 
-    # Ничего не подошло — справка
-    await context.bot.send_message(chat_id, f"❓ {_MUTE_USAGE}", parse_mode="HTML")
+    # РќРёС‡РµРіРѕ РЅРµ РїРѕРґРѕС€Р»Рѕ вЂ” СЃРїСЂР°РІРєР°
+    await context.bot.send_message(chat_id, f"вќ“ {_MUTE_USAGE}", parse_mode="HTML")
     try:
         await update.message.delete()
     except Exception:
         pass
 
 
-# ─── Вспомогательные проверки ─────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ РїСЂРѕРІРµСЂРєРё в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 def get_current_fissure(user_id: int) -> float:
-    """Возвращает текущую фиссуру пользователя (из БД)."""
+    """Р’РѕР·РІСЂР°С‰Р°РµС‚ С‚РµРєСѓС‰СѓСЋ С„РёСЃСЃСѓСЂСѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (РёР· Р‘Р”)."""
     try:
         from database import get_user
         user = get_user(user_id)
@@ -467,19 +468,19 @@ def get_current_fissure(user_id: int) -> float:
     return 0.0
 
 
-# ─── Публичный API модуля ─────────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ РџСѓР±Р»РёС‡РЅС‹Р№ API РјРѕРґСѓР»СЏ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 def register_handlers(application) -> None:
     """
-    Зарегистрировать все обработчики модуля в Application.
+    Р—Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊ РІСЃРµ РѕР±СЂР°Р±РѕС‚С‡РёРєРё РјРѕРґСѓР»СЏ РІ Application.
 
-    Принимает Application из python-telegram-bot v20.
+    РџСЂРёРЅРёРјР°РµС‚ Application РёР· python-telegram-bot v20.
     """
-    # Команда /mute
+    # РљРѕРјР°РЅРґР° /mute
     application.add_handler(CommandHandler("mute", mute_command))
 
-    # Фильтр сообщений: удаляет сообщения закляпленных
-    # block=False → не перехватывает обновление, другие хендлеры continue работать
+    # Р¤РёР»СЊС‚СЂ СЃРѕРѕР±С‰РµРЅРёР№: СѓРґР°Р»СЏРµС‚ СЃРѕРѕР±С‰РµРЅРёСЏ Р·Р°РєР»СЏРїР»РµРЅРЅС‹С…
+    # block=False в†’ РЅРµ РїРµСЂРµС…РІР°С‚С‹РІР°РµС‚ РѕР±РЅРѕРІР»РµРЅРёРµ, РґСЂСѓРіРёРµ С…РµРЅРґР»РµСЂС‹ continue СЂР°Р±РѕС‚Р°С‚СЊ
     application.add_handler(
         MessageHandler(filters=None, callback=on_message, block=False)
     )

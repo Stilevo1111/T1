@@ -1,8 +1,6 @@
-import time
-import asyncio
-from collections import deque
-from typing import Optional
+﻿import asyncio
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +15,11 @@ class RateLimiter:
     Token bucket rate limiter for Telegram API calls.
     Allows bursts up to bucket_size, then refills at rate tokens_per_second.
     """
-    
+
     def __init__(self, tokens_per_second: float = 20.0, bucket_size: int = 40):
         """
         Initialize rate limiter.
-        
+
         Args:
             tokens_per_second: Rate at which tokens are added (default 20/sec)
             bucket_size: Maximum burst size (default 40 tokens)
@@ -31,14 +29,14 @@ class RateLimiter:
         self.tokens = float(bucket_size)  # Start with full bucket
         self.last_update = time.time()
         self._lock = asyncio.Lock()
-        
+
     async def acquire(self, tokens: int = 1) -> bool:
         """
         Acquire tokens from the bucket. Waits if necessary.
-        
+
         Args:
             tokens: Number of tokens to acquire
-            
+
         Returns:
             True if tokens were acquired
         """
@@ -51,7 +49,7 @@ class RateLimiter:
                 self.tokens + time_passed * self.tokens_per_second
             )
             self.last_update = now
-            
+
             if self.tokens >= tokens:
                 self.tokens -= tokens
                 return True
@@ -63,14 +61,14 @@ class RateLimiter:
                 await asyncio.sleep(wait_time)
                 # Retry after waiting
                 return await self.acquire(tokens)
-    
+
     def try_acquire(self, tokens: int = 1) -> bool:
         """
         Try to acquire tokens without waiting.
-        
+
         Args:
             tokens: Number of tokens to acquire
-            
+
         Returns:
             True if tokens were acquired, False otherwise
         """
@@ -82,12 +80,12 @@ class RateLimiter:
             self.tokens + time_passed * self.tokens_per_second
         )
         self.last_update = now
-        
+
         if self.tokens >= tokens:
             self.tokens -= tokens
             return True
         return False
-    
+
     def get_available_tokens(self) -> float:
         """Get current number of available tokens."""
         now = time.time()
@@ -105,7 +103,7 @@ telegram_rate_limiter = RateLimiter(tokens_per_second=15.0, bucket_size=30)
 def rate_limit(tokens: int = 1):
     """
     Decorator to apply rate limiting to async functions.
-    
+
     Usage:
         @rate_limit(tokens=1)
         async def send_message(...):

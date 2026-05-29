@@ -1,15 +1,22 @@
-# -*- coding: utf-8 -*-
-"""
+﻿"""
 Bot utilities: helper functions for Telegram IDs, clickable names, and message tracking.
 Extracted from main.py without any behavior changes.
 """
 
-import logging
 import asyncio
-from typing import Any, Dict, List, Optional, Set
-from database import user_cache, get_user
-from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, Bot
+import logging
+from typing import Any
+
+from telegram import (
+    Bot,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
 from telegram.ext import CallbackContext
+
+from database import get_user, user_cache
 from rate_limiter import rate_limit
 
 logger = logging.getLogger(__name__)
@@ -31,7 +38,7 @@ __all__ = [
 
 
 def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
-    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
+    """РџСЂРѕРІРµСЂСЏРµС‚, СЃРѕРґРµСЂР¶РёС‚ Р»Рё С‚РµРєСЃС‚ РѕС€РёР±РєРё Р»СЋР±СѓСЋ РёР· РїРµСЂРµРґР°РЅРЅС‹С… С„СЂР°Р· (СЂРµРіРёСЃС‚СЂРѕРЅРµР·Р°РІРёСЃРёРјРѕ)."""
     if error is None:
         return False
     msg = str(error).lower()
@@ -43,31 +50,31 @@ last_bot_message = {}  # {chat_id: {user_id: message_id or list}}
 
 
 def format_time(seconds: int) -> str:
-    """Format seconds as HHч MMм"""
+    """Format seconds as HHС‡ MMРј"""
     h = seconds // 3600
     m = (seconds % 3600) // 60
-    return f"{int(h)}ч {int(m)}м"
+    return f"{int(h)}С‡ {int(m)}Рј"
 
 
 def is_valid_telegram_id(user_id: Any) -> bool:
-    """Проверяет, что user_id это валидный Telegram ID (не SteamID64)"""
+    """РџСЂРѕРІРµСЂСЏРµС‚, С‡С‚Рѕ user_id СЌС‚Рѕ РІР°Р»РёРґРЅС‹Р№ Telegram ID (РЅРµ SteamID64)"""
     if not user_id:
         return False
     try:
         uid = int(user_id)
     except (ValueError, TypeError):
         return False
-    # Telegram IDs: могут быть любого размера, но обычно 6-10 цифр
-    # SteamID64: начинается с 7656119... (более 15 цифр)
-    if uid > 10**15:  # Защита от SteamID64 (7656119...)
+    # Telegram IDs: РјРѕРіСѓС‚ Р±С‹С‚СЊ Р»СЋР±РѕРіРѕ СЂР°Р·РјРµСЂР°, РЅРѕ РѕР±С‹С‡РЅРѕ 6-10 С†РёС„СЂ
+    # SteamID64: РЅР°С‡РёРЅР°РµС‚СЃСЏ СЃ 7656119... (Р±РѕР»РµРµ 15 С†РёС„СЂ)
+    if uid > 10**15:  # Р—Р°С‰РёС‚Р° РѕС‚ SteamID64 (7656119...)
         return False
-    if uid < 1:  # Telegram ID должен быть положительным
+    if uid < 1:  # Telegram ID РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РїРѕР»РѕР¶РёС‚РµР»СЊРЅС‹Рј
         return False
     return True
 
 
 def make_clickable(name: str | None, user_id: Any, max_length: int = 12) -> str:
-    """Создать кликабельный никейм для Telegram.
+    """РЎРѕР·РґР°С‚СЊ РєР»РёРєР°Р±РµР»СЊРЅС‹Р№ РЅРёРєРµР№Рј РґР»СЏ Telegram.
 
     Returns an HTML anchor tag with tg://user?id= if resolvable, otherwise a fallback display.
     """
@@ -75,36 +82,36 @@ def make_clickable(name: str | None, user_id: Any, max_length: int = 12) -> str:
         uid = int(user_id) if user_id else 0
     except (ValueError, TypeError):
         uid = 0
-    
+
     if name and name != "None" and uid > 0:
         display_name = name
         try:
-            # Сначала пробуем из кеша
+            # РЎРЅР°С‡Р°Р»Р° РїСЂРѕР±СѓРµРј РёР· РєРµС€Р°
             cached = user_cache.get(uid)
             if cached:
                 display_name = cached.get('steam_nickname') or cached.get('username') or name
             else:
-                # Пробуем из БД напрямую
+                # РџСЂРѕР±СѓРµРј РёР· Р‘Р” РЅР°РїСЂСЏРјСѓСЋ
                 db_user = get_user(uid)
                 if db_user:
                     display_name = db_user.get('steam_nickname') or db_user.get('username') or name
         except Exception:
             display_name = name
 
-        # Нормализуем никнейм - убираем @ если есть
+        # РќРѕСЂРјР°Р»РёР·СѓРµРј РЅРёРєРЅРµР№Рј - СѓР±РёСЂР°РµРј @ РµСЃР»Рё РµСЃС‚СЊ
         if display_name and display_name.startswith('@'):
             display_name = display_name[1:]
 
-        # Если получилось все равно число - показываем как есть
+        # Р•СЃР»Рё РїРѕР»СѓС‡РёР»РѕСЃСЊ РІСЃРµ СЂР°РІРЅРѕ С‡РёСЃР»Рѕ - РїРѕРєР°Р·С‹РІР°РµРј РєР°Рє РµСЃС‚СЊ
         if display_name.isdigit():
-            display_name = f"Игрок {display_name}"
+            display_name = f"РРіСЂРѕРє {display_name}"
 
-        # Обрезаем длинные ники
+        # РћР±СЂРµР·Р°РµРј РґР»РёРЅРЅС‹Рµ РЅРёРєРё
         if len(display_name) > max_length:
             display_name = display_name[:max_length-1] + "."
 
         return f'<a href="tg://user?id={uid}">{display_name}</a>'
-    return name if name and name != "None" else "—"
+    return name if name and name != "None" else "вЂ”"
 
 
 async def delete_last_bot_message(bot: Bot, chat_id: int, user_id: int) -> None:
@@ -173,22 +180,22 @@ def add_bot_message(chat_id: int, user_id: int, message_id: int) -> None:
 
 def main_menu() -> ReplyKeyboardMarkup:
     keyboard = [
-        [KeyboardButton("🎲 Ролл Фиссуры"), KeyboardButton("👤 Профиль")],
-        [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
-        [KeyboardButton("🔑 Привязать Аккаунт"), KeyboardButton("🔎 Аналитика")],
+        [KeyboardButton("рџЋІ Р РѕР»Р» Р¤РёСЃСЃСѓСЂС‹"), KeyboardButton("рџ‘¤ РџСЂРѕС„РёР»СЊ")],
+        [KeyboardButton("рџЏ† РўРѕРї Р¤РёСЃСЃСѓСЂ"), KeyboardButton("рџЏ† РўРѕРї MMR")],
+        [KeyboardButton("рџ”‘ РџСЂРёРІСЏР·Р°С‚СЊ РђРєРєР°СѓРЅС‚"), KeyboardButton("рџ”Ћ РђРЅР°Р»РёС‚РёРєР°")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 
-def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: Optional[Set[int]] = None) -> InlineKeyboardMarkup:
+def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: set[int] | None = None) -> InlineKeyboardMarkup:
     """Build inline keyboard for analytics pagination."""
     rows = []
     page_buttons = []
-    labels = ["🆚 С ПРО", "🔍 Детально"]
+    labels = ["рџ†љ РЎ РџР Рћ", "рџ”Ќ Р”РµС‚Р°Р»СЊРЅРѕ"]
     for i in range(total_pages):
-        label = f"⏳ {labels[i]}" if generated and i not in generated else labels[i]
+        label = f"вЏі {labels[i]}" if generated and i not in generated else labels[i]
         if i == page_idx:
-            page_buttons.append(InlineKeyboardButton(f"✅ {label}", callback_data=f"analytics_page_{i}"))
+            page_buttons.append(InlineKeyboardButton(f"вњ… {label}", callback_data=f"analytics_page_{i}"))
         else:
             page_buttons.append(InlineKeyboardButton(label, callback_data=f"analytics_page_{i}"))
     rows.append(page_buttons)
@@ -196,12 +203,12 @@ def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: Option
 
 
 def _build_stats_button_keyboard() -> InlineKeyboardMarkup:
-    """Build inline keyboard with single 'Сравнить с Pro 🧠' button under chart."""
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Сравнить c Pro🆚", callback_data="analytics_show")]])
+    """Build inline keyboard with single 'РЎСЂР°РІРЅРёС‚СЊ СЃ Pro рџ§ ' button under chart."""
+    return InlineKeyboardMarkup([[InlineKeyboardButton("РЎСЂР°РІРЅРёС‚СЊ c Proрџ†љ", callback_data="analytics_show")]])
 
 
 class ManualContext:
-    """Контекст для ручного вызова jobs"""
+    """РљРѕРЅС‚РµРєСЃС‚ РґР»СЏ СЂСѓС‡РЅРѕРіРѕ РІС‹Р·РѕРІР° jobs"""
     def __init__(self, application: Any, bot: Bot) -> None:
         self.application = application
         self.bot = bot
@@ -210,7 +217,7 @@ class ManualContext:
 
 @rate_limit(tokens=1)
 async def delete_after_delay(bot: Bot, chat_id: int, msg_id: int, delay: float, job_queue: Any = None):
-    """Удалить сообщение через delay секунд"""
+    """РЈРґР°Р»РёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ С‡РµСЂРµР· delay СЃРµРєСѓРЅРґ"""
     if not isinstance(msg_id, int) or msg_id <= 0:
         logger.debug(f"delete_after_delay: skipping invalid msg_id={msg_id}")
         return
@@ -237,7 +244,7 @@ async def delete_after_delay(bot: Bot, chat_id: int, msg_id: int, delay: float, 
 
 @rate_limit(tokens=1)
 async def delete_message_job(context: CallbackContext):
-    """Job для удаления сообщения"""
+    """Job РґР»СЏ СѓРґР°Р»РµРЅРёСЏ СЃРѕРѕР±С‰РµРЅРёСЏ"""
     bot = context.application.bot
     chat_id = context.job.data['chat_id']
     msg_id = context.job.data['msg_id']
@@ -258,5 +265,5 @@ async def delete_message_job(context: CallbackContext):
 
 
 def schedule_delete(bot: Bot, chat_id: int, msg_id: int, delay: float = 30, job_queue: Any = None):
-    """Запланировать удаление сообщения через delay секунд"""
+    """Р—Р°РїР»Р°РЅРёСЂРѕРІР°С‚СЊ СѓРґР°Р»РµРЅРёРµ СЃРѕРѕР±С‰РµРЅРёСЏ С‡РµСЂРµР· delay СЃРµРєСѓРЅРґ"""
     asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay, job_queue))
