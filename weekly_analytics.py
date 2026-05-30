@@ -866,10 +866,10 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
         if (now - updated_at).total_seconds() < 3600:
-        cached = json.loads(user['analytics_cache'])
-        # Run chart generation (async function) directly
-        chart = await _create_visual_chart(cached.get("history", []))
-        return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY")}
+            cached = json.loads(user['analytics_cache'])
+            # Run chart generation (async function) directly
+            chart = await _create_visual_chart(cached.get("history", []))
+            return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY")}
 
     matches = await get_last_matches(telegram_id)
 

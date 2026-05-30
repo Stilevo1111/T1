@@ -24,6 +24,7 @@ from bot_utils import (
     main_menu,
     add_bot_message,
     format_time,
+    bot_can_delete,
 )
 from rolls import (
     calculate_fissure_roll,
@@ -81,9 +82,6 @@ async def delete_fissure_user_and_last_messages(bot, chat_id, user_id, user_msg_
     Безопасное удаление сообщений пользователя и последнего бота при /fissure.
     Логика полностью сохранена из main.py.
     """
-    from bot_utils import bot_can_delete
-    import asyncio
-
     # Delete user message only in groups/channels (not in private)
     if chat_type in ['group', 'supergroup', 'channel']:
         if await bot_can_delete(bot, chat_id):

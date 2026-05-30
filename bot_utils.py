@@ -6,11 +6,38 @@ Extracted from main.py without any behavior changes.
 
 import logging
 import asyncio
+import time
 from database import user_cache, get_user
 from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
 from rate_limiter import rate_limit
 
 logger = logging.getLogger(__name__)
+
+_bot_can_delete_ttl = 3600
+_BOT_CAN_DELETE_CACHE_MAX = 200
+_bot_can_delete_cache = {}
+
+async def bot_can_delete(bot, chat_id):
+    """Проверить может ли бот удалять сообщения в чате"""
+    current_time = time.time()
+    if len(_bot_can_delete_cache) > _BOT_CAN_DELETE_CACHE_MAX:
+        _bot_can_delete_cache.clear()
+        logger.debug("Cleared bot_can_delete cache (exceeded limit)")
+
+    cached = _bot_can_delete_cache.get(chat_id)
+    if cached is not None:
+        cached_val, cached_time = cached
+        if current_time - cached_time < _bot_can_delete_ttl:
+            return cached_val
+    try:
+        me = await bot.get_me()
+        member = await bot.get_chat_member(chat_id, me.id)
+        can_delete = getattr(member, 'can_delete_messages', False) or member.status in ('administrator', 'creator')
+        _bot_can_delete_cache[chat_id] = (can_delete, time.time())
+        return can_delete
+    except Exception:
+        _bot_can_delete_cache[chat_id] = (False, time.time())
+        return False
 
 __all__ = [
     # Public API
@@ -25,6 +52,7 @@ __all__ = [
     "schedule_delete",
     "ManualContext",
     "last_bot_message",
+    "bot_can_delete",
 ]
 
 
