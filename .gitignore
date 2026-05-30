@@ -12,9 +12,16 @@ __pycache__/
 *.temp
 .tmp/
 
-# Binary files
-*.png
-*.jpg
+# Binary files (temp/generated)
+hero_cache/
+background.jpg
+background_new.png
+debug_font_output.png
+digest_header*.png
+final*.png
+test_helper.png
+
+# Temp scripts
 
 # Temp scripts
 add_column.sql
