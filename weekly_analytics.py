@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Еженедельная аналитика игроков Dota 2.
 
@@ -19,26 +20,9 @@
 
 from __future__ import annotations
 
-import asyncio
-import io
-import json
-import logging
-from datetime import datetime, timezone
 from typing import Any
 
-import aiohttp
-from PIL import Image
-
-from database import Database, get_user
-from dota_mmr import OPENDOTA_API_URL, _api_get_async, steam64_to_account_id
-from hero_positions import (
-    POS_CARRY,
-    POS_HARD_SUPPORT,
-    POS_MID,
-    POS_OFFLANE,
-    POS_SOFT_SUPPORT,
-    hero_positions,
-)
+import asyncio
 
 # Type aliases for clarity (no runtime effect)
 RoleName = str
@@ -47,6 +31,19 @@ ProPlayer = dict[str, str | int | float]
 ProBenchmarks = dict[str, float | int]
 ProRoleData = dict[RoleName, dict[str, dict[PlayerName, ProPlayer] | ProBenchmarks]]
 Weights = dict[str, float]
+import aiohttp
+import json
+from PIL import Image, ImageDraw, ImageFont
+import io
+import json
+import re
+from datetime import datetime, timezone, timedelta
+
+from dota_mmr import steam64_to_account_id, OPENDOTA_API_URL, _api_get_async
+from database import get_user, Database
+from hero_positions import hero_positions
+
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -64,21 +61,6 @@ __all__ = [
 # Cache for background image and hero icons
 _CHART_BG_CACHE = None
 _HERO_ICON_CACHE = {}
-
-# Chart constants
-CHART_WIDTH: int = 1200
-CHART_HEIGHT: int = 800
-CHART_DPI: int = 72
-CHART_BG_URL: str = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
-CHART_POINTS: int = 10
-
-# Coordinate system for chart plotting (preserve exact values)
-CHART_X_MIN: int = 0
-CHART_X_MAX: int = 11
-CHART_Y_MIN: int = 0
-CHART_Y_MAX: int = 2
-CHART_Y_TICKS: list[float] = [0, 0.5, 1.0, 1.5, 2.0]
-CHART_Y_LABELS: list[str] = ["0", "0.5", "1.0", "1.5", "2.0"]
 
 # =========================================================
 # MARKDOWN ESCAPE
@@ -314,18 +296,18 @@ def _normalize_hero_file_name(internal_name: str) -> str:
     """Convert OpenDota internal name to file name"""
     # Remove npc_dota_hero_ prefix if present
     name = internal_name.replace("npc_dota_hero_", "")
-
+    
     # Check mapping first
     if name in HERO_NAME_MAP:
         return HERO_NAME_MAP[name]
-
+    
     # Handle specific name transformations
     # doom_bringer -> doom_bringer (same, but check for doom)
     if name == "doom_bringer":
         return "doom_bringer"
     if name == "doom":
         return "doom_bringer"
-
+    
     # Return as-is for most heroes
     return name
 
@@ -384,18 +366,18 @@ def _normalize_hero_name(internal_name: str) -> str:
         "npc_dota_hero_life_stealer": "Lifestealer",
         "npc_dota_hero_abyssal_underlord": "Underlord",
     }
-
+    
     if internal_name in name_map:
         return name_map[internal_name]
-
+    
     # Replace npc_dota_hero_ prefix
     name = internal_name.replace("npc_dota_hero_", "")
-
+    
     # Convert snake_case to Title Case with spaces
     # e.g., "anti_mage" -> "Anti Mage" -> handle special cases
     parts = name.split("_")
     result = " ".join(p.capitalize() for p in parts)
-
+    
     # Fix known multi-word hero names
     multi_word_fixes = {
         "Anti Mage": "Anti-Mage",
@@ -411,74 +393,70 @@ def _normalize_hero_name(internal_name: str) -> str:
         "Outworld Destroyer": "Outworld Destroyer",
         "Dust II": "Dust II",  # handle edge cases
     }
-
+    
     return multi_word_fixes.get(result, result)
 
 
 async def _detect_role_from_hero_counts(matches: list[dict[str, Any]]) -> str:
     heroes = await _load_heroes()
-
+    
     # Mapping: position 1-5 -> role
     POS_TO_ROLE = {
-        POS_CARRY: "CARRY",
-        POS_MID: "MID",
-        POS_OFFLANE: "OFFLANE",
-        POS_SOFT_SUPPORT: "SUPPORT",
-        POS_HARD_SUPPORT: "SUPPORT"
+        1: "CARRY",
+        2: "MID", 
+        3: "OFFLANE",
+        4: "SUPPORT",
+        5: "SUPPORT"
     }
-
+    
     role_counts = {
         "CARRY": 0,
         "MID": 0,
         "OFFLANE": 0,
         "SUPPORT": 0
     }
-
+    
     total_matches = len(matches)
-
+    
     for m in matches:
         hero_id = m.get("hero_id", 0)
         internal_name = heroes.get(hero_id, "")
-
+        
         # Normalize hero name for lookup in hero_positions
         hero_name = _normalize_hero_name(internal_name)
-
+        
         # Look up position from local hero_positions database
         position = hero_positions.get(hero_name, 0)
-
+        
         # Map position to role
         if position in POS_TO_ROLE:
             role = POS_TO_ROLE[position]
             role_counts[role] += 1
-
+    
     if total_matches == 0:
         return None
-
+    
     # Find dominant role (threshold: at least 2 matches or 50% for small samples)
     dominant_role = max(role_counts, key=role_counts.get)
     dominant_count = role_counts[dominant_role]
-
+    
     threshold = max(2, int(total_matches * 0.5))
     if dominant_count >= threshold:
         logger.info(f"ROLE BY HERO COUNT: {dominant_role} ({dominant_count}/{total_matches})")
         return dominant_role
-
+    
     logger.info(f"ROLE BY HERO COUNT: no dominance ({role_counts})")
     return None
 
 
 async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
-    """Detect player role from match history using hero roles and stats.
-
-    Returns role name one of 'CARRY', 'SUPPORT', 'MID', 'OFFLANE'.
-    """
     """
     Определяет наиболее вероятную роль игрока на основе его недавних матчей.
     """
     role = await _detect_role_from_hero_counts(matches)
     if role:
         return role
-
+    
     # Fallback: determine role by stats (GPM, KDA)
     total_gpm = 0
     total_lh = 0
@@ -499,7 +477,7 @@ async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
     total_assists = sum(m.get("assists", 0) for m in matches[:10])
     avg_gpm = total_gpm / max(len(matches[:10]), 1)
     avg_kda = (total_kills + total_assists) / max(total_deaths, 1)
-
+    
     # High GPM + KDA = CARRY/MID, low = SUPPORT
     if avg_gpm >= 500 and avg_kda >= 3.0:
         return "CARRY"
@@ -507,16 +485,11 @@ async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
         return "MID"
     elif avg_gpm >= 200 and avg_kda >= 1.5:
         return "SUPPORT"
-
+    
     return None
 
 
 def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
-    """Compute aggregated player statistics from a list of match dicts.
-
-    Returns a dict with aggregated fields used elsewhere in analytics generation.
-    Behavior and formulas are unchanged.
-    """
     """
     Рассчитывает средние показатели игрока по последним матчам.
     """
@@ -524,7 +497,7 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
     if not matches:
         return {"wr": 50.0, "gpm": 400, "xpm": 500, "lh": 0, "deny": 0, "stacks": 0, "deaths": 5.0, "h_dmg": 10.0, "t_dmg": 2.0, "util": 8.0, "apm": 250, "kda": "3/4/8"}
     n = len(matches)
-
+    
     # Collect raw data
     raw_lh = [m.get("last_hits", 0) for m in matches]
     raw_lh_per_10min = [m.get("last_hits", 0) / max(m.get("duration", 600) / 600, 0.33) for m in matches]  # normalize to 10min
@@ -540,7 +513,7 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
     raw_denies = [m.get("denies", 0) for m in matches]
     raw_stacks = [m.get("creeps_stacked", 0) for m in matches]
     raw_xpm = [m.get("xp_per_min", 0) for m in matches]
-
+    
     # Compute GPM per match from gold and gold_spent (more reliable than gold_per_min)
     raw_gpm = []
     for m in matches:
@@ -553,7 +526,7 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
         else:
             gpm_val = m.get("gold_per_min", 0)
         raw_gpm.append(gpm_val)
-
+    
     total_gpm = sum(raw_gpm)
     # Fallbacks if GPM data is zero (e.g., missing gold info)
     total_lh = sum(raw_lh)
@@ -565,58 +538,59 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
         avg_assists = sum(raw_assists) / max(n, 1)
         avg_kda = (avg_kills + avg_assists) / avg_deaths
         total_gpm = avg_kda * 150
-
+    
     avg_gpm = total_gpm / n
+    avg_lh = total_lh / n
     avg_lh_10min = sum(raw_lh_per_10min) / n
 
     total_deaths = sum(raw_deaths)
     avg_deaths = total_deaths / n
-
+    
     total_kills = sum(raw_kills)
     avg_kills = total_kills / n
-
+    
     total_assists = sum(raw_assists)
     avg_assists = total_assists / n
-
+    
     total_denies = sum(raw_denies)
     avg_denies = total_denies / n
-
+    
     total_stacks = sum(raw_stacks)
     avg_stacks = total_stacks / n
-
+    
     total_xpm = sum(raw_xpm)
     avg_xpm = total_xpm / n
+    
 
-
-
+    
     # Hero DMG fallback: estimate from kills (~200 damage per kill avg)
     total_h_dmg = sum(raw_h_dmg)
     if total_h_dmg == 0:
         total_h_dmg = total_kills * 200
     avg_h_dmg = total_h_dmg / n / 1000
-
+    
     # Tower DMG fallback: estimate from kills
     total_t_dmg = sum(raw_t_dmg)
     if total_t_dmg == 0:
         total_t_dmg = total_kills * 50
     avg_t_dmg = total_t_dmg / n / 1000
-
+    
     # APM fallback
     total_apm = sum(raw_apm)
     if total_apm == 0:
         total_apm = n * 250
     avg_apm = total_apm / n
-
+    
     # Utility from stuns/heals/stacks
     total_stuns = sum(raw_stuns)
     total_heals = sum(raw_heals)
     total_utility = (total_stuns * 0.3 + total_heals / 1000) / n
-
+    
     total_wins = sum(raw_wins)
     wr = (total_wins / n) * 100
-
+    
     real_kda = (avg_kills + avg_assists) / max(avg_deaths, 0.1)
-
+    
     return {
         "wr": round(wr, 1),
         "gpm": round(avg_gpm, 1),
@@ -652,29 +626,29 @@ async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> l
     """Fetch full match details for matches that have minimal data."""
     account_id = steam64_to_account_id(steam_id)
     enriched = []
-
+    
     for m in matches:
         # If match already has all needed data, keep it
         if m.get("gold_per_min", 0) > 0 and m.get("last_hits", 0) > 0:
             enriched.append(m)
             continue
-
+        
         match_id = m.get("match_id")
         if not match_id:
             enriched.append(m)
             continue
-
+        
         try:
             match_url = f"{OPENDOTA_API_URL}/matches/{match_id}"
             match_data = await _api_get_async(match_url, timeout=10)
-
+            
             player_stats = {}
             if match_data and "players" in match_data:
                 for p in match_data["players"]:
                     if p.get("account_id") == int(account_id):
                         player_stats = p
                         break
-
+            
             # Enrich the match data
             m["kills"] = player_stats.get("kills", m.get("kills", 0))
             m["deaths"] = player_stats.get("deaths", m.get("deaths", 0))
@@ -693,15 +667,15 @@ async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> l
             m["creeps_stacked"] = player_stats.get("creeps_stacked", 0)
             m["observer_uses"] = player_stats.get("observer_uses", 0)
             m["sentry_uses"] = player_stats.get("sentry_uses", 0)
-
+            
             # Yield to event loop to prevent blocking
             await asyncio.sleep(0)
-
+            
         except Exception as e:
             logger.debug(f"Failed to fetch match {match_id}: {e}")
-
+        
         enriched.append(m)
-
+    
     return enriched
 
 
@@ -842,7 +816,7 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
 
     text = f"{header}\n\n{t1}"
 
-    header_detailed = _escape_markdown_v2("📈 Подробное сравнение • Детали позиций")
+    header_detailed = _escape_markdown_v2(f"📈 Подробное сравнение • Детали позиций")
 
     text_detailed = f"{header_detailed}\n\n{t2}"
 
@@ -883,23 +857,21 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
     """
 
     """Generate only the chart and game history - no text pages."""
-
-    from datetime import datetime, timezone
-
-    from database import get_user
-
+    
+    from database import get_user, Database
+    from datetime import datetime, timezone, timedelta
+    
     user = get_user(telegram_id)
-    now = datetime.now(timezone.utc)
-
     if user and user.get('analytics_cache') and user.get('analytics_updated_at'):
         updated_at = user['analytics_updated_at']
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
-        if (now - updated_at).total_seconds() < 3600:
-            cached = json.loads(user['analytics_cache'])
-            # Run chart generation (async function) directly
-            chart = await _create_visual_chart(cached.get("history", []))
-            return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY")}
+        now = datetime.now(timezone.utc)
+    if (now - updated_at).total_seconds() < 3600:
+        cached = json.loads(user['analytics_cache'])
+        # Run chart generation (async function) directly
+        chart = await _create_visual_chart(cached.get("history", []))
+        return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY")}
 
     matches = await get_last_matches(telegram_id)
 
@@ -922,20 +894,20 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
         deaths = m.get("deaths", 0)
         assists = m.get("assists", 0)
         kda = (kills + assists) / max(deaths, 1)
-
+        
         # Estimate GPM from last_hits (basic data from match list, no API)
         duration = m.get("duration", 600)
         last_hits = m.get("last_hits", 0)
         gpm = last_hits * 60 / max(duration / 60, 1) if last_hits > 0 else 300
-
+        
         # Estimate utility from stacks and denies (minimal data)
         stacks = m.get("creeps_stacked", 0)
         denies = m.get("denies", 0)
         utility = stacks * 1.5 + denies * 0.5
-
+        
         # Estimate APM (typical values by role)
         apm = 250
-
+        
         imp = _calculate_imp(gpm, kda, utility, apm, role)
         game_history.append({"imp": round(imp, 2), "hero_id": m.get("hero_id", 0)})
 
@@ -1036,7 +1008,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
         total_denies += m.get("denies", 0)
         total_stacks += m.get("creeps_stacked", 0)
         total_xpm += m.get("xp_per_min", 0)
-
+        
         total_utility += utility
 
         # Fallback for hero_damage from kills
@@ -1131,77 +1103,64 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
     return data
 
 # =========================================================
-# CHART HELPERS (pure, no side effects)
+# CHART
 # =========================================================
 
-def _prepare_chart_data(history: list[dict], make_interp_spline=None) -> dict:
-    """Подготавливает данные для отрисовки чарта (без изменения логики)."""
-    import numpy as np
-
-    # Reverse history so oldest game is first (left side of chart)
-    # and newest game is last (right side of chart)
-    reversed_history = list(reversed(history))[:CHART_POINTS]
-
-    raw_impacts = [
-        round(g["imp"], 2)
-        for g in reversed_history
-    ]
-
-    while len(raw_impacts) < CHART_POINTS:
-        raw_impacts.append(0.4)
-
-    raw_impacts = raw_impacts[:CHART_POINTS]
-
-    # old values compressed graph too much
-    # now remap into full 0.2 → 1.8 range
-    min_imp = min(raw_impacts)
-    max_imp = max(raw_impacts)
-
-    impacts = []
-    for value in raw_impacts:
-        normalized = (
-            (value - min_imp)
-            / max(max_imp - min_imp, 0.01)
-        )
-        scaled = 0.25 + (normalized * 1.45)
-        impacts.append(round(scaled, 2))
-
-    x = np.arange(1, CHART_POINTS + 1)
-    avg = np.mean(impacts)
-
-    # SMOOTH INTERPOLATION
-    if make_interp_spline and len(impacts) >= 4:
-        x_smooth = np.linspace(1, CHART_POINTS, 100)
-        spl = make_interp_spline(x, impacts, k=3)
-        y_smooth = spl(x_smooth)
-    else:
-        x_smooth = x
-        y_smooth = impacts
-
-    return {
-        "reversed_history": reversed_history,
-        "impacts": impacts,
-        "x": x,
-        "avg": avg,
-        "x_smooth": x_smooth,
-        "y_smooth": y_smooth,
-    }
-
-
-# =========================================================
-# CHART HELPERS (behavior-preserving extractions)
-# =========================================================
-
-async def _load_chart_background() -> Image.Image:
-    """Load (or create) the 1200x800 chart background with caching. Async-safe."""
+async def _create_visual_chart(history: list[dict]) -> bytes | None:
     global _CHART_BG_CACHE
-    WIDTH, HEIGHT = 1200, 800
+    try:
+        import numpy as np
+        import matplotlib
+        matplotlib.use("Agg")
+
+        import matplotlib.pyplot as plt
+        import matplotlib.patheffects as pe
+
+        from matplotlib.offsetbox import (
+            OffsetImage,
+            AnnotationBbox
+        )
+
+        from PIL import Image
+
+    except ImportError:
+        logger.warning("matplotlib not available, skipping chart generation")
+        return None
+
+    try:
+        from scipy.interpolate import make_interp_spline
+        from scipy.ndimage import gaussian_filter1d
+    except ImportError:
+        make_interp_spline = None
+        gaussian_filter1d = None
+
+    # =====================================================
+    # CANVAS SIZE EXACTLY 1200x800
+    # =====================================================
+
+    WIDTH = 1200
+    HEIGHT = 800
+
+    DPI = 72
+
+    FIG_W = WIDTH / DPI
+    FIG_H = HEIGHT / DPI
+
+    # =====================================================
+    # LOAD BACKGROUND (cached to avoid blocking)
+    # =====================================================
+
+    global _CHART_BG_CACHE
+    background_url = (
+        "https://i.ibb.co/jkTWqcHn/"
+        "pngdsadsad.png"
+    )
 
     if _CHART_BG_CACHE is None:
         try:
             from database import get_aiohttp_session
             session = await get_aiohttp_session()
-            async with session.get(CHART_BG_URL, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            async with session.get(background_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status == 200:
                     content = await resp.read()
                     _CHART_BG_CACHE = Image.open(io.BytesIO(content)).convert("RGB")
@@ -1211,18 +1170,111 @@ async def _load_chart_background() -> Image.Image:
         except Exception as e:
             logger.warning(f"Could not load background image, using fallback: {e}")
             _CHART_BG_CACHE = Image.new("RGB", (WIDTH, HEIGHT), (20, 20, 30))
-    return _CHART_BG_CACHE
 
+    bg = _CHART_BG_CACHE
 
-def _draw_impact_line(ax: Any, x_smooth: Any, y_smooth: Any, impacts: list[float], x: Any, avg: float, pe: Any, np: Any) -> None:
-    """Draw fill, main curve with glow, scatter points and average line (exact original behavior)."""
-    ax.fill_between(
-        x_smooth, y_smooth, np.min(y_smooth),
-        color="#f4c430", alpha=0.50, zorder=3
+    # =====================================================
+    # PREPARE DATA
+    # =====================================================
+
+    # Reverse history so oldest game is first (left side of chart)
+    # and newest game is last (right side of chart)
+    reversed_history = list(reversed(history))[:10]
+    
+    raw_impacts = [
+        round(g["imp"], 2)
+        for g in reversed_history
+    ]
+
+    while len(raw_impacts) < 10:
+        raw_impacts.append(0.4)
+
+    raw_impacts = raw_impacts[:10]
+
+# =====================================================
+    # FORCE BIGGER MOVEMENT
+    # =====================================================
+
+    # old values compressed graph too much
+    # now remap into full 0.2 → 1.8 range
+    min_imp = min(raw_impacts)
+    max_imp = max(raw_impacts)
+
+    impacts = []
+
+    for value in raw_impacts:
+        normalized = (
+            (value - min_imp)
+            / max(max_imp - min_imp, 0.01)
+        )
+
+        scaled = 0.25 + (normalized * 1.45)
+
+        impacts.append(round(scaled, 2))
+
+    x = np.arange(1, 11)
+
+    avg = np.mean(impacts)
+
+    # =====================================================
+    # SMOOTH INTERPOLATION - optimized for speed
+    # =====================================================
+
+    if make_interp_spline and len(impacts) >= 4:
+        x_smooth = np.linspace(1, 10, 100)
+        spl = make_interp_spline(x, impacts, k=3)
+        y_smooth = spl(x_smooth)
+    else:
+        x_smooth = x
+        y_smooth = impacts
+
+    # =====================================================
+    # FIGURE
+    # =====================================================
+
+    fig = plt.figure(
+        figsize=(FIG_W, FIG_H),
+        dpi=DPI
     )
 
+    # FULL SIZE AXIS
+    ax = plt.axes([0, 0, 1, 1])
+
+    fig.patch.set_facecolor("#000000")
+
+    # =====================================================
+    # FULL BACKGROUND
+    # =====================================================
+
+    ax.imshow(
+        bg,
+        extent=[0, 11, 0, 2],
+        aspect='auto',
+        interpolation='bilinear',
+        alpha=1.0,
+        zorder=0
+    )
+
+    # =====================================================
+    # UNDER GRAPH AREA
+    # =====================================================
+
+    ax.fill_between(
+        x_smooth,
+        y_smooth,
+        np.min(y_smooth),
+        color="#f4c430",
+        alpha=0.50,
+        zorder=3
+    )
+
+    # =====================================================
+    # MAIN GRAPH LINE
+    # =====================================================
+
     line = ax.plot(
-        x_smooth, y_smooth,
+        x_smooth,
+        y_smooth,
         color="#f4c430",
         linewidth=6,
         solid_capstyle='round',
@@ -1230,18 +1282,31 @@ def _draw_impact_line(ax: Any, x_smooth: Any, y_smooth: Any, impacts: list[float
     )[0]
 
     line.set_path_effects([
-        pe.Stroke(linewidth=12, foreground="#ff8800", alpha=0.40),
+        pe.Stroke(
+            linewidth=12,
+            foreground="#ff8800",
+            alpha=0.40
+        ),
         pe.Normal()
     ])
 
+    # =====================================================
+    # GRAPH POINTS
+    # =====================================================
+
     ax.scatter(
-        x, impacts,
+        x,
+        impacts,
         s=200,
         color="#ffd54f",
         edgecolors="#fff2a8",
         linewidths=2.5,
         zorder=6
     )
+
+    # =====================================================
+    # AVG LINE
+    # =====================================================
 
     ax.axhline(
         avg,
@@ -1253,7 +1318,9 @@ def _draw_impact_line(ax: Any, x_smooth: Any, y_smooth: Any, impacts: list[float
     )
 
     ax.text(
-        9.7, avg, f"AVG {avg:.2f}",
+        9.7,
+        avg,
+        f"AVG {avg:.2f}",
         fontsize=20,
         color="white",
         weight="bold",
@@ -1261,32 +1328,52 @@ def _draw_impact_line(ax: Any, x_smooth: Any, y_smooth: Any, impacts: list[float
         zorder=10
     )
 
+    # =====================================================
+    # HEROES - parallel preload
+    # =====================================================
 
-async def _add_hero_images(ax: Any, reversed_history: list[dict], impacts: list[float], OffsetImage: Any, AnnotationBbox: Any, Image: Any) -> None:
-    """Preload hero icons in parallel and draw bordered images + glow (exact original logic)."""
+    # Collect unique hero IDs from reversed history
     unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
-
+    
+    # Load all hero icons in parallel
     hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
     hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
-
+    
     for idx, g in enumerate(reversed_history):
         hero_id = g["hero_id"]
         hero_img = hero_icon_map.get(hero_id)
+
         if not hero_img:
             continue
 
         imp = impacts[idx]
 
+        # =================================================
+        # BORDER COLORS
+        # =================================================
+
         if imp >= 1.0:
             border = "#00ff66"
+
         elif imp >= 0.6:
             border = "#ffd000"
+
         else:
             border = "#ff3b3b"
 
-        hero_img = hero_img.resize((72, 72), Image.LANCZOS)
+        # =================================================
+        # HERO IMAGE EXACT SIZE
+        # =================================================
 
-        imagebox = OffsetImage(hero_img, zoom=0.72)
+        hero_img = hero_img.resize(
+            (72, 72),
+            Image.LANCZOS
+        )
+
+        imagebox = OffsetImage(
+            hero_img,
+            zoom=0.72
+        )
 
         ab = AnnotationBbox(
             imagebox,
@@ -1301,25 +1388,29 @@ async def _add_hero_images(ax: Any, reversed_history: list[dict], impacts: list[
             ),
             zorder=10
         )
+
         ax.add_artist(ab)
 
+        # =================================================
+        # GLOW
+        # =================================================
+
         ax.scatter(
-            idx + 1, imp,
+            idx + 1,
+            imp,
             s=1800,
             color=border,
             alpha=0.15,
             zorder=8
         )
 
+    # =====================================================
+    # AXES
+    # =====================================================
 
-def _finalize_chart(ax, x, fig, DPI, plt) -> bytes:
-    """Configure axes/grid, remove spines and save exactly 1200x800 PNG bytes.
+    ax.set_xlim(0, 11)
 
-    Returns raw PNG bytes.
-    """
-    ax.set_xlim(CHART_X_MIN, CHART_X_MAX)
-
-    ax.set_ylim(CHART_Y_MIN, CHART_Y_MAX)
+    ax.set_ylim(0, 2)
 
     ax.set_xticks(x)
 
@@ -1330,27 +1421,44 @@ def _finalize_chart(ax, x, fig, DPI, plt) -> bytes:
         weight="bold"
     )
 
-    ax.set_yticks(CHART_Y_TICKS)
+    ax.set_yticks([
+        0,
+        0.5,
+        1.0,
+        1.5,
+        2.0
+    ])
 
-    ax.set_yticklabels(
-        CHART_Y_LABELS,
-        fontsize=18,
-        color="white"
-    )
-
-    ax.set_yticks([0, 0.5, 1.0, 1.5, 2.0])
     ax.set_yticklabels(
         ["0", "0.5", "1.0", "1.5", "2.0"],
         fontsize=18,
         color="white"
     )
 
-    ax.grid(axis="y", color="white", alpha=0.08, linewidth=1)
+    # =====================================================
+    # GRID
+    # =====================================================
+
+    ax.grid(
+        axis="y",
+        color="white",
+        alpha=0.08,
+        linewidth=1
+    )
+
+    # =====================================================
+    # REMOVE BORDERS
+    # =====================================================
 
     for spine in ax.spines.values():
         spine.set_visible(False)
 
+    # =====================================================
+    # SAVE EXACTLY 1200x800
+    # =====================================================
+
     buf = io.BytesIO()
+
     plt.savefig(
         buf,
         format="png",
@@ -1359,75 +1467,9 @@ def _finalize_chart(ax, x, fig, DPI, plt) -> bytes:
         bbox_inches=None,
         pad_inches=0
     )
+
     plt.close(fig)
+
     buf.seek(0)
+
     return buf.getvalue()
-
-
-# =========================================================
-# CHART (orchestrator - now thin after extraction)
-# =========================================================
-
-async def _create_visual_chart(history: list[dict]) -> bytes | None:
-    global _CHART_BG_CACHE
-
-    try:
-        import matplotlib
-        import numpy as np
-        matplotlib.use("Agg")
-
-        import matplotlib.patheffects as pe
-        import matplotlib.pyplot as plt
-        from matplotlib.offsetbox import AnnotationBbox, OffsetImage
-        from PIL import Image
-
-    except ImportError:
-        logger.warning("matplotlib not available, skipping chart generation")
-        return None
-
-    try:
-        from scipy.interpolate import make_interp_spline
-    except ImportError:
-        make_interp_spline = None
-
-    # Canvas constants (use shared chart constants)
-    WIDTH, HEIGHT = CHART_WIDTH, CHART_HEIGHT
-    DPI = CHART_DPI
-    FIG_W = WIDTH / DPI
-    FIG_H = HEIGHT / DPI
-
-    # Async background load (uses cache)
-    bg = await _load_chart_background()
-
-    # Data preparation (already extracted)
-    data = _prepare_chart_data(history, make_interp_spline)
-    reversed_history = data["reversed_history"]
-    impacts = data["impacts"]
-    x = data["x"]
-    avg = data["avg"]
-    x_smooth = data["x_smooth"]
-    y_smooth = data["y_smooth"]
-
-    # Figure + full-size axis
-    fig = plt.figure(figsize=(FIG_W, FIG_H), dpi=DPI)
-    ax = plt.axes([0, 0, 1, 1])
-    fig.patch.set_facecolor("#000000")
-
-    # Background image
-    ax.imshow(
-        bg,
-        extent=[CHART_X_MIN, CHART_X_MAX, CHART_Y_MIN, CHART_Y_MAX],
-        aspect='auto',
-        interpolation='bilinear',
-        alpha=1.0,
-        zorder=0
-    )
-
-    # All curve / fill / avg drawing
-    _draw_impact_line(ax, x_smooth, y_smooth, impacts, x, avg, pe, np)
-
-    # Hero icons with borders and glow (async preload inside)
-    await _add_hero_images(ax, reversed_history, impacts, OffsetImage, AnnotationBbox, Image)
-
-    # Axes, labels, grid, save
-    return _finalize_chart(ax, x, fig, DPI, plt)

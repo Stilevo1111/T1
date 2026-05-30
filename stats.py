@@ -1,9 +1,11 @@
-﻿"""
+# -*- coding: utf-8 -*-
+"""
 Event chances and statistics system for the fissure bot.
 Handles multicast/zeus chances and persistent counters.
 Extracted from main.py without changing behavior.
 """
 
+import time
 import logging
 
 __all__ = [
@@ -19,7 +21,7 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-# Default chances (Р·Р°С…Р°СЂРґРєРѕР¶РµРЅС‹, С‡С‚РѕР±С‹ РЅРµ РґС‘СЂРіР°С‚СЊ Р‘Р” РїСЂРё РєР°Р¶РґРѕРј СЂРѕР»Р»Рµ)
+# Default chances (захардкожены, чтобы не дёргать БД при каждом ролле)
 MULTICAST_DEFAULT_CHANCE = 0.15
 ZEUS_DEFAULT_CHANCE = 0.05
 
@@ -31,5 +33,5 @@ WEEKLY_JOB_COOLDOWN = 60
 
 
 def get_event_chances():
-    """Р’РѕР·РІСЂР°С‰Р°РµС‚ С‚РµРєСѓС‰РёРµ С€Р°РЅСЃС‹ РјСѓР»СЊС‚РёРєР°СЃС‚Р° Рё Р·РµРІСЃР° (Р·Р°С…Р°СЂРґРєРѕР¶РµРЅС‹ РґР»СЏ СЃРЅРёР¶РµРЅРёСЏ РЅР°РіСЂСѓР·РєРё РЅР° Р‘Р”)"""
+    """Возвращает текущие шансы мультикаста и зевса (захардкожены для снижения нагрузки на БД)"""
     return MULTICAST_DEFAULT_CHANCE, ZEUS_DEFAULT_CHANCE

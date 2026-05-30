@@ -1,4 +1,4 @@
-﻿"""РљРµС€ РёРєРѕРЅРѕРє РіРµСЂРѕРµРІ РЅР° РґРёСЃРєРµ (hero_cache/)."""
+"""Кеш иконок героев на диске (hero_cache/)."""
 import logging
 from pathlib import Path
 
@@ -26,7 +26,7 @@ def get_cached_hero_icon(hero_short_name: str) -> bytes | None:
 
 
 def preload_heroes(heroes_data) -> None:
-    """РџСЂРѕРіСЂРµРІ: СЃРѕР·РґР°С‘Рј РєР°С‚Р°Р»РѕРі РєРµС€Р°; РёРєРѕРЅРєРё РїРѕРґРіСЂСѓР¶Р°СЋС‚СЃСЏ РїРѕ Р·Р°РїСЂРѕСЃСѓ."""
+    """Прогрев: создаём каталог кеша; иконки подгружаются по запросу."""
     try:
         _CACHE_DIR.mkdir(exist_ok=True)
         count = len(heroes_data) if heroes_data else 0

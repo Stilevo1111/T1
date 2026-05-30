@@ -4,7 +4,7 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP"]
-ignore = ["E501", "F601", "E402", "I001"]  # line length; dict key overrides; intentional local imports; mid-block imports
+ignore = ["E501"]  # line length handled above
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

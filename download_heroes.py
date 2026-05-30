@@ -1,10 +1,8 @@
-﻿import asyncio
+import asyncio
+import aiohttp
 import os
 
-import aiohttp
-
 from dota_mmr import OPENDOTA_API_URL, _api_get_async
-
 
 async def main():
 
@@ -44,7 +42,7 @@ async def main():
 
                         print("Downloaded:", name)
 
-            except Exception:
+            except:
                 print("Failed:", name)
 
 asyncio.run(main())

@@ -1,4 +1,4 @@
-﻿"""Smoke tests to verify the bot modules can be imported without errors.
+"""Smoke tests to verify the bot modules can be imported without errors.
 These tests do not start the bot or change any behavior.
 """
 

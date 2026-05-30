@@ -1,11 +1,10 @@
-﻿import asyncio
+import asyncio
 import sys
+import os
 import traceback
-
 sys.path.append('.')
 
 from hero_meta import get_hero_meta_image
-
 
 async def main():
     print("Generating hero meta banner...")
