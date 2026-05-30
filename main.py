@@ -1826,6 +1826,16 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
                     schedule_delete(context.bot, chat_id, loading_msg.message_id, 60, None)
                 return
             except Exception as edit_err:
+                err_str = str(edit_err).lower()
+                # Message was edited to photo, use edit_message_caption instead
+                if "no text" in err_str or "caption" in err_str:
+                    try:
+                        await loading_msg.edit_caption(caption=text, reply_markup=keyboard, parse_mode="MarkdownV2")
+                        context.user_data['analytics_table_msg_id'] = loading_msg.message_id
+                        schedule_delete(context.bot, chat_id, loading_msg.message_id, 60, context.job_queue)
+                        return
+                    except Exception:
+                        pass
                 logger.debug(f"Could not edit loading message: {edit_err}")
                 # Fall through to send new message
         
