@@ -415,15 +415,17 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             async def animate_loading():
                 for i in range(6):
                     try:
-                        await asyncio.sleep(0.5)
+                        await asyncio.sleep(1.0)
                     except asyncio.CancelledError:
                         return
                     if loading_msg is None:
                         break
-                    frame = "⌛️" if i % 2 == 1 else "⏳"
-                    messages = ["Генерирую аналитику...", "Собираю данные...", "Анализирую статы...", "Готово!"]
+                    # Плавная анимация с точками
+                    dots = "." * (i % 4)
+                    frame = "⏳"
+                    messages = ["Генерирую аналитику", "Собираю данные", "Анализирую статы", "Готово!"]
                     try:
-                        await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                        await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}{dots}")
                     except Exception:
                         pass
 
@@ -1469,15 +1471,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             async def animate_loading():
                 for i in range(6):
                     try:
-                        await asyncio.sleep(0.5)
+                        await asyncio.sleep(1.0)
                     except asyncio.CancelledError:
                         return
                     if loading_msg is None:
                         break
-                    frame = "⌛️" if i % 2 == 1 else "⏳"
-                    messages = ["Загружаю меню...", "Подготавливаю интерфейс...", "Строю карточку...", "Готово!"]
+                    dots = "." * (i % 4)
+                    frame = "⏳"
+                    messages = ["Загружаю меню", "Подготавливаю интерфейс", "Строю карточку", "Готово!"]
                     try:
-                        await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                        await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}{dots}")
                     except Exception:
                         pass
 
@@ -1626,15 +1629,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async def animate_analytics_loading():
             for i in range(6):
                 try:
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(1.0)
                 except asyncio.CancelledError:
                     return
                 if loading_msg is None:
                     break
-                frame = "⌛️" if i % 2 == 1 else "⏳"
-                messages = ["Загружаю детали матчей...", "Анализирую статистику...", "Формирую таблицы...", "Готово!"]
+                dots = "." * (i % 4)
+                frame = "⏳"
+                messages = ["Загружаю детали матчей", "Анализирую статистику", "Формирую таблицы", "Готово!"]
                 try:
-                    await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                    await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}{dots}")
                 except Exception:
                     pass
         animation_task = asyncio.create_task(animate_analytics_loading())
@@ -2010,15 +2014,16 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 async def animate_loading():
                     for i in range(6):
                         try:
-                            await asyncio.sleep(0.5)
+                            await asyncio.sleep(1.0)
                         except asyncio.CancelledError:
                             return
                         if loading_msg is None:
                             break
-                        frame = "⌛️" if i % 2 == 1 else "⏳"
-                        messages = ["Формирую профиль...", "Собираю данные...", "Анализирую статы...", "Готово!"]
+                        dots = "." * (i % 4)
+                        frame = "⏳"
+                        messages = ["Формирую профиль", "Собираю данные", "Анализирую статы", "Готово!"]
                         try:
-                            await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}")
+                            await loading_msg.edit_text(f"{frame} {messages[min(i, len(messages)-1)]}{dots}")
                         except Exception:
                             pass
 
