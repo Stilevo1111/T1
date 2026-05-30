@@ -1235,8 +1235,9 @@ async def dota_digest_job(context):
 
 
 # alternate_digest_job живёт в digest.py (с лидерской выборкой).
-# function_fixed.py — только тонкий реэкспорт для совместимости.
-from function_fixed import alternate_digest_job
+from digest import alternate_digest_job
+
+# Импорт из fissure
 from fissure import (
     fissure,
     recent_fissure_rolls,

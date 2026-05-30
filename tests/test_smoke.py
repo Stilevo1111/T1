@@ -17,7 +17,6 @@ def test_core_modules_import():
         "database",
         "main",
         "digest",
-        "function_fixed",
         "dota_mmr",
         "rate_limiter",
         "mute",
