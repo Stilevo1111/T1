@@ -179,9 +179,9 @@ async def _fast_digest_tick(bot):
             if not _fast_tick_chat_id or not _fast_tick_message_id:
                 break
 
+            # Get current type from state (do NOT modify state here)
             current_type = get_digest_type("0")
             next_type = "1" if current_type == "0" else "0"
-            _digest_state_container.set_current_type(next_type)
 
             # Генерируем текст для нового типа из закешированных данных (без БД)
             text = _build_digest_text_for_type(next_type)
@@ -189,12 +189,11 @@ async def _fast_digest_tick(bot):
             if not text:
                 continue
 
-            # Re-sync from the single source of truth every tick (helps with multi-instance drift)
+            # Re-sync photo state from single source of truth
             _fast_tick_is_photo = _get_digest_is_photo()
 
             try:
                 is_photo = _fast_tick_is_photo
-                is_photo = _get_digest_is_photo()  # re-sync one last time right before edit (extra drift protection)
                 if is_photo:
                     await bot.edit_message_caption(
                         chat_id=_fast_tick_chat_id,
@@ -209,14 +208,12 @@ async def _fast_digest_tick(bot):
                         text=text,
                         parse_mode="HTML"
                     )
-                # Explicitly record the type we just successfully used
-                _set_digest_is_photo(is_photo)
+                # Update the recorded type to match what we just edited to
+                _digest_state_container.set_current_type(next_type)
             except Exception as e:
                 if _telegram_error_contains(e, "message to edit not found", "message can't be edited"):
-                    # Сообщение исчезло — выходим из fast loop, heavy job пересоздаст
                     logger.info("Fast tick: message gone, stopping fast loop")
                     break
-                # One-time recovery: if we guessed the wrong message type (photo vs text), try the opposite once
                 if _telegram_error_contains(e, "bad request", "there is no text in the message to edit", "there is no caption in the message to edit"):
                     try:
                         if is_photo:
@@ -227,7 +224,6 @@ async def _fast_digest_tick(bot):
                                 parse_mode="HTML"
                             )
                             _fast_tick_is_photo = False
-                            _set_digest_is_photo(False)
                         else:
                             await bot.edit_message_caption(
                                 chat_id=_fast_tick_chat_id,
@@ -236,8 +232,7 @@ async def _fast_digest_tick(bot):
                                 parse_mode="HTML"
                             )
                             _fast_tick_is_photo = True
-                            _set_digest_is_photo(True)
-                        logger.debug("Fast tick recovered by switching edit method")
+                        _digest_state_container.set_current_type(next_type)
                         continue
                     except Exception:
                         pass
@@ -280,10 +275,10 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
 
         return f"<b>{growth_part}\n{drop_part}\n{streak_part}</b>\n\n🗿Фиссура дайджест."
 
-    # Dota-дайджест
-    mmr_top = _digest_state_container.get_dota_data()
-    if not mmr_top:
-        return None
+    elif digest_type == "1":
+        mmr_top = _digest_state_container.get_dota_data()
+        if not mmr_top:
+            return None
 
     valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
     if len(valid_players) < 2:
@@ -315,6 +310,8 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
     bottom_wr = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
 
     return f"<b>🔺{top_name}: {top_wins}W/{top_losses}L ≈{top_wr}%\n🔻{bottom_name}: {bottom_wins}W/{bottom_losses}L ≈{bottom_wr}%</b>\n\n🎮 Dota дайджест."
+
+    return None
 
 
 async def _generate_hero_meta_banner_if_needed():
