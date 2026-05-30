@@ -859,13 +859,13 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
     from database import get_user
     from datetime import datetime, timezone
     
+    now = datetime.now(timezone.utc)  # Вынести за пределы условия
     user = get_user(telegram_id)
     if user and user.get('analytics_cache') and user.get('analytics_updated_at'):
         updated_at = user['analytics_updated_at']
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
-        now = datetime.now(timezone.utc)
-    if (now - updated_at).total_seconds() < 3600:
+        if (now - updated_at).total_seconds() < 3600:
         cached = json.loads(user['analytics_cache'])
         # Run chart generation (async function) directly
         chart = await _create_visual_chart(cached.get("history", []))
