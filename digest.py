@@ -278,45 +278,59 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         drop_part = f"🔻{drop_display} {drop_cm:.0f} СМ" if drop_player and drop_player != "None" else "🔻—"
         streak_part = f" 🍀{streak_display}: {streak_len} побед подряд" if streak_player and streak_player != "None" and streak_len > 0 else " 🍀—"
 
-        return f"<b>{growth_part}\n{drop_part}\n{streak_part}</b>\n\n🗿Фиссура дайджест.\n\n<b><a href=\"https://seredin999.onrender.com/patch-fissure\">Подробнее на нашем сайте.</a></b>"
+        return f"<b>{growth_part}\n{drop_part}\n{streak_part}</b>\n\n🗿Фиссура дайджест."
 
-    else:
-        mmr_top = _digest_state_container.get_dota_data()
-        if not mmr_top:
-            return None
+    # Dota-дайджест
+    mmr_top = _digest_state_container.get_dota_data()
+    if not mmr_top:
+        return None
 
-        valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
-        if len(valid_players) < 2:
-            return None
+    valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
+    if len(valid_players) < 2:
+        return None
 
-        # Top = best by net (2*wins - games)
-        top_by_net = max(
-            valid_players,
-            key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0))
-        )
+    # Top = best by net (2*wins - games)
+    top_by_net = max(
+        valid_players,
+        key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0))
+    )
 
-        # Bottom = worst = opposite (lowest net)
-        bottom_by_net = min(
-            valid_players,
-            key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), -p.get('week_games', 0))
-        )
+    # Bottom = worst = opposite (lowest net)
+    bottom_by_net = min(
+        valid_players,
+        key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), -p.get('week_games', 0))
+    )
 
-        top_name = make_clickable(top_by_net.get('steam_nickname') or top_by_net.get('username'), top_by_net.get('telegram_id'))
-        bottom_name = make_clickable(bottom_by_net.get('steam_nickname') or bottom_by_net.get('username'), bottom_by_net.get('telegram_id'))
+    top_name = make_clickable(top_by_net.get('steam_nickname') or top_by_net.get('username'), top_by_net.get('telegram_id'))
+    bottom_name = make_clickable(bottom_by_net.get('steam_nickname') or bottom_by_net.get('username'), bottom_by_net.get('telegram_id'))
 
-        top_games = top_by_net.get('week_games', 0)
-        top_wins = top_by_net.get('week_wins', 0)
-        top_losses = top_games - top_wins
-        top_wr = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
+    top_games = top_by_net.get('week_games', 0)
+    top_wins = top_by_net.get('week_wins', 0)
+    top_losses = top_games - top_wins
+    top_wr = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
 
-        bottom_games = bottom_by_net.get('week_games', 0)
-        bottom_wins = bottom_by_net.get('week_wins', 0)
-        bottom_losses = bottom_games - bottom_wins
-        bottom_wr = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
+    bottom_games = bottom_by_net.get('week_games', 0)
+    bottom_wins = bottom_by_net.get('week_wins', 0)
+    bottom_losses = bottom_games - bottom_wins
+    bottom_wr = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
 
-        return f"<b>🔺{top_name}: {top_wins}W/{top_losses}L ≈{top_wr}%\n🔻{bottom_name}: {bottom_wins}W/{bottom_losses}L ≈{bottom_wr}%</b>\n\n🎮 Dota дайджест.\n\n<b><a href='https://seredin999.onrender.com/patch-fissure'>Подробнее на нашем сайте.</a></b>"
+    return f"<b>🔺{top_name}: {top_wins}W/{top_losses}L ≈{top_wr}%\n🔻{bottom_name}: {bottom_wins}W/{bottom_losses}L ≈{bottom_wr}%</b>\n\n🎮 Dota дайджест."
 
-    return None
+
+async def _generate_hero_meta_banner_if_needed():
+    """Генерирует hero meta banner если нужно (раз в HERO_META_REFRESH_INTERVAL)."""
+    now = time.time()
+    last_update = _digest_state_container.state.get("last_hero_meta_update", 0)
+    if now - last_update > HERO_META_REFRESH_INTERVAL:
+        try:
+            from hero_meta import get_hero_meta_image
+            banner = await asyncio.wait_for(get_hero_meta_image(), timeout=30.0)
+            if banner:
+                _digest_state_container.state["hero_meta_image"] = banner
+                _digest_state_container.state["last_hero_meta_update"] = now
+                logger.info("Hero meta banner refreshed")
+        except Exception as e:
+            logger.warning(f"Hero meta banner refresh failed: {e}")
 
 
 def start_fast_digest_loop(bot, chat_id: int, message_id: int, is_photo: bool):
@@ -670,10 +684,7 @@ async def alternate_digest_job(context):
                     current_type = str(raw_type)
                 else:
                     current_type = "0"
-                _digest_state_container.set_current_type(current_type)
-            else:
-                current_type = "0"
-                _digest_state_container.set_current_type(current_type)
+            _digest_state_container.set_current_type(current_type)
             
             logger.info(f"alternate_digest_job: current_type = {current_type}, генерируем новый дайджест")
             
@@ -1023,22 +1034,20 @@ async def alternate_digest_job(context):
             # last_message_id = None (БД отвалилась или сообщение удалено) — можем создавать новый
             # Но проверяем, что кеш валиден (чтобы не генерить баннер каждый тик)
 
-            # Генерируем геро-мета баннер ТОЛЬКО при создании нового поста (ротация 48ч или первый запуск)
+            # Генерируем геро-мета баннер (при создании нового поста)
             hero_meta_banner = None
-            if should_create_new:
+            try:
+                from hero_meta import get_hero_meta_image
                 try:
-                    from hero_meta import get_hero_meta_image
-                    try:
-                        hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=30.0)
-                    except asyncio.TimeoutError:
-                        logger.warning("Hero meta banner generation timed out after 30 seconds")
-                        hero_meta_banner = None
-                    if hero_meta_banner:
-                        logger.info("Hero meta banner generated for digest")
-                    else:
-                        logger.warning("Hero meta banner generation returned None")
-                except Exception as e:
-                    logger.warning(f"Could not generate hero meta banner: {e}")
+                    hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=30.0)
+                except asyncio.TimeoutError:
+                    logger.warning("Hero meta banner generation timed out after 30 seconds")
+                if hero_meta_banner:
+                    logger.info("Hero meta banner generated for digest")
+                else:
+                    logger.warning("Hero meta banner generation returned None")
+            except Exception as e:
+                logger.warning(f"Could not generate hero meta banner: {e}")
 
             # Удаляем старое сообщение если есть
             if last_message_id:
@@ -1051,7 +1060,7 @@ async def alternate_digest_job(context):
                     logger.debug(f"Старое сообщение уже удалено: {e}")
                 set_config('alternate_digest_message_id', None)
 
-            # Создаём новое сообщение
+# Создаём новое сообщение
             try:
                 from io import BytesIO
                 if hero_meta_banner:
@@ -1069,7 +1078,8 @@ async def alternate_digest_job(context):
                     msg = await bot.send_message(
                         chat_id=int(digest_chat_id),
                         text=text,
-                        parse_mode="HTML"
+                        parse_mode="HTML",
+                        disable_web_page_preview=True
                     )
                     logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
                     _set_digest_is_photo(False)
