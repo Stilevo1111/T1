@@ -5,7 +5,6 @@ Handles multicast/zeus chances and persistent counters.
 Extracted from main.py without changing behavior.
 """
 
-import time
 import logging
 
 __all__ = [

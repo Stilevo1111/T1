@@ -2,7 +2,6 @@ import asyncio
 import os
 import time
 import logging
-from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -438,7 +437,7 @@ async def alternate_digest_job(context):
         
         # Проверяем глобальный rate limit
         if is_rate_limited():
-            logger.warning(f"alternate_digest_job: skipped - bot is rate limited")
+            logger.warning("alternate_digest_job: skipped - bot is rate limited")
             return
 
         # === SINGLE ACTIVE INSTANCE (leader election via DB) ===
@@ -506,7 +505,7 @@ async def alternate_digest_job(context):
         #    (We delete the old one and create a fresh post with new hero meta)
         if now - cache["created_at"] > cache["rotation_interval"]:
             should_create_new = True
-            logger.info(f"Rotation interval reached, will create new digest")
+            logger.info("Rotation interval reached, will create new digest")
         
         # 2. No message_id in config at all (and cache empty) — first time, create new
         elif cache["text"] is None and not existing_msg_id:
@@ -924,7 +923,7 @@ async def alternate_digest_job(context):
                 is_rate_limit = _telegram_error_contains(e, "429", "too many requests", "retry after")
                 logger.info(f"Ошибка редактирования: {e}")
                 if is_rate_limit:
-                    logger.warning(f"Rate limited by Telegram, skipping edit")
+                    logger.warning("Rate limited by Telegram, skipping edit")
                     _digest_state_container.set_last_text(text)
                     _digest_state_container.set_last_run(0)
                     return
@@ -972,7 +971,7 @@ async def alternate_digest_job(context):
                     edited = False
                     should_create_new = True
                 elif _telegram_error_contains(e, "message is not modified"):
-                    logger.info(f"Сообщение не изменилось, пропускаем")
+                    logger.info("Сообщение не изменилось, пропускаем")
                     edited = True
                     _digest_state_container.set_current_type(next_type)
                     _digest_state_container.set_last_text(text)

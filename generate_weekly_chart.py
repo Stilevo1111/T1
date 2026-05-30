@@ -1,6 +1,5 @@
 import asyncio
 import sys
-import os
 sys.path.append('.')
 
 from weekly_analytics import generate_weekly_analytics

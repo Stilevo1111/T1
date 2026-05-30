@@ -10,7 +10,6 @@ import random
 import logging
 import time
 import traceback
-from datetime import datetime, timezone, timedelta
 from collections import deque
 
 from telegram import Update
@@ -39,7 +38,6 @@ from stats import get_event_chances
 from database import get_user, update_fissure, update_last_message_id, zeus_strike
 from constants import (
     COOLDOWN,
-    ZEUS_BANNER_URL,
     WEEKEND_BONUS_MULTIPLIERS,
     ZEUS_TEXTS,
 )
@@ -83,7 +81,7 @@ async def delete_fissure_user_and_last_messages(bot, chat_id, user_id, user_msg_
     Безопасное удаление сообщений пользователя и последнего бота при /fissure.
     Логика полностью сохранена из main.py.
     """
-    from bot_utils import bot_can_delete, delete_last_bot_message
+    from bot_utils import bot_can_delete
     import asyncio
 
     # Delete user message only in groups/channels (not in private)
@@ -91,7 +89,7 @@ async def delete_fissure_user_and_last_messages(bot, chat_id, user_id, user_msg_
         if await bot_can_delete(bot, chat_id):
             try:
                 await bot.delete_message(chat_id, user_msg_id)
-            except Exception as e:
+            except Exception:
                 # logger is not imported here to keep it minimal; caller can log if needed
                 pass
 
@@ -101,7 +99,7 @@ async def delete_fissure_user_and_last_messages(bot, chat_id, user_id, user_msg_
     # Delete last bot message immediately
     try:
         await delete_last_bot_message(bot, chat_id, user_id)
-    except Exception as e:
+    except Exception:
         pass
 
 

@@ -8,7 +8,6 @@ import urllib.parse as urlparse
 import threading
 import json
 from contextlib import contextmanager
-from datetime import datetime
 
 # Configure logging for database operations
 logging.basicConfig(level=logging.INFO)
@@ -477,7 +476,7 @@ def get_connection():
             conn = _pool[db_type].pop()
             try:
                 conn.isolation_level = None  # Reset isolation level for PostgreSQL
-                print(f"[DB] Reusing connection from pool")
+                print("[DB] Reusing connection from pool")
                 return conn
             except Exception as e:
                 print(f"[DB] Connection failed: {e}")
@@ -2600,7 +2599,6 @@ def get_dota_mmr_top(limit=10):
 
 def get_dota_week_top(limit=10, force_refresh=False):
     """Получение топа игроков Dota 2 за неделю - с TTL и блокировкой"""
-    import math
     import time
     
     _TOP_CACHE_TTL = 14400  # 4 часа
@@ -2688,7 +2686,6 @@ def get_dota_week_top(limit=10, force_refresh=False):
             user_cache.set('dota_week_top', top_users)
             user_cache.set('dota_week_top_ts', current_time)
             
-            import math as math_module
             def get_sort_key(x):
                 g = x.get('week_games', 0)
                 w = x.get('week_wins', 0)

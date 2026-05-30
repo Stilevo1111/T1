@@ -9,27 +9,24 @@ import logging
 import datetime
 import traceback
 import urllib.parse as urlparse
-import hashlib
 from datetime import timezone, timedelta
-from collections import deque
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, Message, MessageEntity, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, MessageEntity, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.request import HTTPXRequest
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, JobQueue, ChatMemberHandler, CallbackQueryHandler
-from telegram.error import Conflict
 from database import (
-    init_db, get_user, update_fissure, get_fissure_top, update_last_message_id, Database,
-    get_user_rank, get_fissure_rank, decrease_inactive_fissure, get_config, set_config,
-    get_digest_stats, update_player_positions, update_digest_snapshot, migrate_db,
-    get_connection, get_dota_digest_stats, set_user_in_chat, zeus_strike, get_user_by_username,
-    delete_user, top_cache, update_user_fields_batch, get_dota_mmr_top, get_dota_week_top,
+    init_db, get_user, get_fissure_top, update_last_message_id, Database,
+    get_fissure_rank, decrease_inactive_fissure, get_config, set_config,
+    get_digest_stats, migrate_db,
+    set_user_in_chat, get_user_by_username,
+    delete_user, top_cache, update_user_fields_batch, get_dota_week_top,
     get_dota_week_rank, DATABASE_URL, reset_all_fissure_data, cleanup_left_users,
-    get_all_users_with_steam, user_cache, update_dota_week_top_cache, get_db_type, config_cache
+    user_cache
 )
 from mute import register_handlers as register_mute_handlers
 from dota_mmr import update_user_mmr, get_opendota_rate_limit_message, _get_start_card_background
 import aiohttp
 from aiohttp import web
-from rate_limiter import telegram_rate_limiter, rate_limit
+from rate_limiter import rate_limit
 
 # Logging setup
 logging.basicConfig(
@@ -224,7 +221,7 @@ async def decrease_inactive_job(context):
 @rate_limit(tokens=1)
 async def morning_greeting_job(context):
     """✅ Утреннее приветствие 09:00 MSK - 1 раз в чат"""
-    from datetime import datetime as dt, timezone, timedelta
+    from datetime import datetime as dt
     from database import get_config
 
     MSK = timezone(timedelta(hours=3))
@@ -245,7 +242,7 @@ async def morning_greeting_job(context):
     greeting_text = random.choice(MORNING_GREETINGS)
 
     try:
-        logger.info(f"Запуск утреннего приветствия 09:00 MSK")
+        logger.info("Запуск утреннего приветствия 09:00 MSK")
 
         digest_chat_id = get_config('digest_chat_id')
         if not digest_chat_id:
@@ -265,7 +262,7 @@ async def morning_greeting_job(context):
 @rate_limit(tokens=1)
 async def night_greeting_job(context):
     """✅ Вечернее приветствие 23:00 MSK - 1 раз в чат"""
-    from datetime import datetime as dt, timezone, timedelta
+    from datetime import datetime as dt
     from database import get_config
 
     MSK = timezone(timedelta(hours=3))
@@ -286,7 +283,7 @@ async def night_greeting_job(context):
     greeting_text = random.choice(NIGHT_GREETINGS)
 
     try:
-        logger.info(f"Запуск вечернего приветствия 23:00 MSK")
+        logger.info("Запуск вечернего приветствия 23:00 MSK")
 
         digest_chat_id = get_config('digest_chat_id')
         if not digest_chat_id:
@@ -332,7 +329,7 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
         last_announced = get_config('mmr_week_top_announced')
         digest_chat_id = get_config('digest_chat_id')
 
-        debug_info = f"Отладка MVP:\n"
+        debug_info = "Отладка MVP:\n"
         debug_info += f"Сегодня: {today_msk.strftime('%Y-%m-%d %H:%M:%S')} MSK (weekday={today_msk.weekday()})\n"
         debug_info += f"Начало недели: {current_week_start}\n"
         debug_info += f"Последнее поздравление: {last_announced}\n"
@@ -438,7 +435,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Start analytics generation in background task
         async def generate_and_update_analytics():
             try:
-                from weekly_analytics import generate_chart_only, get_analytics_pages, get_last_matches
+                from weekly_analytics import generate_chart_only, get_last_matches
                 chart_data = await generate_chart_only(update.effective_user.id)
 
                 if chart_data:
@@ -620,7 +617,7 @@ async def weekly_mmr_reset_job(context):
     if not await claim_or_check_weekly_leader():
         return
 
-    from datetime import datetime as dt, timezone, timedelta
+    from datetime import datetime as dt
     MSK = timezone(timedelta(hours=3))
     today_msk = dt.now(MSK)
     # Понедельник - начало недели (weekday 0 = Monday)
@@ -666,7 +663,7 @@ async def weekly_mmr_reset_job(context):
 
 async def announce_weekly_mmr_winner(bot):
     """Отправляет поздравление победителю недельного топа MMR в воскресенье."""
-    from datetime import datetime as dt, timezone, timedelta
+    from datetime import datetime as dt
     MSK = timezone(timedelta(hours=3))
     today_msk = dt.now(MSK)
     # Понедельник - начало недели (weekday 0 = Monday)
@@ -682,7 +679,7 @@ async def announce_weekly_mmr_winner(bot):
         return False
 
     # Проверяем, есть ли игроки с данными за ПРОШЛУЮ неделю
-    from database import get_connection as gc2, DATABASE_URL
+    from database import get_connection as gc2
     import urllib.parse as urlparse
     conn = gc2()
     cursor = conn.cursor()
@@ -947,7 +944,7 @@ async def update_all_mmr_job(context):
             return
 
         logger.info("Запуск ежечасного обновления MMR")
-        from database import get_all_users_with_steam, user_cache
+        from database import get_all_users_with_steam
 
         # Fetch users in thread to avoid blocking event loop on DB query
         users = await asyncio.to_thread(get_all_users_with_steam)
@@ -1214,7 +1211,7 @@ async def dota_digest_job(context):
                 return
             except Exception as e:
                 if _telegram_error_contains(e, "429", "too many requests"):
-                    logger.warning(f"Rate limited by Telegram in dota_digest, skipping")
+                    logger.warning("Rate limited by Telegram in dota_digest, skipping")
                     set_dota_last_text(text)
                     return
                 if _telegram_error_contains(e, "message is not modified"):
@@ -1245,44 +1242,20 @@ from fissure import (
     recent_fissure_rolls,
 )
 from bot_utils import (
-    is_valid_telegram_id,
     make_clickable,
     delete_last_bot_message,
     set_last_bot_message,
     add_bot_message,
-    last_bot_message,
     format_time,
     main_menu,
     _build_analytics_keyboard,
     _build_stats_button_keyboard,
     schedule_delete,
-    delete_after_delay,
-    delete_message_job,
     ManualContext,
 )
-from stats import get_event_chances
 from constants import (
     COOLDOWN,
-    COOLDOWN_BANNER_URL,
-    PROFILE_BANNER_URL,
-    TOP_BANNER_URL,
-    TOPMMR_BANNER_URL,
-    LINK_BANNER_URL,
-    SETDIGEST_BANNER_URL,
-    ZEUS_BANNER_URL,
-    DICE_ANIMATION_DELAY,
-    USER_PROCESSING_TTL,
-    BOT_CAN_DELETE_TTL,
     JOB_COOLDOWN,
-    WEEKLY_JOB_COOLDOWN,
-    WEEKEND_BONUS_MULTIPLIERS,
-    MULTICAST_DEFAULT_CHANCE,
-    ZEUS_DEFAULT_CHANCE,
-    MORNING_DIGEST_HEADER,
-    MORNING_DIGEST_FOOTER,
-    DOTA_DIGEST_HEADER,
-    DOTA_DIGEST_FOOTER,
-    ZEUS_TEXTS,
     WELCOME_PHRASES,
 )
 
@@ -1395,7 +1368,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # Skip if rate limited
         if is_rate_limited():
-            logger.warning(f"Skipping /start due to rate limit")
+            logger.warning("Skipping /start due to rate limit")
             return
 
         # Spam protection for /start command
@@ -1965,7 +1938,6 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def recent_rolls_handler(request):
     """Public API: returns last 50 fissure rolls as JSON (for the website widget)."""
-    import json
     data = list(recent_fissure_rolls)  # snapshot
     resp = web.Response(text=json.dumps(data, ensure_ascii=False), content_type="application/json")
     resp.headers['Access-Control-Allow-Origin'] = '*'          # Разрешаем запросы с сайта
@@ -2145,8 +2117,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if img_bytes:
                 profile_banner_url = io.BytesIO(img_bytes)
                 logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
-        except asyncio.TimeoutError as e:
-            logger.warning(f"Timeout generating heroes image, using default banner")
+        except asyncio.TimeoutError:
+            logger.warning("Timeout generating heroes image, using default banner")
         except Exception as e:
             logger.error(f"Could not generate heroes image: {e}", exc_info=True)
 
@@ -2170,7 +2142,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as del_e:
                 logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
         else:
-            logger.warning(f"loading_msg is None, cannot delete (already deleted during animation)")
+            logger.warning("loading_msg is None, cannot delete (already deleted during animation)")
 
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
@@ -2342,13 +2314,13 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         topmmr_banner_url = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
 
         # Сначала пытаемся получить недельный топ
-        logger.info(f"topmmr: before get_dota_week_top_from_db")
+        logger.info("topmmr: before get_dota_week_top_from_db")
         top_users = get_dota_week_top_from_db(10, force_refresh=True)
         logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from weekly DB")
 
         # Если недельный топ пустой, используем MMR топ
         if not top_users or len(top_users) == 0:
-            logger.info(f"topmmr: weekly top empty, using MMR top")
+            logger.info("topmmr: weekly top empty, using MMR top")
             top_users = get_dota_mmr_top(10)
             logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from MMR DB")
 
@@ -2384,7 +2356,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     break
 
         if not top_users:
-            text = f"🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
+            text = "🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
             # Delete previous bot message before sending new one
             try:
                 await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
@@ -2444,7 +2416,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     player_id = player.get('telegram_id')
                     clickable_name = make_clickable(username, player_id)
                     lines.append(f"{medal} <b>{clickable_name}</b> - {rank_str}")
-                    lines.append(f" └ Нет игр за неделю")
+                    lines.append(" └ Нет игр за неделю")
 
 
 
@@ -2453,7 +2425,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Check if this is a digest chat - show normal top list like in private chat
             try:
                 from database import get_config
-                from datetime import datetime
                 digest_chat_id = get_config('digest_chat_id')
                 if str(chat_id) == str(digest_chat_id):
                     # In digest chat, we show the normal top list (same as private chat)
@@ -2487,7 +2458,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif user and user_week_games == 0:
                 user_display = make_clickable(user_username, user.get('telegram_id'))
                 top_text += f"\n\n<b>❓{user_display}</b>\n"
-                top_text += f" └ Нет игр за неделю"
+                top_text += " └ Нет игр за неделю"
 
             # Delete previous bot message before sending new one
             try:
@@ -2681,12 +2652,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
     try:
         # Skip if rate limited (but allow override for error fallback)
         if not allow_when_rate_limited and is_rate_limited():
-            logger.warning(f"Skipping menu_handler due to rate limit")
+            logger.warning("Skipping menu_handler due to rate limit")
             return
 
         # Check if we have a message - if not, this is not a text message update
         if not update.message:
-            logger.warning(f"menu_handler: no message in update")
+            logger.warning("menu_handler: no message in update")
             return
 
         if not update.message.text:
@@ -2703,7 +2674,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
 
             # Skip if not in digest chat
             if str(update.effective_chat.id) != str(digest_chat_id):
-                logger.info(f"menu_handler: skipping message_count (not in digest chat)")
+                logger.info("menu_handler: skipping message_count (not in digest chat)")
             else:
                 user_id = update.effective_user.id
                 db_user = get_user(user_id)  # get without auto-create
@@ -2738,7 +2709,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             logger.error(f"Error updating message_count: {e}")
 
         if not update.message:
-            logger.warning(f"menu_handler: no message in update")
+            logger.warning("menu_handler: no message in update")
             return
 
         if not update.message.text:
@@ -2837,7 +2808,6 @@ async def delete_last_bot_message_safe(bot, chat_id, user_id):
 
 async def health_check(request):
     """Health check endpoint"""
-    import time
     return web.Response(text="Bot is working", status=200)
 
 
@@ -2996,7 +2966,7 @@ async def main():
         init_db()
         migrate_db()
 
-        from database import get_all_users, get_all_users_with_steam, user_cache
+        from database import get_all_users, user_cache
         all_users = get_all_users()
         for u in all_users:
             user_cache.set(u['telegram_id'], u)
@@ -3210,7 +3180,7 @@ async def main():
             logger.info(f"Starting TCP site on port {port}...")
             site = web.TCPSite(runner, '0.0.0.0', port)
             await site.start()
-            logger.info(f"Site started, sleeping 3s for port detection...")
+            logger.info("Site started, sleeping 3s for port detection...")
             await asyncio.sleep(3)
             logger.info(f"Health server started on 0.0.0.0:{port}")
 

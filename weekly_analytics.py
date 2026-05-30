@@ -33,11 +33,9 @@ ProRoleData = dict[RoleName, dict[str, dict[PlayerName, ProPlayer] | ProBenchmar
 Weights = dict[str, float]
 import aiohttp
 import json
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 import io
-import json
-import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from dota_mmr import steam64_to_account_id, OPENDOTA_API_URL, _api_get_async
 from database import get_user, Database
@@ -816,7 +814,7 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
 
     text = f"{header}\n\n{t1}"
 
-    header_detailed = _escape_markdown_v2(f"📈 Подробное сравнение • Детали позиций")
+    header_detailed = _escape_markdown_v2("📈 Подробное сравнение • Детали позиций")
 
     text_detailed = f"{header_detailed}\n\n{t2}"
 
@@ -858,8 +856,8 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
 
     """Generate only the chart and game history - no text pages."""
     
-    from database import get_user, Database
-    from datetime import datetime, timezone, timedelta
+    from database import get_user
+    from datetime import datetime, timezone
     
     user = get_user(telegram_id)
     if user and user.get('analytics_cache') and user.get('analytics_updated_at'):

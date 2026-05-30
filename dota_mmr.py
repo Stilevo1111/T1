@@ -97,7 +97,7 @@ def _circuit_breaker_record_failure():
         # Failure in half-open state -> immediately open again
         cb["state"] = "OPEN"
         cb["last_failure_time"] = time.time()
-        logger.warning(f"Circuit breaker: OPEN - failure in half-open state")
+        logger.warning("Circuit breaker: OPEN - failure in half-open state")
     # If already OPEN, do nothing - keep the original open time for timeout calculation
 
 # Простой кеш для запросов (5 минут)
@@ -241,7 +241,6 @@ _async_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
 
 async def _check_rate_limit_async():
     """Async версия rate limiting"""
-    import asyncio
     now = time.time()
     
     if now - _async_rate_limit["window_start"] >= API_RATE_WINDOW:
@@ -265,7 +264,6 @@ async def _check_rate_limit_async():
 
 async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15) -> dict:
     """Асинхронная функция для API-запросов с переиспользованием сессии и увеличенным таймаутом"""
-    import asyncio
     
     # Circuit breaker check
     if not _circuit_breaker_can_execute():
@@ -281,7 +279,7 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
                 _circuit_breaker_record_success()
                 return await resp.json()
             elif resp.status == 429:
-                logger.warning(f"Rate limited by OpenDota API, waiting...")
+                logger.warning("Rate limited by OpenDota API, waiting...")
                 set_opendota_rate_limited(60)  # Блокируем на 60 секунд
                 _circuit_breaker_record_failure()
                 await asyncio.sleep(3)
@@ -619,7 +617,6 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
     try:
         from PIL import Image, ImageDraw, ImageFont
         import io
-        import requests as req
         
         icon_size = 63
         padding = 5
@@ -692,12 +689,11 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             if time.time() - cached_time < _heroes_image_cache_ttl:
                 return cached_data
 
-        from PIL import Image, ImageDraw, ImageFont
+        from PIL import Image, ImageDraw
         import io
-        import requests as req
 
         if not top_heroes:
-            logger.warning(f"generate_heroes_image: top_heroes is empty")
+            logger.warning("generate_heroes_image: top_heroes is empty")
             return None
 
         logger.info(f"generate_heroes_image: generating for {len(top_heroes)} heroes")
@@ -894,7 +890,7 @@ def search_player(nickname: str) -> dict:
             **stats
         }
 
-    except Exception as e:
+    except Exception:
         logger.error("search error", exc_info=True)
         return None
 
@@ -1089,7 +1085,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                     if existing_user and existing_user.get('telegram_id') == telegram_id:
                         return {"success": True, "message": "✅ Аккаунт уже привязан к вам"}
                     if existing_user:
-                        return {"success": False, "message": f"❌ Этот Steam аккаунт уже привязан к другому пользователю"}
+                        return {"success": False, "message": "❌ Этот Steam аккаунт уже привязан к другому пользователю"}
                 except Exception:
                     pass
 
@@ -1572,7 +1568,7 @@ def generate_start_card(
         buf.seek(0)
         return buf.read()
     
-    except Exception as e:
+    except Exception:
              import logging
              logging.exception("generate_start_card error")
              return None
