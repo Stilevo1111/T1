@@ -1514,16 +1514,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update_last_message_id(user_id, msg.message_id)
                 # Auto-delete after 30 seconds
                 schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
-                if animation_task:
-                    animation_task.cancel()
                 if loading_msg:
                     msg_id = loading_msg.message_id
+                    loading_msg = None  # Stop animation first
                     try:
                         await context.bot.delete_message(chat_id, msg_id)
                         logger.info(f"Deleted loading message {msg_id}")
                     except Exception:
                         pass
-                    loading_msg = None
+                if animation_task:
+                    animation_task.cancel()
                 return
             else:
                 await menu_handler(update, context)
@@ -1558,15 +1558,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
             else:
                 await menu_handler(update, context)
-            if animation_task:
-                animation_task.cancel()
             if loading_msg:
+                loading_msg = None  # Stop animation
                 try:
                     await context.bot.delete_message(chat_id, loading_msg.message_id)
                     logger.info(f"Deleted loading message {loading_msg.message_id} in start (no Steam)")
                 except Exception as e:
                     logger.warning(f"Failed to delete loading message in start: {e}")
-                loading_msg = None
+            if animation_task:
+                animation_task.cancel()
 
     except Exception as e:
         if animation_task:
@@ -2095,33 +2095,35 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
 
         # Delete loading message immediately after successful send
-        if animation_task:
-            animation_task.cancel()
         if loading_msg:
             logger.info(f"Loading msg exists: {loading_msg.message_id}, attempting delete...")
+            msg_id = loading_msg.message_id
+            loading_msg = None  # Stop animation
             try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-                logger.info(f"SUCCESS: Deleted loading message {loading_msg.message_id} in stats")
+                await context.bot.delete_message(chat_id, msg_id)
+                logger.info(f"SUCCESS: Deleted loading message {msg_id} in stats")
             except Exception as del_e:
                 logger.error(f"ERROR: Failed to delete loading message in stats: {del_e}")
-            loading_msg = None
         else:
             logger.warning("loading_msg is None, cannot delete (already deleted during animation)")
+        if animation_task:
+            animation_task.cancel()
 
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
 
     except asyncio.TimeoutError as e:
+        if loading_msg:
+            msg_id = loading_msg.message_id
+            loading_msg = None  # Stop animation
+            try:
+                await context.bot.delete_message(chat_id, msg_id)
+            except Exception:
+                pass
         if animation_task:
             animation_task.cancel()
         logger.error(f"Timeout in stats: {e}")
-        if loading_msg:
-            try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-            except Exception:
-                pass
-            loading_msg = None
         try:
             result_msg = await context.bot.send_message(
                 chat_id=chat_id,
