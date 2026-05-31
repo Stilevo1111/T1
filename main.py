@@ -3050,7 +3050,7 @@ async def main():
 
         job_queue.run_repeating(
             flush_users_cache_job,
-            interval=datetime.timedelta(minutes=30),
+            interval=datetime.timedelta(hours=2),
             first=datetime.timedelta(minutes=15),
         )
 
