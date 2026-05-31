@@ -2055,25 +2055,25 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             week_losses = week_games - week_wins
             winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
 
-            last_10_balls = ""
+last_10_balls = ""
+            top_heroes = []
             try:
                 from dota_mmr import get_recent_matches_async, get_top_heroes_async
                 steam_id = target_user.get('steam_id')
-                top_heroes = []
                 
                 if steam_id:
-                    # Параллельно получаем матчи и героев
+                    matches = []
                     try:
-                         matches, top_heroes = await asyncio.gather(
-                             get_recent_matches_async(steam_id, limit=10),
-                             get_top_heroes_async(steam_id, last_n=10, top_k=5)
-                         )
-                         logger.info(f"Steam {steam_id}: got {len(matches)} matches, {len(top_heroes) if top_heroes else 0} heroes")
+                        matches, top_heroes = await asyncio.gather(
+                            get_recent_matches_async(steam_id, limit=10),
+                            get_top_heroes_async(steam_id, last_n=10, top_k=5)
+                        )
+                        logger.info(f"Steam {steam_id}: got {len(matches)} matches, {len(top_heroes) if top_heroes else 0} heroes")
                     except asyncio.TimeoutError:
                         logger.warning(f"Timeout getting matches/heroes for steam_id={steam_id}, using cache/default")
                     except Exception as e:
                         logger.debug(f"Could not get matches/heroes: {e}")
-                        matches, top_heroes = [], []
+                        matches = []
                     
                     matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)
                     week_match_count = min(len(matches), week_games)
@@ -2085,7 +2085,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         is_win = (radiant_win and player_was_radiant) or (not radiant_win and not player_was_radiant)
                         last_10_balls += "🟢" if is_win else "🔴"
                     if last_10_balls:
-                        last_10_balls = last_10_balls.replace("🟢", "🟢‍").replace("🔴", "🔴‍")
+                        last_10_balls = last_10_balls.replace("🟢", "🟢\u200d").replace("🔴", "🔴\u200d")
             except Exception as e:
                 logger.debug(f"Could not get last matches: {e}")
 
@@ -2111,16 +2111,17 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Banner URL - для Steam использовать картинку с героями
         profile_banner_url = "https://i.ibb.co/n8g8yQYt/dasdsadasdsadasdsad.png"
 
-        try:
-            from dota_mmr import generate_heroes_image
-            img_bytes = await asyncio.to_thread(generate_heroes_image, top_heroes)
-            if img_bytes:
-                profile_banner_url = io.BytesIO(img_bytes)
-                logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
-        except asyncio.TimeoutError:
-            logger.warning("Timeout generating heroes image, using default banner")
-        except Exception as e:
-            logger.error(f"Could not generate heroes image: {e}", exc_info=True)
+        if top_heroes:
+            try:
+                from dota_mmr import generate_heroes_image
+                img_bytes = await asyncio.to_thread(generate_heroes_image, top_heroes)
+                if img_bytes:
+                    profile_banner_url = io.BytesIO(img_bytes)
+                    logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
+            except asyncio.TimeoutError:
+                logger.warning("Timeout generating heroes image, using default banner")
+            except Exception as e:
+                logger.error(f"Could not generate heroes image: {e}", exc_info=True)
 
         result_msg = await context.bot.send_photo(
             chat_id=update.message.chat_id,
