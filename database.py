@@ -2621,7 +2621,7 @@ def get_dota_mmr_top(limit=10):
 
         try:
             if "postgres" in scheme:
-cursor.execute("""
+                cursor.execute("""
                     SELECT telegram_id, username, steam_nickname, mmr,
                             dota_total_games, dota_wins, week_games, week_wins,
                             rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
@@ -2654,7 +2654,7 @@ cursor.execute("""
 
                 return result
             else:
-cursor.execute("""
+                cursor.execute("""
                     SELECT telegram_id, username, steam_nickname, mmr,
                            dota_total_games, dota_wins, week_games, week_wins,
                            rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
