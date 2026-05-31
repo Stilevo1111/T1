@@ -19,6 +19,8 @@ services:
         value: fissure-bot
       - key: RENDER_REGION
         value: oregon
+      - key: PYTHON_VERSION
+        value: 3.11.4
     healthCheckPath: /health
     healthCheckInterval: 60
     healthCheckTimeout: 10
