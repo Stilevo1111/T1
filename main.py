@@ -44,23 +44,12 @@ def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
     return any(p.lower() in msg for p in phrases)
 
 
-async def animate_loading_progress(loading_msg, messages: list, bar_length: int = 10):
-    """Update loading message with progress-bar animation. messages - list of 4 phase texts."""
-    for i in range(20):
-        try:
-            await asyncio.sleep(0.5)
-        except asyncio.CancelledError:
-            return
-        if loading_msg is None:
-            break
-        # Smooth fill: 0 to bar_length
-        filled = (i + 1) * bar_length // 20 or 1
-        bar = "🟩" * filled + "⬜️" * (bar_length - filled)
-        phase = min(i // 5, 3)
-        try:
-            await loading_msg.edit_text(f"⏳ {messages[phase]}\n{bar}")
-        except Exception:
-            pass
+def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
+    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
+    if error is None:
+        return False
+    msg = str(error).lower()
+    return any(p.lower() in msg for p in phrases)
 
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -388,7 +377,6 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Еженедельная аналитика игрока"""
     loading_msg = None
-    animation_task = None
     now = time.time()  # Добавлено: now должен быть определён
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
@@ -423,22 +411,17 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             context.user_data['analytics_chart_msg_id'] = None
 
-        # Immediately respond with loading message
+        # Send loading message without animation (API issues cause flood control)
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text="⏳ Генерирую аналитику..."
             )
             logger.info(f"Created loading message in analyze: chat_id={chat_id}, msg_id={loading_msg.message_id}")
-
-            # Start animation as background task
-            animation_task = asyncio.create_task(
-                animate_loading_progress(loading_msg, ["Генерирую аналитику", "Собираю данные", "Анализирую статы", "Готово!"])
-            )
         except Exception as e:
             logger.debug(f"Could not send loading message: {e}")
             loading_msg = None
-        
+
         # Start analytics generation in background task
         async def generate_and_update_analytics():
             try:
@@ -1464,18 +1447,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-        # Send loading message and start animation in parallel
+        # Send loading message without animation (API issues cause flood control)
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text="⏳ Загружаю меню..."
             )
             logger.info(f"Created loading message in start: chat_id={chat_id}, msg_id={loading_msg.message_id}")
-
-            # Start animation as background task
-            animation_task = asyncio.create_task(
-                animate_loading_progress(loading_msg, ["Загружаю меню", "Подготавливаю интерфейс", "Строю карточку", "Готово!"])
-            )
         except Exception as e:
             logger.debug(f"Could not send loading message in start: {e}")
             loading_msg = None
@@ -1612,13 +1590,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Handle analytics_show separately with loading indicator (as chat message)
     if data == "analytics_show":
-        await callback_query.answer()  # Acknowledge callback immediately (no visual loading indicator)
+        await callback_query.answer()
         loading_msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Загружаю детали матчей...")
-        
-        # Start animation as background task
-        animation_task = asyncio.create_task(
-            animate_loading_progress(loading_msg, ["Загружаю детали матчей", "Анализирую статистику", "Формирую таблицы", "Готово!"])
-        )
+        animation_task = None
         
         try:
             await _show_analytics_page(callback_query, 0, context, loading_msg=loading_msg)
@@ -1989,18 +1963,13 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username = user_obj.username or user_obj.first_name or "Unknown"
             target_user = get_user(user_obj.id, username)
 
-            # Send loading message and start animation in parallel
+            # Send loading message without animation
             try:
                 loading_msg = await context.bot.send_message(
                     chat_id=chat_id,
                     text="⏳ Формирую профиль..."
                 )
                 logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id}")
-
-                # Start animation as background task
-                animation_task = asyncio.create_task(
-                    animate_loading_progress(loading_msg, ["Формирую профиль", "Собираю данные", "Анализирую статы", "Готово!"])
-                )
             except Exception as e:
                 logger.debug(f"Could not send loading message: {e}")
                 loading_msg = None
