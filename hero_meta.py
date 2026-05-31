@@ -184,9 +184,22 @@ async def fetch_hero_icon(session, icon_path):
         return None
 
 
-async def get_dota_data(days=7):
+"""
+Hero meta cache for reducing OpenDota API calls
+"""
+_hero_meta_cache = {"data": None, "timestamp": 0}
+_HERO_META_CACHE_TTL = 7200  # 2 hours
+
+
+async def get_dota_data(days=7, force_refresh=False):
     import time
     now = int(time.time())
+    
+    # Check cache first
+    global _hero_meta_cache
+    if not force_refresh and _hero_meta_cache["data"] and now - _hero_meta_cache["timestamp"] < _HERO_META_CACHE_TTL:
+        logger.info("Using cached hero meta data")
+        return _hero_meta_cache["data"]
     week_ago = now - (days * 24 * 60 * 60)
     
     # Query with position grouping - each hero-position gets separate stats
@@ -238,7 +251,11 @@ async def get_dota_data(days=7):
                     hero_stats = list(hero_position_stats.values())
                     for hs in hero_stats:
                         hs["img"] = f"/apps/dota2/images/dota/heroes/{hs['hero_id']}_sb.png"
-                    return await _enrich_with_hero_data(hero_stats)
+                    result = await _enrich_with_hero_data(hero_stats)
+                    if result:
+                        _hero_meta_cache["data"] = result
+                        _hero_meta_cache["timestamp"] = now
+                    return result
     except Exception as e:
         logger.warning("Explorer failed: %s", e)
     
@@ -261,6 +278,8 @@ async def get_dota_data(days=7):
                         "position": detect_hero_position(h)  # Use role-based position as fallback
                     })
                 if hero_stats:
+                    _hero_meta_cache["data"] = hero_stats
+                    _hero_meta_cache["timestamp"] = now
                     return hero_stats
     except Exception as e:
         logger.error("heroStats error: %s", e)
