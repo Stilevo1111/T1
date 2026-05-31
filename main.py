@@ -335,9 +335,9 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
         debug_info += f"Последнее поздравление: {last_announced}\n"
         debug_info += f"digest_chat_id: {digest_chat_id}\n"
 
-        # Проверяем данные MMR
+# Проверяем данные MMR
         from database import get_dota_week_top_from_db
-top_users = get_dota_week_top_from_db(5)
+        top_users = get_dota_week_top_from_db(5)
         active_users = [u for u in top_users if u.get('week_games', 0) > 0] if top_users else []
 
         debug_info += f"Топ MMR пользователей: {len(top_users) if top_users else 0}\n"
