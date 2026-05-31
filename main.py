@@ -2236,7 +2236,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Generate top banner with winner info
         winner = top_users[0]
         winner_avatar = winner.get('avatar')
-        winner_name = winner.get('username') or winner.get('steam_nickname')
+        winner_name = winner.get('username') or winner.get('steam_nickname') or winner.get('first_name')
         winner_fissure = winner.get('fissure', 0)
         winner_rank_tier = winner.get('rank_tier', 0)
         
@@ -2390,7 +2390,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Generate MMR top banner with winner info
             winner = top_users[0]
             winner_avatar = winner.get('avatar')
-            winner_name = winner.get('steam_nickname') or winner.get('username')
+            winner_name = winner.get('steam_nickname') or winner.get('username') or winner.get('first_name')
+            winner_rank_tier = winner.get('rank_tier', 0)
             winner_week_games = winner.get('week_games', 0)
             winner_week_wins = winner.get('week_wins', 0)
             winner_week_losses = winner_week_games - winner_week_wins
@@ -2404,7 +2405,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     username=winner_name,
                     telegram_id=winner.get('telegram_id'),
                     fissure=0,
-                    extra_text=f"{winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%"
+                    extra_text=f"{winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%",
+                    rank_tier=winner_rank_tier
                 )
                 topmmr_banner_url = io.BytesIO(banner_bytes) if banner_bytes else topmmr_banner_url
             except Exception as e:
