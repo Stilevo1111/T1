@@ -538,7 +538,6 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
         total_gpm = avg_kda * 150
     
     avg_gpm = total_gpm / n
-    avg_lh = total_lh / n
     avg_lh_10min = sum(raw_lh_per_10min) / n
 
     total_deaths = sum(raw_deaths)
@@ -1145,10 +1144,8 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     try:
         from scipy.interpolate import make_interp_spline
-        from scipy.ndimage import gaussian_filter1d
     except ImportError:
         make_interp_spline = None
-        gaussian_filter1d = None
 
     # =====================================================
     # CANVAS SIZE EXACTLY 1200x800

@@ -1423,10 +1423,9 @@ def generate_start_card(
         # Шрифты - увеличенные для Retina
         try:
             font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
-            font_text = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(32 * scale))
             font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(24 * scale))
         except Exception:
-            font_title = font_text = font_small = ImageFont.load_default()
+            font_title = font_small = ImageFont.load_default()
         
         # Иконки - открытые источники
         icon_size = int(32 * scale)

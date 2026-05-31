@@ -20,20 +20,35 @@ from database import (
     set_user_in_chat, get_user_by_username,
     delete_user, top_cache, update_user_fields_batch, get_dota_week_top,
     get_dota_week_rank, DATABASE_URL, reset_all_fissure_data, cleanup_left_users,
-    user_cache
+    user_cache, release_connection
 )
 from mute import register_handlers as register_mute_handlers
-from dota_mmr import update_user_mmr, get_opendota_rate_limit_message, _get_start_card_background
+from dota_mmr import update_user_mmr, _get_start_card_background
 import aiohttp
 from aiohttp import web
 from rate_limiter import rate_limit
 
 # Logging setup
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+import structlog
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.dev.ConsoleRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
 )
-logger = logging.getLogger(__name__)
+
+logger = structlog.get_logger(__name__)
 
 
 def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
@@ -736,7 +751,6 @@ async def announce_weekly_mmr_winner(bot):
     week_losses = week_games - week_wins
     winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
     rank_tier = winner.get('rank_tier', 0)
-    mmr = winner.get('mmr', 0)
     telegram_id = winner.get('telegram_id')
 
     prev_winner_tg_id = get_config('current_mvp_telegram_id')
@@ -1150,7 +1164,6 @@ async def dota_digest_job(context):
         top_games = top_by_net.get('week_games', 0)
         top_wins = top_by_net.get('week_wins', 0)
         top_losses = top_games - top_wins
-        top_net = top_wins - top_losses
         top_winrate = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
 
         bottom_player = bottom_by_net.get('steam_nickname', 'None')
@@ -1158,7 +1171,6 @@ async def dota_digest_job(context):
         bottom_games = bottom_by_net.get('week_games', 0)
         bottom_wins = bottom_by_net.get('week_wins', 0)
         bottom_losses = bottom_games - bottom_wins
-        bottom_net = bottom_wins - bottom_losses
         bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
 
         if top_streak_player:
@@ -1252,7 +1264,6 @@ from bot_utils import (
     delete_last_bot_message,
     set_last_bot_message,
     add_bot_message,
-    format_time,
     main_menu,
     _build_analytics_keyboard,
     _build_stats_button_keyboard,
@@ -2020,9 +2031,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         remaining_cooldown = max(0, COOLDOWN - time_since_last)
 
         if remaining_cooldown > 0:
-            wait_text = f"Восстановление: {format_time(remaining_cooldown)}"
+            pass
         else:
-            wait_text = "✅ Готов к увеличению!"
+            pass
 
         # Форматируем username как кликабельную ссылку
         if viewing_other:
@@ -2333,7 +2344,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_is_in_top = False
         user_week_games = 0
         user_week_wins = 0
-        user_winrate = 0
         user_username = ""
 
         if user:
@@ -2341,7 +2351,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_week_wins = user.get('week_wins', 0)
             user_username = user.get('steam_nickname') or user.get('username') or 'Unknown'
             user_week_losses = user_week_games - user_week_wins
-            user_winrate = round((user_week_wins / user_week_games * 100), 1) if user_week_games > 0 else 0
 
             # Check if user is already in the top list
             for player in top_users:
@@ -2910,7 +2919,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                         length=name_utf16_len,
                         user=user_obj
                     )]
-                    result_msg = await context.bot.send_message(
+                    await context.bot.send_message(
                         chat_id=chat_id,
                         text=welcome_text,
                         entities=entities,
@@ -2919,7 +2928,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 else:
                     # Fallback для пользователей без username
                     welcome_text = f"{make_clickable(name, user_id)}, {phrase}"
-                    result_msg = await context.bot.send_message(
+                    await context.bot.send_message(
                         chat_id=chat_id,
                         text=welcome_text,
                         parse_mode="HTML",

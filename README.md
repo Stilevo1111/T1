@@ -97,7 +97,7 @@ python main.py
 
 ## Технологии
 
-- Python 3.13+
+- Python 3.11.4
 - python-telegram-bot v21.7
 - PostgreSQL / SQLite
 - OpenDota API

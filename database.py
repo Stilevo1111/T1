@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import sqlite3
 import psycopg2
@@ -8,18 +9,90 @@ import urllib.parse as urlparse
 import threading
 import json
 from contextlib import contextmanager
+from typing import Optional, Any, Generator, Protocol
+from dataclasses import dataclass
 
 # Configure logging for database operations
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+@dataclass
+class User:
+    telegram_id: int
+    username: Optional[str] = None
+    steam_id: Optional[int] = None
+    steam_nickname: Optional[str] = None
+    fissure: float = 0.0
+    mmr: int = 0
+    rank_tier: int = 0
+    total_rolls: int = 0
+    current_streak: int = 0
+    best_streak: int = 0
+    message_count: int = 0
 
-def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
-    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
-    if error is None:
-        return False
-    msg = str(error).lower()
-    return any(p.lower() in msg for p in phrases)
+    @classmethod
+    def from_row(cls, row: tuple | dict, db_type: str = "sqlite") -> User:
+        if db_type == "postgresql":
+            return cls(
+                telegram_id=row["telegram_id"],
+                username=row.get("username"),
+                steam_id=row.get("steam_id"),
+                steam_nickname=row.get("steam_nickname"),
+                fissure=float(row.get("fissure", 0)),
+                mmr=row.get("mmr", 0),
+                rank_tier=row.get("rank_tier", 0),
+                total_rolls=row.get("total_rolls", 0),
+                current_streak=row.get("current_streak", 0),
+                best_streak=row.get("best_streak", 0),
+                message_count=row.get("message_count", 0),
+            )
+        return cls(
+            telegram_id=row[0],
+            username=row[1],
+            steam_id=row[2],
+            steam_nickname=row[3],
+            fissure=float(row[4]) if len(row) > 4 else 0,
+            mmr=row[5] if len(row) > 5 else 0,
+            rank_tier=row[6] if len(row) > 6 else 0,
+            total_rolls=row[7] if len(row) > 7 else 0,
+            current_streak=row[8] if len(row) > 8 else 0,
+            best_streak=row[9] if len(row) > 9 else 0,
+            message_count=row[10] if len(row) > 10 else 0,
+        )
+
+
+@dataclass
+class MatchStats:
+    telegram_id: int
+    week_games: int = 0
+    week_wins: int = 0
+    week_current_streak: int = 0
+
+
+class UserRepository:
+    """Repository for user-related database operations"""
+    
+    def __init__(self, db_pool):
+        self.db_pool = db_pool
+    
+    @contextmanager
+    def _get_connection(self) -> Generator:
+        conn = get_connection()
+        try:
+            yield conn
+        finally:
+            release_connection(conn)
+
+
+class UserCache:
+    """Кеш данных пользователей в памяти с записью в БД раз в сутки"""
+    
+    MAX_CACHE_SIZE = 3000  # Максимум пользователей в кеше
+    
+    def __init__(self) -> None:
+        self._cache: dict[int, dict[str, Any]] = {}  # telegram_id -> user_data
+        self._dirty: dict[int, bool] = {}  # telegram_id -> True
+        self._lock = threading.Lock()
 
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -35,12 +108,12 @@ class UserCache:
     
     MAX_CACHE_SIZE = 3000  # Максимум пользователей в кеше
     
-    def __init__(self):
-        self._cache = {}  # telegram_id -> user_data
-        self._dirty = {}  # telegram_id -> True
+    def __init__(self) -> None:
+        self._cache: dict[int, dict[str, Any]] = {}  # telegram_id -> user_data
+        self._dirty: dict[int, bool] = {}  # telegram_id -> True
         self._lock = threading.Lock()
     
-    def get(self, telegram_id):
+    def get(self, telegram_id: int) -> Optional[dict[str, Any]]:
         """Получить данные пользователя из кеша"""
         with self._lock:
             return self._cache.get(telegram_id)
@@ -157,8 +230,8 @@ class TTLCache:
 
 
 # Глобальные экземпляры кешей (оптимизировано для экономии CU в serverless)
-config_cache = TTLCache(default_ttl=600)  # 10 минут для конфигурации (было 5)
-top_cache = TTLCache(default_ttl=600)  # 10 минут для топов и рангов
+config_cache = TTLCache(default_ttl=300)  # 5 минут для конфигурации
+top_cache = TTLCache(default_ttl=1800)  # 30 минут для топов и рангов
 
 _aiohttp_session = None
 
@@ -541,6 +614,25 @@ def get_db_connection():
         raise
     finally:
         release_connection(conn)
+
+
+@contextmanager
+def db_transaction():
+    """Async-safe transaction context manager"""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        yield cursor
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Transaction failed: {e}")
+        raise
+    finally:
+        if conn:
+            release_connection(conn)
 
 def _save_schema_version(cursor, is_pg):
     if is_pg:
@@ -1418,9 +1510,6 @@ class Database:
         """Получить статистику для дайджеста"""
         try:
             # Используем execute_query для безопасного выполнения
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
-            
             if get_db_type() == "postgresql":
                 query = """
                     SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, total_growth
@@ -1459,10 +1548,6 @@ class Database:
                         "current_streak": int(r[6] or 0),
                         "total_growth": float(r[7] or 0.0),
                     })
-
-            # Текущие позиции по текущей фиссуре (для ранкинга)
-            users_sorted = sorted(users, key=lambda u: u["fissure"], reverse=True)
-            current_pos_by_id = {u["telegram_id"]: i + 1 for i, u in enumerate(users_sorted)}
 
 # Рост: самый большой прирост см за сутки (current - digest)
             top_growth_user = None
@@ -2208,7 +2293,7 @@ def _save_user_to_db_immediately(telegram_id, user_data):
             user_data.get('weekly_top3_count', 0),
             telegram_id
         )
-        result = db.execute_query(query, params)
+        db.execute_query(query, params)
     except Exception as e:
         logger.error(f"Error saving user {telegram_id} to DB immediately: {e}", exc_info=True)
 
@@ -2605,7 +2690,7 @@ def get_dota_week_top(limit=10, force_refresh=False):
     """Получение топа игроков Dota 2 за неделю - с TTL и блокировкой"""
     import time
     
-    _TOP_CACHE_TTL = 14400  # 4 часа
+    _TOP_CACHE_TTL = 3600  # 1 час
     
     # Блокировка от дубликатов - использовать threading.Lock
     global _dota_week_top_lock
