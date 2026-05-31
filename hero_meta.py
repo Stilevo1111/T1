@@ -189,9 +189,11 @@ async def get_dota_data(days=7):
     now = int(time.time())
     week_ago = now - (days * 24 * 60 * 60)
     
+    # Query with position grouping - each hero-position gets separate stats
     sql = f"""
         SELECT 
             hero_id,
+            player_slot,
             COUNT(*) as pub_pick,
             SUM(
                 CASE 
@@ -202,8 +204,8 @@ async def get_dota_data(days=7):
             ) as pub_win
         FROM public_player_matches 
         WHERE start_time >= {week_ago}
-        GROUP BY hero_id
-        HAVING COUNT(*) >= 10
+        GROUP BY hero_id, player_slot
+        HAVING COUNT(*) >= 5
     """
     
     try:
@@ -217,16 +219,25 @@ async def get_dota_data(days=7):
             if resp.status == 200:
                 data = await resp.json()
                 if data and "rows" in data and data["rows"]:
-                    hero_stats = []
+                    # Aggregate by hero_id + position (from player_slot)
+                    hero_position_stats = {}
                     for row in data["rows"]:
-                        hero_stats.append({
-                            "id": row["hero_id"],
-                            "localized_name": f"Hero {row['hero_id']}",
-                            "roles": [],
-                            "pub_pick": row["pub_pick"],
-                            "pub_win": row["pub_win"],
-                            "img": f"/apps/dota2/images/dota/heroes/{row['hero_id']}_sb.png"
-                        })
+                        hero_id = row["hero_id"]
+                        player_slot = row.get("player_slot", 0)
+                        if player_slot < 0:
+                            continue
+                        count = row["pub_pick"]  # This is the count for this hero+position
+                        position = player_slot % 5 if player_slot < 128 else (player_slot - 128) % 5
+                        pos_map = {0: 1, 1: 2, 2: 3, 3: 4, 4: 5}
+                        actual_pos = pos_map.get(position, 1)
+                        key = (hero_id, actual_pos)
+                        if key not in hero_position_stats:
+                            hero_position_stats[key] = {"hero_id": hero_id, "position": actual_pos, "pub_pick": 0, "pub_win": 0}
+                        hero_position_stats[key]["pub_pick"] += count
+                        hero_position_stats[key]["pub_win"] += row.get("pub_win", 0)
+                    hero_stats = list(hero_position_stats.values())
+                    for hs in hero_stats:
+                        hs["img"] = f"/apps/dota2/images/dota/heroes/{hs['hero_id']}_sb.png"
                     return await _enrich_with_hero_data(hero_stats)
     except Exception as e:
         logger.warning("Explorer failed: %s", e)
@@ -236,7 +247,21 @@ async def get_dota_data(days=7):
         session = await get_aiohttp_session()
         async with session.get("https://api.opendota.com/api/heroStats", timeout=aiohttp.ClientTimeout(total=5)) as resp:
             if resp.status == 200:
-                return await resp.json()
+                heroes = await resp.json()
+                # Convert heroStats format to match our expected format
+                hero_stats = []
+                for h in heroes:
+                    hero_stats.append({
+                        "hero_id": h["hero_id"],
+                        "localized_name": h.get("localized_name", f"Hero {h['hero_id']}"),
+                        "roles": h.get("roles", []),
+                        "pub_pick": h.get("pro_pick", 0) or h.get("picked", 0),
+                        "pub_win": h.get("pro_win", 0) or h.get("win", 0),
+                        "img": h.get("img", ""),
+                        "position": detect_hero_position(h)  # Use role-based position as fallback
+                    })
+                if hero_stats:
+                    return hero_stats
     except Exception as e:
         logger.error("heroStats error: %s", e)
     return None
@@ -251,8 +276,8 @@ async def _enrich_with_hero_data(hero_stats):
                 heroes = await resp.json()
                 hero_map = {h["id"]: h for h in heroes}
                 for hs in hero_stats:
-                    if hs["id"] in hero_map:
-                        hero = hero_map[hs["id"]]
+                    if hs["hero_id"] in hero_map:
+                        hero = hero_map[hs["hero_id"]]
                         hs["localized_name"] = hero["localized_name"]
                         hs["roles"] = hero.get("roles", [])
                         hs["img"] = hero.get("img", hs["img"])
@@ -285,12 +310,12 @@ def _build_grid(hero_stats):
             math.log10(matches + 1)
         )
 
-        # Use position from role detection (not max picks)
-        pos = detect_hero_position(hero)
+        # Use position from SQL grouping (hero already has position)
+        pos = hero.get("position", detect_hero_position(hero))
 
         processed_heroes.append({
-            'id': hero["id"],
-            'name': hero.get("localized_name", 'Hero %d' % hero["id"]),
+            'id': hero.get("hero_id", hero.get("id")),
+            'name': hero.get("localized_name", 'Hero %d' % hero.get("hero_id", hero.get("id"))),
             'img': hero.get("img", ""),
             'position': pos,
             'score': score,
