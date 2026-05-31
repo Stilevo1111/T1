@@ -65,9 +65,27 @@ _HERO_ICON_CACHE = {}
 # =========================================================
 
 def _escape_markdown_v2(text: str) -> str:
-    """Escape special characters for Telegram MarkdownV2"""
-    escape_chars = r"_*[]()~`>#+-=|{}.!"
-    return "".join(f"\\{c}" if c in escape_chars else c for c in text)
+    """Escape special characters for Telegram MarkdownV2.
+    
+    Note: In MarkdownV2, only certain characters are reserved:
+    - _ * [ ] ( ) ~ ` # > + - = | { } ! are always reserved
+    - . is reserved only after digits (for lists)
+    - & is reserved for entities
+    """
+    if not text:
+        return text
+    result = []
+    for i, c in enumerate(text):
+        if c in r"_*[]()~`>#+-=|{}!":
+            result.append(f"\\{c}")
+        elif c == "." and i > 0 and text[i-1].isdigit():
+            result.append(f"\\{c}")
+        elif c == "&":
+            result.append("\\&")
+        else:
+            result.append(c)
+    return "".join(result)
+
 
 # =========================================================
 # HERO CACHE

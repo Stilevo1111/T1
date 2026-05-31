@@ -2949,6 +2949,7 @@ def _get_dota_week_top_query(limit):
             return result
     except Exception as e:
         logger.error(f"Error get_dota_week_top: {e}")
+        release_connection(conn)
         return []
 
 

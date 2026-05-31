@@ -2238,6 +2238,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         winner_avatar = winner.get('avatar')
         winner_name = winner.get('username') or winner.get('steam_nickname')
         winner_fissure = winner.get('fissure', 0)
+        winner_rank_tier = winner.get('rank_tier', 0)
         
         try:
             from dota_mmr import generate_top_card
@@ -2246,7 +2247,9 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 avatar_url=winner_avatar,
                 username=winner_name,
                 telegram_id=winner.get('telegram_id'),
-                fissure=winner_fissure
+                fissure=winner_fissure,
+                extra_text=f"Фиссура: {winner_fissure:.1f} см",
+                rank_tier=winner_rank_tier
             )
             banner_url = io.BytesIO(banner_bytes) if banner_bytes else "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
         except Exception as e:
@@ -2387,7 +2390,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             # Generate MMR top banner with winner info
             winner = top_users[0]
-            winner_avatar = winner.get('avatar') or winner.get('steam_avatar')
+            winner_avatar = winner.get('avatar')
             winner_name = winner.get('steam_nickname') or winner.get('username')
             winner_week_games = winner.get('week_games', 0)
             winner_week_wins = winner.get('week_wins', 0)
@@ -2402,7 +2405,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     username=winner_name,
                     telegram_id=winner.get('telegram_id'),
                     fissure=0,
-                    extra_text=f"{winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%"
+                    extra_text=f"{winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%",
+                    week_wins=winner_week_wins,
+                    week_losses=winner_week_losses,
+                    winrate=winner_wr
                 )
                 topmmr_banner_url = io.BytesIO(banner_bytes) if banner_bytes else topmmr_banner_url
             except Exception as e:
