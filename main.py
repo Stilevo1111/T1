@@ -3056,10 +3056,10 @@ async def main():
 
         # morning_digest_job удалён
 
-        # Обновление MMR каждый час (актуальные данные)
+        # Обновление MMR каждые 3 часа (экономия Neon часов)
         job_queue.run_repeating(
             update_all_mmr_job,
-            interval=datetime.timedelta(hours=1),
+            interval=datetime.timedelta(hours=3),
             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
         )
 
