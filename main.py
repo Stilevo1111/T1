@@ -517,11 +517,14 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             schedule_delete(context.bot, chat_id, loading_msg.message_id, 30, context.application.job_queue)
                         except Exception:
                             # Fallback: delete and send new message
-                            photo_buf.seek(0)  # Reset buffer position after failed edit
-                            try:
-                                await context.bot.delete_message(chat_id, loading_msg.message_id)
-                            except Exception:
-                                pass
+                            photo_buf.seek(0)
+                            if loading_msg:
+                                msg_id = loading_msg.message_id
+                                loading_msg = None  # Stop animation
+                                try:
+                                    await context.bot.delete_message(chat_id, msg_id)
+                                except Exception:
+                                    pass
                             # Delete previous bot message before sending new one
                             try:
                                 await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
@@ -1686,8 +1689,10 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         if not matches:
             await callback_query.answer(text="❌ Нет данных матчей для аналитики", show_alert=True)
             if loading_msg:
+                msg_id = loading_msg.message_id
+                loading_msg = None  # Stop animation
                 try:
-                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                    await context.bot.delete_message(chat_id, msg_id)
                 except Exception:
                     pass
             return
@@ -1724,8 +1729,10 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         if not stats:
             await callback_query.answer(text="❌ Ошибка анализа статистики", show_alert=True)
             if loading_msg:
+                msg_id = loading_msg.message_id
+                loading_msg = None  # Stop animation
                 try:
-                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                    await context.bot.delete_message(chat_id, msg_id)
                 except Exception:
                     pass
             return
@@ -1737,8 +1744,10 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
             logger.error(f"Error generating analytics pages: {e}", exc_info=True)
             await callback_query.answer(text=f"Ошибка: {e}", show_alert=True)
             if loading_msg:
+                msg_id = loading_msg.message_id
+                loading_msg = None  # Stop animation
                 try:
-                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                    await context.bot.delete_message(chat_id, msg_id)
                 except Exception:
                     pass
             return
