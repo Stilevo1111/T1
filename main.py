@@ -421,7 +421,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         return
                     if loading_msg is None:
                         break
-                    bar = "█" * (i % 5) + "░" * (4 - i % 5)
+                    bar = "🟩" * (i % 5) + "⬜️" * (4 - i % 5)
                     phase = min(i // 5, 3)
                     messages = ["Генерирую аналитику", "Собираю данные", "Анализирую статы", "Готово!"]
                     try:
@@ -1476,7 +1476,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         return
                     if loading_msg is None:
                         break
-                    bar = "█" * (i % 5) + "░" * (4 - i % 5)
+                    bar = "🟩" * (i % 5) + "⬜️" * (4 - i % 5)
                     phase = min(i // 5, 3)
                     messages = ["Загружаю меню", "Подготавливаю интерфейс", "Строю карточку", "Готово!"]
                     try:
@@ -1634,7 +1634,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return
                 if loading_msg is None:
                     break
-                bar = "█" * (i % 5) + "░" * (4 - i % 5)
+                bar = "🟩" * (i % 5) + "⬜️" * (4 - i % 5)
                 phase = min(i // 5, 3)
                 messages = ["Загружаю детали матчей", "Анализирую статистику", "Формирую таблицы", "Готово!"]
                 try:
@@ -2029,7 +2029,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             return
                         if loading_msg is None:
                             break
-                        bar = "█" * (i % 5) + "░" * (4 - i % 5)
+                        bar = "🟩" * (i % 5) + "⬜️" * (4 - i % 5)
                         phase = min(i // 5, 3)
                         messages = ["Формирую профиль", "Собираю данные", "Анализирую статы", "Готово!"]
                         try:
