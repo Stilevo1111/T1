@@ -44,12 +44,22 @@ def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
     return any(p.lower() in msg for p in phrases)
 
 
-def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
-    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
-    if error is None:
-        return False
-    msg = str(error).lower()
-    return any(p.lower() in msg for p in phrases)
+async def animate_loading_progress(loading_msg, messages: list, bar_length: int = 10):
+    """Update loading message with progress-bar animation. messages - list of 4 phase texts."""
+    for i in range(20):
+        try:
+            await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            return
+        if loading_msg is None:
+            break
+        filled = (i + 1) * bar_length // 20 or 1
+        bar = "🟩" * filled + "⬜️" * (bar_length - filled)
+        phase = min(i // 5, 3)
+        try:
+            await loading_msg.edit_text(f"⏳ {messages[phase]}\n{bar}")
+        except Exception:
+            pass
 
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -411,7 +421,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             context.user_data['analytics_chart_msg_id'] = None
 
-        # Send loading message without animation (API issues cause flood control)
+        # Send loading message and start animation
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
@@ -431,8 +441,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if chart_data:
                     # Check if it's an API error response
                     if isinstance(chart_data, dict) and chart_data.get("error") == "opendota_rate_limit":
-                        if animation_task:
-                            animation_task.cancel()
                         if loading_msg:
                             try:
                                 await context.bot.edit_message_text(
@@ -448,8 +456,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     history = chart_data.get("history", [])
                     matches = chart_data.get("matches", [])
                     chart_image = chart_data.get("image")
-                    role_from_chart = chart_data.get("role", "CARRY")  # Get role from chart data
-                    
+                    role_from_chart = chart_data.get("role", "CARRY")
+
 # If matches empty but cache had old data, fetch fresh matches
                     if not matches:
                         try:
