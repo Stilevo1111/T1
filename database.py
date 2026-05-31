@@ -190,8 +190,6 @@ def flush_users_cache():
     
     logger.info(f"flush_users_cache: found {len(dirty_users)} dirty users, saving to DB")
     
-    update_dota_week_top_cache()
-    
     db_type = get_db_type()
     flushed = 0
     
