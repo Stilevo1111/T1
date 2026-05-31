@@ -496,7 +496,7 @@ async def alternate_digest_job(context):
         # Если в БД уже есть alternate_digest_message_id — пост существует,
         # значит мы должны РЕДАКТИРОВАТЬ его, а не создавать новый.
         # created_at=0 после импорта модуля больше не должен триггерить should_create_new.
-cache = _digest_cache
+        cache = _digest_cache
         msg_id = get_config('alternate_digest_message_id')
         if msg_id:
             if not cache.get("created_at") or cache.get("created_at", 0) <= 0:
