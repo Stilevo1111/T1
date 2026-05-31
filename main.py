@@ -2249,7 +2249,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 telegram_id=winner.get('telegram_id'),
                 fissure=winner_fissure,
                 rank_tier=winner_rank_tier,
-                show_avatar=True
+                show_avatar=True,
+                secondary_font_size=36
             )
             banner_url = io.BytesIO(banner_bytes) if banner_bytes else "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
         except Exception as e:
@@ -2408,7 +2409,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     fissure=0,
                     extra_text=f"{winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%",
                     rank_tier=winner_rank_tier,
-                    show_avatar=True
+                    show_avatar=True,
+                    secondary_font_size=33
                 )
                 topmmr_banner_url = io.BytesIO(banner_bytes) if banner_bytes else topmmr_banner_url
             except Exception as e:

@@ -1582,7 +1582,8 @@ def generate_top_card(
     fissure: float = 0.0,
     extra_text: str = None,
     rank_tier: int = 0,
-    show_avatar: bool = True
+    show_avatar: bool = True,
+    secondary_font_size: int = 36
 ) -> bytes | None:
     """Generate top banner matching start card style"""
     try:
@@ -1646,7 +1647,7 @@ def generate_top_card(
         
         try:
             font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(secondary_font_size * scale))
         except Exception:
             font_title = font_small = ImageFont.load_default()
         
@@ -1654,12 +1655,15 @@ def generate_top_card(
         draw.text((info_x, info_y), display_name, fill=(255, 255, 255), font=font_title)
         
         if fissure > 0:
-            fissure_y = info_y + int(40 * scale)
+            fissure_y = info_y + int(36 * scale)
             fissure_text = f"{fissure:.0f}см"
             draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_small)
         
         if extra_text:
-            extra_y = info_y + int(33 * scale)
+            if fissure > 0:
+                extra_y = fissure_y + int(5 * scale)
+            else:
+                extra_y = info_y + int(33 * scale)
             draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_small)
         
         if rank_tier > 0:
