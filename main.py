@@ -53,9 +53,8 @@ async def animate_loading_progress(loading_msg, messages: list, bar_length: int 
             return
         if loading_msg is None:
             break
-        # Smooth ping-pong: 1-10-1 cycle
-        pos = i % (bar_length * 2 - 2)
-        filled = pos + 1 if pos < bar_length - 1 else bar_length * 2 - pos - 3
+        # Smooth fill: 0 to bar_length
+        filled = (i + 1) * bar_length // 20 or 1
         bar = "🟩" * filled + "⬜️" * (bar_length - filled)
         phase = min(i // 5, 3)
         try:
