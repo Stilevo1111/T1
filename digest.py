@@ -496,19 +496,18 @@ async def alternate_digest_job(context):
         # Если в БД уже есть alternate_digest_message_id — пост существует,
         # значит мы должны РЕДАКТИРОВАТЬ его, а не создавать новый.
         # created_at=0 после импорта модуля больше не должен триггерить should_create_new.
-        cache = _digest_cache
-        if get_config('alternate_digest_message_id'):
+cache = _digest_cache
+        msg_id = get_config('alternate_digest_message_id')
+        if msg_id:
             if not cache.get("created_at") or cache.get("created_at", 0) <= 0:
                 cache["created_at"] = time.time() - 30
                 logger.info("alternate_digest_job: existing message_id in config, created_at adjusted to prevent false rotation after restart")
         
-# === УМНАЯ СИСТЕМА КЕШИРОВАНИЯ ДАЙДЖЕСТОВ ===
-        # Rotation (48h) triggers new post with fresh hero meta banner.
-        # Otherwise we edit the existing post.
+        # === УМНАЯ СИСТЕМА КЕШИРОВАНИЯ ДАЙДЖЕСТОВ ===
         should_create_new = False
         should_refresh_data = False
         
-        existing_msg_id = get_config('alternate_digest_message_id')
+        existing_msg_id = msg_id
         
         # 1. Rotation interval — create new message and regenerate hero meta
         #    (We delete the old one and create a fresh post with new hero meta)
