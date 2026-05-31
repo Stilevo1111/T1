@@ -2235,7 +2235,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Generate top banner with winner info
         winner = top_users[0]
-        winner_avatar = winner.get('avatar') or winner.get('steam_avatar')
+        winner_avatar = winner.get('avatar')
         winner_name = winner.get('username') or winner.get('steam_nickname')
         winner_fissure = winner.get('fissure', 0)
         
