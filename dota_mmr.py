@@ -1426,7 +1426,8 @@ def generate_start_card(
             font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
             font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(24 * scale))
         except Exception:
-            font_title = font_small = ImageFont.load_default()
+            font_title = ImageFont.load_default()
+            font_small = ImageFont.load_default()
         
         # Иконки - открытые источники
         icon_size = int(32 * scale)
@@ -1645,7 +1646,7 @@ def generate_top_card(
         
         try:
             font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(24 * scale))
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
         except Exception:
             font_title = font_small = ImageFont.load_default()
         
@@ -1653,12 +1654,12 @@ def generate_top_card(
         draw.text((info_x, info_y), display_name, fill=(255, 255, 255), font=font_title)
         
         if fissure > 0:
-            fissure_y = info_y + int(20 * scale)
+            fissure_y = info_y + int(40 * scale)
             fissure_text = f"{fissure:.0f}см"
             draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_small)
         
         if extra_text:
-            extra_y = info_y + int(65 * scale)
+            extra_y = info_y + int(45 * scale)
             draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_small)
         
         if rank_tier > 0:
