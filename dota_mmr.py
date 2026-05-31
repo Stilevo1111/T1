@@ -1424,7 +1424,7 @@ def generate_start_card(
         # Шрифты - увеличенные для Retina
         try:
             font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(36 * scale))
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
         except Exception:
             font_title = font_small = ImageFont.load_default()
         
@@ -1580,7 +1580,8 @@ def generate_top_card(
     telegram_id: int = None,
     fissure: float = 0.0,
     extra_text: str = None,
-    rank_tier: int = 0
+    rank_tier: int = 0,
+    show_avatar: bool = True
 ) -> bytes | None:
     """Generate top banner matching start card style"""
     try:
@@ -1609,7 +1610,7 @@ def generate_top_card(
         avatar_y = int((height - avatar_size) // 2 - 10)
         
         avatar_loaded = False
-        if avatar_url:
+        if avatar_url and show_avatar:
             try:
                 if os.path.isfile(avatar_url):
                     avatar = Image.open(avatar_url).convert("RGBA")
@@ -1657,7 +1658,7 @@ def generate_top_card(
             draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_small)
         
         if extra_text:
-            extra_y = info_y + int(90 * scale)
+            extra_y = info_y + int(45 * scale)
             draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_small)
         
         if rank_tier > 0:
