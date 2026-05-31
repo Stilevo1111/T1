@@ -44,8 +44,8 @@ def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
     return any(p.lower() in msg for p in phrases)
 
 
-async def animate_loading_progress(loading_msg, messages: list, bar_length: int = 10):
-    """Update loading message with progress-bar animation. messages - list of 4 phase texts."""
+async def animate_loading_progress(loading_msg, bar_length: int = 10):
+    """Update loading message with progress-bar animation."""
     for i in range(20):
         try:
             await asyncio.sleep(0.5)
@@ -55,9 +55,8 @@ async def animate_loading_progress(loading_msg, messages: list, bar_length: int 
             break
         filled = (i + 1) * bar_length // 20 or 1
         bar = "🟩" * filled + "⬜️" * (bar_length - filled)
-        phase = min(i // 5, 3)
         try:
-            await loading_msg.edit_text(f"⏳ {messages[phase]}\n{bar}")
+            await loading_msg.edit_text(f"Загрузка...\n{bar}")
         except Exception:
             pass
 
@@ -387,6 +386,7 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Еженедельная аналитика игрока"""
     loading_msg = None
+    animation_task = None
     now = time.time()  # Добавлено: now должен быть определён
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
