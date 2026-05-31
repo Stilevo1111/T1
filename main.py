@@ -337,7 +337,7 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Проверяем данные MMR
         from database import get_dota_week_top_from_db
-        top_users = get_dota_week_top_from_db(5, force_refresh=True)
+top_users = get_dota_week_top_from_db(5)
         active_users = [u for u in top_users if u.get('week_games', 0) > 0] if top_users else []
 
         debug_info += f"Топ MMR пользователей: {len(top_users) if top_users else 0}\n"
@@ -716,7 +716,7 @@ async def announce_weekly_mmr_winner(bot):
         return False
 
     from database import get_dota_week_top_from_db
-    top_users = get_dota_week_top_from_db(5, force_refresh=True)
+    top_users = get_dota_week_top_from_db(5)
     if not top_users or all(u.get('week_games', 0) == 0 for u in top_users):
         logger.info("announce_weekly_mmr_winner: нет данных для топа MMR (никто не играл)")
         set_config('mmr_week_top_announced', current_week_start)
@@ -2332,7 +2332,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Сначала пытаемся получить недельный топ
         logger.info("topmmr: before get_dota_week_top_from_db")
-        top_users = get_dota_week_top_from_db(10, force_refresh=True)
+        top_users = get_dota_week_top_from_db(10)
         logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from weekly DB")
 
         # Если недельный топ пустой, используем MMR топ
