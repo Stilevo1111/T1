@@ -2055,7 +2055,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             week_losses = week_games - week_wins
             winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
 
-last_10_balls = ""
+            last_10_balls = ""
             top_heroes = []
             try:
                 from dota_mmr import get_recent_matches_async, get_top_heroes_async
