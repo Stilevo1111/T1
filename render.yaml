@@ -1,19 +1,18 @@
 services:
-  - type: background
-    name: fissure-bot
-    env: python
-    region: oregon
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
-    python:
-      version: 3.11.4
-    envVars:
-      - key: BOT_TOKEN
-        fromSecret: BOT_TOKEN
-      - key: DATABASE_URL
-        fromSecret: DATABASE_URL
-      - key: WEBHOOK_URL
-        value: https://fissure-bot.onrender.com/webhook
-      - key: BOT_NAME
-        value: fissure_bot
+- type: background
+  name: fissure-bot
+  env: python
+  region: oregon
+  plan: free
+  buildCommand: pip install -r requirements.txt
+  startCommand: python main.py
+  pythonVersion: 3.11.4
+  envVars:
+  - key: BOT_TOKEN
+    fromSecret: BOT_TOKEN
+  - key: DATABASE_URL
+    fromSecret: DATABASE_URL
+  - key: WEBHOOK_URL
+    value: https://fissure-bot.onrender.com/webhook
+  - key: BOT_NAME
+    value: fissure_bot
