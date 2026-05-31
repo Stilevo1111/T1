@@ -273,7 +273,7 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         drop_part = f"🔻{drop_display} {drop_cm:.0f} СМ" if drop_player and drop_player != "None" else "🔻—"
         streak_part = f" 🍀{streak_display}: {streak_len} побед подряд" if streak_player and streak_player != "None" and streak_len > 0 else " 🍀—"
 
-        return f"<b>{growth_part}\n{drop_part}\n{streak_part}</b>\n\n🗿Фиссура дайджест.\n\n<a href=\"https://seredin999.onrender.com/patch-fissure\">Подробнее на сайте</a>"
+        return f"<b>{growth_part}\n{drop_part}\n{streak_part}</b>\n\n🗿Фиссура дайджест.\n\n🔷 <a href=\"https://seredin999.onrender.com/patch-fissure\">Подробнее на сайте</a>"
 
     # Dota-дайджест
     mmr_top = _digest_state_container.get_dota_data()
@@ -309,7 +309,7 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
     bottom_losses = bottom_games - bottom_wins
     bottom_wr = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
 
-    return f"<b>🔺{top_name}: {top_wins}W/{top_losses}L ≈{top_wr}%\n🔻{bottom_name}: {bottom_wins}W/{bottom_losses}L ≈{bottom_wr}%</b>\n\n🎮 Dota дайджест.\n\n<a href=\"https://seredin999.onrender.com/patch-fissure\">Подробнее на сайте</a>"
+    return f"<b>🔺{top_name}: {top_wins}W/{top_losses}L ≈{top_wr}%\n🔻{bottom_name}: {bottom_wins}W/{bottom_losses}L ≈{bottom_wr}%</b>\n\n🎮 Dota дайджест.\n\n🔷 <a href=\"https://seredin999.onrender.com/patch-fissure\">Подробнее на сайте</a>"
 
 
 async def _generate_hero_meta_banner_if_needed():
