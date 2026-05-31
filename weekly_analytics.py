@@ -874,16 +874,34 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
     matches = await get_last_matches(telegram_id)
 
     if len(matches) < 5:
-        from dota_mmr import get_opendota_rate_limit_message
-        return {"error": "opendota_rate_limit", "message": get_opendota_rate_limit_message()}
+        from database import get_user
+        user = get_user(telegram_id)
+        if user and user.get('analytics_cache'):
+            cached = json.loads(user['analytics_cache'])
+            if cached.get('matches') and len(cached.get('matches', [])) >= 3:
+                logger.info(f"generate_chart_only: using cached data for user {telegram_id}")
+                chart = await _create_visual_chart(cached.get("history", []))
+                return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY"), "api_fallback": True}
+        return {"error": "opendota_rate_limit", "message": "⚠️ OpenDota API недоступен. Данные могут быть устаревшими."}
 
     # Matches are already sorted newest-first from API, keep this order
 
     # Detect role from hero picks
     role = await _detect_role_from_hero_counts(matches)
     if not role:
-        from dota_mmr import get_opendota_rate_limit_message
-        return {"error": "opendota_rate_limit", "message": get_opendota_rate_limit_message()}
+        from database import get_user
+        user = get_user(telegram_id)
+        if user and user.get('analytics_cache'):
+            cached = json.loads(user['analytics_cache'])
+            cached_role = cached.get('role')
+            if cached_role:
+                logger.info(f"generate_chart_only: using cached role {cached_role}")
+                role = cached_role
+            else:
+                role = "CARRY"
+        else:
+            role = "CARRY"
+        logger.info(f"generate_chart_only: using fallback role {role}")
 
     # Calculate only what's needed for chart - minimal data
     game_history = []

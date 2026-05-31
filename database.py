@@ -2530,70 +2530,72 @@ def get_dota_mmr_top(limit=10):
 
         cursor = conn.cursor()
 
-        if "postgres" in scheme:
-            cursor.execute("""
-                SELECT telegram_id, username, steam_nickname, mmr,
-                        dota_total_games, dota_wins, week_games, week_wins,
-                        rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
- CASE WHEN week_games > 0
+        try:
+            if "postgres" in scheme:
+                cursor.execute("""
+                    SELECT telegram_id, username, steam_nickname, mmr,
+                            dota_total_games, dota_wins, week_games, week_wins,
+                            rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
+     CASE WHEN week_games > 0
                                 THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1)
                                 ELSE 0 END as winrate
-                  FROM users
-                  WHERE steam_id IS NOT NULL
+                    FROM users
+                    WHERE steam_id IS NOT NULL
               ORDER BY
-                  COALESCE(rank_tier, 0) DESC,
-                  mmr DESC,
-                  wins DESC
+                    COALESCE(rank_tier, 0) DESC,
+                    mmr DESC,
+                    wins DESC
              LIMIT %s
             """, (limit,))
-            users = cursor.fetchall()
-            cursor.close()
-            result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
-                    "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
-                    "week_games": u[6], "week_wins": u[7],
-"rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11]} for u in users]
+                users = cursor.fetchall()
+                cursor.close()
+                result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
+                        "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
+                        "week_games": u[6], "week_wins": u[7],
+                "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11]} for u in users]
 
-            # Сохранить в кеш config только если есть данные
-            if result:
-                try:
-                    set_config('mmr_top_cache', json.dumps(result))
-                    logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
-                except Exception as e:
-                    logger.warning(f"Failed to save MMR top cache: {e}")
+                if result:
+                    try:
+                        set_config('mmr_top_cache', json.dumps(result))
+                        logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
+                    except Exception as e:
+                        logger.warning(f"Failed to save MMR top cache: {e}")
 
-            return result
-        else:
-            cursor.execute("""
-                SELECT telegram_id, username, steam_nickname, mmr,
-                       dota_total_games, dota_wins, week_games, week_wins,
-                       rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
- CASE WHEN week_games > 0
+                return result
+            else:
+                cursor.execute("""
+                    SELECT telegram_id, username, steam_nickname, mmr,
+                           dota_total_games, dota_wins, week_games, week_wins,
+                           rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
+                CASE WHEN week_games > 0
                                THEN ROUND(week_wins * 100.0 / week_games, 1)
                                ELSE 0 END as winrate
                  FROM users
                  WHERE steam_id IS NOT NULL
-                  ORDER BY
-                      COALESCE(rank_tier, 0) DESC,
-                      mmr DESC,
-                      wins DESC
+                    ORDER BY
+                        COALESCE(rank_tier, 0) DESC,
+                        mmr DESC,
+                        wins DESC
                  LIMIT ?
             """, (limit,))
-            users = cursor.fetchall()
+                users = cursor.fetchall()
+                cursor.close()
+                result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
+                        "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
+                        "week_games": u[6], "week_wins": u[7],
+                        "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11]} for u in users]
+
+                if result:
+                    try:
+                        set_config('mmr_top_cache', json.dumps(result))
+                        logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
+                    except Exception as e:
+                        logger.warning(f"Failed to save MMR top cache: {e}")
+
+                return result
+        finally:
             cursor.close()
-            result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
-                    "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
-                    "week_games": u[6], "week_wins": u[7],
-                    "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11]} for u in users]
-
-            # Сохранить в кеш config только если есть данные
-            if result:
-                try:
-                    set_config('mmr_top_cache', json.dumps(result))
-                    logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
-                except Exception as e:
-                    logger.warning(f"Failed to save MMR top cache: {e}")
-
-            return result
+            release_connection(conn)
     except Exception as e:
         logger.error(f"Error get_dota_mmr_top: {e}")
         return []
@@ -3174,8 +3176,8 @@ def get_all_users():
         logger.error(f"Error get_all_users: {e}")
         return []
     finally:
-        if conn:
-            conn.close()
+        if conn is not None:
+            release_connection(conn)
 
 
 def get_all_users_with_steam():

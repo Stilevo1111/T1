@@ -438,19 +438,21 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chart_data = await generate_chart_only(update.effective_user.id)
 
                 if chart_data:
-                    # Check if it's an API error response
                     if isinstance(chart_data, dict) and chart_data.get("error") == "opendota_rate_limit":
                         if loading_msg:
                             try:
                                 await context.bot.edit_message_text(
                                     chat_id=chat_id,
                                     message_id=loading_msg.message_id,
-                                    text=chart_data.get("message", get_opendota_rate_limit_message())
+                                    text=chart_data.get("message", "⚠️ OpenDota API недоступен")
                                 )
                             except Exception:
                                 pass
                             schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.application.job_queue)
                         return
+                    
+                    if chart_data.get("api_fallback"):
+                        logger.info("Using cached API data for analytics")
                     
                     history = chart_data.get("history", [])
                     matches = chart_data.get("matches", [])
@@ -652,6 +654,8 @@ async def weekly_mmr_reset_job(context):
             """, (current_week_start,))
         conn_reset.commit()
         cursor_reset.close()
+        from database import release_connection
+        release_connection(conn_reset)
         user_cache.clear()
         top_cache.clear()
         user_cache.delete_key('dota_week_top')
@@ -3105,6 +3109,8 @@ async def main():
                         """, (current_week_start,))
                     conn.commit()
                     cursor.close()
+                    from database import release_connection
+                    release_connection(conn)
                     from database import user_cache, top_cache
                     user_cache.clear()
                     top_cache.clear()
