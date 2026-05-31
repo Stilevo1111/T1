@@ -386,7 +386,6 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Еженедельная аналитика игрока"""
     loading_msg = None
-    animation_task = None
     now = time.time()  # Добавлено: now должен быть определён
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
