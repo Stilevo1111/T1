@@ -1529,13 +1529,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if animation_task:
                     animation_task.cancel()
                 if loading_msg:
+                    msg_id = loading_msg.message_id
                     try:
-                        msg_id = loading_msg.message_id
-                        logger.info(f"Deleting loading message: chat_id={chat_id}, msg_id={msg_id}")
                         await context.bot.delete_message(chat_id, msg_id)
-                        logger.info(f"Successfully deleted loading message {msg_id}")
-                    except Exception as e:
-                        logger.error(f"Failed to delete loading message: {e}")
+                        logger.info(f"Deleted loading message {msg_id}")
+                    except Exception:
+                        pass
+                    loading_msg = None
                 return
             else:
                 await menu_handler(update, context)
