@@ -37,13 +37,13 @@ class _DigestState:
             "text": None,
             "type": None,
             "created_at": 0,
-            "cache_ttl": 300,
+            "cache_ttl": 1200,  # 20 минут
             "rotation_interval": 172800,
             "data_hash": None,
             "last_data_check": 0,
         }
         self.last_data_refresh = 0
-        self.data_refresh_interval = 600
+        self.data_refresh_interval = 1200  # 20 минут между обновлениями данных
         self.lock = asyncio.Lock()
 
     # --- Convenience methods (internal use only) ---

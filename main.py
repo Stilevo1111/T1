@@ -3064,11 +3064,11 @@ async def main():
         )
 
 # Дайджест (Fissure + Dota):
-# - Тяжёлая работа (лидерство + обновление данных из БД) — раз в 20 минут (максимальная экономия Neon часов)
+# - Тяжёлая работа (лидерство + обновление данных из БД) — раз в 40 минут (экономия Neon часов)
 # - Быстрый 15-секундный тик (только переключение типов) — чисто в памяти, без БД
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(minutes=20),
+            interval=datetime.timedelta(minutes=40),
             first=datetime.datetime.now() + datetime.timedelta(seconds=10)
         )
 
