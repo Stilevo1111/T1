@@ -1580,10 +1580,7 @@ def generate_top_card(
     telegram_id: int = None,
     fissure: float = 0.0,
     extra_text: str = None,
-    rank_tier: int = 0,
-    week_wins: int = 0,
-    week_losses: int = 0,
-    winrate: float = 0.0
+    rank_tier: int = 0
 ) -> bytes | None:
     """Generate top banner matching start card style"""
     try:
@@ -1655,7 +1652,8 @@ def generate_top_card(
         
         if fissure > 0:
             fissure_y = info_y + int(50 * scale)
-            draw.text((info_x, fissure_y), f"Фиссура: {fissure:.1f} см", fill=(255, 215, 0), font=font_small)
+            fissure_text = f"{fissure:.0f}см"
+            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_small)
         
         if extra_text:
             extra_y = info_y + int(70 * scale)
