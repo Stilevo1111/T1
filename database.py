@@ -158,7 +158,7 @@ class TTLCache:
 
 # Глобальные экземпляры кешей (оптимизировано для экономии CU в serverless)
 config_cache = TTLCache(default_ttl=600)  # 10 минут для конфигурации (было 5)
-top_cache = TTLCache(default_ttl=300)  # 5 минут для топов и рангов (было 1)
+top_cache = TTLCache(default_ttl=600)  # 10 минут для топов и рангов
 
 _aiohttp_session = None
 
@@ -923,7 +923,7 @@ def migrate_db():
 
 _config_cache = {}
 _config_cache_time = {}
-_CONFIG_CACHE_TTL = 60  # секунд
+_CONFIG_CACHE_TTL = 600  # 10 минут - конфиги меняются редко
 
 class Database:
     def execute_query(self, query, params=None, fetch="none"):
