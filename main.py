@@ -48,7 +48,7 @@ async def animate_loading_progress(loading_msg, messages: list, bar_length: int 
     """Update loading message with progress-bar animation. messages - list of 4 phase texts."""
     for i in range(20):
         try:
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.5)
         except asyncio.CancelledError:
             return
         if loading_msg is None:
