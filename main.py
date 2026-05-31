@@ -72,7 +72,9 @@ async def animate_loading_progress(loading_msg, bar_length: int = 10):
         bar = "🟩" * filled + "⬜️" * (bar_length - filled)
         try:
             await loading_msg.edit_text(f"⏳ Загрузка...\n{bar}")
-        except Exception:
+        except Exception as e:
+            if "message to edit not found" in str(e).lower() or "not found" in str(e).lower():
+                break
             pass
 
 
@@ -439,7 +441,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=chat_id,
                 text="⏳ Загрузка...\n⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️"
             )
-            logger.info(f"Created loading message in analyze: chat_id={chat_id}, msg_id={loading_msg.message_id}")
+            logger.info(f"Created loading message in analyze: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
             animation_task = asyncio.create_task(animate_loading_progress(loading_msg))
         except Exception as e:
             logger.debug(f"Could not send loading message: {e}")
@@ -526,21 +528,21 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 media=InputMediaPhoto(media=photo_buf, caption="🧠 Импакт в последних 10 играх."),
                                 reply_markup=reply_markup
                             )
-                            # Store chart message ID for future deletion
+                            if animation_task:
+                                animation_task.cancel()
                             context.user_data['analytics_chart_msg_id'] = loading_msg.message_id
-                            # Schedule deletion after 30 seconds
                             schedule_delete(context.bot, chat_id, loading_msg.message_id, 30, context.application.job_queue)
                         except Exception:
-                            # Fallback: delete and send new message
+                            if animation_task:
+                                animation_task.cancel()
                             photo_buf.seek(0)
-                            if loading_msg:
-                                msg_id = loading_msg.message_id
-                                loading_msg = None  # Stop animation
+                            msg_id = loading_msg.message_id if loading_msg else None
+                            loading_msg = None
+                            if msg_id:
                                 try:
                                     await context.bot.delete_message(chat_id, msg_id)
                                 except Exception:
                                     pass
-                            # Delete previous bot message before sending new one
                             try:
                                 await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
                             except Exception:
@@ -552,7 +554,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 reply_markup=reply_markup,
                                 parse_mode="MarkdownV2"
                             )
-                            # Store chart message ID for future deletion
                             context.user_data['analytics_chart_msg_id'] = result_msg.message_id
                             set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
                             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
@@ -576,7 +577,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.error(f"Error in background analytics generation: {e}")
                 if animation_task:
                     animation_task.cancel()
-                err_msg_id = loading_msg.message_id if loading_msg else None
+                err_msg_id = loading_msg.message_id if loading_msg else None if loading_msg else None
                 try:
                     await context.bot.edit_message_text(
                         chat_id=chat_id,
@@ -1480,7 +1481,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text="⏳ Загрузка...\n⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️"
             )
             animation_task = asyncio.create_task(animate_loading_progress(loading_msg))
-            logger.info(f"Created loading message in start: chat_id={chat_id}, msg_id={loading_msg.message_id}")
+            logger.info(f"Created loading message in start: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
         except Exception as e:
             logger.debug(f"Could not send loading message in start: {e}")
             loading_msg = None
@@ -1529,18 +1530,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 set_last_bot_message(chat_id, user_id, msg.message_id)
                 update_last_message_id(user_id, msg.message_id)
-                # Auto-delete after 30 seconds
                 schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
-                if loading_msg:
-                    msg_id = loading_msg.message_id
-                    loading_msg = None  # Stop animation first
-                    try:
-                        await context.bot.delete_message(chat_id, msg_id)
-                        logger.info(f"Deleted loading message {msg_id}")
-                    except Exception:
-                        pass
                 if animation_task:
                     animation_task.cancel()
+                if loading_msg:
+                    msg_id = loading_msg.message_id
+                    loading_msg = None
+                    try:
+                        await context.bot.delete_message(chat_id, msg_id)
+                    except Exception:
+                        pass
                 return
             else:
                 await menu_handler(update, context)
@@ -1576,13 +1575,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await menu_handler(update, context)
             if loading_msg:
-                msg_id = loading_msg.message_id
-                loading_msg = None  # Stop animation
-                try:
-                    await context.bot.delete_message(chat_id, msg_id)
-                    logger.info(f"Deleted loading message {msg_id} in start (no Steam)")
-                except Exception as e:
-                    logger.warning(f"Failed to delete loading message in start: {e}")
+                msg_id = loading_msg.message_id if loading_msg else None
+                loading_msg = None
+                if msg_id:
+                    try:
+                        await context.bot.delete_message(chat_id, msg_id)
+                        logger.info(f"Deleted loading message {msg_id} in start (no Steam)")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete loading message in start: {e}")
             if animation_task:
                 animation_task.cancel()
 
@@ -1629,13 +1629,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error in button_callback: {e}", exc_info=True)
             # Try to edit loading message with error and schedule deletion
             if loading_msg:
-                msg_id = loading_msg.message_id
-                loading_msg = None  # Stop animation
-                try:
-                    await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="❌ Ошибка загрузки данных")
-                    schedule_delete(context.bot, chat_id, msg_id, 30, context.application.job_queue)
-                except Exception:
-                    pass
+                msg_id = loading_msg.message_id if loading_msg else None
+                loading_msg = None
+                if msg_id:
+                    try:
+                        await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="❌ Ошибка загрузки данных")
+                        schedule_delete(context.bot, chat_id, msg_id, 30, context.application.job_queue)
+                    except Exception:
+                        pass
         finally:
             if animation_task:
                 animation_task.cancel()
@@ -2020,7 +2021,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text="⏳ Загрузка...\n⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️"
                 )
                 animation_task = asyncio.create_task(animate_loading_progress(loading_msg))
-                logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id}")
+                logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
             except Exception as e:
                 logger.debug(f"Could not send loading message: {e}")
                 loading_msg = None
