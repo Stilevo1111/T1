@@ -1603,18 +1603,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "analytics_show":
         await callback_query.answer()
         loading_msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Загружаю детали матчей...")
-        animation_task = None
+        animation_task = asyncio.create_task(animate_loading_progress(loading_msg))
         
         try:
             await _show_analytics_page(callback_query, 0, context, loading_msg=loading_msg)
         except Exception as e:
             logger.error(f"Error in button_callback: {e}", exc_info=True)
             # Try to edit loading message with error and schedule deletion
-            try:
-                await context.bot.edit_message_text(chat_id=chat_id, message_id=loading_msg.message_id, text="❌ Ошибка загрузки данных")
-                schedule_delete(context.bot, chat_id, loading_msg.message_id, 30, context.application.job_queue)
-            except Exception:
-                pass
+            if loading_msg:
+                msg_id = loading_msg.message_id
+                loading_msg = None  # Stop animation
+                try:
+                    await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="❌ Ошибка загрузки данных")
+                    schedule_delete(context.bot, chat_id, msg_id, 30, context.application.job_queue)
+                except Exception:
+                    pass
         finally:
             if animation_task:
                 animation_task.cancel()
