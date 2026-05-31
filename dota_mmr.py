@@ -195,7 +195,7 @@ def _api_get(url: str, params: dict = None, max_retries: int = 2) -> dict:
     _check_rate_limit()  # Применяем rate limiting
 
     for attempt in range(max_retries + 1):
-        timeout = 15 if attempt == 0 else 30  # Увеличиваем таймаут при повторных попытках
+        timeout = 5 if attempt == 0 else 10  # Уменьшаем таймаут, быстрее откажемся
         try:
             r = requests.get(url, params=params or {}, timeout=timeout)
             if r.status_code == 200:
