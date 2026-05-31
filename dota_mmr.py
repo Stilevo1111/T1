@@ -1659,7 +1659,7 @@ def generate_top_card(
             draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_small)
         
         if extra_text:
-            extra_y = info_y + int(45 * scale)
+            extra_y = info_y + int(33 * scale)
             draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_small)
         
         if rank_tier > 0:
