@@ -12,7 +12,12 @@ from contextlib import contextmanager
 from typing import Optional, Any, Generator, Protocol
 from dataclasses import dataclass
 
-# Configure logging for database operations
+def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
+    if error is None:
+        return False
+    msg = str(error).lower()
+    return any(p.lower() in msg for p in phrases)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
