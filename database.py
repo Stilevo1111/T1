@@ -2708,10 +2708,10 @@ def get_dota_week_top(limit=10, force_refresh=False):
 
 
 def get_dota_week_top_from_db(limit=10, force_refresh=False):
-    """Получение топа игроков Dota 2 за неделю напрямую из БД с кешем 5 минут"""
+    """Получение топа игроков Dota 2 за неделю напрямую из БД с кешем 30 минут"""
     import time
     
-_TTL = 1800  # 30 минут
+    _TTL = 1800  # 30 минут
     
     # Простой кеш в памяти
     if not hasattr(get_dota_week_top_from_db, '_cache'):
