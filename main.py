@@ -1950,9 +1950,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.debug(f"Could not delete last bot message: {e}")
 
-    loading_msg = None
-    animation_task = None
-
     try:
         # Определяем: свой профиль или чужой
         target_user = None
@@ -2139,11 +2136,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             animation_task.cancel()
         logger.error(f"Error in stats: {e}\n{traceback.format_exc()}")
         if loading_msg:
+            msg_id = loading_msg.message_id
+            loading_msg = None  # Stop animation
             try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
+                await context.bot.delete_message(chat_id, msg_id)
             except Exception:
                 pass
-            loading_msg = None
         if "Timed out" not in str(e):
             try:
                 await context.bot.send_message(
