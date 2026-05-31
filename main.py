@@ -3109,10 +3109,10 @@ async def main():
             first=datetime.datetime.now() + datetime.timedelta(minutes=5)
         )
 
-        # ✅ Объявление чемпиона недели в воскресенье 23:30 MSK
+        # ✅ Объявление чемпиона недели в воскресенье 23:00 MSK
         job_queue.run_daily(
             weekly_champion_announcement_job,
-            time=datetime.time(hour=20, minute=30),  # 20:30 UTC = 23:30 MSK
+            time=datetime.time(hour=20, minute=0),  # 20:00 UTC = 23:00 MSK
             days=(6,)  # Только воскресенье
         )
 
