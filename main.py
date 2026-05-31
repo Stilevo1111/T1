@@ -2057,12 +2057,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             last_10_balls = ""
             top_heroes = []
+            matches = []
             try:
                 from dota_mmr import get_recent_matches_async, get_top_heroes_async
                 steam_id = target_user.get('steam_id')
                 
                 if steam_id:
-                    matches = []
                     try:
                         matches, top_heroes = await asyncio.gather(
                             get_recent_matches_async(steam_id, limit=10),
@@ -2071,6 +2071,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         logger.info(f"Steam {steam_id}: got {len(matches)} matches, {len(top_heroes) if top_heroes else 0} heroes")
                     except asyncio.TimeoutError:
                         logger.warning(f"Timeout getting matches/heroes for steam_id={steam_id}, using cache/default")
+                        matches = []
                     except Exception as e:
                         logger.debug(f"Could not get matches/heroes: {e}")
                         matches = []
