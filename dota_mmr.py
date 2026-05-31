@@ -1578,7 +1578,8 @@ def generate_top_card(
     avatar_url: str = None,
     username: str = None,
     telegram_id: int = None,
-    fissure: float = 0.0
+    fissure: float = 0.0,
+    extra_text: str = None
 ) -> bytes | None:
     """Generate top banner showing winner info"""
     try:
@@ -1638,8 +1639,13 @@ def generate_top_card(
         display_name = f"@{username}" if username else str(telegram_id) if telegram_id else "Unknown"
         draw.text((info_x, name_y), display_name, fill=(255, 255, 255), font=font_title)
         
-        fissure_y = name_y + int(60 * scale)
-        draw.text((info_x, fissure_y), f"Фиссура: {fissure:.1f} см", fill=(0, 255, 0), font=font_title)
+        if fissure > 0:
+            fissure_y = name_y + int(60 * scale)
+            draw.text((info_x, fissure_y), f"Фиссура: {fissure:.1f} см", fill=(0, 255, 0), font=font_title)
+        
+        if extra_text:
+            extra_y = name_y + int(130 * scale)
+            draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_small)
         
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=90)

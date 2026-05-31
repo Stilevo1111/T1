@@ -2369,7 +2369,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not top_users:
             text = "🏆 Топ MMR за неделю\n\nПока нет данных об MMR игроков."
-            # Delete previous bot message before sending new one
             try:
                 await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
             except Exception as e:
@@ -2386,7 +2385,29 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
             return
         else:
-            # Build the top MMR text in the requested format (without title)
+            # Generate MMR top banner with winner info
+            winner = top_users[0]
+            winner_avatar = winner.get('avatar') or winner.get('steam_avatar')
+            winner_name = winner.get('steam_nickname') or winner.get('username')
+            winner_week_games = winner.get('week_games', 0)
+            winner_week_wins = winner.get('week_wins', 0)
+            winner_week_losses = winner_week_games - winner_week_wins
+            winner_wr = round((winner_week_wins / winner_week_games * 100), 1) if winner_week_games > 0 else 0
+            
+            try:
+                from dota_mmr import generate_top_card
+                banner_bytes = await asyncio.to_thread(
+                    generate_top_card,
+                    avatar_url=winner_avatar,
+                    username=winner_name,
+                    telegram_id=winner.get('telegram_id'),
+                    fissure=0,
+                    extra_text=f"{winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%"
+                )
+                topmmr_banner_url = io.BytesIO(banner_bytes) if banner_bytes else topmmr_banner_url
+            except Exception as e:
+                logger.warning(f"Could not generate MMR top card: {e}")
+
             lines = []
 
             # Helper function to convert number to emoji digits
