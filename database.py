@@ -246,7 +246,7 @@ def flush_users_cache():
                         steam_id = ?, steam_nickname = ?, mmr = ?, rank_tier = ?,
                         dota_total_games = ?, dota_wins = ?, last_dota_games = ?,
                         last_dota_wins = ?, week_games = ?, week_wins = ?,
-week_best_streak = ?, week_start_date = ?, last_activity = CURRENT_TIMESTAMP
+                        week_best_streak = ?, week_start_date = ?, last_activity = CURRENT_TIMESTAMP
                     WHERE telegram_id = ?
                 """
                 cursor.executemany(query, batch_data)
@@ -1536,13 +1536,17 @@ class Database:
                     return cached.get('username')
                 conn = get_connection()
                 cursor = conn.cursor()
-                url = urlparse.urlparse(DATABASE_URL)
-                if "postgres" in url.scheme:
-                    cursor.execute("SELECT username FROM users WHERE telegram_id = %s", (telegram_id,))
-                else:
-                    cursor.execute("SELECT username FROM users WHERE telegram_id = ?", (telegram_id,))
-                result = cursor.fetchone()
-                return result[0] if result else None
+                try:
+                    url = urlparse.urlparse(DATABASE_URL)
+                    if "postgres" in url.scheme:
+                        cursor.execute("SELECT username FROM users WHERE telegram_id = %s", (telegram_id,))
+                    else:
+                        cursor.execute("SELECT username FROM users WHERE telegram_id = ?", (telegram_id,))
+                    result = cursor.fetchone()
+                    return result[0] if result else None
+                finally:
+                    cursor.close()
+                    release_connection(conn)
             
             streak_username = get_user_telegram_username(top_streak_id) if top_streak_id else None
             
@@ -2798,6 +2802,7 @@ def _get_dota_week_top_query(limit):
             for r in result:
                 logger.info(f"  - {r['steam_nickname']}: {r['week_wins']}W / {r['week_games']}G")
             
+            release_connection(conn)
             return result
         else:
             # Формула сортировки: score = 2 * week_wins - week_games
@@ -2846,6 +2851,7 @@ def _get_dota_week_top_query(limit):
             for r in result:
                 logger.info(f"  - {r['steam_nickname']}: {r['week_wins']}W / {r['week_games']}G")
             
+            release_connection(conn)
             # Сохраняем в кеш
             get_dota_week_top_from_db._cache = (result, time.time())
             

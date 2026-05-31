@@ -390,11 +390,12 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
     # Download and cache
     url = f"{HERO_IMAGE_BASE}/{hero_short_name}.png"
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.read()
+        from database import get_aiohttp_session
+        session = await get_aiohttp_session()
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.read()
 
         # Save to cache
         try:
