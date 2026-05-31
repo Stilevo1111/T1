@@ -2621,27 +2621,29 @@ def get_dota_mmr_top(limit=10):
 
         try:
             if "postgres" in scheme:
-                cursor.execute("""
+cursor.execute("""
                     SELECT telegram_id, username, steam_nickname, mmr,
                             dota_total_games, dota_wins, week_games, week_wins,
                             rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
-     CASE WHEN week_games > 0
+                    avatar,
+                    CASE WHEN week_games > 0
                                 THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1)
                                 ELSE 0 END as winrate
                     FROM users
                     WHERE steam_id IS NOT NULL
-              ORDER BY
-                    COALESCE(rank_tier, 0) DESC,
-                    mmr DESC,
-                    wins DESC
-             LIMIT %s
+                    ORDER BY
+                        COALESCE(rank_tier, 0) DESC,
+                        mmr DESC,
+                        wins DESC
+                 LIMIT %s
             """, (limit,))
                 users = cursor.fetchall()
                 cursor.close()
                 result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
                         "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
                         "week_games": u[6], "week_wins": u[7],
-                "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11]} for u in users]
+                "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11],
+            "avatar": u[12]} for u in users]
 
                 if result:
                     try:
@@ -2652,11 +2654,12 @@ def get_dota_mmr_top(limit=10):
 
                 return result
             else:
-                cursor.execute("""
+cursor.execute("""
                     SELECT telegram_id, username, steam_nickname, mmr,
                            dota_total_games, dota_wins, week_games, week_wins,
                            rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
-                CASE WHEN week_games > 0
+                    avatar,
+                    CASE WHEN week_games > 0
                                THEN ROUND(week_wins * 100.0 / week_games, 1)
                                ELSE 0 END as winrate
                  FROM users
@@ -2672,7 +2675,8 @@ def get_dota_mmr_top(limit=10):
                 result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
                         "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
                         "week_games": u[6], "week_wins": u[7],
-                        "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11]} for u in users]
+                        "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11],
+            "avatar": u[12]} for u in users]
 
                 if result:
                     try:

@@ -1469,14 +1469,13 @@ def generate_start_card(
         
         # Dota 2 rank icon - прямые ссылки с gamepedia.cursecdn.com (работают)
         rank_icon = None
-        rank_icon_size = int(80 * scale)  # увеличен в 2 раза
+        rank_icon_size = int(80 * scale)
         if rank_tier > 0:
-            tier = rank_tier // 10  # 1-7
-            star = rank_tier % 10   # 1-5 stars within tier
+            tier = rank_tier // 10
+            star = rank_tier % 10
             if star == 0:
                 star = 5
             
-            # Прямые рабочие ссылки на иконки рангов (обновлено для fandom)
             rank_urls = {
                 (1, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/85/SeasonalRank1-1.png",
                 (1, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/e/ee/SeasonalRank1-2.png",
@@ -1588,6 +1587,7 @@ def generate_top_card(
         from PIL import Image, ImageDraw, ImageFont
         import io
         import requests
+        import os
         
         width = 1024
         height = 500
