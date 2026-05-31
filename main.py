@@ -2202,7 +2202,6 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     chat_type = update.message.chat.type
 
-    # Delete user message only in groups/channels
     if chat_type in ['group', 'supergroup', 'channel']:
         if await bot_can_delete(context.bot, chat_id):
             user_msg_id = update.message.message_id
@@ -2211,7 +2210,6 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not delete user message: {e}")
 
-    # Delete last bot message immediately
     try:
         await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
     except Exception as e:
@@ -2225,58 +2223,66 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not top_users:
             text = "😶 Пока нет игроков. Будь первым!"
-        else:
-            text = ""
-            medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-            emoji_nums = {4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
-            for i, user_top in enumerate(top_users, 1):
-                # Приоритет: username -> steam_nickname -> first_name -> telegram_id
-                name = user_top.get('username')
-                if not name:
-                    name = user_top.get('steam_nickname')
-                if not name:
-                    name = user_top.get('first_name')
-                if not name:
-                    tg_id = user_top.get('telegram_id')
-                    name = str(tg_id) if tg_id else 'Unknown'
-                if len(name) > 12:
-                    name = name[:12] + "…"
-                telegram_id = user_top.get('telegram_id')
-                clickable_name = f'<b>{make_clickable(name, telegram_id)}</b>'
-                fissure = user_top.get('fissure', 0)
-                medal = medals.get(i)
-                if medal:
-                    text += f"{medal} {clickable_name}: {fissure:.1f} см\n"
-                else:
-                    text += f"{emoji_nums.get(i, f'{i}.')} {clickable_name}: {fissure:.1f} см\n"
+            result_msg = await context.bot.send_message(
+                chat_id=update.message.chat_id,
+                text=text,
+                reply_markup=main_menu()
+            )
+            set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+            update_last_message_id(update.effective_user.id, result_msg.message_id)
+            return
 
-            def get_emoji_num(n):
-                if n <= 10:
-                    nums = {1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
-                    return nums.get(n, str(n))
-                else:
-                    emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣', '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
-                    return ''.join(emoji_digits[d] for d in str(n))
+        # Generate top banner with winner info
+        winner = top_users[0]
+        winner_avatar = winner.get('avatar') or winner.get('steam_avatar')
+        winner_name = winner.get('username') or winner.get('steam_nickname')
+        winner_fissure = winner.get('fissure', 0)
+        
+        try:
+            from dota_mmr import generate_top_card
+            banner_bytes = await asyncio.to_thread(
+                generate_top_card,
+                avatar_url=winner_avatar,
+                username=winner_name,
+                telegram_id=winner.get('telegram_id'),
+                fissure=winner_fissure
+            )
+            banner_url = io.BytesIO(banner_bytes) if banner_bytes else "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
+        except Exception as e:
+            logger.warning(f"Could not generate top card: {e}")
+            banner_url = "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
 
-            # Всегда показываем позицию пользователя, даже если он не в топе
-            user_fissure = user.get('fissure', 0) if user else 0
-            clickable_username = make_clickable(username, update.effective_user.id)
-            if user_rank:
-                text += f"\n<b>{get_emoji_num(user_rank)} {clickable_username}: {user_fissure:.1f} см</b>"
+        text = ""
+        medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+        emoji_nums = {4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
+        
+        for i, user_top in enumerate(top_users, 1):
+            name = user_top.get('username') or user_top.get('steam_nickname') or user_top.get('first_name') or 'Unknown'
+            if not name:
+                name = str(user_top.get('telegram_id', 'Unknown'))
+            if len(name) > 12:
+                name = name[:12] + "…"
+            telegram_id = user_top.get('telegram_id')
+            clickable_name = f'<b>{make_clickable(name, telegram_id)}</b>'
+            fissure = user_top.get('fissure', 0)
+            medal = medals.get(i)
+            if medal:
+                text += f"{medal} {clickable_name}: {fissure:.1f} см\n"
             else:
-                text += f"\n<b>— {clickable_username}: {user_fissure:.1f} см</b>"
+                text += f"{emoji_nums.get(i, f'{i}.')} {clickable_name}: {fissure:.1f} см\n"
 
-            # Ссылка на live логи фиссур внизу топа
-            text += "\n\n<b><a href=\"https://seredin999.onrender.com/fissure-logs\">📜 История бросков</a></b>"
+        user_fissure = user.get('fissure', 0) if user else 0
+        clickable_username = make_clickable(username, update.effective_user.id)
+        if user_rank:
+            text += f"\n<b>{user_rank}. {clickable_username}: {user_fissure:.1f} см</b>"
+        else:
+            text += f"\n<b>— {clickable_username}: {user_fissure:.1f} см</b>"
 
-        # Add banner and send
-        top_banner_url = "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
-
-        text = f"{text}"
+        text += "\n\n<b><a href=\"https://seredin999.onrender.com/fissure-logs\">📜 История бросков</a></b>"
 
         result_msg = await context.bot.send_photo(
             chat_id=update.message.chat_id,
-            photo=top_banner_url,
+            photo=banner_url,
             caption=text,
             parse_mode="HTML",
             reply_markup=main_menu()

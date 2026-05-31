@@ -1573,3 +1573,81 @@ def generate_start_card(
              logging.exception("generate_start_card error")
              return None
 
+
+def generate_top_card(
+    avatar_url: str = None,
+    username: str = None,
+    telegram_id: int = None,
+    fissure: float = 0.0
+) -> bytes | None:
+    """Generate top banner showing winner info"""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        import io
+        import requests
+        
+        width = 1024
+        height = 500
+        scale = 1.8
+        
+        img = Image.new("RGB", (width, height), (15, 20, 35))
+        draw = ImageDraw.Draw(img)
+        
+        avatar_size = int(180 * scale)
+        avatar_x = int(80 * scale)
+        avatar_y = int((height - avatar_size) // 2 - 10)
+        
+        avatar_loaded = False
+        if avatar_url:
+            try:
+                logger.info(f"Loading avatar for top card: {avatar_url}")
+                resp = requests.get(avatar_url, timeout=10, headers={"User-Agent": "fissure-bot/1.0"})
+                if resp.status_code == 200 and resp.content:
+                    avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                    w, h = avatar.size
+                    side = min(w, h)
+                    left = (w - side) // 2
+                    top = (h - side) // 2
+                    avatar = avatar.crop((left, top, left + side, top + side))
+                    avatar = avatar.resize((avatar_size, avatar_size), Image.LANCZOS)
+                    draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], outline=(215, 175, 85), width=int(4*scale))
+                    if avatar.mode == "RGBA":
+                        img.paste(avatar, (avatar_x, avatar_y), avatar)
+                    else:
+                        img.paste(avatar, (avatar_x, avatar_y))
+                    avatar_loaded = True
+            except Exception as e:
+                logger.warning(f"Exception loading avatar for top card: {e}")
+        
+        if not avatar_loaded:
+            draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(215, 175, 85), width=int(4*scale))
+            draw.ellipse([avatar_x + int(60*scale), avatar_y + int(45*scale), avatar_x + int(120*scale), avatar_y + int(135*scale)], fill=(80, 100, 130))
+        
+        info_x = avatar_x + avatar_size + int(40 * scale)
+        info_y = avatar_y + int(20 * scale)
+        
+        try:
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(48 * scale))
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(28 * scale))
+        except Exception:
+            font_title = font_small = ImageFont.load_default()
+        
+        draw.text((info_x, info_y), "ПОБЕДИТЕЛЬ", fill=(255, 215, 0), font=font_title)
+        
+        name_y = info_y + int(70 * scale)
+        display_name = f"@{username}" if username else str(telegram_id) if telegram_id else "Unknown"
+        draw.text((info_x, name_y), display_name, fill=(255, 255, 255), font=font_title)
+        
+        fissure_y = name_y + int(60 * scale)
+        draw.text((info_x, fissure_y), f"Фиссура: {fissure:.1f} см", fill=(0, 255, 0), font=font_title)
+        
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=90)
+        buf.seek(0)
+        return buf.read()
+    
+    except Exception:
+        import logging
+        logging.exception("generate_top_card error")
+        return None
+

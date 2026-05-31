@@ -1310,18 +1310,17 @@ class Database:
     def get_fissure_top(self, limit=10):
         """Получение топ пользователей"""
         try:
-            # Используем execute_query для безопасного выполнения
             url = urlparse.urlparse(DATABASE_URL)
             scheme = url.scheme
             
             if "postgres" in scheme:
-                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure FROM users WHERE (in_chat = TRUE OR in_chat IS NULL) ORDER BY fissure DESC NULLS LAST LIMIT %s"
+                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure, avatar, steam_avatar FROM users WHERE (in_chat = TRUE OR in_chat IS NULL) ORDER BY fissure DESC NULLS LAST LIMIT %s"
                 users = self.execute_query(query, (limit,), fetch="all")
-                return [{"telegram_id": u["telegram_id"], "username": u["username"], "steam_nickname": u["steam_nickname"], "first_name": u["first_name"], "fissure": u["fissure"]} for u in users]
+                return [{"telegram_id": u["telegram_id"], "username": u["username"], "steam_nickname": u["steam_nickname"], "first_name": u["first_name"], "fissure": u["fissure"], "avatar": u.get("avatar"), "steam_avatar": u.get("steam_avatar")} for u in users]
             else:
-                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure FROM users ORDER BY fissure DESC LIMIT ?"
+                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure, avatar, steam_avatar FROM users ORDER BY fissure DESC LIMIT ?"
                 users = self.execute_query(query, (limit,), fetch="all")
-                return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], "first_name": u[3], "fissure": u[4]} for u in users]
+                return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], "first_name": u[3], "fissure": u[4], "avatar": u[5], "steam_avatar": u[6]} for u in users]
         except Exception as e:
             logger.error(f"Error getting fissure top: {e}")
             return []
