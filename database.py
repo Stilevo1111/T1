@@ -2619,16 +2619,16 @@ def get_dota_mmr_top(limit=10):
 
         cursor = conn.cursor()
 
-        try:
+try:
             if "postgres" in scheme:
                 cursor.execute("""
                     SELECT telegram_id, username, steam_nickname, mmr,
                             dota_total_games, dota_wins, week_games, week_wins,
                             rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
-                    avatar,
+                    avatar, fissure,
                     CASE WHEN week_games > 0
-                                THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1)
-                                ELSE 0 END as winrate
+                            THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1)
+                            ELSE 0 END as winrate
                     FROM users
                     WHERE steam_id IS NOT NULL
                     ORDER BY
@@ -2643,7 +2643,7 @@ def get_dota_mmr_top(limit=10):
                         "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
                         "week_games": u[6], "week_wins": u[7],
                 "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11],
-            "avatar": u[12]} for u in users]
+            "avatar": u[12], "fissure": float(u[13]) if u[13] else 0.0} for u in users]
 
                 if result:
                     try:
@@ -2658,7 +2658,7 @@ def get_dota_mmr_top(limit=10):
                     SELECT telegram_id, username, steam_nickname, mmr,
                            dota_total_games, dota_wins, week_games, week_wins,
                            rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
-                    avatar,
+                    avatar, fissure,
                     CASE WHEN week_games > 0
                                THEN ROUND(week_wins * 100.0 / week_games, 1)
                                ELSE 0 END as winrate
@@ -2676,7 +2676,7 @@ def get_dota_mmr_top(limit=10):
                         "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
                         "week_games": u[6], "week_wins": u[7],
                         "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11],
-            "avatar": u[12]} for u in users]
+                "avatar": u[12], "fissure": float(u[13]) if u[13] else 0.0} for u in users]
 
                 if result:
                     try:
