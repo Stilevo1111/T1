@@ -3297,7 +3297,7 @@ async def main():
                 ping_url = webhook_url.rsplit('/webhook', 1)[0] + '/health'
                 while True:
                     try:
-                        await asyncio.sleep(1800)  # Ping every 30 minutes to prevent Render sleep
+                        await asyncio.sleep(1500)  # Ping every 25 minutes to prevent Render sleep
                         from database import get_aiohttp_session
                         session = await get_aiohttp_session()
                         # Ping health endpoint
