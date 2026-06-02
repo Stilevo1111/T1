@@ -2267,7 +2267,11 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         text = ""
         medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-        emoji_nums = {4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
+        emoji_nums = {
+            4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟",
+            11: "1️⃣1️⃣", 12: "1️⃣2️⃣", 13: "1️⃣3️⃣", 14: "1️⃣4️⃣", 15: "1️⃣5️⃣",
+            16: "1️⃣6️⃣", 17: "1️⃣7️⃣", 18: "1️⃣8️⃣", 19: "1️⃣9️⃣"
+        }
         
         for i, user_top in enumerate(top_users, 1):
             name = user_top.get('username') or user_top.get('steam_nickname') or user_top.get('first_name') or 'Unknown'
