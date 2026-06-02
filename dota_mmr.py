@@ -1641,7 +1641,7 @@ def generate_top_card(
             draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(215, 175, 85), width=int(4*scale))
             draw.ellipse([avatar_x + int(45*scale), avatar_y + int(35*scale), avatar_x + int(95*scale), avatar_y + int(105*scale)], fill=(80, 100, 130))
         
-info_x = avatar_x + avatar_size + int(30 * scale)
+        info_x = avatar_x + avatar_size + int(30 * scale)
         info_y = avatar_y + int(20 * scale)
         
         try:
