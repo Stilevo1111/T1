@@ -1488,7 +1488,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if steam_id and steam_nickname:
             from dota_mmr import generate_start_card, get_player_stats, is_opendota_rate_limited
-
+            
             # Get avatar - prefer cached, fallback to Telegram
             avatar_url = user.get("avatar")
             if not avatar_url:
@@ -1498,11 +1498,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     avatar_url = await get_user_avatar_url(context.bot, user_id)
                 else:
                     try:
-                        stats = await asyncio.to_thread(get_player_stats, steam_id)
+                        # Add timeout to prevent long waits
+                        stats = await asyncio.wait_for(
+                            asyncio.to_thread(get_player_stats, steam_id),
+                            timeout=5.0
+                        )
                         if stats and stats.get("avatar"):
                             avatar_url = stats["avatar"]
                         else:
                             avatar_url = await get_user_avatar_url(context.bot, user_id)
+                    except asyncio.TimeoutError:
+                        logger.warning(f"OpenDota API timeout for user {user_id}, using Telegram avatar")
+                        avatar_url = await get_user_avatar_url(context.bot, user_id)
                     except Exception as e:
                         logger.warning(f"Could not get Steam avatar: {e}")
                         avatar_url = await get_user_avatar_url(context.bot, user_id)
