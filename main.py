@@ -525,7 +525,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             await context.bot.edit_message_media(
                                 chat_id=chat_id,
                                 message_id=loading_msg.message_id,
-                                media=InputMediaPhoto(media=photo_buf, caption="🧠 Импакт в последних 10 играх."),
+                                media=InputMediaPhoto(media=photo_buf, caption=_escape_markdown_v2("🧠 Импакт в последних 10 играх.")),
                                 reply_markup=reply_markup
                             )
                             if animation_task:
@@ -550,7 +550,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             result_msg = await context.bot.send_photo(
                                 chat_id=chat_id,
                                 photo=photo_buf,
-                                caption="🧠 Импакт в последних 10 играх.",
+                                caption=_escape_markdown_v2("🧠 Импакт в последних 10 играх."),
                                 reply_markup=reply_markup,
                                 parse_mode="MarkdownV2"
                             )
@@ -1794,7 +1794,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
                     message_id=existing_msg_id,
                     text=text,
                     reply_markup=keyboard,
-                    parse_mode="MarkdownV2"
+                    parse_mode="HTML"
                 )
                 return  # Successfully edited, done
             except Exception as edit_err:
@@ -1815,7 +1815,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
                     message_id=msg_id,
                     text=text,
                     reply_markup=keyboard,
-                    parse_mode="MarkdownV2"
+                    parse_mode="HTML"
                 )
                 context.user_data['analytics_table_msg_id'] = msg_id
                 job_queue = context.job_queue
@@ -1832,7 +1832,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
                             message_id=msg_id,
                             caption=text,
                             reply_markup=keyboard,
-                            parse_mode="MarkdownV2"
+                            parse_mode="HTML"
                         )
                         context.user_data['analytics_table_msg_id'] = msg_id
                         schedule_delete(context.bot, chat_id, msg_id, 60, context.job_queue)
@@ -1847,7 +1847,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
             chat_id=chat_id,
             text=text,
             reply_markup=keyboard,
-            parse_mode="MarkdownV2"
+            parse_mode="HTML"
         )
         # Store the new message_id for potential cleanup and pagination
         context.user_data['analytics_table_msg_id'] = new_msg.message_id

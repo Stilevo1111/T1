@@ -779,8 +779,8 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
 
     db = PRO_DB.get(role, PRO_DB["CARRY"])
 
-    # Table 1: PRO comparison
-    t1 = "```\n"
+    # Table 1: PRO comparison - use HTML pre tag instead of markdown code block
+    t1 = "<pre>\n"
     t1 += f"{'PLAYER':<12} {'WR':>4} {'GPM':>5} {'KDA':>11}\n"
     t1 += "--------------------------------\n"
     for name, s in db["players"].items():
@@ -799,10 +799,10 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
         f"{user_stats['kda']:>11}\n"
     )
     t1 += you_line
-    t1 += "```"
+    t1 += "</pre>"
 
     # Таблица 2: Детальное сравнение
-    t2 = "```\n"
+    t2 = "<pre>\n"
     t2 += f"{'Metric':<10} {'You':>6} {'PRO':>6}\n"
     t2 += "----------------------------\n"
     bench = db["benchmarks"]
@@ -825,13 +825,13 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
         is_bad = diff > 0 if "Deaths" in label else diff < 0
         arrow = "↓" if is_bad else "↑"
         t2 += f"{label:<10} {u_str:>6} {p_str:>6} {arrow}\n"
-    t2 += "```"
+    t2 += "</pre>"
 
-    header = _escape_markdown_v2(f"📊 ANALYTICS ({role})")
+    header = f"<b>📊 ANALYTICS ({role})</b>"
 
     text = f"{header}\n\n{t1}"
 
-    header_detailed = _escape_markdown_v2("📈 Подробное сравнение • Детали позиций")
+    header_detailed = "<b>📈 Подробное сравнение • Детали позиций</b>"
 
     text_detailed = f"{header_detailed}\n\n{t2}"
 
