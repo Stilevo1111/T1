@@ -451,7 +451,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async def generate_and_update_analytics():
             nonlocal loading_msg
             try:
-                from weekly_analytics import generate_chart_only, get_last_matches
+                from weekly_analytics import generate_chart_only, get_last_matches, _escape_markdown_v2
                 chart_data = await generate_chart_only(update.effective_user.id)
 
                 if chart_data:
