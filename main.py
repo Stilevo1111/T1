@@ -2283,7 +2283,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             text += f"\n<b>— {clickable_username}: {user_fissure:.1f} см</b>"
 
-        text += "\n\n<b><a href=\"https://seredin999.onrender.com/fissure-logs\">📜 История бросков</a></b>"
+        text += "\n\n<b><a href=\"https://seredin999.onrender.com/fissure-logs\">📜 История бросков</a></b>"  # Updated
 
         result_msg = await context.bot.send_photo(
             chat_id=update.message.chat_id,
