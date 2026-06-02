@@ -2255,7 +2255,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = ""
         medals = {1: "🥇", 2: "🥈", 3: "🥉"}
         emoji_nums = {
-            4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟",
+            1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣",
+            6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟",
             11: "1️⃣1️⃣", 12: "1️⃣2️⃣", 13: "1️⃣3️⃣", 14: "1️⃣4️⃣", 15: "1️⃣5️⃣",
             16: "1️⃣6️⃣", 17: "1️⃣7️⃣", 18: "1️⃣8️⃣", 19: "1️⃣9️⃣"
         }
@@ -2265,7 +2266,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not name:
                 name = str(user_top.get('telegram_id', 'Unknown'))
             if len(name) > 12:
-                name = name[:12] + "…"
+                name = name[:12]
             telegram_id = user_top.get('telegram_id')
             clickable_name = f'<b>{make_clickable(name, telegram_id)}</b>'
             fissure = user_top.get('fissure', 0)
@@ -2401,13 +2402,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             try:
                 from dota_mmr import generate_top_card
+                winner_wr_short = f"{winner_wr:.1f}%"
                 banner_bytes = await asyncio.to_thread(
                     generate_top_card,
                     avatar_url=winner_avatar,
                     username=winner_name,
                     telegram_id=winner.get('telegram_id'),
                     fissure=0,
-                    extra_text=f"{winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%",
+                    extra_text=f"{winner_week_wins}W • {winner_week_losses}L",
                     rank_tier=winner_rank_tier,
                     show_avatar=True
                 )
