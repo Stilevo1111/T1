@@ -2619,7 +2619,7 @@ def get_dota_mmr_top(limit=10):
 
         cursor = conn.cursor()
 
-try:
+        try:
             if "postgres" in scheme:
                 cursor.execute("""
                     SELECT telegram_id, username, steam_nickname, mmr,
