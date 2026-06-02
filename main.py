@@ -73,7 +73,7 @@ async def animate_loading_progress(loading_msg, bar_length: int = 10):
         try:
             await loading_msg.edit_text(f"⏳ Загрузка...\n{bar}")
         except Exception as e:
-            if "message to edit not found" in str(e).lower() or "not found" in str(e).lower():
+            if "message to edit not found" in str(e).lower() or "not found" in str(e).lower() or "bad request" in str(e).lower():
                 break
             pass
 
@@ -1600,7 +1600,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"start command error: {e}")
         if loading_msg:
             try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
+                msg_id = loading_msg.message_id
+                loading_msg = None
+                await context.bot.delete_message(chat_id, msg_id)
             except Exception:
                 pass
         await menu_handler(update, context, allow_when_rate_limited=True)
@@ -2576,7 +2578,10 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Удалить loading сообщение
             try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
+                msg_id = loading_msg.message_id if loading_msg else None
+                loading_msg = None  # Stop animation
+                if msg_id:
+                    await context.bot.delete_message(chat_id, msg_id)
             except Exception:
                 pass
 
