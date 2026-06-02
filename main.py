@@ -1500,8 +1500,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                         # Add timeout to prevent long waits
                         stats = await asyncio.wait_for(
-                            asyncio.to_thread(get_player_stats, steam_id),
-                            timeout=5.0
+                            asyncio.to_thread(get_player_stats, steam_id, True, 8),
+                            timeout=12.0
                         )
                         if stats and stats.get("avatar"):
                             avatar_url = stats["avatar"]

@@ -186,7 +186,7 @@ def _clear_cache():
     _cache = {}
 
 
-def _api_get(url: str, params: dict = None, max_retries: int = 2) -> dict:
+def _api_get(url: str, params: dict = None, max_retries: int = 2, timeout: int = 8) -> dict:
     """Универсальная функция для API-запросов с обработкой ошибок, кешем и повторными попытками"""
     # Circuit breaker check
     if not _circuit_breaker_can_execute():
@@ -196,9 +196,9 @@ def _api_get(url: str, params: dict = None, max_retries: int = 2) -> dict:
     _check_rate_limit()  # Применяем rate limiting
 
     for attempt in range(max_retries + 1):
-        timeout = 5 if attempt == 0 else 10  # Уменьшаем таймаут, быстрее откажемся
+        current_timeout = timeout if attempt == 0 else timeout + 5  # Уменьшаем таймаут, быстрее откажемся
         try:
-            r = requests.get(url, params=params or {}, timeout=timeout)
+            r = requests.get(url, params=params or {}, timeout=current_timeout)
             if r.status_code == 200:
                 _circuit_breaker_record_success()
                 return r.json()
@@ -226,10 +226,10 @@ def _api_get(url: str, params: dict = None, max_retries: int = 2) -> dict:
             return None
         except requests.exceptions.ReadTimeout as e:
             if attempt < max_retries:
-                logger.warning(f"API request timeout ({timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
+                logger.warning(f"API request timeout ({current_timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
                 continue
             else:
-                logger.error(f"API request timeout ({timeout}s) after {max_retries + 1} attempts: {e}")
+                logger.error(f"API request timeout ({current_timeout}s) after {max_retries + 1} attempts: {e}")
                 return None
         except Exception as e:
             logger.error(f"API request error: {e}", exc_info=True)
@@ -965,7 +965,7 @@ def is_win_api(match_id: int, steam_id: int) -> bool:
 # 📊 GET STATS
 # ========================
 
-def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
+def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) -> dict:
     try:
         # Проверяем кеш
         cache_key = f"player_{steam_id}"
@@ -976,9 +976,9 @@ def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
                 return cached
             
         account_id = steam64_to_account_id(steam_id)
-         
+          
         # Получаем основную информацию об игроке
-        player_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}")
+        player_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}", timeout=timeout)
         if not player_data:
             logger.warning(f"Player data not found for account_id: {account_id}")
             logger.warning(f"API URL used: {OPENDOTA_API_URL}/players/{account_id}")
@@ -989,12 +989,12 @@ def get_player_stats(steam_id: int, use_cache: bool = True) -> dict:
                     logger.info(f"Returning cached stats for {steam_id} due to API failure")
                     return cached
             return None
- 
+  
         profile = player_data.get("profile", {})
         rank_tier = player_data.get("rank_tier") or 0
-         
+          
         # Получаем статистику побед/поражений
-        wl_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}/wl")
+        wl_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}/wl", timeout=timeout)
         if wl_data:
             wins = wl_data.get("win", 0)
             losses = wl_data.get("lose", 0)
