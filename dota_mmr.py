@@ -1666,14 +1666,14 @@ def generate_top_card(
         if fissure > 0:
             fissure_y = info_y + int(50 * scale)
             fissure_text = f"{fissure:.0f} См."
-            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_small)
+            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_title)
         
         if extra_text:
             if fissure > 0:
                 extra_y = fissure_y + int(25 * scale)
             else:
                 extra_y = info_y + int(50 * scale)
-            draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_small)
+            draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_title)
         
         if rank_tier > 0:
             tier = rank_tier // 10

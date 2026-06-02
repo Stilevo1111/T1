@@ -2416,7 +2416,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     username=winner_name,
                     telegram_id=winner.get('telegram_id'),
                     fissure=0,
-                    extra_text=f"MMR: {winner_mmr} • {winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%",
+                    extra_text=f"{winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%",
                     rank_tier=winner_rank_tier,
                     show_avatar=True
                 )
