@@ -463,6 +463,9 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.debug(f"Could not send loading message: {e}")
             loading_msg = None
 
+        # Make animation_task available to nested function
+        _anim_task = animation_task
+        
         # Start analytics generation in background task
         async def generate_and_update_analytics():
             nonlocal loading_msg
@@ -528,8 +531,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     if chart_image and len(chart_image) > 0:
                         # Cancel animation and delete loading message
-                        if animation_task:
-                            animation_task.cancel()
+                        if _anim_task:
+                            _anim_task.cancel()
                         
                         # Update loading message with result
                         photo_buf = io.BytesIO(chart_image)
@@ -544,13 +547,13 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 media=InputMediaPhoto(media=photo_buf, caption=_escape_markdown_v2("🧠 Импакт в последних 10 играх.")),
                                 reply_markup=reply_markup
                             )
-                            if animation_task:
-                                animation_task.cancel()
+                            if _anim_task:
+                                _anim_task.cancel()
                             context.user_data['analytics_chart_msg_id'] = loading_msg.message_id
                             schedule_delete(context.bot, chat_id, loading_msg.message_id, 30, context.application.job_queue)
                         except Exception:
-                            if animation_task:
-                                animation_task.cancel()
+                            if _anim_task:
+                                _anim_task.cancel()
                             photo_buf.seek(0)
                             msg_id = loading_msg.message_id if loading_msg else None
                             loading_msg = None
@@ -591,11 +594,13 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             except Exception as e:
                 logger.error(f"Error in background analytics generation: {e}")
-                if animation_task:
-                    animation_task.cancel()
+                try:
+                    if _anim_task:
+                        _anim_task.cancel()
+                except Exception:
+                    pass
                 err_msg_id = loading_msg.message_id if loading_msg else None
-                loading_msg = await stop_loading_animation(loading_msg, animation_task, chat_id, context.bot)
-                animation_task = None
+                loading_msg = await stop_loading_animation(loading_msg, None, chat_id, context.bot)
                 try:
                     await context.bot.edit_message_text(
                         chat_id=chat_id,
@@ -2433,12 +2438,16 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 # Medal emoji
                 medals = ["🥇", "🥈", "🥉"]
+                emoji_nums = {
+                    1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣",
+                    6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟",
+                    11: "1️⃣1️⃣", 12: "1️⃣2️⃣", 13: "1️⃣3️⃣", 14: "1️⃣4️⃣", 15: "1️⃣5️⃣",
+                    16: "1️⃣6️⃣", 17: "1️⃣7️⃣", 18: "1️⃣8️⃣", 19: "1️⃣9️⃣"
+                }
                 if i <= 3:
                     medal = medals[i - 1]
-                elif i == 10:
-                    medal = "🔟"
                 else:
-                    medal = f"{i}️⃣"
+                    medal = emoji_nums.get(i, f"{i}.")
 
                 if week_games > 0:
                     wr = round((week_wins / week_games) * 100, 1)
