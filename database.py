@@ -1886,6 +1886,7 @@ def get_user_by_username(username):
         result = cursor.fetchone()
         logger.info(f"get_user_by_username: DB query for '{username}' returned: {result}")
         cursor.close()
+        conn.commit() if "postgres" in scheme else None
         if result:
             tid = result[0] if not isinstance(result, dict) else result.get('telegram_id')
             logger.info(f"get_user_by_username: found '{username}' in DB (tid={tid})")
