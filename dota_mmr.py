@@ -1642,14 +1642,13 @@ def generate_top_card(
             draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(215, 175, 85), width=int(4*scale))
             draw.ellipse([avatar_x + int(45*scale), avatar_y + int(35*scale), avatar_x + int(95*scale), avatar_y + int(105*scale)], fill=(80, 100, 130))
         
-        info_x = avatar_x + avatar_size + int(30 * scale)
+info_x = avatar_x + avatar_size + int(30 * scale)
         info_y = avatar_y + int(20 * scale)
         
         try:
-            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(secondary_font_size * scale))
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(secondary_font_size * scale))
         except Exception:
-            font_title = font_small = ImageFont.load_default()
+            font_title = ImageFont.load_default()
         
         display_name = f"@{username}" if username else str(telegram_id) if telegram_id else "Unknown"
         draw.text((info_x, info_y), display_name, fill=(255, 255, 255), font=font_title)
@@ -1657,14 +1656,14 @@ def generate_top_card(
         if fissure > 0:
             fissure_y = info_y + int(60 * scale)
             fissure_text = f"{fissure:.0f} См."
-            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_small)
+            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_title)
         
         if extra_text:
             if fissure > 0:
                 extra_y = fissure_y + int(20 * scale)
             else:
                 extra_y = info_y + int(33 * scale)
-            draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_small)
+            draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_title)
         
         if rank_tier > 0:
             tier = rank_tier // 10
@@ -1730,7 +1729,7 @@ def generate_top_card(
         return buf.read()
     
     except Exception:
-        import logging
-        logging.exception("generate_top_card error")
-        return None
+             import logging
+             logging.exception("generate_top_card error")
+             return None
 
