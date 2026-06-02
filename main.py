@@ -2254,12 +2254,14 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         text = ""
         medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-        emoji_nums = {
-            1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣",
-            6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟",
-            11: "1️⃣1️⃣", 12: "1️⃣2️⃣", 13: "1️⃣3️⃣", 14: "1️⃣4️⃣", 15: "1️⃣5️⃣",
-            16: "1️⃣6️⃣", 17: "1️⃣7️⃣", 18: "1️⃣8️⃣", 19: "1️⃣9️⃣"
-        }
+        
+        def get_emoji_num(n):
+            if n is None or n == '?':
+                return "?"
+            emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣',
+                           '4': '4️⃣', '5': '5️⃣', '6': '6️⃣', '7': '7️⃣',
+                           '8': '8️⃣', '9': '9️⃣'}
+            return ''.join(emoji_digits[d] for d in str(n))
         
         for i, user_top in enumerate(top_users, 1):
             name = (user_top.get('username') or user_top.get('steam_nickname') or user_top.get('first_name') or 'Unknown').strip()
@@ -2274,7 +2276,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if medal:
                 text += f"{medal} {clickable_name}: {fissure:.1f} см\n"
             else:
-                text += f"{emoji_nums.get(i, f'{i}.')} {clickable_name}: {fissure:.1f} см\n"
+                text += f"{get_emoji_num(i)} {clickable_name}: {fissure:.1f} см\n"
 
         user_fissure = user.get('fissure', 0) if user else 0
         clickable_username = make_clickable(username, update.effective_user.id)
@@ -2283,7 +2285,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             text += f"\n<b>— {clickable_username}: {user_fissure:.1f} см</b>"
 
-        text += "\n\n<b><a href=\"https://seredin999.onrender.com/fissure-logs\">📜 История бросков</a></b>"  # Updated
+        text += "\n\n<b><a href=\"https://seredin999.onrender.com/fissure-logs\">📜 История бросков</a></b>"
 
         result_msg = await context.bot.send_photo(
             chat_id=update.message.chat_id,
@@ -2418,14 +2420,13 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             lines = []
 
-            # Helper function to convert number to emoji digits
-            def number_to_emojis(num: int) -> str:
-                emoji_digits = {
-                    '0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣',
-                    '4': '4️⃣', '5': '5️⃣', '6': '6️⃣', '7': '7️⃣',
-                    '8': '8️⃣', '9': '9️⃣'
-                }
-                return ''.join(emoji_digits[d] for d in str(num))
+            def get_emoji_num(n):
+                if n is None or n == '?':
+                    return "?"
+                emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣',
+                               '4': '4️⃣', '5': '5️⃣', '6': '6️⃣', '7': '7️⃣',
+                               '8': '8️⃣', '9': '9️⃣'}
+                return ''.join(emoji_digits[d] for d in str(n))
 
             for i, player in enumerate(top_users, 1):
                 username = player.get('steam_nickname') or player.get('username') or 'Unknown'
@@ -2439,16 +2440,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 # Medal emoji
                 medals = ["🥇", "🥈", "🥉"]
-                emoji_nums = {
-                    1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣",
-                    6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟",
-                    11: "1️⃣1️⃣", 12: "1️⃣2️⃣", 13: "1️⃣3️⃣", 14: "1️⃣4️⃣", 15: "1️⃣5️⃣",
-                    16: "1️⃣6️⃣", 17: "1️⃣7️⃣", 18: "1️⃣8️⃣", 19: "1️⃣9️⃣"
-                }
                 if i <= 3:
                     medal = medals[i - 1]
                 else:
-                    medal = emoji_nums.get(i, f"{i}.")
+                    medal = get_emoji_num(i)
 
                 if week_games > 0:
                     wr = round((week_wins / week_games) * 100, 1)
@@ -2477,17 +2472,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
             except Exception as e:
                 logger.debug(f"Could not process digest chat: {e}")
-
-            def get_emoji_num(n):
-                if n is None or n == '?':
-                    return "?"
-                n = int(n)
-                if n <= 10:
-                    nums = {1: "1️⃣", 2: "2️⃣", 3: "3️⃣", 4: "4️⃣", 5: "5️⃣", 6: "6️⃣", 7: "7️⃣", 8: "8️⃣", 9: "9️⃣", 10: "🔟"}
-                    return nums.get(n, str(n))
-                else:
-                    emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣', '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
-                    return ''.join(emoji_digits[d] for d in str(n))
 
             # Add the current user's position (always show it at the bottom)
             if user and user_week_games > 0:
