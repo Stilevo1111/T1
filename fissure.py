@@ -253,7 +253,15 @@ async def handle_multicast_animation(bot, chat_id, random_module, MULTICAST_TEXT
             await asyncio.sleep(0.5)
             cascade_count = 2
     else:
-        pass  # no multicast
+        slots = random_module.sample(slot_emojis, 3)
+        msg = await bot.send_message(
+            chat_id=chat_id,
+            text=f"🎰 {' | '.join(slots)} | x2"
+        )
+        slot_msg_ids.append(msg.message_id)
+        await asyncio.sleep(0.5)
+
+    return cascade_count, multicast_text, slot_msg_ids
 
 # =====================
 # MAIN FISSURE HANDLER (extracted from main.py - behavior 100% preserved)
@@ -340,8 +348,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return  # exit without roll
 
         # Остальные события (обычный ролл или мулькаст)
-        roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
-
+        original_roll = None
 
         slot_msg_ids = []
 
@@ -350,12 +357,14 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             slot_emojis = ["🍒", "🍋", "🍇", "🔔", "💎"]
             multicast_text = ""
             cascade_count = 1
+            slot_msg_ids = []
+
+            # Get base roll first
+            roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
 
             # Проверяем переход на x2 (скрытый рандом 75%)
-            slot_msg_ids = []
             if random.random() < 0.75:
                 cascade_count = 2
-                # Показываем джекпот (3 одинаковых) - это и есть анимация x2
                 jackpot_symbol = random.choice(slot_emojis)
                 slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
 
@@ -369,7 +378,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Проверяем переход на x3 (скрытый рандом 25%)
                 if random.random() < 0.25:
                     cascade_count = 3
-                    # Показываем джекпот - анимация x3
                     jackpot_symbol = random.choice(slot_emojis)
                     slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
 
@@ -383,7 +391,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Проверяем переход на x4 (скрытый рандом 15%)
                     if random.random() < 0.15:
                         cascade_count = 4
-                        # Показываем джекпот - анимация x4
                         jackpot_symbol = random.choice(slot_emojis)
                         slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
 
@@ -394,28 +401,32 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         slot_msg_ids.append(msg.message_id)
                         await asyncio.sleep(0.5)
                     else:
-                        # Не попали в x4 - показываем проигрышный спин и финиш на x3
+                        # Не попали в x4 - проигрышный спин и финиш на x3
                         slots = random.sample(slot_emojis, 3)
                         msg = await context.bot.send_message(
                             chat_id=update.message.chat_id,
-                            text=f"🎰 {' | '.join(slots)} | x4"
+                            text=f"🎰 {' | '.join(slots)} | x3"
                         )
                         slot_msg_ids.append(msg.message_id)
                         await asyncio.sleep(0.5)
-                        cascade_count = 3
                 else:
-                    # Не попали в x3 - показываем проигрышный спин и финиш на x2
+                    # Не попали в x3 - проигрышный спин и финиш на x2
                     slots = random.sample(slot_emojis, 3)
                     msg = await context.bot.send_message(
                         chat_id=update.message.chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x3"
+                        text=f"🎰 {' | '.join(slots)} | x2"
                     )
                     slot_msg_ids.append(msg.message_id)
                     await asyncio.sleep(0.5)
-                    cascade_count = 2
             else:
-                # Не попали в x2 - обычный ролл (не мультикаст)
-                pass  # multicast_count was dead code, removed safely
+                # Не попали в x2 - обычный мультикаст x2
+                slots = random.sample(slot_emojis, 3)
+                msg = await context.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text=f"🎰 {' | '.join(slots)} | x2"
+                )
+                slot_msg_ids.append(msg.message_id)
+                await asyncio.sleep(0.5)
 
             # Сохраняем original_roll ДО умножения!
             roll, original_roll, multicast_text = process_multicast_result(
@@ -423,15 +434,15 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             logger.info(f"fissure multicast: roll after multiply={roll}, cascade_count={cascade_count}")
             if cascade_count >= 4:
-                pass  # Statistics disabled (was: increment_stat("multicast_x4"))
+                pass
             elif cascade_count >= 3:
-                pass  # Statistics disabled (was: increment_stat("multicast_x3"))
+                pass
             elif cascade_count >= 2:
-                pass  # Statistics disabled (was: increment_stat("multicast_x2"))
+                pass
 
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
-            pass
+            roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
 
         # Даем время slot сообщениям отправиться перед итоговым
         if cascade_count > 1:
