@@ -2510,7 +2510,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
             elif user and user_week_games == 0:
                 user_display = make_clickable(user_username, user.get('telegram_id'))
-                top_text += f"\n\n<b>❓{user_display}</b>\n"
+                top_text += f"\n\n<b>{user_display}</b>\n"
                 top_text += " └ Нет игр за неделю"
 
             # Delete previous bot message before sending new one
