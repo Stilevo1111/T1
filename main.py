@@ -2279,7 +2279,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_fissure = user.get('fissure', 0) if user else 0
         clickable_username = make_clickable(username, update.effective_user.id)
         if user_rank:
-            text += f"\n<b>{user_rank}. {clickable_username}: {user_fissure:.1f} см</b>"
+            text += f"\n<b>{user_rank} {clickable_username}: {user_fissure:.1f} см</b>"
         else:
             text += f"\n<b>— {clickable_username}: {user_fissure:.1f} см</b>"
 
@@ -2402,14 +2402,13 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             try:
                 from dota_mmr import generate_top_card
-                winner_wr_short = f"{winner_wr:.1f}%"
                 banner_bytes = await asyncio.to_thread(
                     generate_top_card,
                     avatar_url=winner_avatar,
                     username=winner_name,
                     telegram_id=winner.get('telegram_id'),
                     fissure=0,
-                    extra_text=f"{winner_week_wins}W • {winner_week_losses}L",
+                    extra_text=f"{winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%",
                     rank_tier=winner_rank_tier,
                     show_avatar=True
                 )
@@ -2497,10 +2496,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_display = make_clickable(user_username, user.get('telegram_id'))
                 if user_is_in_top:
                     top_text += f"\n\n<b>{get_emoji_num(user_pos)} {user_display}: {user_rank_str}</b>\n"
-                    top_text += f" └ В топе • {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
+                    top_text += f" └ {user_week_wins}W • {user_week_losses}L • {user_wr}%"
                 else:
                     top_text += f"\n\n<b>{get_emoji_num(user_pos)} {user_display}: {user_rank_str}</b>\n"
-                    top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
+                    top_text += f" └ {user_week_wins}W • {user_week_losses}L • {user_wr}%"
             elif user and user_week_games == 0:
                 user_display = make_clickable(user_username, user.get('telegram_id'))
                 top_text += f"\n\n<b>{user_display}</b>\n"
