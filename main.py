@@ -2399,6 +2399,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             winner_week_wins = winner.get('week_wins', 0)
             winner_week_losses = winner_week_games - winner_week_wins
             winner_wr = round((winner_week_wins / winner_week_games * 100), 1) if winner_week_games > 0 else 0
+            winner_mmr = winner.get('mmr', 0)
             
             try:
                 from dota_mmr import generate_top_card
@@ -2408,7 +2409,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     username=winner_name,
                     telegram_id=winner.get('telegram_id'),
                     fissure=0,
-                    extra_text=f"{winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%",
+                    extra_text=f"MMR: {winner_mmr} • {winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%",
                     rank_tier=winner_rank_tier,
                     show_avatar=True
                 )
