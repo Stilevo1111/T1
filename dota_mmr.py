@@ -698,6 +698,11 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             logger.warning("generate_heroes_image: top_heroes is empty")
             return None
 
+        # Limit number of heroes to prevent memory issues
+        if len(top_heroes) > 10:
+            logger.info(f"Limiting heroes from {len(top_heroes)} to 10")
+            top_heroes = top_heroes[:10]
+
         logger.info(f"generate_heroes_image: generating for {len(top_heroes)} heroes")
         target_width = 1744
         target_height = 592
@@ -1393,6 +1398,11 @@ def generate_start_card(
                         logger.warning(f"Avatar download failed: status={resp.status_code}, url={avatar_url[:80]}")
                         avatar = None
                 if avatar:
+                    # Check image size to prevent memory issues - max 512px
+                    w, h = avatar.size
+                    if w > 512 or h > 512:
+                        logger.info(f"Resizing avatar from {w}x{h} to 512x512 max")
+                        avatar = avatar.resize((min(w, 512), min(h, 512)), Image.LANCZOS)
                     # Resize and crop to square
                     w, h = avatar.size
                     side = min(w, h)
