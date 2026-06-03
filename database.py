@@ -1553,70 +1553,44 @@ class Database:
                         "total_growth": float(r[7] or 0.0),
                     })
 
-# Рост: самый большой прирост см за сутки (current - digest)
+# Рассчитываем все три топа за один проход
             top_growth_user = None
             top_growth_cm = 0.0
             top_growth_id = None
-            for u in users:
-                prev_f = u["digest_fissure"]
-                cur_f = u["fissure"]
-                telegram_id = u.get("telegram_id")
-                if prev_f is not None and telegram_id:
-                    delta = cur_f - prev_f
-                    if delta > top_growth_cm:
-                        top_growth_cm = delta
-                        cached = user_cache.get(telegram_id)
-                        if cached:
-                            nick = cached.get('steam_nickname') or cached.get('username') or str(telegram_id)
-                            top_growth_user = nick if nick and nick != "None" else None
-                        else:
-                            nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
-                            top_growth_user = nick if nick and nick != "None" else None
-                        if not top_growth_user:
-                            top_growth_user = str(telegram_id)
-                        top_growth_id = telegram_id
-
-            # Падение: насколько см уменьшилась фиссура за сутки (current - digest)
             top_drop_user = None
-            top_drop_cm = 0.0
+            top_drop_cm = float('inf')  # Start with positive infinity to find minimum (most negative)
             top_drop_id = None
-            for u in users:
-                prev_f = u["digest_fissure"]
-                cur_f = u["fissure"]
-                telegram_id = u.get("telegram_id")
-                if prev_f is not None and telegram_id:
-                    delta = cur_f - prev_f
-                    if delta < top_drop_cm:
-                        top_drop_cm = delta
-                        cached = user_cache.get(telegram_id)
-                        if cached:
-                            nick = cached.get('steam_nickname') or cached.get('username') or str(telegram_id)
-                            top_drop_user = nick if nick and nick != "None" else None
-                        else:
-                            nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
-                            top_drop_user = nick if nick and nick != "None" else None
-                        if not top_drop_user:
-                            top_drop_user = str(telegram_id)
-                        top_drop_id = telegram_id
-
-            # Стрик: текущая серия побед (current_streak)
             top_streak_user = None
             top_streak = 0
             top_streak_id = None
+
             for u in users:
                 telegram_id = u.get("telegram_id")
-                if telegram_id and u["current_streak"] > top_streak:
+                if not telegram_id:
+                    continue
+
+                # Рост: current - digest_fissure
+                prev_f = u["digest_fissure"]
+                cur_f = u["fissure"]
+                if prev_f is not None:
+                    delta = cur_f - prev_f
+                    if delta > top_growth_cm:
+                        top_growth_cm = delta
+                        nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
+                        top_growth_user = nick if nick and nick != "None" else str(telegram_id)
+                        top_growth_id = telegram_id
+                    if delta < top_drop_cm:
+                        top_drop_cm = delta
+                        nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
+                        top_drop_user = nick if nick and nick != "None" else str(telegram_id)
+                        top_drop_id = telegram_id
+
+                # Стрик
+                if u["current_streak"] > top_streak:
                     top_streak = u["current_streak"]
                     top_streak_id = telegram_id
-                    cached = user_cache.get(telegram_id)
-                    if cached:
-                        nick = cached.get('steam_nickname') or cached.get('username') or str(telegram_id)
-                        top_streak_user = nick if nick and nick != "None" else None
-                    else:
-                        nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
-                        top_streak_user = nick if nick and nick != "None" else None
-                        if not top_streak_user:
-                            top_streak_user = str(telegram_id)
+                    nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
+                    top_streak_user = nick if nick and nick != "None" else str(telegram_id)
 
             def get_user_telegram_username(telegram_id):
                 """Получить Telegram username пользователя"""
