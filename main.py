@@ -2365,7 +2365,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user:
             user_week_games = user.get('week_games', 0)
             user_week_wins = user.get('week_wins', 0)
-            user_username = user.get('steam_nickname') or user.get('username') or 'Unknown'
+            user_username = user.get('steam_nickname') or user.get('username') or user.get('first_name') or 'Unknown'
             user_week_losses = user_week_games - user_week_wins
 
             # Check if user is already in the top list
