@@ -3078,12 +3078,10 @@ async def main():
             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
         )
 
-# Дайджест (Fissure + Dota):
-# - Тяжёлая работа (лидерство + обновление данных из БД) — раз в 40 минут (экономия Neon часов)
-# - Быстрый 15-секундный тик (только переключение типов) — чисто в памяти, без БД
+# Дайджест (Fissure + Dota): раз в 10 минут (актуально + экономия Render)
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(minutes=40),
+            interval=datetime.timedelta(minutes=10),
             first=datetime.datetime.now() + datetime.timedelta(seconds=10)
         )
 

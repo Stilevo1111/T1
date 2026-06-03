@@ -42,6 +42,7 @@ from constants import (
     WEEKEND_BONUS_MULTIPLIERS,
     ZEUS_TEXTS,
 )
+from digest import invalidate_digest_cache
 
 # Fissure-specific in-memory state (moved from main.py for clean extraction)
 _user_fissure_processing: dict[int, float] = {}
@@ -601,6 +602,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Сохраняем fissure + last_message_id одним запросом
         update_fissure(user_obj.id, new_fissure, now, growth, last_message_id=result_msg.message_id)
+
+        # Инвалидируем кеш дайджеста чтобы следующий job показал свежие данные
+        invalidate_digest_cache()
 
     except Exception as e:
         tb = traceback.format_exc()

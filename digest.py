@@ -141,6 +141,19 @@ DIGEST_DATA_REFRESH_INTERVAL = 3600
 HERO_META_REFRESH_INTERVAL = 3600
 
 # =====================================================
+# Digest cache - invalidate to force refresh on next job run
+# Called from fissure.py after each roll to ensure fresh data
+# =====================================================
+
+def invalidate_digest_cache():
+    """Сбрасывает кеш digest_stats чтобы следующий alternate_digest_job запросил свежие данные."""
+    import database
+    database.user_cache.set('digest_stats', None)
+    _digest_state_container.set_digest_data(None)
+    logger.info("Digest cache invalidated (will refresh on next job run)")
+
+
+# =====================================================
 # Digest cache refresh (hourly, for combined Fissure + Dota display)
 # =====================================================
 
