@@ -2010,9 +2010,9 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
             """
             db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, win, win, lose, last_message_id, telegram_id))
         logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
-        
-        # Сбрасываем кеши дайджестов при изменении fissure
-        user_cache.set('digest_stats', None)
+
+        # Инвалидируем кеш конкретного пользователя - чтобы другие контейнеры получили свежие данные
+        user_cache.delete(telegram_id)
         # Сбрасываем кеш топа при изменении fissure
         top_cache.clear()
     else:
