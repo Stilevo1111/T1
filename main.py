@@ -2485,9 +2485,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}: {user_rank_str}</b>\n"
                     top_text += f" └ {user_week_wins}W • {user_week_losses}L • {user_wr}%"
             elif user and user_week_games == 0:
+                user_rank_str = rank_to_string(user.get('rank_tier', 0))
                 user_display = make_clickable(user_username, user.get('telegram_id'))
                 user_pos_emoji = get_emoji_num(user_pos) if user_pos else "0️⃣"
-                top_text += f"\n{user_pos_emoji} {user_display}\n"
+                top_text += f"\n{user_pos_emoji} <b>{user_display}: {user_rank_str}</b>\n"
                 top_text += f" └ Нет игр за неделю"
 
             # Delete previous bot message before sending new one
