@@ -209,8 +209,8 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
             bottom_wins = bottom_by_net.get('week_wins', 0)
             bottom_wr = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
 
-            parts.append(f"🔺{top_name}: {top_wins}W/{top_games-top_wins}L ≈{top_wr}%")
-            parts.append(f"🔻{bottom_name}: {bottom_wins}W/{bottom_games-bottom_wins}L ≈{bottom_wr}%")
+            parts.append(f"🔺{top_name}: {top_wins}W/{top_games-top_wins}L ≈{top_wr}%\n")
+            parts.append(f"🔻{bottom_name}: {bottom_wins}W/{bottom_games-bottom_wins}L ≈{bottom_wr}%\n")
 
     # Fissure digest
     stats = _digest_state_container.get_digest_data()
@@ -229,9 +229,9 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         drop_display = make_clickable(drop_player, stats.get("top_drop_id")) if drop_player and drop_player != "None" else "—"
         streak_display = make_clickable(streak_player, stats.get("top_streak_id")) if streak_player and streak_player != "None" and streak_len > 0 else "—"
 
-        parts.append(f"🔺{growth_display} +{growth_pos}")
-        parts.append(f"🔻{drop_display} {drop_cm:.0f} СМ" if drop_player and drop_player != "None" else "🔻—")
-        parts.append(f"🍀{streak_display} {streak_len} побед подряд" if streak_len > 0 else "")
+        parts.append(f"🔺{growth_display} +{growth_pos}\n")
+        parts.append(f"🔻{drop_display} {drop_cm:.0f} СМ\n" if drop_player and drop_player != "None" else "🔻—\n")
+        parts.append(f"🍀{streak_display} {streak_len} побед подряд\n" if streak_len > 0 else "")
 
     parts.append("\n\n🔷 <a href=\"https://seredin999.onrender.com/patch-fissure\">Подробнее на сайте</a>")
     return "".join(parts)
