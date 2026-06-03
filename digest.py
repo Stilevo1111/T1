@@ -346,7 +346,7 @@ def get_digest_data_hash():
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов (редактирование существующего, создание нового только при необходимости)"""
     from main import is_rate_limited, make_clickable, bot_can_delete
-    from database import get_config, set_config, get_digest_stats, get_dota_week_top, user_cache
+    from database import get_config, set_config, get_digest_stats, get_dota_week_top, user_cache, update_digest_snapshot
     try:
         now = time.time()
         
@@ -450,6 +450,23 @@ async def alternate_digest_job(context):
         # Иначе - генерируем новый дайджест или обновляем данные
         else:
             logger.info("Генерируем новый или обновляем существующий дайджест")
+
+            # === ЕЖЕДНЕВНЫЙ СБРОС SNAPSHOT ===
+            # Чтобы в дайджесте каждый день могли появляться новые лидеры роста/падения,
+            # раз в календарный день мы копируем текущую fissure в digest_fissure.
+            from datetime import date
+            today = date.today().isoformat()
+            last_snapshot = get_config('last_fissure_digest_snapshot')
+
+            if last_snapshot != today:
+                logger.info(f"Новый день ({today}) — обновляем digest_fissure snapshot для расчёта суточного роста")
+                update_digest_snapshot()
+                user_cache.set('digest_stats', None)
+                _digest_state_container.set_digest_data(None)
+                set_config('last_fissure_digest_snapshot', today)
+                set_config('last_top_growth', None)
+                set_config('last_top_drop', None)
+                set_config('last_top_streak', None)
 
             # Проверяем, нужно ли обновить данные из БД (раз в час или они пусты)
             if _digest_state_container.get_digest_data() is None or now - _digest_state_container.get_last_data_refresh() > _data_refresh_interval:
