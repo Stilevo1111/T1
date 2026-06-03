@@ -469,6 +469,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Start analytics generation in background task
         async def generate_and_update_analytics():
             nonlocal loading_msg
+            nonlocal _anim_task
             try:
                 from weekly_analytics import generate_chart_only, get_last_matches, _escape_markdown_v2
                 chart_data = await generate_chart_only(update.effective_user.id)
@@ -579,8 +580,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             update_last_message_id(update.effective_user.id, result_msg.message_id)
                     else:
                         # Cancel animation and update with error message
-                        if animation_task:
-                            animation_task.cancel()
+                        if _anim_task:
+                            _anim_task.cancel()
                         error_text = "⚠️ Не удалось сгенерировать график аналитики. Попробуйте позже."
                         try:
                             await context.bot.edit_message_text(
@@ -600,7 +601,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     pass
                 err_msg_id = loading_msg.message_id if loading_msg else None
-                loading_msg = await stop_loading_animation(loading_msg, None, chat_id, context.bot)
+                loading_msg = await stop_loading_animation(loading_msg, _anim_task, chat_id, context.bot)
                 try:
                     await context.bot.edit_message_text(
                         chat_id=chat_id,
@@ -2281,9 +2282,9 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_fissure = user.get('fissure', 0) if user else 0
         clickable_username = make_clickable(username, update.effective_user.id)
         if user_rank:
-            text += f"\n<b>{user_rank} {clickable_username}: {user_fissure:.1f} см</b>"
+            text += f"\n{get_emoji_num(user_rank)} <b>{clickable_username}: {user_fissure:.1f} см</b>"
         else:
-            text += f"\n<b>— {clickable_username}: {user_fissure:.1f} см</b>"
+            text += f"\n<b>{clickable_username}: {user_fissure:.1f} см</b>"
 
         text += "\n\n<b><a href=\"https://seredin999.onrender.com/fissure-logs\">📜 История бросков</a></b>"
 
@@ -2447,7 +2448,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 if week_games > 0:
                     wr = round((week_wins / week_games) * 100, 1)
-                    # Make all nicknames clickable and bold
                     player_id = player.get('telegram_id')
                     clickable_name = make_clickable(username, player_id)
                     lines.append(f"{medal} <b>{clickable_name}</b> - {rank_str}")
@@ -2479,14 +2479,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_rank_str = rank_to_string(user.get('rank_tier', 0))
                 user_display = make_clickable(user_username, user.get('telegram_id'))
                 if user_is_in_top:
-                    top_text += f"\n\n<b>{get_emoji_num(user_pos)} {user_display}: {user_rank_str}</b>\n"
+                    top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}: {user_rank_str}</b>\n"
                     top_text += f" └ {user_week_wins}W • {user_week_losses}L • {user_wr}%"
                 else:
-                    top_text += f"\n\n<b>{get_emoji_num(user_pos)} {user_display}: {user_rank_str}</b>\n"
+                    top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}: {user_rank_str}</b>\n"
                     top_text += f" └ {user_week_wins}W • {user_week_losses}L • {user_wr}%"
             elif user and user_week_games == 0:
                 user_display = make_clickable(user_username, user.get('telegram_id'))
-                top_text += f"\n\n<b>{user_display}</b>\n"
+                top_text += f"\n{user_display}\n"
                 top_text += " └ Нет игр за неделю"
 
             # Delete previous bot message before sending new one
