@@ -1655,8 +1655,8 @@ def generate_top_card(
         info_y = avatar_y + int(20 * scale)
         
         try:
-            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(22 * scale))
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(40 * scale))
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(26 * scale))
         except Exception:
             font_title = font_small = ImageFont.load_default()
         
@@ -1670,9 +1670,12 @@ def generate_top_card(
         
         if extra_text:
             if fissure > 0:
-                extra_y = fissure_y + int(35 * scale)
+                extra_y = fissure_y + int(35 * scale) + 5
             else:
-                extra_y = info_y + int(55 * scale)
+                extra_y = info_y + int(55 * scale) + 5
+            # Draw with slight outline for thickness
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                draw.text((info_x + dx, extra_y + dy), extra_text, fill=(100, 100, 100), font=font_small)
             draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_small)
         
         if rank_tier > 0:
