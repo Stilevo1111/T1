@@ -181,30 +181,7 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
     except Exception:
         from bot_utils import make_clickable
 
-    parts = ["<b>📊 Дайджест</b>"]
-
-    # Fissure digest
-    stats = _digest_state_container.get_digest_data()
-    if stats:
-        growth_data = stats.get("top_growth", ("None", 0))
-        growth_player = growth_data[0] if len(growth_data) > 0 else "None"
-        growth_pos = growth_data[1] if len(growth_data) > 1 else 0
-        drop_data = stats.get("top_drop", ("None", 0.0))
-        drop_player = drop_data[0] if len(drop_data) > 0 else "None"
-        drop_cm = drop_data[1] if len(drop_data) > 1 else 0.0
-        streak_data = stats.get("top_streak", ("None", 0))
-        streak_player = streak_data[0] if len(streak_data) > 0 else "None"
-        streak_len = streak_data[1] if len(streak_data) > 1 else 0
-
-        growth_display = make_clickable(growth_player, stats.get("top_growth_id")) if growth_player and growth_player != "None" else "—"
-        drop_display = make_clickable(drop_player, stats.get("top_drop_id")) if drop_player and drop_player != "None" else "—"
-        streak_display = make_clickable(streak_player, stats.get("top_streak_id")) if streak_player and streak_player != "None" and streak_len > 0 else "—"
-
-        growth_part = f"🔺{growth_display} +{growth_pos}"
-        drop_part = f"🔻{drop_display} {drop_cm:.0f} СМ" if drop_player and drop_player != "None" else "🔻—"
-        streak_part = f" 🍀{streak_display}: {streak_len} побед подряд" if streak_len > 0 else ""
-
-        parts.append(f"\n🗿 <b>Фиссура</b>\n{growth_part}\n{drop_part}{streak_part}")
+    parts = []
 
     # Dota digest
     mmr_top = _digest_state_container.get_dota_data()
@@ -232,7 +209,29 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
             bottom_wins = bottom_by_net.get('week_wins', 0)
             bottom_wr = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
 
-            parts.append(f"\n\n🎮 <b>Dota</b>\n🔺{top_name}: {top_wins}W/{top_games-top_wins}L ≈{top_wr}%\n🔻{bottom_name}: {bottom_wins}W/{bottom_games-bottom_wins}L ≈{bottom_wr}%")
+            parts.append(f"🔺{top_name}: {top_wins}W/{top_games-top_wins}L ≈{top_wr}%")
+            parts.append(f"🔻{bottom_name}: {bottom_wins}W/{bottom_games-bottom_wins}L ≈{bottom_wr}%")
+
+    # Fissure digest
+    stats = _digest_state_container.get_digest_data()
+    if stats:
+        growth_data = stats.get("top_growth", ("None", 0))
+        growth_player = growth_data[0] if len(growth_data) > 0 else "None"
+        growth_pos = growth_data[1] if len(growth_data) > 1 else 0
+        drop_data = stats.get("top_drop", ("None", 0.0))
+        drop_player = drop_data[0] if len(drop_data) > 0 else "None"
+        drop_cm = drop_data[1] if len(drop_data) > 1 else 0.0
+        streak_data = stats.get("top_streak", ("None", 0))
+        streak_player = streak_data[0] if len(streak_data) > 0 else "None"
+        streak_len = streak_data[1] if len(streak_data) > 1 else 0
+
+        growth_display = make_clickable(growth_player, stats.get("top_growth_id")) if growth_player and growth_player != "None" else "—"
+        drop_display = make_clickable(drop_player, stats.get("top_drop_id")) if drop_player and drop_player != "None" else "—"
+        streak_display = make_clickable(streak_player, stats.get("top_streak_id")) if streak_player and streak_player != "None" and streak_len > 0 else "—"
+
+        parts.append(f"🔺{growth_display} +{growth_pos}")
+        parts.append(f"🔻{drop_display} {drop_cm:.0f} СМ" if drop_player and drop_player != "None" else "🔻—")
+        parts.append(f"🍀{streak_display} {streak_len} побед подряд" if streak_len > 0 else "")
 
     parts.append("\n\n🔷 <a href=\"https://seredin999.onrender.com/patch-fissure\">Подробнее на сайте</a>")
     return "".join(parts)
@@ -347,7 +346,7 @@ def get_digest_data_hash():
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов (редактирование существующего, создание нового только при необходимости)"""
     from main import is_rate_limited, make_clickable, bot_can_delete
-    from database import get_config, set_config, get_digest_stats, get_dota_week_top, update_digest_snapshot, user_cache
+    from database import get_config, set_config, get_digest_stats, get_dota_week_top, user_cache
     try:
         now = time.time()
         
@@ -437,317 +436,49 @@ async def alternate_digest_job(context):
             should_refresh_data = True
             logger.info(f"Данные в БД обновились ({_data_refresh_interval}с), обновляем")
         
-        # Если кеш валиден - используем его и переключаем тип
-        if not should_create_new and not should_refresh_data:
-            # После рестарта контейнера in-memory данные могут быть пустыми,
-            # даже если cache TTL ещё не истёк (из-за safeguard created_at).
-            # В этом случае принудительно идём в ветку загрузки данных.
-            current_type = cache.get("type") or "0"
-            if current_type == "0":
-                if _digest_state_container.get_digest_data() is None:
-                    should_refresh_data = True
-                    logger.info("Данные в памяти пусты (новый контейнер) — принудительно обновляем из БД")
-            else:
-                if _digest_state_container.get_dota_data() is None:
-                    should_refresh_data = True
-                    logger.info("Данные в памяти пусты (новый контейнер) — принудительно обновляем из БД")
-
+# Если кеш валиден - используем его и обновляем объединённый дайджест
         if not should_create_new and not should_refresh_data:
             logger.info(f"Используем кешированный дайджест (создан {now - cache['created_at']:.0f}с назад)")
 
-            # Просто меняем тип для следующего раза
-            current_type = cache["type"]
-            if current_type == "0":
-                next_type = "1"
-            else:
-                next_type = "0"
-
-            # ПРИ СМЕНЕ ТИПА - ГЕНЕРИРУЕМ ТЕКСТ ДЛЯ НОВОГО ТИПА (next_type)
-            # Определяем следующий тип (чередуем)
-            _digest_state_container.set_current_type(next_type)
-            logger.info(f"Переключаем тип: {current_type} -> {next_type} (генерируем текст для нового типа)")
-            current_type = next_type  # Используем next_type как текущий для генерации текста
-
-            # Формируем текст в зависимости от типа (без обращения к БД - используем кешированные данные)
-            text = None
-
-            if current_type == "0":
-                # Фиссур-дайджест из кеша
-                stats = _digest_state_container.get_digest_data()
-                if stats:
-                    growth_data = stats.get("top_growth", ("None", 0))
-                    growth_player = growth_data[0] if len(growth_data) > 0 else "None"
-                    growth_pos = growth_data[1] if len(growth_data) > 1 else 0
-                    drop_data = stats.get("top_drop", ("None", 0.0))
-                    drop_player = drop_data[0] if len(drop_data) > 0 else "None"
-                    drop_cm = drop_data[1] if len(drop_data) > 1 else 0.0
-                    streak_data = stats.get("top_streak", ("None", 0))
-                    streak_player = streak_data[0] if len(streak_data) > 0 else "None"
-                    streak_len = streak_data[1] if len(streak_data) > 1 else 0
-                    growth_id = stats.get("top_growth_id")
-                    drop_id = stats.get("top_drop_id")
-                    streak_id = stats.get("top_streak_id")
-
-                    growth_display = make_clickable(growth_player, growth_id)
-                    drop_display = make_clickable(drop_player, drop_id)
-                    streak_display = make_clickable(streak_player, streak_id)
-
-                    if growth_player and growth_player != "None":
-                        growth_part = f"🔺{growth_display} +{growth_pos}"
-                    else:
-                        growth_part = "🔺—"
-
-                    if drop_player and drop_player != "None":
-                        if drop_cm < 0:
-                            drop_part = f"🔻{drop_display} {drop_cm:.0f} СМ"
-                        else:
-                            drop_part = f"🔻{drop_display} +{drop_cm:.0f} СМ"
-                    else:
-                        drop_part = "🔻—"
-
-                    if streak_player and streak_player != "None" and streak_len > 0:
-                        streak_part = f" 🍀{streak_display}: {streak_len} побед подряд"
-                    else:
-                        streak_part = " 🍀—"
-
-                    text = f"<b>{growth_part}\n{drop_part}\n{streak_part}</b>\n\n🗿Фиссура дайджест."
-
-            else:
-                # Dota-дайджест из кеша
-                mmr_top = _digest_state_container.get_dota_data()
-                if not mmr_top:
-                    logger.info("Нет данных для Dota дайджеста, используем fallback")
-                    next_type = "0"
-                else:
-                    valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
-                    if len(valid_players) < 2:
-                        logger.info("Недостаточно игроков для Dota дайджеста, используем fallback")
-                        next_type = "0"
-                    else:
-                        valid_players_sorted = sorted(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)), reverse=True)
-
-                        top_by_net = valid_players_sorted[0]
-                        for p in reversed(valid_players_sorted):
-                            if p.get('telegram_id') != top_by_net.get('telegram_id'):
-                                bottom_by_net = p
-                                break
-                        else:
-                            bottom_by_net = valid_players_sorted[-1]
-
-                        top_player = top_by_net.get('steam_nickname', 'None')
-                        top_id = top_by_net.get('telegram_id')
-                        top_games = top_by_net.get('week_games', 0)
-                        top_wins = top_by_net.get('week_wins', 0)
-                        top_losses = top_games - top_wins
-                        top_winrate = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
-
-                        bottom_player = bottom_by_net.get('steam_nickname', 'None')
-                        bottom_id = bottom_by_net.get('telegram_id')
-                        bottom_games = bottom_by_net.get('week_games', 0)
-                        bottom_wins = bottom_by_net.get('week_wins', 0)
-                        bottom_losses = bottom_games - bottom_wins
-                        bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
-
-                        if top_player and top_player != "None":
-                            top_part = f"🔺{make_clickable(top_player, top_id)}: {top_wins}W/{top_losses}L ≈{top_winrate}%"
-                        else:
-                            top_part = "🔺—"
-
-                        if bottom_player and bottom_player != "None":
-                            bottom_part = f"🔻{make_clickable(bottom_player, bottom_id)}: {bottom_wins}W/{bottom_losses}L ≈{bottom_winrate}%"
-                        else:
-                            bottom_part = "🔻—"
-
-                        text = f"<b>{top_part}\n{bottom_part}</b>\n\n🦞Дота Дайджест."
-
-            # Если не удалось сгенерировать текст - используем fallback
-            if text is None:
-                logger.info("Не удалось сгенерировать дайджест, используем fallback")
+            # Генерируем объединённый текст (Fissure + Dota)
+            text = _build_digest_text_for_type("0")
+            if not text:
                 text = "<b>📊 Данные для дайджеста пока не доступны</b>\n\nПопробуйте позже!"
-                next_type = "0"
 
-            logger.info(f"Дайджест сгенерирован для переключения типа (тип: {current_type}, редактируем существующее)")
+            next_type = "0"  # Всегда один тип для объединённого дайджеста
 
-            # next_type должен быть типом для СЛЕДУЮЩЕГО запуска (обратный текущему)
-            next_type = "0" if current_type == "1" else "1"
-
-            # Обновляем кеш для нового типа (но не трогаем created_at - чтобы ротация работала корректно)
-            cache["text"] = text
-            cache["type"] = current_type
-        
         # Иначе - генерируем новый дайджест или обновляем данные
         else:
-            # Получаем текущий тип дайджеста из памяти
-            current_type = get_digest_type(None)
-            if current_type is None:
-                raw_type = get_config('alternate_digest_type')
-                if raw_type is not None:
-                    current_type = str(raw_type)
-                else:
-                    current_type = "0"
-            _digest_state_container.set_current_type(current_type)
-            
-            logger.info(f"alternate_digest_job: current_type = {current_type}, генерируем новый дайджест")
-            
-            # Определяем следующий тип (чередуем)
-            if current_type == "0":
-                next_type = "1"
-            else:
-                next_type = "0"
-            
-            # Формируем текст в зависимости от типа
-            text = None
-            
-            if current_type == "0":
-                # Фиссур-дайджест
+            logger.info("Генерируем новый или обновляем существующий дайджест")
 
-                # === ЕЖЕДНЕВНЫЙ СБРОС SNAPSHOT ===
-                # Чтобы в дайджесте каждый день могли появляться новые лидеры роста/падения,
-                # раз в календарный день мы копируем текущую fissure в digest_fissure.
-                from datetime import date
-                today = date.today().isoformat()
-                last_snapshot = get_config('last_fissure_digest_snapshot')
+            # Проверяем, нужно ли обновить данные из БД (раз в час или они пусты)
+            if _digest_state_container.get_digest_data() is None or now - _digest_state_container.get_last_data_refresh() > _data_refresh_interval:
+                logger.info("Обновляем данные для дайджеста из БД")
+                _digest_state_container.set_digest_data(get_digest_stats())
+                _digest_state_container.set_last_data_refresh(now)
 
-                if last_snapshot != today:
-                    logger.info(f"Новый день ({today}) — обновляем digest_fissure snapshot для расчёта суточного роста")
-                    update_digest_snapshot()
-                    user_cache.set('digest_stats', None)      # сбрасываем кеш в database.py
-                    _digest_state_container.set_digest_data(None)       # сбрасываем локальный кеш дайджеста
-                    set_config('last_fissure_digest_snapshot', today)
+            # То же для Dota данных
+            if _digest_state_container.get_dota_data() is None:
+                logger.info("Обновляем Dota данные для дайджеста из БД")
+                _digest_state_container.set_dota_data(get_dota_week_top(limit=30))
 
-                    # Чистим fallback-значения прошлых победителей, чтобы они не "залипали"
-                    set_config('last_top_growth', None)
-                    set_config('last_top_drop', None)
-                    set_config('last_top_streak', None)
-
-                # Проверяем, нужно ли обновить данные из БД
-                if _digest_state_container.get_digest_data() is None or now - _digest_state_container.get_last_data_refresh() > _data_refresh_interval:
-                    logger.info("Обновляем данные для фиссур-дайджеста из БД")
-                    stats = get_digest_stats()
-                    _digest_state_container.set_digest_data(stats)
-                    _digest_state_container.set_last_data_refresh(now)
-                else:
-                    stats = _digest_state_container.get_digest_data()
-
-                
-                growth_data = stats.get("top_growth", ("None", 0))
-                growth_player = growth_data[0] if len(growth_data) > 0 else "None"
-                growth_pos = growth_data[1] if len(growth_data) > 1 else 0
-                drop_data = stats.get("top_drop", ("None", 0.0))
-                drop_player = drop_data[0] if len(drop_data) > 0 else "None"
-                drop_cm = drop_data[1] if len(drop_data) > 1 else 0.0
-                streak_data = stats.get("top_streak", ("None", 0))
-                streak_player = streak_data[0] if len(streak_data) > 0 else "None"
-                streak_len = streak_data[1] if len(streak_data) > 1 else 0
-                growth_id = stats.get("top_growth_id")
-                drop_id = stats.get("top_drop_id")
-                streak_id = stats.get("top_streak_id")
-                
-                growth_display = make_clickable(growth_player, growth_id)
-                drop_display = make_clickable(drop_player, drop_id)
-                streak_display = make_clickable(streak_player, streak_id)
-                
-                if growth_player and growth_player != "None":
-                    growth_part = f"🔺{growth_display} +{growth_pos}"
-                else:
-                    growth_part = "🔺—"
-                
-                if drop_player and drop_player != "None":
-                    if drop_cm < 0:
-                        drop_part = f"🔻{drop_display} {drop_cm:.0f} СМ"
-                    else:
-                        drop_part = f"🔻{drop_display} +{drop_cm:.0f} СМ"
-                else:
-                    drop_part = "🔻—"
-                
-                if streak_player and streak_player != "None" and streak_len > 0:
-                    streak_part = f" 🍀{streak_display}: {streak_len} побед подряд"
-                else:
-                    streak_part = " 🍀—"
-                
-                text = f"<b>{growth_part}\n{drop_part}\n{streak_part}</b>\n\n🗿Фиссура дайджест."
-            
-            else:
-                # Dota-дайджест
-                # Данные обновляются отдельным job'ом раз в час + при старте контейнера.
-                # Здесь просто читаем из кеша (get_dota_week_top почти никогда не будет делать тяжёлый SQL,
-                # потому что кеш поддерживается часовым job'ом).
-                mmr_top = get_dota_week_top(limit=30)
-                _digest_state_container.set_dota_data(mmr_top)
-                
-                dota_text = None
-                if not mmr_top:
-                    logger.info("Нет данных для Dota дайджеста")
-                    # Fallback на фиссур-дайджест
-                    next_type = "0"
-                else:
-                    valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
-                    if not valid_players:
-                        logger.info("Нет игроков с 3+ играми для Dota дайджеста")
-                        next_type = "0"
-                    else:
-                        # Top = best by net (2*wins - games)
-                        top_by_net = max(
-                            valid_players,
-                            key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0))
-                        )
-
-                        # Bottom = worst = opposite of best formula (lowest net)
-                        # When nets equal — more games = "worse" (more impressive bad performance)
-                        bottom_by_net = min(
-                            valid_players,
-                            key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), -p.get('week_games', 0))
-                        )
-                        
-                        if top_by_net:
-                            top_player = top_by_net.get('steam_nickname', 'None')
-                            top_id = top_by_net.get('telegram_id')
-                            top_games = top_by_net.get('week_games', 0)
-                            top_wins = top_by_net.get('week_wins', 0)
-                            top_losses = top_games - top_wins
-                            top_winrate = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
-                            
-                            bottom_player = bottom_by_net.get('steam_nickname', 'None')
-                            bottom_id = bottom_by_net.get('telegram_id')
-                            bottom_games = bottom_by_net.get('week_games', 0)
-                            bottom_wins = bottom_by_net.get('week_wins', 0)
-                            bottom_losses = bottom_games - bottom_wins
-                            bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
-                            
-                            if top_player and top_player != "None":
-                                top_part = f"🔺{make_clickable(top_player, top_id)}: {top_wins}W/{top_losses}L ≈{top_winrate}%"
-                            else:
-                                top_part = "🔺—"
-                            
-                            if bottom_player and bottom_player != "None":
-                                bottom_part = f"🔻{make_clickable(bottom_player, bottom_id)}: {bottom_wins}W/{bottom_losses}L ≈{bottom_winrate}%"
-                            else:
-                                bottom_part = "🔻—"
-                            
-                            dota_text = f"<b>{top_part}\n{bottom_part}</b>\n\n🦞Дота Дайджест."
-                        
-                        if dota_text is None:
-                            next_type = "0"
-                
-                text = dota_text
-            
-            # Если не удалось сгенерировать текст - используем fallback
-            if text is None:
-                logger.info("Не удалось сгенерировать дайджест, используем fallback")
+            # Генерируем объединённый текст
+            text = _build_digest_text_for_type("0")
+            if not text:
                 text = "<b>📊 Данные для дайджеста пока не доступны</b>\n\nПопробуйте позже!"
-                next_type = "0"
-            
-            # === СОХРАНЯЕМ В КЕШ ТОЛЬКО ПРИ СОЗДАНИИ НОВОГО СООБЩЕНИЯ ===
-            # При простом обновлении данных НЕ трогаем кеш - чтобы ротация работала корректно
+
+            next_type = "0"
+
+            # === СОХРАНЯЕМ В КЕШ ПРИ СОЗДАНИИ НОВОГО СООБЩЕНИЯ ===
             if should_create_new:
                 cache["text"] = text
-                cache["type"] = current_type
+                cache["type"] = next_type
                 cache["created_at"] = now
-                logger.info(f"Дайджест сгенерирован и сохранен в кеш (тип: {current_type}, новое сообщение)")
+                logger.info(f"Дайджест сгенерирован и сохранен в кеш (новое сообщение)")
             else:
-                logger.info(f"Дайджест сгенерирован для обновления (тип: {current_type}, редактируем существующее)")
-        
-# === ОТПРАВКА ДАЙДЖЕСТА ===
+                logger.info(f"Дайджест сгенерирован для обновления (редактируем существующее)")
+
+        # === ОТПРАВКА ДАЙДЖЕСТА ===
         # Пропускаем редактирование если текст не изменился
         if _digest_state_container.get_last_text() == text:
             logger.debug("Текст дайджеста не изменился, пропускаем редактирование")
