@@ -148,7 +148,7 @@ HERO_META_REFRESH_INTERVAL = 3600
 def invalidate_digest_cache():
     """Сбрасывает кеш digest_stats чтобы следующий alternate_digest_job запросил свежие данные."""
     import database
-    database.user_cache.set('digest_stats', None)
+    database.user_cache.delete_key('digest_stats')
     _digest_state_container.set_digest_data(None)
     logger.info("Digest cache invalidated (will refresh on next job run)")
 
@@ -374,8 +374,8 @@ async def alternate_digest_job(context):
                 logger.info("alternate_digest_job: обновляем данные из БД")
                 # Сбрасываем кеш в database.py чтобы получить свежие данные
                 from database import user_cache
-                user_cache.set('digest_stats', None)
-                user_cache.set('dota_digest_stats', None)
+                user_cache.delete_key('digest_stats')
+                user_cache.delete_key('dota_digest_stats')
                 # Очищаем локальный кеш дайджестов
                 _digest_state_container.set_digest_data(None)
                 _digest_state_container.set_dota_data(None)
@@ -461,7 +461,7 @@ async def alternate_digest_job(context):
             if last_snapshot != today:
                 logger.info(f"Новый день ({today}) — обновляем digest_fissure snapshot для расчёта суточного роста")
                 update_digest_snapshot()
-                user_cache.set('digest_stats', None)
+                user_cache.delete('digest_stats')
                 _digest_state_container.set_digest_data(None)
                 set_config('last_fissure_digest_snapshot', today)
                 set_config('last_top_growth', None)

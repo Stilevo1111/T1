@@ -439,6 +439,7 @@ _PG_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_users_week_games ON users(week_games DESC)",
     "CREATE INDEX IF NOT EXISTS idx_users_current_position ON users(current_position)",
     "CREATE INDEX IF NOT EXISTS idx_users_rank_tier ON users(rank_tier DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_users_in_chat ON users(in_chat)",  # Index for filtering active users
 )
 
 # Лёгкие миграции — выполняются даже при fast init (ADD IF NOT EXISTS)
@@ -876,17 +877,17 @@ def init_db():
                     last_dota_wins INTEGER DEFAULT 0,
                     mmr_updated_at TIMESTAMP,
                     rank_tier INTEGER DEFAULT 0,
-                    wins INTEGER DEFAULT 0,
-                    losses INTEGER DEFAULT 0,
-                    last_match_id INTEGER DEFAULT 0,
-                    week_start_date DATE,
-                    week_best_streak INTEGER DEFAULT 0,
-                    week_current_streak INTEGER DEFAULT 0,
-                    in_chat BOOLEAN DEFAULT 1,
-                    last_greeting_date DATE,
-                    message_count INTEGER DEFAULT 0,
-                    first_name TEXT,
-current_win_streak INTEGER DEFAULT 0,
+wins INTEGER DEFAULT 0,
+                     losses INTEGER DEFAULT 0,
+                     last_match_id INTEGER DEFAULT 0,
+                     week_start_date DATE,
+                     week_best_streak INTEGER DEFAULT 0,
+                     week_current_streak INTEGER DEFAULT 0,
+                     in_chat BOOLEAN DEFAULT 1,
+                     last_greeting_date DATE,
+                     message_count INTEGER DEFAULT 0,
+                     first_name TEXT,
+                     current_win_streak INTEGER DEFAULT 0,
                      current_lose_streak INTEGER DEFAULT 0,
                      best_lose_streak INTEGER DEFAULT 0,
                      avatar TEXT
@@ -972,7 +973,7 @@ current_win_streak INTEGER DEFAULT 0,
                 cursor.execute("ALTER TABLE users ADD COLUMN message_count INTEGER DEFAULT 0")
             if 'first_name' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
-            
+
             # Создаём индексы для часто используемых полей (улучшение производительности)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_mmr ON users(mmr DESC)")
@@ -980,6 +981,7 @@ current_win_streak INTEGER DEFAULT 0,
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_week_games ON users(week_games DESC)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_current_position ON users(current_position)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_rank_tier ON users(rank_tier DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_in_chat ON users(in_chat)")  # Index for filtering active users
         
         _save_schema_version(cursor, is_pg)
         conn.commit()
@@ -1553,12 +1555,11 @@ class Database:
                         "total_growth": float(r[7] or 0.0),
                     })
 
-# Рассчитываем все три топа за один проход
             top_growth_user = None
             top_growth_cm = 0.0
             top_growth_id = None
             top_drop_user = None
-            top_drop_cm = float('inf')  # Start with positive infinity to find minimum (most negative)
+            top_drop_cm = float('inf')
             top_drop_id = None
             top_streak_user = None
             top_streak = 0
@@ -1569,7 +1570,6 @@ class Database:
                 if not telegram_id:
                     continue
 
-                # Рост: current - digest_fissure
                 prev_f = u["digest_fissure"]
                 cur_f = u["fissure"]
                 if prev_f is not None:
@@ -1585,34 +1585,35 @@ class Database:
                         top_drop_user = nick if nick and nick != "None" else str(telegram_id)
                         top_drop_id = telegram_id
 
-                # Стрик
                 if u["current_streak"] > top_streak:
                     top_streak = u["current_streak"]
                     top_streak_id = telegram_id
                     nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
                     top_streak_user = nick if nick and nick != "None" else str(telegram_id)
 
-            def get_user_telegram_username(telegram_id):
-                """Получить Telegram username пользователя"""
-                cached = user_cache.get(telegram_id)
+            if top_drop_cm == float('inf'):
+                top_drop_cm = 0.0
+
+            streak_username = None
+            if top_streak_id:
+                cached = user_cache.get(top_streak_id)
                 if cached:
-                    return cached.get('username')
-                conn = get_connection()
-                cursor = conn.cursor()
-                try:
-                    url = urlparse.urlparse(DATABASE_URL)
-                    if "postgres" in url.scheme:
-                        cursor.execute("SELECT username FROM users WHERE telegram_id = %s", (telegram_id,))
-                    else:
-                        cursor.execute("SELECT username FROM users WHERE telegram_id = ?", (telegram_id,))
-                    result = cursor.fetchone()
-                    return result[0] if result else None
-                finally:
-                    cursor.close()
-                    release_connection(conn)
-            
-            streak_username = get_user_telegram_username(top_streak_id) if top_streak_id else None
-            
+                    streak_username = cached.get('username')
+                else:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    try:
+                        url = urlparse.urlparse(DATABASE_URL)
+                        if "postgres" in url.scheme:
+                            cursor.execute("SELECT username FROM users WHERE telegram_id = %s", (top_streak_id,))
+                        else:
+                            cursor.execute("SELECT username FROM users WHERE telegram_id = ?", (top_streak_id,))
+                        result = cursor.fetchone()
+                        streak_username = result[0] if result else None
+                    finally:
+                        cursor.close()
+                        release_connection(conn)
+
             return {
                 "top_growth": (top_growth_user or "None", int(top_growth_cm)),
                 "top_drop": (top_drop_user or "None", float(top_drop_cm)),
@@ -2174,9 +2175,9 @@ def update_user_field(telegram_id, field, value):
             _save_user_to_db_immediately(telegram_id, user)
         
         # Сбрасываем кеши дайджестов при изменении данных пользователя
-        user_cache.set('digest_stats', None)
-        user_cache.set('weekly_digest_stats', None)
-        user_cache.set('dota_digest_stats', None)
+        user_cache.delete('digest_stats')
+        user_cache.delete('weekly_digest_stats')
+        user_cache.delete('dota_digest_stats')
         # Сбрасываем кеш топа при изменении данных пользователей
         top_cache.clear()
         
@@ -2219,9 +2220,9 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
         user_cache.delete('dota_week_top_ts')
     
     # Сбрасываем кеши дайджестов
-    user_cache.set('digest_stats', None)
-    user_cache.set('weekly_digest_stats', None)
-    user_cache.set('dota_digest_stats', None)
+    user_cache.delete('digest_stats')
+    user_cache.delete('weekly_digest_stats')
+    user_cache.delete('dota_digest_stats')
     top_cache.clear()
     
     return True
@@ -2341,7 +2342,7 @@ def reset_all_fissure_data():
                 user['current_streak'] = 0
                 user['best_streak'] = 0
                 user_cache.set(uid, user)
-        user_cache.set('digest_stats', None)
+        user_cache.delete_key('digest_stats')
         logger.info("reset_all_fissure_data: все данные сброшены")
         return True
     except Exception as e:
@@ -2544,7 +2545,7 @@ def update_digest_snapshot():
     db = Database()
     result = db.update_digest_snapshot()
     # Сбрасываем кеш дайджеста
-    user_cache.set('digest_stats', None)
+    user_cache.delete('digest_stats')
     # Сбрасываем кеш топа при обновлении снимка
     top_cache.clear()
     return result
@@ -2568,7 +2569,7 @@ def update_weekly_digest_snapshot():
     db = Database()
     result = db.update_weekly_digest_snapshot()
     # Сбрасываем кеш
-    user_cache.set('weekly_digest_stats', None)
+    user_cache.delete_key('weekly_digest_stats')
     # Сбрасываем кеш топа при обновлении снимка
     top_cache.clear()
     return result
