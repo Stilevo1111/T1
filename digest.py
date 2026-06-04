@@ -361,7 +361,7 @@ async def alternate_digest_job(context):
             stop_fast_digest_loop()
             return
 
-        # Блокировка от параллельного запуска - УДЕРЖИВАЕМ ДО КОНЦА!
+        # Блокировка от параллельного запуска - только для критических секций
         async with _digest_state_lock:
             last_run = _digest_state_container.get_last_run() or 0
             if now - last_run < 5:
@@ -389,13 +389,10 @@ async def alternate_digest_job(context):
             if not digest_chat_id:
                 logger.info("Чат для дайджеста не настроен")
                 return
-            
-            bot = context.application.bot
 
-        # Re-sync photo/text state from the single source of truth early
-        # (reduces drift between instances after restarts)
-        _get_digest_is_photo()  # warms up the in-memory value from config if needed
-        
+# Release lock before network operations - acquire only for state updates
+        bot = context.application.bot
+
         now = time.time()
         
         # === ЗАЩИТА ОТ ЛОЖНОЙ РОТАЦИИ ПОСЛЕ РЕСТАРТА ===

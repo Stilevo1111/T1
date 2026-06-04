@@ -59,6 +59,7 @@ __all__ = [
 # Cache for background image and hero icons
 _CHART_BG_CACHE = None
 _HERO_ICON_CACHE = {}
+_HERO_ICON_CACHE_MAX = 150  # ~120 Dota heroes + buffer
 
 # =========================================================
 # MARKDOWN ESCAPE
@@ -344,6 +345,11 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
 
         try:
             icon = Image.open(path).convert("RGBA")
+            # FIFO eviction: when cache is full, remove oldest 25% of entries
+            if len(_HERO_ICON_CACHE) >= _HERO_ICON_CACHE_MAX:
+                keys_to_remove = list(_HERO_ICON_CACHE.keys())[:_HERO_ICON_CACHE_MAX // 4]
+                for k in keys_to_remove:
+                    _HERO_ICON_CACHE.pop(k, None)
             _HERO_ICON_CACHE[hero_id] = icon
             return icon
 

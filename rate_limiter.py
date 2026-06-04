@@ -8,7 +8,27 @@ __all__ = [
     "RateLimiter",
     "telegram_rate_limiter",
     "rate_limit",
+    "is_rate_limited",
+    "set_rate_limited",
 ]
+
+# Global state for Telegram API rate limit protection
+_rate_limit_until = 0
+RATE_LIMIT_COOLDOWN = 60  # 60 seconds cooldown after hitting rate limit
+
+
+def is_rate_limited():
+    """Check if bot is currently rate limited for Telegram API calls."""
+    return time.time() < _rate_limit_until
+
+
+def set_rate_limited(retry_after=None):
+    """Set rate limit state. retry_after is seconds to wait (default COOLDOWN)."""
+    global _rate_limit_until
+    wait_time = retry_after if retry_after else RATE_LIMIT_COOLDOWN
+    _rate_limit_until = time.time() + wait_time
+    logger.warning(f"Rate limited until {time.strftime('%H:%M:%S', time.localtime(_rate_limit_until))}")
+
 
 class RateLimiter:
     """

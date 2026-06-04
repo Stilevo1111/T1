@@ -26,7 +26,7 @@ from mute import register_handlers as register_mute_handlers
 from dota_mmr import update_user_mmr, _get_start_card_background
 import aiohttp
 from aiohttp import web
-from rate_limiter import rate_limit
+from rate_limiter import rate_limit, is_rate_limited, set_rate_limited
 
 # Logging setup
 import structlog
@@ -104,26 +104,38 @@ else:
 
 _USER_START_COOLDOWN = {}  # Spam protection for /start: user_id -> timestamp
 _START_COOLDOWN = 5  # 5 seconds cooldown for /start command
+_START_COOLDOWN_TTL = 3600  # Clean up entries older than 1 hour to prevent memory leak
+
+async def _cleanup_start_cooldown():
+    """Periodic cleanup of old _USER_START_COOLDOWN entries to prevent memory leak"""
+    current_time = time.time()
+    to_remove = [uid for uid, ts in _USER_START_COOLDOWN.items() if current_time - ts > _START_COOLDOWN_TTL]
+    for uid in to_remove:
+        _USER_START_COOLDOWN.pop(uid, None)
+    if to_remove:
+        logger.debug(f"Cleaned up {len(to_remove)} stale start cooldown entries")
+
+async def _cleanup_user_analytics(context):
+    """Clean up old analytics_* entries from user_data to prevent memory leak (entries older than 5 minutes)"""
+    current_time = time.time()
+    ANALYTICS_ENTRY_TTL = 300  # 5 minutes
+    
+    # Check for cached timestamp of when analytics data was stored
+    analytics_ts = context.user_data.get('analytics_timestamp', 0)
+    if current_time - analytics_ts > ANALYTICS_ENTRY_TTL:
+        to_remove = []
+        for key in list(context.user_data.keys()):
+            if isinstance(key, str) and key.startswith('analytics_'):
+                to_remove.append(key)
+        for key in to_remove:
+            context.user_data.pop(key, None)
+        # Reset timestamp
+        context.user_data['analytics_timestamp'] = 0
+        if to_remove:
+            logger.debug(f"Cleaned up {len(to_remove)} stale analytics user_data entries")
 
 # Digest state and logic are now fully centralized in digest.py
 # (leader election + single active instance on Render).
-
-_rate_limit_until = 0  # Unix timestamp - skip API calls until this time after 429
-RATE_LIMIT_COOLDOWN = 60  # 60 seconds cooldown after hitting rate limit
-
-
-def is_rate_limited():
-    """Check if bot is currently rate limited"""
-    return time.time() < _rate_limit_until
-
-
-def set_rate_limited(retry_after=None):
-    """Set rate limit state. retry_after is seconds to wait (default COOLDOWN)"""
-    global _rate_limit_until
-    wait_time = retry_after if retry_after else RATE_LIMIT_COOLDOWN
-    _rate_limit_until = time.time() + wait_time
-    logger.warning(f"Rate limited until {time.strftime('%H:%M:%S', time.localtime(_rate_limit_until))}")
-
 
 _bot_can_delete_ttl = 3600  # 1 час
 _BOT_CAN_DELETE_CACHE_MAX = 200
@@ -614,11 +626,28 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Schedule deletion of the final loading/error message
                 schedule_delete(context.bot, chat_id, err_msg_id, 10, context.application.job_queue)
 
-        # Import required classes
+# Import required classes
         from telegram import InputMediaPhoto
         
-        # Start background task
-        context.application.create_task(generate_and_update_analytics())
+        # Track background task for this user to cancel on subsequent requests
+        user_id_for_tracking = update.effective_user.id
+        existing_task = getattr(analyze_command, '_active_tasks', {}).pop(user_id_for_tracking, None)
+        if existing_task and not existing_task.done():
+            logger.info(f"Canceling previous analytics task for user {user_id_for_tracking}")
+            existing_task.cancel()
+            try:
+                await existing_task
+            except asyncio.CancelledError:
+                pass
+        
+        # Start background task and track it
+        task = asyncio.create_task(generate_and_update_analytics())
+        if not hasattr(analyze_command, '_active_tasks'):
+            analyze_command._active_tasks = {}
+        analyze_command._active_tasks[user_id_for_tracking] = task
+        
+        # Start cleanup task
+        asyncio.create_task(_cleanup_user_analytics(context))
         
     except Exception as e:
         logger.error(f"Error in analyze_command: {e}")
@@ -988,7 +1017,7 @@ async def update_all_mmr_job(context):
             return
 
         logger.info("Запуск ежечасного обновления MMR")
-        from database import get_all_users_with_steam
+        from database import get_all_users_with_steam, batch_save_mmr
 
         # Fetch users in thread to avoid blocking event loop on DB query
         users = await asyncio.to_thread(get_all_users_with_steam)
@@ -998,40 +1027,61 @@ async def update_all_mmr_job(context):
 
         logger.info(f"Обновление MMR для {len(users)} пользователей (leader)")
         success_count = 0
-        rank_up_users = []  # собираем для уведомлений
+        rank_up_users = []
+        all_updated_users = []  # Collect all updated data for batch save
 
-        # === BATCHED + PAUSED to spread Neon/OpenDota load ===
-        MMR_BATCH_SIZE = 25
-        MMR_BATCH_PAUSE = 10  # seconds between batches
+        # Semaphore to limit concurrent OpenDota API calls
+        MMR_CONCURRENCY_LIMIT = 5
+        mmr_semaphore = asyncio.Semaphore(MMR_CONCURRENCY_LIMIT)
 
-        for i in range(0, len(users), MMR_BATCH_SIZE):
-            batch = users[i : i + MMR_BATCH_SIZE]
-            for user in batch:
+        async def update_single_user_mmr_async(user: dict) -> tuple[int, dict | None]:
+            """Update MMR for a single user with semaphore limiting"""
+            async with mmr_semaphore:
                 try:
-                    # Pass update_top_cache=False so we rebuild the top cache ONLY ONCE after the full loop
+                    # Run the blocking update_user_mmr in thread
                     result = await asyncio.to_thread(
                         update_user_mmr, user['telegram_id'], update_top_cache=False
                     )
                     if result and result.get('success'):
-                        success_count += 1
-                        logger.info(f"MMR updated for {user['telegram_id']}: {result.get('mmr')} MMR")
-
-                        if result.get('rank_up'):
-                            fresh_user = get_user(user['telegram_id']) or user
-                            rank_up_users.append((fresh_user, result['rank_up']))
+                        return user['telegram_id'], result
+                    return user['telegram_id'], None
                 except Exception as e:
                     logger.error(f"Ошибка обновления MMR для {user['telegram_id']}: {e}")
+                    return user['telegram_id'], None
 
-            if i + MMR_BATCH_SIZE < len(users):
-                logger.info(f"MMR batch done ({i + len(batch)}/{len(users)}), sleeping {MMR_BATCH_PAUSE}s to spread load")
-                await asyncio.sleep(MMR_BATCH_PAUSE)
+        # Run all updates in parallel with semaphore limiting concurrency
+        results = await asyncio.gather(*[update_single_user_mmr_async(user) for user in users])
 
-        # Обновляем кеш топа MMR РОВНО ОДИН РАЗ после всех пользователей (не 150 раз из update_user_fields_batch)
+        for telegram_id, result in results:
+            if result:
+                success_count += 1
+                logger.info(f"MMR updated for {telegram_id}: {result.get('mmr')} MMR")
+                if result.get('rank_up'):
+                    fresh_user = get_user(telegram_id) or {'telegram_id': telegram_id}
+                    rank_up_users.append((fresh_user, result['rank_up']))
+                # Collect data for batch save
+                if result.get('mmr') is not None:
+                    all_updated_users.append({
+                        'telegram_id': telegram_id,
+                        'mmr': result.get('mmr'),
+                        'steam_nickname': result.get('steam_nickname'),
+                        'rank_tier': result.get('rank_tier'),
+                        'week_games': result.get('week_games', 0),
+                        'week_wins': result.get('week_wins', 0),
+                        'week_best_streak': result.get('week_best_streak', 0),
+                        'week_current_streak': result.get('week_current_streak', 0),
+                        'week_start_date': result.get('week_start_date')
+                    })
+
+        # Batch save all updated MMR data at once
+        if all_updated_users:
+            await asyncio.to_thread(batch_save_mmr, all_updated_users)
+
+        # Update top cache once after all updates
         from database import update_dota_week_top_cache
         update_dota_week_top_cache()
 
-        # Refresh Dota digest cache so the 15-second fast rotation
-        # can reliably flip between Fissure and fresh Dota content.
+        # Refresh Dota digest cache
         try:
             from digest import refresh_dota_digest_cache
             refresh_dota_digest_cache()
@@ -1393,7 +1443,7 @@ async def resolve_avatar_url_for_card(
         cached = user_cache.get(telegram_id)
         if cached and cached.get("avatar"):
             return cached["avatar"]
-        db_user = get_user(telegram_id)
+        db_user = await asyncio.to_thread(get_user, telegram_id)
         if db_user and db_user.get("avatar"):
             return db_user["avatar"]
     if telegram_id and bot:
@@ -1416,6 +1466,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Spam protection for /start command
         user_id = update.effective_user.id
         current_time = time.time()
+        
+        # Periodic cleanup of stale entries (every ~100 calls)
+        if len(_USER_START_COOLDOWN) > 100:
+            await _cleanup_start_cooldown()
+        
         if user_id in _USER_START_COOLDOWN:
             last_time = _USER_START_COOLDOWN[user_id]
             if current_time - last_time < _START_COOLDOWN:
@@ -1429,8 +1484,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         first_name = update.effective_user.first_name or "Friend"
         display_username = telegram_username or first_name  # для отображения в карточке
 
-        # Получаем пользователя без авто-создания
-        db_user = get_user(user_id)
+        # Получаем пользователя без авто-создания (wrapped in thread to avoid blocking event loop)
+        db_user = await asyncio.to_thread(get_user, user_id)
         is_new_user = False
 
         if db_user is None:
@@ -1729,7 +1784,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         
         # Fetch full details for matches that have match_id
         telegram_id = callback_query.from_user.id
-        user = get_user(telegram_id)
+        user = await asyncio.to_thread(get_user, telegram_id)
         if user and user.get('steam_id'):
             steam_id = user.get('steam_id')
             matches = await fetch_match_details(matches, steam_id)
@@ -1750,7 +1805,8 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
             from weekly_analytics import detect_role_from_history
             logger.info("Analytics: detecting role and calculating stats")
             role = await detect_role_from_history(matches)
-            stats = calculate_player_stats(matches)
+            # Wrap blocking calculate_player_stats in thread
+            stats = await asyncio.to_thread(calculate_player_stats, matches)
             context.user_data['analytics_stats'] = stats
             context.user_data['analytics_role'] = role
             logger.info(f"Analytics: detected role={role}, stats keys={list(stats.keys()) if stats else 'None'}")
@@ -1768,7 +1824,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
             return
         
         try:
-            all_pages = get_analytics_pages(role, stats)
+            all_pages = await asyncio.to_thread(get_analytics_pages, role, stats)
             logger.info(f"Analytics: generated {len(all_pages)} pages")
         except Exception as e:
             logger.error(f"Error generating analytics pages: {e}", exc_info=True)
@@ -2008,12 +2064,16 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Определяем: свой профиль или чужой
         target_user = None
         viewing_other = False
+        
+        last_10_balls = ""
+        top_heroes = []
+        matches = []
 
         if context.args and context.args[0]:
             # /profile @username или /profile username — ищем другого пользователя
             target_username = context.args[0].lstrip("@")
             if target_username:
-                target_user = get_user_by_username(target_username)
+                target_user = await asyncio.to_thread(get_user_by_username, target_username)
                 if not target_user:
                     msg = await context.bot.send_message(
                         chat_id=chat_id,
@@ -2069,9 +2129,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             week_losses = week_games - week_wins
             winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
 
-            last_10_balls = ""
-            top_heroes = []
-            matches = []
             try:
                 from dota_mmr import get_recent_matches_async, get_top_heroes_async
                 steam_id = target_user.get('steam_id')
@@ -2086,9 +2143,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except asyncio.TimeoutError:
                         logger.warning(f"Timeout getting matches/heroes for steam_id={steam_id}, using cache/default")
                         matches = []
+                        top_heroes = []
                     except Exception as e:
                         logger.debug(f"Could not get matches/heroes: {e}")
                         matches = []
+                        top_heroes = []
                     
                     matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)
                     week_match_count = min(len(matches), week_games)
@@ -3069,6 +3128,13 @@ async def main():
             flush_users_cache_job,
             interval=datetime.timedelta(hours=2),
             first=datetime.timedelta(minutes=15),
+        )
+
+        # Periodic cleanup of stale _USER_START_COOLDOWN entries (prevents memory leak)
+        job_queue.run_repeating(
+            _cleanup_start_cooldown,
+            interval=datetime.timedelta(hours=1),
+            first=datetime.datetime.now() + datetime.timedelta(minutes=30),
         )
 
         # morning_digest_job удалён

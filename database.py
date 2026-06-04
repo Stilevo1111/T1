@@ -2228,51 +2228,45 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
     return True
 
 
+# Whitelist of allowed field names for security in _save_user_to_db_immediately
+_ALLOWED_USER_FIELDS = frozenset([
+    'steam_id', 'steam_nickname', 'avatar', 'mmr', 'rank_tier',
+    'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'dota_total_games',
+    'dota_wins', 'last_dota_games', 'last_dota_wins', 'wins', 'losses', 'week_start_date',
+    'mmr_last_updated', 'message_count', 'weekly_mvp_count', 'weekly_top2_count', 'weekly_top3_count'
+])
+_NUMERIC_USER_FIELDS = frozenset([
+    'mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'week_current_streak',
+    'dota_total_games', 'dota_wins', 'last_dota_games', 'last_dota_wins', 'wins', 'losses',
+    'message_count', 'weekly_mvp_count', 'weekly_top2_count', 'weekly_top3_count'
+])
+
+
 def _save_user_to_db_immediately(telegram_id, user_data):
     """Сохранение пользователя в БД сразу (для важных полей)"""
     try:
         db = Database()
         scheme = get_db_type()
+        
         if "postgres" in scheme:
             placeholders = "%s"
         else:
             placeholders = "?"
+        
+        # Build query using whitelisted field names (safe from SQL injection)
+        field_names = list(_ALLOWED_USER_FIELDS)
+        set_clauses = [f"{name} = {placeholders}" for name in field_names]
         query = f"""
             UPDATE users SET 
-                steam_id = {placeholders}, steam_nickname = {placeholders}, avatar = {placeholders}, mmr = {placeholders}, rank_tier = {placeholders},
-                week_games = {placeholders}, week_wins = {placeholders}, 
-                week_best_streak = {placeholders}, week_current_streak = {placeholders}, dota_total_games = {placeholders},
-                dota_wins = {placeholders}, last_dota_games = {placeholders}, last_dota_wins = {placeholders},
-                wins = {placeholders}, losses = {placeholders}, week_start_date = {placeholders},
-                mmr_last_updated = {placeholders},
-                message_count = {placeholders},
-                weekly_mvp_count = {placeholders}, weekly_top2_count = {placeholders}, weekly_top3_count = {placeholders}
+                {', '.join(set_clauses)}
             WHERE telegram_id = {placeholders}
         """
-        params = (
-            user_data.get('steam_id'),
-            user_data.get('steam_nickname'),
-            user_data.get('avatar'),
-            user_data.get('mmr', 0),
-            user_data.get('rank_tier', 0),
-            user_data.get('week_games', 0),
-            user_data.get('week_wins', 0),
-            user_data.get('week_best_streak', 0),
-            user_data.get('week_current_streak', 0),
-            user_data.get('dota_total_games', 0),
-            user_data.get('dota_wins', 0),
-            user_data.get('last_dota_games', 0),
-            user_data.get('last_dota_wins', 0),
-            user_data.get('wins', 0),
-            user_data.get('losses', 0),
-            user_data.get('week_start_date'),
-            user_data.get('mmr_last_updated'),
-            user_data.get('message_count', 0),
-            user_data.get('weekly_mvp_count', 0),
-            user_data.get('weekly_top2_count', 0),
-            user_data.get('weekly_top3_count', 0),
-            telegram_id
-        )
+        
+        params = tuple(
+            user_data.get(name, 0 if name in _NUMERIC_USER_FIELDS else None)
+            for name in field_names
+        ) + (telegram_id,)
+        
         db.execute_query(query, params)
     except Exception as e:
         logger.error(f"Error saving user {telegram_id} to DB immediately: {e}", exc_info=True)

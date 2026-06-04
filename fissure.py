@@ -26,6 +26,7 @@ from bot_utils import (
     format_time,
     bot_can_delete,
 )
+from rate_limiter import is_rate_limited
 from rolls import (
     calculate_fissure_roll,
     apply_fissure_protection,
@@ -278,6 +279,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_type = update.message.chat.type
     user_msg_id = update.message.message_id
     now = time.time()
+
+    # Глобальная проверка rate limit - защита от всплеска запросов при атаке/боте
+    if is_rate_limited():
+        logger.warning("fissure: skipped due to rate limit")
+        return
 
     # Проверка на выходные по МСК (суббота = 5, воскресенье = 6)
     is_weekend = is_weekend_msk()
