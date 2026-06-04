@@ -1666,9 +1666,6 @@ def generate_top_card(
         if fissure > 0:
             fissure_y = info_y + int(60 * scale) + 5  # 5px down like MMR extra_text
             fissure_text = f"{fissure:.0f} См."
-            # Draw with outline for visual thickness like MMR text
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                draw.text((info_x + dx, fissure_y + dy), fissure_text, fill=(100, 100, 100), font=font_small)
             draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_small)
         
         if extra_text:
@@ -1676,9 +1673,6 @@ def generate_top_card(
                 extra_y = fissure_y + int(35 * scale) + 5
             else:
                 extra_y = info_y + int(55 * scale) + 5
-            # Draw with slight outline for thickness
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                draw.text((info_x + dx, extra_y + dy), extra_text, fill=(100, 100, 100), font=font_small)
             draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_small)
         
         if rank_tier > 0:
