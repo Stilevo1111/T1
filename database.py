@@ -3124,44 +3124,88 @@ def get_dota_digest_stats():
         release_connection(conn)
 
 
-def get_all_users_from_db():
-    """Получение всех пользователей из БД (полные данные)"""
-    return _get_all_users_query(load_all=True, allow_non_steam=True)
+def _get_all_users_query(load_all=False, allow_non_steam=False):
+    """Shared helper: fetch users from DB with ALL columns to avoid setdefault in hot path."""
+    conn = None
     try:
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
-
         cursor = conn.cursor()
 
+        where = ""
+        params = []
+        if not load_all and not allow_non_steam:
+            where = " WHERE steam_id IS NOT NULL"
+        elif allow_non_steam and not load_all:
+            pass
+        elif not allow_non_steam and load_all:
+            where = " WHERE steam_id IS NOT NULL"
+
+        sql = f"""
+            SELECT telegram_id, username, fissure, last_fissure, last_message_id,
+                   total_growth, total_rolls, best_streak, current_streak,
+                   steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
+                   week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
+                   message_count, weekly_mvp_count, weekly_top2_count, weekly_top3_count,
+                   week_start_date, week_updated_at, analytics_cache, analytics_updated_at,
+                   current_win_streak, current_lose_streak, best_lose_streak, weekly_rolls, weekly_growth,
+                   last_activity, in_chat, digest_fissure, weekly_digest_position, week_best_streak,
+                   dota_last_games, dota_last_wins, mmr_last_updated, created_at
+            FROM users{where}
+        """
         if "postgres" in scheme:
-            cursor.execute("""
-SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
-                       total_growth, total_rolls, best_streak, current_streak,
-                       steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
-                       week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
-                       message_count
-                FROM users WHERE steam_id IS NOT NULL
-            """)
-            users = cursor.fetchall()
-            cursor.close()
-            return [{
-                "telegram_id": u[0], "username": u[1], "fissure": u[2], "last_fissure": u[3],
-                "last_message_id": u[4], "total_growth": u[5], "total_rolls": u[6],
-                "best_streak": u[7], "current_streak": u[8], "steam_id": u[9],
-                "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
-                "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
-                "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18], "last_dota_games": u[19],
-                "last_dota_wins": u[20], "message_count": u[21] if len(u) > 21 else 0
-            } for u in users]
+            cursor.execute(sql, params)
+        else:
+            cursor.execute(sql.replace("%s", "?"), params)
+
+        users = cursor.fetchall()
+        cursor.close()
+        return [{
+            "telegram_id": u[0], "username": u[1], "fissure": u[2], "last_fissure": u[3],
+            "last_message_id": u[4], "total_growth": u[5], "total_rolls": u[6],
+            "best_streak": u[7], "current_streak": u[8], "steam_id": u[9],
+            "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
+            "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
+            "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18],
+            "last_dota_games": u[19], "last_dota_wins": u[20], "message_count": u[21] if len(u) > 21 else 0,
+            "weekly_mvp_count": u[22] if len(u) > 22 else 0,
+            "weekly_top2_count": u[23] if len(u) > 23 else 0,
+            "weekly_top3_count": u[24] if len(u) > 24 else 0,
+            "week_start_date": u[25] if len(u) > 25 else None,
+            "week_updated_at": u[26] if len(u) > 26 else None,
+            "analytics_cache": u[27] if len(u) > 27 else None,
+            "analytics_updated_at": u[28] if len(u) > 28 else None,
+            "current_win_streak": u[29] if len(u) > 29 else 0,
+            "current_lose_streak": u[30] if len(u) > 30 else 0,
+            "best_lose_streak": u[31] if len(u) > 31 else 0,
+            "weekly_rolls": u[32] if len(u) > 32 else 0,
+            "weekly_growth": u[33] if len(u) > 33 else 0,
+            "last_activity": u[34] if len(u) > 34 else None,
+            "in_chat": u[35] if len(u) > 35 else False,
+            "digest_fissure": u[36] if len(u) > 36 else 0,
+            "weekly_digest_position": u[37] if len(u) > 37 else 0,
+            "dota_last_games": u[38] if len(u) > 38 else 0,
+            "dota_last_wins": u[39] if len(u) > 39 else 0,
+            "mmr_last_updated": u[40] if len(u) > 40 else 0,
+            "created_at": u[41] if len(u) > 41 else None,
+        } for u in users]
     except Exception as e:
-        logger.error(f"Error get_all_users_from_db: {e}")
+        logger.error(f"Error _get_all_users_query: {e}")
         return []
     finally:
-        release_connection(conn)
+        if conn is not None:
+            release_connection(conn)
 
 
-def reset_weekly_stats():
+def get_all_users_from_db():
+    """Получение всех пользователей из БД (полные данные, все колонки)"""
+    return _get_all_users_query(load_all=True, allow_non_steam=True)
+
+
+def get_all_users():
+    """Получение всех пользователей (для загрузки в кеш при старте)"""
+    return _get_all_users_query(load_all=False, allow_non_steam=True)
     """Сброс недельной статистики для всех пользователей (вызывается по понедельникам)"""
     from datetime import datetime as dt
     from datetime import timedelta, timezone
@@ -3192,65 +3236,6 @@ def reset_weekly_stats():
     except Exception as e:
         logger.error(f"Error reset_weekly_stats: {e}")
         return 0
-
-
-def get_all_users():
-    """Получение всех пользователей (для загрузки в кеш при старте)"""
-    conn = None
-    try:
-        conn = get_connection()
-        url = urlparse.urlparse(DATABASE_URL)
-        scheme = url.scheme
-        cursor = conn.cursor()
-
-        logger.info(f"get_all_users: connecting to {scheme} database")
-
-        if "postgres" in scheme:
-            cursor.execute("""
-                SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
-                       total_growth, total_rolls, best_streak, current_streak,
-                       steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
-                       week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
-                       message_count
-                FROM users
-            """)
-            users = cursor.fetchall()
-            cursor.close()
-            return [{
-                "telegram_id": u[0], "username": u[1], "fissure": u[2], "last_fissure": u[3],
-                "last_message_id": u[4], "total_growth": u[5], "total_rolls": u[6],
-                "best_streak": u[7], "current_streak": u[8], "steam_id": u[9],
-                "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
-                "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
-                "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18], "last_dota_games": u[19],
-                "last_dota_wins": u[20], "message_count": u[21] if len(u) > 21 else 0
-            } for u in users]
-        else:
-            cursor.execute("""
-                SELECT telegram_id, username, fissure, last_fissure, last_message_id, 
-                       total_growth, total_rolls, best_streak, current_streak,
-                       steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
-                       week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
-                       message_count
-                FROM users
-            """)
-            users = cursor.fetchall()
-            cursor.close()
-            return [{
-                "telegram_id": u[0], "username": u[1], "fissure": u[2], "last_fissure": u[3],
-                "last_message_id": u[4], "total_growth": u[5], "total_rolls": u[6],
-                "best_streak": u[7], "current_streak": u[8], "steam_id": u[9],
-                "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
-                "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
-                "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18], "last_dota_games": u[19],
-                "last_dota_wins": u[20], "message_count": u[21] if len(u) > 21 else 0
-            } for u in users]
-    except Exception as e:
-        logger.error(f"Error get_all_users: {e}")
-        return []
-    finally:
-        if conn is not None:
-            release_connection(conn)
 
 
 def get_all_users_with_steam():
