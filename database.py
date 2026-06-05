@@ -2735,7 +2735,7 @@ def get_dota_week_top(limit=10, force_refresh=False):
                 if not user or not user.get('steam_id'):
                     continue
                 
-        week_games = user.get('week_games', 0) or 0
+                week_games = user.get('week_games', 0) or 0
                 # Пропускаем пользователей без игр за неделю
                 if week_games == 0:
                     continue
