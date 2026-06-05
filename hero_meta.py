@@ -470,6 +470,18 @@ async def create_infographic(hero_stats):
 
             icons[hero['id']] = result
 
+    return await asyncio.to_thread(
+        _compose_infographic,
+        base, draw, grid, icons, font_lg,
+        margin_x, margin_y, gap_between_cols,
+        col_width, row_height, icon_height
+    )
+
+
+def _compose_infographic(base, draw, grid, icons, font_lg,
+                         margin_x, margin_y, gap_between_cols,
+                         col_width, row_height, icon_height):
+    """Heavy PIL composition — runs in a thread pool to avoid blocking the event loop."""
     for col_idx in range(5):
         pos = col_idx + 1
         heroes = grid[pos]
@@ -482,14 +494,14 @@ async def create_infographic(hero_stats):
 
             if icon_raw is None:
                 draw.rounded_rectangle(
-                    [x + 20, y + 5, x + col_width - 5, y + icon_height],  # Shift rectangle right by 15
+                    [x + 20, y + 5, x + col_width - 5, y + icon_height],
                     radius=10, fill=(80, 80, 80)
                 )
                 try:
                     ph_font = ImageFont.truetype(FONT_PATH, 16)
                 except:
                     ph_font = ImageFont.load_default()
-                draw.text((x + 25, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)  # Shift text right by 15
+                draw.text((x + 25, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
                 continue
 
             scale = icon_height / icon_raw.height
@@ -505,7 +517,7 @@ async def create_infographic(hero_stats):
                                           radius=max(8, nh // 12), border_width=2)
 
             pw = nw + 4
-            icon_x = x + (col_width - pw) // 2 + 15  # Shift right by 15 pixels
+            icon_x = x + (col_width - pw) // 2 + 15
             icon_y = y + 5
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
@@ -516,7 +528,7 @@ async def create_infographic(hero_stats):
                 bb = draw.textbbox((0, 0), wr_text, font=font_lg)
                 tw = bb[2] - bb[0]
                 th = bb[3] - bb[1]
-                tx = icon_x + pw // 2 - tw // 2  # Also shifted right due to icon_x change
+                tx = icon_x + pw // 2 - tw // 2
                 ty = icon_y + nh + 2 - 12 - th
                 draw.text((tx, ty), wr_text, fill=(255, 255, 255), font=font_lg)
             except Exception:

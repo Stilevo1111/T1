@@ -106,9 +106,7 @@ _cache = {}
 CACHE_TTL = 300  # 5 минут
 CACHE_MAX_SIZE = 100  # максимальное количество записей в кеше
 
-# Кеш для изображений героев (1 час)
-_heroes_image_cache = {}
-_heroes_image_cache_ttl = 3600  # 1 час
+
 
 
 def is_opendota_rate_limited():
@@ -132,30 +130,30 @@ def set_opendota_rate_limited(wait_seconds=60):
     _opendota_rate_limited_until = time.time() + wait_seconds
 
 def _check_rate_limit():
-    """Проверить и обновить rate limiting"""
-    import time
+    """Проверить и обновить rate limiting (sync версия)"""
     now = time.time()
 
-    # Сброс окна если прошла минута
     if now - _api_rate_limit["window_start"] >= API_RATE_WINDOW:
         _api_rate_limit["window_start"] = now
         _api_rate_limit["requests_count"] = 0
 
-    # Проверка лимита
     if _api_rate_limit["requests_count"] >= API_RATE_LIMIT:
         wait_time = API_RATE_WINDOW - (now - _api_rate_limit["window_start"])
         if wait_time > 0:
-            time.sleep(wait_time)
-            _api_rate_limit["window_start"] = time.time()
-            _api_rate_limit["requests_count"] = 0
+            raise RateLimitWaitError(wait_time)
 
-    # Минимальный интервал между запросами
     time_since_last = now - _api_rate_limit["last_request"]
     if time_since_last < API_MIN_INTERVAL:
-        time.sleep(API_MIN_INTERVAL - time_since_last)
+        raise RateLimitWaitError(API_MIN_INTERVAL - time_since_last)
 
     _api_rate_limit["requests_count"] += 1
-    _api_rate_limit["last_request"] = time.time()
+    _api_rate_limit["last_request"] = now
+
+
+class RateLimitWaitError(Exception):
+    def __init__(self, wait_seconds: float):
+        self.wait_seconds = wait_seconds
+        super().__init__(f"Rate limit wait: {wait_seconds}s")
 
 
 def _get_cached(key):
@@ -188,32 +186,35 @@ def _clear_cache():
 
 def _api_get(url: str, params: dict = None, max_retries: int = 2, timeout: int = 8) -> dict:
     """Универсальная функция для API-запросов с обработкой ошибок, кешем и повторными попытками"""
-    # Circuit breaker check
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping request, API unavailable")
         return None
 
-    _check_rate_limit()  # Применяем rate limiting
+    try:
+        _check_rate_limit()
+    except RateLimitWaitError as e:
+        logger.warning(f"Rate limited, waiting {e.wait_seconds:.1f}s...")
+        time.sleep(e.wait_seconds)
+        _api_rate_limit["window_start"] = time.time()
+        _api_rate_limit["requests_count"] = 0
 
     for attempt in range(max_retries + 1):
-        current_timeout = timeout if attempt == 0 else timeout + 5  # Уменьшаем таймаут, быстрее откажемся
+        current_timeout = timeout if attempt == 0 else timeout + 5
         try:
             r = requests.get(url, params=params or {}, timeout=current_timeout)
             if r.status_code == 200:
                 _circuit_breaker_record_success()
                 return r.json()
             elif r.status_code == 429:
-                # Rate limited - wait longer and retry
                 wait_time = 5 * (attempt + 1)
                 logger.warning(f"Rate limited by OpenDota API, waiting {wait_time}s...")
-                set_opendota_rate_limited(60)  # Блокируем на 60 секунд
+                set_opendota_rate_limited(60)
                 _circuit_breaker_record_failure()
                 time.sleep(wait_time)
                 if attempt < max_retries:
                     continue
                 return None
             elif r.status_code >= 500:
-                # Серверная ошибка, попробуем ещё раз
                 _circuit_breaker_record_failure()
                 if attempt < max_retries:
                     logger.warning(f"Server error {r.status_code}, retrying in {attempt + 1}s...")
@@ -263,40 +264,55 @@ async def _check_rate_limit_async():
     _async_rate_limit["last_request"] = time.time()
 
 
-async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15) -> dict:
-    """Асинхронная функция для API-запросов с переиспользованием сессии и увеличенным таймаутом"""
-
-    # Circuit breaker check
+async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15, max_retries: int = 3) -> dict:
+    """Асинхронная функция для API-запросов с переиспользованием сессии, retry и rate limiting"""
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping async request, API unavailable")
         return None
 
     await _check_rate_limit_async()
-    try:
-        from database import get_aiohttp_session
-        session = await get_aiohttp_session()
-        async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
-            if resp.status == 200:
-                _circuit_breaker_record_success()
-                return await resp.json()
-            elif resp.status == 429:
-                logger.warning("Rate limited by OpenDota API, waiting...")
-                set_opendota_rate_limited(60)  # Блокируем на 60 секунд
-                _circuit_breaker_record_failure()
-                await asyncio.sleep(3)
-                return None
 
-            # Timeout also indicates API issues
+    for attempt in range(max_retries):
+        try:
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+                if resp.status == 200:
+                    _circuit_breaker_record_success()
+                    return await resp.json()
+                elif resp.status == 429:
+                    logger.warning("Rate limited by OpenDota API, waiting...")
+                    set_opendota_rate_limited(60)
+                    _circuit_breaker_record_failure()
+                    wait_time = 3 * (attempt + 1)
+                    await asyncio.sleep(wait_time)
+                    continue
+                elif resp.status >= 500:
+                    logger.warning(f"Server error {resp.status} for {url[:60]}, attempt {attempt + 1}/{max_retries}")
+                    _circuit_breaker_record_failure()
+                    await asyncio.sleep(1 + attempt)
+                    continue
+                else:
+                    logger.error(f"API error {resp.status} for {url[:80]}")
+                    _circuit_breaker_record_failure()
+                    return None
+        except TimeoutError:
+            logger.warning(f"API request timeout for {url[:80]}, attempt {attempt + 1}/{max_retries}")
             _circuit_breaker_record_failure()
+            if attempt < max_retries - 1:
+                await asyncio.sleep(1 + attempt)
+                continue
             return None
-    except TimeoutError:
-        logger.warning(f"API request timeout for {url[:80]}")
-        _circuit_breaker_record_failure()
-        return None
-    except Exception as e:
-        logger.error(f"Async API request error: {e}", exc_info=True)
-        _circuit_breaker_record_failure()
-        return None
+        except Exception as e:
+            logger.error(f"Async API request error: {e}", exc_info=True)
+            _circuit_breaker_record_failure()
+            if attempt < max_retries - 1:
+                await asyncio.sleep(1 + attempt)
+                continue
+            return None
+
+    logger.error(f"Async API request failed after {max_retries} retries: {url[:80]}")
+    return None
 
 
 # ========================
