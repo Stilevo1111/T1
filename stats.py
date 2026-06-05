@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Event chances and statistics system for the fissure bot.
 Handles multicast/zeus chances and persistent counters.

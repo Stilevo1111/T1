@@ -1,13 +1,15 @@
 """Dependency Injection Container"""
 from __future__ import annotations
+
 from dependency_injector import containers, providers
-from database import Database
+
 from cache import RedisCache
+from database import Database
 
 
 class Container(containers.DeclarativeContainer):
     """Application dependency container"""
-    
+
     # Configuration
     config = providers.Object(
         type('Config', (), {
@@ -16,18 +18,18 @@ class Container(containers.DeclarativeContainer):
             'db_pool_max_size': 10,
         })()
     )
-    
+
     # Database provider
     database = providers.Singleton(
         Database,
     )
-    
+
     # Cache provider
     cache = providers.Singleton(
         RedisCache,
         url="redis://localhost:6379"
     )
-    
+
     # Repository providers
     user_repository = providers.Factory(
         lambda db=database, cache=cache: UserRepository(db, cache)
@@ -36,17 +38,17 @@ class Container(containers.DeclarativeContainer):
 
 class UserRepository:
     """User repository with cache support"""
-    
+
     def __init__(self, db: Database, cache: RedisCache):
         self.db = db
         self.cache = cache
-    
+
     async def get(self, telegram_id: int):
         # Try cache first
         user = await self.cache.get(f"user:{telegram_id}")
         if user:
             return user
-        
+
         # Fallback to database
         user = await self.db.get_user(telegram_id)
         if user:

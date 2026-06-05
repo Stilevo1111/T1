@@ -1,16 +1,16 @@
-# -*- coding: utf-8 -*-
-import os
+import asyncio
+import io
+import logging
 import re
 import time
-import requests
-import logging
-import aiohttp
-import asyncio
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
-from database import get_user, update_user_fields_batch
-import io
+
+import aiohttp
+import requests
 from PIL import Image
+
+from database import get_user, update_user_fields_batch
 
 # Cached background for start card to avoid repeated downloads
 _START_CARD_BACKGROUND_RESIZED = None
@@ -59,10 +59,10 @@ def _circuit_breaker_can_execute() -> bool:
     """Проверить можно ли выполнять запрос (Circuit Breaker pattern)"""
     cb = _circuit_breaker
     now = time.time()
-    
+
     if cb["state"] == "CLOSED":
         return True
-    
+
     if cb["state"] == "OPEN":
         # Проверяем таймаут восстановления
         if now - cb["last_failure_time"] > cb["recovery_timeout"]:
@@ -70,10 +70,10 @@ def _circuit_breaker_can_execute() -> bool:
             logger.info("Circuit breaker: HALF_OPEN - attempting recovery")
             return True
         return False
-    
+
     if cb["state"] == "HALF_OPEN":
         return True
-    
+
     return True
 
 def _circuit_breaker_record_success():
@@ -88,7 +88,7 @@ def _circuit_breaker_record_failure():
     """Записать неудачный запрос"""
     cb = _circuit_breaker
     cb["failure_count"] += 1
-    
+
     if cb["state"] == "CLOSED":
         if cb["failure_count"] >= cb["failure_threshold"]:
             cb["state"] = "OPEN"
@@ -135,12 +135,12 @@ def _check_rate_limit():
     """Проверить и обновить rate limiting"""
     import time
     now = time.time()
-    
+
     # Сброс окна если прошла минута
     if now - _api_rate_limit["window_start"] >= API_RATE_WINDOW:
         _api_rate_limit["window_start"] = now
         _api_rate_limit["requests_count"] = 0
-    
+
     # Проверка лимита
     if _api_rate_limit["requests_count"] >= API_RATE_LIMIT:
         wait_time = API_RATE_WINDOW - (now - _api_rate_limit["window_start"])
@@ -148,12 +148,12 @@ def _check_rate_limit():
             time.sleep(wait_time)
             _api_rate_limit["window_start"] = time.time()
             _api_rate_limit["requests_count"] = 0
-    
+
     # Минимальный интервал между запросами
     time_since_last = now - _api_rate_limit["last_request"]
     if time_since_last < API_MIN_INTERVAL:
         time.sleep(API_MIN_INTERVAL - time_since_last)
-    
+
     _api_rate_limit["requests_count"] += 1
     _api_rate_limit["last_request"] = time.time()
 
@@ -176,7 +176,7 @@ def _set_cached(key, value):
         sorted_cache = sorted(_cache.items(), key=lambda x: x[1][1])
         for key_to_remove in sorted_cache[:CACHE_MAX_SIZE // 5]:
             del _cache[key_to_remove[0]]
-    
+
     _cache[key] = (value, time.time())
 
 
@@ -192,7 +192,7 @@ def _api_get(url: str, params: dict = None, max_retries: int = 2, timeout: int =
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping request, API unavailable")
         return None
-    
+
     _check_rate_limit()  # Применяем rate limiting
 
     for attempt in range(max_retries + 1):
@@ -243,34 +243,34 @@ _async_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
 async def _check_rate_limit_async():
     """Async версия rate limiting"""
     now = time.time()
-    
+
     if now - _async_rate_limit["window_start"] >= API_RATE_WINDOW:
         _async_rate_limit["window_start"] = now
         _async_rate_limit["requests_count"] = 0
-    
+
     if _async_rate_limit["requests_count"] >= API_RATE_LIMIT:
         wait_time = API_RATE_WINDOW - (now - _async_rate_limit["window_start"])
         if wait_time > 0:
             await asyncio.sleep(wait_time)
             _async_rate_limit["window_start"] = time.time()
             _async_rate_limit["requests_count"] = 0
-    
+
     time_since_last = now - _async_rate_limit["last_request"]
     if time_since_last < API_MIN_INTERVAL:
         await asyncio.sleep(API_MIN_INTERVAL - time_since_last)
-    
+
     _async_rate_limit["requests_count"] += 1
     _async_rate_limit["last_request"] = time.time()
 
 
 async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15) -> dict:
     """Асинхронная функция для API-запросов с переиспользованием сессии и увеличенным таймаутом"""
-    
+
     # Circuit breaker check
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping async request, API unavailable")
         return None
-    
+
     await _check_rate_limit_async()
     try:
         from database import get_aiohttp_session
@@ -285,11 +285,11 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
                 _circuit_breaker_record_failure()
                 await asyncio.sleep(3)
                 return None
-            
+
             # Timeout also indicates API issues
             _circuit_breaker_record_failure()
             return None
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(f"API request timeout for {url[:80]}")
         _circuit_breaker_record_failure()
         return None
@@ -429,8 +429,9 @@ def _compose_heroes_strip_background(canvas_width: int, canvas_height: int):
     Холст фиксированный (иконки как раньше). Фон ImgBB — оригинальные пиксели, без resize.
     Совпадение с холстом — один в один; больше — центр-обрезка; меньше — центр на градиенте.
     """
-    from PIL import Image
     import io
+
+    from PIL import Image
 
     data = None
     cache_file = Path(__file__).parent / "hero_cache" / HEROES_STRIP_BG_CACHE
@@ -488,13 +489,13 @@ def get_heroes_data() -> dict:
     cached = _get_cached("heroes_data")
     if cached:
         return cached
-    
+
     try:
         url = f"{OPENDOTA_API_URL}/heroes"
         data = _api_get(url)
         if not data:
             return {}
-        
+
         heroes = {}
         for hero in data:
             hero_id = hero["id"]
@@ -507,7 +508,7 @@ def get_heroes_data() -> dict:
                 "image_url": f"{HERO_IMAGE_BASE}/{short_name}.png",
                 "icon_url": f"{HERO_ICON_BASE}/{short_name}.png",
             }
-        
+
         _set_cached("heroes_data", heroes)
         logger.info(f"Loaded {len(heroes)} heroes from OpenDota")
         return heroes
@@ -519,32 +520,32 @@ def get_heroes_data() -> dict:
 def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
     """Получить топ-{top_k} популярных героев за последние {last_n} игр"""
     import time
-    
+
     _TOP_HEROES_TTL = 3600  # 1 час
-    
+
     cache_key = f"top_heroes_{steam_id}_{last_n}_{top_k}"
     cached = _heroes_image_cache.get(cache_key)
     if cached:
         cached_data, cached_time = cached
         if time.time() - cached_time < _TOP_HEROES_TTL:
             return cached_data
-    
+
     try:
         matches = get_recent_matches(steam_id, limit=last_n)
         if not matches:
             return []
-        
+
         heroes_data = get_heroes_data()
         if not heroes_data:
             return []
-        
+
         from collections import Counter
         hero_counts = Counter()
         for match in matches:
             hero_id = match.get("hero_id")
             if hero_id:
                 hero_counts[hero_id] += 1
-        
+
         result = []
         for hero_id, count in hero_counts.most_common(top_k):
             hero_info = heroes_data.get(hero_id)
@@ -557,7 +558,7 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
                     "icon_url": hero_info["icon_url"],
                     "picks": count,
                 })
-        
+
         _heroes_image_cache[cache_key] = (result, time.time())
         return result
     except Exception as e:
@@ -568,32 +569,32 @@ def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
 async def get_top_heroes_async(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
     """Асинхронно получить топ-{top_k} популярных героев за последние {last_n} игр"""
     import time
-    
+
     _TOP_HEROES_TTL = 3600  # 1 час
-    
+
     cache_key = f"top_heroes_{steam_id}_{last_n}_{top_k}"
     cached = _heroes_image_cache.get(cache_key)
     if cached:
         cached_data, cached_time = cached
         if time.time() - cached_time < _TOP_HEROES_TTL:
             return cached_data
-    
+
     try:
         matches = await get_recent_matches_async(steam_id, limit=last_n)
         if not matches:
             return []
-        
+
         heroes_data = get_heroes_data()
         if not heroes_data:
             return []
-        
+
         from collections import Counter
         hero_counts = Counter()
         for match in matches:
             hero_id = match.get("hero_id")
             if hero_id:
                 hero_counts[hero_id] += 1
-        
+
         result = []
         for hero_id, count in hero_counts.most_common(top_k):
             hero_info = heroes_data.get(hero_id)
@@ -606,7 +607,7 @@ async def get_top_heroes_async(steam_id: int, last_n: int = 10, top_k: int = 3) 
                     "icon_url": hero_info["icon_url"],
                     "picks": count,
                 })
-        
+
         _heroes_image_cache[cache_key] = (result, time.time())
         return result
     except Exception as e:
@@ -617,18 +618,19 @@ async def get_top_heroes_async(steam_id: int, last_n: int = 10, top_k: int = 3) 
 def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
     """Сгенерировать иконку героя (стиль профиля: 63×63, тёмный фон, синяя рамка)"""
     try:
-        from PIL import Image, ImageDraw, ImageFont
         import io
-        
+
+        from PIL import Image, ImageDraw, ImageFont
+
         icon_size = 63
         padding = 5
         label_height = 16 if label else 0
         width = icon_size + padding * 2
         height = icon_size + padding * 2 + label_height
-        
+
         img = Image.new("RGB", (width, height), color=(40, 55, 70))
         draw = ImageDraw.Draw(img)
-        
+
         # Загружаем иконку
         try:
             resp = requests.get(hero_url, timeout=5)
@@ -638,13 +640,13 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
                 img.paste(icon, (padding, padding), icon)
         except Exception:
             draw.rectangle([padding, padding, padding + icon_size, padding + icon_size], fill=(80, 95, 110))
-        
+
         # Синяя рамка
         draw.rectangle(
             [padding - 1, padding - 1, padding + icon_size, padding + icon_size],
             outline=(120, 170, 210), width=1
         )
-        
+
         # Подпись
         if label:
             try:
@@ -656,7 +658,7 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
             tx = (width - tw) // 2
             ty = icon_size + padding * 2
             draw.text((tx, ty), label, fill=(200, 220, 240), font=font)
-        
+
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=85)
         buf.seek(0)
@@ -667,7 +669,6 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
 
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 
 _heroes_image_cache = {}
 _heroes_image_cache_ttl = 86400
@@ -691,8 +692,9 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             if time.time() - cached_time < _heroes_image_cache_ttl:
                 return cached_data
 
-        from PIL import Image, ImageDraw
         import io
+
+        from PIL import Image, ImageDraw
 
         if not top_heroes:
             logger.warning("generate_heroes_image: top_heroes is empty")
@@ -807,13 +809,13 @@ def parse_steam_identifier(identifier: str) -> int:
     - Никнейм (возвращает None, обработаем позже)
     """
     identifier = identifier.strip()
-    
+
     # Dotabuff ссылка
     match = re.search(r"players/(\d+)", identifier)
     if match:
         account_id = int(match.group(1))
         return account_id_to_steam64(account_id)
-    
+
     # Чистые цифры
     if identifier.isdigit():
         number = int(identifier)
@@ -821,7 +823,7 @@ def parse_steam_identifier(identifier: str) -> int:
             return number
         else:  # короткий Account ID
             return account_id_to_steam64(number)
-    
+
     # Никнейм (не цифры) → вернем None, обработаем позже
     return None
 
@@ -848,20 +850,20 @@ def rank_to_string(rank_tier: int) -> str:
     """Конвертировать rank_tier в читаемый вид (например: "Герой 2", "Титан")"""
     if not rank_tier:
         return "Не калиброван"
-    
+
     ranks = ["Рекрут", "Страж", "Рыцарь", "Герой", "Легенда", "Властелин", "Божество", "Титан"]
     tier = rank_tier // 10
     star = rank_tier % 10
-    
+
     if tier < 1 or tier > 8:
         return "Неизвестно"
-    
+
     rank_name = ranks[tier - 1]
-    
+
     # Титан не имеет звёзд
     if tier == 8:
         return rank_name
-    
+
     return f"{rank_name} {star}"
 
 
@@ -872,7 +874,7 @@ def rank_to_string(rank_tier: int) -> str:
 def search_player(nickname: str) -> dict:
     try:
         url = f"{OPENDOTA_API_URL}/search"
-        
+
         data = _api_get(url, {"q": nickname})
         if not data:
             return None
@@ -891,7 +893,7 @@ def search_player(nickname: str) -> dict:
 
         # Обновляем никнейм из результатов поиска
         stats["nickname"] = player.get("personaname", stats.get("nickname", "Unknown"))
-        
+
         return {
             "steam_id": steam_id,
             **stats
@@ -911,7 +913,7 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
     try:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
-        
+
         # Сортируем по start_time descending (новые первыми)
         matches = _api_get(url, {"limit": limit, "sort": "-start_time"})
         return matches or []
@@ -927,7 +929,7 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
     try:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
-        
+
         matches = await _api_get_async(url, {"limit": limit, "sort": "-start_time"})
         return matches or []
     except Exception as e:
@@ -949,17 +951,17 @@ def is_win_api(match_id: int, steam_id: int) -> bool:
     try:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/matches/{match_id}"
-        
+
         match_data = _api_get(url)
         if not match_data:
             return False
-        
+
         players = match_data.get("players", [])
-        
+
         for player in players:
             if player.get("account_id") == account_id:
                 return player.get("win", 0) == 1
-        
+
         return False
     except Exception as e:
         logger.error(f"is_win_api error: {e}", exc_info=True)
@@ -979,9 +981,9 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
             if cached:
                 # Возвращаем кешированные данные мгновенно
                 return cached
-            
+
         account_id = steam64_to_account_id(steam_id)
-          
+
         # Получаем основную информацию об игроке
         player_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}", timeout=timeout)
         if not player_data:
@@ -994,10 +996,10 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
                     logger.info(f"Returning cached stats for {steam_id} due to API failure")
                     return cached
             return None
-  
+
         profile = player_data.get("profile", {})
         rank_tier = player_data.get("rank_tier") or 0
-          
+
         # Получаем статистику побед/поражений
         wl_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}/wl", timeout=timeout)
         if wl_data:
@@ -1022,14 +1024,14 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
                 total_games = 0
                 wins = 0
                 losses = 0
-         
+
         # Используем mmr_estimate для более точного MMR
         mmr_estimate = player_data.get("mmr_estimate", {}).get("estimate", 0)
         mmr = mmr_estimate or rank_to_mmr(rank_tier)
-         
+
         # Вычисляем винрейт
         winrate = safe_winrate(wins, total_games)
- 
+
         result = {
             "nickname": profile.get("personaname", "Unknown"),
             "avatar": profile.get("avatarfull") or profile.get("avatar"),
@@ -1040,12 +1042,12 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
             "losses": losses,
             "winrate": winrate,
         }
-         
+
         # Сохраняем в кеш
         _set_cached(cache_key, result)
-         
+
         return result
- 
+
     except Exception as e:
         logger.error(f"stats error: {e}", exc_info=True)
         # При любой ошибке возвращаем кешированные данные если есть
@@ -1113,7 +1115,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                     "rank_tier": 0,
                     "wins": 0,
                     "losses": 0,
-                    "week_start_date": datetime.now(timezone.utc).date().isoformat()
+                    "week_start_date": datetime.now(UTC).date().isoformat()
                 })
                 return {"success": True, "message": "✅ Аккаунт привязан! Статистика будет доступна, когда профиль станет публичным (Steam → Settings → Privacy → Game Details → Public)"}
         else:
@@ -1132,7 +1134,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         if existing_user and existing_user.get('telegram_id') != telegram_id:
             existing_username = existing_user.get('username') or existing_user.get('steam_nickname') or 'другой игрок'
             return {"success": False, "message": f"❌ Этот Steam аккаунт уже привязан к {existing_username}"}
-        
+
         # сохраняем все поля одним запросом
         update_user_fields_batch(telegram_id, {
             "steam_id": steam_id,
@@ -1142,9 +1144,9 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
             "rank_tier": stats.get("rank_tier", 0),
             "wins": stats.get("wins", 0),
             "losses": stats.get("losses", 0),
-            "week_start_date": datetime.now(timezone.utc).date().isoformat()
+            "week_start_date": datetime.now(UTC).date().isoformat()
         })
-        
+
         # Обновляем недельную статистику сразу после привязки
         update_user_mmr(telegram_id)
 
@@ -1155,7 +1157,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         losses = stats.get("losses", 0)
         total = wins + losses
         winrate = stats.get("winrate", 0)
-        
+
         return {
             "success": True,
             "message": f"✅ {stats['nickname']} | {rank_str}\n📊 {total} игр | ✅ {wins} | ❌ {losses} | {winrate}%"
@@ -1195,18 +1197,18 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         today_msk = datetime.now(MSK)
         monday_msk = today_msk - timedelta(days=today_msk.weekday())
         week_start_msk = monday_msk.replace(hour=0, minute=0, second=0, microsecond=0)
-        week_start_utc = week_start_msk.astimezone(timezone.utc)
+        week_start_utc = week_start_msk.astimezone(UTC)
         logger.info(f"topmmr: week start (MSK) = {week_start_msk} (Monday)")
         logger.info(f"topmmr: week start (UTC) = {week_start_utc} (Monday)")
-        
+
         # Получаем последние матчи недели (максимум 30)
         matches = get_recent_matches(user["steam_id"], limit=30)
-        
+
         # Логируем все полученные матчи
         if matches:
             logger.info(f"topmmr: total matches received from API: {len(matches)}")
             for i, match in enumerate(matches):
-                match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=timezone.utc)
+                match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=UTC)
                 in_week = match_date >= week_start_utc
                 logger.info(f"topmmr: match[{i}] id={match.get('match_id')} start_time={match.get('start_time')} date={match_date} week_start={week_start_utc} in_week={in_week}")
                 if in_week:
@@ -1229,24 +1231,24 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             # Идём от новых к старым, чтобы current_streak в конце = текущий стрик
             for match in matches:
                 try:
-                    match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=timezone.utc)
+                    match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=UTC)
                     if match_date >= week_start_utc:
                         week_games += 1
-                        
+
                         # Определяем победу используя player_slot и radiant_win
                         player_slot = match.get("player_slot")
                         radiant_win = match.get("radiant_win", False)
-                        
+
                         # Логируем ВСЕ значения для отладки (первые 3 матча)
                         if week_games <= 3:
                             logger.info(f"topmmr: DEBUG match {match.get('match_id')} player_slot={player_slot} radiant_win={radiant_win}")
-                        
+
                         # player_slot: 0-4 = Radiant, 128-132 = Dire
                         if player_slot is not None:
                             player_was_radiant = player_slot < 127
                         else:
                             player_was_radiant = True
-                        
+
                         # Победа: игрок был на стороне победившей команды
                         if radiant_win and player_was_radiant:
                             is_win = True
@@ -1254,7 +1256,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                             is_win = True
                         else:
                             is_win = False
-                        
+
                         # Логируем только для отладки (можно убрать после проверки)
                         if week_games <= 3:
                             logger.info(f"topmmr: match {match.get('match_id')} - player_was_radiant={player_was_radiant}, is_win={is_win}")
@@ -1269,19 +1271,19 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                             week_current_streak = 0
                 except Exception:
                     pass
-        
+
         logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}, week_streak={max_streak}")
-        
+
         # Проверяем смену недели - если неделя изменилась, сбрасываем статистику
         user_week_start = user.get('week_start_date')
         current_week_start = week_start_msk.strftime("%Y-%m-%d")
-        
+
         if user_week_start and user_week_start != current_week_start:
             logger.info(f"Week changed for {telegram_id}: {user_week_start} -> {current_week_start}, resetting week stats")
             week_games = 0
             week_wins = 0
             max_streak = 0
-        
+
         # Проверяем повышение ранга
         new_rank_tier = stats.get("rank_tier", 0)
         old_rank_tier = user.get("rank_tier", 0)
@@ -1289,10 +1291,10 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         if new_rank_tier > old_rank_tier:
             logger.info(f"Rank UP for {telegram_id}: {old_rank_tier} -> {new_rank_tier}")
             rank_up = {"old_rank": rank_to_string(old_rank_tier), "new_rank": rank_to_string(new_rank_tier)}
-        
+
         # ВАЖНО: Всегда обновляем недельную статистику из матчей
         logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_streak={max_streak}, week_start={week_start_utc}")
-        
+
         # If no matches, don't update week stats (preserve existing)
         if not matches:
             week_games = None
@@ -1300,7 +1302,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             max_streak = None
             week_current_streak = None
             logger.info("No matches this week, preserving existing week stats")
-        
+
         # Обновляем ВСЕ поля одним запросом
         # Pass update_top_cache so the caller (MMR job) can force exactly ONE rebuild after the whole batch
         update_user_fields_batch(telegram_id, {
@@ -1357,15 +1359,16 @@ def generate_start_card(
 ) -> bytes | None:
     """Сгенерировать карточку для /start существующего пользователя"""
     try:
-        from PIL import Image, ImageDraw, ImageFont
         import io
         import os
+
+        from PIL import Image, ImageDraw, ImageFont
 
         # Компактный размер - увеличенный для Retina
         width = 1024
         height = 500
         scale = 1.8  # коэффициент масштабирования
-        
+
         # Фон и draw
         try:
             bg_image = _get_start_card_background()
@@ -1380,13 +1383,13 @@ def generate_start_card(
             logger.error(f"Failed to load background image: {e}")
             img = Image.new("RGB", (width, height), (15, 20, 35))
         draw = ImageDraw.Draw(img)
-        
+
         avatar_x_offset = -100  # Shift avatar 100px left
         avatar_size = int(140 * scale)  # Avatar size
         avatar_x = int(120 * scale) + avatar_x_offset  # 20 - 100 + offset
         # Центрирование авататная
         avatar_y = int((height - avatar_size) // 2 - 10)
-        
+
         avatar_loaded = False
         if avatar_url:
             try:
@@ -1429,16 +1432,16 @@ def generate_start_card(
                     logger.warning(f"Avatar download returned no image: {avatar_url}")
             except Exception as e:
                 logger.warning(f"Exception loading avatar: {e}")
-        
+
         if not avatar_loaded:
             draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(215, 175, 85), width=int(4*scale))
             # Default icon placeholder
             draw.ellipse([avatar_x + int(45*scale), avatar_y + int(35*scale), avatar_x + int(95*scale), avatar_y + int(105*scale)], fill=(80, 100, 130))
-        
+
         # Координаты для текстовой информации (справа от аватара)
         info_x = avatar_x + avatar_size + int(30 * scale)
         info_y = avatar_y + int(20 * scale)
-        
+
         # Шрифты - увеличенные для Retina
         try:
             font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
@@ -1446,15 +1449,15 @@ def generate_start_card(
         except Exception:
             font_title = ImageFont.load_default()
             font_small = ImageFont.load_default()
-        
+
         # Иконки - открытые источники
         icon_size = int(32 * scale)
-        
+
         icon_urls = {
             'msg': 'https://upload.wikimedia.org/wikipedia/commons/8/83/Telegram_icon_%282021%29.svg',
             'trophy': 'https://upload.wikimedia.org/wikipedia/commons/a/a2/Trophy_icon.svg',
         }
-        
+
         icons = {}
         for name, url in icon_urls.items():
             try:
@@ -1464,7 +1467,7 @@ def generate_start_card(
                     icons[name] = ic.resize((icon_size, icon_size), Image.LANCZOS)
             except Exception:
                 pass
-        
+
         # Генерируем медали программно (прозрачные PNG с цифрами)
         def create_medal_image(number, color, text_color):
             img = Image.new("RGBA", (icon_size, icon_size), (0, 0, 0, 0))
@@ -1481,11 +1484,11 @@ def generate_start_card(
             y = (icon_size - text_height) // 2 - 2
             draw.text((x, y), str(number), fill=text_color, font=font_medal)
             return img
-        
+
         icons['gold'] = create_medal_image(1, (255, 215, 0, 255), (184, 134, 11, 255))
         icons['silver'] = create_medal_image(2, (192, 192, 192, 255), (128, 128, 128, 255))
         icons['bronze'] = create_medal_image(3, (205, 127, 50, 255), (139, 69, 19, 255))
-        
+
         # Dota 2 rank icon - прямые ссылки с gamepedia.cursecdn.com (работают)
         rank_icon = None
         rank_icon_size = int(80 * scale)
@@ -1494,7 +1497,7 @@ def generate_start_card(
             star = rank_tier % 10
             if star == 0:
                 star = 5
-            
+
             rank_urls = {
                 (1, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/85/SeasonalRank1-1.png",
                 (1, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/e/ee/SeasonalRank1-2.png",
@@ -1538,7 +1541,7 @@ def generate_start_card(
                 (7, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/1/13/SeasonalRank7-4.png",
                 (7, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/3/33/SeasonalRank7-5.png",
             }
-            
+
             rank_url = rank_urls.get((tier, star))
             if rank_url:
                 try:
@@ -1552,7 +1555,7 @@ def generate_start_card(
                         logger.warning(f"Failed to load rank icon: HTTP {resp.status_code}")
                 except Exception as e:
                     logger.warning(f"Exception loading rank icon: {e}")
-        
+
         # Username/nickname - white color (always show for all users)
         username_y = info_y
         username_x_offset = 0
@@ -1560,33 +1563,33 @@ def generate_start_card(
             draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(255, 255, 255), font=font_title)
         elif username:
             draw.text((info_x + username_x_offset, username_y), f"@{username}", fill=(255, 255, 255), font=font_title)
-        
+
         # Messages label - white
         msg_label_y = username_y + int(50 * scale)
         if week_wins is not None and week_losses is not None:
             draw.text((info_x + username_x_offset, msg_label_y), "За неделю:", fill=(255, 255, 255), font=font_small)
         else:
             draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(255, 255, 255), font=font_small)
-        
+
         # Number - white
         msg_num_y = msg_label_y + int(28 * scale)
         if week_wins is not None and week_losses is not None:
             draw.text((info_x + username_x_offset, msg_num_y), f"{week_wins}W/{week_losses}L", fill=(255, 255, 255), font=font_title)
         else:
             draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
-        
+
 # Rank icon - only show if rank_tier > 0
         if rank_tier > 0 and rank_icon:
             # Center under avatar (avatar is shifted 100px left)
             rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
             rank_y = avatar_y + avatar_size - rank_icon_size // 2
             img.paste(rank_icon, (rank_x, rank_y), rank_icon)
-        
+
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=90)
         buf.seek(0)
         return buf.read()
-    
+
     except Exception:
              import logging
              logging.exception("generate_start_card error")
@@ -1604,15 +1607,16 @@ def generate_top_card(
 ) -> bytes | None:
     """Generate top banner matching start card style"""
     try:
-        from PIL import Image, ImageDraw, ImageFont
         import io
-        import requests
         import os
-        
+
+        import requests
+        from PIL import Image, ImageDraw, ImageFont
+
         width = 1024
         height = 500
         scale = 1.8
-        
+
         try:
             bg_image = _get_start_card_background()
             if bg_image is not None:
@@ -1622,12 +1626,12 @@ def generate_top_card(
         except Exception:
             img = Image.new("RGB", (width, height), (15, 20, 35))
         draw = ImageDraw.Draw(img)
-        
+
         avatar_x_offset = -100
         avatar_size = int(140 * scale)
         avatar_x = int(120 * scale) + avatar_x_offset
         avatar_y = int((height - avatar_size) // 2 - 10)
-        
+
         avatar_loaded = False
         logger.info(f"generate_top_card: avatar_url={avatar_url[:50] if avatar_url else None}, show_avatar={show_avatar}")
         if avatar_url and show_avatar and str(avatar_url).strip().lower().startswith(('http://', 'https://')):
@@ -1655,42 +1659,42 @@ def generate_top_card(
                     avatar_loaded = True
             except Exception as e:
                 logger.warning(f"Exception loading avatar: {e}")
-        
+
         if not avatar_loaded:
             draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(40, 55, 80), outline=(215, 175, 85), width=int(4*scale))
             draw.ellipse([avatar_x + int(45*scale), avatar_y + int(35*scale), avatar_x + int(95*scale), avatar_y + int(105*scale)], fill=(80, 100, 130))
-        
+
         info_x = avatar_x + avatar_size + int(30 * scale)
         info_y = avatar_y + int(20 * scale)
-        
+
         try:
             font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(40 * scale))
             font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(26 * scale))
             font_fissure = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(36 * scale))
         except Exception:
             font_title = font_small = font_fissure = ImageFont.load_default()
-        
+
         display_name = f"@{username}" if username else str(telegram_id) if telegram_id else "Unknown"
         draw.text((info_x, info_y), display_name, fill=(255, 255, 255), font=font_title)
-        
+
         if fissure > 0:
             fissure_y = info_y + int(60 * scale) + 5
             fissure_text = f"{fissure:.0f} См."
             draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_fissure)
-        
+
         if extra_text:
             if fissure > 0:
                 extra_y = fissure_y + int(35 * scale) + 5
             else:
                 extra_y = info_y + int(55 * scale) + 5
             draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_small)
-        
+
         if rank_tier > 0:
             tier = rank_tier // 10
             star = rank_tier % 10
             if star == 0:
                 star = 5
-            
+
             rank_urls = {
                 (1, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/85/SeasonalRank1-1.png",
                 (1, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/e/ee/SeasonalRank1-2.png",
@@ -1728,7 +1732,7 @@ def generate_top_card(
                 (7, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/1/13/SeasonalRank7-4.png",
                 (7, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/3/33/SeasonalRank7-5.png",
             }
-            
+
             rank_url = rank_urls.get((tier, star))
             if rank_url:
                 try:
@@ -1742,12 +1746,12 @@ def generate_top_card(
                         img.paste(rank_icon, (rank_x, rank_y), rank_icon)
                 except Exception as e:
                     logger.warning(f"Exception loading rank icon: {e}")
-        
+
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=90)
         buf.seek(0)
         return buf.read()
-    
+
     except Exception:
              import logging
              logging.exception("generate_top_card error")

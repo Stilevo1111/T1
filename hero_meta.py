@@ -1,14 +1,16 @@
 # hero_meta.py — heroStats API + role-based positions, layout = dc5d7a5 (a32f3e8)
 
 import asyncio
-import aiohttp
 import io
-import os
-import math
 import logging
+import math
+import os
 from pathlib import Path
 from urllib.parse import urlparse
+
+import aiohttp
 from PIL import Image, ImageDraw, ImageFont
+
 from hero_positions import hero_positions
 
 logger = logging.getLogger(__name__)
@@ -194,14 +196,14 @@ _HERO_META_CACHE_TTL = 7200  # 2 hours
 async def get_dota_data(days=7, force_refresh=False):
     import time
     now = int(time.time())
-    
+
     # Check cache first
     global _hero_meta_cache
     if not force_refresh and _hero_meta_cache["data"] and now - _hero_meta_cache["timestamp"] < _HERO_META_CACHE_TTL:
         logger.info("Using cached hero meta data")
         return _hero_meta_cache["data"]
     week_ago = now - (days * 24 * 60 * 60)
-    
+
     # Query with position grouping - each hero-position gets separate stats
     sql = f"""
         SELECT 
@@ -220,7 +222,7 @@ async def get_dota_data(days=7, force_refresh=False):
         GROUP BY hero_id, player_slot
         HAVING COUNT(*) >= 5
     """
-    
+
     try:
         from database import get_aiohttp_session
         session = await get_aiohttp_session()
@@ -258,7 +260,7 @@ async def get_dota_data(days=7, force_refresh=False):
                     return result
     except Exception as e:
         logger.warning("Explorer failed: %s", e)
-    
+
     try:
         from database import get_aiohttp_session
         session = await get_aiohttp_session()
@@ -392,7 +394,7 @@ async def create_infographic(hero_stats):
 
     draw = ImageDraw.Draw(base)
 
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
     MSK = timezone(timedelta(hours=3))
     now_msk = datetime.now(MSK)
     date_text = now_msk.strftime("%d.%m.%Y %H:%M")
@@ -441,7 +443,7 @@ async def create_infographic(hero_stats):
 
     from database import get_aiohttp_session
     session = await get_aiohttp_session()
-    
+
     tasks = [
         fetch_hero_icon(session, h['img'])
         for h in all_heroes
@@ -549,7 +551,7 @@ def get_static_fallback_banner():
     try:
         base = Image.new("RGBA", (1200, 200), (25, 25, 35, 255))
         draw = ImageDraw.Draw(base)
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
         MSK = timezone(timedelta(hours=3))
         date_text = datetime.now(MSK).strftime("%d.%m.%Y %H:%M")
         try:

@@ -1,7 +1,7 @@
 import asyncio
+import logging
 import os
 import time
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -333,11 +333,18 @@ def get_digest_data_hash():
 
 async def alternate_digest_job(context):
     """Чередование утреннего и Dota дайджестов (редактирование существующего, создание нового только при необходимости)"""
-    from main import is_rate_limited, make_clickable, bot_can_delete
-    from database import get_config, set_config, get_digest_stats, get_dota_week_top, user_cache, update_digest_snapshot
+    from database import (
+        get_config,
+        get_digest_stats,
+        get_dota_week_top,
+        set_config,
+        update_digest_snapshot,
+        user_cache,
+    )
+    from main import bot_can_delete, is_rate_limited
     try:
         now = time.time()
-        
+
         # Проверяем глобальный rate limit
         if is_rate_limited():
             logger.warning("alternate_digest_job: skipped - bot is rate limited")
@@ -356,7 +363,7 @@ async def alternate_digest_job(context):
                 logger.info(f"alternate_digest_job: пропуск (запущен {(now - last_run):.1f}с назад)")
                 return
             _digest_state_container.set_last_run(now)
-            
+
             # Проверяем, нужно ли обновить данные из БД (раз в час)
             if now - _digest_state_container.get_last_data_update() >= DIGEST_DATA_REFRESH_INTERVAL:
                 logger.info("alternate_digest_job: обновляем данные из БД")
@@ -368,7 +375,7 @@ async def alternate_digest_job(context):
                 _digest_state_container.set_digest_data(None)
                 _digest_state_container.set_dota_data(None)
                 _digest_state_container.set_last_data_update(now)
-            
+
             # Получаем ID чата для дайджеста (из кеша, не БД)
             digest_chat_id = _digest_state_container.get_chat_id() or get_config('digest_chat_id')
             if digest_chat_id:
@@ -382,7 +389,7 @@ async def alternate_digest_job(context):
         bot = context.application.bot
 
         now = time.time()
-        
+
         # === ЗАЩИТА ОТ ЛОЖНОЙ РОТАЦИИ ПОСЛЕ РЕСТАРТА ===
         # Если в БД уже есть alternate_digest_message_id — пост существует,
         # значит мы должны РЕДАКТИРОВАТЬ его, а не создавать новый.
@@ -393,34 +400,34 @@ async def alternate_digest_job(context):
             if not cache.get("created_at") or cache.get("created_at", 0) <= 0:
                 cache["created_at"] = time.time() - 30
                 logger.info("alternate_digest_job: existing message_id in config, created_at adjusted to prevent false rotation after restart")
-        
+
         # === УМНАЯ СИСТЕМА КЕШИРОВАНИЯ ДАЙДЖЕСТОВ ===
         should_create_new = False
         should_refresh_data = False
-        
+
         existing_msg_id = msg_id
-        
+
         # 1. Rotation interval — create new message and regenerate hero meta
         #    (We delete the old one and create a fresh post with new hero meta)
         if now - cache["created_at"] > cache["rotation_interval"]:
             should_create_new = True
             logger.info("Rotation interval reached, will create new digest")
-        
+
         # 2. No message_id in config at all (and cache empty) — first time, create new
         elif cache["text"] is None and not existing_msg_id:
             should_create_new = True
             logger.info("Кеш пуст и нет сохранённого сообщения — создаём новое")
-        
+
         # 3. Cache expired (TTL) - REFRESH DATA in existing message
         elif now - cache["created_at"] > cache["cache_ttl"]:
             should_refresh_data = True
             logger.info(f"Кеш устарел ({now - cache['created_at']:.0f}с > {cache['cache_ttl']}с), обновляем данные")
-        
+
         # 4. Data refreshed - REFRESH DATA in existing message
         elif now - _digest_state_container.get_last_data_refresh() > _data_refresh_interval:
             should_refresh_data = True
             logger.info(f"Данные в БД обновились ({_data_refresh_interval}с), обновляем")
-        
+
 # Если кеш валиден - используем его и обновляем объединённый дайджест
         if not should_create_new and not should_refresh_data:
             logger.info(f"Используем кешированный дайджест (создан {now - cache['created_at']:.0f}с назад)")
@@ -476,9 +483,9 @@ async def alternate_digest_job(context):
                 cache["text"] = text
                 cache["type"] = next_type
                 cache["created_at"] = now
-                logger.info(f"Дайджест сгенерирован и сохранен в кеш (новое сообщение)")
+                logger.info("Дайджест сгенерирован и сохранен в кеш (новое сообщение)")
             else:
-                logger.info(f"Дайджест сгенерирован для обновления (редактируем существующее)")
+                logger.info("Дайджест сгенерирован для обновления (редактируем существующее)")
 
         # === ОТПРАВКА ДАЙДЖЕСТА ===
         # Пропускаем редактирование если текст не изменился
@@ -781,21 +788,21 @@ async def alternate_digest_job(context):
                     logger.debug(f"Не удалось закрепить: {e}")
             finally:
                 pass  # Creation flag no longer used (legacy from extraction)
-        
+
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
 
 
 # ============================================================
 # Internal helpers for photo/text message type (single source of truth)
-# 
+#
 # This is the centralized mechanism for tracking whether the current
 # pinned alternate digest message is a photo (with caption) or plain text.
-# 
+#
 # All reads and writes MUST go through these two functions to prevent
 # drift between instances, after restarts, or during fast tick <-> job
 # interactions.
-# 
+#
 # These helpers do NOT change any user-visible behavior or message content.
 # ============================================================
 

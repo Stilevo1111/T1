@@ -68,7 +68,7 @@ def test_rolls_calculations_are_pure_and_stable():
     """Pure calculation functions from rolls.py must work and never raise for valid inputs.
     This protects against accidental breakage during future extractions.
     """
-    from rolls import calculate_fissure_roll, calculate_new_fissure, apply_fissure_protection
+    from rolls import apply_fissure_protection, calculate_fissure_roll, calculate_new_fissure
 
     # Test a range of fissure sizes
     for size in [0.1, 1, 5, 10, 19, 20, 50, 100]:

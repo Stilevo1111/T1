@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Global constants for the fissure bot.
 Extracted from main.py without changing any behavior.

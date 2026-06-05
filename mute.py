@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Модуль модерации: /mute — "молчанка" (кляп) за 10 см фиссуры.
 
@@ -18,10 +17,9 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 
 from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler, MessageHandler
+from telegram.ext import CommandHandler, ContextTypes, MessageHandler
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +59,7 @@ def _pick_gag_emoji(victim_id: int) -> str:
     return random.choice(_GAG_EMOJIS)
 
 
-def _get_gag_expiry(user_id: int) -> Optional[datetime]:
+def _get_gag_expiry(user_id: int) -> datetime | None:
     """Возвращает время окончания кляпа или None."""
     expiry = _gagged_users.get(user_id)
     if expiry is None:
@@ -104,7 +102,7 @@ async def get_user_by_username_in_chat(
     chat_id: int,
     username: str,
     context: ContextTypes.DEFAULT_TYPE,
-) -> Optional[dict]:
+) -> dict | None:
     """
     Найти пользователя Telegram по сокращённому username (без @) среди участников чата.
 

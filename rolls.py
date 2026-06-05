@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Roll system for fissure calculations.
 Contains constants and pure calculation functions.

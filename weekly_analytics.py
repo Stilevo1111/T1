@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Еженедельная аналитика игроков Dota 2.
 
@@ -20,9 +19,8 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import asyncio
+from typing import Any
 
 # Type aliases for clarity (no runtime effect)
 RoleName = str
@@ -31,17 +29,17 @@ ProPlayer = dict[str, str | int | float]
 ProBenchmarks = dict[str, float | int]
 ProRoleData = dict[RoleName, dict[str, dict[PlayerName, ProPlayer] | ProBenchmarks]]
 Weights = dict[str, float]
-import aiohttp
-import json
-from PIL import Image
 import io
-from datetime import datetime, timezone
-
-from dota_mmr import steam64_to_account_id, OPENDOTA_API_URL, _api_get_async
-from database import get_user, Database
-from hero_positions import hero_positions
-
+import json
 import logging
+from datetime import UTC, datetime
+
+import aiohttp
+from PIL import Image
+
+from database import Database, get_user
+from dota_mmr import OPENDOTA_API_URL, _api_get_async, steam64_to_account_id
+from hero_positions import hero_positions
 
 logger = logging.getLogger(__name__)
 
@@ -313,18 +311,18 @@ def _normalize_hero_file_name(internal_name: str) -> str:
     """Convert OpenDota internal name to file name"""
     # Remove npc_dota_hero_ prefix if present
     name = internal_name.replace("npc_dota_hero_", "")
-    
+
     # Check mapping first
     if name in HERO_NAME_MAP:
         return HERO_NAME_MAP[name]
-    
+
     # Handle specific name transformations
     # doom_bringer -> doom_bringer (same, but check for doom)
     if name == "doom_bringer":
         return "doom_bringer"
     if name == "doom":
         return "doom_bringer"
-    
+
     # Return as-is for most heroes
     return name
 
@@ -388,18 +386,18 @@ def _normalize_hero_name(internal_name: str) -> str:
         "npc_dota_hero_life_stealer": "Lifestealer",
         "npc_dota_hero_abyssal_underlord": "Underlord",
     }
-    
+
     if internal_name in name_map:
         return name_map[internal_name]
-    
+
     # Replace npc_dota_hero_ prefix
     name = internal_name.replace("npc_dota_hero_", "")
-    
+
     # Convert snake_case to Title Case with spaces
     # e.g., "anti_mage" -> "Anti Mage" -> handle special cases
     parts = name.split("_")
     result = " ".join(p.capitalize() for p in parts)
-    
+
     # Fix known multi-word hero names
     multi_word_fixes = {
         "Anti Mage": "Anti-Mage",
@@ -415,58 +413,58 @@ def _normalize_hero_name(internal_name: str) -> str:
         "Outworld Destroyer": "Outworld Destroyer",
         "Dust II": "Dust II",  # handle edge cases
     }
-    
+
     return multi_word_fixes.get(result, result)
 
 
 async def _detect_role_from_hero_counts(matches: list[dict[str, Any]]) -> str:
     heroes = await _load_heroes()
-    
+
     # Mapping: position 1-5 -> role
     POS_TO_ROLE = {
         1: "CARRY",
-        2: "MID", 
+        2: "MID",
         3: "OFFLANE",
         4: "SUPPORT",
         5: "SUPPORT"
     }
-    
+
     role_counts = {
         "CARRY": 0,
         "MID": 0,
         "OFFLANE": 0,
         "SUPPORT": 0
     }
-    
+
     total_matches = len(matches)
-    
+
     for m in matches:
         hero_id = m.get("hero_id", 0)
         internal_name = heroes.get(hero_id, "")
-        
+
         # Normalize hero name for lookup in hero_positions
         hero_name = _normalize_hero_name(internal_name)
-        
+
         # Look up position from local hero_positions database
         position = hero_positions.get(hero_name, 0)
-        
+
         # Map position to role
         if position in POS_TO_ROLE:
             role = POS_TO_ROLE[position]
             role_counts[role] += 1
-    
+
     if total_matches == 0:
         return None
-    
+
     # Find dominant role (threshold: at least 2 matches or 50% for small samples)
     dominant_role = max(role_counts, key=role_counts.get)
     dominant_count = role_counts[dominant_role]
-    
+
     threshold = max(2, int(total_matches * 0.5))
     if dominant_count >= threshold:
         logger.info(f"ROLE BY HERO COUNT: {dominant_role} ({dominant_count}/{total_matches})")
         return dominant_role
-    
+
     logger.info(f"ROLE BY HERO COUNT: no dominance ({role_counts})")
     return None
 
@@ -478,7 +476,7 @@ async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
     role = await _detect_role_from_hero_counts(matches)
     if role:
         return role
-    
+
     # Fallback: determine role by stats (GPM, KDA)
     total_gpm = 0
     total_lh = 0
@@ -499,7 +497,7 @@ async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
     total_assists = sum(m.get("assists", 0) for m in matches[:10])
     avg_gpm = total_gpm / max(len(matches[:10]), 1)
     avg_kda = (total_kills + total_assists) / max(total_deaths, 1)
-    
+
     # High GPM + KDA = CARRY/MID, low = SUPPORT
     if avg_gpm >= 500 and avg_kda >= 3.0:
         return "CARRY"
@@ -507,7 +505,7 @@ async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
         return "MID"
     elif avg_gpm >= 200 and avg_kda >= 1.5:
         return "SUPPORT"
-    
+
     return None
 
 
@@ -519,7 +517,7 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
     if not matches:
         return {"wr": 50.0, "gpm": 400, "xpm": 500, "lh": 0, "deny": 0, "stacks": 0, "deaths": 5.0, "h_dmg": 10.0, "t_dmg": 2.0, "util": 8.0, "apm": 250, "kda": "3/4/8"}
     n = len(matches)
-    
+
     # Collect raw data
     raw_lh = [m.get("last_hits", 0) for m in matches]
     raw_lh_per_10min = [m.get("last_hits", 0) / max(m.get("duration", 600) / 600, 0.33) for m in matches]  # normalize to 10min
@@ -535,7 +533,7 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
     raw_denies = [m.get("denies", 0) for m in matches]
     raw_stacks = [m.get("creeps_stacked", 0) for m in matches]
     raw_xpm = [m.get("xp_per_min", 0) for m in matches]
-    
+
     # Compute GPM per match from gold and gold_spent (more reliable than gold_per_min)
     raw_gpm = []
     for m in matches:
@@ -548,7 +546,7 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
         else:
             gpm_val = m.get("gold_per_min", 0)
         raw_gpm.append(gpm_val)
-    
+
     total_gpm = sum(raw_gpm)
     # Fallbacks if GPM data is zero (e.g., missing gold info)
     total_lh = sum(raw_lh)
@@ -560,58 +558,58 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
         avg_assists = sum(raw_assists) / max(n, 1)
         avg_kda = (avg_kills + avg_assists) / avg_deaths
         total_gpm = avg_kda * 150
-    
+
     avg_gpm = total_gpm / n
     avg_lh_10min = sum(raw_lh_per_10min) / n
 
     total_deaths = sum(raw_deaths)
     avg_deaths = total_deaths / n
-    
+
     total_kills = sum(raw_kills)
     avg_kills = total_kills / n
-    
+
     total_assists = sum(raw_assists)
     avg_assists = total_assists / n
-    
+
     total_denies = sum(raw_denies)
     avg_denies = total_denies / n
-    
+
     total_stacks = sum(raw_stacks)
     avg_stacks = total_stacks / n
-    
+
     total_xpm = sum(raw_xpm)
     avg_xpm = total_xpm / n
-    
 
-    
+
+
     # Hero DMG fallback: estimate from kills (~200 damage per kill avg)
     total_h_dmg = sum(raw_h_dmg)
     if total_h_dmg == 0:
         total_h_dmg = total_kills * 200
     avg_h_dmg = total_h_dmg / n / 1000
-    
+
     # Tower DMG fallback: estimate from kills
     total_t_dmg = sum(raw_t_dmg)
     if total_t_dmg == 0:
         total_t_dmg = total_kills * 50
     avg_t_dmg = total_t_dmg / n / 1000
-    
+
     # APM fallback
     total_apm = sum(raw_apm)
     if total_apm == 0:
         total_apm = n * 250
     avg_apm = total_apm / n
-    
+
     # Utility from stuns/heals/stacks
     total_stuns = sum(raw_stuns)
     total_heals = sum(raw_heals)
     total_utility = (total_stuns * 0.3 + total_heals / 1000) / n
-    
+
     total_wins = sum(raw_wins)
     wr = (total_wins / n) * 100
-    
+
     real_kda = (avg_kills + avg_assists) / max(avg_deaths, 0.1)
-    
+
     return {
         "wr": round(wr, 1),
         "gpm": round(avg_gpm, 1),
@@ -647,29 +645,29 @@ async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> l
     """Fetch full match details for matches that have minimal data."""
     account_id = steam64_to_account_id(steam_id)
     enriched = []
-    
+
     for m in matches:
         # If match already has all needed data, keep it
         if m.get("gold_per_min", 0) > 0 and m.get("last_hits", 0) > 0:
             enriched.append(m)
             continue
-        
+
         match_id = m.get("match_id")
         if not match_id:
             enriched.append(m)
             continue
-        
+
         try:
             match_url = f"{OPENDOTA_API_URL}/matches/{match_id}"
             match_data = await _api_get_async(match_url, timeout=10)
-            
+
             player_stats = {}
             if match_data and "players" in match_data:
                 for p in match_data["players"]:
                     if p.get("account_id") == int(account_id):
                         player_stats = p
                         break
-            
+
             # Enrich the match data
             m["kills"] = player_stats.get("kills", m.get("kills", 0))
             m["deaths"] = player_stats.get("deaths", m.get("deaths", 0))
@@ -688,15 +686,15 @@ async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> l
             m["creeps_stacked"] = player_stats.get("creeps_stacked", 0)
             m["observer_uses"] = player_stats.get("observer_uses", 0)
             m["sentry_uses"] = player_stats.get("sentry_uses", 0)
-            
+
             # Yield to event loop to prevent blocking
             await asyncio.sleep(0)
-            
+
         except Exception as e:
             logger.debug(f"Failed to fetch match {match_id}: {e}")
-        
+
         enriched.append(m)
-    
+
     return enriched
 
 
@@ -878,11 +876,12 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
     """
 
     """Generate only the chart and game history - no text pages."""
-    
+
+    from datetime import datetime
+
     from database import get_user
-    from datetime import datetime, timezone
-    
-    now = datetime.now(timezone.utc)  # Вынести за пределы условия
+
+    now = datetime.now(UTC)  # Вынести за пределы условия
     user = get_user(telegram_id)
     if user and user.get('analytics_cache') and user.get('analytics_updated_at'):
         updated_at = user['analytics_updated_at']
@@ -933,20 +932,20 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
         deaths = m.get("deaths", 0)
         assists = m.get("assists", 0)
         kda = (kills + assists) / max(deaths, 1)
-        
+
         # Estimate GPM from last_hits (basic data from match list, no API)
         duration = m.get("duration", 600)
         last_hits = m.get("last_hits", 0)
         gpm = last_hits * 60 / max(duration / 60, 1) if last_hits > 0 else 300
-        
+
         # Estimate utility from stacks and denies (minimal data)
         stacks = m.get("creeps_stacked", 0)
         denies = m.get("denies", 0)
         utility = stacks * 1.5 + denies * 0.5
-        
+
         # Estimate APM (typical values by role)
         apm = 250
-        
+
         imp = _calculate_imp(gpm, kda, utility, apm, role)
         game_history.append({"imp": round(imp, 2), "hero_id": m.get("hero_id", 0)})
 
@@ -1047,7 +1046,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
         total_denies += m.get("denies", 0)
         total_stacks += m.get("creeps_stacked", 0)
         total_xpm += m.get("xp_per_min", 0)
-        
+
         total_utility += utility
 
         # Fallback for hero_damage from kills
@@ -1133,7 +1132,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
         db = Database()
         db.execute_query(
             "UPDATE users SET analytics_cache = ?, analytics_updated_at = ? WHERE telegram_id = ?",
-            (cache_data, datetime.now(timezone.utc).isoformat(), telegram_id)
+            (cache_data, datetime.now(UTC).isoformat(), telegram_id)
         )
         logger.info(f"Saved analytics cache for {telegram_id}")
     except Exception as e:
@@ -1148,18 +1147,13 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
 async def _create_visual_chart(history: list[dict]) -> bytes | None:
     global _CHART_BG_CACHE
     try:
-        import numpy as np
         import matplotlib
+        import numpy as np
         matplotlib.use("Agg")
 
-        import matplotlib.pyplot as plt
         import matplotlib.patheffects as pe
-
-        from matplotlib.offsetbox import (
-            OffsetImage,
-            AnnotationBbox
-        )
-
+        import matplotlib.pyplot as plt
+        from matplotlib.offsetbox import AnnotationBbox, OffsetImage
         from PIL import Image
 
     except ImportError:
@@ -1217,7 +1211,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     # Reverse history so oldest game is first (left side of chart)
     # and newest game is last (right side of chart)
     reversed_history = list(reversed(history))[:10]
-    
+
     raw_impacts = [
         round(g["imp"], 2)
         for g in reversed_history
@@ -1371,11 +1365,11 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     # Collect unique hero IDs from reversed history
     unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
-    
+
     # Load all hero icons in parallel
     hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
     hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
-    
+
     for idx, g in enumerate(reversed_history):
         hero_id = g["hero_id"]
         hero_img = hero_icon_map.get(hero_id)

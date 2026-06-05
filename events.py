@@ -1,19 +1,21 @@
 """Event-driven architecture for loose coupling"""
 from __future__ import annotations
+
 import asyncio
 import logging
-from typing import Callable, Any, Dict, List
 from collections import defaultdict
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class EventBus:
     """Simple in-memory event bus"""
-    
+
     def __init__(self):
-        self._handlers: Dict[str, List[Callable]] = defaultdict(list)
-    
+        self._handlers: dict[str, list[Callable]] = defaultdict(list)
+
     def on(self, event: str) -> Callable:
         """Decorator to register event handler"""
         def decorator(handler: Callable) -> Callable:
@@ -21,13 +23,13 @@ class EventBus:
             logger.debug(f"Registered handler for event: {event}")
             return handler
         return decorator
-    
+
     async def emit(self, event: str, data: Any = None):
         """Emit event to all handlers"""
         handlers = self._handlers.get(event, [])
         if not handlers:
             return
-        
+
         tasks = [handler(data) for handler in handlers]
         await asyncio.gather(*tasks, return_exceptions=True)
 
