@@ -689,12 +689,14 @@ async def alternate_digest_job(context):
                         hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=10.0)
                     except asyncio.TimeoutError:
                         logger.warning("Hero meta banner generation timed out after 10 seconds, using text only")
+                        hero_meta_banner = None
                     if hero_meta_banner:
                         logger.info("Hero meta banner generated for digest")
                     else:
                         logger.info("Hero meta banner skipped (using text digest)")
                 except Exception as e:
                     logger.warning(f"Could not generate hero meta banner: {e}")
+                    hero_meta_banner = None
 
             # Удаляем старое сообщение если есть
             if last_message_id:
