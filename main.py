@@ -2158,8 +2158,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Dota stats (без стрика)
         if target_user.get('steam_id'):
-            week_games = week_games or 0
-            week_wins = week_wins or 0
+            week_games = target_user.get('week_games') or 0
+            week_wins = target_user.get('week_wins') or 0
             week_losses = week_games - week_wins
             winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
 
@@ -2485,8 +2485,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_username = ""
 
         if user:
-            user_week_games = user_week_games or 0
-            user_week_wins = user_week_wins or 0
+            user_week_games = user.get('week_games') or 0
+            user_week_wins = user.get('week_wins') or 0
             user_username = user.get('steam_nickname') or user.get('username') or user.get('first_name') or 'Unknown'
             user_week_losses = user_week_games - user_week_wins
 
@@ -2553,8 +2553,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for i, player in enumerate(top_users, 1):
                 username = player.get('steam_nickname') or player.get('username') or 'Unknown'
                 rank_tier = player.get('rank_tier', 0)
-                week_games = week_games or 0
-                week_wins = week_wins or 0
+                week_games = player.get('week_games') or 0
+                week_wins = player.get('week_wins') or 0
                 week_losses = week_games - week_wins
 
                 # Format rank using helper function
