@@ -138,7 +138,7 @@ _last_data_refresh = _digest_state_container.last_data_refresh
 _data_refresh_interval = _digest_state_container.data_refresh_interval
 
 DIGEST_DATA_REFRESH_INTERVAL = 3600
-HERO_META_REFRESH_INTERVAL = 7200  # 2 hours
+HERO_META_REFRESH_INTERVAL = 3600  # 1 hour (fallback, only used on new message)
 
 # =====================================================
 # Digest cache - invalidate to force refresh on next job run
@@ -476,9 +476,6 @@ async def alternate_digest_job(context):
                 logger.info("Обновляем Dota данные для дайджеста из БД")
                 _digest_state_container.set_dota_data(get_dota_week_top(limit=30))
 
-            # Генерируем hero meta баннер (если нужно - раз в HERO_META_REFRESH_INTERVAL)
-            await _generate_hero_meta_banner_if_needed()
-
             # Генерируем объединённый текст
             text = _build_digest_text_for_type("0")
             if not text:
@@ -681,7 +678,25 @@ async def alternate_digest_job(context):
                 return
 
             # last_message_id = None (БД отвалилась или сообщение удалено) — можем создавать новый
-            # Используем кешированный hero_meta_image (обновляется в _generate_hero_meta_banner_if_needed)
+            # Но проверяем, что кеш валиден (чтобы не генерить баннер каждый тик)
+
+            # Генерируем геро-мета баннер (ТОЛЬКО при создании нового поста)
+            hero_meta_banner = None
+            if should_create_new:
+                try:
+                    from hero_meta import get_hero_meta_image
+                    try:
+                        hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=10.0)
+                    except asyncio.TimeoutError:
+                        logger.warning("Hero meta banner generation timed out after 10 seconds, using text only")
+                        hero_meta_banner = None
+                    if hero_meta_banner:
+                        logger.info("Hero meta banner generated for digest")
+                    else:
+                        logger.info("Hero meta banner skipped (using text digest)")
+                except Exception as e:
+                    logger.warning(f"Could not generate hero meta banner: {e}")
+                    hero_meta_banner = None
 
             # Удаляем старое сообщение если есть
             if last_message_id:
@@ -697,7 +712,6 @@ async def alternate_digest_job(context):
 # Создаём новое сообщение
             try:
                 from io import BytesIO
-                hero_meta_banner = _digest_state_container.state.get("hero_meta_image")
                 if hero_meta_banner:
                     photo_buf = BytesIO(hero_meta_banner)
                     photo_buf.name = "hero_meta_banner.png"
