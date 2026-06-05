@@ -2373,10 +2373,10 @@ def batch_save_mmr(users_data: list):
                     mmr = COALESCE(%s, mmr),
                     steam_nickname = COALESCE(%s, steam_nickname),
                     rank_tier = COALESCE(%s, rank_tier),
-                    week_games = COALESCE(%s, week_games),
-                    week_wins = COALESCE(%s, week_wins),
-                    week_best_streak = COALESCE(%s, week_best_streak),
-                    week_current_streak = COALESCE(%s, week_current_streak),
+                    week_games = CASE WHEN %s IS NOT NULL THEN %s ELSE week_games END,
+                    week_wins = CASE WHEN %s IS NOT NULL THEN %s ELSE week_wins END,
+                    week_best_streak = CASE WHEN %s IS NOT NULL THEN %s ELSE week_best_streak END,
+                    week_current_streak = CASE WHEN %s IS NOT NULL THEN %s ELSE week_current_streak END,
                     week_start_date = COALESCE(%s, week_start_date)
                 WHERE telegram_id = %s
             """
@@ -2386,10 +2386,10 @@ def batch_save_mmr(users_data: list):
                     mmr = COALESCE(?, mmr),
                     steam_nickname = COALESCE(?, steam_nickname),
                     rank_tier = COALESCE(?, rank_tier),
-                    week_games = COALESCE(?, week_games),
-                    week_wins = COALESCE(?, week_wins),
-                    week_best_streak = COALESCE(?, week_best_streak),
-                    week_current_streak = COALESCE(?, week_current_streak),
+                    week_games = CASE WHEN ? IS NOT NULL THEN ? ELSE week_games END,
+                    week_wins = CASE WHEN ? IS NOT NULL THEN ? ELSE week_wins END,
+                    week_best_streak = CASE WHEN ? IS NOT NULL THEN ? ELSE week_best_streak END,
+                    week_current_streak = CASE WHEN ? IS NOT NULL THEN ? ELSE week_current_streak END,
                     week_start_date = COALESCE(?, week_start_date)
                 WHERE telegram_id = ?
             """
@@ -2398,8 +2398,11 @@ def batch_save_mmr(users_data: list):
         for u in users_data:
             rows.append((
                 u.get("mmr"), u.get("steam_nickname"), u.get("rank_tier"),
-                u.get("week_games"), u.get("week_wins"), u.get("week_best_streak"),
-                u.get("week_current_streak"), u.get("week_start_date"),
+                u.get("week_games"), u.get("week_games"),
+                u.get("week_wins"), u.get("week_wins"),
+                u.get("week_best_streak"), u.get("week_best_streak"),
+                u.get("week_current_streak"), u.get("week_current_streak"),
+                u.get("week_start_date"),
                 u["telegram_id"]
             ))
         
