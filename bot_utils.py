@@ -112,7 +112,7 @@ def make_clickable(name, user_id, max_length=12):
                 db_user = get_user(uid)
                 if db_user:
                     display_name = db_user.get('steam_nickname') or db_user.get('username') or name
-        except:
+        except Exception:
             display_name = name
 
         # Нормализуем никнейм - убираем @ если есть

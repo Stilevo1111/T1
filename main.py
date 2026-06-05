@@ -2204,9 +2204,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             weekly_top2 = target_user.get('weekly_top2_count', 0)
             weekly_top3 = target_user.get('weekly_top3_count', 0)
             medals = []
-            if weekly_mvp: medals.append(f"🥇{weekly_mvp}")
-            if weekly_top2: medals.append(f"🥈{weekly_top2}")
-            if weekly_top3: medals.append(f"🥉{weekly_top3}")
+            if weekly_mvp:
+                medals.append(f"🥇{weekly_mvp}")
+            if weekly_top2:
+                medals.append(f"🥈{weekly_top2}")
+            if weekly_top3:
+                medals.append(f"🥉{weekly_top3}")
             if medals:
                 text += " " + " ".join(medals)
 
@@ -2520,7 +2523,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             winner_week_wins = winner.get('week_wins', 0)
             winner_week_losses = winner_week_games - winner_week_wins
             winner_wr = round((winner_week_wins / winner_week_games * 100), 1) if winner_week_games > 0 else 0
-            winner_mmr = winner.get('mmr', 0)
 
             try:
                 from dota_mmr import generate_top_card

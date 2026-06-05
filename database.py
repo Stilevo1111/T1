@@ -2765,10 +2765,10 @@ def get_dota_week_top(limit=10, force_refresh=False):
             def get_sort_key(x):
                 g = x.get('week_games', 0)
                 w = x.get('week_wins', 0)
-                l = g - w  # losses
+                losses = g - w  # losses
                 if g == 0:
                     return (3, 0, 0)
-                score = w - l  # победы - поражения
+                score = w - losses  # победы - поражения
                 return (0, -score, -g)
 
             top_users.sort(key=get_sort_key)
