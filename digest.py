@@ -621,7 +621,7 @@ async def alternate_digest_job(context):
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
                     edited = False
-                elif _telegram_error_contains(e, "message to edit not found", "message can't be edited"):
+                elif _telegram_error_contains(e, "message to edit not found", "message can't be edited", "there is no message to edit"):
                     logger.info(f"Старое сообщение {last_message_id} удалено, создаём новое")
                     set_config('alternate_digest_message_id', None)
                     last_message_id = None
