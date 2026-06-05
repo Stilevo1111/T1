@@ -2535,12 +2535,12 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     wr = round((week_wins / week_games) * 100, 1)
                     player_id = player.get('telegram_id')
                     clickable_name = make_clickable(username, player_id)
-                    lines.append(f"{medal} <b>{clickable_name}</b> - {rank_str}")
+                    lines.append(f"{medal} {clickable_name} - {rank_str}")
                     lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%")
                 else:
                     player_id = player.get('telegram_id')
                     clickable_name = make_clickable(username, player_id)
-                    lines.append(f"{medal} <b>{clickable_name}</b> - {rank_str}")
+                    lines.append(f"{medal} {clickable_name} - {rank_str}")
                     lines.append(" └ Нет игр за неделю")
 
 
