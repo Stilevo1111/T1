@@ -1,14 +1,15 @@
-# -*- coding: utf-8 -*-
 """
 Bot utilities: helper functions for Telegram IDs, clickable names, and message tracking.
 Extracted from main.py without any behavior changes.
 """
 
-import logging
 import asyncio
+import logging
 import time
-from database import user_cache, get_user
-from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+
+from database import get_user, user_cache
 from rate_limiter import rate_limit
 
 logger = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ def make_clickable(name, user_id, max_length=12):
         uid = int(user_id) if user_id else 0
     except (ValueError, TypeError):
         uid = 0
-    
+
     if name and name != "None" and uid > 0:
         display_name = name
         try:

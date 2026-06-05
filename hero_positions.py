@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Manual hero positions database for Dota 2.
 

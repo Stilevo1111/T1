@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Fissure-specific logic extracted from main.py.
 This module contains the core fissure roll handling and related helpers.
@@ -6,8 +5,8 @@ All extractions are done without changing any bot behavior or visuals.
 """
 
 import asyncio
-import random
 import logging
+import random
 import time
 import traceback
 from collections import deque
@@ -18,32 +17,32 @@ from telegram.ext import ContextTypes
 # Imports from other modules (will be adjusted as we extract more)
 # The following are prepared for the full fissure() implementation (do not remove during incremental extraction)
 from bot_utils import (
-    delete_last_bot_message,
-    set_last_bot_message,
-    schedule_delete,
-    main_menu,
     add_bot_message,
-    format_time,
     bot_can_delete,
+    delete_last_bot_message,
+    format_time,
+    main_menu,
+    schedule_delete,
+    set_last_bot_message,
 )
-from rate_limiter import is_rate_limited
-from rolls import (
-    calculate_fissure_roll,
-    apply_fissure_protection,
-    calculate_new_fissure,
-    MULTICAST_TEXTS,
-    ROLL_TEXTS,
-    ROLL_MEMES,
-    CATEGORY_PHRASES,
-)
-from stats import get_event_chances
-from database import get_user, update_fissure, update_last_message_id, zeus_strike
 from constants import (
     COOLDOWN,
     WEEKEND_BONUS_MULTIPLIERS,
     ZEUS_TEXTS,
 )
+from database import get_user, update_fissure, update_last_message_id, zeus_strike
 from digest import invalidate_digest_cache
+from rate_limiter import is_rate_limited
+from rolls import (
+    CATEGORY_PHRASES,
+    MULTICAST_TEXTS,
+    ROLL_MEMES,
+    ROLL_TEXTS,
+    apply_fissure_protection,
+    calculate_fissure_roll,
+    calculate_new_fissure,
+)
+from stats import get_event_chances
 
 # Fissure-specific in-memory state (moved from main.py for clean extraction)
 _user_fissure_processing: dict[int, float] = {}
@@ -75,7 +74,7 @@ logger = logging.getLogger(__name__)
 def is_weekend_msk() -> bool:
     """Определяет, является ли текущий день выходным по МСК (без изменения логики)."""
     import datetime
-    msk_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)
+    msk_time = datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=3)
     return msk_time.weekday() in (5, 6)
 
 
