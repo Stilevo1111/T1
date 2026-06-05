@@ -1293,6 +1293,14 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         # ВАЖНО: Всегда обновляем недельную статистику из матчей
         logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_streak={max_streak}, week_start={week_start_utc}")
         
+        # If no matches, don't update week stats (preserve existing)
+        if not matches:
+            week_games = None
+            week_wins = None
+            max_streak = None
+            week_current_streak = None
+            logger.info("No matches this week, preserving existing week stats")
+        
         # Обновляем ВСЕ поля одним запросом
         # Pass update_top_cache so the caller (MMR job) can force exactly ONE rebuild after the whole batch
         update_user_fields_batch(telegram_id, {
@@ -1310,7 +1318,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             "mmr_last_updated": time.time()
         }, update_top_cache=update_top_cache)
 
-        return {"success": True, "rank_up": rank_up, "mmr": stats.get("mmr")}
+        return {"success": True, "rank_up": rank_up, "mmr": stats.get("mmr"), "week_games": week_games, "week_wins": week_wins, "week_best_streak": max_streak, "week_current_streak": week_current_streak, "week_start_date": current_week_start}
 
     except Exception as e:
         logger.error(f"update error: {e}", exc_info=True)

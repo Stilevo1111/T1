@@ -1066,10 +1066,10 @@ async def update_all_mmr_job(context):
                         'mmr': result.get('mmr'),
                         'steam_nickname': result.get('steam_nickname'),
                         'rank_tier': result.get('rank_tier'),
-                        'week_games': result.get('week_games', 0),
-                        'week_wins': result.get('week_wins', 0),
-                        'week_best_streak': result.get('week_best_streak', 0),
-                        'week_current_streak': result.get('week_current_streak', 0),
+                        'week_games': result.get('week_games') if result.get('week_games') else None,
+                        'week_wins': result.get('week_wins') if result.get('week_wins') else None,
+                        'week_best_streak': result.get('week_best_streak'),
+                        'week_current_streak': result.get('week_current_streak'),
                         'week_start_date': result.get('week_start_date')
                     })
 
