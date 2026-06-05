@@ -413,7 +413,7 @@ def update_dota_week_top_cache():
 
     logger.info("===== TOP USERS AFTER SORT =====")
     for i, u in enumerate(top_users):
-        week_losses = u.get('week_games', 0) - u.get('week_wins', 0)
+        week_losses = (u.get('week_games') or 0) - (u.get('week_wins') or 0)
         logger.info(f"  POS{i+1}. {u.get('steam_nickname')}: {u.get('week_wins')}W/{week_losses}L, WR={u.get('winrate')}%")
     logger.info("===== END SORT =====")
 
