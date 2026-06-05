@@ -642,6 +642,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Start background task and track it
         task = asyncio.create_task(generate_and_update_analytics())
+        task.add_done_callback(lambda t: analyze_command._active_tasks.pop(user_id_for_tracking, None))
         if not hasattr(analyze_command, '_active_tasks'):
             analyze_command._active_tasks = {}
         analyze_command._active_tasks[user_id_for_tracking] = task
@@ -1376,7 +1377,7 @@ async def fetch_hero_icon(url, session=None, size=96):
                 try:
                     from PIL import Image
                     import io
-                    loop = asyncio.get_event_loop()
+                    loop = asyncio.get_running_loop()
                     # Выполняем блокирующие операции в thread pool
                     img = await loop.run_in_executor(
                         None,

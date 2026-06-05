@@ -237,22 +237,6 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
     return "".join(parts)
 
 
-async def _generate_hero_meta_banner_if_needed():
-    """Генерирует hero meta banner если нужно (раз в HERO_META_REFRESH_INTERVAL)."""
-    now = time.time()
-    last_update = _digest_state_container.state.get("last_hero_meta_update", 0)
-    if now - last_update > HERO_META_REFRESH_INTERVAL:
-        try:
-            from hero_meta import get_hero_meta_image
-            banner = await asyncio.wait_for(get_hero_meta_image(), timeout=30.0)
-            if banner:
-                _digest_state_container.state["hero_meta_image"] = banner
-                _digest_state_container.state["last_hero_meta_update"] = now
-                logger.info("Hero meta banner refreshed")
-        except Exception as e:
-            logger.warning(f"Hero meta banner refresh failed: {e}")
-
-
 def start_fast_digest_loop(bot, chat_id: int, message_id: int, is_photo: bool):
     """Fast tick disabled - digest now updates via alternative_digest_job (40min interval)."""
     pass
@@ -297,10 +281,14 @@ async def claim_or_check_digest_leader():
         is_leader = True
     elif not current_leader or (now - last_seen > LEADER_TIMEOUT):
         try:
-            set_config('digest_leader_id', instance_id)
-            set_config('digest_leader_last_seen', str(now))
-            logger.warning(f"digest: ЗАХВАТИЛ ЛИДЕРСТВО (instance={instance_id})")
-            is_leader = True
+            current = get_config('digest_leader_id')
+            if not current or (now - float(get_config('digest_leader_last_seen', '0')) > LEADER_TIMEOUT):
+                set_config('digest_leader_id', instance_id)
+                set_config('digest_leader_last_seen', str(now))
+                logger.warning(f"digest: ЗАХВАТИЛ ЛИДЕРСТВО (instance={instance_id})")
+                is_leader = True
+            else:
+                logger.info(f"digest: пропуск (лидер = {current}, я = {instance_id})")
         except Exception as e:
             logger.error(f"digest: failed to claim leadership: {e}")
     else:
@@ -685,11 +673,7 @@ async def alternate_digest_job(context):
             if should_create_new:
                 try:
                     from hero_meta import get_hero_meta_image
-                    try:
-                        hero_meta_banner = await get_hero_meta_image()
-                    except asyncio.TimeoutError:
-                        logger.warning("Hero meta banner generation timed out after 10 seconds, using text only")
-                        hero_meta_banner = None
+                    hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=90.0)
                     if hero_meta_banner:
                         logger.info("Hero meta banner generated for digest")
                     else:

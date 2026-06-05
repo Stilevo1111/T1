@@ -89,17 +89,6 @@ class UserRepository:
             release_connection(conn)
 
 
-class UserCache:
-    """Кеш данных пользователей в памяти с записью в БД раз в сутки"""
-    
-    MAX_CACHE_SIZE = 3000  # Максимум пользователей в кеше
-    
-    def __init__(self) -> None:
-        self._cache: dict[int, dict[str, Any]] = {}  # telegram_id -> user_data
-        self._dirty: dict[int, bool] = {}  # telegram_id -> True
-        self._lock = threading.Lock()
-
-
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     DATABASE_URL = "sqlite:///fissure_bot.db"
@@ -884,6 +873,7 @@ def init_db():
                     last_dota_games INTEGER DEFAULT 0,
                     last_dota_wins INTEGER DEFAULT 0,
                     mmr_updated_at TIMESTAMP,
+                    mmr_last_updated TIMESTAMP,
                     rank_tier INTEGER DEFAULT 0,
 wins INTEGER DEFAULT 0,
                      losses INTEGER DEFAULT 0,
@@ -953,6 +943,8 @@ wins INTEGER DEFAULT 0,
                 cursor.execute("ALTER TABLE users ADD COLUMN last_dota_wins INTEGER DEFAULT 0")
             if 'mmr_updated_at' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN mmr_updated_at TIMESTAMP")
+            if 'mmr_last_updated' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN mmr_last_updated TIMESTAMP")
             if 'rank_tier' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN rank_tier INTEGER DEFAULT 0")
             if 'wins' not in columns:
@@ -2422,6 +2414,8 @@ def batch_save_mmr(users_data: list):
         top_cache.clear()
         logger.info(f"batch_save_mmr: saved {len(users_data)} users in one transaction")
     except Exception as e:
+        if conn is not None:
+            conn.rollback()
         logger.error(f"batch_save_mmr error: {e}")
     finally:
         if conn is not None:
