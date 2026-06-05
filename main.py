@@ -905,7 +905,7 @@ async def announce_weekly_mmr_winner(bot):
                 parse_mode="HTML"
             )
         else:
-            winner_banner_url = "https://i.ibb.co/Jj3vwbWB/ANQkz.jpg"
+            winner_banner_url = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
             await bot.send_photo(
                 chat_id=digest_chat_id,
                 photo=winner_banner_url,
