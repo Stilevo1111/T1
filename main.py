@@ -928,10 +928,10 @@ async def announce_weekly_mmr_winner(bot):
 
 @rate_limit(tokens=1)
 async def claim_or_check_mmr_leader():
-    """Leader election for hourly MMR job (prevents duplicate heavy work when 2+ Render instances run the same bot)."""
+    """Leader election for MMR job (prevents duplicate heavy work when 2+ Render instances run the same bot)."""
     instance_id = os.getenv("RENDER_INSTANCE_ID") or f"local_{os.getpid()}"
     now = time.time()
-    LEADER_TIMEOUT = 180  # 3 minutes is enough for hourly job
+    LEADER_TIMEOUT = 900  # 15 minutes (100-200 users with rate limiting)
 
     current_leader = None
     last_seen = 0.0
@@ -3165,10 +3165,10 @@ async def main():
 
         # morning_digest_job удалён
 
-        # Обновление MMR каждые 3 часа (экономия Neon часов)
+        # Обновление MMR каждые 2 часа
         job_queue.run_repeating(
             update_all_mmr_job,
-            interval=datetime.timedelta(hours=3),
+            interval=datetime.timedelta(hours=2),
             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
         )
 
@@ -3179,16 +3179,15 @@ async def main():
             first=datetime.datetime.now() + datetime.timedelta(seconds=10)
         )
 
-        # Обновление кеша Dota Weekly Top раз в час
-        # (для alternate_digest + /topmmr). Позволяет 20-минутному дайджесту
-        # брать данные почти без тяжёлых запросов в БД.
+        # Обновление кеша Dota Weekly Top раз в 2 часа
+        # (для alternate_digest + /topmmr). Синхронно с MMR обновлением.
         async def _refresh_dota_week_top_cache(context):
             """Асинхронная обёртка: тяжёлая синхронная работа уходит в thread."""
             await asyncio.to_thread(update_dota_week_top_cache)
 
         job_queue.run_repeating(
             _refresh_dota_week_top_cache,
-            interval=datetime.timedelta(hours=1),
+            interval=datetime.timedelta(hours=2),
             first=datetime.datetime.now() + datetime.timedelta(minutes=5)
         )
 
