@@ -835,8 +835,8 @@ async def announce_weekly_mmr_winner(bot):
 
     winner = active_users[0]
     username = winner.get('steam_nickname') or winner.get('username') or 'Игрок'
-    week_wins = winner.get('week_wins', 0)
-    week_games = winner.get('week_games', 0)
+    week_wins = winner.get('week_wins') or 0
+    week_games = winner.get('week_games') or 0
     week_losses = week_games - week_wins
     winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
     rank_tier = winner.get('rank_tier', 0)
@@ -1246,7 +1246,7 @@ async def dota_digest_job(context):
 
         # top_net - лучший по разнице побед-поражений (wins - losses), при равенстве net — больше игр
         # Убедимся что top и bottom это РАЗНЫЕ игроки
-        valid_players_sorted = sorted(valid_players, key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), p.get('week_games', 0)), reverse=True)
+        valid_players_sorted = sorted(valid_players, key=lambda p: ((p.get('week_wins') or 0) - ((p.get('week_games') or 0) - (p.get('week_wins') or 0)), p.get('week_games', 0) or 0), reverse=True)
 
         if len(valid_players_sorted) >= 2:
             top_by_net = valid_players_sorted[0]
@@ -2158,8 +2158,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Dota stats (без стрика)
         if target_user.get('steam_id'):
-            week_games = target_user.get('week_games', 0)
-            week_wins = target_user.get('week_wins', 0)
+            week_games = week_games or 0
+            week_wins = week_wins or 0
             week_losses = week_games - week_wins
             winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
 
@@ -2485,8 +2485,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_username = ""
 
         if user:
-            user_week_games = user.get('week_games', 0)
-            user_week_wins = user.get('week_wins', 0)
+            user_week_games = user_week_games or 0
+            user_week_wins = user_week_wins or 0
             user_username = user.get('steam_nickname') or user.get('username') or user.get('first_name') or 'Unknown'
             user_week_losses = user_week_games - user_week_wins
 
@@ -2519,8 +2519,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             winner_avatar = winner.get('avatar')
             winner_name = winner.get('steam_nickname') or winner.get('username') or winner.get('first_name')
             winner_rank_tier = winner.get('rank_tier', 0)
-            winner_week_games = winner.get('week_games', 0)
-            winner_week_wins = winner.get('week_wins', 0)
+            winner_week_games = winner.get('week_games') or 0
+            winner_week_wins = winner.get('week_wins') or 0
             winner_week_losses = winner_week_games - winner_week_wins
             winner_wr = round((winner_week_wins / winner_week_games * 100), 1) if winner_week_games > 0 else 0
 
@@ -2553,8 +2553,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for i, player in enumerate(top_users, 1):
                 username = player.get('steam_nickname') or player.get('username') or 'Unknown'
                 rank_tier = player.get('rank_tier', 0)
-                week_games = player.get('week_games', 0)
-                week_wins = player.get('week_wins', 0)
+                week_games = week_games or 0
+                week_wins = week_wins or 0
                 week_losses = week_games - week_wins
 
                 # Format rank using helper function
