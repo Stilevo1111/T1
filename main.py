@@ -132,7 +132,7 @@ _USER_START_COOLDOWN = {}  # Spam protection for /start: user_id -> timestamp
 _START_COOLDOWN = 5  # 5 seconds cooldown for /start command
 _START_COOLDOWN_TTL = 3600  # Clean up entries older than 1 hour to prevent memory leak
 
-async def _cleanup_start_cooldown():
+async def _cleanup_start_cooldown(*args, **kwargs):
     """Periodic cleanup of old _USER_START_COOLDOWN entries to prevent memory leak"""
     current_time = time.time()
     to_remove = [uid for uid, ts in _USER_START_COOLDOWN.items() if current_time - ts > _START_COOLDOWN_TTL]

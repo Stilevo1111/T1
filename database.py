@@ -383,7 +383,7 @@ def update_dota_week_top_cache():
         if not user or not user.get('steam_id'):
             continue
 
-        week_games = user.get('week_games', 0)
+        week_games = user.get('week_games') or 0
         week_wins = user.get('week_wins', 0)
         winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
 
