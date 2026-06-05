@@ -2292,9 +2292,35 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Generate top banner with winner info
         winner = top_users[0]
         winner_avatar = winner.get('avatar')
+        winner_telegram_id = winner.get('telegram_id')
+        
+        # Ensure we have a valid avatar URL
+        if not winner_avatar or not str(winner_avatar).strip():
+            winner_avatar = None
+        elif not str(winner_avatar).startswith('http'):
+            winner_avatar = None
+        
+        # Fallback to Telegram avatar if Steam avatar not available
+        if not winner_avatar and winner_telegram_id:
+            try:
+                tg_avatar = await get_user_avatar_url(context.bot, winner_telegram_id)
+                if tg_avatar:
+                    winner_avatar = tg_avatar
+                    logger.info(f"top: using Telegram fallback avatar for user {winner_telegram_id}")
+            except Exception as e:
+                logger.debug(f"Could not get Telegram avatar for top user: {e}")
+        
         winner_name = winner.get('username') or winner.get('steam_nickname') or winner.get('first_name')
         winner_fissure = winner.get('fissure', 0)
         winner_rank_tier = winner.get('rank_tier', 0)
+        
+        # If still no avatar, use DEFAULT_AVATAR_URL
+        if not winner_avatar:
+            winner_avatar = DEFAULT_AVATAR_URL
+            logger.info(f"top: using DEFAULT_AVATAR_URL for user {winner_telegram_id}")
+        
+        avatar_source = "steam" if winner.get('avatar') else ("telegram" if winner_avatar and winner_avatar != DEFAULT_AVATAR_URL else "default")
+        logger.info(f"top: winner_avatar={winner_avatar[:50] if winner_avatar else None}, avatar_source={avatar_source}, winner_name={winner_name}")
         
         try:
             from dota_mmr import generate_top_card

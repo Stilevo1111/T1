@@ -1621,7 +1621,8 @@ def generate_top_card(
         avatar_y = int((height - avatar_size) // 2 - 10)
         
         avatar_loaded = False
-        if avatar_url and show_avatar:
+        logger.info(f"generate_top_card: avatar_url={avatar_url[:50] if avatar_url else None}, show_avatar={show_avatar}")
+        if avatar_url and show_avatar and str(avatar_url).strip().lower().startswith(('http://', 'https://')):
             try:
                 if os.path.isfile(avatar_url):
                     avatar = Image.open(avatar_url).convert("RGBA")
@@ -1657,16 +1658,17 @@ def generate_top_card(
         try:
             font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(40 * scale))
             font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(26 * scale))
+            font_fissure = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(36 * scale))
         except Exception:
-            font_title = font_small = ImageFont.load_default()
+            font_title = font_small = font_fissure = ImageFont.load_default()
         
         display_name = f"@{username}" if username else str(telegram_id) if telegram_id else "Unknown"
         draw.text((info_x, info_y), display_name, fill=(255, 255, 255), font=font_title)
         
         if fissure > 0:
-            fissure_y = info_y + int(60 * scale) + 5  # 5px down like MMR extra_text
+            fissure_y = info_y + int(60 * scale) + 5
             fissure_text = f"{fissure:.0f} См."
-            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_small)
+            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_fissure)
         
         if extra_text:
             if fissure > 0:
