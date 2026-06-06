@@ -2576,7 +2576,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     player_id = player.get('telegram_id')
                     clickable_name = make_clickable(username, player_id)
-                    lines.append(f"{medal} {clickable_name} - {rank_str}")
+                    lines.append(f"{medal} {clickable_name} - Не калиброван")
                     lines.append(" └ Нет игр за неделю")
 
 

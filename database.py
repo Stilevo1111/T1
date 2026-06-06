@@ -2875,7 +2875,6 @@ def _get_dota_week_top_query(limit):
                     LIMIT %s
                 """, (limit,))
             users = cursor.fetchall()
-            users = cursor.fetchall()
             cursor.close()
             logger.info(f"get_dota_week_top: returning {len(users)} users from {scheme}")
 
