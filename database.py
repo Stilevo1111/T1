@@ -446,11 +446,8 @@ def update_dota_week_top_cache():
 
 # Connection pool management
 _pool_lock = threading.Lock()
-_pool = {}  # db_type -> list of connections
-_max_connections = 50  # Max connections per DB type (оптимизировано для serverless)
-_persistent_pg_conn = None  # одно соединение на процесс — меньше DISCARD ALL на Neon
-_last_pg_conn_check = 0
-_PG_CONN_CHECK_INTERVAL = 90  # секунд — не чаще одного лёгкого пинга в 1.5 минуты (минимальный оверхед)
+_pool = {}
+_max_connections = 50
 
 SCHEMA_VERSION = "20260516v1"
 SCHEMA_VERSION_KEY = "schema_version"
@@ -484,17 +481,9 @@ def _ensure_pg_columns(cursor):
 
 
 def _reset_persistent_pg_conn(reason: str = ""):
-    """Аккуратно закрывает и обнуляет persistent-соединение при обрывах."""
-    global _persistent_pg_conn, _last_pg_conn_check
-    if _persistent_pg_conn is not None:
-        try:
-            _persistent_pg_conn.close()
-        except Exception:
-            pass
-        _persistent_pg_conn = None
-        _last_pg_conn_check = 0
-        if reason:
-            logger.warning(f"Persistent PostgreSQL connection reset: {reason}")
+    """No-op: persistent connection removed, all connections are short-lived via pool."""
+    if reason:
+        logger.info(f"Connection reset (no-op, pool-based): {reason}")
 
 
 def get_db_type():
@@ -576,8 +565,6 @@ def _create_new_connection(db_type):
 def release_connection(conn):
     """Вернуть соединение в пул"""
     if conn is None:
-        return
-    if get_db_type() == "postgresql" and conn is _persistent_pg_conn:
         return
     db_type = get_db_type()  # Получаем тип вне блокировки
     with _pool_lock:
