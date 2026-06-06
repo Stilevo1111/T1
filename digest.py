@@ -668,7 +668,7 @@ async def alternate_digest_job(context):
             last_created_str = get_config('alternate_digest_last_created')
             last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
             time_since_last = now - last_created
-            if time_since_last < 300:
+            if time_since_last < 300 and not should_create_new:
                 logger.info(f"Пропускаем создание - прошло всего {time_since_last:.0f} сек с последнего создания (last_message_id={last_message_id})")
                 return
 
