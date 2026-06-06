@@ -3219,8 +3219,8 @@ async def main():
 
         job_queue.run_repeating(
             _refresh_dota_week_top_cache,
-            interval=datetime.timedelta(hours=2),
-            first=datetime.datetime.now() + datetime.timedelta(minutes=5)
+            interval=datetime.timedelta(minutes=15),
+            first=datetime.datetime.now() + datetime.timedelta(minutes=1)
         )
 
         # ✅ Объявление чемпиона недели в воскресенье 23:00 MSK
