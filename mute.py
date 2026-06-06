@@ -325,28 +325,20 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return
 
     # Администраторы с правом удаления сообщений НЕ страдают от кляпа
-    if _can_admin_bypass(context, update):
+    if await _can_admin_bypass(context, update):
         return
 
-    if _gagged_users.get(user.id) and datetime.now() < _gagged_users[user.id]:
-        try:
-            await update.effective_message.delete()
-        except Exception:
-            logger.debug(f"Failed to delete gagged message from {user.id}", exc_info=True)
-    else:
-        # Кляп истёк — чистим
-        _gagged_users.pop(user.id, None)
 
-
-def _can_admin_bypass(
+async def _can_admin_bypass(
     context: ContextTypes.DEFAULT_TYPE,
     update: Update,
 ) -> bool:
     """Администраторы могут обходить кляп."""
+    """Администраторы могут обходить кляп."""
     try:
         chat_id  = update.effective_chat.id
         user_id  = update.effective_user.id
-        member = context.bot.get_chat_member(chat_id, user_id)
+        member = await context.bot.get_chat_member(chat_id, user_id)
         status  = member.status
         return status in ("creator", "administrator")
     except Exception:
