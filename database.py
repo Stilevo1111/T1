@@ -428,7 +428,7 @@ def update_dota_week_top_cache():
         w = x.get('week_wins', 0)
         if g == 0:
             return (1, 0, 0)  # Помещаем в самый конец
-        score = 2 * w - g  # wins - losses
+        score = w - (g - w)  # wins - losses
         return (0, -score, -g)  # Сортировка по убыванию score, затем по убыванию игр
 
     top_users.sort(key=get_sort_key)
@@ -2869,7 +2869,7 @@ def _get_dota_week_top_query(limit):
                     FROM wr_calc
                     ORDER BY 
                         CASE WHEN week_games = 0 THEN 1 ELSE 0 END,
-                        (2 * week_wins - week_games) DESC,
+                        (week_wins::numeric - (week_games::numeric - week_wins::numeric)) DESC,
                         week_games DESC,
                         mmr DESC
                     LIMIT %s
@@ -2915,7 +2915,7 @@ def _get_dota_week_top_query(limit):
                 FROM wr_calc
                 ORDER BY 
                     CASE WHEN week_games = 0 THEN 1 ELSE 0 END,
-                    (2 * week_wins - week_games) DESC,
+                    (week_wins - (week_games - week_wins)) DESC,
                     week_games DESC,
                     mmr DESC
                 LIMIT ?

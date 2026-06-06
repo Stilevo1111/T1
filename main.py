@@ -2571,12 +2571,12 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     wr = round((week_wins / week_games) * 100, 1)
                     player_id = player.get('telegram_id')
                     clickable_name = make_clickable(username, player_id)
-                    lines.append(f"{medal} {clickable_name} - {rank_str}")
+                    lines.append(f"{medal} <b>{clickable_name}</b> - {rank_str}")
                     lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%")
                 else:
                     player_id = player.get('telegram_id')
                     clickable_name = make_clickable(username, player_id)
-                    lines.append(f"{medal} {clickable_name} - Не калиброван")
+                    lines.append(f"{medal} <b>{clickable_name}</b> - Не калиброван")
                     lines.append(" └ Нет игр за неделю")
 
 
@@ -2599,18 +2599,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_wr = round((user_week_wins / user_week_games) * 100, 1)
                 user_rank_str = rank_to_string(user.get('rank_tier', 0))
                 user_display = make_clickable(user_username, user.get('telegram_id'))
-                if user_is_in_top:
-                    top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}: {user_rank_str}</b>\n"
-                    top_text += f" └ {user_week_wins}W • {user_week_losses}L • {user_wr}%"
-                else:
-                    top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}: {user_rank_str}</b>\n"
-                    top_text += f" └ {user_week_wins}W • {user_week_losses}L • {user_wr}%"
+                top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}</b> - {user_rank_str}\n"
+                top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
             elif user and user_week_games == 0:
                 user_rank_str = rank_to_string(user.get('rank_tier', 0))
                 user_display = make_clickable(user_username, user.get('telegram_id'))
                 user_pos_emoji = get_emoji_num(user_pos) if user_pos else "0️⃣"
-                top_text += f"\n{user_pos_emoji} <b>{user_display}: {user_rank_str}</b>\n"
-                top_text += " └ Нет игр за неделю"
+                top_text += f"\n{user_pos_emoji} <b>{user_display}</b> - {user_rank_str}\n"
+                top_text += "└ Нет игр за неделю"
 
             # Delete previous bot message before sending new one
             try:
