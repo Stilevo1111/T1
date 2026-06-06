@@ -521,9 +521,10 @@ def _postgres_connect_kwargs():
 
 
 def get_connection():
-    """Получение соединения с базой данных с пулом"""
+    """Получение соединения с базой данных"""
     db_type = get_db_type()
-
+    if db_type == "postgresql":
+        return _create_new_connection(db_type)
     with _pool_lock:
         if db_type in _pool and _pool[db_type]:
             conn = _pool[db_type].pop()
@@ -533,14 +534,13 @@ def get_connection():
                 logger.debug(f"Pool connection failed: {e}")
                 try:
                     conn.close()
-                except:
+                except Exception:
                     pass
-
-        conn = _create_new_connection(db_type)
-        return conn
+        return _create_new_connection(db_type)
 
 
 def _create_new_connection(db_type):
+    """Создать новое соединение с БД"""
     """Создать новое соединение с БД"""
     if db_type == "postgresql":
         try:
@@ -563,10 +563,16 @@ def _create_new_connection(db_type):
 
 
 def release_connection(conn):
-    """Вернуть соединение в пул"""
+    """Закрыть соединение или вернуть в пул (только SQLite)"""
     if conn is None:
         return
-    db_type = get_db_type()  # Получаем тип вне блокировки
+    db_type = get_db_type()
+    if db_type == "postgresql":
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return
     with _pool_lock:
         if db_type not in _pool:
             _pool[db_type] = []
@@ -575,7 +581,7 @@ def release_connection(conn):
         else:
             try:
                 conn.close()
-            except:
+            except Exception:
                 pass
 
 @contextmanager
