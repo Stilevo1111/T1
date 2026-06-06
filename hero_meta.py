@@ -220,7 +220,7 @@ async def get_dota_data(days=7, force_refresh=False):
         FROM public_player_matches 
         WHERE start_time >= {week_ago}
         GROUP BY hero_id, player_slot
-        HAVING COUNT(*) >= 5
+        HAVING COUNT(*) >= 100
     """
 
     try:
@@ -353,7 +353,7 @@ def _build_grid(hero_stats):
     # Take top 5 by winrate for each position (highest at top)
     grid = {}
     for pos in range(1, 6):
-        heroes = sorted(by_position[pos], key=lambda h: -h['winrate'])
+        heroes = sorted(by_position[pos], key=lambda h: -h['score'])
         grid[pos] = heroes[:5]
 
     # Ensure we have enough heroes - fill with heroes that can play the role if needed
