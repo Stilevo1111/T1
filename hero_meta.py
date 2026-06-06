@@ -271,13 +271,13 @@ async def get_dota_data(days=7, force_refresh=False):
                 hero_stats = []
                 for h in heroes:
                     hero_stats.append({
-                        "hero_id": h["hero_id"],
-                        "localized_name": h.get("localized_name", f"Hero {h['hero_id']}"),
+                        "hero_id": h.get("hero_id") or h.get("id"),
+                        "localized_name": h.get("localized_name", f"Hero {h.get('hero_id') or h.get('id')}"),
                         "roles": h.get("roles", []),
                         "pub_pick": h.get("pro_pick", 0) or h.get("picked", 0),
                         "pub_win": h.get("pro_win", 0) or h.get("win", 0),
                         "img": h.get("img", ""),
-                        "position": detect_hero_position(h)  # Use role-based position as fallback
+                        "position": detect_hero_position(h)
                     })
                 if hero_stats:
                     _hero_meta_cache["data"] = hero_stats
@@ -541,7 +541,7 @@ def _compose_infographic(base, draw, grid, icons, font_lg,
 
 
 async def get_hero_meta_image():
-    logger.info("get_hero_meta_image called")
+    """Generate hero meta infographic. Falls back to static banner if no data."""
     try:
         data = await get_dota_data()
         if not data:
