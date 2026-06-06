@@ -1846,7 +1846,7 @@ def get_user(telegram_id, username=None):
 
     if user:
         msg_count = user.get('message_count', 0)
-        logger.info(f"get_user: DB hit for {telegram_id}, message_count={msg_count}, keys={list(user.keys()) if isinstance(user, dict) else 'tuple'}")
+        logger.info(f"get_user: DB hit for {telegram_id}, message_count={msg_count}")
         user.setdefault('weekly_mvp_count', 0)
         user.setdefault('weekly_top2_count', 0)
         user.setdefault('weekly_top3_count', 0)
