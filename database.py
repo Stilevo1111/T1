@@ -2868,8 +2868,8 @@ def _get_dota_week_top_query(limit):
                            winrate, week_current_streak
                     FROM wr_calc
                     ORDER BY 
-                        CASE WHEN week_games = 0 THEN 1 ELSE 0 END,
-                        (week_wins::numeric - (week_games::numeric - week_wins::numeric)) DESC,
+                        CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
+                        (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
                         week_games DESC,
                         mmr DESC
                     LIMIT %s
@@ -2914,8 +2914,8 @@ def _get_dota_week_top_query(limit):
                        winrate, week_current_streak
                 FROM wr_calc
                 ORDER BY 
-                    CASE WHEN week_games = 0 THEN 1 ELSE 0 END,
-                    (week_wins - (week_games - week_wins)) DESC,
+                    CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
+                    (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
                     week_games DESC,
                     mmr DESC
                 LIMIT ?
