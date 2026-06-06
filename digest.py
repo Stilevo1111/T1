@@ -706,14 +706,24 @@ async def alternate_digest_job(context):
                 if hero_meta_banner:
                     photo_buf = BytesIO(hero_meta_banner)
                     photo_buf.name = "hero_meta_banner.png"
-                    msg = await bot.send_photo(
-                        chat_id=int(digest_chat_id),
-                        photo=photo_buf,
-                        caption=text,
-                        parse_mode="HTML"
-                    )
-                    logger.info(f"Создан новый дайджест с фото {msg.message_id}")
-                    _set_digest_is_photo(True)
+                    for attempt in range(3):
+                        try:
+                            msg = await bot.send_photo(
+                                chat_id=int(digest_chat_id),
+                                photo=photo_buf,
+                                caption=text,
+                                parse_mode="HTML"
+                            )
+                            logger.info(f"Создан новый дайджест с фото {msg.message_id}")
+                            _set_digest_is_photo(True)
+                            break
+                        except Exception as e:
+                            if attempt < 2 and ("TimedOut" in str(type(e).__name__) or "timeout" in str(e).lower()):
+                                logger.warning(f"send_photo timeout, retry {attempt + 1}/3")
+                                await asyncio.sleep(2)
+                                photo_buf.seek(0)
+                                continue
+                            raise
                 else:
                     msg = await bot.send_message(
                         chat_id=int(digest_chat_id),
