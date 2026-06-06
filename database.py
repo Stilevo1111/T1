@@ -535,83 +535,43 @@ def get_connection():
     """Получение соединения с базой данных с пулом"""
     db_type = get_db_type()
 
-    if db_type == "postgresql":
-        global _persistent_pg_conn, _last_pg_conn_check
-        with _pool_lock:
-            if _persistent_pg_conn is None or _persistent_pg_conn.closed:
-                _persistent_pg_conn = psycopg2.connect(**_postgres_connect_kwargs())
-                _persistent_pg_conn.autocommit = True
-                _last_pg_conn_check = time.time()
-                logger.info("PostgreSQL connected (persistent, autocommit=True)")
-            else:
-                now = time.time()
-                # Лёгкая проверка живости раз в _PG_CONN_CHECK_INTERVAL (не на каждый запрос!)
-                if now - _last_pg_conn_check > _PG_CONN_CHECK_INTERVAL:
-                    try:
-                        with _persistent_pg_conn.cursor() as cur:
-                            cur.execute("SELECT 1")
-                        _last_pg_conn_check = now
-                    except Exception as e:
-                        _reset_persistent_pg_conn(f"liveness check failed: {e}")
-                        # Пересоздаём сразу
-                        _persistent_pg_conn = psycopg2.connect(**_postgres_connect_kwargs())
-                        _persistent_pg_conn.autocommit = True
-                        _last_pg_conn_check = time.time()
-                        logger.info("PostgreSQL reconnected after failed liveness check")
-
-                try:
-                    status = _persistent_pg_conn.get_transaction_status()
-                    if status != psycopg2.extensions.TRANSACTION_STATUS_IDLE:
-                        logger.warning("Persistent connection was in non-idle state, rolling back before reuse")
-                        _persistent_pg_conn.rollback()
-                except Exception:
-                    try:
-                        _persistent_pg_conn.rollback()
-                    except Exception:
-                        pass
-            return _persistent_pg_conn
-
-    print(f"[DB] Getting connection, type: {db_type}")
-
     with _pool_lock:
-        # Проверяем доступные соединения в пуле
         if db_type in _pool and _pool[db_type]:
             conn = _pool[db_type].pop()
             try:
-                conn.isolation_level = None  # Reset isolation level for PostgreSQL
-                print("[DB] Reusing connection from pool")
                 return conn
             except Exception as e:
-                print(f"[DB] Connection failed: {e}")
+                logger.debug(f"Pool connection failed: {e}")
                 try:
                     conn.close()
                 except:
                     pass
 
-        # Создаем новое соединение
-        print(f"[DB] Creating new connection for {db_type}")
-        if db_type == "postgresql":
-            try:
-                # Neon: используйте pooled endpoint (-pooler в hostname), не ?pgbouncer=true
-                conn = psycopg2.connect(**_postgres_connect_kwargs())
-                logger.info("PostgreSQL connected")
-            except Exception as e:
-                logger.error(f"PostgreSQL connection failed: {e}")
-                raise
-        else:
-            if DATABASE_URL is None:
-                db_path = "fissure_bot.db"
-            elif DATABASE_URL.startswith("sqlite:///"):
-                db_path = DATABASE_URL[10:]
-            elif DATABASE_URL.startswith("sqlite://"):
-                db_path = DATABASE_URL[9:]
-            else:
-                db_path = DATABASE_URL
-
-            conn = sqlite3.connect(db_path, timeout=10)
-            logger.info("SQLite connected")
-
+        conn = _create_new_connection(db_type)
         return conn
+
+
+def _create_new_connection(db_type):
+    """Создать новое соединение с БД"""
+    if db_type == "postgresql":
+        try:
+            conn = psycopg2.connect(**_postgres_connect_kwargs())
+            conn.autocommit = True
+            logger.debug("PostgreSQL connected (short-lived)")
+            return conn
+        except Exception as e:
+            logger.error(f"PostgreSQL connection failed: {e}")
+            raise
+    else:
+        db_path = "fissure_bot.db"
+        if DATABASE_URL and DATABASE_URL.startswith("sqlite:///"):
+            db_path = DATABASE_URL[10:]
+        elif DATABASE_URL and DATABASE_URL.startswith("sqlite://"):
+            db_path = DATABASE_URL[9:]
+        conn = sqlite3.connect(db_path, timeout=10)
+        logger.debug("SQLite connected")
+        return conn
+
 
 def release_connection(conn):
     """Вернуть соединение в пул"""
