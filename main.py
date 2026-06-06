@@ -3211,7 +3211,7 @@ async def main():
             first=datetime.datetime.now() + datetime.timedelta(seconds=10)
         )
 
-        # Обновление кеша Dota Weekly Top раз в 2 часа
+        # Обновление кеша Dota Weekly Top раз в 45 минут
         # (для alternate_digest + /topmmr). Синхронно с MMR обновлением.
         async def _refresh_dota_week_top_cache(context):
             """Асинхронная обёртка: тяжёлая синхронная работа уходит в thread."""
@@ -3219,7 +3219,7 @@ async def main():
 
         job_queue.run_repeating(
             _refresh_dota_week_top_cache,
-            interval=datetime.timedelta(minutes=15),
+            interval=datetime.timedelta(minutes=45),
             first=datetime.datetime.now() + datetime.timedelta(minutes=1)
         )
 
