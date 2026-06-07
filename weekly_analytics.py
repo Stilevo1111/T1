@@ -1154,7 +1154,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         import matplotlib.patheffects as pe
         import matplotlib.pyplot as plt
         from matplotlib.offsetbox import AnnotationBbox, OffsetImage
-        from PIL import Image
+        from PIL import Image, ImageFilter
 
     except ImportError:
         logger.warning("matplotlib not available, skipping chart generation")
@@ -1252,7 +1252,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     # =====================================================
 
     if make_interp_spline and len(impacts) >= 4:
-        x_smooth = np.linspace(1, 10, 100)
+        x_smooth = np.linspace(1, 10, 300)
         spl = make_interp_spline(x, impacts, k=3)
         y_smooth = spl(x_smooth)
     else:
@@ -1296,6 +1296,8 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         np.min(y_smooth),
         color="#f4c430",
         alpha=0.50,
+        interpolate=True,
+        antialiased=True,
         zorder=3
     )
 
@@ -1397,13 +1399,13 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         # =================================================
 
         hero_img = hero_img.resize(
-            (72, 72),
+            (82, 82),
             Image.LANCZOS
         )
 
         imagebox = OffsetImage(
             hero_img,
-            zoom=0.72
+            zoom=0.82
         )
 
         ab = AnnotationBbox(
@@ -1412,7 +1414,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
             frameon=True,
             bboxprops=dict(
                 edgecolor=border,
-                linewidth=4,
+                linewidth=5,
                 boxstyle="circle,pad=0.12",
                 facecolor="none",
                 alpha=1.0
@@ -1429,7 +1431,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         ax.scatter(
             idx + 1,
             imp,
-            s=1800,
+            s=2200,
             color=border,
             alpha=0.15,
             zorder=8
@@ -1496,11 +1498,19 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         dpi=DPI,
         facecolor=fig.get_facecolor(),
         bbox_inches=None,
-        pad_inches=0
+        pad_inches=0,
+        antialiased=True
     )
 
     plt.close(fig)
 
     buf.seek(0)
 
-    return buf.getvalue()
+    # Apply slight Gaussian blur to smooth sharp edges
+    img = Image.open(buf).convert("RGBA")
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
+    blurred_buf = io.BytesIO()
+    img.save(blurred_buf, format="PNG")
+    blurred_buf.seek(0)
+
+    return blurred_buf.getvalue()
