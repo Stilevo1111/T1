@@ -1498,8 +1498,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         dpi=DPI,
         facecolor=fig.get_facecolor(),
         bbox_inches=None,
-        pad_inches=0,
-        antialiased=True
+        pad_inches=0
     )
 
     plt.close(fig)
