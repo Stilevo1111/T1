@@ -23,6 +23,7 @@ __all__ = [
     "calculate_fissure_roll",
     "apply_fissure_protection",
     "calculate_new_fissure",
+    "calculate_streak_bonus",
 ]
 
 
@@ -298,10 +299,14 @@ def apply_fissure_protection(current_fissure: float, roll: float, is_fatal: bool
     return roll, ""
 
 
-def calculate_new_fissure(current_fissure: float, roll: float) -> float:
-    """Calculates new fissure size with minimum 0.1"""
-    new_value = current_fissure + roll
-    return max(0.1, new_value)
+def calculate_streak_bonus(current_win_streak: int, base_roll: float) -> tuple[float, str]:
+    """Streak bonus: +1cm per win streak (only for positive rolls)."""
+    if current_win_streak > 0 and base_roll > 0:
+        streak_bonus = current_win_streak
+        new_roll = base_roll + streak_bonus
+        streak_text = f"🔥 СТРИК x{current_win_streak}: +{streak_bonus} СМ"
+        return new_roll, streak_text
+    return base_roll, ""
 
 
 # =====================

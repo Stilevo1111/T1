@@ -34,13 +34,10 @@ from database import get_user, update_fissure, update_last_message_id, zeus_stri
 from digest import invalidate_digest_cache
 from rate_limiter import is_rate_limited
 from rolls import (
-    CATEGORY_PHRASES,
-    MULTICAST_TEXTS,
-    ROLL_MEMES,
-    ROLL_TEXTS,
     apply_fissure_protection,
     calculate_fissure_roll,
     calculate_new_fissure,
+    calculate_streak_bonus,
 )
 from stats import get_event_chances
 
@@ -456,6 +453,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
 
+        # СТРИК-БОНУС: +1 см за каждый выигрышный стрик (до выходного бонуса)
+        current_win_streak = user.get('current_win_streak', 0)
+        roll, streak_text = calculate_streak_bonus(current_win_streak, roll)
+
         # Сохраняем original_roll для отображения в мультикасте (до бонусов)
         display_roll = roll
 
@@ -541,6 +542,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{result_text}\n"
                 f"{extra_text}"
             )
+
+        if streak_text:
+            text = f"{text}\n{streak_text}"
 
         if is_fatal and protection_msg:
             text = f"{text}\n{protection_msg}"
