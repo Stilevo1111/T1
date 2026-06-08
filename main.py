@@ -87,14 +87,16 @@ def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
 
 async def animate_loading_progress(loading_msg, bar_length: int = 10):
     """Update loading message with progress-bar animation."""
-    for i in range(20):
+    iteration = 0
+    while True:
         try:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.3)
         except asyncio.CancelledError:
             return
         if loading_msg is None:
             break
-        filled = (i + 1) * bar_length // 20 or 1
+        iteration = (iteration + 1) % 10
+        filled = iteration + 1
         bar = "🟩" * filled + "⬜️" * (bar_length - filled)
         try:
             await loading_msg.edit_text(f"⏳ Загрузка...\n{bar}")
