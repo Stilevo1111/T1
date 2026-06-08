@@ -785,7 +785,7 @@ async def announce_weekly_mmr_winner(bot):
     if last_announced == current_week_start:
         return False
 
-    # Проверяем, есть ли игроки с данными за ПРОШЛУЮ неделю
+    # Проверяем, есть ли игроки с данными за текущую неделю
     import urllib.parse as urlparse
 
     from database import get_connection as gc2
@@ -794,13 +794,13 @@ async def announce_weekly_mmr_winner(bot):
     scheme = urlparse.urlparse(DATABASE_URL).scheme
     if "postgres" in scheme:
         cursor.execute(
-            "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND (week_start_date IS NULL OR week_start_date::text != %s)",
+            "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND week_start_date::text = %s",
             (current_week_start,))
     else:
         cursor.execute(
-            "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND (week_start_date IS NULL OR week_start_date != ?)",
+            "SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL AND week_games > 0 AND week_start_date = ?",
             (current_week_start,))
-    stale_count = cursor.fetchone()[0]
+    active_players_count = cursor.fetchone()[0]
     cursor.close()
     release_connection(conn)
 
@@ -811,9 +811,9 @@ async def announce_weekly_mmr_winner(bot):
         logger.info("announce_weekly_mmr_winner: не воскресенье - пропускаем")
         return False
 
-    # В воскресенье проверяем, что есть игроки с новыми данными
-    if stale_count == 0:
-        logger.info("announce_weekly_mmr_winner: в воскресенье stale_count == 0 - данных за новую неделю ещё нет")
+    # В воскресенье проверяем, что есть игроки с данными за текущую неделю
+    if active_players_count == 0:
+        logger.info("announce_weekly_mmr_winner: в воскресенье active_players_count == 0 - данных за неделю ещё нет")
         return False
 
     digest_chat_id = get_config('digest_chat_id')
