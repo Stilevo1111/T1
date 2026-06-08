@@ -1090,7 +1090,7 @@ class Database:
                     RETURNING id
                 '''
                 result = self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0), fetch="one")
-                return result[0] if result else telegram_id
+                return result["id"] if result else telegram_id
             else:
                 query = '''
                     INSERT INTO users (telegram_id, username, first_name, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at, message_count)
@@ -1103,7 +1103,7 @@ class Database:
                         last_message_id = excluded.last_message_id,
                         total_growth = excluded.total_growth,
                         total_rolls = excluded.total_rolls
-                '''
+                    '''
                 self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0))
                 return None
         except Exception as e:
@@ -1116,7 +1116,7 @@ class Database:
                     existing = self.execute_query("SELECT id FROM users WHERE telegram_id = %s", (telegram_id,), fetch="one")
                     if existing:
                         logger.warning(f"add_user: recovered from pkey sequence desync for telegram_id={telegram_id}")
-                        return existing[0]
+                        return existing["id"]
                 except Exception:
                     pass
             
@@ -1337,14 +1337,14 @@ class Database:
                 return None
             else:
                 query = """
-                    SELECT COUNT(*) + 1 FROM users WHERE mmr > (
+                    SELECT COUNT(*) + 1 as rank FROM users WHERE mmr > (
                         SELECT mmr FROM users WHERE telegram_id = ? LIMIT 1
                     ) AND steam_id IS NOT NULL
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 # Если пользователь первый (нет тех, у кого больше MMR), возвращаем 1
-                if result and result[0] is not None:
-                    rank = int(result[0])
+                if result and (result.get('rank') if isinstance(result, dict) else result[0]) is not None:
+                    rank = int(result.get('rank') if isinstance(result, dict) else result[0])
                     # Если rank = 0, значит пользователь первый (у него максимальный MMR)
                     return rank if rank > 0 else 1
                 return None
@@ -1371,15 +1371,15 @@ class Database:
                 return None
             else:
                 query = """
-                    SELECT COUNT(*) + 1 FROM users 
+                    SELECT COUNT(*) + 1 as rank FROM users 
                     WHERE (in_chat = 1 OR in_chat IS NULL)
                     AND fissure > COALESCE(
                         (SELECT fissure FROM users WHERE telegram_id = ? LIMIT 1), -1)
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
                 logger.info(f"get_fissure_rank result: {result}, type={type(result)}")
-                if result and result[0] is not None:
-                    rank = int(result[0])
+                if result and (result.get("rank") if isinstance(result, dict) else result[0]) is not None:
+                    rank = int(result.get("rank") if isinstance(result, dict) else result[0])
                     return rank if rank > 0 else 1
                 return None
         except Exception as e:
@@ -1663,9 +1663,9 @@ class Database:
                 rows = self.execute_query(query, fetch="all")
 
                 # Разный синтаксис для дат в PostgreSQL
-                query_count = "SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '7 days'"
+                query_count = "SELECT COUNT(*) as count FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '7 days'"
                 new_players_week = self.execute_query(query_count, fetch="one")
-                new_players_week = new_players_week[0] if new_players_week else 0
+                new_players_week = new_players_week.get('count') if new_players_week else 0
             else:
                 query = """
                     SELECT telegram_id, username, fissure, current_position, weekly_digest_position,
@@ -1676,20 +1676,21 @@ class Database:
                 rows = self.execute_query(query, fetch="all")
 
                 # Разный синтаксис для дат в SQLite
-                query_count = "SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', '-7 days')"
+                query_count = "SELECT COUNT(*) as count FROM users WHERE created_at >= datetime('now', '-7 days')"
                 new_players_week = self.execute_query(query_count, fetch="one")
-                new_players_week = new_players_week[0] if new_players_week else 0
+                new_players_week = new_players_week.get('count') if new_players_week else 0
 
             users = []
             for r in rows:
+                is_dict = isinstance(r, dict)
                 users.append({
-                    "telegram_id": r[0],
-                    "username": r[1],
-                    "fissure": float(r[2] or 0.0),
-                    "current_position": int(r[3] or 0),
-                    "weekly_digest_position": int(r[4] or 0),
-                    "weekly_growth": float(r[5] or 0.0),
-                    "weekly_rolls": int(r[6] or 0),
+                    "telegram_id": r.get("telegram_id") if is_dict else r[0],
+                    "username": r.get("username") if is_dict else r[1],
+                    "fissure": float((r.get("fissure") or 0.0) if is_dict else (r[2] or 0.0)),
+                    "current_position": int((r.get("current_position") or 0) if is_dict else (r[3] or 0)),
+                    "weekly_digest_position": int((r.get("weekly_digest_position") or 0) if is_dict else (r[4] or 0)),
+                    "weekly_growth": float((r.get("weekly_growth") or 0.0) if is_dict else (r[5] or 0.0)),
+                    "weekly_rolls": int((r.get("weekly_rolls") or 0) if is_dict else (r[6] or 0)),
                 })
 
             # Текущие позиции по fissure (могут отличаться от current_position если не обновлялись)
