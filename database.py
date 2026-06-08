@@ -1030,7 +1030,7 @@ class Database:
             except Exception as e:
                 if _telegram_error_contains(e, "closed", "ssl", "connection", "server closed", "terminating", "eof", "broken"):
                     _reset_persistent_pg_conn(f"execute_query postgres error: {e}")
-                logger.error(f"execute_query error: {e}")
+                logger.error(f"execute_query error: {e} (type={type(e).__name__}, args={getattr(e, 'args', 'N/A')})")
                 try:
                     conn.rollback()
                 except Exception:
@@ -1058,7 +1058,7 @@ class Database:
             except Exception as e:
                 if _telegram_error_contains(e, "closed", "ssl", "connection", "server closed", "terminating", "eof", "broken"):
                     _reset_persistent_pg_conn(f"execute_query sqlite error: {e}")
-                logger.error(f"execute_query error: {e}")
+                logger.error(f"execute_query error: {e} (type={type(e).__name__}, args={getattr(e, 'args', 'N/A')})")
                 try:
                     conn.rollback()
                 except Exception:
@@ -1068,11 +1068,12 @@ class Database:
                 release_connection(conn)
 
     def add_user(self, telegram_id, username=None, first_name=None, last_name=None):
-        """Добавить нового пользователя или обновить существующего"""
+        """Добавить нового пользователя или обновить существующим"""
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        db_type = get_db_type()
+        
         try:
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
-
             if "postgres" in scheme:
                 query = '''
                     INSERT INTO users (telegram_id, username, first_name, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at, message_count)
@@ -1106,18 +1107,20 @@ class Database:
                 self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0))
                 return None
         except Exception as e:
-            # If the serial sequence for `id` is out of sync (common after data restores),
-            # the INSERT may fail on users_pkey before the ON CONFLICT on telegram_id is even checked.
-            if _telegram_error_contains(e, "duplicate key") and "users_pkey" in str(e).lower():
+            error_msg = str(e) if str(e) else "unknown error"
+            error_type = type(e).__name__
+            error_args = getattr(e, 'args', None)
+            
+            if _telegram_error_contains(e, "duplicate key") and "users_pkey" in error_msg.lower():
                 try:
-                    # Fallback: fetch the existing user by telegram_id
                     existing = self.execute_query("SELECT id FROM users WHERE telegram_id = %s", (telegram_id,), fetch="one")
                     if existing:
                         logger.warning(f"add_user: recovered from pkey sequence desync for telegram_id={telegram_id}")
                         return existing[0]
                 except Exception:
                     pass
-            logger.error(f"Error adding user: {e}")
+            
+            logger.error(f"Error adding user: {error_msg} (type={error_type}, db_type={db_type}, telegram_id={telegram_id}, username={username})")
             return None
 
     def get_user(self, telegram_id, username=None):
