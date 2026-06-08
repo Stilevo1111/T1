@@ -2899,6 +2899,7 @@ def _get_dota_week_top_query(limit):
             for r in result:
                 logger.info(f"  - {r['steam_nickname']}: {r['week_wins']}W / {r['week_games']}G")
 
+            cursor.close()
             release_connection(conn)
             # Сохраняем в кеш
             get_dota_week_top_from_db._cache = (result, time.time())
