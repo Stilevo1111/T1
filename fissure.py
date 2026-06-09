@@ -38,6 +38,9 @@ from rolls import (
     calculate_fissure_roll,
     calculate_new_fissure,
     calculate_streak_bonus,
+    ROLL_TEXTS,
+    ROLL_MEMES,
+    CATEGORY_PHRASES,
 )
 from stats import get_event_chances
 
