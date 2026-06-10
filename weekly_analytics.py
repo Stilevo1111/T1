@@ -659,7 +659,7 @@ async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> l
 
         try:
             match_url = f"{OPENDOTA_API_URL}/matches/{match_id}"
-            match_data = await _api_get_async(match_url, timeout=10)
+            match_data = await _api_get_async(match_url, timeout=20)
 
             player_stats = {}
             if match_data and "players" in match_data:
