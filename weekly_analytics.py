@@ -1360,8 +1360,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         np.min(y_smooth),
         color="#f4c430",
         alpha=0.35,
-        interpolate=True,
-        antialiased=True,
         zorder=3
     )
 
