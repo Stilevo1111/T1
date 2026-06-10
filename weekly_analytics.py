@@ -1298,7 +1298,16 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     # SMOOTH INTERPOLATION
     # =====================================================
 
-    if len(impacts) >= 2:
+    try:
+        from scipy.interpolate import interp1d
+    except ImportError:
+        interp1d = None
+
+    if interp1d and len(impacts) >= 4:
+        x_smooth = np.linspace(1, 10, 1000)
+        interp_func = interp1d(x, impacts, kind='cubic', fill_value='extrapolate')
+        y_smooth = interp_func(x_smooth)
+    elif len(impacts) >= 2:
         x_smooth = np.linspace(1, 10, 1000)
         y_smooth = np.interp(x_smooth, x, impacts)
     else:
