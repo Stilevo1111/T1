@@ -186,6 +186,21 @@ async def fetch_hero_icon(session, icon_path):
         return None
 
 
+async def _enrich_with_hero_data(hero_stats):
+    from dota_mmr import get_hero_list
+    heroes_info = await get_hero_list()
+    if not heroes_info:
+        return hero_stats
+    hero_map = {h.get("id"): h for h in heroes_info}
+    for hs in hero_stats:
+        hero_id = hs.get("hero_id")
+        if hero_id in hero_map:
+            info = hero_map[hero_id]
+            hs["localized_name"] = info.get("localized_name", hs.get("name", ""))
+            hs["roles"] = info.get("roles", [])
+    return hero_stats
+
+
 """
 Hero meta cache for reducing OpenDota API calls
 """
@@ -252,11 +267,11 @@ async def get_dota_data(days=7, force_refresh=False):
                     hero_stats = list(hero_position_stats.values())
                     for hs in hero_stats:
                         hs["img"] = f"/apps/dota2/images/dota/heroes/{hs['hero_id']}_sb.png"
-                    result = await _enrich_with_hero_data(hero_stats)
-                    if result:
-                        _hero_meta_cache["data"] = result
+                    hero_stats = await _enrich_with_hero_data(hero_stats)
+                    if hero_stats:
+                        _hero_meta_cache["data"] = hero_stats
                         _hero_meta_cache["timestamp"] = now
-                    return result
+                    return hero_stats
     except Exception as e:
         logger.warning("Explorer failed: %s", e)
 
@@ -282,7 +297,7 @@ def _build_grid(hero_stats):
         score = winrate * math.log10(matches + 1)
         pos = hero.get("position", detect_hero_position(hero))
         hero_id = hero.get("hero_id", hero.get("id"))
-        
+
         if hero_id not in hero_best_position or winrate > hero_best_position[hero_id]["winrate"]:
             hero_best_position[hero_id] = {
                 'id': hero_id,
@@ -294,7 +309,7 @@ def _build_grid(hero_stats):
                 'matches': matches,
                 'roles': hero.get("roles", []),
             }
-    
+
     # Process heroes with their best position only
     processed_heroes = list(hero_best_position.values())
 

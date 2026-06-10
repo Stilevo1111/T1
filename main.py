@@ -86,43 +86,6 @@ def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
     return any(p.lower() in msg for p in phrases)
 
 
-async def animate_loading_progress(loading_msg, bar_length: int = 10):
-    """Update loading message with progress-bar animation."""
-    iteration = 0
-    while True:
-        try:
-            await asyncio.sleep(0.5)
-        except asyncio.CancelledError:
-            return
-        if loading_msg is None:
-            break
-        iteration = (iteration + 1) % 10
-        filled = iteration + 1
-        bar = "🍖" * filled + "🪝" * (bar_length - filled)
-        try:
-            await loading_msg.edit_text(f"⏳ Загрузка...\n{bar}", parse_mode="HTML")
-        except Exception as e:
-            if "message to edit not found" in str(e).lower() or "not found" in str(e).lower() or "bad request" in str(e).lower():
-                break
-            pass
-
-
-async def stop_loading_animation(loading_msg, animation_task, chat_id, bot):
-    """Cancel animation task and delete loading message safely."""
-    if animation_task:
-        animation_task.cancel()
-        try:
-            await animation_task
-        except asyncio.CancelledError:
-            pass
-    if loading_msg:
-        try:
-            await bot.delete_message(chat_id, loading_msg.message_id)
-        except Exception:
-            pass
-    return None
-
-
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     print("WARNING: BOT_TOKEN is not set!")
@@ -475,7 +438,6 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Еженедельная аналитика игрока"""
     loading_msg = None
-    animation_task = None
     chat_id = update.message.chat_id
 
     # Try to get chat_type safely
@@ -511,25 +473,18 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="<b>⏳ Загрузка...</b>\n🪝🪝🪝🪝🪝🪝🪝🪝🪝🪝",
-                parse_mode="HTML"
+                text="⏳ Загрузка графика..."
             )
             logger.info(f"Created loading message in analyze: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
-            animation_task = asyncio.create_task(animate_loading_progress(loading_msg))
         except Exception as e:
             logger.debug(f"Could not send loading message: {e}")
             loading_msg = None
 
-        # Make animation_task available to nested function
-        _anim_task = animation_task
-
         # Start analytics generation in background task
         async def generate_and_update_analytics():
             nonlocal loading_msg
-            nonlocal _anim_task
             try:
                 from weekly_analytics import (
-                    _escape_markdown_v2,
                     generate_chart_only,
                     get_last_matches,
                 )
@@ -588,9 +543,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         context.user_data['analytics_table_msg_id'] = None
 
                     if chart_image and len(chart_image) > 0:
-                        if _anim_task:
-                            _anim_task.cancel()
-
                         photo_buf = io.BytesIO(chart_image)
                         photo_buf.name = "weekly_analytics.png"
 
@@ -603,13 +555,9 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 media=InputMediaPhoto(media=photo_buf, caption="🧠 Импакт в последних 10 играх."),
                                 reply_markup=reply_markup
                             )
-                            if _anim_task:
-                                _anim_task.cancel()
                             context.user_data['analytics_chart_msg_id'] = loading_msg.message_id
                             schedule_delete(context.bot, chat_id, loading_msg.message_id, 30, context.application.job_queue)
                         except Exception:
-                            if _anim_task:
-                                _anim_task.cancel()
                             photo_buf.seek(0)
                             msg_id = loading_msg.message_id if loading_msg else None
                             loading_msg = None
@@ -634,8 +582,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
                             update_last_message_id(update.effective_user.id, result_msg.message_id)
                     else:
-                        if _anim_task:
-                            _anim_task.cancel()
                         error_text = "⚠️ Не удалось сгенерировать график аналитики. Попробуйте позже."
                         try:
                             await context.bot.edit_message_text(
@@ -649,13 +595,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             except Exception as e:
                 logger.error(f"Error in background analytics generation: {e}")
-                try:
-                    if _anim_task:
-                        _anim_task.cancel()
-                except Exception:
-                    pass
                 err_msg_id = loading_msg.message_id if loading_msg else None
-                loading_msg = await stop_loading_animation(loading_msg, _anim_task, chat_id, context.bot)
+                loading_msg = None
                 try:
                     await context.bot.edit_message_text(
                         chat_id=chat_id,
@@ -665,7 +606,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     pass
 
-                # Schedule deletion of the final loading/error message
                 schedule_delete(context.bot, chat_id, err_msg_id, 10, context.application.job_queue)
 
 # Import required classes
@@ -1499,7 +1439,6 @@ async def resolve_avatar_url_for_card(
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command - show profile card"""
     loading_msg = None
-    animation_task = None
     try:
         # Skip if rate limited
         if is_rate_limited():
@@ -1596,13 +1535,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-# Send loading message and start animation
+# Send loading message
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="⏳ Загрузка...\n⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️"
+                text="⏳ Загрузка..."
             )
-            animation_task = asyncio.create_task(animate_loading_progress(loading_msg))
             logger.info(f"Created loading message in start: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
         except Exception as e:
             logger.debug(f"Could not send loading message in start: {e}")
@@ -1660,9 +1598,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 set_last_bot_message(chat_id, user_id, msg.message_id)
                 update_last_message_id(user_id, msg.message_id)
                 schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
-                if animation_task:
-                    animation_task.cancel()
-                loading_msg = await stop_loading_animation(loading_msg, None, chat_id, context.bot)
+                if loading_msg:
+                    try:
+                        await context.bot.delete_message(chat_id, loading_msg.message_id)
+                    except Exception:
+                        pass
                 return
             else:
                 await menu_handler(update, context)
@@ -1693,17 +1633,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 set_last_bot_message(chat_id, user_id, msg.message_id)
                 update_last_message_id(user_id, msg.message_id)
-                # Auto-delete after 30 seconds
                 schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
             else:
                 await menu_handler(update, context)
             if loading_msg:
-                loading_msg = await stop_loading_animation(loading_msg, animation_task, chat_id, context.bot)
-            animation_task = None
+                try:
+                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                except Exception:
+                    pass
 
     except Exception as e:
-        if animation_task:
-            animation_task.cancel()
         error_str = str(e).lower()
         if _telegram_error_contains(e, "flood control", "429", "too many requests"):
             retry_after = 60
@@ -1714,10 +1653,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             set_rate_limited(retry_after)
         logger.error(f"start command error: {e}")
         if loading_msg:
-            loading_msg = await stop_loading_animation(loading_msg, animation_task, chat_id, context.bot)
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception:
+                pass
         await menu_handler(update, context, allow_when_rate_limited=True)
     finally:
-        pass  # No shared processing dictionary to clean up for /start
+        pass
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1732,14 +1674,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Handle analytics_show separately with loading indicator (as chat message)
     if data == "analytics_show":
         await callback_query.answer()
-        loading_msg = await context.bot.send_message(chat_id=chat_id, text="<b>⏳ Загрузка...</b>\n🪝🪝🪝🪝🪝🪝🪝🪝🪝🪝", parse_mode="HTML")
-        animation_task = asyncio.create_task(animate_loading_progress(loading_msg))
+        loading_msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Загрузка аналитики...")
 
         try:
             await _show_analytics_page(callback_query, 0, context, loading_msg=loading_msg)
         except Exception as e:
             logger.error(f"Error in button_callback: {e}", exc_info=True)
-            # Try to edit loading message with error and schedule deletion
             if loading_msg:
                 msg_id = loading_msg.message_id if loading_msg else None
                 loading_msg = None
@@ -1749,14 +1689,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         schedule_delete(context.bot, chat_id, msg_id, 30, context.application.job_queue)
                     except Exception:
                         pass
-        finally:
-            if animation_task:
-                animation_task.cancel()
         return
 
     # Handle analytics_page_N - no loading indicator (pages already generated or will show error)
     if data and data.startswith("analytics_page_"):
-        await callback_query.answer()  # Just acknowledge the callback
+        await callback_query.answer()
         try:
             page_idx = int(data.split("_")[-1])
             await _show_analytics_page(callback_query, page_idx, context)
@@ -2086,7 +2023,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_type = update.message.chat.type
 
     loading_msg = None
-    animation_task = None
 
     # Delete user message only in groups/channels if bot has permissions
     if chat_type in ['group', 'supergroup', 'channel']:
@@ -2131,14 +2067,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username = user_obj.username or user_obj.first_name or "Unknown"
             target_user = get_user(user_obj.id, username)
 
-            # Send loading message with animation
             try:
                 loading_msg = await context.bot.send_message(
                     chat_id=chat_id,
-                    text="<b>⏳ Загрузка...</b>\n🪝🪝🪝🪝🪝🪝🪝🪝🪝🪝",
-                    parse_mode="HTML"
+                    text="⏳ Загрузка..."
                 )
-                animation_task = asyncio.create_task(animate_loading_progress(loading_msg))
                 logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
             except Exception as e:
                 logger.debug(f"Could not send loading message: {e}")
@@ -2253,23 +2186,17 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
 
-        # Delete loading message immediately after successful send
         if loading_msg:
-            loading_msg = await stop_loading_animation(loading_msg, animation_task, chat_id, context.bot)
-            animation_task = None
-        else:
-            logger.warning("loading_msg is None, cannot delete (already deleted during animation)")
-        if animation_task:
-            animation_task.cancel()
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception:
+                pass
 
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
 
     except TimeoutError as e:
-        if animation_task:
-            animation_task.cancel()
-        loading_msg = await stop_loading_animation(loading_msg, None, chat_id, context.bot)
         logger.error(f"Timeout in stats: {e}")
         try:
             result_msg = await context.bot.send_message(
@@ -2282,11 +2209,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
     except Exception as e:
-        if animation_task:
-            animation_task.cancel()
         logger.error(f"Error in stats: {e}\n{traceback.format_exc()}")
-        loading_msg = await stop_loading_animation(loading_msg, animation_task, chat_id, context.bot)
-        animation_task = None
+        if loading_msg:
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception:
+                pass
         if "Timed out" not in str(e):
             try:
                 await context.bot.send_message(
@@ -3467,7 +3395,7 @@ async def main():
         while not stop_event.is_set():
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=1.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     except Exception as e:
