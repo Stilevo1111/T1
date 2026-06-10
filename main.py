@@ -99,7 +99,6 @@ _START_COOLDOWN_TTL = 3600  # Clean up entries older than 1 hour
 _START_COOLDOWN_MAX_SIZE = 1000  # LRU max size to prevent memory leak
 
 MORNING_GREETINGS = [
-    "☀️ УТРО",
     "🦇 Утречко! Готов к катке?",
     "☀️ Доброе утро. Время забирать руну.",
     "☀️ Доброе утро. Время фармить",
@@ -114,7 +113,6 @@ MORNING_GREETINGS = [
 ]
 
 EVENING_GREETINGS = [
-    "🌙 НОЧЬ",
     "🌙 Спокойной ночи! Восстанавливай хп.",
     "🛌 Карта погашена. Сладких снов.",
     "🌃 Хорошая катка была. Отдыхай.",
