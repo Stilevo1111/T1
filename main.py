@@ -97,6 +97,35 @@ else:
 _START_COOLDOWN = 5  # 5 seconds cooldown for /start command
 _START_COOLDOWN_TTL = 3600  # Clean up entries older than 1 hour
 _START_COOLDOWN_MAX_SIZE = 1000  # LRU max size to prevent memory leak
+
+MORNING_GREETINGS = [
+    "☀️ УТРО",
+    "🦇 Утречко! Готов к катке?",
+    "☀️ Доброе утро. Время забирать руну.",
+    "☀️ Доброе утро. Время фармить",
+    "🌅 Всем хорошего дня! Ролли.",
+    "☕ Утро началось! Кто в игре?",
+    "🎮 Проснись! Время побеждать.",
+    "🧭 Варды поставлены. Хорошего дня!",
+    "⚔️ Доброе утро, тима!",
+    "🛡️ Респавн успешный. Жизнь началась.",
+    "🌄 Кофе + бкб. День не пробьёт.",
+    "🍃 Лёгкой линии сегодня, бро!",
+]
+
+EVENING_GREETINGS = [
+    "🌙 НОЧЬ",
+    "🌙 Спокойной ночи! Восстанавливай хп.",
+    "🛌 Карта погашена. Сладких снов.",
+    "🌃 Хорошая катка была. Отдыхай.",
+    "✨ Ночная руна. Восстанавливай хп.",
+    "🌌 Варды сняты. Спи спокойно.",
+    "🕯️ Выход из игры. Сладких снов.",
+    "🎮 Дота спит. И ты ложись.",
+    "🛡️ Отдых — лучший саппорт. Сладких снов.",
+    "🌙 Фарми сны, а не крипов.",
+    "💤 Тьма на карте. Доброй ночи.",
+]
 _USER_START_COOLDOWN = {}  # user_id -> timestamp (with LRU eviction)
 
 def _start_cooldown_cleanup_if_needed():
@@ -299,13 +328,6 @@ async def morning_greeting_job(context):
         logger.info("Утреннее приветствие уже отправлено сегодня")
         return
 
-    MORNING_GREETINGS = [
-        "🦇 Утречко! Готовы к каточке? 🎮",
-        "☀️ Доброе утро! Время мочить.",
-        "🌅 Всем хорошего дня! Ролли.",
-        "☕ Утро началось! Кто в игре?"
-    ]
-
     greeting_text = random.choice(MORNING_GREETINGS)
 
     try:
@@ -341,14 +363,7 @@ async def night_greeting_job(context):
         logger.info("Вечернее приветствие уже отправлено сегодня")
         return
 
-    NIGHT_GREETINGS = [
-        "🦇 Спокойной ночи, дотеры. Если кто не спит — играйте тихо, я молчу.",
-        "🦇 Спокойной ночи! Вижу, все уснули. 💤",
-        "🦇 Zzz... Спокойной ночи!",
-        "🌙 Доброй ночи! Завтра новые катки."
-    ]
-
-    greeting_text = random.choice(NIGHT_GREETINGS)
+    greeting_text = random.choice(EVENING_GREETINGS)
 
     try:
         logger.info("Запуск вечернего приветствия 23:00 MSK")
