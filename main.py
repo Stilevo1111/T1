@@ -98,9 +98,9 @@ async def animate_loading_progress(loading_msg, bar_length: int = 10):
             break
         iteration = (iteration + 1) % 10
         filled = iteration + 1
-        bar = "🟩" * filled + "⬜️" * (bar_length - filled)
+        bar = "🍖" * filled + "🪝" * (bar_length - filled)
         try:
-            await loading_msg.edit_text(f"⏳ Загрузка...\n{bar}")
+            await loading_msg.edit_text(f"<b>⏳ Загрузка...</b>\n{bar}")
         except Exception as e:
             if "message to edit not found" in str(e).lower() or "not found" in str(e).lower() or "bad request" in str(e).lower():
                 break
@@ -556,7 +556,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chart_image = chart_data.get("image")
                     role_from_chart = chart_data.get("role", "CARRY")
 
-# If matches empty but cache had old data, fetch fresh matches
                     if not matches:
                         try:
                             fresh_matches = await get_last_matches(update.effective_user.id)
@@ -568,20 +567,17 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                     logger.info(f"Analytics: got chart_data with {len(matches)} matches, image={chart_image is not None}")
 
-                    # Ensure charts directory exists for potential caching
                     import os
                     os.makedirs("charts", exist_ok=True)
 
-                    # Сохраняем только matches для полной ленивой генерации
                     context.user_data['analytics_stats'] = None
-                    context.user_data['analytics_role'] = role_from_chart  # Store role from chart generation
+                    context.user_data['analytics_role'] = role_from_chart
                     context.user_data['analytics_page'] = 0
                     context.user_data['analytics_history'] = history
                     context.user_data['analytics_matches'] = matches
                     context.user_data['analytics_pages'] = [None, None]
                     context.user_data['analytics_generated'] = set()
 
-                    # Delete old analytics table if exists
                     old_table_msg_id = context.user_data.get('analytics_table_msg_id')
                     if old_table_msg_id:
                         try:
@@ -591,11 +587,9 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         context.user_data['analytics_table_msg_id'] = None
 
                     if chart_image and len(chart_image) > 0:
-                        # Cancel animation and delete loading message
                         if _anim_task:
                             _anim_task.cancel()
 
-                        # Update loading message with result
                         photo_buf = io.BytesIO(chart_image)
                         photo_buf.name = "weekly_analytics.png"
 
@@ -605,7 +599,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             await context.bot.edit_message_media(
                                 chat_id=chat_id,
                                 message_id=loading_msg.message_id,
-                                media=InputMediaPhoto(media=photo_buf, caption=_escape_markdown_v2("🧠 Импакт в последних 10 играх.")),
+                                media=InputMediaPhoto(media=photo_buf, caption="🧠 Импакт в последних 10 играх."),
                                 reply_markup=reply_markup
                             )
                             if _anim_task:
@@ -639,7 +633,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
                             update_last_message_id(update.effective_user.id, result_msg.message_id)
                     else:
-                        # Cancel animation and update with error message
                         if _anim_task:
                             _anim_task.cancel()
                         error_text = "⚠️ Не удалось сгенерировать график аналитики. Попробуйте позже."
@@ -2141,7 +2134,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 loading_msg = await context.bot.send_message(
                     chat_id=chat_id,
-                    text="⏳ Загрузка...\n⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️"
+                    text="<b>⏳ Загрузка...</b>\n🪝🪝🪝🪝🪝🪝🪝🪝🪝🪝"
                 )
                 animation_task = asyncio.create_task(animate_loading_progress(loading_msg))
                 logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")

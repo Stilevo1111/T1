@@ -234,14 +234,13 @@ async def get_dota_data(days=7, force_refresh=False):
             if resp.status == 200:
                 data = await resp.json()
                 if data and "rows" in data and data["rows"]:
-                    # Aggregate by hero_id + position (from player_slot)
                     hero_position_stats = {}
                     for row in data["rows"]:
                         hero_id = row["hero_id"]
                         player_slot = row.get("player_slot", 0)
                         if player_slot < 0:
                             continue
-                        count = row["pub_pick"]  # This is the count for this hero+position
+                        count = row["pub_pick"]
                         position = player_slot % 5 if player_slot < 128 else (player_slot - 128) % 5
                         pos_map = {0: 1, 1: 2, 2: 3, 3: 4, 4: 5}
                         actual_pos = pos_map.get(position, 1)
@@ -261,65 +260,25 @@ async def get_dota_data(days=7, force_refresh=False):
     except Exception as e:
         logger.warning("Explorer failed: %s", e)
 
-    try:
-        from database import get_aiohttp_session
-        session = await get_aiohttp_session()
-        async with session.get("https://api.opendota.com/api/heroStats", timeout=aiohttp.ClientTimeout(total=5)) as resp:
-            if resp.status == 200:
-                heroes = await resp.json()
-                # Convert heroStats format to match our expected format
-                hero_stats = []
-                for h in heroes:
-                    hero_stats.append({
-                        "hero_id": h.get("hero_id") or h.get("id"),
-                        "localized_name": h.get("localized_name", f"Hero {h.get('hero_id') or h.get('id')}"),
-                        "roles": h.get("roles", []),
-                        "pub_pick": h.get("pro_pick", 0) or h.get("picked", 0),
-                        "pub_win": h.get("pro_win", 0) or h.get("win", 0),
-                        "img": h.get("img", ""),
-                        "position": detect_hero_position(h)
-                    })
-                if hero_stats:
-                    _hero_meta_cache["data"] = hero_stats
-                    _hero_meta_cache["timestamp"] = now
-                    return hero_stats
-    except Exception as e:
-        logger.error("heroStats error: %s", e)
+    logger.warning("OpenDota explorer API unavailable - cannot generate hero meta (no valid data source)")
     return None
-
-
-async def _enrich_with_hero_data(hero_stats):
-    try:
-        from database import get_aiohttp_session
-        session = await get_aiohttp_session()
-        async with session.get("https://api.opendota.com/api/heroes", timeout=aiohttp.ClientTimeout(total=5)) as resp:
-            if resp.status == 200:
-                heroes = await resp.json()
-                hero_map = {h["id"]: h for h in heroes}
-                for hs in hero_stats:
-                    if hs["hero_id"] in hero_map:
-                        hero = hero_map[hs["hero_id"]]
-                        hs["localized_name"] = hero["localized_name"]
-                        hs["roles"] = hero.get("roles", [])
-                        hs["img"] = hero.get("img", hs["img"])
-    except Exception as e:
-        logger.warning("Could not enrich hero data: %s", e)
-    return hero_stats
 
 
 def _build_grid(hero_stats):
     """
     Сетка 5 колонок с лучшими героями по позициям за неделю.
-    1) Для каждого героя выбираем лучшую позицию по winrate.
+    1) Для каждого героя выбираем лучшую позицию по winrate (минимум 48%).
     2) Группируем по позициям.
     3) Берём топ-5 по winrate для каждой позиции (самый высокий винрейт сверху).
     """
-    # First, find best position for each hero (by winrate)
+    MIN_WINRATE = 0.48
     hero_best_position = {}
     for hero in hero_stats:
         matches = hero.get("pub_pick", hero.get("pro_pick", 0))
         wins = hero.get("pub_win", hero.get("pro_win", 0))
         winrate = (wins / matches) if matches > 0 else 0
+        if winrate < MIN_WINRATE:
+            continue
         score = winrate * math.log10(matches + 1)
         pos = hero.get("position", detect_hero_position(hero))
         hero_id = hero.get("hero_id", hero.get("id"))
@@ -568,7 +527,8 @@ def get_static_fallback_banner():
             font = ImageFont.load_default()
         # Removed "Dota 2 Hero Meta" label as requested
         draw.text((20, 20), "Updated: %s" % date_text, fill=(200, 200, 200), font=font)
-        draw.text((20, 70), "API unavailable", fill=(150, 150, 150), font=font)
+        draw.text((20, 70), "OpenDota API недоступен", fill=(150, 150, 150), font=font)
+        draw.text((20, 110), "Подождите, пока API восстановится", fill=(120, 120, 120), font=font)
         buf = io.BytesIO()
         base.save(buf, format='PNG')
         return buf.getvalue()
