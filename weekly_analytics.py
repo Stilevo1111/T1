@@ -1187,7 +1187,28 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         "https://i.ibb.co/jkTWqcHn/"
         "pngdsadsad.png"
     )
+    # Try WebP first, fallback to PNG
+    background_url_webp = (
+        "https://i.ibb.co/4g1t8xQ/chart-bg.webp"
+    )
 
+    if _CHART_BG_CACHE is None:
+        try:
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+            # Try WebP first (better quality, smaller size)
+            async with session.get(background_url_webp, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    content = await resp.read()
+                    img = Image.open(io.BytesIO(content))
+                    if img.mode == 'RGBA':
+                        img = img.convert('RGB')
+                    _CHART_BG_CACHE = img.resize((WIDTH, HEIGHT), Image.LANCZOS)
+        except Exception as e:
+            logger.warning(f"Could not load chart WebP background: {e}")
+            _CHART_BG_CACHE = None
+
+    # Fallback to PNG
     if _CHART_BG_CACHE is None:
         try:
             from database import get_aiohttp_session
@@ -1200,8 +1221,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
                         img = img.convert('RGB')
                     _CHART_BG_CACHE = img.resize((WIDTH, HEIGHT), Image.LANCZOS)
         except Exception as e:
-            logger.warning(f"Could not load chart background: {e}")
-            _CHART_BG_CACHE = None
+            logger.warning(f"Could not load chart PNG background: {e}")
 
     if _CHART_BG_CACHE is None:
         _CHART_BG_CACHE = Image.new('RGB', (WIDTH, HEIGHT), (15, 15, 25))
