@@ -69,6 +69,7 @@ def _circuit_breaker_can_execute() -> bool:
             cb["state"] = "HALF_OPEN"
             logger.info("Circuit breaker: HALF_OPEN - attempting recovery")
             return True
+        logger.warning(f"Circuit breaker OPEN, waiting {cb['recovery_timeout'] - (now - cb['last_failure_time']):.0f}s")
         return False
 
     if cb["state"] == "HALF_OPEN":
@@ -1223,17 +1224,22 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         # Логируем все полученные матчи
         if matches:
             logger.info(f"topmmr: total matches received from API: {len(matches)}")
-            for i, match in enumerate(matches):
+            for i, match in enumerate(matches[:5]):
                 match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=UTC)
                 in_week = match_date >= week_start_utc
                 logger.info(f"topmmr: match[{i}] id={match.get('match_id')} start_time={match.get('start_time')} date={match_date} week_start={week_start_utc} in_week={in_week}")
+            for i, match in enumerate(matches):
+                match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=UTC)
+                in_week = match_date >= week_start_utc
                 if in_week:
-                    # Детальное логирование только для первых 3 матчей в неделе
                     if i < 3:
                         radiant_win = match.get("radiant_win", False)
-                        player_is_radiant = match.get("radiant", True)
+                        player_is_radiant = match.get("radiant")
+                        if player_is_radiant is None:
+                            player_is_radiant = match.get("player_slot", 0) < 128
                         is_win = (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win)
                         logger.info(f"topmmr:   -> radiant={player_is_radiant}, radiant_win={radiant_win}, is_win={is_win}")
+                pass
         else:
             logger.warning("topmmr: no matches received from API")
 
@@ -1280,6 +1286,12 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                     pass
 
         logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}, week_streak={max_streak}")
+        
+        # If no matches in week, check if we have any recent matches at all (debug)
+        if week_games == 0 and matches:
+            latest_match_time = matches[0].get("start_time", 0) if matches else 0
+            oldest_match_time = matches[-1].get("start_time", 0) if matches else 0
+            logger.info(f"topmmr: DEBUG - no matches in week, latest={latest_match_time}, oldest={oldest_match_time}, week_start={int(week_start_utc.timestamp())}")
 
         # Проверяем смену недели - если неделя изменилась, сбрасываем статистику
         user_week_start = user.get('week_start_date')
