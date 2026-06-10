@@ -91,7 +91,7 @@ async def animate_loading_progress(loading_msg, bar_length: int = 10):
     iteration = 0
     while True:
         try:
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.5)
         except asyncio.CancelledError:
             return
         if loading_msg is None:
