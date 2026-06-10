@@ -1550,7 +1550,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     # Apply slight Gaussian blur to smooth sharp edges
     img = Image.open(buf).convert("RGBA")
-    img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
+    img = img.filter(ImageFilter.GaussianBlur(radius=1.0))
     blurred_buf = io.BytesIO()
     img.save(blurred_buf, format="PNG")
     blurred_buf.seek(0)
