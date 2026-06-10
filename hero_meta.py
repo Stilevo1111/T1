@@ -310,40 +310,34 @@ async def _enrich_with_hero_data(hero_stats):
 def _build_grid(hero_stats):
     """
     Сетка 5 колонок с лучшими героями по позициям за неделю.
-    1) Для каждого героя определяем bestPosition по максимальным пикам.
-    2) Рассчитываем score = winrate * log10(matches).
-    3) Фильтруем героев с < 5000 матчей.
-    4) Выбираем топ-5 по score для каждой позиции.
+    1) Для каждого героя выбираем лучшую позицию по winrate.
+    2) Группируем по позициям.
+    3) Берём топ-5 по winrate для каждой позиции (самый высокий винрейт сверху).
     """
-    # Process heroes
-    processed_heroes = []
-
+    # First, find best position for each hero (by winrate)
+    hero_best_position = {}
     for hero in hero_stats:
-        # Use pub data
         matches = hero.get("pub_pick", hero.get("pro_pick", 0))
-
-        # Calculate winrate
         wins = hero.get("pub_win", hero.get("pro_win", 0))
         winrate = (wins / matches) if matches > 0 else 0
-
-        score = (
-            winrate *
-            math.log10(matches + 1)
-        )
-
-        # Use position from SQL grouping (hero already has position)
+        score = winrate * math.log10(matches + 1)
         pos = hero.get("position", detect_hero_position(hero))
-
-        processed_heroes.append({
-            'id': hero.get("hero_id", hero.get("id")),
-            'name': hero.get("localized_name", 'Hero %d' % hero.get("hero_id", hero.get("id"))),
-            'img': hero.get("img", ""),
-            'position': pos,
-            'score': score,
-            'winrate': winrate,
-            'matches': matches,
-            'roles': hero.get("roles", []),
-        })
+        hero_id = hero.get("hero_id", hero.get("id"))
+        
+        if hero_id not in hero_best_position or winrate > hero_best_position[hero_id]["winrate"]:
+            hero_best_position[hero_id] = {
+                'id': hero_id,
+                'name': hero.get("localized_name", 'Hero %d' % hero_id),
+                'img': hero.get("img", ""),
+                'position': pos,
+                'score': score,
+                'winrate': winrate,
+                'matches': matches,
+                'roles': hero.get("roles", []),
+            }
+    
+    # Process heroes with their best position only
+    processed_heroes = list(hero_best_position.values())
 
     # Group by position and sort by winrate (highest first)
     by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
@@ -353,7 +347,7 @@ def _build_grid(hero_stats):
     # Take top 5 by winrate for each position (highest at top)
     grid = {}
     for pos in range(1, 6):
-        heroes = sorted(by_position[pos], key=lambda h: -h['score'])
+        heroes = sorted(by_position[pos], key=lambda h: -h['winrate'])
         grid[pos] = heroes[:5]
 
     # Ensure we have enough heroes - fill with heroes that can play the role if needed
@@ -378,6 +372,8 @@ def _build_grid(hero_stats):
                         grid[pos].append(h)
                         if len(grid[pos]) >= 5:
                             break
+            # Re-sort the column by winrate (highest to lowest)
+            grid[pos] = sorted(grid[pos], key=lambda h: -h['winrate'])
 
     return grid
 

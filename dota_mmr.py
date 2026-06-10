@@ -1251,31 +1251,22 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                     if match_date >= week_start_utc:
                         week_games += 1
 
-                        # Определяем победу используя player_slot и radiant_win
+                        # Определяем победу используя radiant поле из API (приоритет) или player_slot
                         player_slot = match.get("player_slot")
                         radiant_win = match.get("radiant_win", False)
-
-                        # Логируем ВСЕ значения для отладки (первые 3 матча)
-                        if week_games <= 3:
-                            logger.info(f"topmmr: DEBUG match {match.get('match_id')} player_slot={player_slot} radiant_win={radiant_win}")
-
-                        # player_slot: 0-4 = Radiant, 128-132 = Dire
-                        if player_slot is not None:
-                            player_was_radiant = player_slot < 127
-                        else:
-                            player_was_radiant = True
+                        
+                        # API уже предоставляет radiant булево поле - используем его
+                        player_is_radiant = match.get("radiant")
+                        if player_is_radiant is None and player_slot is not None:
+                            player_is_radiant = player_slot < 128
+                        elif player_is_radiant is None:
+                            player_is_radiant = True
 
                         # Победа: игрок был на стороне победившей команды
-                        if radiant_win and player_was_radiant:
-                            is_win = True
-                        elif not radiant_win and not player_was_radiant:
-                            is_win = True
-                        else:
-                            is_win = False
+                        is_win = (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win)
 
-                        # Логируем только для отладки (можно убрать после проверки)
                         if week_games <= 3:
-                            logger.info(f"topmmr: match {match.get('match_id')} - player_was_radiant={player_was_radiant}, is_win={is_win}")
+                            logger.info(f"topmmr: match {match.get('match_id')} - player_is_radiant={player_is_radiant}, is_win={is_win}")
                         if is_win:
                             week_wins += 1
                             current_streak += 1
