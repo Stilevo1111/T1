@@ -92,7 +92,7 @@ def detect_hero_position(hero_data):
     return pos
 
 
-def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
+def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3, border_color=(255, 215, 0, 255)):
     outer_size = (size[0] + 2 * border_width, size[1] + 2 * border_width)
     img_scaled = img.resize(size, Image.Resampling.LANCZOS)
     mask = Image.new('L', size, 0)
@@ -103,7 +103,7 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3):
     draw_border = ImageDraw.Draw(output)
     draw_border.rounded_rectangle(
         (0, 0) + outer_size, radius=radius,
-        outline=(255, 215, 0, 255), width=2
+        outline=border_color, width=border_width
     )
     return output
 
@@ -483,8 +483,17 @@ def _compose_infographic(base, draw, grid, icons, font_lg,
                 nh = int(icon_raw.height * scale)
 
             icon_scaled = icon_raw.resize((nw, nh), Image.Resampling.LANCZOS)
+            winrate = hero.get('winrate', 0)
+            if winrate >= 0.55:
+                border_color = (0, 255, 100, 255)
+            elif winrate >= 0.50:
+                border_color = (255, 210, 0, 255)
+            else:
+                border_color = (255, 80, 80, 255)
+
             icon_proc = apply_fancy_style(icon_scaled, size=(nw, nh),
-                                          radius=max(8, nh // 12), border_width=2)
+                                          radius=max(8, nh // 12), border_width=4,
+                                          border_color=border_color)
 
             pw = nw + 4
             icon_x = x + (col_width - pw) // 2 + 15
