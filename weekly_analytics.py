@@ -1153,8 +1153,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         from matplotlib import rcParams
         from matplotlib import patheffects as pe
         from matplotlib.offsetbox import AnnotationBbox, OffsetImage
-        rcParams['path.simplify'] = True
-        rcParams['path.simplify_threshold'] = 0.1
+        rcParams['path.simplify'] = False
         rcParams['lines.solid_capstyle'] = 'round'
         rcParams['lines.solid_joinstyle'] = 'round'
         rcParams['svg.image_inline'] = True
