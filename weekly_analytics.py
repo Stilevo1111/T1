@@ -1294,7 +1294,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     if make_interp_spline and len(impacts) >= 4:
         x_smooth = np.linspace(1, 10, 1000)
-        spl = make_interp_spline(x, impacts, k=1)
+        spl = make_interp_spline(x, impacts, k=2)
         y_smooth = spl(x_smooth)
     else:
         x_smooth = x
@@ -1544,8 +1544,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         pad_inches=0
     )
 
-    plt.close(fig)
-
+    plt.close('all')
     buf.seek(0)
 
     return buf.getvalue()
