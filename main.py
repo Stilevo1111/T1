@@ -100,7 +100,7 @@ async def animate_loading_progress(loading_msg, bar_length: int = 10):
         filled = iteration + 1
         bar = "🍖" * filled + "🪝" * (bar_length - filled)
         try:
-            await loading_msg.edit_text(f"<b>⏳ Загрузка...</b>\n{bar}")
+            await loading_msg.edit_text(f"⏳ Загрузка...\n{bar}", parse_mode="HTML")
         except Exception as e:
             if "message to edit not found" in str(e).lower() or "not found" in str(e).lower() or "bad request" in str(e).lower():
                 break
@@ -511,7 +511,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="⏳ Загрузка...\n⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️"
+                text="<b>⏳ Загрузка...</b>\n🪝🪝🪝🪝🪝🪝🪝🪝🪝🪝",
+                parse_mode="HTML"
             )
             logger.info(f"Created loading message in analyze: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
             animation_task = asyncio.create_task(animate_loading_progress(loading_msg))
@@ -1731,7 +1732,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Handle analytics_show separately with loading indicator (as chat message)
     if data == "analytics_show":
         await callback_query.answer()
-        loading_msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Загрузка...\n⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️")
+        loading_msg = await context.bot.send_message(chat_id=chat_id, text="<b>⏳ Загрузка...</b>\n🪝🪝🪝🪝🪝🪝🪝🪝🪝🪝", parse_mode="HTML")
         animation_task = asyncio.create_task(animate_loading_progress(loading_msg))
 
         try:
@@ -2134,7 +2135,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 loading_msg = await context.bot.send_message(
                     chat_id=chat_id,
-                    text="<b>⏳ Загрузка...</b>\n🪝🪝🪝🪝🪝🪝🪝🪝🪝🪝"
+                    text="<b>⏳ Загрузка...</b>\n🪝🪝🪝🪝🪝🪝🪝🪝🪝🪝",
+                    parse_mode="HTML"
                 )
                 animation_task = asyncio.create_task(animate_loading_progress(loading_msg))
                 logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
