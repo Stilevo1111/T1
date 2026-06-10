@@ -1148,13 +1148,20 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     global _CHART_BG_CACHE
     try:
         import matplotlib
-        import numpy as np
         matplotlib.use("Agg")
-
-        import matplotlib.patheffects as pe
         import matplotlib.pyplot as plt
+        from matplotlib import rcParams
+        from matplotlib import patheffects as pe
         from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+        rcParams['path.simplify'] = True
+        rcParams['path.simplify_threshold'] = 0.1
+        rcParams['lines.solid_capstyle'] = 'round'
+        rcParams['lines.solid_joinstyle'] = 'round'
+        rcParams['svg.image_inline'] = True
+
+        import numpy as np
         from PIL import Image, ImageFilter
+        import io
 
     except ImportError:
         logger.warning("matplotlib not available, skipping chart generation")
