@@ -1252,7 +1252,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     raw_impacts = raw_impacts[:10]
 
-# =====================================================
+    # =====================================================
     # FORCE BIGGER MOVEMENT
     # =====================================================
 
@@ -1276,27 +1276,23 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     x = np.arange(1, 11)
 
     avg = np.mean(impacts)
+    avg_impact = avg
 
     # =====================================================
-    # DETERMINE LINE COLOR BASED ON AVG IMPACT
+    # LINE STROKE COLOR BASED ON AVG IMPACT
     # =====================================================
 
-    avg_impact = np.mean(impacts)
     if avg_impact >= 1.0:
-        line_color = "#00ff66"
         stroke_color = "#00cc55"
     elif avg_impact >= 0.6:
-        line_color = "#ffd000"
         stroke_color = "#ccaa00"
     else:
-        line_color = "#ff3b3b"
         stroke_color = "#cc2f2f"
 
     # =====================================================
-    # SMOOTH INTERPOLATION - optimized for speed
+    # SMOOTH INTERPOLATION
     # =====================================================
 
-    # Волнистая кривая (k=3 - оптимальный баланс плавности и волн)
     if make_interp_spline and len(impacts) >= 4:
         x_smooth = np.linspace(1, 10, 300)
         spl = make_interp_spline(x, impacts, k=3)
@@ -1304,6 +1300,29 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     else:
         x_smooth = x
         y_smooth = impacts
+
+    # =====================================================
+    # MAIN GRAPH LINE
+    # =====================================================
+
+    line = ax.plot(
+        x_smooth,
+        y_smooth,
+        color="#f4c430",
+        linewidth=8,
+        solid_capstyle='round',
+        solid_joinstyle='round',
+        zorder=5
+    )[0]
+
+    line.set_path_effects([
+        pe.Stroke(
+            linewidth=16,
+            foreground=stroke_color,
+            alpha=0.35
+        ),
+        pe.Normal()
+    ])
 
     # =====================================================
     # FIGURE
@@ -1314,7 +1333,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         dpi=DPI
     )
 
-    # FULL SIZE AXIS
     ax = plt.axes([0, 0, 1, 1])
 
     fig.patch.set_facecolor("#000000")
@@ -1340,35 +1358,12 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         x_smooth,
         y_smooth,
         np.min(y_smooth),
-        color=line_color,
+        color="#f4c430",
         alpha=0.35,
         interpolate=True,
         antialiased=True,
         zorder=3
     )
-
-    # =====================================================
-    # MAIN GRAPH LINE
-    # =====================================================
-
-    line = ax.plot(
-        x_smooth,
-        y_smooth,
-        color=line_color,
-        linewidth=8,
-        solid_capstyle='round',
-        solid_joinstyle='round',
-        zorder=5
-    )[0]
-
-    line.set_path_effects([
-        pe.Stroke(
-            linewidth=16,
-            foreground=stroke_color,
-            alpha=0.35
-        ),
-        pe.Normal()
-    ])
 
     # =====================================================
     # GRAPH POINTS
