@@ -281,7 +281,7 @@ def calculate_fissure_roll(current_fissure: float) -> RollResult:
     # Normal balanced distribution (-15 ... +75)
     # Reduced chance for -1 and 0
     weighted_rolls: list[tuple[float, int]] = [
-        (-15, 3), (-10, 5), (-7, 7), (-5, 8), (-3, 7), (-1, 2), (0, 2),
+        (-15, 2), (-10, 3), (-7, 4), (-5, 4), (-3, 4), (-1, 1), (0, 1),
         (1, 5), (3, 7), (5, 8), (7, 7), (10, 8), (15, 6), (20, 5),
         (30, 4), (50, 2), (75, 1)
     ]
