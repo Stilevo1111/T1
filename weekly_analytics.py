@@ -1296,12 +1296,27 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         x_smooth,
         y_smooth,
         np.min(y_smooth),
-        color="#f4c430",
-        alpha=0.50,
+        color=line_color,
+        alpha=0.35,
         interpolate=True,
         antialiased=True,
         zorder=3
     )
+
+    # =====================================================
+    # DETERMINE LINE COLOR BASED ON AVG IMPACT
+    # =====================================================
+
+    avg_impact = np.mean(impacts)
+    if avg_impact >= 1.0:
+        line_color = "#00ff66"
+        stroke_color = "#00cc55"
+    elif avg_impact >= 0.6:
+        line_color = "#ffd000"
+        stroke_color = "#ccaa00"
+    else:
+        line_color = "#ff3b3b"
+        stroke_color = "#cc2f2f"
 
     # =====================================================
     # MAIN GRAPH LINE
@@ -1310,17 +1325,18 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     line = ax.plot(
         x_smooth,
         y_smooth,
-        color="#f4c430",
-        linewidth=6,
+        color=line_color,
+        linewidth=8,
         solid_capstyle='round',
+        solid_joinstyle='round',
         zorder=5
     )[0]
 
     line.set_path_effects([
         pe.Stroke(
-            linewidth=12,
-            foreground="#ff8800",
-            alpha=0.40
+            linewidth=16,
+            foreground=stroke_color,
+            alpha=0.35
         ),
         pe.Normal()
     ])
@@ -1332,11 +1348,12 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     ax.scatter(
         x,
         impacts,
-        s=200,
+        s=250,
         color="#ffd54f",
         edgecolors="#fff2a8",
-        linewidths=2.5,
-        zorder=6
+        linewidths=4,
+        zorder=6,
+        joinstyle='round'
     )
 
     # =====================================================
@@ -1384,17 +1401,18 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         imp = impacts[idx]
 
         # =================================================
-        # BORDER COLORS
+        # BORDER COLORS (match line color)
         # =================================================
 
         if imp >= 1.0:
             border = "#00ff66"
-
+            border_glow = "#00ff66"
         elif imp >= 0.6:
             border = "#ffd000"
-
+            border_glow = "#ffd000"
         else:
             border = "#ff3b3b"
+            border_glow = "#ff3b3b"
 
         # =================================================
         # HERO IMAGE EXACT SIZE
@@ -1416,10 +1434,11 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
             frameon=True,
             bboxprops=dict(
                 edgecolor=border,
-                linewidth=5,
-                boxstyle="circle,pad=0.12",
+                linewidth=8,
+                boxstyle="circle,pad=0.15",
                 facecolor="none",
-                alpha=1.0
+                alpha=1.0,
+                joinstyle="round"
             ),
             zorder=10
         )
@@ -1434,8 +1453,8 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
             idx + 1,
             imp,
             s=2200,
-            color=border,
-            alpha=0.15,
+            color=border_glow,
+            alpha=0.25,
             zorder=8
         )
 
