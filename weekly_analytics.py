@@ -1278,6 +1278,21 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     avg = np.mean(impacts)
 
     # =====================================================
+    # DETERMINE LINE COLOR BASED ON AVG IMPACT
+    # =====================================================
+
+    avg_impact = np.mean(impacts)
+    if avg_impact >= 1.0:
+        line_color = "#00ff66"
+        stroke_color = "#00cc55"
+    elif avg_impact >= 0.6:
+        line_color = "#ffd000"
+        stroke_color = "#ccaa00"
+    else:
+        line_color = "#ff3b3b"
+        stroke_color = "#cc2f2f"
+
+    # =====================================================
     # SMOOTH INTERPOLATION - optimized for speed
     # =====================================================
 
@@ -1331,21 +1346,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         antialiased=True,
         zorder=3
     )
-
-    # =====================================================
-    # DETERMINE LINE COLOR BASED ON AVG IMPACT
-    # =====================================================
-
-    avg_impact = np.mean(impacts)
-    if avg_impact >= 1.0:
-        line_color = "#00ff66"
-        stroke_color = "#00cc55"
-    elif avg_impact >= 0.6:
-        line_color = "#ffd000"
-        stroke_color = "#ccaa00"
-    else:
-        line_color = "#ff3b3b"
-        stroke_color = "#cc2f2f"
 
     # =====================================================
     # MAIN GRAPH LINE
