@@ -86,6 +86,45 @@ def test_rolls_calculations_are_pure_and_stable():
     print('test_rolls_calculations_are_pure_and_stable: PASSED')
 
 
+def test_multicast_texts_import():
+    """MULTICAST_TEXTS should be importable from rolls (used in fissure multicasts)."""
+    from rolls import MULTICAST_TEXTS
+    assert isinstance(MULTICAST_TEXTS, dict)
+    assert 2 in MULTICAST_TEXTS
+    assert 3 in MULTICAST_TEXTS
+    assert 4 in MULTICAST_TEXTS
+
+
+def test_fissure_module_has_multicast_texts():
+    """fissure.py should have access to MULTICAST_TEXTS for multicast rolls."""
+    import fissure
+    assert hasattr(fissure, 'MULTICAST_TEXTS')
+
+
+def test_start_cooldown_lru():
+    """Start cooldown should have LRU protection to prevent memory leaks."""
+    from main import _USER_START_COOLDOWN, _start_cooldown_cleanup_if_needed, _START_COOLDOWN_MAX_SIZE
+    import time
+
+    # Test LRU function exists
+    assert callable(_start_cooldown_cleanup_if_needed)
+    assert _START_COOLDOWN_MAX_SIZE == 1000
+
+    # Clear cache first
+    _USER_START_COOLDOWN.clear()
+
+    # Add test entries
+    for uid in range(1100):
+        _USER_START_COOLDOWN[uid] = time.time()
+
+    assert len(_USER_START_COOLDOWN) == 1100
+
+    _start_cooldown_cleanup_if_needed()
+
+    assert len(_USER_START_COOLDOWN) <= 1000
+    print('test_start_cooldown_lru: PASSED')
+
+
 if __name__ == "__main__":
     # Allow running directly: python -m pytest tests/test_smoke.py -q
     import pytest
