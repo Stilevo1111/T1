@@ -3,7 +3,7 @@ services:
   name: fissure-bot
   env: python
   region: oregon
-  plan: free
+  plan: starter
   buildCommand: pip install -r requirements.txt
   startCommand: python main.py
   pythonVersion: 3.11.4
@@ -16,3 +16,5 @@ services:
     value: https://fissure-bot.onrender.com/webhook
   - key: BOT_NAME
     value: fissure_bot
+  - key: MMR_CONCURRENCY_LIMIT
+    value: "5"

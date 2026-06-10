@@ -4,6 +4,7 @@ import io
 import json
 import os
 import random
+import signal
 import time
 import traceback
 import urllib.parse as urlparse
@@ -130,9 +131,19 @@ else:
 
 # COOLDOWN moved to constants.py
 
-_USER_START_COOLDOWN = {}  # Spam protection for /start: user_id -> timestamp
 _START_COOLDOWN = 5  # 5 seconds cooldown for /start command
-_START_COOLDOWN_TTL = 3600  # Clean up entries older than 1 hour to prevent memory leak
+_START_COOLDOWN_TTL = 3600  # Clean up entries older than 1 hour
+_START_COOLDOWN_MAX_SIZE = 1000  # LRU max size to prevent memory leak
+_USER_START_COOLDOWN = {}  # user_id -> timestamp (with LRU eviction)
+
+def _start_cooldown_cleanup_if_needed():
+    """Evict oldest entries if cache exceeds max size (simple LRU)"""
+    if len(_USER_START_COOLDOWN) > _START_COOLDOWN_MAX_SIZE:
+        # Remove oldest 20% of entries
+        oldest = sorted(_USER_START_COOLDOWN.items(), key=lambda x: x[1])[:_START_COOLDOWN_MAX_SIZE // 5]
+        for uid, _ in oldest:
+            _USER_START_COOLDOWN.pop(uid, None)
+        logger.debug(f"LRU evicted {len(oldest)} entries from start cooldown")
 
 async def _cleanup_start_cooldown(*args, **kwargs):
     """Periodic cleanup of old _USER_START_COOLDOWN entries to prevent memory leak"""
@@ -142,6 +153,8 @@ async def _cleanup_start_cooldown(*args, **kwargs):
         _USER_START_COOLDOWN.pop(uid, None)
     if to_remove:
         logger.debug(f"Cleaned up {len(to_remove)} stale start cooldown entries")
+    # Also apply LRU cleanup
+    _start_cooldown_cleanup_if_needed()
 
 async def _cleanup_user_analytics(context):
     """Clean up old analytics_* entries from user_data to prevent memory leak (entries older than 5 minutes)"""
@@ -1068,7 +1081,7 @@ async def update_all_mmr_job(context):
         all_updated_users = []  # Collect all updated data for batch save
 
         # Semaphore to limit concurrent OpenDota API calls
-        MMR_CONCURRENCY_LIMIT = 5
+        MMR_CONCURRENCY_LIMIT = int(os.getenv("MMR_CONCURRENCY_LIMIT", "5"))
         mmr_semaphore = asyncio.Semaphore(MMR_CONCURRENCY_LIMIT)
 
         async def update_single_user_mmr_async(user: dict) -> tuple[int, dict | None]:
@@ -2652,6 +2665,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
 
+@rate_limit(tokens=1)
 async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Привязка Steam аккаунта по нику или Steam ID"""
     logger.info(f"User {update.effective_user.id} called link")
@@ -3209,7 +3223,7 @@ async def main():
 # Дайджест (Fissure + Dota): раз в 10 минут (актуально + экономия Render)
         job_queue.run_repeating(
             alternate_digest_job,
-            interval=datetime.timedelta(minutes=10),
+            interval=datetime.timedelta(minutes=30),
             first=datetime.datetime.now() + datetime.timedelta(seconds=10)
         )
 
@@ -3422,10 +3436,44 @@ async def main():
                         await session.get(root_url, timeout=aiohttp.ClientTimeout(total=10))
                     except Exception as e:
                         logger.error(f"Keep-alive ping error: {e}")
-        asyncio.create_task(keep_alive_ping())
 
-        while True:
-            await asyncio.sleep(3600)
+            # Webhook recovery task - re-register webhook if lost after cold start
+        async def webhook_recovery_task():
+            """Re-register webhook periodically to recover from Render cold starts"""
+            while True:
+                try:
+                    await asyncio.sleep(300)  # Check every 5 minutes
+                    webhook_info = await app.bot.get_webhook_info()
+                    if not webhook_info.url:
+                        logger.warning("Webhook lost, re-registering...")
+                        await app.bot.set_webhook(url=webhook_url, drop_pending_updates=False)
+                        logger.info("Webhook re-registered successfully")
+                except Exception as e:
+                    logger.error(f"Webhook recovery check error: {e}")
+
+        asyncio.create_task(keep_alive_ping())
+        asyncio.create_task(webhook_recovery_task())
+
+        # Graceful shutdown handling
+        loop = asyncio.get_running_loop()
+        stop_event = asyncio.Event()
+
+        def _signal_handler():
+            logger.info("Received SIGTERM/SIGINT, initiating graceful shutdown...")
+            stop_event.set()
+
+        try:
+            loop.add_signal_handler(signal.SIGTERM, _signal_handler)
+            loop.add_signal_handler(signal.SIGINT, _signal_handler)
+        except (NotImplementedError, RuntimeError):
+            # Windows doesn't support add_signal_handler
+            pass
+
+        while not stop_event.is_set():
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
 
     except Exception as e:
         logger.error(f"Critical error: {e}", exc_info=True)

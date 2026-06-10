@@ -41,6 +41,7 @@ from rolls import (
     ROLL_TEXTS,
     ROLL_MEMES,
     CATEGORY_PHRASES,
+    MULTICAST_TEXTS,
 )
 from stats import get_event_chances
 

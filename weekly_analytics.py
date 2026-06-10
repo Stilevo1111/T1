@@ -881,8 +881,8 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
 
     from database import get_user
 
-    now = datetime.now(UTC)  # Вынести за пределы условия
-    user = get_user(telegram_id)
+    now = datetime.now(UTC)
+    user = await asyncio.to_thread(get_user, telegram_id)
     if user and user.get('analytics_cache') and user.get('analytics_updated_at'):
         updated_at = user['analytics_updated_at']
         if isinstance(updated_at, str):
@@ -897,7 +897,7 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
 
     if len(matches) < 5:
         from database import get_user
-        user = get_user(telegram_id)
+        user = await asyncio.to_thread(get_user, telegram_id)
         if user and user.get('analytics_cache'):
             cached = json.loads(user['analytics_cache'])
             if cached.get('matches') and len(cached.get('matches', [])) >= 3:
@@ -912,7 +912,7 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
     role = await _detect_role_from_hero_counts(matches)
     if not role:
         from database import get_user
-        user = get_user(telegram_id)
+        user = await asyncio.to_thread(get_user, telegram_id)
         if user and user.get('analytics_cache'):
             cached = json.loads(user['analytics_cache'])
             cached_role = cached.get('role')
@@ -1166,9 +1166,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         make_interp_spline = None
 
     # =====================================================
-    # CANVAS SIZE EXACTLY 1200x800
-    # =====================================================
-
+# CANVAS SIZE EXACTLY 1200x800
     WIDTH = 1200
     HEIGHT = 800
 
@@ -1176,6 +1174,9 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     FIG_W = WIDTH / DPI
     FIG_H = HEIGHT / DPI
+
+    def sync_chart_gen():
+        """CPU-intensive chart generation - runs in thread to avoid blocking event loop"""
 
     # =====================================================
     # LOAD BACKGROUND (cached to avoid blocking)
