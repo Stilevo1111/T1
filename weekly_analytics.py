@@ -1252,6 +1252,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     # SMOOTH INTERPOLATION - optimized for speed
     # =====================================================
 
+    # Волнистая кривая (k=3 - оптимальный баланс плавности и волн)
     if make_interp_spline and len(impacts) >= 4:
         x_smooth = np.linspace(1, 10, 300)
         spl = make_interp_spline(x, impacts, k=3)
