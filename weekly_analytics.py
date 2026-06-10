@@ -1336,19 +1336,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     )
 
     # =====================================================
-    # UNDER GRAPH AREA
-    # =====================================================
-
-    ax.fill_between(
-        x_smooth,
-        y_smooth,
-        np.min(y_smooth),
-        color="#f4c430",
-        alpha=0.35,
-        zorder=3
-    )
-
-    # =====================================================
     # MAIN GRAPH LINE
     # =====================================================
 
@@ -1488,6 +1475,10 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
             alpha=0.25,
             zorder=8
         )
+
+    # =====================================================
+    # HEROES - parallel preload
+    # =====================================================
 
     # =====================================================
     # AXES
