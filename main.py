@@ -486,7 +486,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="⏳ Загрузка графика..."
+                text="🪝 Загрузка графика..."
             )
             logger.info(f"Created loading message in analyze: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
         except Exception as e:
@@ -1552,7 +1552,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="⏳ Загрузка..."
+                text="🪝 Загрузка..."
             )
             logger.info(f"Created loading message in start: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
         except Exception as e:
@@ -1687,7 +1687,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Handle analytics_show separately with loading indicator (as chat message)
     if data == "analytics_show":
         await callback_query.answer()
-        loading_msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Загрузка аналитики...")
+        loading_msg = await context.bot.send_message(chat_id=chat_id, text="🪝 Загрузка аналитики...")
 
         try:
             await _show_analytics_page(callback_query, 0, context, loading_msg=loading_msg)
@@ -2083,7 +2083,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 loading_msg = await context.bot.send_message(
                     chat_id=chat_id,
-                    text="⏳ Загрузка..."
+                    text="🪝 Загрузка..."
                 )
                 logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
             except Exception as e:
@@ -2629,7 +2629,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="⏳ Привязываю аккаунт Dota 2…"
+                text="🪝 Привязываю аккаунт Dota 2…"
             )
 
             from dota_mmr import register_steam

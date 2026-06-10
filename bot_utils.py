@@ -210,7 +210,7 @@ def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: set = 
     page_buttons = []
     labels = ["🆚 С ПРО", "🔍 Детально"]
     for i in range(total_pages):
-        label = f"⏳ {labels[i]}" if generated and i not in generated else labels[i]
+        label = f"🪝 {labels[i]}" if generated and i not in generated else labels[i]
         if i == page_idx:
             page_buttons.append(InlineKeyboardButton(f"✅ {label}", callback_data=f"analytics_page_{i}"))
         else:
