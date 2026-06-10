@@ -2263,7 +2263,7 @@ def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
         top_cache.invalidate_top_cache()
     return result
 
-def zeus_strike(percent=0.05):
+def zeus_strike(percent=0.025):
     """Удар Зевса: уменьшить fissure ВСЕХ игроков на percent (батчевая версия)."""
     db = Database()
     scheme = get_db_type()

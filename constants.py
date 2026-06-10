@@ -60,7 +60,7 @@ WEEKEND_BONUS_MULTIPLIERS = [1.5, 2, 2.5]
 
 # Default event chances (can be overridden in DB)
 MULTICAST_DEFAULT_CHANCE = 0.15
-ZEUS_DEFAULT_CHANCE = 0.025
+ZEUS_DEFAULT_CHANCE = 0.02
 
 # Texts
 MORNING_DIGEST_HEADER = "🌅ФИССУРА ДАЙДЖЕСТ"
