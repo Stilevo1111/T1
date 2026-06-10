@@ -152,8 +152,8 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
 
     text = (
         f"🎲 {display_username}\n\n"
-        f"{zeus_text}\n"
-        f"<i>Все фиссуры потеряли -5%! ({affected} игроков)</i>\n\n"
+        f"{zeus_text}\n\n"
+        f"💀 Все Фиссуры −5%, {affected} жертв.\n\n"
         f"📏 {new_fissure:.1f} см"
     )
 
