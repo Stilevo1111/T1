@@ -52,8 +52,15 @@ _circuit_breaker = {
     "failure_count": 0,
     "last_failure_time": 0,
     "failure_threshold": 5,  # Количество неудач перед открытием (быстрее реагируем)
-    "recovery_timeout": 30,   # 30 секунд до попытки восстановления
+    "recovery_timeout": 120,   # 2 минуты до попытки восстановления (увеличено для стабильности)
 }
+
+def reset_circuit_breaker():
+    """Принудительно сбросить circuit breaker (для отладки/восстановления)"""
+    _circuit_breaker["state"] = "CLOSED"
+    _circuit_breaker["failure_count"] = 0
+    _circuit_breaker["last_failure_time"] = 0
+    logger.info("Circuit breaker manually reset to CLOSED")
 
 def _circuit_breaker_can_execute() -> bool:
     """Проверить можно ли выполнять запрос (Circuit Breaker pattern)"""
@@ -1190,6 +1197,17 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
 # ========================
 
 def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
+    # Force reset circuit breaker to ensure we attempt API calls
+    global _circuit_breaker
+    if _circuit_breaker["state"] != "CLOSED":
+        logger.info(f"update_user_mmr: resetting circuit breaker from {_circuit_breaker['state']}")
+        _circuit_breaker = {
+            "state": "CLOSED",
+            "failure_count": 0,
+            "last_failure_time": 0,
+            "failure_threshold": 5,
+            "recovery_timeout": 120,
+        }
     try:
         user = get_user(telegram_id)
         if not user or not user.get("steam_id"):
