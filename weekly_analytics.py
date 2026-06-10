@@ -1299,12 +1299,9 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     # SMOOTH INTERPOLATION
     # =====================================================
 
-    if make_interp_spline and len(impacts) >= 4:
-        x_arr = np.array(x)
-        y_arr = np.array(impacts)
+    if len(impacts) >= 4:
         x_smooth = np.linspace(1, 10, 1000)
-        spl = make_interp_spline(x_arr, y_arr, k=2)
-        y_smooth = spl(x_smooth)
+        y_smooth = np.interp(x_smooth, x, impacts)
     else:
         x_smooth = x
         y_smooth = impacts
@@ -1317,6 +1314,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         figsize=(FIG_W, FIG_H),
         dpi=DPI
     )
+    fig.set_dpi(DPI)
 
     ax = plt.axes([0, 0, 1, 1])
 
