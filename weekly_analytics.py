@@ -1166,11 +1166,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         logger.warning("matplotlib not available, skipping chart generation")
         return None
 
-    try:
-        from scipy.interpolate import make_interp_spline
-    except ImportError:
-        make_interp_spline = None
-
     # =====================================================
     # CANVAS SIZE EXACTLY 1200x800
     # =====================================================
