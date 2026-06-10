@@ -1166,7 +1166,9 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         make_interp_spline = None
 
     # =====================================================
-# CANVAS SIZE EXACTLY 1200x800
+    # CANVAS SIZE EXACTLY 1200x800
+    # =====================================================
+
     WIDTH = 1200
     HEIGHT = 800
 
@@ -1174,9 +1176,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     FIG_W = WIDTH / DPI
     FIG_H = HEIGHT / DPI
-
-    def sync_chart_gen():
-        """CPU-intensive chart generation - runs in thread to avoid blocking event loop"""
 
     # =====================================================
     # LOAD BACKGROUND (cached to avoid blocking)
@@ -1302,30 +1301,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         y_smooth = impacts
 
     # =====================================================
-    # MAIN GRAPH LINE
-    # =====================================================
-
-    line = ax.plot(
-        x_smooth,
-        y_smooth,
-        color="#f4c430",
-        linewidth=8,
-        solid_capstyle='round',
-        solid_joinstyle='round',
-        antialiased=True,
-        zorder=5
-    )[0]
-
-    line.set_path_effects([
-        pe.Stroke(
-            linewidth=16,
-            foreground=stroke_color,
-            alpha=0.35
-        ),
-        pe.Normal()
-    ])
-
-    # =====================================================
     # FIGURE
     # =====================================================
 
@@ -1363,6 +1338,30 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         alpha=0.35,
         zorder=3
     )
+
+    # =====================================================
+    # MAIN GRAPH LINE
+    # =====================================================
+
+    line = ax.plot(
+        x_smooth,
+        y_smooth,
+        color="#f4c430",
+        linewidth=8,
+        solid_capstyle='round',
+        solid_joinstyle='round',
+        antialiased=True,
+        zorder=5
+    )[0]
+
+    line.set_path_effects([
+        pe.Stroke(
+            linewidth=16,
+            foreground=stroke_color,
+            alpha=0.35
+        ),
+        pe.Normal()
+    ])
 
     # =====================================================
     # GRAPH POINTS
