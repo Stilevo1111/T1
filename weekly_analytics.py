@@ -1183,11 +1183,15 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     # =====================================================
 
     global _CHART_BG_CACHE
+    background_url = (
+        "https://i.ibb.co/jkTWqcHn/"
+        "pngdsadsad.png"
+    )
+
     if _CHART_BG_CACHE is None:
         try:
             from database import get_aiohttp_session
             session = await get_aiohttp_session()
-            background_url = "https://i.ibb.co/4g1t8xQ/chart-bg.webp"
             async with session.get(background_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status == 200:
                     content = await resp.read()
@@ -1199,14 +1203,14 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
             logger.warning(f"Could not load chart background: {e}")
             _CHART_BG_CACHE = None
 
-        if _CHART_BG_CACHE is None:
-            _CHART_BG_CACHE = Image.new('RGB', (WIDTH, HEIGHT), (15, 15, 25))
-            from PIL.ImageDraw import Draw
-            draw = Draw(_CHART_BG_CACHE)
-            for i in range(0, WIDTH, 40):
-                draw.line([(i, 0), (i, HEIGHT)], fill=(30, 30, 45), width=1)
-            for i in range(0, HEIGHT, 40):
-                draw.line([(0, i), (WIDTH, i)], fill=(30, 30, 45), width=1)
+    if _CHART_BG_CACHE is None:
+        _CHART_BG_CACHE = Image.new('RGB', (WIDTH, HEIGHT), (15, 15, 25))
+        from PIL.ImageDraw import Draw
+        draw = Draw(_CHART_BG_CACHE)
+        for i in range(0, WIDTH, 40):
+            draw.line([(i, 0), (i, HEIGHT)], fill=(30, 30, 45), width=1)
+        for i in range(0, HEIGHT, 40):
+            draw.line([(0, i), (WIDTH, i)], fill=(30, 30, 45), width=1)
 
     bg = _CHART_BG_CACHE
 
