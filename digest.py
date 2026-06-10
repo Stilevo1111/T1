@@ -209,8 +209,8 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
             bottom_wins = bottom_by_net.get('week_wins', 0)
             bottom_wr = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
 
-            parts.append(f"🔺{top_name} - {top_wins}W/{top_games-top_wins}L ≈{top_wr}%\n")
-            parts.append(f"🔻{bottom_name} - {bottom_wins}W/{bottom_games-bottom_wins}L ≈{bottom_wr}%\n")
+            parts.append(f"🔺{top_name} {top_wins}W/{top_games-top_wins}L ≈{top_wr}%\n")
+            parts.append(f"🔻{bottom_name} {bottom_wins}W/{bottom_games-bottom_wins}L ≈{bottom_wr}%\n")
 
     # Fissure digest
     stats = _digest_state_container.get_digest_data()
