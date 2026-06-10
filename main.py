@@ -627,13 +627,13 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
                             except Exception:
                                 pass
-                            result_msg = await context.bot.send_photo(
-                                chat_id=chat_id,
-                                photo=photo_buf,
-                                caption=_escape_markdown_v2("🧠 Импакт в последних 10 играх."),
-                                reply_markup=reply_markup,
-                                parse_mode="MarkdownV2"
-                            )
+result_msg = await context.bot.send_photo(
+                                 chat_id=chat_id,
+                                 photo=photo_buf,
+                                 caption="🧠 Импакт в последних 10 играх.",
+                                 reply_markup=reply_markup,
+                                 parse_mode="HTML"
+                             )
                             context.user_data['analytics_chart_msg_id'] = result_msg.message_id
                             set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
                             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
