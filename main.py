@@ -2348,16 +2348,16 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             fissure = user_top.get('fissure', 0)
             medal = medals.get(i)
             if medal:
-                text += f"{medal} {clickable_name}: {fissure:.1f} см\n"
+                text += f"{medal} {clickable_name} - {fissure:.1f} см\n"
             else:
-                text += f"{get_emoji_num(i)} {clickable_name}: {fissure:.1f} см\n"
+                text += f"{get_emoji_num(i)} {clickable_name} - {fissure:.1f} см\n"
 
         user_fissure = user.get('fissure', 0) if user else 0
         clickable_username = make_clickable(username, update.effective_user.id)
         if user_rank:
-            text += f"\n{get_emoji_num(user_rank)} <b>{clickable_username}: {user_fissure:.1f} см</b>"
+            text += f"\n{get_emoji_num(user_rank)} <b>{clickable_username} - {user_fissure:.1f} см</b>"
         else:
-            text += f"\n<b>{clickable_username}: {user_fissure:.1f} см</b>"
+            text += f"\n<b>{clickable_username} - {user_fissure:.1f} см</b>"
 
         text += "\n\n<b><a href=\"https://seredin999.onrender.com/fissure-logs\">📜 История бросков</a></b>"
 
