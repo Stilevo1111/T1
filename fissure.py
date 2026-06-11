@@ -140,7 +140,7 @@ async def send_fissure_cooldown_response(bot, chat_id, user_id, text, banner_url
 
 async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now, ZEUS_TEXTS, main_menu, set_last_bot_message, schedule_delete, update_fissure, update_last_message_id, zeus_strike):
     """
-    Handles the Zeus strike event (no roll, -5% to all fissures).
+    Handles the Zeus strike event (no roll, -2.5% to all fissures).
     Logic and all messages are 100% preserved from the original.
     """
     affected = zeus_strike(percent=0.025)
@@ -153,7 +153,7 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
     text = (
         f"🎲 {display_username}\n\n"
         f"{zeus_text}\n\n"
-        f"💀 Все Фиссуры −5%, {affected} жертв.\n\n"
+        f"💀 Все Фиссуры −2.5%, {affected} жертв.\n\n"
         f"📏 {new_fissure:.1f} см"
     )
 
