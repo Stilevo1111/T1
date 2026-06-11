@@ -3108,7 +3108,7 @@ def _get_all_users_query(load_all=False, allow_non_steam=False):
                    week_start_date, week_updated_at, analytics_cache, analytics_updated_at,
                    current_win_streak, current_lose_streak, best_lose_streak, weekly_rolls, weekly_growth,
                    last_activity, in_chat, digest_fissure, weekly_digest_position, week_best_streak,
-                   dota_last_games, dota_last_wins, mmr_last_updated, created_at
+                   mmr_last_updated, created_at
             FROM users{where}
         """
         if "postgres" in scheme:
@@ -3137,15 +3137,14 @@ def _get_all_users_query(load_all=False, allow_non_steam=False):
             "current_lose_streak": u[30] if len(u) > 30 else 0,
             "best_lose_streak": u[31] if len(u) > 31 else 0,
             "weekly_rolls": u[32] if len(u) > 32 else 0,
-            "weekly_growth": u[33] if len(u) > 33 else 0,
-            "last_activity": u[34] if len(u) > 34 else None,
-            "in_chat": u[35] if len(u) > 35 else False,
-            "digest_fissure": u[36] if len(u) > 36 else 0,
-            "weekly_digest_position": u[37] if len(u) > 37 else 0,
-            "dota_last_games": u[38] if len(u) > 38 else 0,
-            "dota_last_wins": u[39] if len(u) > 39 else 0,
-            "mmr_last_updated": u[40] if len(u) > 40 else 0,
-            "created_at": u[41] if len(u) > 41 else None,
+            "weekly_growth": u[31] if len(u) > 31 else 0,
+            "last_activity": u[32] if len(u) > 32 else None,
+            "in_chat": u[33] if len(u) > 33 else False,
+            "digest_fissure": u[34] if len(u) > 34 else 0,
+            "weekly_digest_position": u[35] if len(u) > 35 else 0,
+            "week_best_streak": u[36] if len(u) > 36 else 0,
+            "mmr_last_updated": u[37] if len(u) > 37 else 0,
+            "created_at": u[38] if len(u) > 38 else None,
         } for u in users]
     except Exception as e:
         logger.error(f"Error _get_all_users_query: {e}")
