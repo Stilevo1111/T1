@@ -98,31 +98,33 @@ _START_COOLDOWN = 5  # 5 seconds cooldown for /start command
 _START_COOLDOWN_TTL = 3600  # Clean up entries older than 1 hour
 _START_COOLDOWN_MAX_SIZE = 1000  # LRU max size to prevent memory leak
 
+from telegram import InlineKeyboardButton
+
 MORNING_GREETINGS = [
-    "🦇 Утречко! Готов к катке?",
-    "☀️ Доброе утро. Время забирать руну.",
-    "☀️ Доброе утро. Время фармить",
-    "🌅 Всем хорошего дня! Ролли.",
-    "☕ Утро началось! Кто в игре?",
-    "🎮 Проснись! Время побеждать.",
-    "🧭 Варды поставлены. Хорошего дня!",
-    "⚔️ Доброе утро, тима!",
-    "🛡️ Респавн успешный. Жизнь началась.",
-    "🌄 Кофе + бкб. День не пробьёт.",
-    "🍃 Лёгкой линии сегодня, бро!",
+    ("🦇 Утречко! Готов к катке?", "guess_morning"),
+    ("☀️ Доброе утро. Время забирать руну.", "guess_morning"),
+    ("☀️ Доброе утро. Время фармить.", "guess_morning"),
+    ("🌅 Всем хорошего дня! Ролли.", "guess_morning"),
+    ("☕ Утро началось! Кто в игре?", "guess_morning"),
+    ("🎮 Проснись! Время побеждать.", "guess_morning"),
+    ("🧭 Варды поставлены. Хорошего дня!", "guess_morning"),
+    ("⚔️ Доброе утро, тима!", "guess_morning"),
+    ("🛡️ Респавн успешный. Жизнь началась.", "guess_morning"),
+    ("🌄 Кофе + бкб. День не пробьёт.", "guess_morning"),
+    ("🍃 Лёгкой линии сегодня, бро!", "guess_morning"),
 ]
 
 EVENING_GREETINGS = [
-    "🌙 Спокойной ночи! Восстанавливай хп.",
-    "🛌 Карта погашена. Сладких снов.",
-    "🌃 Хорошая катка была. Отдыхай.",
-    "✨ Ночная руна. Восстанавливай хп.",
-    "🌌 Варды сняты. Спи спокойно.",
-    "🕯️ Выход из игры. Сладких снов.",
-    "🎮 Дота спит. И ты ложись.",
-    "🛡️ Отдых — лучший саппорт. Сладких снов.",
-    "🌙 Фарми сны, а не крипов.",
-    "💤 Тьма на карте. Доброй ночи.",
+    ("🌙 Спокойной ночи! Восстанавливай хп.", "guess_evening"),
+    ("🛌 Карта погاشена. Сладких снов.", "guess_evening"),
+    ("🌃 Хорошая катка была. Отдыхай.", "guess_evening"),
+    ("✨ Ночная руна. Восстанавливай хп.", "guess_evening"),
+    ("🌌 Варды сняты. Спи спокойно.", "guess_evening"),
+    ("🕯️ Выход из игры. Сладких снов.", "guess_evening"),
+    ("🎮 Дота спит. И ты ложись.", "guess_evening"),
+    ("🛡️ Отдых — лучший саппорт. Сладких снов.", "guess_evening"),
+    ("🌙 Фарми сны, а не крипов.", "guess_evening"),
+    ("💤 Тьма на карте. Доброй ночи.", "guess_evening"),
 ]
 _USER_START_COOLDOWN = {}  # user_id -> timestamp (with LRU eviction)
 
@@ -326,7 +328,7 @@ async def morning_greeting_job(context):
         logger.info("Утреннее приветствие уже отправлено сегодня")
         return
 
-    greeting_text = random.choice(MORNING_GREETINGS)
+    greeting_text, _ = random.choice(MORNING_GREETINGS)
 
     try:
         logger.info("Запуск утреннего приветствия 09:00 MSK")
@@ -361,7 +363,7 @@ async def night_greeting_job(context):
         logger.info("Вечернее приветствие уже отправлено сегодня")
         return
 
-    greeting_text = random.choice(EVENING_GREETINGS)
+    greeting_text, _ = random.choice(EVENING_GREETINGS)
 
     try:
         logger.info("Запуск вечернего приветствия 23:00 MSK")
