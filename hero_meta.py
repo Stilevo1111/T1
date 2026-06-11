@@ -243,7 +243,7 @@ async def get_dota_data(days=7, force_refresh=False):
         session = await get_aiohttp_session()
         async with session.post(
             "https://api.opendota.com/api/explorer",
-            data={"sql": sql},
+            json={"sql": sql},
             timeout=aiohttp.ClientTimeout(total=30)
         ) as resp:
             if resp.status == 200:
