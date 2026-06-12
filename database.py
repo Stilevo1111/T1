@@ -439,9 +439,25 @@ def update_dota_week_top_cache():
         logger.info(f"  POS{i+1}. {u.get('steam_nickname')}: {u.get('week_wins')}W/{week_losses}L, WR={u.get('winrate')}%")
     logger.info("===== END SORT =====")
 
-    # Сохраняем в кеш
+    # Сохраняем в кеш (память + база)
     user_cache.set('dota_week_top', top_users)
+    # Сохраняем в базу для восстановления после рестарта
+    set_config('dota_week_top_cache', json.dumps(top_users))
     logger.info(f"update_dota_week_top_cache: cached {len(top_users)} users")
+
+
+def restore_dota_week_top_cache():
+    """Восстановление кеша топа MMR из базы после рестарта"""
+    cached = get_config('dota_week_top_cache')
+    if cached:
+        try:
+            top_users = json.loads(cached)
+            user_cache.set('dota_week_top', top_users)
+            logger.info(f"restore_dota_week_top_cache: restored {len(top_users)} users from database cache")
+            return True
+        except Exception as e:
+            logger.error(f"restore_dota_week_top_cache: error parsing cache: {e}")
+    return False
 
 
 # Connection pool management

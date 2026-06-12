@@ -3122,15 +3122,19 @@ async def main():
         init_db()
         migrate_db()
 
-        from database import get_all_users, user_cache
+        from database import get_all_users, user_cache, restore_dota_week_top_cache
         all_users = get_all_users()
         for u in all_users:
             user_cache.set(u['telegram_id'], u)
         logger.info(f"Loaded {len(all_users)} users into cache on startup")
 
-        from database import update_dota_week_top_cache
-        update_dota_week_top_cache()
-        logger.info("Dota week top cache initialized on startup")
+        # Восстанавливаем кеш Dota Week Top из базы (если есть)
+        if restore_dota_week_top_cache():
+            logger.info("Dota week top cache restored from database on startup")
+        else:
+            from database import update_dota_week_top_cache
+            update_dota_week_top_cache()
+            logger.info("Dota week top cache initialized on startup")
 
         # Pre-load start card background image (async)
         async def preload_start_card_bg():
