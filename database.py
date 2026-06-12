@@ -1626,7 +1626,7 @@ class Database:
                         release_connection(conn)
 
             return {
-                "top_growth": (top_growth_user or "None", int(top_growth_cm)),
+                "top_growth": (top_growth_user or "None", round(top_growth_cm)),
                 "top_drop": (top_drop_user or "None", float(top_drop_cm)),
                 "top_streak": (top_streak_user or "None", int(top_streak)),
                 "top_growth_id": top_growth_id,
