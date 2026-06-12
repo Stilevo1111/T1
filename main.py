@@ -341,7 +341,7 @@ async def morning_greeting_job(context):
             return
 
         bot = context.application.bot
-        await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=main_menu())
+        await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=main_menu(), parse_mode="HTML")
 
         set_config('daily_greeting_sent', today_str)
         logger.info(f"Утреннее приветствие отправлено в чат {digest_chat_id}")
@@ -376,7 +376,7 @@ async def night_greeting_job(context):
             return
 
         bot = context.application.bot
-        await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=main_menu())
+        await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=main_menu(), parse_mode="HTML")
 
         set_config('night_greeting_sent', today_str)
         logger.info(f"Вечернее приветствие отправлено в чат {digest_chat_id}")
