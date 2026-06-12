@@ -469,7 +469,7 @@ async def alternate_digest_job(context):
 
             # Сбрасываем в понедельник, если это первый понедельник после последнего сброса
             if day_of_week == 0:  # Monday
-                if last_week_snapshot is None or date.fromisoformat(last_week_snapshot) < today_date:
+                if last_week_snapshot is None or date.fromisoformat(last_week_snapshot) != today_date:
                     logger.info(f"Новый понедельник ({today_date}) — обновляем weekly_growth и weekly_rolls")
                     from database import update_weekly_digest_snapshot
                     update_weekly_digest_snapshot()
