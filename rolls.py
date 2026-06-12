@@ -307,7 +307,7 @@ def calculate_new_fissure(current_fissure: float, roll: float) -> float:
 
 def calculate_streak_bonus(current_win_streak: int, base_roll: float) -> tuple[float, str]:
     """Streak bonus: +1cm per win streak (only for positive rolls)."""
-    if current_win_streak > 0 and base_roll > 0:
+    if current_win_streak > 0:
         streak_bonus = current_win_streak
         new_roll = base_roll + streak_bonus
         streak_text = f"🔥 СТРИК x{current_win_streak}: +{streak_bonus} см"
