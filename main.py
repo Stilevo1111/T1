@@ -3128,12 +3128,11 @@ async def main():
             user_cache.set(u['telegram_id'], u)
         logger.info(f"Loaded {len(all_users)} users into cache on startup")
 
-        # Восстанавливаем кеш Dota Week Top из базы (если есть)
+# Восстанавливаем кеш Dota Week Top из базы (если есть)
         if restore_dota_week_top_cache():
             logger.info("Dota week top cache restored from database on startup")
         else:
-            from database import update_dota_week_top_cache
-            update_dota_week_top_cache()
+            await asyncio.to_thread(update_dota_week_top_cache)
             logger.info("Dota week top cache initialized on startup")
 
         # Pre-load start card background image (async)

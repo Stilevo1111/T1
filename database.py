@@ -1294,7 +1294,7 @@ class Database:
                     total_rolls = total_rolls + 1,
                     weekly_rolls = weekly_rolls + 1,
                     weekly_growth = weekly_growth + ?,
-                    daily_best_growth = GREATEST(daily_best_growth, ?),
+                    daily_best_growth = MAX(daily_best_growth, ?),
                     last_activity = CURRENT_TIMESTAMP,
                     current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
                     current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
@@ -1303,7 +1303,7 @@ class Database:
                     best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END)
                     WHERE telegram_id=?
                 """
-                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, win, lose, win, win, lose, telegram_id))
+                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, max(growth, 0), win, lose, win, win, lose, telegram_id))
         except Exception as e:
             logger.error(f"Error updating fissure: {e}")
 
