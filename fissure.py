@@ -498,7 +498,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             base_fissure = user["fissure"]
         base_fissure = max(0.1, base_fissure)
-        new_fissure = calculate_new_fissure(base_fissure, roll + streak_bonus_value)
+        new_fissure = calculate_new_fissure(base_fissure, roll)
         growth = new_fissure - old_fissure
 
         # Record for website live feed (in-memory only, zero DB cost)
