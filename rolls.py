@@ -310,7 +310,7 @@ def calculate_streak_bonus(current_win_streak: int, base_roll: float) -> tuple[f
     if current_win_streak > 0 and base_roll > 0:
         streak_bonus = current_win_streak
         new_roll = base_roll + streak_bonus
-        streak_text = f"🔥 СТРИК x{current_win_streak}: +{streak_bonus} СМ"
+        streak_text = f"🔥 СТРИК x{current_win_streak}: +{streak_bonus} см"
         return new_roll, streak_text
     return base_roll, ""
 
