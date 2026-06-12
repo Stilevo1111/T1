@@ -903,6 +903,8 @@ wins INTEGER DEFAULT 0,
                 cursor.execute("ALTER TABLE users ADD COLUMN weekly_rolls INTEGER DEFAULT 0")
             if 'weekly_growth' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN weekly_growth REAL DEFAULT 0.0")
+            if 'daily_best_growth' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN daily_best_growth REAL DEFAULT 0.0")
             if 'weekly_digest_position' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN weekly_digest_position INTEGER DEFAULT 0")
             if 'created_at' not in columns:
