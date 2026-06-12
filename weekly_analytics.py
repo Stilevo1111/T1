@@ -1144,7 +1144,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
 # CHART
 # =========================================================
 
-def _create_visual_chart_sync(history: list[dict]) -> bytes | None:
+async def _create_visual_chart(history: list[dict]) -> bytes | None:
     global _CHART_BG_CACHE
     try:
         import matplotlib
@@ -1174,18 +1174,52 @@ def _create_visual_chart_sync(history: list[dict]) -> bytes | None:
     FIG_W = WIDTH / DPI
     FIG_H = HEIGHT / DPI
 
+    global _CHART_BG_CACHE
+    background_url = (
+        "https://i.ibb.co/jkTWqcHn/"
+        "pngdsadsad.png"
+    )
+    background_url_webp = (
+        "https://i.ibb.co/4g1t8xQ/chart-bg.webp"
+    )
+
     if _CHART_BG_CACHE is None:
         try:
-            from PIL import Image
-            from PIL.ImageDraw import Draw
-            _CHART_BG_CACHE = Image.new('RGB', (WIDTH, HEIGHT), (15, 15, 25))
-            draw = Draw(_CHART_BG_CACHE)
-            for i in range(0, WIDTH, 40):
-                draw.line([(i, 0), (i, HEIGHT)], fill=(30, 30, 45), width=1)
-            for i in range(0, HEIGHT, 40):
-                draw.line([(0, i), (WIDTH, i)], fill=(30, 30, 45), width=1)
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+            async with session.get(background_url_webp, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    content = await resp.read()
+                    img = Image.open(io.BytesIO(content))
+                    if img.mode == 'RGBA':
+                        img = img.convert('RGB')
+                    _CHART_BG_CACHE = img.resize((WIDTH, HEIGHT), Image.LANCZOS)
         except Exception as e:
-            logger.warning(f"Could not create fallback background: {e}")
+            logger.warning(f"Could not load chart WebP background: {e}")
+            _CHART_BG_CACHE = None
+
+    if _CHART_BG_CACHE is None:
+        try:
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+            async with session.get(background_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    content = await resp.read()
+                    img = Image.open(io.BytesIO(content))
+                    if img.mode == 'RGBA':
+                        img = img.convert('RGB')
+                    _CHART_BG_CACHE = img.resize((WIDTH, HEIGHT), Image.LANCZOS)
+        except Exception as e:
+            logger.warning(f"Could not load chart PNG background: {e}")
+
+    if _CHART_BG_CACHE is None:
+        _CHART_BG_CACHE = Image.new('RGB', (WIDTH, HEIGHT), (15, 15, 25))
+        from PIL.ImageDraw import Draw
+        draw = Draw(_CHART_BG_CACHE)
+        for i in range(0, WIDTH, 40):
+            draw.line([(i, 0), (i, HEIGHT)], fill=(30, 30, 45), width=1)
+        for i in range(0, HEIGHT, 40):
+            draw.line([(0, i), (WIDTH, i)], fill=(30, 30, 45), width=1)
 
     bg = _CHART_BG_CACHE
 
@@ -1314,6 +1348,66 @@ def _create_visual_chart_sync(history: list[dict]) -> bytes | None:
         zorder=10
     )
 
+    unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
+
+    hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
+    hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
+
+    for idx, g in enumerate(reversed_history):
+        hero_id = g["hero_id"]
+        hero_img = hero_icon_map.get(hero_id)
+
+        if not hero_img:
+            continue
+
+        imp = impacts[idx]
+
+        if imp >= 1.0:
+            border = "#00ff66"
+            border_glow = "#00ff66"
+        elif imp >= 0.6:
+            border = "#ffd000"
+            border_glow = "#ffd000"
+        else:
+            border = "#ff3b3b"
+            border_glow = "#ff3b3b"
+
+        hero_img = hero_img.resize(
+            (82, 82),
+            Image.LANCZOS
+        )
+
+        imagebox = OffsetImage(
+            hero_img,
+            zoom=0.82
+        )
+
+        ab = AnnotationBbox(
+            imagebox,
+            (idx + 1, imp),
+            frameon=True,
+            bboxprops=dict(
+                edgecolor=border,
+                linewidth=8,
+                boxstyle="circle,pad=0.15",
+                facecolor="none",
+                alpha=1.0,
+                joinstyle="round"
+            ),
+            zorder=10
+        )
+
+        ax.add_artist(ab)
+
+        ax.scatter(
+            idx + 1,
+            imp,
+            s=2200,
+            color=border_glow,
+            alpha=0.25,
+            zorder=8
+        )
+
     ax.set_xlim(0, 11)
 
     ax.set_ylim(0, 2)
@@ -1367,7 +1461,3 @@ def _create_visual_chart_sync(history: list[dict]) -> bytes | None:
     buf.seek(0)
 
     return buf.getvalue()
-
-
-async def _create_visual_chart(history: list[dict]) -> bytes | None:
-    return await asyncio.to_thread(_create_visual_chart_sync, history)
