@@ -729,6 +729,9 @@ def init_db():
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_growth REAL DEFAULT 0.0
             """)
             cursor.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_best_growth REAL DEFAULT 0.0
+            """)
+            cursor.execute("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_position INTEGER DEFAULT 0
             """)
             cursor.execute("""
@@ -1255,6 +1258,7 @@ class Database:
                     total_rolls = total_rolls + 1,
                     weekly_rolls = weekly_rolls + 1,
                     weekly_growth = weekly_growth + %s,
+                    daily_best_growth = GREATEST(daily_best_growth, %s),
                     last_activity = CURRENT_TIMESTAMP,
                     current_win_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
                     current_lose_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END,
@@ -1263,7 +1267,7 @@ class Database:
                     best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END)
                     WHERE telegram_id=%s
                 """
-                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, win, lose, win, win, lose, telegram_id))
+                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, max(growth, 0), win, lose, win, win, lose, telegram_id))
             else:
                 query = """
                     UPDATE users SET fissure=?, last_fissure=?, 
@@ -1271,6 +1275,7 @@ class Database:
                     total_rolls = total_rolls + 1,
                     weekly_rolls = weekly_rolls + 1,
                     weekly_growth = weekly_growth + ?,
+                    daily_best_growth = GREATEST(daily_best_growth, ?),
                     last_activity = CURRENT_TIMESTAMP,
                     current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
                     current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
@@ -1503,7 +1508,7 @@ class Database:
             # Используем execute_query для безопасного выполнения
             if get_db_type() == "postgresql":
                 query = """
-                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, weekly_growth
+                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, daily_best_growth
                     FROM users
                     WHERE in_chat = TRUE
                 """
@@ -1518,11 +1523,11 @@ class Database:
                         "digest_position": int(r["digest_position"] or 0),
                         "digest_fissure": float(r["digest_fissure"] or 0.0),
                         "current_streak": int(r["current_streak"] or 0),
-                        "weekly_growth": float(r["weekly_growth"] or 0.0),
+                        "daily_best_growth": float(r["daily_best_growth"] or 0.0),
                     })
             else:
                 query = """
-                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, weekly_growth
+                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, daily_best_growth
                     FROM users
                     WHERE in_chat = 1 OR in_chat IS NULL
                 """
@@ -1537,7 +1542,7 @@ class Database:
                         "digest_position": int(r[4] or 0),
                         "digest_fissure": float(r[5] or 0.0),
                         "current_streak": int(r[6] or 0),
-                        "weekly_growth": float(r[7] or 0.0),
+                        "daily_best_growth": float(r[7] or 0.0),
                     })
 
             top_growth_user = None
@@ -1555,14 +1560,16 @@ class Database:
                 if not telegram_id:
                     continue
 
-                prev_f = u.get("digest_fissure", 0.0)
-                cur_f = u.get("fissure", 0.0)
-                weekly_growth = u.get("weekly_growth", 0.0)
-                if weekly_growth > top_growth_cm:
-                    top_growth_cm = weekly_growth
+                daily_best = u.get("daily_best_growth", 0.0)
+                if daily_best > top_growth_cm:
+                    top_growth_cm = daily_best
                     nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
                     top_growth_user = nick if nick and nick != "None" else str(telegram_id)
                     top_growth_id = telegram_id
+
+                # also track drop (fissure decrease)
+                prev_f = u.get("digest_fissure", 0.0)
+                cur_f = u.get("fissure", 0.0)
                 delta = cur_f - prev_f
                 if delta < top_drop_cm:
                     top_drop_cm = delta

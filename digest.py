@@ -460,20 +460,10 @@ async def alternate_digest_job(context):
                 set_config('last_top_drop', None)
                 set_config('last_top_streak', None)
 
-            # === ЕЖЕНЕДЕЛЬНЫЙ СБРОС SNAPSHOT ===
-            # Сбрасываем weekly_growth в ноль раз в неделю (в понедельник)
-            from datetime import date
-            today_date = date.today()
-            day_of_week = today_date.weekday()  # 0 = Monday
-            last_week_snapshot = get_config('last_weekly_digest_snapshot')
-
-            # Сбрасываем в понедельник, если это первый понедельник после последнего сброса
-            if day_of_week == 0:  # Monday
-                if last_week_snapshot is None or date.fromisoformat(last_week_snapshot) != today_date:
-                    logger.info(f"Новый понедельник ({today_date}) — обновляем weekly_growth и weekly_rolls")
-                    from database import update_weekly_digest_snapshot
-                    update_weekly_digest_snapshot()
-                    set_config('last_weekly_digest_snapshot', today_date.isoformat())
+                # СБРОС: daily_best_growth обнуляем для нового дня
+                logger.info(f"Сбрасываем daily_best_growth до 0 для нового дня")
+                from database import db
+                db.execute_query("UPDATE users SET daily_best_growth = 0 WHERE in_chat = TRUE")
 
             # Проверяем, нужно ли обновить данные из БД (раз в час или они пусты)
             if _digest_state_container.get_digest_data() is None or now - _digest_state_container.get_last_data_refresh() > _data_refresh_interval:
