@@ -1317,6 +1317,16 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         pe.Normal()
     ])
 
+    ax.fill_between(
+        x_smooth,
+        y_smooth,
+        0,
+        color="#f4c430",
+        alpha=0.12,
+        interpolate=True,
+        zorder=2
+    )
+
     ax.scatter(
         x,
         impacts,
