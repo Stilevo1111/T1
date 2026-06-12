@@ -3132,6 +3132,7 @@ async def main():
         if restore_dota_week_top_cache():
             logger.info("Dota week top cache restored from database on startup")
         else:
+            from database import update_dota_week_top_cache
             await asyncio.to_thread(update_dota_week_top_cache)
             logger.info("Dota week top cache initialized on startup")
 
