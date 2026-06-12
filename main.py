@@ -3175,6 +3175,7 @@ async def main():
         # (для alternate_digest + /topmmr). Синхронно с MMR обновлением.
         async def _refresh_dota_week_top_cache(context):
             """Асинхронная обёртка: тяжёлая синхронная работа уходит в thread."""
+            from database import update_dota_week_top_cache
             await asyncio.to_thread(update_dota_week_top_cache)
 
         job_queue.run_repeating(
