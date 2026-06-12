@@ -1503,7 +1503,7 @@ class Database:
             # Используем execute_query для безопасного выполнения
             if get_db_type() == "postgresql":
                 query = """
-                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, total_growth
+                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, weekly_growth
                     FROM users
                     WHERE in_chat = TRUE
                 """
@@ -1518,11 +1518,11 @@ class Database:
                         "digest_position": int(r["digest_position"] or 0),
                         "digest_fissure": float(r["digest_fissure"] or 0.0),
                         "current_streak": int(r["current_streak"] or 0),
-                        "total_growth": float(r["total_growth"] or 0.0),
+                        "weekly_growth": float(r["weekly_growth"] or 0.0),
                     })
             else:
                 query = """
-                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, total_growth
+                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, weekly_growth
                     FROM users
                     WHERE in_chat = 1 OR in_chat IS NULL
                 """
@@ -1537,7 +1537,7 @@ class Database:
                         "digest_position": int(r[4] or 0),
                         "digest_fissure": float(r[5] or 0.0),
                         "current_streak": int(r[6] or 0),
-                        "total_growth": float(r[7] or 0.0),
+                        "weekly_growth": float(r[7] or 0.0),
                     })
 
             top_growth_user = None
@@ -1555,20 +1555,20 @@ class Database:
                 if not telegram_id:
                     continue
 
-                prev_f = u["digest_fissure"]
-                cur_f = u["fissure"]
-                if prev_f is not None:
-                    delta = cur_f - prev_f
-                    if delta > top_growth_cm:
-                        top_growth_cm = delta
-                        nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
-                        top_growth_user = nick if nick and nick != "None" else str(telegram_id)
-                        top_growth_id = telegram_id
-                    if delta < top_drop_cm:
-                        top_drop_cm = delta
-                        nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
-                        top_drop_user = nick if nick and nick != "None" else str(telegram_id)
-                        top_drop_id = telegram_id
+                prev_f = u.get("digest_fissure", 0.0)
+                cur_f = u.get("fissure", 0.0)
+                weekly_growth = u.get("weekly_growth", 0.0)
+                if weekly_growth > top_growth_cm:
+                    top_growth_cm = weekly_growth
+                    nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
+                    top_growth_user = nick if nick and nick != "None" else str(telegram_id)
+                    top_growth_id = telegram_id
+                delta = cur_f - prev_f
+                if delta < top_drop_cm:
+                    top_drop_cm = delta
+                    nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
+                    top_drop_user = nick if nick and nick != "None" else str(telegram_id)
+                    top_drop_id = telegram_id
 
                 if u["current_streak"] > top_streak:
                     top_streak = u["current_streak"]
