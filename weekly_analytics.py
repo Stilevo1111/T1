@@ -1144,7 +1144,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
 # CHART
 # =========================================================
 
-async def _create_visual_chart(history: list[dict]) -> bytes | None:
+def _create_visual_chart_sync(history: list[dict]) -> bytes | None:
     global _CHART_BG_CACHE
     try:
         import matplotlib
@@ -1166,10 +1166,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         logger.warning("matplotlib not available, skipping chart generation")
         return None
 
-    # =====================================================
-    # CANVAS SIZE EXACTLY 1200x800
-    # =====================================================
-
     WIDTH = 1200
     HEIGHT = 800
 
@@ -1178,68 +1174,21 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     FIG_W = WIDTH / DPI
     FIG_H = HEIGHT / DPI
 
-    # =====================================================
-    # LOAD BACKGROUND (cached to avoid blocking)
-    # =====================================================
-
-    global _CHART_BG_CACHE
-    background_url = (
-        "https://i.ibb.co/jkTWqcHn/"
-        "pngdsadsad.png"
-    )
-    # Try WebP first, fallback to PNG
-    background_url_webp = (
-        "https://i.ibb.co/4g1t8xQ/chart-bg.webp"
-    )
-
     if _CHART_BG_CACHE is None:
         try:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            # Try WebP first (better quality, smaller size)
-            async with session.get(background_url_webp, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status == 200:
-                    content = await resp.read()
-                    img = Image.open(io.BytesIO(content))
-                    if img.mode == 'RGBA':
-                        img = img.convert('RGB')
-                    _CHART_BG_CACHE = img.resize((WIDTH, HEIGHT), Image.LANCZOS)
+            from PIL import Image
+            from PIL.ImageDraw import Draw
+            _CHART_BG_CACHE = Image.new('RGB', (WIDTH, HEIGHT), (15, 15, 25))
+            draw = Draw(_CHART_BG_CACHE)
+            for i in range(0, WIDTH, 40):
+                draw.line([(i, 0), (i, HEIGHT)], fill=(30, 30, 45), width=1)
+            for i in range(0, HEIGHT, 40):
+                draw.line([(0, i), (WIDTH, i)], fill=(30, 30, 45), width=1)
         except Exception as e:
-            logger.warning(f"Could not load chart WebP background: {e}")
-            _CHART_BG_CACHE = None
-
-    # Fallback to PNG
-    if _CHART_BG_CACHE is None:
-        try:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(background_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status == 200:
-                    content = await resp.read()
-                    img = Image.open(io.BytesIO(content))
-                    if img.mode == 'RGBA':
-                        img = img.convert('RGB')
-                    _CHART_BG_CACHE = img.resize((WIDTH, HEIGHT), Image.LANCZOS)
-        except Exception as e:
-            logger.warning(f"Could not load chart PNG background: {e}")
-
-    if _CHART_BG_CACHE is None:
-        _CHART_BG_CACHE = Image.new('RGB', (WIDTH, HEIGHT), (15, 15, 25))
-        from PIL.ImageDraw import Draw
-        draw = Draw(_CHART_BG_CACHE)
-        for i in range(0, WIDTH, 40):
-            draw.line([(i, 0), (i, HEIGHT)], fill=(30, 30, 45), width=1)
-        for i in range(0, HEIGHT, 40):
-            draw.line([(0, i), (WIDTH, i)], fill=(30, 30, 45), width=1)
+            logger.warning(f"Could not create fallback background: {e}")
 
     bg = _CHART_BG_CACHE
 
-    # =====================================================
-    # PREPARE DATA
-    # =====================================================
-
-    # Reverse history so oldest game is first (left side of chart)
-    # and newest game is last (right side of chart)
     reversed_history = list(reversed(history))[:10]
 
     raw_impacts = [
@@ -1252,12 +1201,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     raw_impacts = raw_impacts[:10]
 
-    # =====================================================
-    # FORCE BIGGER MOVEMENT
-    # =====================================================
-
-    # old values compressed graph too much
-    # now remap into full 0.2 → 1.8 range
     min_imp = min(raw_impacts)
     max_imp = max(raw_impacts)
 
@@ -1278,20 +1221,12 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     avg = np.mean(impacts)
     avg_impact = avg
 
-    # =====================================================
-    # LINE STROKE COLOR BASED ON AVG IMPACT
-    # =====================================================
-
     if avg_impact >= 1.0:
         stroke_color = "#00cc55"
     elif avg_impact >= 0.6:
         stroke_color = "#ccaa00"
     else:
         stroke_color = "#cc2f2f"
-
-    # =====================================================
-    # SMOOTH INTERPOLATION
-    # =====================================================
 
     try:
         from scipy.interpolate import interp1d
@@ -1309,10 +1244,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         x_smooth = x
         y_smooth = impacts
 
-    # =====================================================
-    # FIGURE
-    # =====================================================
-
     fig = plt.figure(
         figsize=(FIG_W, FIG_H),
         dpi=DPI
@@ -1323,10 +1254,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     fig.patch.set_facecolor("#000000")
 
-    # =====================================================
-    # FULL BACKGROUND
-    # =====================================================
-
     ax.imshow(
         bg,
         extent=[0, 11, 0, 2],
@@ -1335,10 +1262,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         alpha=1.0,
         zorder=0
     )
-
-    # =====================================================
-    # MAIN GRAPH LINE
-    # =====================================================
 
     line = ax.plot(
         x_smooth,
@@ -1360,10 +1283,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         pe.Normal()
     ])
 
-    # =====================================================
-    # GRAPH POINTS
-    # =====================================================
-
     ax.scatter(
         x,
         impacts,
@@ -1374,10 +1293,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         zorder=6,
         joinstyle='round'
     )
-
-    # =====================================================
-    # AVG LINE
-    # =====================================================
 
     ax.axhline(
         avg,
@@ -1398,92 +1313,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         va="center",
         zorder=10
     )
-
-    # =====================================================
-    # HEROES - parallel preload
-    # =====================================================
-
-    # Collect unique hero IDs from reversed history
-    unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
-
-    # Load all hero icons in parallel
-    hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
-    hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
-
-    for idx, g in enumerate(reversed_history):
-        hero_id = g["hero_id"]
-        hero_img = hero_icon_map.get(hero_id)
-
-        if not hero_img:
-            continue
-
-        imp = impacts[idx]
-
-        # =================================================
-        # BORDER COLORS (match line color)
-        # =================================================
-
-        if imp >= 1.0:
-            border = "#00ff66"
-            border_glow = "#00ff66"
-        elif imp >= 0.6:
-            border = "#ffd000"
-            border_glow = "#ffd000"
-        else:
-            border = "#ff3b3b"
-            border_glow = "#ff3b3b"
-
-        # =================================================
-        # HERO IMAGE EXACT SIZE
-        # =================================================
-
-        hero_img = hero_img.resize(
-            (82, 82),
-            Image.LANCZOS
-        )
-
-        imagebox = OffsetImage(
-            hero_img,
-            zoom=0.82
-        )
-
-        ab = AnnotationBbox(
-            imagebox,
-            (idx + 1, imp),
-            frameon=True,
-            bboxprops=dict(
-                edgecolor=border,
-                linewidth=8,
-                boxstyle="circle,pad=0.15",
-                facecolor="none",
-                alpha=1.0,
-                joinstyle="round"
-            ),
-            zorder=10
-        )
-
-        ax.add_artist(ab)
-
-        # =================================================
-        # GLOW
-        # =================================================
-
-        ax.scatter(
-            idx + 1,
-            imp,
-            s=2200,
-            color=border_glow,
-            alpha=0.25,
-            zorder=8
-        )
-
-    # =====================================================
-    # HEROES - parallel preload
-    # =====================================================
-
-    # =====================================================
-    # AXES
-    # =====================================================
 
     ax.set_xlim(0, 11)
 
@@ -1512,10 +1341,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         color="white"
     )
 
-    # =====================================================
-    # GRID
-    # =====================================================
-
     ax.grid(
         axis="y",
         color="white",
@@ -1523,16 +1348,8 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         linewidth=1
     )
 
-    # =====================================================
-    # REMOVE BORDERS
-    # =====================================================
-
     for spine in ax.spines.values():
         spine.set_visible(False)
-
-    # =====================================================
-    # SAVE EXACTLY 1200x800
-    # =====================================================
 
     buf = io.BytesIO()
 
@@ -1550,3 +1367,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     buf.seek(0)
 
     return buf.getvalue()
+
+
+async def _create_visual_chart(history: list[dict]) -> bytes | None:
+    return await asyncio.to_thread(_create_visual_chart_sync, history)
