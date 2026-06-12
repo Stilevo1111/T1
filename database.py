@@ -449,7 +449,7 @@ _pool_lock = threading.Lock()
 _pool = {}
 _max_connections = 50
 
-SCHEMA_VERSION = "20260516v1"
+SCHEMA_VERSION = "20260612v1"
 SCHEMA_VERSION_KEY = "schema_version"
 
 _PG_INDEXES = (
@@ -845,8 +845,9 @@ def init_db():
                     digest_position INTEGER DEFAULT 0,
                     digest_fissure REAL DEFAULT 0.0,
                     weekly_rolls INTEGER DEFAULT 0,
-                    weekly_growth REAL DEFAULT 0.0,
-                    weekly_digest_position INTEGER DEFAULT 0,
+weekly_growth REAL DEFAULT 0.0,
+                     daily_best_growth REAL DEFAULT 0.0,
+                     weekly_digest_position INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT NULL,
                     steam_id INTEGER,
                     steam_nickname TEXT,
