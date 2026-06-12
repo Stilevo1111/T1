@@ -460,6 +460,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # СТРИК-БОНУС: +1 см за каждый выигрышный стрик (до выходного бонуса)
         current_win_streak = user.get('current_win_streak', 0)
         roll, streak_text = calculate_streak_bonus(current_win_streak, roll)
+        streak_bonus_value = current_win_streak if current_win_streak > 0 and roll > 0 else 0
 
         # Сохраняем original_roll для отображения в мультикасте (до бонусов)
         display_roll = roll
@@ -497,7 +498,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             base_fissure = user["fissure"]
         base_fissure = max(0.1, base_fissure)
-        new_fissure = calculate_new_fissure(base_fissure, roll)
+        new_fissure = calculate_new_fissure(base_fissure, roll + streak_bonus_value)
         growth = new_fissure - old_fissure
 
         # Record for website live feed (in-memory only, zero DB cost)
