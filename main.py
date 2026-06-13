@@ -53,6 +53,14 @@ from database import (
     update_user_fields_batch,
     user_cache,
 )
+# Prometheus metrics
+try:
+    from prometheus_client import Counter, Histogram, Gauge, start_http_server
+    PROMETHEUS_ENABLED = True
+except ImportError:
+    PROMETHEUS_ENABLED = False
+    logger.info("Prometheus client not available, metrics disabled")
+
 from dota_mmr import _get_start_card_background, update_user_mmr
 from mute import register_handlers as register_mute_handlers
 from rate_limiter import is_rate_limited, rate_limit, set_rate_limited
@@ -76,29 +84,6 @@ structlog.configure(
 )
 
 logger = structlog.get_logger(__name__)
-
-
-def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
-    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
-    if error is None:
-        return False
-    msg = str(error).lower()
-    return any(p.lower() in msg for p in phrases)
-
-
-TOKEN = os.getenv("BOT_TOKEN")
-if not TOKEN:
-    print("WARNING: BOT_TOKEN is not set!")
-else:
-    print("BOT_TOKEN found")
-
-# COOLDOWN moved to constants.py
-
-_START_COOLDOWN = 5  # 5 seconds cooldown for /start command
-_START_COOLDOWN_TTL = 3600  # Clean up entries older than 1 hour
-_START_COOLDOWN_MAX_SIZE = 1000  # LRU max size to prevent memory leak
-
-from telegram import InlineKeyboardButton
 
 MORNING_GREETINGS = [
     "<b>🦇 Утречко! Готов к катке?</b>\n\n<i>👍 – да, уже в деле \n❤️ – не, я ещё не проснулся</i>",
@@ -126,9 +111,43 @@ EVENING_GREETINGS = [
     "<b>🌙 Фарми сны, а не крипов.</b>\n\n<i>👍 – спокойной ночи \n❤️ – я ещё немного поиграю</i>",
     "<b>💤 Тьма на карте. Доброй ночи.</b>\n\n<i>👍 – приятных снов \n❤️ – а я ещё не ложусь</i>",
 ]
+
 _EVENING_GREETINGS_DUP = [
 ]
-_USER_START_COOLDOWN = {}  # user_id -> timestamp (with LRU eviction)
+
+# Prometheus metrics
+if PROMETHEUS_ENABLED:
+    # Metrics
+    REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
+    REQUEST_LATENCY = Histogram('http_request_latency_seconds', 'HTTP request latency', ['endpoint'])
+    UPDATE_FISSURE_COUNT = Counter('fissure_updates_total', 'Total fissure updates')
+    DIGEST_JOB_LATENCY = Histogram('digest_job_latency_seconds', 'Digest job latency')
+    ACTIVE_USERS = Gauge('active_users_count', 'Number of users with in_chat=True')
+    
+    # Start Prometheus HTTP server on port 8000
+    start_http_server(8000)
+    logger.info("Prometheus metrics server started on port 8000")
+else:
+    logger.info("Prometheus metrics disabled")
+
+# Start cooldown tracking (for anti-spam on /start commands)
+_USER_START_COOLDOWN = {}
+_START_COOLDOWN_MAX_SIZE = 1000
+_START_COOLDOWN_TTL = 3600  # 1 hour
+
+
+def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
+    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
+    if error is None:
+        return False
+    msg = str(error).lower()
+    return any(p.lower() in msg for p in phrases)
+
+
+async def health_check(request):
+    """Health check endpoint for Render"""
+    return web.Response(text="OK", status=200)
+
 
 def _start_cooldown_cleanup_if_needed():
     """Evict oldest entries if cache exceeds max size (simple LRU)"""

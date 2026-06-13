@@ -465,8 +465,30 @@ _pool_lock = threading.Lock()
 _pool = {}
 _max_connections = 50
 
-SCHEMA_VERSION = "20260612v1"
+SCHEMA_VERSION = "20260613v1"
 SCHEMA_VERSION_KEY = "schema_version"
+
+# PostgreSQL connection pool
+_pg_pool = None
+_pg_pool_lock = threading.Lock()
+
+def get_pg_connection():
+    """Get a PostgreSQL connection from the pool"""
+    global _pg_pool
+    if _pg_pool is None:
+        with _pg_pool_lock:
+            if _pg_pool is None:
+                _pg_pool = psycopg2.pool.ThreadedConnectionPool(
+                    minconn=1,
+                    maxconn=20,
+                    dsn=DATABASE_URL
+                )
+    return _pg_pool.getconn()
+
+def release_pg_connection(conn):
+    """Release a PostgreSQL connection back to the pool"""
+    if _pg_pool is not None:
+        _pg_pool.putconn(conn)
 
 _PG_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)",
@@ -478,7 +500,7 @@ _PG_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_users_in_chat ON users(in_chat)",
     "CREATE INDEX IF NOT EXISTS idx_users_username ON users(LOWER(username))",
     "CREATE INDEX IF NOT EXISTS idx_users_week_active ON users(steam_id, week_games DESC) WHERE steam_id IS NOT NULL AND week_games > 0",
-    "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)",
+    "CREATE INDEX IF NOT EXISTS idx_users_daily_best_growth ON users(daily_best_growth DESC)",
 )
 
 # Лёгкие миграции — выполняются даже при fast init (ADD IF NOT EXISTS)
@@ -540,7 +562,7 @@ def get_connection():
     """Получение соединения с базой данных"""
     db_type = get_db_type()
     if db_type == "postgresql":
-        return _create_new_connection(db_type)
+        return get_pg_connection()
     with _pool_lock:
         if db_type in _pool and _pool[db_type]:
             conn = _pool[db_type].pop()
@@ -584,10 +606,7 @@ def release_connection(conn):
         return
     db_type = get_db_type()
     if db_type == "postgresql":
-        try:
-            conn.close()
-        except Exception:
-            pass
+        release_pg_connection(conn)
         return
     with _pool_lock:
         if db_type not in _pool:
@@ -986,6 +1005,7 @@ wins INTEGER DEFAULT 0,
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_current_position ON users(current_position)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_rank_tier ON users(rank_tier DESC)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_in_chat ON users(in_chat)")  # Index for filtering active users
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_daily_best_growth ON users(daily_best_growth DESC)")
 
         _save_schema_version(cursor, is_pg)
         conn.commit()

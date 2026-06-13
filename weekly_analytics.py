@@ -1141,11 +1141,11 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
     return data
 
 # =========================================================
-# CHART
+# CHART (matplotlib runs in thread pool via asyncio.to_thread)
 # =========================================================
 
-async def _create_visual_chart(history: list[dict]) -> bytes | None:
-    global _CHART_BG_CACHE
+def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Image.Image) -> bytes | None:
+    """Sync matplotlib chart generation - runs in thread pool. All matplotlib ops here."""
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -1159,69 +1159,15 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         rcParams['svg.image_inline'] = True
 
         import numpy as np
-        from PIL import Image, ImageFilter
+        from PIL import Image
         import io
 
     except ImportError:
-        logger.warning("matplotlib not available, skipping chart generation")
         return None
 
     WIDTH = 1200
     HEIGHT = 800
-
     DPI = 72
-
-    FIG_W = WIDTH / DPI
-    FIG_H = HEIGHT / DPI
-
-    global _CHART_BG_CACHE
-    background_url = (
-        "https://i.ibb.co/jkTWqcHn/"
-        "pngdsadsad.png"
-    )
-    background_url_webp = (
-        "https://i.ibb.co/4g1t8xQ/chart-bg.webp"
-    )
-
-    if _CHART_BG_CACHE is None:
-        try:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(background_url_webp, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status == 200:
-                    content = await resp.read()
-                    img = Image.open(io.BytesIO(content))
-                    if img.mode == 'RGBA':
-                        img = img.convert('RGB')
-                    _CHART_BG_CACHE = img.resize((WIDTH, HEIGHT), Image.LANCZOS)
-        except Exception as e:
-            logger.warning(f"Could not load chart WebP background: {e}")
-            _CHART_BG_CACHE = None
-
-    if _CHART_BG_CACHE is None:
-        try:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(background_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status == 200:
-                    content = await resp.read()
-                    img = Image.open(io.BytesIO(content))
-                    if img.mode == 'RGBA':
-                        img = img.convert('RGB')
-                    _CHART_BG_CACHE = img.resize((WIDTH, HEIGHT), Image.LANCZOS)
-        except Exception as e:
-            logger.warning(f"Could not load chart PNG background: {e}")
-
-    if _CHART_BG_CACHE is None:
-        _CHART_BG_CACHE = Image.new('RGB', (WIDTH, HEIGHT), (15, 15, 25))
-        from PIL.ImageDraw import Draw
-        draw = Draw(_CHART_BG_CACHE)
-        for i in range(0, WIDTH, 40):
-            draw.line([(i, 0), (i, HEIGHT)], fill=(30, 30, 45), width=1)
-        for i in range(0, HEIGHT, 40):
-            draw.line([(0, i), (WIDTH, i)], fill=(30, 30, 45), width=1)
-
-    bg = _CHART_BG_CACHE
 
     reversed_history = list(reversed(history))[:10]
 
@@ -1279,10 +1225,9 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         y_smooth = impacts
 
     fig = plt.figure(
-        figsize=(FIG_W, FIG_H),
+        figsize=(WIDTH / DPI, HEIGHT / DPI),
         dpi=DPI
     )
-    fig.set_dpi(DPI)
 
     ax = plt.axes([0, 0, 1, 1])
 
@@ -1357,11 +1302,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
         va="center",
         zorder=10
     )
-
-    unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
-
-    hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
-    hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
 
     for idx, g in enumerate(reversed_history):
         hero_id = g["hero_id"]
@@ -1471,3 +1411,42 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     buf.seek(0)
 
     return buf.getvalue()
+
+
+async def _create_visual_chart(history: list[dict]) -> bytes | None:
+    """Non-blocking chart generation - prepares data then runs matplotlib in thread pool."""
+    import aiohttp
+
+    global _CHART_BG_CACHE
+
+    # Load background if needed (async)
+    if _CHART_BG_CACHE is None:
+        try:
+            from database import get_aiohttp_session
+            import io
+            session = await get_aiohttp_session()
+            background_url_webp = "https://i.ibb.co/4g1t8xQ/chart-bg.webp"
+            async with session.get(background_url_webp, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    content = await resp.read()
+                    img = Image.open(io.BytesIO(content))
+                    if img.mode == 'RGBA':
+                        img = img.convert('RGB')
+                    _CHART_BG_CACHE = img.resize((1200, 800), Image.LANCZOS)
+        except Exception as e:
+            logger.warning("Could not load chart WebP background: %s", e)
+
+    if _CHART_BG_CACHE is None:
+        _CHART_BG_CACHE = Image.new('RGB', (1200, 800), (15, 15, 25))
+
+    bg = _CHART_BG_CACHE
+
+    reversed_history = list(reversed(history))[:10]
+
+    # Load hero icons asynchronously
+    unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
+    hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
+    hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
+
+    # Run matplotlib in thread pool (non-blocking)
+    return await asyncio.to_thread(_create_visual_chart_sync, history, hero_icon_map, bg)
