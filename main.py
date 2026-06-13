@@ -53,13 +53,6 @@ from database import (
     update_user_fields_batch,
     user_cache,
 )
-# Prometheus metrics
-try:
-    from prometheus_client import Counter, Histogram, Gauge, start_http_server
-    PROMETHEUS_ENABLED = True
-except ImportError:
-    PROMETHEUS_ENABLED = False
-    logger.info("Prometheus client not available, metrics disabled")
 
 from dota_mmr import _get_start_card_background, update_user_mmr
 from mute import register_handlers as register_mute_handlers
@@ -115,20 +108,28 @@ EVENING_GREETINGS = [
 _EVENING_GREETINGS_DUP = [
 ]
 
-# Prometheus metrics
-if PROMETHEUS_ENABLED:
-    # Metrics
+# Prometheus metrics (optional, for monitoring)
+try:
+    from prometheus_client import Counter, Histogram, Gauge, start_http_server
+    PROMETHEUS_ENABLED = True
     REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
     REQUEST_LATENCY = Histogram('http_request_latency_seconds', 'HTTP request latency', ['endpoint'])
     UPDATE_FISSURE_COUNT = Counter('fissure_updates_total', 'Total fissure updates')
     DIGEST_JOB_LATENCY = Histogram('digest_job_latency_seconds', 'Digest job latency')
     ACTIVE_USERS = Gauge('active_users_count', 'Number of users with in_chat=True')
-    
-    # Start Prometheus HTTP server on port 8000
-    start_http_server(8000)
-    logger.info("Prometheus metrics server started on port 8000")
-else:
-    logger.info("Prometheus metrics disabled")
+    try:
+        start_http_server(8000)
+        logger.info("Prometheus metrics server started on port 8000")
+    except OSError as e:
+        logger.warning(f"Could not start Prometheus server: {e}")
+except ImportError:
+    PROMETHEUS_ENABLED = False
+    # Provide no-op stubs
+    REQUEST_COUNT = lambda *args, **kwargs: None
+    REQUEST_LATENCY = lambda *args, **kwargs: None
+    UPDATE_FISSURE_COUNT = lambda *args, **kwargs: None
+    DIGEST_JOB_LATENCY = lambda *args, **kwargs: None
+    ACTIVE_USERS = lambda *args, **kwargs: None
 
 # Start cooldown tracking (for anti-spam on /start commands)
 _USER_START_COOLDOWN = {}
