@@ -478,17 +478,29 @@ def get_pg_connection():
     if _pg_pool is None:
         with _pg_pool_lock:
             if _pg_pool is None:
-                _pg_pool = psycopg2.pool.ThreadedConnectionPool(
-                    minconn=1,
-                    maxconn=20,
-                    dsn=DATABASE_URL
-                )
+                try:
+                    from psycopg_pool import ConnectionPool
+                    _pg_pool = ConnectionPool(
+                        min_size=1,
+                        max_size=20,
+                        conninfo=DATABASE_URL
+                    )
+                except ImportError:
+                    logger.warning("psycopg_pool not available, using direct psycopg2 connections")
+                    _pg_pool = None
+    if _pg_pool is None:
+        # Fallback to direct connection
+        return get_connection()
     return _pg_pool.getconn()
 
 def release_pg_connection(conn):
     """Release a PostgreSQL connection back to the pool"""
+    global _pg_pool
     if _pg_pool is not None:
         _pg_pool.putconn(conn)
+    else:
+        # Fallback: just release direct connection
+        release_connection(conn)
 
 _PG_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)",
