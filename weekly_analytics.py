@@ -1454,6 +1454,12 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     if _CHART_BG_CACHE is None:
         _CHART_BG_CACHE = Image.new('RGB', (1200, 800), (15, 15, 25))
+        from PIL.ImageDraw import Draw
+        draw = Draw(_CHART_BG_CACHE)
+        for i in range(0, WIDTH, 40):
+            draw.line([(i, 0), (i, HEIGHT)], fill=(30, 30, 45), width=1)
+        for i in range(0, HEIGHT, 40):
+            draw.line([(0, i), (WIDTH, i)], fill=(30, 30, 45), width=1)
 
     bg = _CHART_BG_CACHE
 
