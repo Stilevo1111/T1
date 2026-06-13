@@ -1425,16 +1425,32 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
             from database import get_aiohttp_session
             import io
             session = await get_aiohttp_session()
+            # Try webp first, then png
             background_url_webp = "https://i.ibb.co/4g1t8xQ/chart-bg.webp"
-            async with session.get(background_url_webp, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status == 200:
-                    content = await resp.read()
-                    img = Image.open(io.BytesIO(content))
-                    if img.mode == 'RGBA':
-                        img = img.convert('RGB')
-                    _CHART_BG_CACHE = img.resize((1200, 800), Image.LANCZOS)
+            background_url_png = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
+            content = None
+            # Try webp
+            try:
+                async with session.get(background_url_webp, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        content = await resp.read()
+            except Exception:
+                pass
+            # Try png if webp failed
+            if content is None:
+                try:
+                    async with session.get(background_url_png, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        if resp.status == 200:
+                            content = await resp.read()
+                except Exception:
+                    pass
+            if content is not None:
+                img = Image.open(io.BytesIO(content))
+                if img.mode == 'RGBA':
+                    img = img.convert('RGB')
+                _CHART_BG_CACHE = img.resize((1200, 800), Image.LANCZOS)
         except Exception as e:
-            logger.warning("Could not load chart WebP background: %s", e)
+            logger.warning("Could not load chart background: %s", e)
 
     if _CHART_BG_CACHE is None:
         _CHART_BG_CACHE = Image.new('RGB', (1200, 800), (15, 15, 25))
