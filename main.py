@@ -78,6 +78,11 @@ structlog.configure(
 
 logger = structlog.get_logger(__name__)
 
+# Bot token
+TOKEN = os.getenv("BOT_TOKEN")
+if not TOKEN:
+    logger.warning("BOT_TOKEN is not set!")
+
 MORNING_GREETINGS = [
     "<b>🦇 Утречко! Готов к катке?</b>\n\n<i>👍 – да, уже в деле \n❤️ – не, я ещё не проснулся</i>",
     "<b>☀️ Доброе утро. Время забирать руну.</b>\n\n<i>👍 – уже бегу \n❤️ – у меня другие планы</i>",
