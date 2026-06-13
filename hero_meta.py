@@ -5,6 +5,7 @@ import io
 import logging
 import math
 import os
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -12,6 +13,18 @@ import aiohttp
 from PIL import Image, ImageDraw, ImageFont
 
 from hero_positions import hero_positions
+
+# Circuit breaker for OpenDota explorer API
+_explorer_circuit_breaker = {
+    "state": "CLOSED",
+    "failure_count": 0,
+    "last_failure_time": 0,
+    "failure_threshold": 3,
+    "recovery_timeout": 300,  # 5 minutes
+}
+
+# Rate limit cache
+_explorer_cache = {"data": None, "timestamp": 0, "fallback_used": False}
 
 logger = logging.getLogger(__name__)
 
@@ -212,8 +225,19 @@ async def get_dota_data(days=7, force_refresh=False):
     import time
     now = int(time.time())
 
+    # Check circuit breaker state
+    cb = _explorer_circuit_breaker
+    if cb["state"] == "OPEN":
+        if now - cb["last_failure_time"] < cb["recovery_timeout"]:
+            logger.warning("Explorer circuit breaker OPEN - returning cached or None")
+            if _hero_meta_cache["data"]:
+                return _hero_meta_cache["data"]
+            return None
+        else:
+            cb["state"] = "HALF_OPEN"
+            logger.info("Explorer circuit breaker: HALF_OPEN")
+
     # Check cache first
-    global _hero_meta_cache
     if not force_refresh and _hero_meta_cache["data"] and now - _hero_meta_cache["timestamp"] < _HERO_META_CACHE_TTL:
         logger.info("Using cached hero meta data")
         return _hero_meta_cache["data"]
@@ -271,9 +295,18 @@ async def get_dota_data(days=7, force_refresh=False):
                     if hero_stats:
                         _hero_meta_cache["data"] = hero_stats
                         _hero_meta_cache["timestamp"] = now
+                        if _explorer_circuit_breaker["state"] == "HALF_OPEN":
+                            _explorer_circuit_breaker["state"] = "CLOSED"
+                            _explorer_circuit_breaker["failure_count"] = 0
+                            logger.info("Explorer circuit breaker CLOSED - recovered")
                     return hero_stats
     except Exception as e:
         logger.warning("Explorer failed: %s", e)
+        _explorer_circuit_breaker["failure_count"] += 1
+        _explorer_circuit_breaker["last_failure_time"] = now
+        if _explorer_circuit_breaker["failure_count"] >= _explorer_circuit_breaker["failure_threshold"]:
+            _explorer_circuit_breaker["state"] = "OPEN"
+            logger.warning("Explorer circuit breaker OPENED")
 
     logger.warning("OpenDota explorer API unavailable - cannot generate hero meta (no valid data source)")
     return None
