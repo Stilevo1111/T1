@@ -1084,12 +1084,37 @@ class Database:
             except Exception as e:
                 if _telegram_error_contains(e, "closed", "ssl", "connection", "server closed", "terminating", "eof", "broken"):
                     _reset_persistent_pg_conn(f"execute_query postgres error: {e}")
-                logger.error(f"execute_query error: {e} (type={type(e).__name__}, args={getattr(e, 'args', 'N/A')})")
-                try:
-                    conn.rollback()
-                except Exception:
-                    pass
-                raise
+                    # Try to reconnect and retry once
+                    try:
+                        conn = get_connection()
+                        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                        if params:
+                            cursor.execute(query, params)
+                        else:
+                            cursor.execute(query)
+
+                        if fetch == "one":
+                            result = cursor.fetchone()
+                        elif fetch == "all":
+                            result = cursor.fetchall()
+                        else:
+                            result = cursor.rowcount
+                        conn.commit()
+                        return result
+                    except Exception as e2:
+                        logger.error(f"execute_query retry error: {e2}")
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        raise
+                else:
+                    logger.error(f"execute_query error: {e} (type={type(e).__name__}, args={getattr(e, 'args', 'N/A')})")
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+                    raise
             finally:
                 release_connection(conn)
         else:
@@ -1112,12 +1137,37 @@ class Database:
             except Exception as e:
                 if _telegram_error_contains(e, "closed", "ssl", "connection", "server closed", "terminating", "eof", "broken"):
                     _reset_persistent_pg_conn(f"execute_query sqlite error: {e}")
-                logger.error(f"execute_query error: {e} (type={type(e).__name__}, args={getattr(e, 'args', 'N/A')})")
-                try:
-                    conn.rollback()
-                except Exception:
-                    pass
-                raise
+                    # Try to reconnect and retry once
+                    try:
+                        conn = get_connection()
+                        cursor = conn.cursor()
+                        if params:
+                            cursor.execute(query, params)
+                        else:
+                            cursor.execute(query)
+
+                        if fetch == "one":
+                            result = cursor.fetchone()
+                        elif fetch == "all":
+                            result = cursor.fetchall()
+                        else:
+                            result = cursor.rowcount
+                        conn.commit()
+                        return result
+                    except Exception as e2:
+                        logger.error(f"execute_query retry error: {e2}")
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        raise
+                else:
+                    logger.error(f"execute_query error: {e} (type={type(e).__name__}, args={getattr(e, 'args', 'N/A')})")
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+                    raise
             finally:
                 release_connection(conn)
 
