@@ -479,18 +479,19 @@ def get_pg_connection():
         with _pg_pool_lock:
             if _pg_pool is None:
                 try:
-                    from psycopg_pool import ConnectionPool
-                    _pg_pool = ConnectionPool(
+                    import psycopg_pool
+                    _pg_pool = psycopg_pool.ConnectionPool(
                         min_size=1,
                         max_size=20,
                         conninfo=DATABASE_URL
                     )
-                except ImportError:
-                    logger.warning("psycopg_pool not available, using direct psycopg2 connections")
+                except Exception as e:
+                    logger.warning(f"psycopg_pool init failed, using direct connections: {e}")
                     _pg_pool = None
     if _pg_pool is None:
         # Fallback to direct connection
         return get_connection()
+    return _pg_pool.getconn()
     return _pg_pool.getconn()
 
 def release_pg_connection(conn):
