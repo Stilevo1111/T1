@@ -6,6 +6,7 @@ import logging
 import math
 import os
 import time
+
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -219,6 +220,8 @@ Hero meta cache for reducing OpenDota API calls
 """
 _hero_meta_cache = {"data": None, "timestamp": 0}
 _HERO_META_CACHE_TTL = 7200  # 2 hours
+HERO_META_CONFIG_KEY = 'hero_meta_data'
+HERO_META_CONFIG_TTL = 7 * 24 * 3600  # 7 days
 
 
 async def get_dota_data(days=7, force_refresh=False):
@@ -241,26 +244,26 @@ async def get_dota_data(days=7, force_refresh=False):
     if not force_refresh and _hero_meta_cache["data"] and now - _hero_meta_cache["timestamp"] < _HERO_META_CACHE_TTL:
         logger.info("Using cached hero meta data")
         return _hero_meta_cache["data"]
+
     week_ago = now - (days * 24 * 60 * 60)
 
     # Query with position grouping - each hero-position gets separate stats
-    sql = f"""
-        SELECT 
-            hero_id,
-            player_slot,
-            COUNT(*) as pub_pick,
-            SUM(
-                CASE 
-                    WHEN (radiant_win = TRUE AND player_slot < 128) OR 
-                         (radiant_win = FALSE AND player_slot >= 128) 
-                    THEN 1 ELSE 0 
-                END
-            ) as pub_win
-        FROM public_player_matches 
-        WHERE start_time >= {week_ago}
-        GROUP BY hero_id, player_slot
-        HAVING COUNT(*) >= 100
-    """
+    sql = ("SELECT\n"
+        "    hero_id,\n"
+        "    player_slot,\n"
+        "    COUNT(*) as pub_pick,\n"
+        "    SUM(\n"
+        "        CASE\n"
+        "            WHEN (radiant_win = TRUE AND player_slot < 128) OR\n"
+        "                 (radiant_win = FALSE AND player_slot >= 128)\n"
+        "            THEN 1 ELSE 0\n"
+        "        END\n"
+        "    ) as pub_win\n"
+        "FROM public_player_matches\n"
+        "WHERE start_time >= " + str(week_ago) + "\n"
+        "GROUP BY hero_id, player_slot\n"
+        "HAVING COUNT(*) >= 100"
+    )
 
     try:
         from database import get_aiohttp_session
@@ -295,6 +298,13 @@ async def get_dota_data(days=7, force_refresh=False):
                     if hero_stats:
                         _hero_meta_cache["data"] = hero_stats
                         _hero_meta_cache["timestamp"] = now
+                        # Store to DB config for fallback
+                        try:
+                            from database import set_config
+                            cache_dict = {"data": hero_stats, "timestamp": now}
+                            set_config(HERO_META_CONFIG_KEY, json.dumps(cache_dict))
+                        except Exception as e:
+                            logger.warning(f"Failed to cache hero meta to DB: {e}")
                         if _explorer_circuit_breaker["state"] == "HALF_OPEN":
                             _explorer_circuit_breaker["state"] = "CLOSED"
                             _explorer_circuit_breaker["failure_count"] = 0
@@ -308,181 +318,26 @@ async def get_dota_data(days=7, force_refresh=False):
             _explorer_circuit_breaker["state"] = "OPEN"
             logger.warning("Explorer circuit breaker OPENED")
 
+    # Try to get cached hero meta from DB config
+    try:
+        from database import get_config
+        cached_str = get_config(HERO_META_CONFIG_KEY)
+        if cached_str:
+            cache_dict = json.loads(cached_str)
+            cached_data = cache_dict.get("data")
+            cached_ts = cache_dict.get("timestamp", 0)
+            if cached_data and (now - cached_ts) < HERO_META_CONFIG_TTL:
+                logger.info("Using cached hero meta from DB config")
+                # Update in-memory cache as well
+                _hero_meta_cache["data"] = cached_data
+                _hero_meta_cache["timestamp"] = cached_ts
+                return cached_data
+    except Exception as e:
+        logger.warning(f"Failed to read hero meta from DB config: {e}")
+
     logger.warning("OpenDota explorer API unavailable - cannot generate hero meta (no valid data source)")
     return None
-
-
-def _build_grid(hero_stats):
-    """
-    Сетка 5 колонок с лучшими героями по позициям за неделю.
-    1) Для каждого героя выбираем лучшую позицию по winrate (минимум 48%).
-    2) Группируем по позициям.
-    3) Берём топ-5 по winrate для каждой позиции (самый высокий винрейт сверху).
-    """
-    MIN_WINRATE = 0.48
-    hero_best_position = {}
-    for hero in hero_stats:
-        matches = hero.get("pub_pick", hero.get("pro_pick", 0))
-        wins = hero.get("pub_win", hero.get("pro_win", 0))
-        winrate = (wins / matches) if matches > 0 else 0
-        if winrate < MIN_WINRATE:
-            continue
-        score = winrate * math.log10(matches + 1)
-        pos = hero.get("position", detect_hero_position(hero))
-        hero_id = hero.get("hero_id", hero.get("id"))
-
-        if hero_id not in hero_best_position or winrate > hero_best_position[hero_id]["winrate"]:
-            hero_best_position[hero_id] = {
-                'id': hero_id,
-                'name': hero.get("localized_name", 'Hero %d' % hero_id),
-                'img': hero.get("img", ""),
-                'position': pos,
-                'score': score,
-                'winrate': winrate,
-                'matches': matches,
-                'roles': hero.get("roles", []),
-            }
-
-    # Process heroes with their best position only
-    processed_heroes = list(hero_best_position.values())
-
-    # Group by position and sort by winrate (highest first)
-    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
-    for hero in processed_heroes:
-        by_position[hero['position']].append(hero)
-
-    # Take top 5 by winrate for each position (highest at top)
-    grid = {}
-    for pos in range(1, 6):
-        heroes = sorted(by_position[pos], key=lambda h: -h['winrate'])
-        grid[pos] = heroes[:5]
-
-    # Ensure we have enough heroes - fill with heroes that can play the role if needed
-    all_heroes_sorted = sorted(processed_heroes, key=lambda h: -h['winrate'])
-
-    pos_role_map = {
-        1: ["Carry"],
-        2: ["Mid"],
-        3: ["Offlane"],
-        4: ["Support", "Soft Support"],
-        5: ["Hard Support"]
-    }
-
-    for pos in range(1, 6):
-        if len(grid[pos]) < 5:
-            # Fill remaining slots with top heroes that have the role
-            needed_roles = pos_role_map[pos]
-            for h in all_heroes_sorted:
-                if h['id'] not in {hero['id'] for pos_list in grid.values() for hero in pos_list}:
-                    hero_roles = h.get('roles', [])
-                    if any(role in needed_roles for role in hero_roles):
-                        grid[pos].append(h)
-                        if len(grid[pos]) >= 5:
-                            break
-            # Re-sort the column by winrate (highest to lowest)
-            grid[pos] = sorted(grid[pos], key=lambda h: -h['winrate'])
-
-    return grid
-
-
-async def create_infographic(hero_stats):
-    logger.info("Starting create_infographic")
-
-    if not os.path.exists(BACKGROUND_PATH):
-        base = Image.new("RGBA", (1200, 800), (25, 25, 35, 255))
-        bg_width, bg_height = 1200, 800
-    else:
-        base = Image.open(BACKGROUND_PATH).convert("RGBA")
-        bg_width, bg_height = base.size
-
-    draw = ImageDraw.Draw(base)
-
-    from datetime import datetime, timedelta, timezone
-    MSK = timezone(timedelta(hours=3))
-    now_msk = datetime.now(MSK)
-    date_text = now_msk.strftime("%d.%m.%Y %H:%M")
-
-    try:
-        date_font = ImageFont.truetype(FONT_PATH, 24)
-    except:
-        date_font = ImageFont.load_default()
-    try:
-        bbox = draw.textbbox((0, 0), date_text, font=date_font)
-        tw = bbox[2] - bbox[0]
-    except:
-        tw = 0
-    draw.text((bg_width - tw - 20, 20), date_text, fill=(255, 255, 255), font=date_font)
-
-    margin_x = 50
-    margin_y = 215
-    gap_between_cols = 15
-
-    col_width = (bg_width - 2 * margin_x - 6 * gap_between_cols) // 5
-    row_height = (bg_height - margin_y - 10) // 5
-
-    base_icon_height = row_height - 25
-    icon_height = min(int(base_icon_height * 1.163), row_height - 5)
-
-    try:
-        font_lg = ImageFont.truetype(FONT_PATH, 28)
-        for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
-            try:
-                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 28)
-                break
-            except:
-                continue
-    except:
-        font_lg = ImageFont.load_default()
-
-    grid = _build_grid(hero_stats)
-
-    all_heroes = []
-    seen_ids = set()
-    for pos in range(1, 6):
-        for h in grid[pos]:
-            if h['id'] not in seen_ids:
-                seen_ids.add(h['id'])
-                all_heroes.append(h)
-
-    from database import get_aiohttp_session
-    session = await get_aiohttp_session()
-
-    tasks = [
-        fetch_hero_icon(session, h['img'])
-        for h in all_heroes
-    ]
-
-    results = await asyncio.gather(
-        *tasks,
-        return_exceptions=True
-    )
-
-    icons = {}
-
-    for hero, result in zip(all_heroes, results):
-
-        if isinstance(result, Exception):
-
-            logger.exception(
-                "Failed load hero icon"
-            )
-
-            icons[hero['id']] = None
-
-        else:
-
-            icons[hero['id']] = result
-
-    return await asyncio.to_thread(
-        _compose_infographic,
-        base, draw, grid, icons, font_lg,
-        margin_x, margin_y, gap_between_cols,
-        col_width, row_height, icon_height
-    )
-
-
-def _compose_infographic(base, draw, grid, icons, font_lg,
-                         margin_x, margin_y, gap_between_cols,
+def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, gap_between_cols,
                          col_width, row_height, icon_height):
     """Heavy PIL composition — runs in a thread pool to avoid blocking the event loop."""
     for col_idx in range(5):
