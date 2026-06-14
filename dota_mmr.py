@@ -1303,6 +1303,65 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                 except Exception:
                     pass
 
+# Save matches to public_player_matches for hero meta
+        if matches:
+            try:
+                from database import get_connection, DATABASE_URL, urlparse
+                conn = get_connection()
+                url = urlparse.urlparse(DATABASE_URL)
+                scheme = url.scheme
+                cursor = conn.cursor()
+                if "postgres" in scheme:
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS public_player_matches (
+                            match_id BIGINT UNIQUE,
+                            hero_id INTEGER,
+                            player_slot INTEGER,
+                            radiant_win BOOLEAN,
+                            start_time INTEGER,
+                            steam_id BIGINT
+                        )
+                    """)
+                    for match in matches:
+                        match_id = match.get("match_id")
+                        hero_id = match.get("hero_id")
+                        player_slot = match.get("player_slot")
+                        radiant_win = match.get("radiant_win")
+                        start_time = match.get("start_time")
+                        steam_id = user.get("steam_id")
+                        if match_id and hero_id is not None:
+                            cursor.execute("""
+                                INSERT INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
+                                VALUES (%s, %s, %s, %s, %s, %s)
+                                ON CONFLICT DO NOTHING
+                            """, (match_id, hero_id, player_slot, radiant_win, start_time, steam_id))
+                else:
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS public_player_matches (
+                            match_id INTEGER UNIQUE,
+                            hero_id INTEGER,
+                            player_slot INTEGER,
+                            radiant_win INTEGER,
+                            start_time INTEGER,
+                            steam_id INTEGER
+                        )
+                    """)
+                    for match in matches:
+                        match_id = match.get("match_id")
+                        hero_id = match.get("hero_id")
+                        player_slot = match.get("player_slot")
+                        radiant_win = match.get("radiant_win")
+                        start_time = match.get("start_time")
+                        steam_id = user.get("steam_id")
+                        if match_id and hero_id is not None:
+                            cursor.execute("""
+                                INSERT OR IGNORE INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                            """, (match_id, hero_id, player_slot, radiant_win, start_time, steam_id))
+                conn.commit()
+            except Exception as e:
+                logger.warning(f"Failed to save matches to public_player_matches: {e}")
+        logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}, week_streak={max_streak}")
         logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}, week_streak={max_streak}")
         
         # If no matches in week, check if we have any recent matches at all (debug)
