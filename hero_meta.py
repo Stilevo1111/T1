@@ -2,6 +2,7 @@
 
 import asyncio
 import io
+import json
 import logging
 import math
 import os
@@ -213,6 +214,111 @@ async def _enrich_with_hero_data(hero_stats):
             hs["localized_name"] = info.get("localized_name", hs.get("name", ""))
             hs["roles"] = info.get("roles", [])
     return hero_stats
+
+
+def _build_grid(hero_stats):
+    MIN_WINRATE = 0.48
+    hero_best_position = {}
+    for hero in hero_stats:
+        matches = hero.get("pub_pick", hero.get("pro_pick", 0))
+        wins = hero.get("pub_win", hero.get("pro_win", 0))
+        winrate = (wins / matches) if matches > 0 else 0
+        if winrate < MIN_WINRATE:
+            continue
+        score = winrate * math.log10(matches + 1)
+        pos = hero.get("position", detect_hero_position(hero))
+        hero_id = hero.get("hero_id", hero.get("id"))
+        if hero_id not in hero_best_position or winrate > hero_best_position[hero_id]["winrate"]:
+            hero_best_position[hero_id] = {
+                'id': hero_id,
+                'name': hero.get("localized_name", 'Hero %d' % hero_id),
+                'img': hero.get("img", ""),
+                'position': pos,
+                'score': score,
+                'winrate': winrate,
+                'matches': matches,
+                'roles': hero.get("roles", []),
+            }
+    processed_heroes = list(hero_best_position.values())
+    by_position = {1: [], 2: [], 3: [], 4: [], 5: []}
+    for hero in processed_heroes:
+        by_position[hero['position']].append(hero)
+    grid = {}
+    for pos in range(1, 6):
+        heroes = sorted(by_position[pos], key=lambda h: -h['winrate'])
+        grid[pos] = heroes[:5]
+    all_heroes_sorted = sorted(processed_heroes, key=lambda h: -h['winrate'])
+    pos_role_map = {1: ["Carry"], 2: ["Mid"], 3: ["Offlane"], 4: ["Support", "Soft Support"], 5: ["Hard Support"]}
+    for pos in range(1, 6):
+        if len(grid[pos]) < 5:
+            needed_roles = pos_role_map[pos]
+            for h in all_heroes_sorted:
+                if h['id'] not in {hero['id'] for pos_list in grid.values() for hero in pos_list}:
+                    if any(role in needed_roles for role in h.get('roles', [])):
+                        grid[pos].append(h)
+                        if len(grid[pos]) >= 5:
+                            break
+            grid[pos] = sorted(grid[pos], key=lambda h: -h['winrate'])
+    return grid
+
+
+async def create_infographic(hero_stats):
+    logger.info("Starting create_infographic")
+    if not os.path.exists(BACKGROUND_PATH):
+        base = Image.new("RGBA", (1200, 800), (25, 25, 35, 255))
+        bg_width, bg_height = 1200, 800
+    else:
+        base = Image.open(BACKGROUND_PATH).convert("RGBA")
+        bg_width, bg_height = base.size
+    draw = ImageDraw.Draw(base)
+    from datetime import datetime, timedelta, timezone
+    MSK = timezone(timedelta(hours=3))
+    date_text = datetime.now(MSK).strftime("%d.%m.%Y %H:%M")
+    try:
+        date_font = ImageFont.truetype(FONT_PATH, 24)
+    except:
+        date_font = ImageFont.load_default()
+    try:
+        bbox = draw.textbbox((0, 0), date_text, font=date_font)
+        tw = bbox[2] - bbox[0]
+    except:
+        tw = 0
+    draw.text((bg_width - tw - 20, 20), date_text, fill=(255, 255, 255), font=date_font)
+    margin_x = 50
+    margin_y = 215
+    gap_between_cols = 15
+    col_width = (bg_width - 2 * margin_x - 6 * gap_between_cols) // 5
+    row_height = (bg_height - margin_y - 10) // 5
+    icon_height = min(int((row_height - 25) * 1.163), row_height - 5)
+    try:
+        font_lg = ImageFont.truetype(FONT_PATH, 28)
+        for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
+            try:
+                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 28)
+                break
+            except:
+                continue
+    except:
+        font_lg = ImageFont.load_default()
+    grid = _build_grid(hero_stats)
+    all_heroes = []
+    seen_ids = set()
+    for pos in range(1, 6):
+        for h in grid[pos]:
+            if h['id'] not in seen_ids:
+                seen_ids.add(h['id'])
+                all_heroes.append(h)
+    from database import get_aiohttp_session
+    session = await get_aiohttp_session()
+    tasks = [fetch_hero_icon(session, h['img']) for h in all_heroes]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    icons = {}
+    for hero, result in zip(all_heroes, results):
+        if isinstance(result, Exception):
+            icons[hero['id']] = None
+        else:
+            icons[hero['id']] = result
+    return await asyncio.to_thread(_compose_infographic, base, draw, grid, icons, font_lg, margin_x, margin_y, gap_between_cols, col_width, row_height, icon_height)
 
 
 """

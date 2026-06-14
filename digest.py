@@ -229,8 +229,8 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         drop_display = make_clickable(drop_player, stats.get("top_drop_id")) if drop_player and drop_player != "None" else "—"
         streak_display = make_clickable(streak_player, stats.get("top_streak_id")) if streak_player and streak_player != "None" and streak_len > 0 else "—"
 
-        parts.append(f"🔺{growth_display} +{growth_pos}\n")
-        parts.append(f"🔻{drop_display} {drop_cm:.0f} СМ\n" if drop_player and drop_player != "None" else "🔻—\n")
+        parts.append(f"🔺{growth_display} +{growth_pos} СМ\n" if growth_player and growth_player != "None" and growth_pos > 0 else "🔻не прощаю 0 СМ\n")
+        parts.append(f"🔻{drop_display} {abs(drop_cm):.0f} СМ\n" if drop_player and drop_player != "None" and drop_cm < 0 else "")
         parts.append(f"🍀{streak_display} {streak_len} побед подряд\n" if streak_len > 0 else "")
 
     parts.append("\n\n🔷<a href=\"https://seredin999.onrender.com/patch-fissure\">Подробнее на сайте</a>")
