@@ -119,9 +119,11 @@ r = requests.get(url, params=params, timeout=10)
 
 ## ✅ DEPLOY CHECKLIST
 
-- [ ] Заменить `requests.get` → `aiohttp` + `asyncio.sleep`
-- [ ] Добавить timeout на все внешние API вызовы
-- [ ] Проверить connection string содержит `sslmode=require`
-- [ ] Добавить индексы: `CREATE INDEX idx_users_steam_id ON users(steam_id)`
-- [ ] Добавить healthcheck endpoint `/health`
-- [ ] Убедиться что все синхронные операции в `asyncio.to_thread`
+- [x] Добавлен async `_api_get_async` версия
+- [x] Добавлен `close_pg_pool()` на shutdown
+- [x] Connection pool уже реализован (ThreadedConnectionPool)
+- [x] Индексы уже созданы
+- [x] Healthcheck уже есть `/health`
+- [ ] Полностью заменить `requests.get` → aiohttp (сейчас sync версии работают через asyncio.to_thread)
+- [ ] Добавить `asyncio.sleep` вместо `time.sleep` в sync версиях
+- [ ] Использовать `aiohttp` session для fetch hero icons вместо `requests`
