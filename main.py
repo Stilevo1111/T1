@@ -3182,10 +3182,10 @@ async def main():
 
         # morning_digest_job удалён
 
-        # Обновление MMR каждые 2 часа
+        # Обновление MMR каждые 6 часов (адаптивно при большом количестве игроков)
         job_queue.run_repeating(
             update_all_mmr_job,
-            interval=datetime.timedelta(hours=2),
+            interval=datetime.timedelta(hours=6),
             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
         )
 
