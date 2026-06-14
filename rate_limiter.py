@@ -117,8 +117,8 @@ class RateLimiter:
         return tokens
 
 # Global rate limiter instance for the bot
-# Telegram allows up to 30 messages per second, but we'll be conservative
-telegram_rate_limiter = RateLimiter(tokens_per_second=15.0, bucket_size=30)
+# Telegram allows up to 30 messages per second, but we'll be conservative for Free tier
+telegram_rate_limiter = RateLimiter(tokens_per_second=10.0, bucket_size=20)
 
 def rate_limit(tokens: int = 1):
     """

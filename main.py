@@ -152,8 +152,18 @@ def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
 
 
 async def health_check(request):
-    """Health check endpoint for Render"""
-    return web.Response(text="OK", status=200)
+    """Health check endpoint for Render - verifies DB connectivity"""
+    try:
+        from database import get_connection, release_connection
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.close()
+        release_connection(conn)
+        return web.Response(text="OK: DB connected", status=200)
+    except Exception as e:
+        logger.error(f"Health check DB error: {e}")
+        return web.Response(text=f"ERROR: {e}", status=503)
 
 
 def _start_cooldown_cleanup_if_needed():

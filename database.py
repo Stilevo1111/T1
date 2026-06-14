@@ -269,8 +269,8 @@ async def get_aiohttp_session():
     if _aiohttp_session is None or _aiohttp_session.closed:
         import aiohttp
         _aiohttp_session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=10),
-            connector=aiohttp.TCPConnector(limit=10, limit_per_host=5)
+            timeout=aiohttp.ClientTimeout(total=15, connect=5),
+            connector=aiohttp.TCPConnector(limit=5, limit_per_host=3)
         )
     return _aiohttp_session
 
@@ -486,7 +486,7 @@ def get_pg_connection():
                     from psycopg2 import pool
                     _pg_pool = pool.ThreadedConnectionPool(
                         minconn=1,
-                        maxconn=20,
+                        maxconn=5,
                         dsn=DATABASE_URL
                     )
                 except Exception as e:

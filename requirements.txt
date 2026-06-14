@@ -14,4 +14,3 @@ numpy>=1.26.0
 pydantic-settings>=2.0.3
 structlog==23.2.0
 dependency-injector>=4.40.0
-redis[hiredis]>=5.0.0
