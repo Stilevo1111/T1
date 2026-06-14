@@ -1482,7 +1482,7 @@ class Database:
                 query = """
                     SELECT COUNT(*) + 1 as rank FROM users 
                     WHERE in_chat = TRUE 
-                    AND fissure > COALESCE(
+                    AND COALESCE(fissure, 0) > COALESCE(
                         (SELECT fissure FROM users WHERE telegram_id = %s LIMIT 1), -1)
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
@@ -1495,7 +1495,7 @@ class Database:
                 query = """
                     SELECT COUNT(*) + 1 as rank FROM users 
                     WHERE (in_chat = 1 OR in_chat IS NULL)
-                    AND fissure > COALESCE(
+                    AND COALESCE(fissure, 0) > COALESCE(
                         (SELECT fissure FROM users WHERE telegram_id = ? LIMIT 1), -1)
                 """
                 result = self.execute_query(query, (telegram_id,), fetch="one")
