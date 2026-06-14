@@ -2136,7 +2136,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not send loading message: {e}")
                 loading_msg = None
 
-last_fissure_time = target_user.get("last_fissure")
+        last_fissure_time = target_user.get("last_fissure")
         if last_fissure_time is not None:
             now = time.time()
             time_since_last = now - last_fissure_time
@@ -3340,16 +3340,6 @@ async def main():
             web_app.router.add_get('/health', health_handler)
             web_app.router.add_get('/api/recent-rolls', recent_rolls_handler)
             web_app.router.add_get('/api/top-mmr', top_mmr_handler)
-
-            async def reset_circuit(request):
-                try:
-                    from dota_mmr import reset_circuit_breaker
-                    reset_circuit_breaker()
-                    return web.Response(text="Circuit breaker reset", status=200)
-                except Exception as e:
-                    logger.error(f"Reset circuit error: {e}")
-                    return web.Response(text=f"Error: {e}", status=500)
-            web_app.router.add_post('/api/reset-circuit', reset_circuit)
             runner = web.AppRunner(web_app)
             await runner.setup()
             port = int(os.getenv('PORT', 10000))
