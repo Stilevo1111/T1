@@ -2525,6 +2525,10 @@ def batch_save_mmr(users_data: list):
                 for k, v in u.items():
                     if v is not None and k != "telegram_id":
                         cached[k] = v
+                cached.setdefault('fissure', 0.1)
+                cached.setdefault('total_rolls', 0)
+                cached.setdefault('current_streak', 0)
+                cached.setdefault('best_streak', 0)
                 user_cache.set(u["telegram_id"], cached)
 
         top_cache.invalidate_top_cache()
@@ -3250,7 +3254,7 @@ def _get_all_users_query(load_all=False, allow_non_steam=False):
         users = cursor.fetchall()
         cursor.close()
         return [{
-            "telegram_id": u[0], "username": u[1], "fissure": u[2], "last_fissure": u[3],
+            "telegram_id": u[0], "username": u[1], "fissure": u[2] if u[2] is not None else 0.1, "last_fissure": u[3],
             "last_message_id": u[4], "total_growth": u[5], "total_rolls": u[6],
             "best_streak": u[7], "current_streak": u[8], "steam_id": u[9],
             "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
@@ -3294,6 +3298,9 @@ def get_all_users_from_db():
 def get_all_users():
     """Получение всех пользователей (для загрузки в кеш при старте)"""
     return _get_all_users_query(load_all=False, allow_non_steam=True)
+
+
+def reset_weekly_stats():
     """Сброс недельной статистики для всех пользователей (вызывается по понедельникам)"""
     from datetime import datetime as dt
     from datetime import timedelta, timezone
@@ -3304,7 +3311,6 @@ def get_all_users():
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
-
         cursor = conn.cursor()
 
         if "postgres" in scheme:
