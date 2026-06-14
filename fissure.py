@@ -367,7 +367,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             slot_msg_ids = []
 
             # Get base roll first
-            roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
+            roll, special_message, is_fatal, got_help = calculate_fissure_roll(user.get("fissure", 0))
 
             # Проверяем переход на x2 (скрытый рандом 75%)
             if random.random() < 0.75:
@@ -449,13 +449,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
-            roll, special_message, is_fatal, got_help = calculate_fissure_roll(user["fissure"])
+            roll, special_message, is_fatal, got_help = calculate_fissure_roll(user.get("fissure", 0))
 
         # Даем время slot сообщениям отправиться перед итоговым
         if cascade_count > 1:
             await asyncio.sleep(0.3)
 
-        roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
+        roll, protection_msg = apply_fissure_protection(user.get("fissure", 0), roll, is_fatal)
 
         # STORE ORIGINAL ROLL FOR DISPLAY
         base_roll_for_text = roll
