@@ -639,61 +639,60 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
 
 async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> list[dict[str, Any]]:
     """
-    Загружает детальную информацию по каждому матчу (GPM, XPM, actions и т.д.).
+    Загружает детальную информацию по каждому матчу (GPM, XPM, actions и т.д.) параллельно.
     """
 
     """Fetch full match details for matches that have minimal data."""
     account_id = steam64_to_account_id(steam_id)
     enriched = []
+    semaphore = asyncio.Semaphore(5)  # Limit concurrent requests to OpenDota
 
-    for m in matches:
-        # If match already has all needed data, keep it
+    async def fetch_one(m):
         if m.get("gold_per_min", 0) > 0 and m.get("last_hits", 0) > 0:
-            enriched.append(m)
-            continue
-
+            return m
         match_id = m.get("match_id")
         if not match_id:
-            enriched.append(m)
-            continue
-
+            return m
         try:
-            match_url = f"{OPENDOTA_API_URL}/matches/{match_id}"
-            match_data = await _api_get_async(match_url, timeout=20)
-
+            async with semaphore:
+                match_url = f"{OPENDOTA_API_URL}/matches/{match_id}"
+                match_data = await _api_get_async(match_url, timeout=20)
             player_stats = {}
             if match_data and "players" in match_data:
                 for p in match_data["players"]:
                     if p.get("account_id") == int(account_id):
                         player_stats = p
                         break
-
-            # Enrich the match data
-            m["kills"] = player_stats.get("kills", m.get("kills", 0))
-            m["deaths"] = player_stats.get("deaths", m.get("deaths", 0))
-            m["assists"] = player_stats.get("assists", m.get("assists", 0))
-            m["gold_per_min"] = player_stats.get("gold_per_min", 0)
-            m["xp_per_min"] = player_stats.get("xp_per_min", 0)
-            m["last_hits"] = player_stats.get("last_hits", 0)
-            m["gold"] = player_stats.get("gold", 0)
-            m["gold_spent"] = player_stats.get("gold_spent", 0)
-            m["hero_damage"] = player_stats.get("hero_damage", 0)
-            m["tower_damage"] = player_stats.get("tower_damage", 0)
-            m["denies"] = player_stats.get("denies", 0)
-            m["actions_per_min"] = player_stats.get("actions_per_min", 0)
-            m["stuns"] = player_stats.get("stuns", 0.0) if isinstance(player_stats.get("stuns"), (int, float)) else 0
-            m["hero_healing"] = player_stats.get("hero_healing", 0)
-            m["creeps_stacked"] = player_stats.get("creeps_stacked", 0)
-            m["observer_uses"] = player_stats.get("observer_uses", 0)
-            m["sentry_uses"] = player_stats.get("sentry_uses", 0)
-
-            # Yield to event loop to prevent blocking
-            await asyncio.sleep(0)
-
+            # Enrich the match data (same as before)
+            if player_stats:
+                m["kills"] = player_stats.get("kills", m.get("kills", 0))
+                m["deaths"] = player_stats.get("deaths", m.get("deaths", 0))
+                m["assists"] = player_stats.get("assists", m.get("assists", 0))
+                m["gold_per_min"] = player_stats.get("gold_per_min", 0)
+                m["xp_per_min"] = player_stats.get("xp_per_min", 0)
+                m["last_hits"] = player_stats.get("last_hits", 0)
+                m["gold"] = player_stats.get("gold", 0)
+                m["gold_spent"] = player_stats.get("gold_spent", 0)
+                m["hero_damage"] = player_stats.get("hero_damage", 0)
+                m["tower_damage"] = player_stats.get("tower_damage", 0)
+                m["denies"] = player_stats.get("denies", 0)
+                m["actions_per_min"] = player_stats.get("actions_per_min", 0)
+                m["stuns"] = player_stats.get("stuns", 0.0) if isinstance(player_stats.get("stuns"), (int, float)) else 0
+                m["hero_healing"] = player_stats.get("hero_healing", 0)
+                m["creeps_stacked"] = player_stats.get("creeps_stacked", 0)
+                m["observer_uses"] = player_stats.get("observer_uses", 0)
+                m["sentry_uses"] = player_stats.get("sentry_uses", 0)
         except Exception as e:
             logger.debug(f"Failed to fetch match {match_id}: {e}")
+        return m
 
-        enriched.append(m)
+    # Parallel fetch with semaphore
+    results = await asyncio.gather(*[fetch_one(m) for m in matches], return_exceptions=True)
+    for r in results:
+        if isinstance(r, dict):
+            enriched.append(r)
+        elif isinstance(r, Exception):
+            logger.debug(f"fetch_match_details exception: {r}")
 
     return enriched
 

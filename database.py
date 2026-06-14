@@ -119,6 +119,23 @@ class UserCache:
         self._cache: dict[int, dict[str, Any]] = {}  # telegram_id -> user_data
         self._dirty: dict[int, bool] = {}  # telegram_id -> True
         self._lock = threading.Lock()
+        self._steam_index: dict[int, int] = {}  # steam_id -> telegram_id reverse index
+
+    def set(self, telegram_id: int, user_data: dict[str, Any]):
+        with self._lock:
+            if len(self._cache) >= self.MAX_CACHE_SIZE:
+                self._evict_lru()
+            self._cache[telegram_id] = user_data
+            self._dirty[telegram_id] = True
+            # Update steam index
+            steam_id = user_data.get('steam_id')
+            if steam_id and isinstance(steam_id, int):
+                self._steam_index[steam_id] = telegram_id
+            elif telegram_id in self._steam_index.values():
+                for sid, tid in list(self._steam_index.items()):
+                    if tid == telegram_id:
+                        del self._steam_index[sid]
+                        break
 
     def invalidate_user_top_caches(self, telegram_id: int):
         keys_to_remove = []
@@ -580,7 +597,10 @@ def _postgres_connect_kwargs():
         "sslmode": sslmode,
         "connect_timeout": 10,
     }
-    for key in ("sslrootcert", "sslcert", "sslkey", "options", "application_name"):
+    # Add statement timeout to prevent runaway queries
+    query.pop("options", None)
+    kwargs["options"] = "-c statement_timeout=30000"  # 30s max query time
+    for key in ("sslrootcert", "sslcert", "sslkey", "application_name"):
         if key in query and query[key]:
             kwargs[key] = query[key][0]
     return kwargs
@@ -1995,22 +2015,16 @@ def get_user_by_username(username):
 
 
 def get_user_by_steam_id(steam_id: int):
-    """Найти пользователя по steam_id. Ищет сначала в кеше, потом в БД."""
+    """Найти пользователя по steam_id. Ищет сначала в кеше (reverse index), потом в БД."""
     if not steam_id:
         return None
 
-    # Сначала ищем в кеше
-    all_keys = user_cache.get_all_users()
-    for uid in all_keys:
-        if not isinstance(uid, int):
-            continue
-        cached_user = user_cache.get(uid)
-        if not cached_user or not isinstance(cached_user, dict):
-            continue
-        cached_steam_id = cached_user.get('steam_id')
-        if cached_steam_id == steam_id:
-            logger.info(f"get_user_by_steam_id: found {steam_id} in cache (tid={uid})")
-            return get_user(uid)
+    # Use reverse index first - O(1) lookup
+    with user_cache._lock:
+        telegram_id = user_cache._steam_index.get(steam_id)
+    if telegram_id:
+        logger.info(f"get_user_by_steam_id: found {steam_id} in cache index (tid={telegram_id})")
+        return get_user(telegram_id)
 
     conn = None
     try:
