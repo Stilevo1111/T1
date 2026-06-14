@@ -2980,10 +2980,10 @@ def _get_dota_week_top_query(limit):
                         FROM users
                         WHERE steam_id IS NOT NULL
                     )
-                    SELECT telegram_id, username, steam_nickname, mmr, 
-                           week_games, week_wins, rank_tier, steam_id, avatar,
-                           winrate, week_current_streak
-                    FROM wr_calc
+SELECT telegram_id, username, steam_nickname, mmr,
+                            week_games, week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
+                            winrate, week_current_streak
+                     FROM wr_calc
                     ORDER BY 
                         CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
                         (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
@@ -3026,10 +3026,10 @@ def _get_dota_week_top_query(limit):
                     FROM users
                     WHERE steam_id IS NOT NULL
                 )
-                SELECT telegram_id, username, steam_nickname, mmr, 
-                       week_games, week_wins, rank_tier, steam_id, avatar,
+SELECT telegram_id, username, steam_nickname, mmr,
+                       week_games, week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
                        winrate, week_current_streak
-                FROM wr_calc
+                 FROM wr_calc
                 ORDER BY 
                     CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
                     (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
