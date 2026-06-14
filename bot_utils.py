@@ -253,7 +253,7 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
             await bot.delete_message(chat_id, msg_id)
             logger.info(f"Deleted delayed message {msg_id} in chat {chat_id}")
         except Exception as e:
-            if _telegram_error_contains(e, "message to delete not found", "bad request"):
+            if _telegram_error_contains(e, "message to delete not found", "bad request", "400"):
                 logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
             else:
                 logger.warning(f"Failed to delete delayed message {msg_id} in chat {chat_id}: {e}")
@@ -275,7 +275,7 @@ async def delete_message_job(context):
         await bot.delete_message(chat_id, msg_id)
         logger.info(f"Deleted scheduled message {msg_id} in chat {chat_id}")
     except Exception as e:
-        if _telegram_error_contains(e, "message to delete not found", "bad request"):
+        if _telegram_error_contains(e, "message to delete not found", "bad request", "400"):
             logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
         else:
             logger.warning(f"Failed to delete message {msg_id} in chat {chat_id}: {e}")
