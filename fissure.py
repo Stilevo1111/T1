@@ -457,17 +457,28 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         roll, protection_msg = apply_fissure_protection(user["fissure"], roll, is_fatal)
 
-        # СТРИК-БОНУС: +1 см за каждый выигрышный стрик (до выходного бонуса)
-        current_win_streak = user.get('current_win_streak', 0)
-        roll, streak_text = calculate_streak_bonus(current_win_streak, roll)
-
-        display_roll = roll
-
-        # Определяем базовый ролл для текста результата (без учета бонусов выходного дня)
+        # STORE ORIGINAL ROLL FOR DISPLAY
+        base_roll_for_text = roll
         if original_roll is not None:
             base_roll_for_text = original_roll
+
+        # СТРИК-БОНУС: добавляем к базовому роллу
+        if cascade_count <= 1:  # No streak during multicast
+            current_win_streak = user.get('current_win_streak', 0)
+            roll, streak_text = calculate_streak_bonus(current_win_streak, roll)
         else:
-            base_roll_for_text = roll
+            streak_text = ""
+
+        # Weekend bonus APPLIED TO ROLL AFTER STREAK
+        if is_weekend and roll > 0 and not is_fatal and cascade_count == 1:
+            bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
+            bonus_amount = roll * bonus_multiplier
+            roll = int(roll * bonus_multiplier)
+            weekend_bonus = f"🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {bonus_amount:.1f} СМ"
+        else:
+            weekend_bonus = ""
+
+        display_roll = roll
 
         # Вычисляем result_text на основе базового ролла
         roll_key_text = min(base_roll_for_text, 75)
@@ -476,17 +487,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result_text = random.choice(ROLL_TEXTS[roll_key_text])
         else:
             result_text = f"{'+' if base_roll_for_text > 0 else ''}{base_roll_for_text} см"
-
-        # Бонус для выходных: увеличиваем положительный ролл
-        # НЕ применяем выходной бонус при мультикасте
-        if is_weekend and roll > 0 and not is_fatal and cascade_count == 1:
-            bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
-            # Показываем точное значение в сообщении, но сохраняем как целое для расчета
-            bonus_amount = roll * bonus_multiplier
-            roll = int(roll * bonus_multiplier)
-            weekend_bonus = f"🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {bonus_amount:.1f} СМ"
-        else:
-            weekend_bonus = ""
 
         old_fissure = user["fissure"]
 
