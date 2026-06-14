@@ -1131,11 +1131,11 @@ async def update_all_mmr_job(context):
         # Получаем digest_chat_id из конфига
         digest_chat_id = get_config('digest_chat_id')
 
-        # Отправляем уведомления о ранк-апах
+        # Отправляем уведомления о ранк-апах параллельно
         if digest_chat_id and rank_up_users:
             from dota_mmr import generate_start_card
 
-            for user, rank_info in rank_up_users:
+            async def notify_rank_up(user, rank_info):
                 try:
                     username = user.get('steam_nickname') or user.get('username') or 'Игрок'
                     telegram_id = user.get('telegram_id')
@@ -1148,7 +1148,6 @@ async def update_all_mmr_job(context):
                         db_avatar=user.get('avatar'),
                     )
 
-                    # Generate card in thread (blocking image + network ops)
                     card_data = await asyncio.to_thread(
                         generate_start_card,
                         avatar_url=avatar_url,
@@ -1166,13 +1165,14 @@ async def update_all_mmr_job(context):
                         text = f"🎉 {name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
                         await context.bot.send_photo(chat_id=digest_chat_id, photo=card_data, caption=text, parse_mode="HTML")
                     else:
-                        # Fallback
                         name_display = make_clickable(username, telegram_id)
                         text = f"{name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
                         rank_up_banner_url = "https://i.ibb.co/HLF6JJTw/ji8hy.jpg"
                         await context.bot.send_photo(chat_id=digest_chat_id, photo=rank_up_banner_url, caption=text, parse_mode="HTML")
                 except Exception as notify_err:
                     logger.error(f"Ошибка отправки уведомления о ранк-апе: {notify_err}")
+
+            await asyncio.gather(*[notify_rank_up(u, r) for u, r in rank_up_users], return_exceptions=True)
 
 
 
