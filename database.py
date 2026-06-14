@@ -2845,9 +2845,6 @@ def get_dota_week_top(limit=10, force_refresh=False):
                     'week_current_streak': user.get('week_current_streak', 0)
                 })
 
-            user_cache.set('dota_week_top', top_users)
-            user_cache.set('dota_week_top_ts', current_time)
-
             def get_sort_key(x):
                 g = x.get('week_games', 0)
                 w = x.get('week_wins', 0)
@@ -2987,7 +2984,7 @@ def _get_dota_week_top_query(limit):
             """, (limit,))
             users = cursor.fetchall()
             logger.info(f"get_dota_week_top: sqlite users={users}")
-            cursor.close()
+
             result = []
             for u in users:
                 result.append({
