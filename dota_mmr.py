@@ -1361,7 +1361,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                 conn.commit()
             except Exception as e:
                 logger.warning(f"Failed to save matches to public_player_matches: {e}")
-        logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}, week_streak={max_streak}")
+        
         logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}, week_streak={max_streak}")
         
         # If no matches in week, check if we have any recent matches at all (debug)
