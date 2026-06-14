@@ -708,7 +708,7 @@ async def get_last_matches(telegram_id: int, limit: int = 10) -> list[dict[str, 
     user = get_user(telegram_id)
 
     if not user or not user.get("steam_id"):
-        return []
+        return {"error": "no_steam_linked", "message": "🎮 У вас не привязан аккаунт Steam. Используйте /link для привязки."}
 
     account_id = steam64_to_account_id(
         user["steam_id"]
@@ -893,9 +893,12 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
             chart = await _create_visual_chart(cached.get("history", []))
             return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY")}
 
-    matches = await get_last_matches(telegram_id)
+        # Check for no steam_id linked
+        matches = await get_last_matches(telegram_id)
+        if isinstance(matches, dict) and matches.get("error") == "no_steam_linked":
+            return matches
 
-    if len(matches) < 5:
+        if len(matches) < 5:
         from database import get_user
         user = await asyncio.to_thread(get_user, telegram_id)
         if user and user.get('analytics_cache'):

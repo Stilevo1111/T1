@@ -534,7 +534,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chart_data = await generate_chart_only(update.effective_user.id)
 
                 if chart_data:
-                    if isinstance(chart_data, dict) and chart_data.get("error") == "opendota_rate_limit":
+                    if isinstance(chart_data, dict) and chart_data.get("error") in ("opendota_rate_limit", "no_steam_linked"):
                         if loading_msg:
                             try:
                                 await context.bot.edit_message_text(
@@ -544,7 +544,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 )
                             except Exception:
                                 pass
-                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.application.job_queue)
+                            if chart_data.get("error") == "opendota_rate_limit":
+                                schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.application.job_queue)
                         return
 
                     if chart_data.get("api_fallback"):
@@ -1773,6 +1774,18 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
 
     # Determine if we need to generate pages (lazy loading)
     is_first_generation = page_idx not in generated or pages == [None, None]
+
+    # Check if user has steam_id linked
+    if is_first_generation:
+        user = await asyncio.to_thread(get_user, callback_query.from_user.id)
+        if not user or not user.get('steam_id'):
+            await callback_query.answer(text="🎮 У вас не привязан аккаунт Steam. Используйте /link для привязки.", show_alert=True)
+            if loading_msg:
+                try:
+                    await context.bot.delete_message(chat_id, loading_msg.message_id)
+                except Exception:
+                    pass
+            return
 
     if page_idx < 0:
         logger.warning(f"Invalid page index: {page_idx}, pages: {len(pages)}")
