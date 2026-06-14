@@ -2989,7 +2989,7 @@ FROM wr_calc
                          (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
                          week_games DESC,
                          mmr DESC,
-                         rank_tier DESC
+                         rank_tier DESC NULLS LAST
                      LIMIT %s
                 """, (limit,))
             users = cursor.fetchall()
@@ -3036,7 +3036,7 @@ FROM wr_calc
                      (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
                      week_games DESC,
                      mmr DESC,
-                     rank_tier DESC
+                     COALESCE(rank_tier, 0) DESC
                  LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
