@@ -340,17 +340,19 @@ async def _get_hero_stats_from_db(days=7):
     heroes_info = await get_hero_list()
     if heroes_info:
         hero_map = {h.get("id"): h for h in heroes_info}
-        for hs in hero_stats:
-            hero_id = hs.get("hero_id")
-            if hero_id in hero_map:
-                info = hero_map[hero_id]
-                hs["localized_name"] = info.get("localized_name", f"Hero {hero_id}")
-                hs["img"] = info.get("img", f"/apps/dota2/images/dota/heroes/{hero_id}_sb.png")
-                hs["roles"] = info.get("roles", [])
-                # Calculate winrate
-                if hs["pub_pick"] > 0:
-                    hs["winrate"] = hs["pub_win"] / hs["pub_pick"]
-    
+for hs in hero_stats:
+        hero_id = hs.get("hero_id")
+        if hero_id in hero_map:
+            info = hero_map[hero_id]
+            hs["localized_name"] = info.get("localized_name", f"Hero {hero_id}")
+            hs["img"] = info.get("img", f"/apps/dota2/images/dota/heroes/{hero_id}_sb.png")
+            hs["roles"] = info.get("roles", [])
+        # Calculate winrate always
+        if hs["pub_pick"] > 0:
+            hs["winrate"] = hs["pub_win"] / hs["pub_pick"]
+        else:
+            hs["winrate"] = 0
+
     return hero_stats
 
 
