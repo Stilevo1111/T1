@@ -217,13 +217,13 @@ async def _enrich_with_hero_data(hero_stats):
 
 
 def _build_grid(hero_stats):
-    MIN_WINRATE = 0.48
+    MIN_MATCHES = 1  # Need at least 1 game
     hero_best_position = {}
     for hero in hero_stats:
         matches = hero.get("pub_pick", hero.get("pro_pick", 0))
         wins = hero.get("pub_win", hero.get("pro_win", 0))
         winrate = (wins / matches) if matches > 0 else 0
-        if winrate < MIN_WINRATE:
+        if matches < MIN_MATCHES:
             continue
         score = winrate * math.log10(matches + 1)
         pos = hero.get("position", detect_hero_position(hero))
@@ -260,6 +260,95 @@ def _build_grid(hero_stats):
                             break
             grid[pos] = sorted(grid[pos], key=lambda h: -h['winrate'])
     return grid
+
+
+async def _get_hero_stats_from_db(days=7):
+    """Get hero statistics from local database instead of OD explorer API."""
+    import time
+    from database import get_connection, urlparse, DATABASE_URL, get_hero_list
+    
+    now = int(time.time())
+    week_ago = now - (days * 24 * 60 * 60)
+    
+    conn = get_connection()
+    url = urlparse.urlparse(DATABASE_URL)
+    scheme = url.scheme
+    
+    cursor = conn.cursor()
+    
+    # Query hero stats grouped by hero_id and position
+    if "postgres" in scheme:
+        cursor.execute("""
+            SELECT 
+                hero_id,
+                player_slot,
+                COUNT(*) as pub_pick,
+                SUM(CASE 
+                    WHEN (radiant_win = TRUE AND player_slot < 128) OR
+                         (radiant_win = FALSE AND player_slot >= 128)
+                    THEN 1 ELSE 0 
+                END) as pub_win
+            FROM public_player_matches
+            WHERE start_time >= %s
+            GROUP BY hero_id, player_slot
+        """, (week_ago,))
+    else:
+        cursor.execute("""
+            SELECT 
+                hero_id,
+                player_slot,
+                COUNT(*) as pub_pick,
+                SUM(CASE 
+                    WHEN (radiant_win = 1 AND player_slot < 128) OR
+                         (radiant_win = 0 AND player_slot >= 128)
+                    THEN 1 ELSE 0 
+                END) as pub_win
+            FROM public_player_matches
+            WHERE start_time >= ?
+            GROUP BY hero_id, player_slot
+        """, (week_ago,))
+    
+    rows = cursor.fetchall()
+    
+    hero_position_stats = {}
+    for row in rows:
+        hero_id = row[0]
+        player_slot = row[1] if row[1] is not None else 0
+        
+        if player_slot < 0:
+            continue
+            
+        # Calculate position (0-4 -> 1-5)
+        position = player_slot % 5 if player_slot < 128 else (player_slot - 128) % 5
+        pos_map = {0: 1, 1: 2, 2: 3, 3: 4, 4: 5}
+        actual_pos = pos_map.get(position, 1)
+        
+        key = (hero_id, actual_pos)
+        if key not in hero_position_stats:
+            hero_position_stats[key] = {
+                "hero_id": hero_id, 
+                "position": actual_pos, 
+                "pub_pick": 0, 
+                "pub_win": 0
+            }
+        hero_position_stats[key]["pub_pick"] += row[2] or 0
+        hero_position_stats[key]["pub_win"] += row[3] or 0
+    
+    hero_stats = list(hero_position_stats.values())
+    
+    # Enrich with hero data (names, icons)
+    heroes_info = await get_hero_list()
+    if heroes_info:
+        hero_map = {h.get("id"): h for h in heroes_info}
+        for hs in hero_stats:
+            hero_id = hs.get("hero_id")
+            if hero_id in hero_map:
+                info = hero_map[hero_id]
+                hs["localized_name"] = info.get("localized_name", f"Hero {hero_id}")
+                hs["img"] = info.get("img", f"/apps/dota2/images/dota/heroes/{hero_id}_sb.png")
+                hs["roles"] = info.get("roles", [])
+    
+    return hero_stats
 
 
 async def create_infographic(hero_stats):
@@ -334,97 +423,12 @@ async def get_dota_data(days=7, force_refresh=False):
     import time
     now = int(time.time())
 
-    # Check circuit breaker state
-    cb = _explorer_circuit_breaker
-    if cb["state"] == "OPEN":
-        if now - cb["last_failure_time"] < cb["recovery_timeout"]:
-            logger.warning("Explorer circuit breaker OPEN - returning cached or None")
-            if _hero_meta_cache["data"]:
-                return _hero_meta_cache["data"]
-            return None
-        else:
-            cb["state"] = "HALF_OPEN"
-            logger.info("Explorer circuit breaker: HALF_OPEN")
-
     # Check cache first
     if not force_refresh and _hero_meta_cache["data"] and now - _hero_meta_cache["timestamp"] < _HERO_META_CACHE_TTL:
         logger.info("Using cached hero meta data")
         return _hero_meta_cache["data"]
 
-    week_ago = now - (days * 24 * 60 * 60)
-
-    # Query with position grouping - each hero-position gets separate stats
-    sql = ("SELECT\n"
-        "    hero_id,\n"
-        "    player_slot,\n"
-        "    COUNT(*) as pub_pick,\n"
-        "    SUM(\n"
-        "        CASE\n"
-        "            WHEN (radiant_win = TRUE AND player_slot < 128) OR\n"
-        "                 (radiant_win = FALSE AND player_slot >= 128)\n"
-        "            THEN 1 ELSE 0\n"
-        "        END\n"
-        "    ) as pub_win\n"
-        "FROM public_player_matches\n"
-        "WHERE start_time >= " + str(week_ago) + "\n"
-        "GROUP BY hero_id, player_slot\n"
-        "HAVING COUNT(*) >= 100"
-    )
-
-    try:
-        from database import get_aiohttp_session
-        session = await get_aiohttp_session()
-        async with session.post(
-            "https://api.opendota.com/api/explorer",
-            data={"sql": sql},
-            timeout=aiohttp.ClientTimeout(total=30)
-        ) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                if data and "rows" in data and data["rows"]:
-                    hero_position_stats = {}
-                    for row in data["rows"]:
-                        hero_id = row["hero_id"]
-                        player_slot = row.get("player_slot", 0)
-                        if player_slot < 0:
-                            continue
-                        count = row["pub_pick"]
-                        position = player_slot % 5 if player_slot < 128 else (player_slot - 128) % 5
-                        pos_map = {0: 1, 1: 2, 2: 3, 3: 4, 4: 5}
-                        actual_pos = pos_map.get(position, 1)
-                        key = (hero_id, actual_pos)
-                        if key not in hero_position_stats:
-                            hero_position_stats[key] = {"hero_id": hero_id, "position": actual_pos, "pub_pick": 0, "pub_win": 0}
-                        hero_position_stats[key]["pub_pick"] += count
-                        hero_position_stats[key]["pub_win"] += row.get("pub_win", 0)
-                    hero_stats = list(hero_position_stats.values())
-                    for hs in hero_stats:
-                        hs["img"] = f"/apps/dota2/images/dota/heroes/{hs['hero_id']}_sb.png"
-                    hero_stats = await _enrich_with_hero_data(hero_stats)
-                    if hero_stats:
-                        _hero_meta_cache["data"] = hero_stats
-                        _hero_meta_cache["timestamp"] = now
-                        # Store to DB config for fallback
-                        try:
-                            from database import set_config
-                            cache_dict = {"data": hero_stats, "timestamp": now}
-                            set_config(HERO_META_CONFIG_KEY, json.dumps(cache_dict))
-                        except Exception as e:
-                            logger.warning(f"Failed to cache hero meta to DB: {e}")
-                        if _explorer_circuit_breaker["state"] == "HALF_OPEN":
-                            _explorer_circuit_breaker["state"] = "CLOSED"
-                            _explorer_circuit_breaker["failure_count"] = 0
-                            logger.info("Explorer circuit breaker CLOSED - recovered")
-                    return hero_stats
-    except Exception as e:
-        logger.warning("Explorer failed: %s", e)
-        _explorer_circuit_breaker["failure_count"] += 1
-        _explorer_circuit_breaker["last_failure_time"] = now
-        if _explorer_circuit_breaker["failure_count"] >= _explorer_circuit_breaker["failure_threshold"]:
-            _explorer_circuit_breaker["state"] = "OPEN"
-            logger.warning("Explorer circuit breaker OPENED")
-
-    # Try to get cached hero meta from DB config
+    # Try DB config cache
     try:
         from database import get_config
         cached_str = get_config(HERO_META_CONFIG_KEY)
@@ -434,14 +438,29 @@ async def get_dota_data(days=7, force_refresh=False):
             cached_ts = cache_dict.get("timestamp", 0)
             if cached_data and (now - cached_ts) < HERO_META_CONFIG_TTL:
                 logger.info("Using cached hero meta from DB config")
-                # Update in-memory cache as well
                 _hero_meta_cache["data"] = cached_data
                 _hero_meta_cache["timestamp"] = cached_ts
                 return cached_data
     except Exception as e:
         logger.warning(f"Failed to read hero meta from DB config: {e}")
 
-    logger.warning("OpenDota explorer API unavailable - cannot generate hero meta (no valid data source)")
+    # Get data from local database instead of OD explorer
+    try:
+        hero_stats = await _get_hero_stats_from_db(days)
+        if hero_stats:
+            _hero_meta_cache["data"] = hero_stats
+            _hero_meta_cache["timestamp"] = now
+            try:
+                from database import set_config
+                cache_dict = {"data": hero_stats, "timestamp": now}
+                set_config(HERO_META_CONFIG_KEY, json.dumps(cache_dict))
+            except Exception as e:
+                logger.warning(f"Failed to cache hero meta to DB: {e}")
+            return hero_stats
+    except Exception as e:
+        logger.error(f"Failed to get hero stats from DB: {e}")
+
+    logger.warning("No hero meta data available - using fallback banner")
     return None
 def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, gap_between_cols,
                          col_width, row_height, icon_height):
