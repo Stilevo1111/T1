@@ -145,7 +145,7 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
     """
     affected = zeus_strike(percent=0.025)
 
-    new_fissure = user["fissure"]
+    new_fissure = user.get("fissure", 0)
     update_fissure(user_obj.id, new_fissure, now, 0)
 
     zeus_text = random.choice(ZEUS_TEXTS)
@@ -167,7 +167,7 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
     )
     set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
     schedule_delete(bot, chat_id, result_msg.message_id, 600, None)  # job_queue passed from caller if needed
-    update_fissure(user_obj.id, user["fissure"], now, 0, last_message_id=result_msg.message_id)
+    update_fissure(user_obj.id, user.get("fissure", 0), now, 0, last_message_id=result_msg.message_id)
 
     await asyncio.sleep(0.1)
     return  # exit without roll
@@ -488,13 +488,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             result_text = f"{'+' if base_roll_for_text > 0 else ''}{base_roll_for_text} см"
 
-        old_fissure = user["fissure"]
+        old_fissure = user.get("fissure", 0)
 
         # Считаем новую фиссуру: база - 5% Зевса + ролл (фиссуры < 5 защищены от Зевса)
-        if zeus_triggered and user["fissure"] >= 5:
-            base_fissure = user["fissure"] * 0.95
+        if zeus_triggered and user.get("fissure", 0) >= 5:
+            base_fissure = user.get("fissure", 0) * 0.95
         else:
-            base_fissure = user["fissure"]
+            base_fissure = user.get("fissure", 0)
         base_fissure = max(0.1, base_fissure)
         new_fissure = calculate_new_fissure(base_fissure, roll)
         growth = new_fissure - old_fissure

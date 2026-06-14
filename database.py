@@ -1254,12 +1254,12 @@ class Database:
                 query = "SELECT * FROM users WHERE telegram_id = %s"
                 user = self.execute_query(query, (telegram_id,), fetch="one")
                 if user:
-                    result = {
-                        "telegram_id": user["telegram_id"],
-                        "username": user["username"],
-                        "fissure": user["fissure"],
-                        "last_fissure": user["last_fissure"],
-                        "last_message_id": user["last_message_id"],
+result = {
+                         "telegram_id": user["telegram_id"],
+                         "username": user["username"],
+                         "fissure": user.get("fissure", 0),
+                         "last_fissure": user.get("last_fissure"),
+                         "last_message_id": user.get("last_message_id"),
                         "total_growth": user.get("total_growth", 0),
                         "total_rolls": user.get("total_rolls", 0),
                         "best_streak": user.get("best_streak", 0),
