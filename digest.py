@@ -211,6 +211,9 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
 
             parts.append(f"🔺{top_name} {top_wins}W/{top_games-top_wins}L ≈{top_wr}%\n")
             parts.append(f"🔻{bottom_name} {bottom_wins}W/{bottom_games-bottom_wins}L ≈{bottom_wr}%\n")
+        else:
+            parts.append("🔺—\n")
+            parts.append("🔻—\n")
 
     # Fissure digest
     stats = _digest_state_container.get_digest_data()
@@ -684,31 +687,20 @@ async def alternate_digest_job(context):
             # last_message_id = None (БД отвалилась или сообщение удалено) — можем создавать новый
             # Но проверяем, что кеш валиден (чтобы не генерить баннер каждый тик)
 
-            # Генерируем геро-мета баннер (раз в сутки или при новом дайджесте)
+            # Генерируем геро-мета баннер (раз в 12 часов или при новом дайджесте)
             hero_meta_banner = None
-            last_hero_meta_update = get_config('last_hero_meta_update')
-            should_update_hero_meta = False
-            if last_hero_meta_update:
-                try:
-                    last_ts = int(last_hero_meta_update)
-                    if now - last_ts < 24 * 3600:  # 24 hours
-                        hero_meta_banner = None
-                    else:
-                        should_update_hero_meta = True
-                except:
-                    should_update_hero_meta = True
-            else:
-                should_update_hero_meta = True
-
-            if should_create_new or should_update_hero_meta:
+            need_hero_meta = should_create_new or now - _digest_state_container.get_last_hero_meta_refresh() > 12 * 3600
+            
+            if need_hero_meta:
                 try:
                     from hero_meta import get_hero_meta_image
                     hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=90.0)
                     if hero_meta_banner:
                         set_config('last_hero_meta_update', int(now))
+                        _digest_state_container.set_last_hero_meta_refresh(now)
                         logger.info("Hero meta banner generated for digest")
                     else:
-                        logger.info("Hero meta banner skipped (using fallback)")
+                        logger.info("Hero meta banner skipped (no data)")
                 except Exception as e:
                     logger.warning(f"Could not generate hero meta banner: {e}")
                     hero_meta_banner = None
