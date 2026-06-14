@@ -2182,19 +2182,36 @@ def delete_user(telegram_id: int):
 
 
 def cleanup_left_users():
-    """Удалить всех пользователей с in_chat = FALSE (кто вышел из чата)"""
+    """Удалить пользователей, вышедших из чата более 7 дней назад (чтобы не удалять новых/созданных по ошибке)"""
     conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
         scheme = get_db_type()
-        # DEPRECATED: Deleting users caused massive data loss when in_chat was not set properly during INSERT
-        # Now we just log without deleting, users with in_chat=FALSE are ignored in top queries anyway
-        cursor.execute("SELECT COUNT(*) FROM users WHERE in_chat = FALSE" if "postgres" not in scheme else "SELECT COUNT(*) FROM users WHERE in_chat = FALSE")
-        count = cursor.fetchone()[0]
+        # Only delete users who left more than 7 days ago - protects against INSERT without in_chat=TRUE
+        if "postgres" in scheme:
+            cursor.execute("""
+                DELETE FROM users 
+                WHERE in_chat = FALSE 
+                AND created_at < CURRENT_TIMESTAMP - INTERVAL '7 days'
+            """)
+        else:
+            cursor.execute("""
+                DELETE FROM users 
+                WHERE in_chat = 0 
+                AND created_at < datetime('now', '-7 days')
+            """)
+        deleted = cursor.rowcount
+        conn.commit()
         cursor.close()
-        logger.info(f"cleanup_left_users: found {count} users with in_chat=FALSE (not deleted - deprecated behavior)")
-        return 0
+        if deleted:
+            top_cache.invalidate_top_cache()
+            user_cache.delete('dota_digest_stats')
+            user_cache.delete('digest_stats')
+            user_cache.delete('dota_week_top')
+            user_cache.delete('weekly_digest_stats')
+        logger.info(f"cleanup_left_users: deleted {deleted} users who left chat >7 days ago")
+        return deleted
     except Exception as e:
         logger.error(f"cleanup_left_users error: {e}")
         return 0
