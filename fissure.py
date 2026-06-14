@@ -183,7 +183,7 @@ def process_multicast_result(roll, cascade_count, MULTICAST_TEXTS):
 
     multicast_text = ""
     if cascade_count > 1:
-        multicast_text = f"\n{random.choice(MULTICAST_TEXTS[cascade_count])}"
+        multicast_text = random.choice(MULTICAST_TEXTS[cascade_count])
 
     return roll, original_roll, multicast_text
 
@@ -504,10 +504,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
 
-        # Вычисляем roll_key для финального значения (используется в extra_text)
-        roll_key = min(roll, 75)
-        roll_key = max(roll_key, -15)
-
         if is_fatal:
             category = "fatal"
         elif got_help:
@@ -520,34 +516,46 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             category = "same"
 
         extra_text = ""
+        # Для мультикаста используем original_roll для выбора мема
+        roll_for_meme = original_roll if original_roll is not None else roll
+        roll_key = min(roll_for_meme, 75)
+        roll_key = max(roll_key, -15)
         if roll_key in ROLL_MEMES and random.random() < 0.5:
             extra_text = random.choice(ROLL_MEMES[roll_key])
-        elif not is_weekend and cascade_count == 1 and roll > 0 and not is_fatal:
-            # Выбираем фразу только если нет выходного бонуса, нет мультикаста и это положительный ролл
+        elif not is_weekend and roll > 0 and not is_fatal:
             extra_text = random.choice(CATEGORY_PHRASES[category])
 
         if cascade_count > 1 and original_roll is not None:
             logger.info(f"DEBUG: original_roll={original_roll}, cascade_count={cascade_count}, roll_final={original_roll * cascade_count}")
             roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
             mc_level = f"×{cascade_count}"
-            # Ролл уже умножён, используем его напрямую
             roll_final = roll
+            
+            # Для мультикаста добавляем extra_text (мем)
+            if cascade_count == 1:
+                extra_text = ""
+            
             text = (
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n"
-                f"{multicast_text}\n"
-                f"⚡ МУЛЬТИКАСТ{mc_level}  {roll_final} CM"
             )
+            if streak_text:
+                text = f"{text}{streak_text}\n"
+            if extra_text:
+                text = f"{text}{extra_text}\n"
+            if multicast_text:
+                text = f"{text}\n\n{multicast_text}"
+            text = f"{text}⚡ МУЛЬТИКАСТ{mc_level}  {roll_final} CM"
         else:
             # Старый дизайн без мультикаста
             text = (
                 f"🎲 {display_username}\n\n"
                 f"{result_text}\n"
-                f"{extra_text}"
             )
-
-        if streak_text:
-            text = f"{text}\n{streak_text}"
+            if streak_text:
+                text = f"{text}{streak_text}\n"
+            if extra_text:
+                text = f"{text}{extra_text}"
 
         if is_fatal and protection_msg:
             text = f"{text}\n{protection_msg}"
