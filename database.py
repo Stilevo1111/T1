@@ -1665,17 +1665,22 @@ class Database:
                 if not telegram_id:
                     continue
 
-                daily_best = u.get("daily_best_growth", 0.0)
-                if daily_best > top_growth_cm:
-                    top_growth_cm = daily_best
+                # Use delta = fissure - digest_fissure for daily growth (fallback to daily_best_growth if 0)
+                prev_f = u.get("digest_fissure", 0.0)
+                cur_f = u.get("fissure", 0.0)
+                delta = cur_f - prev_f
+                daily_best = u.get("daily_best_growth", 0.0) or 0.0
+                
+                # Show growth if either delta or daily_best is positive
+                growth_cm = max(delta, daily_best) if delta > 0 or daily_best > 0 else 0.0
+                
+                if growth_cm > 0 and growth_cm > top_growth_cm:
+                    top_growth_cm = growth_cm
                     nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
                     top_growth_user = nick if nick and nick != "None" else str(telegram_id)
                     top_growth_id = telegram_id
 
-                # also track drop (fissure decrease)
-                prev_f = u.get("digest_fissure", 0.0)
-                cur_f = u.get("fissure", 0.0)
-                delta = cur_f - prev_f
+                # also track drop (fissure decrease) - only if delta is negative (fissure decreased)
                 if delta < top_drop_cm:
                     top_drop_cm = delta
                     nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
