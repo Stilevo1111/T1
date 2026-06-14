@@ -1196,8 +1196,8 @@ class Database:
         try:
             if "postgres" in scheme:
                 query = '''
-                    INSERT INTO users (telegram_id, username, first_name, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at, message_count)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, 0)
+                    INSERT INTO users (telegram_id, username, first_name, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at, message_count, in_chat)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, 0, TRUE)
                     ON CONFLICT (telegram_id) 
                     DO UPDATE SET 
                         username = EXCLUDED.username,
@@ -1207,14 +1207,13 @@ class Database:
                         last_message_id = EXCLUDED.last_message_id,
                         total_growth = EXCLUDED.total_growth,
                         total_rolls = EXCLUDED.total_rolls
-                    RETURNING id
                 '''
                 result = self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0), fetch="one")
                 return result["id"] if result else telegram_id
             else:
                 query = '''
-                    INSERT INTO users (telegram_id, username, first_name, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at, message_count)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 0)
+                    INSERT INTO users (telegram_id, username, first_name, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at, message_count, in_chat)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 0, 1)
                     ON CONFLICT(telegram_id) DO UPDATE SET
                         username = excluded.username,
                         first_name = excluded.first_name,
@@ -1223,7 +1222,7 @@ class Database:
                         last_message_id = excluded.last_message_id,
                         total_growth = excluded.total_growth,
                         total_rolls = excluded.total_rolls
-                    '''
+                '''
                 self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0))
                 return None
         except Exception as e:
@@ -2189,21 +2188,13 @@ def cleanup_left_users():
         conn = get_connection()
         cursor = conn.cursor()
         scheme = get_db_type()
-        if "postgres" in scheme:
-            cursor.execute("DELETE FROM users WHERE in_chat = FALSE")
-        else:
-            cursor.execute("DELETE FROM users WHERE in_chat = 0")
-        deleted = cursor.rowcount
-        conn.commit()
+        # DEPRECATED: Deleting users caused massive data loss when in_chat was not set properly during INSERT
+        # Now we just log without deleting, users with in_chat=FALSE are ignored in top queries anyway
+        cursor.execute("SELECT COUNT(*) FROM users WHERE in_chat = FALSE" if "postgres" not in scheme else "SELECT COUNT(*) FROM users WHERE in_chat = FALSE")
+        count = cursor.fetchone()[0]
         cursor.close()
-        # Clear all caches after bulk delete
-        top_cache.invalidate_top_cache()
-        user_cache.delete('dota_digest_stats')
-        user_cache.delete('digest_stats')
-        user_cache.delete('dota_week_top')
-        user_cache.delete('weekly_digest_stats')
-        logger.info(f"cleanup_left_users: deleted {deleted} users who left chat")
-        return deleted
+        logger.info(f"cleanup_left_users: found {count} users with in_chat=FALSE (not deleted - deprecated behavior)")
+        return 0
     except Exception as e:
         logger.error(f"cleanup_left_users error: {e}")
         return 0
