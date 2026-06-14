@@ -1236,8 +1236,8 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         logger.info(f"topmmr: week start (MSK) = {week_start_msk} (Monday)")
         logger.info(f"topmmr: week start (UTC) = {week_start_utc} (Monday)")
 
-        # Получаем последние матчи недели (максимум 30)
-        matches = get_recent_matches(user["steam_id"], limit=30)
+        # Получаем последние матчи недели (максимум 10)
+        matches = get_recent_matches(user["steam_id"], limit=10)
 
         # Логируем все полученные матчи
         if matches:
