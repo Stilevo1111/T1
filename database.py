@@ -1924,6 +1924,10 @@ def get_user(telegram_id, username=None):
     if cached_user:
         msg_count = cached_user.get('message_count', 0)
         logger.info(f"get_user: cache hit for {telegram_id}, message_count={msg_count}")
+        cached_user.setdefault('fissure', 0.1)
+        cached_user.setdefault('total_rolls', 0)
+        cached_user.setdefault('current_streak', 0)
+        cached_user.setdefault('best_streak', 0)
         return cached_user
 
     # Нет в кеше - читаем из БД
@@ -1938,6 +1942,7 @@ def get_user(telegram_id, username=None):
         user.setdefault('weekly_top3_count', 0)
         user.setdefault('analytics_cache', None)
         user.setdefault('analytics_updated_at', None)
+        user.setdefault('fissure', 0.1)
         user_cache.set(telegram_id, user)
     else:
         logger.warning(f"get_user: user {telegram_id} NOT found in cache or DB")
