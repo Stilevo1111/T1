@@ -502,6 +502,18 @@ def release_pg_connection(conn):
     global _pg_pool
     if _pg_pool is not None:
         _pg_pool.putconn(conn)
+
+
+def close_pg_pool():
+    """Close PostgreSQL connection pool"""
+    global _pg_pool
+    if _pg_pool is not None:
+        try:
+            _pg_pool.closeall()
+            logger.info("PostgreSQL pool closed")
+        except Exception as e:
+            logger.warning(f"Failed to close pg pool: {e}")
+        _pg_pool = None
     else:
         # Fallback: just release direct connection
         release_connection(conn)

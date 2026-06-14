@@ -192,8 +192,69 @@ def _clear_cache():
     _cache = {}
 
 
+async def _api_get_async(url: str, params: dict = None, max_retries: int = 2, timeout: int = 8) -> dict:
+    """Async version of API calls using aiohttp"""
+    if not _circuit_breaker_can_execute():
+        logger.warning("Circuit breaker: skipping request, API unavailable")
+        return None
+
+    try:
+        _check_rate_limit()
+    except RateLimitWaitError as e:
+        logger.warning(f"Rate limited, waiting {e.wait_seconds:.1f}s...")
+        await asyncio.sleep(e.wait_seconds)
+        _api_rate_limit["window_start"] = time.time()
+        _api_rate_limit["requests_count"] = 0
+
+    for attempt in range(max_retries + 1):
+        current_timeout = timeout if attempt == 0 else timeout + 5
+        try:
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=current_timeout)) as resp:
+                if resp.status == 200:
+                    _circuit_breaker_record_success()
+                    return await resp.json()
+                elif resp.status == 429:
+                    wait_time = 5 * (attempt + 1)
+                    logger.warning(f"Rate limited by OpenDota API, waiting {wait_time}s...")
+                    set_opendota_rate_limited(60)
+                    _circuit_breaker_record_failure()
+                    await asyncio.sleep(wait_time)
+                    if attempt < max_retries:
+                        continue
+                    return None
+                elif resp.status >= 500:
+                    _circuit_breaker_record_failure()
+                    if attempt < max_retries:
+                        logger.warning(f"Server error {resp.status}, retrying in {attempt + 1}s...")
+                        await asyncio.sleep(attempt + 1)
+                        continue
+                    return None
+                elif resp.status >= 400:
+                    logger.error(f"API error {resp.status} for URL: {url}")
+                    return None
+                return None
+        except asyncio.TimeoutError as e:
+            if attempt < max_retries:
+                logger.warning(f"API request timeout ({current_timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
+                continue
+            else:
+                logger.error(f"API request timeout ({current_timeout}s) after {max_retries + 1} attempts: {e}")
+                return None
+        except Exception as e:
+            logger.error(f"API request error: {e}", exc_info=True)
+            return None
+
+    return None
+
+
 def _api_get(url: str, params: dict = None, max_retries: int = 2, timeout: int = 8) -> dict:
     """Универсальная функция для API-запросов с обработкой ошибок, кешем и повторными попытками"""
+    cached = _get_cached(url)
+    if cached is not None:
+        return cached
+    
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping request, API unavailable")
         return None

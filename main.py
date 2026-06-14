@@ -3450,12 +3450,14 @@ async def main():
         raise
     finally:
         try:
-            from database import close_aiohttp_session, flush_users_cache
+            from database import close_aiohttp_session, flush_users_cache, close_pg_pool
             flushed = flush_users_cache()
             logger.info(f"Shutdown: flushed {flushed} users to DB")
             # Close aiohttp session to prevent "Unclosed connection" error
             await close_aiohttp_session()
             logger.info("Shutdown: aiohttp session closed")
+            # Close PostgreSQL pool
+            close_pg_pool()
         except Exception as flush_err:
             logger.error(f"Shutdown flush error: {flush_err}")
 
