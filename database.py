@@ -452,6 +452,10 @@ def restore_dota_week_top_cache():
     if cached:
         try:
             top_users = json.loads(cached)
+            # Restore individual users to user_cache
+            for u in top_users:
+                if 'telegram_id' in u:
+                    user_cache.set(u['telegram_id'], u)
             user_cache.set('dota_week_top', top_users)
             logger.info(f"restore_dota_week_top_cache: restored {len(top_users)} users from database cache")
             return True

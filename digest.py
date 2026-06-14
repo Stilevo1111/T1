@@ -186,7 +186,7 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
     # Dota digest
     mmr_top = _digest_state_container.get_dota_data()
     if mmr_top:
-        valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 3]
+        valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 1]
         if len(valid_players) >= 2:
             top_by_net = max(
                 valid_players,
@@ -475,6 +475,10 @@ async def alternate_digest_job(context):
             if _digest_state_container.get_dota_data() is None:
                 logger.info("Обновляем Dota данные для дайджеста из БД")
                 _digest_state_container.set_dota_data(get_dota_week_top(limit=30))
+            if _digest_state_container.get_dota_data() is None:
+                logger.info("Dota данные пусты, пробуем get_dota_week_top_from_db")
+                from database import get_dota_week_top_from_db
+                _digest_state_container.set_dota_data(get_dota_week_top_from_db(limit=30))
 
             # Генерируем объединённый текст
             text = _build_digest_text_for_type("0")
