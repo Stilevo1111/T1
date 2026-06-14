@@ -12,6 +12,30 @@ from PIL import Image
 
 from database import get_user, update_user_fields_batch
 
+# Hero list cache
+_heroes_cache = None
+_heroes_cache_time = 0
+_HEROES_CACHE_TTL = 86400  # 24 hours
+
+async def get_hero_list():
+    """Get list of heroes from OpenDota API with caching."""
+    global _heroes_cache, _heroes_cache_time
+    if _heroes_cache is not None and time.time() - _heroes_cache_time < _HEROES_CACHE_TTL:
+        return _heroes_cache
+    try:
+        from database import get_aiohttp_session
+        session = await get_aiohttp_session()
+        async with session.get("https://api.opendota.com/api/heroes", timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                if data:
+                    _heroes_cache = data
+                    _heroes_cache_time = time.time()
+                    return data
+    except Exception as e:
+        logger.warning(f"Failed to fetch heroes: {e}")
+    return []
+
 # Cached background for start card to avoid repeated downloads
 _START_CARD_BACKGROUND_RESIZED = None
 _START_CARD_BACKGROUND_CACHED = False

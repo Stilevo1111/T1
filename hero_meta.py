@@ -265,7 +265,9 @@ def _build_grid(hero_stats):
 async def _get_hero_stats_from_db(days=7):
     """Get hero statistics from local database instead of OD explorer API."""
     import time
-    from database import get_connection, urlparse, DATABASE_URL, get_hero_list
+    from database import get_connection, urlparse, DATABASE_URL
+    # Import inside function to avoid circular dependency
+    from dota_mmr import get_hero_list
     
     now = int(time.time())
     week_ago = now - (days * 24 * 60 * 60)
