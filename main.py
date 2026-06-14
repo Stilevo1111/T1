@@ -1,4 +1,5 @@
 import asyncio
+import atexit
 import datetime
 import io
 import json
@@ -3518,6 +3519,16 @@ async def main():
 
 
 if __name__ == "__main__":
+    def _emergency_flush():
+        try:
+            from database import flush_users_cache
+            dirty = flush_users_cache()
+            logger.warning(f"atexit: emergency flush completed ({dirty} users)")
+        except Exception as e:
+            logger.warning(f"Emergency flush failed: {e}")
+
+    atexit.register(_emergency_flush)
+
     try:
         from image_cache import preload_heroes
 
