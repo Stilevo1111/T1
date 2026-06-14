@@ -414,10 +414,10 @@ async def create_infographic(hero_stats):
 
 
 """
-Hero meta cache for reducing OpenDota API calls
+Hero meta cache for reducing image generation load
 """
 _hero_meta_cache = {"data": None, "timestamp": 0}
-_HERO_META_CACHE_TTL = 7200  # 2 hours
+_HERO_META_CACHE_TTL = 12 * 3600  # 12 hours
 HERO_META_CONFIG_KEY = 'hero_meta_data'
 HERO_META_CONFIG_TTL = 7 * 24 * 3600  # 7 days
 

@@ -684,16 +684,31 @@ async def alternate_digest_job(context):
             # last_message_id = None (БД отвалилась или сообщение удалено) — можем создавать новый
             # Но проверяем, что кеш валиден (чтобы не генерить баннер каждый тик)
 
-            # Генерируем геро-мета баннер (ТОЛЬКО при создании нового поста)
+            # Генерируем геро-мета баннер (раз в сутки или при новом дайджесте)
             hero_meta_banner = None
-            if should_create_new:
+            last_hero_meta_update = get_config('last_hero_meta_update')
+            should_update_hero_meta = False
+            if last_hero_meta_update:
+                try:
+                    last_ts = int(last_hero_meta_update)
+                    if now - last_ts < 24 * 3600:  # 24 hours
+                        hero_meta_banner = None
+                    else:
+                        should_update_hero_meta = True
+                except:
+                    should_update_hero_meta = True
+            else:
+                should_update_hero_meta = True
+
+            if should_create_new or should_update_hero_meta:
                 try:
                     from hero_meta import get_hero_meta_image
                     hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=90.0)
                     if hero_meta_banner:
+                        set_config('last_hero_meta_update', int(now))
                         logger.info("Hero meta banner generated for digest")
                     else:
-                        logger.info("Hero meta banner skipped (using text digest)")
+                        logger.info("Hero meta banner skipped (using fallback)")
                 except Exception as e:
                     logger.warning(f"Could not generate hero meta banner: {e}")
                     hero_meta_banner = None
