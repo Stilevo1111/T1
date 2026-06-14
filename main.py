@@ -2047,12 +2047,28 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def recent_rolls_handler(request):
     """Public API: returns last 50 fissure rolls as JSON (for the website widget)."""
-    data = list(recent_fissure_rolls)  # snapshot
+    data = list(recent_fissure_rolls)[-50:]  # Limit to 50
     resp = web.Response(text=json.dumps(data, ensure_ascii=False), content_type="application/json")
-    resp.headers['Access-Control-Allow-Origin'] = '*'          # Разрешаем запросы с сайта
+    resp.headers['Access-Control-Allow-Origin'] = '*'
     resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
     resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     return resp
+
+
+async def top_mmr_handler(request):
+    """Public API: returns top MMR players as JSON (for the website widget)."""
+    from database import get_dota_mmr_top
+    try:
+        top_users = get_dota_mmr_top(50)
+        data = [{"username": u.get("username", "Unknown"), "mmr": u.get("mmr", 0)} for u in top_users]
+        resp = web.Response(text=json.dumps(data, ensure_ascii=False), content_type="application/json")
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return resp
+    except Exception as e:
+        logger.error(f"top_mmr_handler error: {e}")
+        return web.Response(text=json.dumps({"error": str(e)}), status=500)
 
 
 @rate_limit(tokens=1)
@@ -3319,6 +3335,7 @@ async def main():
             web_app.router.add_get('/', health_handler)
             web_app.router.add_get('/health', health_handler)
             web_app.router.add_get('/api/recent-rolls', recent_rolls_handler)
+            web_app.router.add_get('/api/top-mmr', top_mmr_handler)
             runner = web.AppRunner(web_app)
             await runner.setup()
             port = int(os.getenv('PORT', 10000))
@@ -3379,6 +3396,7 @@ async def main():
             setup_health_check(app.bot)
             web_app.router.add_get('/health', health_check_handler)
             web_app.router.add_get('/api/recent-rolls', recent_rolls_handler)
+            web_app.router.add_get('/api/top-mmr', top_mmr_handler)
 
             runner = web.AppRunner(web_app, keepalive_timeout=120, client_max_size=10*1024*1024)
             await runner.setup()
