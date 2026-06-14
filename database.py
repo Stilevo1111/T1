@@ -1924,7 +1924,10 @@ def get_user(telegram_id, username=None):
     if cached_user:
         msg_count = cached_user.get('message_count', 0)
         logger.info(f"get_user: cache hit for {telegram_id}, message_count={msg_count}")
-        cached_user.setdefault('fissure', 0.1)
+        # Ensure required fields exist (they may be missing from cached partial data)
+        if 'fissure' not in cached_user or cached_user.get('fissure') is None:
+            cached_user['fissure'] = 0.1
+            user_cache.set(telegram_id, cached_user)
         cached_user.setdefault('total_rolls', 0)
         cached_user.setdefault('current_streak', 0)
         cached_user.setdefault('best_streak', 0)
