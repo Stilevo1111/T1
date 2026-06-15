@@ -3155,7 +3155,22 @@ async def main():
         init_db()
         migrate_db()
 
-        from database import get_all_users, user_cache, restore_dota_week_top_cache, logger
+        from database import get_all_users, user_cache, restore_dota_week_top_cache, logger, get_db_type, get_connection
+        
+        # Test DB connection
+        try:
+            db_type = get_db_type()
+            logger.info(f"DB type: {db_type}")
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM users")
+            count = cursor.fetchone()[0]
+            logger.info(f"Database connection OK: {count} users in DB")
+            from database import release_connection
+            release_connection(conn)
+        except Exception as e:
+            logger.error(f"Database connection failed: {e}")
+        
         try:
             all_users = get_all_users()
             logger.info(f"get_all_users returned {len(all_users)} users")
