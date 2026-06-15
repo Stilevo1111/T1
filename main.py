@@ -3157,6 +3157,24 @@ async def main():
 
         from database import get_all_users, user_cache, restore_dota_week_top_cache, get_db_type, get_connection
         
+        # Fix any NULL fissure values in database
+        try:
+            db_type = get_db_type()
+            conn = get_connection()
+            cursor = conn.cursor()
+            if "postgres" in db_type:
+                cursor.execute("UPDATE users SET fissure = 0.1 WHERE fissure IS NULL")
+            else:
+                cursor.execute("UPDATE users SET fissure = 0.1 WHERE fissure IS NULL")
+            conn.commit()
+            fixed_count = cursor.rowcount
+            cursor.close()
+            logger.info(f"Fixed {fixed_count} users with NULL fissure")
+            from database import release_connection
+            release_connection(conn)
+        except Exception as e:
+            logger.error(f"Failed to fix NULL fissure values: {e}")
+        
         # Test DB connection
         try:
             db_type = get_db_type()

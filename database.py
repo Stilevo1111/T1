@@ -2236,6 +2236,12 @@ def cleanup_left_users():
         conn = get_connection()
         cursor = conn.cursor()
         scheme = get_db_type()
+        # First, fix any NULL fissure values
+        if "postgres" in scheme:
+            cursor.execute("UPDATE users SET fissure = 0.1 WHERE fissure IS NULL")
+        else:
+            cursor.execute("UPDATE users SET fissure = 0.1 WHERE fissure IS NULL")
+        conn.commit()
         # Only delete users who left more than 7 days ago - protects against INSERT without in_chat=TRUE
         if "postgres" in scheme:
             cursor.execute("""
@@ -2250,7 +2256,6 @@ def cleanup_left_users():
                 AND created_at < datetime('now', '-7 days')
             """)
         deleted = cursor.rowcount
-        conn.commit()
         cursor.close()
         if deleted:
             top_cache.invalidate_top_cache()
