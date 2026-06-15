@@ -3025,10 +3025,9 @@ def _get_dota_week_top_query(limit):
         total_with_steam = cursor.fetchone()[0]
         logger.info(f"get_dota_week_top: {total_with_steam} users with steam_id")
 
-        # Если есть пользователи с steam_id, выполняем запрос
+# Если есть пользователи с steam_id, выполняем запрос
         if total_with_steam > 0:
-            # Формула сортировки: score = 2 * week_wins - week_games (победы - поражения)
-            # Игроки без игр за неделю (week_games = 0) идут в конец
+            # Формула сортировки: сначала с играми за неделю, потом без (по рангу)
             if "postgres" in scheme:
                 cursor.execute("""
                     WITH wr_calc AS (
@@ -3039,14 +3038,15 @@ def _get_dota_week_top_query(limit):
                                     ELSE 0 END as winrate,
                                COALESCE(week_current_streak, 0) as week_current_streak
                         FROM users
-                        WHERE steam_id IS NOT NULL AND week_games > 0
+                        WHERE steam_id IS NOT NULL
                     )
 SELECT telegram_id, username, steam_nickname, mmr,
-                             COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
-                             winrate, week_current_streak
+                              COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
+                              winrate, week_current_streak
                  FROM wr_calc
                  ORDER BY 
                      CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
+                     CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
                      (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
                      week_games DESC,
                      mmr DESC,
@@ -3076,7 +3076,7 @@ SELECT telegram_id, username, steam_nickname, mmr,
 
             return result
         else:
-            # Формула сортировки: score = 2 * week_wins - week_games
+            # Формула сортировки: сначала с играми за неделю, потом без (по рангу)
             cursor.execute("""
                 WITH wr_calc AS (
                     SELECT telegram_id, username, steam_nickname, mmr, 
@@ -3086,7 +3086,7 @@ SELECT telegram_id, username, steam_nickname, mmr,
                                 ELSE 0 END as winrate,
                           COALESCE(week_current_streak, 0) as week_current_streak
                     FROM users
-                    WHERE steam_id IS NOT NULL AND week_games > 0
+                    WHERE steam_id IS NOT NULL
                 )
 SELECT telegram_id, username, steam_nickname, mmr,
                           COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
@@ -3094,6 +3094,7 @@ SELECT telegram_id, username, steam_nickname, mmr,
                FROM wr_calc
                ORDER BY 
                    CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
+                   CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
                    (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
                    week_games DESC,
                    mmr DESC,
