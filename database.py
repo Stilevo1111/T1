@@ -2145,30 +2145,13 @@ current_win_streak = user.get('current_win_streak', 0) + 1 if win else 0
                 last_activity = CURRENT_TIMESTAMP,
                 current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
                 current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                current_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
+                current_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
                 best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END),
                 best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END),
                 last_message_id = COALESCE(?, last_message_id)
                 WHERE telegram_id=?
-            """
-            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, last_message_id, telegram_id))
-        else:
-            query = """
-                UPDATE users SET fissure=?, last_fissure=?, 
-                total_growth = total_growth + ?,
-                total_rolls = total_rolls + 1,
-                weekly_rolls = weekly_rolls + 1,
-                weekly_growth = weekly_growth + ?,
-                last_activity = CURRENT_TIMESTAMP,
-                current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
-                current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                current_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
-                best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END),
-                best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END),
-                last_message_id = COALESCE(?, last_message_id)
-                WHERE telegram_id=?
-            """
-            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, win, win, lose, last_message_id, telegram_id))
+             """
+             db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, last_message_id, telegram_id))
         logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
 
         # Инвалидируем кеш конкретного пользователя - чтобы другие контейнеры получили свежие данные
@@ -3136,7 +3119,7 @@ SELECT telegram_id, username, steam_nickname, mmr,
             release_connection(conn)
             # Сохраняем в кеш
             get_dota_week_top_from_db._cache = (result, time.time())
-
+            release_connection(conn)
             return result
     except Exception as e:
         logger.error(f"Error get_dota_week_top: {e}")

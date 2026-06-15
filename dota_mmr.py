@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import io
 import logging
 import re
@@ -16,6 +17,10 @@ from database import get_user, update_user_fields_batch
 _heroes_cache = None
 _heroes_cache_time = 0
 _HEROES_CACHE_TTL = 86400  # 24 hours
+
+# Heroes image cache
+_heroes_image_cache = {}
+_heroes_image_cache_ttl = 86400  # 24 hours
 
 async def get_hero_list():
     """Get list of heroes from OpenDota API with caching."""
@@ -105,8 +110,9 @@ def _circuit_breaker_can_execute() -> bool:
 
     if cb["state"] == "HALF_OPEN":
         return True
-
-    return True
+    
+    # Unknown state, treat as closed for safety
+    return False
 
 def _circuit_breaker_record_success():
     """Записать успешный запрос"""
@@ -216,63 +222,6 @@ def _clear_cache():
     _cache = {}
 
 
-async def _api_get_async(url: str, params: dict = None, max_retries: int = 2, timeout: int = 8) -> dict:
-    """Async version of API calls using aiohttp"""
-    if not _circuit_breaker_can_execute():
-        logger.warning("Circuit breaker: skipping request, API unavailable")
-        return None
-
-    try:
-        _check_rate_limit()
-    except RateLimitWaitError as e:
-        logger.warning(f"Rate limited, waiting {e.wait_seconds:.1f}s...")
-        await asyncio.sleep(e.wait_seconds)
-        _api_rate_limit["window_start"] = time.time()
-        _api_rate_limit["requests_count"] = 0
-
-    for attempt in range(max_retries + 1):
-        current_timeout = timeout if attempt == 0 else timeout + 5
-        try:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=current_timeout)) as resp:
-                if resp.status == 200:
-                    _circuit_breaker_record_success()
-                    return await resp.json()
-                elif resp.status == 429:
-                    wait_time = 5 * (attempt + 1)
-                    logger.warning(f"Rate limited by OpenDota API, waiting {wait_time}s...")
-                    set_opendota_rate_limited(60)
-                    _circuit_breaker_record_failure()
-                    await asyncio.sleep(wait_time)
-                    if attempt < max_retries:
-                        continue
-                    return None
-                elif resp.status >= 500:
-                    _circuit_breaker_record_failure()
-                    if attempt < max_retries:
-                        logger.warning(f"Server error {resp.status}, retrying in {attempt + 1}s...")
-                        await asyncio.sleep(attempt + 1)
-                        continue
-                    return None
-                elif resp.status >= 400:
-                    logger.error(f"API error {resp.status} for URL: {url}")
-                    return None
-                return None
-        except asyncio.TimeoutError as e:
-            if attempt < max_retries:
-                logger.warning(f"API request timeout ({current_timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
-                continue
-            else:
-                logger.error(f"API request timeout ({current_timeout}s) after {max_retries + 1} attempts: {e}")
-                return None
-        except Exception as e:
-            logger.error(f"API request error: {e}", exc_info=True)
-            return None
-
-    return None
-
-
 def _api_get(url: str, params: dict = None, max_retries: int = 2, timeout: int = 8) -> dict:
     """Универсальная функция для API-запросов с обработкой ошибок, кешем и повторными попытками"""
     cached = _get_cached(url)
@@ -346,15 +295,14 @@ async def _check_rate_limit_async():
         wait_time = API_RATE_WINDOW - (now - _async_rate_limit["window_start"])
         if wait_time > 0:
             await asyncio.sleep(wait_time)
-            _async_rate_limit["window_start"] = time.time()
-            _async_rate_limit["requests_count"] = 0
+            # Don't reset window here - let it continue naturally after sleep
 
     time_since_last = now - _async_rate_limit["last_request"]
     if time_since_last < API_MIN_INTERVAL:
         await asyncio.sleep(API_MIN_INTERVAL - time_since_last)
 
     _async_rate_limit["requests_count"] += 1
-    _async_rate_limit["last_request"] = time.time()
+    _async_rate_limit["last_request"] = now
 
 
 async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15, max_retries: int = 3) -> dict:
@@ -777,31 +725,16 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
         return None
 
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-_heroes_image_cache = {}
-_heroes_image_cache_ttl = 86400
-
-
-def _fetch_hero_portrait(hero_short: str) -> tuple[str, bytes | None]:
-    """Загрузить портрет героя (для параллельной загрузки)"""
-    data = get_hero_portrait_cached(hero_short) or get_hero_icon_cached(hero_short)
-    return hero_short, data
-
-
 def generate_heroes_image(top_heroes: list) -> bytes | None:
     """Сгенерировать картинку с иконками топ-героев: центральный крупнее, к краям меньше."""
     global _heroes_image_cache
 
     try:
-        import time
         cache_key = ",".join(str(h.get("id", "")) for h in sorted(top_heroes, key=lambda x: x.get("id", "")))
         if cache_key in _heroes_image_cache:
             cached_data, cached_time = _heroes_image_cache[cache_key]
             if time.time() - cached_time < _heroes_image_cache_ttl:
                 return cached_data
-
-        import io
 
         from PIL import Image, ImageDraw
 
@@ -839,6 +772,7 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
 
         available = target_width - 2 * padding
         total_w = sum(sizes) + gap * max(0, n - 1)
+
         if total_w > available > 0:
             scale = available / total_w
             sizes = [max(88, int(round(s * scale))) for s in sizes]
@@ -852,15 +786,11 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
         hero_short_names = [h.get("short_name", "") for h in top_heroes]
         icon_data_map = {}
 
-        with ThreadPoolExecutor(max_workers=min(5, n)) as executor:
-            futures = {executor.submit(_fetch_hero_portrait, sh): sh for sh in hero_short_names if sh}
-            for future in as_completed(futures):
-                try:
-                    sh, data = future.result()
-                    if data:
-                        icon_data_map[sh] = data
-                except Exception:
-                    pass
+        for sh in hero_short_names:
+            if sh:
+                data = get_hero_portrait_cached(sh) or get_hero_icon_cached(sh)
+                if data:
+                    icon_data_map[sh] = data
 
         x = start_x
         for i, hero in enumerate(top_heroes):
@@ -909,6 +839,7 @@ def account_id_to_steam64(account_id: int) -> int:
     return account_id + STEAM_OFFSET
 
 
+@functools.lru_cache(maxsize=256)
 def parse_steam_identifier(identifier: str) -> int:
     """
     Возвращает SteamID64 из:
