@@ -501,10 +501,16 @@ def get_pg_connection():
             if _pg_pool is None:
                 try:
                     from psycopg2 import pool
+                    # Ensure SSL for Neon PostgreSQL
+                    import urllib.parse as urlparse
+                    parsed = urlparse.urlparse(DATABASE_URL)
+                    dsn = DATABASE_URL
+                    if "postgres" in parsed.scheme and "sslmode" not in dsn:
+                        dsn = f"{dsn}?sslmode=require&connect_timeout=10"
                     _pg_pool = pool.ThreadedConnectionPool(
                         minconn=1,
                         maxconn=5,
-                        dsn=DATABASE_URL
+                        dsn=dsn
                     )
                 except Exception as e:
                     logger.warning(f"Failed to create psycopg2 pool: {e}")
@@ -512,7 +518,21 @@ def get_pg_connection():
     if _pg_pool is None:
         # Fallback to direct connection
         return get_connection()
-    return _pg_pool.getconn()
+    try:
+        conn = _pg_pool.getconn()
+        # Test connection is alive
+        if conn and not conn.closed:
+            return conn
+    except Exception as e:
+        logger.warning(f"Pool connection closed, recreating: {e}")
+    # Recreate pool
+    try:
+        from psycopg2 import pool
+        _pg_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=5, dsn=DATABASE_URL)
+        return _pg_pool.getconn()
+    except Exception as e:
+        logger.warning(f"Failed to get pg connection: {e}")
+    return get_connection()
 
 def release_pg_connection(conn):
     """Release a PostgreSQL connection back to the pool"""
