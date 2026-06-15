@@ -144,6 +144,10 @@ _cache = {}
 CACHE_TTL = 300  # 5 минут
 CACHE_MAX_SIZE = 100  # максимальное количество записей в кеше
 
+# Кеш матчей пользователей (30 минут - экономим API)
+_user_matches_cache = {}
+USER_MATCHES_CACHE_TTL = 1800  # 30 минут
+
 
 
 
@@ -950,13 +954,23 @@ def search_player(nickname: str) -> dict:
 
 def get_recent_matches(steam_id: int, limit: int = 5) -> list:
     """Получить последние матчи игрока"""
+    # Проверяем кеш матчей пользователя
+    if steam_id in _user_matches_cache:
+        cached_data, cached_time = _user_matches_cache[steam_id]
+        if time.time() - cached_time < USER_MATCHES_CACHE_TTL:
+            return cached_data
+    
     try:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
 
-        # Сортируем по start_time descending (новые первыми)
         matches = _api_get(url, {"limit": limit, "sort": "-start_time"})
-        return matches or []
+        matches = matches or []
+        
+        # Сохраняем в кеш матчей пользователя
+        _user_matches_cache[steam_id] = (matches, time.time())
+        
+        return matches
     except Exception as e:
         logger.error(f"get_recent_matches error: {e}", exc_info=True)
         return []
@@ -966,12 +980,24 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
     """Асинхронно получить последние матчи игрока"""
     if steam_id is None:
         return []
+    
+    # Проверяем кеш матчей пользователя
+    if steam_id in _user_matches_cache:
+        cached_data, cached_time = _user_matches_cache[steam_id]
+        if time.time() - cached_time < USER_MATCHES_CACHE_TTL:
+            return cached_data
+    
     try:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
 
         matches = await _api_get_async(url, {"limit": limit, "sort": "-start_time"})
-        return matches or []
+        matches = matches or []
+        
+        # Сохраняем в кеш матчей пользователя
+        _user_matches_cache[steam_id] = (matches, time.time())
+        
+        return matches
     except Exception as e:
         logger.error(f"get_recent_matches_async error: {e}", exc_info=True)
         return []
