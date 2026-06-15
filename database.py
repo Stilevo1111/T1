@@ -2816,7 +2816,7 @@ def get_dota_mmr_top(limit=10):
                         mmr DESC,
                         wins DESC
                  LIMIT %s
-            """, (limit,))
+                """, (limit,))
                 users = cursor.fetchall()
                 cursor.close()
                 result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
@@ -3061,6 +3061,31 @@ def _get_dota_week_top_query(limit):
                         rank_tier DESC NULLS LAST
                     LIMIT %s
                 """, (limit,))
+            else:
+                cursor.execute("""
+                    WITH wr_calc AS (
+                        SELECT telegram_id, username, steam_nickname, mmr, 
+                               week_games, week_wins, rank_tier, steam_id, avatar,
+                               CASE WHEN week_games > 0 
+                                    THEN ROUND(week_wins * 100.0 / week_games, 1) 
+                                    ELSE 0 END as winrate,
+                              COALESCE(week_current_streak, 0) as week_current_streak
+                        FROM users
+                        WHERE steam_id IS NOT NULL
+                    )
+                    SELECT telegram_id, username, steam_nickname, mmr,
+                              COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
+                              winrate, week_current_streak
+                    FROM wr_calc
+                    ORDER BY 
+                        CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
+                        CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
+                        (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
+                        week_games DESC,
+                        mmr DESC,
+                        rank_tier DESC NULLS LAST
+                    LIMIT ?
+                """, (limit,))
             users = cursor.fetchall()
             cursor.close()
             logger.info(f"get_dota_week_top: returning {len(users)} users from {scheme}")
@@ -3084,60 +3109,7 @@ def _get_dota_week_top_query(limit):
 
             return result
         else:
-            # Формула сортировки: сначала с играми за неделю, потом без (по рангу)
-            cursor.execute("""
-                WITH wr_calc AS (
-                    SELECT telegram_id, username, steam_nickname, mmr, 
-                           week_games, week_wins, rank_tier, steam_id, avatar,
-                           CASE WHEN week_games > 0 
-                                THEN ROUND(week_wins * 100.0 / week_games, 1) 
-                                ELSE 0 END as winrate,
-                          COALESCE(week_current_streak, 0) as week_current_streak
-                    FROM users
-                    WHERE steam_id IS NOT NULL
-                )
-                SELECT telegram_id, username, steam_nickname, mmr,
-                          COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
-                          winrate, week_current_streak
-                FROM wr_calc
-                ORDER BY 
-                    CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
-                    CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
-                    (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
-                    week_games DESC,
-                    mmr DESC,
-                    rank_tier DESC NULLS LAST
-                LIMIT ?
-            """, (limit,))
-            users = cursor.fetchall()
-            logger.info(f"get_dota_week_top: sqlite users={users}")
-
-            result = []
-            for u in users:
-                result.append({
-                    'telegram_id': u[0],
-                    'username': u[1],
-                    'steam_nickname': u[2],
-                    'mmr': u[3],
-                    'week_games': u[4],
-                    'week_wins': u[5],
-                    'rank_tier': u[6] if u[6] else u[3] // 73,
-                    'steam_id': u[7],
-                    'avatar': u[8],
-                    'winrate': u[9],
-                    'week_current_streak': u[10] if len(u) > 10 else 0
-                })
-
-            logger.info(f"get_dota_week_top: returning {len(result)} users")
-            for r in result:
-                logger.info(f"  - {r['steam_nickname']}: {r['week_wins']}W / {r['week_games']}G")
-
-            cursor.close()
-            release_connection(conn)
-            # Сохраняем в кеш
-            get_dota_week_top_from_db._cache = (result, time.time())
-            release_connection(conn)
-            return result
+            return []
     except Exception as e:
         logger.error(f"Error get_dota_week_top: {e}")
         release_connection(conn)
