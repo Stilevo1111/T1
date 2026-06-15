@@ -1275,7 +1275,8 @@ class Database:
                         last_fissure = EXCLUDED.last_fissure,
                         last_message_id = EXCLUDED.last_message_id,
                         total_growth = EXCLUDED.total_growth,
-                        total_rolls = EXCLUDED.total_rolls
+                        total_rolls = EXCLUDED.total_rolls,
+                        in_chat = TRUE
                 '''
                 result = self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0), fetch="one")
                 return result["id"] if result else telegram_id
@@ -1290,7 +1291,8 @@ class Database:
                         last_fissure = excluded.last_fissure,
                         last_message_id = excluded.last_message_id,
                         total_growth = excluded.total_growth,
-                        total_rolls = excluded.total_rolls
+                        total_rolls = excluded.total_rolls,
+                        in_chat = 1
                 '''
                 self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0))
                 return None
