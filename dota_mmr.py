@@ -1177,10 +1177,12 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         logger.info(f"Registering Steam for user {telegram_id} with identifier: {identifier}")
 
         # Создаем пользователя если не существует
-        from database import get_user
+        from database import get_user, add_user
         user = get_user(telegram_id)
         if not user:
-            return {"success": False, "message": "❌ Пользователь не найден. Сначала отправьте /start или /fissure"}
+            logger.info(f"User not found in register_steam, creating new user: {telegram_id}")
+            add_user(telegram_id, "", "", "")
+            user = get_user(telegram_id)
 
         steam_id = parse_steam_identifier(identifier)
         logger.info(f"Parsed steam_id: {steam_id}")
