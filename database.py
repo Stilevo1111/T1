@@ -628,12 +628,6 @@ def get_db_type():
     else:
         logger.warning(f"Unknown DB scheme: {scheme}, defaulting to SQLite")
         return "sqlite"
-    url = urlparse.urlparse(DATABASE_URL)
-    scheme = url.scheme
-    if scheme is None:
-        return "sqlite"
-    scheme_str = str(scheme)
-    return "postgresql" if "postgres" in scheme_str else "sqlite"
 
 
 def _postgres_connect_kwargs():
@@ -641,6 +635,7 @@ def _postgres_connect_kwargs():
     url = urlparse.urlparse(DATABASE_URL)
     query = urlparse.parse_qs(url.query, keep_blank_values=True)
     query.pop("pgbouncer", None)
+    query.pop("channel_binding", None)  # Remove channel_binding - not supported by psycopg2
 
     sslmode = (query.pop("sslmode", None) or ["require"])[0]
     kwargs = {
