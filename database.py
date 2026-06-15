@@ -2002,6 +2002,7 @@ def get_user(telegram_id, username=None):
         cached_user.setdefault('best_streak', 0)
         if cached_user.get('fissure') is None:
             cached_user['fissure'] = 0.1
+            user_cache.set(telegram_id, cached_user)
         return cached_user
 
     # Нет в кеше - читаем из БД
@@ -2159,6 +2160,12 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
             user['weekly_rolls'] = user.get('weekly_rolls', 0) + 1
             user['weekly_growth'] = user.get('weekly_growth', 0) + max(0, growth)
             user_cache.set(telegram_id, user)
+        else:
+            # Cache miss - fetch updated user from DB using same connection
+            db_user = db.get_user(telegram_id)
+            if db_user:
+                db_user.setdefault('fissure', 0.1)
+                user_cache.set(telegram_id, db_user)
 
         logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
 
