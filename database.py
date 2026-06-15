@@ -520,15 +520,28 @@ def get_pg_connection():
         return get_connection()
     try:
         conn = _pg_pool.getconn()
-        # Test connection is alive
+        # Test connection is alive - conn.closed is 0 for open connections
         if conn and not conn.closed:
             return conn
+        else:
+            # Connection is closed, close it and reset pool
+            try:
+                conn.close()
+            except Exception:
+                pass
+            _reset_persistent_pg_conn("closed connection returned from pool")
     except Exception as e:
         logger.warning(f"Pool connection closed, recreating: {e}")
-    # Recreate pool
+        _reset_persistent_pg_conn(str(e))
+    # Recreate pool with proper SSL settings
     try:
         from psycopg2 import pool
-        _pg_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=5, dsn=DATABASE_URL)
+        import urllib.parse as urlparse
+        parsed = urlparse.urlparse(DATABASE_URL)
+        dsn = DATABASE_URL
+        if "postgres" in parsed.scheme and "sslmode" not in dsn:
+            dsn = f"{dsn}?sslmode=require&connect_timeout=10"
+        _pg_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=5, dsn=dsn)
         return _pg_pool.getconn()
     except Exception as e:
         logger.warning(f"Failed to get pg connection: {e}")
@@ -584,9 +597,16 @@ def _ensure_pg_columns(cursor):
 
 
 def _reset_persistent_pg_conn(reason: str = ""):
-    """No-op: persistent connection removed, all connections are short-lived via pool."""
+    """Reset the PostgreSQL connection pool on connection errors."""
+    global _pg_pool
     if reason:
-        logger.info(f"Connection reset (no-op, pool-based): {reason}")
+        logger.warning(f"Resetting PostgreSQL pool: {reason}")
+    if _pg_pool is not None:
+        try:
+            _pg_pool.closeall()
+        except Exception as e:
+            logger.debug(f"Error closing pool: {e}")
+        _pg_pool = None
 
 
 def get_db_type():
@@ -2407,32 +2427,40 @@ _NUMERIC_USER_FIELDS = frozenset([
 
 def _save_user_to_db_immediately(telegram_id, user_data):
     """Сохранение пользователя в БД сразу (для важных полей)"""
-    try:
-        db = Database()
-        scheme = get_db_type()
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            db = Database()
+            scheme = get_db_type()
 
-        if "postgres" in scheme:
-            placeholders = "%s"
-        else:
-            placeholders = "?"
+            if "postgres" in scheme:
+                placeholders = "%s"
+            else:
+                placeholders = "?"
 
-        # Build query using whitelisted field names (safe from SQL injection)
-        field_names = list(_ALLOWED_USER_FIELDS)
-        set_clauses = [f"{name} = {placeholders}" for name in field_names]
-        query = f"""
-            UPDATE users SET 
-                {', '.join(set_clauses)}
-            WHERE telegram_id = {placeholders}
-        """
+            # Build query using whitelisted field names (safe from SQL injection)
+            field_names = list(_ALLOWED_USER_FIELDS)
+            set_clauses = [f"{name} = {placeholders}" for name in field_names]
+            query = f"""
+                UPDATE users SET 
+                    {', '.join(set_clauses)}
+                WHERE telegram_id = {placeholders}
+            """
 
-        params = tuple(
-            user_data.get(name, 0 if name in _NUMERIC_USER_FIELDS else None)
-            for name in field_names
-        ) + (telegram_id,)
+            params = tuple(
+                user_data.get(name, 0 if name in _NUMERIC_USER_FIELDS else None)
+                for name in field_names
+            ) + (telegram_id,)
 
-        db.execute_query(query, params)
-    except Exception as e:
-        logger.error(f"Error saving user {telegram_id} to DB immediately: {e}", exc_info=True)
+            db.execute_query(query, params)
+            return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"_save_user_to_db_immediately attempt {attempt + 1} failed, retrying...: {e}")
+                time.sleep(0.1 * (attempt + 1))
+            else:
+                logger.error(f"Error saving user {telegram_id} to DB immediately after {max_retries} attempts: {e}", exc_info=True)
+                raise
 
 
 def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
