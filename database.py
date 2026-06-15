@@ -2099,7 +2099,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
 
         user_cache.set(telegram_id, user)
 
-         # Сразу сохраняем в БД
+        # Сразу сохраняем в БД
         db = Database()
         scheme = get_db_type()
         if "postgres" in scheme:
@@ -2143,7 +2143,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
         # Сбрасываем кеш топа при изменении fissure
         top_cache.invalidate_top_cache()
     else:
-        # Пользователя нет - создаем нового
+        # Пользователь не найден - создаем нового
         logger.info(f"update_fissure: пользователь не найден, создаём нового для telegram_id={telegram_id}")
         db = Database()
         db.add_user(telegram_id, "", "", "")
@@ -2159,6 +2159,8 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
             user['current_streak'] = 1 if growth > 0 else 0
             user['best_streak'] = 1 if growth > 0 else 0
             user_cache.set(telegram_id, user)
+            # Сразу сохраняем в БД
+            _save_user_to_db_immediately(telegram_id, user)
             # Сбрасываем кеш топа при создании нового пользователя
             top_cache.invalidate_top_cache()
 
