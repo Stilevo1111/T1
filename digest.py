@@ -196,7 +196,7 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
             bottom_by_net = min(
                 valid_players,
                 key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), -p.get('week_games', 0))
-            )
+)
 
             top_name = make_clickable(top_by_net.get('steam_nickname') or top_by_net.get('username'), top_by_net.get('telegram_id'))
             bottom_name = make_clickable(bottom_by_net.get('steam_nickname') or bottom_by_net.get('username'), bottom_by_net.get('telegram_id'))
@@ -209,11 +209,13 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
             bottom_wins = bottom_by_net.get('week_wins', 0)
             bottom_wr = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
 
-            parts.append(f"🔺{top_name} {top_wins}W/{top_games-top_wins}L ≈{top_wr}%\n")
-            parts.append(f"🔻{bottom_name} {bottom_wins}W/{bottom_games-bottom_wins}L ≈{bottom_wr}%\n")
+            parts.append(f"📈{top_name} {top_wins}W/{top_games-top_wins}L ≈{top_wr}%\n")
+            parts.append(f"📉{bottom_name} {bottom_wins}W/{bottom_games-bottom_wins}L ≈{bottom_wr}%\n")
         else:
-            parts.append("🔺—\n")
-            parts.append("🔻—\n")
+            parts.append("📈—\n")
+            parts.append("📉—\n")
+
+        parts.append("\n")
 
     # Fissure digest
     stats = _digest_state_container.get_digest_data()
