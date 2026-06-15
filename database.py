@@ -108,6 +108,7 @@ if not DATABASE_URL:
     print(f"💡 Используется: {DATABASE_URL}")
 else:
     print(f"Using DATABASE_URL: {_mask_db_url(DATABASE_URL)}")
+    print(f"DB type: {get_db_type()}")
 
 
 class UserCache:
@@ -615,8 +616,17 @@ def _reset_persistent_pg_conn(reason: str = ""):
 
 
 def get_db_type():
-    """Получить тип базы данных"""
     if DATABASE_URL is None:
+        logger.warning("DATABASE_URL is None, using SQLite")
+        return "sqlite"
+    url = urlparse.urlparse(DATABASE_URL)
+    scheme = url.scheme.lower()
+    if scheme in ("postgresql", "postgres", "pg"):
+        return "postgresql"
+    elif scheme == "sqlite":
+        return "sqlite"
+    else:
+        logger.warning(f"Unknown DB scheme: {scheme}, defaulting to SQLite")
         return "sqlite"
     url = urlparse.urlparse(DATABASE_URL)
     scheme = url.scheme
@@ -3040,19 +3050,19 @@ def _get_dota_week_top_query(limit):
                         FROM users
                         WHERE steam_id IS NOT NULL
                     )
-SELECT telegram_id, username, steam_nickname, mmr,
-                              COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
-                              winrate, week_current_streak
-                 FROM wr_calc
-                 ORDER BY 
-                     CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
-                     CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
-                     (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
-                     week_games DESC,
-                     mmr DESC,
-                     rank_tier DESC NULLS LAST
-               LIMIT %s
-            """, (limit,))
+                    SELECT telegram_id, username, steam_nickname, mmr,
+                               COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
+                               winrate, week_current_streak
+                    FROM wr_calc
+                    ORDER BY 
+                        CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
+                        CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
+                        (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
+                        week_games DESC,
+                        mmr DESC,
+                        rank_tier DESC NULLS LAST
+                    LIMIT %s
+                """, (limit,))
             users = cursor.fetchall()
             cursor.close()
             logger.info(f"get_dota_week_top: returning {len(users)} users from {scheme}")
@@ -3088,18 +3098,18 @@ SELECT telegram_id, username, steam_nickname, mmr,
                     FROM users
                     WHERE steam_id IS NOT NULL
                 )
-SELECT telegram_id, username, steam_nickname, mmr,
+                SELECT telegram_id, username, steam_nickname, mmr,
                           COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
                           winrate, week_current_streak
-               FROM wr_calc
-               ORDER BY 
-                   CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
-                   CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
-                   (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
-                   week_games DESC,
-                   mmr DESC,
-                   rank_tier DESC NULLS LAST
-               LIMIT ?
+                FROM wr_calc
+                ORDER BY 
+                    CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
+                    CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
+                    (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
+                    week_games DESC,
+                    mmr DESC,
+                    rank_tier DESC NULLS LAST
+                LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
             logger.info(f"get_dota_week_top: sqlite users={users}")
