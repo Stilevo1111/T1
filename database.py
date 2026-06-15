@@ -3023,12 +3023,16 @@ def _get_dota_week_top_query(limit):
         cursor = conn.cursor()
 
         # Сначала проверим, есть ли вообще данные
-        cursor.execute("""
-            SELECT COUNT(*) FROM users
-            WHERE steam_id IS NOT NULL
-        """)
-        total_with_steam = cursor.fetchone()[0]
-        logger.info(f"get_dota_week_top: {total_with_steam} users with steam_id")
+        try:
+            cursor.execute("""
+                SELECT COUNT(*) FROM users
+                WHERE steam_id IS NOT NULL
+            """)
+            total_with_steam = cursor.fetchone()[0]
+            logger.info(f"get_dota_week_top: {total_with_steam} users with steam_id")
+        except Exception as e:
+            logger.error(f"get_dota_week_top: failed to count users: {e}")
+            total_with_steam = 0
 
 # Если есть пользователи с steam_id, выполняем запрос
         if total_with_steam > 0:
