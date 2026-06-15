@@ -1272,12 +1272,8 @@ class Database:
                     DO UPDATE SET 
                         username = EXCLUDED.username,
                         first_name = EXCLUDED.first_name,
-                        fissure = EXCLUDED.fissure,
-                        last_fissure = EXCLUDED.last_fissure,
-                        last_message_id = EXCLUDED.last_message_id,
-                        total_growth = EXCLUDED.total_growth,
-                        total_rolls = EXCLUDED.total_rolls,
-                        in_chat = TRUE
+                        in_chat = TRUE,
+                        last_activity = CURRENT_TIMESTAMP
                 '''
                 result = self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0), fetch="one")
                 return result["id"] if result else telegram_id
@@ -1288,11 +1284,6 @@ class Database:
                     ON CONFLICT(telegram_id) DO UPDATE SET
                         username = excluded.username,
                         first_name = excluded.first_name,
-                        fissure = excluded.fissure,
-                        last_fissure = excluded.last_fissure,
-                        last_message_id = excluded.last_message_id,
-                        total_growth = excluded.total_growth,
-                        total_rolls = excluded.total_rolls,
                         in_chat = 1
                 '''
                 self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0))
@@ -1357,7 +1348,7 @@ class Database:
                         "weekly_top2_count": user.get("weekly_top2_count", 0),
                         "weekly_top3_count": user.get("weekly_top3_count", 0),
                     }
-                    # Обновляем username если передан не-None и отличается
+# Обновляем username если передан не-None и отличается
                     if username is not None and username != result.get('username'):
                         self.execute_query("UPDATE users SET username = %s WHERE telegram_id = %s", (username, telegram_id))
                         result['username'] = username
@@ -1365,11 +1356,8 @@ class Database:
                         logger.info(f"get_user: updated username for {telegram_id} to '{username}'")
                     return result
                 else:
-                    if username:
-                        self.add_user(telegram_id, username, None, None)
-                        return {"telegram_id": telegram_id, "username": username, "fissure": 0.1, "last_fissure": 0, "last_message_id": 0, "total_growth": 0, "total_rolls": 0, "best_streak": 0, "current_streak": 0, "steam_id": None, "steam_nickname": None, "mmr": 0, "rank_tier": 0, "dota_total_games": 0, "dota_wins": 0, "week_games": 0, "week_wins": 0, "week_best_streak": 0, "week_current_streak": 0, "week_updated_at": None, "mmr_updated_at": None, "message_count": 0}
-                    else:
-                        return None
+                    logger.warning(f"DB.get_user: user {telegram_id} not found")
+                    return None
             else:
                 # SQLite - use column names to avoid index mismatches
                 conn = get_connection()
@@ -1392,38 +1380,8 @@ class Database:
                         return result
                     else:
                         cursor.close()
-                        if username:
-                            self.add_user(telegram_id, username, None, None)
-                            logger.warning(f"DB.get_user: created new user {telegram_id} in DB")
-                            return {
-                                "telegram_id": telegram_id,
-                                "username": username,
-                                "fissure": 0.1,
-                                "last_fissure": 0,
-                                "last_message_id": 0,
-                                "total_growth": 0,
-                                "total_rolls": 0,
-                                "best_streak": 0,
-                                "current_streak": 0,
-                                "steam_id": None,
-                                "steam_nickname": None,
-                                "mmr": 0,
-                                "rank_tier": 0,
-                                "dota_total_games": 0,
-                                "dota_wins": 0,
-                                "week_games": 0,
-                                "week_wins": 0,
-                                "week_best_streak": 0,
-                                "week_current_streak": 0,
-                                "week_updated_at": None,
-                                "mmr_updated_at": None,
-                                "analytics_cache": None,
-                                "analytics_updated_at": None,
-                                "message_count": 0
-                            }
-                        else:
-                            logger.warning(f"DB.get_user: user {telegram_id} not found")
-                            return None
+                        logger.warning(f"DB.get_user: user {telegram_id} not found")
+                        return None
                 finally:
                     release_connection(conn)
         except Exception as e:
@@ -2239,9 +2197,10 @@ def cleanup_left_users():
         # First, fix any NULL fissure values
         if "postgres" in scheme:
             cursor.execute("UPDATE users SET fissure = 0.1 WHERE fissure IS NULL")
+            conn.commit()
         else:
             cursor.execute("UPDATE users SET fissure = 0.1 WHERE fissure IS NULL")
-        conn.commit()
+            conn.commit()
         # Only delete users who left more than 7 days ago - protects against INSERT without in_chat=TRUE
         if "postgres" in scheme:
             cursor.execute("""
@@ -2256,6 +2215,7 @@ def cleanup_left_users():
                 AND created_at < datetime('now', '-7 days')
             """)
         deleted = cursor.rowcount
+        conn.commit()
         cursor.close()
         if deleted:
             top_cache.invalidate_top_cache()
