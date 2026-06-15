@@ -279,9 +279,6 @@ async def claim_or_check_digest_leader():
     now = time.time()
     LEADER_TIMEOUT = 60
 
-    current_leader = None
-    last_seen = 0.0
-
     from database import get_config, set_config
 
     try:
@@ -289,32 +286,23 @@ async def claim_or_check_digest_leader():
         last_seen_str = get_config('digest_leader_last_seen')
         last_seen = float(last_seen_str) if last_seen_str else 0
     except Exception:
-        pass
+        current_leader = None
+        last_seen = 0
 
     is_leader = False
 
     if current_leader == instance_id:
         is_leader = True
     elif not current_leader or (now - last_seen > LEADER_TIMEOUT):
-        try:
-            current = get_config('digest_leader_id')
-            if not current or (now - float(get_config('digest_leader_last_seen', '0')) > LEADER_TIMEOUT):
-                set_config('digest_leader_id', instance_id)
-                set_config('digest_leader_last_seen', str(now))
-                logger.warning(f"digest: ЗАХВАТИЛ ЛИДЕРСТВО (instance={instance_id})")
-                is_leader = True
-            else:
-                logger.info(f"digest: пропуск (лидер = {current}, я = {instance_id})")
-        except Exception as e:
-            logger.error(f"digest: failed to claim leadership: {e}")
+        # Try to claim leadership
+        set_config('digest_leader_id', instance_id)
+        set_config('digest_leader_last_seen', str(now))
+        is_leader = True
+        logger.warning(f"digest: ЗАХВАТИЛ ЛИДЕРСТВО (instance={instance_id})")
     else:
         logger.info(f"digest: пропуск (лидер = {current_leader}, я = {instance_id})")
 
     if is_leader:
-        try:
-            set_config('digest_leader_last_seen', str(now))
-        except Exception:
-            pass
         if int(now) % 300 == 0:
             logger.info(f"digest: active leader = {instance_id}")
 
@@ -333,7 +321,7 @@ def get_digest_data_hash():
             return None
 
         key_data = f"{digest_stats.get('top_growth', '')}{digest_stats.get('top_drop', '')}{digest_stats.get('top_streak', '')}"
-        key_data += f"{dota_stats.get('top_mmr_player', '')}{dota_stats.get('top_mmr', 0)}{dota_stats.get('total_active', 0)}"
+        key_data += f"{dota_stats.get('top_winrate', '')}{dota_stats.get('bottom_winrate', '')}{dota_stats.get('top_streak', '')}"
 
         import hashlib
         return hashlib.md5(key_data.encode()).hexdigest()

@@ -232,7 +232,6 @@ class ManualContext:
         self.manual = True
 
 
-@rate_limit(tokens=1)
 async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
     """Удалить сообщение через delay секунд"""
     if not isinstance(msg_id, int) or msg_id <= 0:
@@ -259,7 +258,6 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
                 logger.warning(f"Failed to delete delayed message {msg_id} in chat {chat_id}: {e}")
 
 
-@rate_limit(tokens=1)
 async def delete_message_job(context):
     """Job для удаления сообщения"""
     bot = context.application.bot

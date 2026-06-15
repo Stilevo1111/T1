@@ -16,6 +16,8 @@
 
 import asyncio
 import logging
+import random
+import time
 from datetime import datetime, timedelta
 
 from telegram import Update
@@ -55,7 +57,6 @@ _gag_auto_release_tasks: dict[int, asyncio.Task] = {}
 
 def _pick_gag_emoji(victim_id: int) -> str:
     """Случайный выбор смайла кляпа."""
-    import random
     return random.choice(_GAG_EMOJIS)
 
 
@@ -84,15 +85,14 @@ def add_fissure(user_id: int, amount_cm: float) -> None:
     Использует БД напрямую (как остальной бот), поэтому **не** делает flush
     кеша — изменения сразу попадают в базу.
     """
-    from database import get_user, update_fissure  # локальный импорт, чтобы не было цикла
+    from database import get_user, update_fissure
 
     user = get_user(user_id)
-    if user is None:       # пользователь ещё не зарегистрирован
+    if user is None:
         return
 
     current = float(user.get("fissure", 0.0))
     new_fissure = max(0.0, current + amount_cm)
-    import time
     update_fissure(user_id, new_fissure, time.time(), 0)
 
 
@@ -311,12 +311,7 @@ async def _gag_timeout_job(
 GAG_FILTER_FLAG = "mute"
 
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Middleware-фильтр: удаляет сообщения от пользователей с активным кляпом.
-    Подключается как отдельный MessageHandler с низким приоритетом.
-    """
-    # Пропускаем сообщения без текста (стикеры, медиа проходят — если нужно
-    # их тоже блокировать, расширьте условия ниже)
+    """Middleware-фильтр: удаляет сообщения от пользователей с активным кляпом."""
     if not update.effective_message:
         return
 
@@ -324,16 +319,23 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if user is None:
         return
 
-    # Администраторы с правом удаления сообщений НЕ страдают от кляпа
+    user_id = user.id
+    if not _is_gagged(user_id):
+        return
+
     if await _can_admin_bypass(context, update):
         return
+
+    try:
+        await update.effective_message.delete()
+    except Exception:
+        logger.debug("Failed to delete gagged message", exc_info=True)
 
 
 async def _can_admin_bypass(
     context: ContextTypes.DEFAULT_TYPE,
     update: Update,
 ) -> bool:
-    """Администраторы могут обходить кляп."""
     """Администраторы могут обходить кляп."""
     try:
         chat_id  = update.effective_chat.id
