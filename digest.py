@@ -700,6 +700,11 @@ async def alternate_digest_job(context):
                         set_config('last_hero_meta_update', int(now))
                         _digest_state_container.set_last_hero_meta_refresh(now)
                         logger.info("Hero meta banner generated for digest")
+                        # Если баннер готов и сообщение существует - нужно создать новое сообщение с фото
+                        if last_message_id:
+                            should_create_new = True
+                            set_config('alternate_digest_message_id', None)
+                            last_message_id = None
                     else:
                         logger.info("Hero meta banner skipped (no data)")
                 except Exception as e:
