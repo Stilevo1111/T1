@@ -121,22 +121,6 @@ class UserCache:
         self._lock = threading.Lock()
         self._steam_index: dict[int, int] = {}  # steam_id -> telegram_id reverse index
 
-    def set(self, telegram_id: int, user_data: dict[str, Any]):
-        with self._lock:
-            if len(self._cache) >= self.MAX_CACHE_SIZE:
-                self._evict_lru()
-            self._cache[telegram_id] = user_data
-            self._dirty[telegram_id] = True
-            # Update steam index
-            steam_id = user_data.get('steam_id')
-            if steam_id and isinstance(steam_id, int):
-                self._steam_index[steam_id] = telegram_id
-            elif telegram_id in self._steam_index.values():
-                for sid, tid in list(self._steam_index.items()):
-                    if tid == telegram_id:
-                        del self._steam_index[sid]
-                        break
-
     def invalidate_user_top_caches(self, telegram_id: int):
         keys_to_remove = []
         with self._lock:
@@ -157,10 +141,19 @@ class UserCache:
             logger.warning(f"UserCache.set: rejecting SteamID64 as telegram_id key={telegram_id}")
             return
         with self._lock:
+            if len(self._cache) >= self.MAX_CACHE_SIZE:
+                self._evict_lru()
             self._cache[telegram_id] = data
-            # Проверяем лимит при каждой записи
-            if len(self._cache) > self.MAX_CACHE_SIZE:
-                self.enforce_limit()
+            self._dirty[telegram_id] = True
+            # Update steam index
+            steam_id = data.get('steam_id')
+            if steam_id and isinstance(steam_id, int):
+                self._steam_index[steam_id] = telegram_id
+            elif telegram_id in self._steam_index.values():
+                for sid, tid in list(self._steam_index.items()):
+                    if tid == telegram_id:
+                        del self._steam_index[sid]
+                        break
 
     def mark_dirty(self, telegram_id):
         """Пометить пользователя как изменённого"""
@@ -209,13 +202,17 @@ class UserCache:
             self._cache.clear()
             self._dirty.clear()
 
+    def _evict_lru(self):
+        """Evict half the cache when limit reached (simple LRU approximation)."""
+        keys_to_remove = list(self._cache.keys())[:len(self._cache) // 2]
+        for key in keys_to_remove:
+            self._cache.pop(key, None)
+            self._dirty.pop(key, None)
+
     def enforce_limit(self):
         with self._lock:
             if len(self._cache) > self.MAX_CACHE_SIZE:
-                keys_to_remove = list(self._cache.keys())[:len(self._cache) // 2]
-                for key in keys_to_remove:
-                    self._cache.pop(key, None)
-                    self._dirty.pop(key, None)  # Используем pop с дефолтом
+                self._evict_lru()
 
 
 # Глобальный экземпляр кеша
@@ -1316,7 +1313,7 @@ class Database:
                     result = {
                         "telegram_id": user["telegram_id"],
                         "username": user["username"],
-                        "fissure": user.get("fissure", 0),
+                        "fissure": user.get("fissure") if user.get("fissure") is not None else 0.1,
                         "last_fissure": user.get("last_fissure"),
                         "last_message_id": user.get("last_message_id"),
                         "total_growth": user.get("total_growth", 0),
@@ -1368,6 +1365,7 @@ class Database:
                     if user_row:
                         columns = [desc[0] for desc in cursor.description]
                         result = dict(zip(columns, user_row))
+                        result["fissure"] = result.get("fissure") if result.get("fissure") is not None else 0.1
                         # Update username if provided and different
                         if username is not None and username != result.get('username'):
                             cursor.execute("UPDATE users SET username = ? WHERE telegram_id = ?", (username, telegram_id))
@@ -1982,14 +1980,13 @@ def get_user(telegram_id, username=None):
     cached_user = user_cache.get(telegram_id)
     if cached_user:
         msg_count = cached_user.get('message_count', 0)
-        logger.info(f"get_user: cache hit for {telegram_id}, message_count={msg_count}")
-        # Ensure required fields exist (they may be missing from cached partial data)
-        if 'fissure' not in cached_user or cached_user.get('fissure') is None:
-            cached_user['fissure'] = 0.1
-            user_cache.set(telegram_id, cached_user)
+        fissure_val = cached_user.get('fissure')
+        logger.info(f"get_user: cache hit for {telegram_id}, fissure={fissure_val}")
         cached_user.setdefault('total_rolls', 0)
         cached_user.setdefault('current_streak', 0)
         cached_user.setdefault('best_streak', 0)
+        if cached_user.get('fissure') is None:
+            cached_user['fissure'] = 0.1
         return cached_user
 
     # Нет в кеше - читаем из БД
@@ -2004,7 +2001,8 @@ def get_user(telegram_id, username=None):
         user.setdefault('weekly_top3_count', 0)
         user.setdefault('analytics_cache', None)
         user.setdefault('analytics_updated_at', None)
-        user.setdefault('fissure', 0.1)
+        if user.get('fissure') is None:
+            user['fissure'] = 0.1
         user_cache.set(telegram_id, user)
     else:
         logger.warning(f"get_user: user {telegram_id} NOT found in cache or DB")
@@ -2108,14 +2106,12 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
         lose = 1 if growth < 0 else 0
 
         # Track separate win and lose streaks
-        current_win_streak = user.get('current_win_streak', 0) + 1 if win else 0
+current_win_streak = user.get('current_win_streak', 0) + 1 if win else 0
         current_lose_streak = user.get('current_lose_streak', 0) + 1 if lose else 0
 
         user['current_win_streak'] = current_win_streak
         user['current_lose_streak'] = current_lose_streak
-        user['current_streak'] = current_win_streak  # Keep for backward compatibility
-        user['best_streak'] = max(user.get('best_streak', 0), current_win_streak)
-        user['best_lose_streak'] = max(user.get('best_lose_streak', 0), current_lose_streak)
+        user['current_streak'] = current_lose_streak if lose else current_win_streak
 
         user_cache.set(telegram_id, user)
 
@@ -2132,13 +2128,30 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
                 last_activity = CURRENT_TIMESTAMP,
                 current_win_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
                 current_lose_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                current_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
+                current_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
                 best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END),
                 best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END),
                 last_message_id = COALESCE(%s, last_message_id)
                 WHERE telegram_id=%s
             """
-            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, win, win, lose, last_message_id, telegram_id))
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, last_message_id, telegram_id))
+        else:
+            query = """
+                UPDATE users SET fissure=?, last_fissure=?, 
+                total_growth = total_growth + ?,
+                total_rolls = total_rolls + 1,
+                weekly_rolls = weekly_rolls + 1,
+                weekly_growth = weekly_growth + ?,
+                last_activity = CURRENT_TIMESTAMP,
+                current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
+                current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
+                current_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
+                best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END),
+                best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END),
+                last_message_id = COALESCE(?, last_message_id)
+                WHERE telegram_id=?
+            """
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, last_message_id, telegram_id))
         else:
             query = """
                 UPDATE users SET fissure=?, last_fissure=?, 
@@ -2413,12 +2426,14 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
 
 # Whitelist of allowed field names for security in _save_user_to_db_immediately
 _ALLOWED_USER_FIELDS = frozenset([
+    'fissure', 'last_fissure', 'total_rolls', 'total_growth', 'current_streak', 'best_streak',
     'steam_id', 'steam_nickname', 'avatar', 'mmr', 'rank_tier',
     'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'dota_total_games',
     'dota_wins', 'last_dota_games', 'last_dota_wins', 'wins', 'losses', 'week_start_date',
     'mmr_last_updated', 'message_count', 'weekly_mvp_count', 'weekly_top2_count', 'weekly_top3_count'
 ])
 _NUMERIC_USER_FIELDS = frozenset([
+    'fissure', 'last_fissure', 'total_rolls', 'total_growth', 'current_streak', 'best_streak',
     'mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'week_current_streak',
     'dota_total_games', 'dota_wins', 'last_dota_games', 'last_dota_wins', 'wins', 'losses',
     'message_count', 'weekly_mvp_count', 'weekly_top2_count', 'weekly_top3_count'
