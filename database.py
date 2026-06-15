@@ -3448,7 +3448,7 @@ def get_all_users_with_steam():
                         week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
                         message_count, avatar, mmr_last_updated
                  FROM users 
-                 WHERE steam_id IS NOT NULL AND in_chat = TRUE
+                 WHERE steam_id IS NOT NULL
             """)
             users = cursor.fetchall()
             cursor.close()
@@ -3470,7 +3470,7 @@ def get_all_users_with_steam():
                         week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
                         message_count, avatar, mmr_last_updated
                  FROM users 
-                 WHERE steam_id IS NOT NULL AND (in_chat = 1 OR in_chat IS NULL)
+                 WHERE steam_id IS NOT NULL
             """)
             users = cursor.fetchall()
             cursor.close()
