@@ -3277,34 +3277,35 @@ def _get_all_users_query(load_all=False, allow_non_steam=False):
 
         users = cursor.fetchall()
         cursor.close()
+        logger.info(f"_get_all_users_query: fetched {len(users)} users")
         return [{
-            "telegram_id": u[0], "username": u[1], "fissure": u[2] if u[2] is not None else 0.1, "last_fissure": u[3],
-            "last_message_id": u[4], "total_growth": u[5], "total_rolls": u[6],
-            "best_streak": u[7], "current_streak": u[8], "steam_id": u[9],
-            "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
-            "dota_total_games": u[13], "dota_wins": u[14], "week_games": u[15],
-            "week_wins": u[16], "week_best_streak": u[17], "week_current_streak": u[18],
-            "last_dota_games": u[19], "last_dota_wins": u[20], "message_count": u[21] if len(u) > 21 else 0,
-            "weekly_mvp_count": u[22] if len(u) > 22 else 0,
-            "weekly_top2_count": u[23] if len(u) > 23 else 0,
-            "weekly_top3_count": u[24] if len(u) > 24 else 0,
+            "telegram_id": u[0], "username": u[1], "fissure": float(u[2]) if u[2] is not None else 0.1, "last_fissure": u[3],
+            "last_message_id": u[4], "total_growth": float(u[5]) if u[5] is not None else 0.0, "total_rolls": int(u[6]) if u[6] is not None else 0,
+            "best_streak": int(u[7]) if u[7] is not None else 0, "current_streak": int(u[8]) if u[8] is not None else 0, "steam_id": u[9],
+            "steam_nickname": u[10], "mmr": int(u[11]) if u[11] is not None else 0, "rank_tier": int(u[12]) if u[12] is not None else 0,
+            "dota_total_games": int(u[13]) if u[13] is not None else 0, "dota_wins": int(u[14]) if u[14] is not None else 0, "week_games": int(u[15]) if u[15] is not None else 0,
+            "week_wins": int(u[16]) if u[16] is not None else 0, "week_best_streak": int(u[17]) if u[17] is not None else 0, "week_current_streak": int(u[18]) if u[18] is not None else 0,
+            "last_dota_games": int(u[19]) if u[19] is not None else 0, "last_dota_wins": int(u[20]) if u[20] is not None else 0, "message_count": int(u[21]) if len(u) > 21 and u[21] is not None else 0,
+            "weekly_mvp_count": int(u[22]) if len(u) > 22 and u[22] is not None else 0,
+            "weekly_top2_count": int(u[23]) if len(u) > 23 and u[23] is not None else 0,
+            "weekly_top3_count": int(u[24]) if len(u) > 24 and u[24] is not None else 0,
             "week_start_date": u[25] if len(u) > 25 else None,
             "week_updated_at": u[26] if len(u) > 26 else None,
             "analytics_cache": u[27] if len(u) > 27 else None,
             "analytics_updated_at": u[28] if len(u) > 28 else None,
-            "current_win_streak": u[29] if len(u) > 29 else 0,
-            "current_lose_streak": u[30] if len(u) > 30 else 0,
-            "best_lose_streak": u[31] if len(u) > 31 else 0,
-            "weekly_rolls": u[32] if len(u) > 32 else 0,
-            "weekly_growth": u[33] if len(u) > 33 else 0,
+            "current_win_streak": int(u[29]) if len(u) > 29 and u[29] is not None else 0,
+            "current_lose_streak": int(u[30]) if len(u) > 30 and u[30] is not None else 0,
+            "best_lose_streak": int(u[31]) if len(u) > 31 and u[31] is not None else 0,
+            "weekly_rolls": int(u[32]) if len(u) > 32 and u[32] is not None else 0,
+            "weekly_growth": float(u[33]) if len(u) > 33 and u[33] is not None else 0.0,
             "last_activity": u[34] if len(u) > 34 else None,
             "in_chat": u[35] if len(u) > 35 else False,
-            "digest_fissure": u[36] if len(u) > 36 else 0,
-            "weekly_digest_position": u[37] if len(u) > 37 else 0,
-            "week_best_streak": u[38] if len(u) > 38 else 0,
-            "mmr_last_updated": u[39] if len(u) > 39 else 0,
+            "digest_fissure": float(u[36]) if len(u) > 36 and u[36] is not None else 0,
+            "weekly_digest_position": int(u[37]) if len(u) > 37 and u[37] is not None else 0,
+            "week_best_streak": int(u[38]) if len(u) > 38 and u[38] is not None else 0,
+            "mmr_last_updated": float(u[39]) if len(u) > 39 and u[39] is not None else 0,
             "created_at": u[40] if len(u) > 40 else None,
-            "daily_best_growth": u[41] if len(u) > 41 else 0,
+            "daily_best_growth": float(u[41]) if len(u) > 41 and u[41] is not None else 0,
         } for u in users]
     except Exception as e:
         logger.error(f"Error _get_all_users_query: {e}")
@@ -3320,8 +3321,8 @@ def get_all_users_from_db():
 
 
 def get_all_users():
-    """Получение всех пользователей (для загрузки в кеш при старте)"""
-    return _get_all_users_query(load_all=False, allow_non_steam=True)
+    """Получение всех пользователей (для загрузки в кеш при старте) - ВСЕ пользователи"""
+    return _get_all_users_query(load_all=True, allow_non_steam=True)
 
 
 def reset_weekly_stats():
