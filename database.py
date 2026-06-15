@@ -3039,20 +3039,20 @@ def _get_dota_week_top_query(limit):
                                     ELSE 0 END as winrate,
                                COALESCE(week_current_streak, 0) as week_current_streak
                         FROM users
-                        WHERE steam_id IS NOT NULL
+                        WHERE steam_id IS NOT NULL AND week_games > 0
                     )
 SELECT telegram_id, username, steam_nickname, mmr,
                              COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
                              winrate, week_current_streak
-                     FROM wr_calc
-                     ORDER BY 
-                         CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
-                         (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
-                         week_games DESC,
-                         mmr DESC,
-                         rank_tier DESC NULLS LAST
-                     LIMIT %s
-                """, (limit,))
+                 FROM wr_calc
+                 ORDER BY 
+                     CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
+                     (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
+                     week_games DESC,
+                     mmr DESC,
+                     rank_tier DESC NULLS LAST
+               LIMIT %s
+            """, (limit,))
             users = cursor.fetchall()
             cursor.close()
             logger.info(f"get_dota_week_top: returning {len(users)} users from {scheme}")
@@ -3086,19 +3086,19 @@ SELECT telegram_id, username, steam_nickname, mmr,
                                 ELSE 0 END as winrate,
                           COALESCE(week_current_streak, 0) as week_current_streak
                     FROM users
-                    WHERE steam_id IS NOT NULL
+                    WHERE steam_id IS NOT NULL AND week_games > 0
                 )
 SELECT telegram_id, username, steam_nickname, mmr,
-                        COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
-                        winrate, week_current_streak
-                 FROM wr_calc
-                 ORDER BY 
-                     CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
-                     (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
-                     week_games DESC,
-                     mmr DESC,
-                     COALESCE(rank_tier, 0) DESC
-                 LIMIT ?
+                          COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
+                          winrate, week_current_streak
+               FROM wr_calc
+               ORDER BY 
+                   CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
+                   (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
+                   week_games DESC,
+                   mmr DESC,
+                   rank_tier DESC NULLS LAST
+               LIMIT ?
             """, (limit,))
             users = cursor.fetchall()
             logger.info(f"get_dota_week_top: sqlite users={users}")
