@@ -108,7 +108,6 @@ if not DATABASE_URL:
     print(f"💡 Используется: {DATABASE_URL}")
 else:
     print(f"Using DATABASE_URL: {_mask_db_url(DATABASE_URL)}")
-    print(f"DB type: {get_db_type()}")
 
 
 class UserCache:
