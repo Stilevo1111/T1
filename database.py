@@ -2106,7 +2106,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
         lose = 1 if growth < 0 else 0
 
         # Track separate win and lose streaks
-current_win_streak = user.get('current_win_streak', 0) + 1 if win else 0
+        current_win_streak = user.get('current_win_streak', 0) + 1 if win else 0
         current_lose_streak = user.get('current_lose_streak', 0) + 1 if lose else 0
 
         user['current_win_streak'] = current_win_streak
@@ -2150,8 +2150,8 @@ current_win_streak = user.get('current_win_streak', 0) + 1 if win else 0
                 best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END),
                 last_message_id = COALESCE(?, last_message_id)
                 WHERE telegram_id=?
-             """
-             db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, last_message_id, telegram_id))
+            """
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, last_message_id, telegram_id))
         logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
 
         # Инвалидируем кеш конкретного пользователя - чтобы другие контейнеры получили свежие данные
