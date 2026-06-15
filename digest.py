@@ -465,8 +465,9 @@ async def alternate_digest_job(context):
 
                 # СБРОС: daily_best_growth обнуляем для нового дня
                 logger.info(f"Сбрасываем daily_best_growth до 0 для нового дня")
-                from database import db
-                db.execute_query("UPDATE users SET daily_best_growth = 0 WHERE in_chat = TRUE")
+                from database import Database
+                db_local = Database()
+                db_local.execute_query("UPDATE users SET daily_best_growth = 0 WHERE in_chat = TRUE")
 
             # Проверяем, нужно ли обновить данные из БД (раз в час или они пусты)
             if _digest_state_container.get_digest_data() is None or now - _digest_state_container.get_last_data_refresh() > _data_refresh_interval:
