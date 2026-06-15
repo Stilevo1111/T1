@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Default chances (захардкожены, чтобы не дёргать БД при каждом ролле)
 MULTICAST_DEFAULT_CHANCE = 0.15
-ZEUS_DEFAULT_CHANCE = 0.02
+ZEUS_DEFAULT_CHANCE = 0.03
 
 # Spam protection constants (moved here for now, can be moved later if needed)
 USER_PROCESSING_TTL = 30
