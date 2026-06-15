@@ -3529,6 +3529,14 @@ if __name__ == "__main__":
 
     atexit.register(_emergency_flush)
 
+    # Restore Dota week top cache on startup (for quick top display before MMR job)
+    try:
+        from database import restore_dota_week_top_cache
+        if restore_dota_week_top_cache():
+            logger.info("Restored dota_week_top cache on startup")
+    except Exception as e:
+        logger.debug(f"Could not restore dota_week_top cache: {e}")
+
     try:
         from image_cache import preload_heroes
 
