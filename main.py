@@ -3155,11 +3155,21 @@ async def main():
         init_db()
         migrate_db()
 
-        from database import get_all_users, user_cache, restore_dota_week_top_cache
-        all_users = get_all_users()
-        for u in all_users:
-            user_cache.set(u['telegram_id'], u)
-        logger.info(f"Loaded {len(all_users)} users into cache on startup")
+        from database import get_all_users, user_cache, restore_dota_week_top_cache, logger
+        try:
+            all_users = get_all_users()
+            logger.info(f"get_all_users returned {len(all_users)} users")
+            loaded_count = 0
+            for u in all_users:
+                try:
+                    user_cache.set(u['telegram_id'], u)
+                    loaded_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to cache user {u.get('telegram_id')}: {e}")
+            logger.info(f"Loaded {loaded_count} users into cache on startup")
+        except Exception as e:
+            logger.error(f"Failed to load users into cache: {e}")
+            all_users = []
 
 # Восстанавливаем кеш Dota Week Top из базы (если есть)
         if restore_dota_week_top_cache():
