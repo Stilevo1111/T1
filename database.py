@@ -3076,7 +3076,7 @@ SELECT telegram_id, username, steam_nickname, mmr,
                     'mmr': u[3],
                     'week_games': u[4],
                     'week_wins': u[5],
-                    'rank_tier': u[6],
+                    'rank_tier': u[6] if u[6] else u[3] // 73,
                     'steam_id': u[7],
                     'avatar': u[8],
                     'winrate': u[9],
@@ -3121,7 +3121,7 @@ SELECT telegram_id, username, steam_nickname, mmr,
                     'mmr': u[3],
                     'week_games': u[4],
                     'week_wins': u[5],
-                    'rank_tier': u[6],
+                    'rank_tier': u[6] if u[6] else u[3] // 73,
                     'steam_id': u[7],
                     'avatar': u[8],
                     'winrate': u[9],
@@ -3451,7 +3451,7 @@ def get_all_users_with_steam():
             users = cursor.fetchall()
             cursor.close()
             return [{
-                "telegram_id": u[0], "username": u[1], "fissure": u[2], "last_fissure": u[3],
+                "telegram_id": u[0], "username": u[1], "fissure": u[2] if u[2] is not None else 0.1, "last_fissure": u[3],
                 "last_message_id": u[4], "total_growth": u[5], "total_rolls": u[6],
                 "best_streak": u[7], "current_streak": u[8], "steam_id": u[9],
                 "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
@@ -3473,7 +3473,7 @@ def get_all_users_with_steam():
             users = cursor.fetchall()
             cursor.close()
             return [{
-                "telegram_id": u[0], "username": u[1], "fissure": u[2], "last_fissure": u[3],
+                "telegram_id": u[0], "username": u[1], "fissure": u[2] if u[2] is not None else 0.1, "last_fissure": u[3],
                 "last_message_id": u[4], "total_growth": u[5], "total_rolls": u[6],
                 "best_streak": u[7], "current_streak": u[8], "steam_id": u[9],
                 "steam_nickname": u[10], "mmr": u[11], "rank_tier": u[12],
