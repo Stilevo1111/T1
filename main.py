@@ -2591,16 +2591,13 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     medal = get_emoji_num(i)
 
+                player_id = player.get('telegram_id')
+                clickable_name = make_clickable(username, player_id)
+                lines.append(f"{medal} <b>{clickable_name}</b> - {rank_str}")
                 if week_games > 0:
                     wr = round((week_wins / week_games) * 100, 1)
-                    player_id = player.get('telegram_id')
-                    clickable_name = make_clickable(username, player_id)
-                    lines.append(f"{medal} <b>{clickable_name}</b> - {rank_str}")
                     lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%")
                 else:
-                    player_id = player.get('telegram_id')
-                    clickable_name = make_clickable(username, player_id)
-                    lines.append(f"{medal} <b>{clickable_name}</b> - Не калиброван")
                     lines.append(" └ Нет игр за неделю")
 
 

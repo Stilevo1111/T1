@@ -2782,8 +2782,8 @@ def get_dota_mmr_top(limit=10):
                 result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
                         "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
                         "week_games": u[6], "week_wins": u[7],
-                "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11],
-            "avatar": u[12], "fissure": float(u[13]) if u[13] else 0.0} for u in users]
+                        "rank_tier": u[8] if u[8] else u[3] // 73, "wins": u[9], "losses": u[10], "week_current_streak": u[11],
+                "avatar": u[12], "fissure": float(u[13]) if u[13] else 0.0} for u in users]
 
                 if result:
                     try:
@@ -2815,7 +2815,7 @@ def get_dota_mmr_top(limit=10):
                 result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
                         "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
                         "week_games": u[6], "week_wins": u[7],
-                        "rank_tier": u[8], "wins": u[9], "losses": u[10], "week_current_streak": u[11],
+                        "rank_tier": u[8] if u[8] else u[3] // 73, "wins": u[9], "losses": u[10], "week_current_streak": u[11],
                 "avatar": u[12], "fissure": float(u[13]) if u[13] else 0.0} for u in users]
 
                 if result:
@@ -2908,6 +2908,11 @@ def get_dota_week_top(limit=10, force_refresh=False):
                 week_wins = user.get('week_wins', 0)
                 winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
 
+                rank_tier = user.get('rank_tier')
+                if rank_tier is None or rank_tier == 0:
+                    mmr = user.get('mmr', 0)
+                    rank_tier = mmr // 73
+
                 top_users.append({
                     'telegram_id': telegram_id,
                     'username': user.get('username'),
@@ -2915,7 +2920,7 @@ def get_dota_week_top(limit=10, force_refresh=False):
                     'mmr': user.get('mmr', 0),
                     'week_games': week_games,
                     'week_wins': week_wins,
-                    'rank_tier': user.get('rank_tier', 0),
+                    'rank_tier': rank_tier,
                     'winrate': winrate,
                     'week_current_streak': user.get('week_current_streak', 0)
                 })
