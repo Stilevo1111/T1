@@ -593,6 +593,7 @@ _PG_ENSURE_COLUMNS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_top3_count INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr_last_updated REAL",
+    "UPDATE users SET in_chat = TRUE WHERE in_chat IS NULL OR in_chat = FALSE",
 )
 
 
