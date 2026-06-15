@@ -3227,11 +3227,11 @@ async def main():
         # morning_digest_job удалён
 
         # Обновление MMR каждые 6 часов (адаптивно при большом количестве игроков)
-        job_queue.run_repeating(
-            update_all_mmr_job,
-            interval=datetime.timedelta(hours=6),
-            first=datetime.datetime.now() + datetime.timedelta(minutes=10)
-        )
+job_queue.run_repeating(
+             update_all_mmr_job,
+             interval=datetime.timedelta(hours=3),
+             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
+         )
 
 # Дайджест (Fissure + Dota): раз в 10 минут (актуально + экономия Render)
         job_queue.run_repeating(
