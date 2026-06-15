@@ -2874,9 +2874,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                         updates['username'] = new_telegram_username
                     elif current_username is None and update.effective_user.first_name:
                         updates['username'] = update.effective_user.first_name
-                    # Не сохраняем в БД при каждом сообщении - только в кеш
-                    # БД будет обновлена при завершении работы или ежедневно
-                    update_user_fields_batch(user_id, updates, save_to_db=False)
+                    # Сохраняем в БД сразу чтобы данные не терялись при деплое
+                    update_user_fields_batch(user_id, updates, save_to_db=True)
                     logger.info(f"Cached message_count for {user_id}: {new_count}")
         except Exception as e:
             logger.error(f"Error updating message_count: {e}")
@@ -3226,7 +3225,7 @@ async def main():
         # Обновление MMR каждые 6 часов (адаптивно при большом количестве игроков)
         job_queue.run_repeating(
             update_all_mmr_job,
-            interval=datetime.timedelta(hours=3),
+            interval=datetime.timedelta(hours=2),
             first=datetime.datetime.now() + datetime.timedelta(minutes=10)
         )
 
@@ -3237,18 +3236,7 @@ async def main():
             first=datetime.datetime.now() + datetime.timedelta(seconds=10)
         )
 
-        # Обновление кеша Dota Weekly Top раз в 45 минут
-        # (для alternate_digest + /topmmr). Синхронно с MMR обновлением.
-        async def _refresh_dota_week_top_cache(context):
-            """Асинхронная обёртка: тяжёлая синхронная работа уходит в thread."""
-            from database import update_dota_week_top_cache
-            await asyncio.to_thread(update_dota_week_top_cache)
-
-        job_queue.run_repeating(
-            _refresh_dota_week_top_cache,
-            interval=datetime.timedelta(minutes=45),
-            first=datetime.datetime.now() + datetime.timedelta(minutes=1)
-        )
+        # Топ MMR обновляется в update_all_mmr_job после обновления всех игроков
 
         # ✅ Объявление чемпиона недели в воскресенье 23:00 MSK
         job_queue.run_daily(

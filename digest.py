@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import time
@@ -119,6 +120,12 @@ class _DigestState:
 
     def set_is_photo_message(self, value):
         self.state["is_photo_message"] = value
+
+    def get_last_hero_meta_refresh(self):
+        return self.state.get("last_hero_meta_refresh", 0)
+
+    def set_last_hero_meta_refresh(self, value):
+        self.state["last_hero_meta_refresh"] = value
 
     def get_dota_last_text(self):
         return self.state.get("dota_last_text")
@@ -352,6 +359,23 @@ async def alternate_digest_job(context):
     )
     from main import bot_can_delete, is_rate_limited
     try:
+        
+        # === ВОССТАНОВЛЕНИЕ СОСТОЯНИЯ ДАЙДЖЕСТА ПОСЛЕ ДЕПЛОЯ ===
+        saved_last_text = get_config('alternate_digest_last_text')
+        if saved_last_text and _digest_state_container.get_last_text() is None:
+            _digest_state_container.set_last_text(saved_last_text)
+            logger.info(f"alternate_digest_job: restored last_text from DB after deploy")
+
+        saved_digest_data = get_config('digest_fissure_data')
+        if saved_digest_data and _digest_state_container.get_digest_data() is None:
+            try:
+                data = json.loads(saved_digest_data)
+                _digest_state_container.set_digest_data(data)
+                _digest_state_container.set_last_data_refresh(time.time())
+                logger.info("alternate_digest_job: restored fissure digest data from DB")
+            except Exception as e:
+                logger.debug(f"Could not parse saved digest data: {e}")
+
         now = time.time()
 
         # Проверяем глобальный rate limit
@@ -575,6 +599,9 @@ async def alternate_digest_job(context):
                     edited = True
                     _digest_state_container.set_current_type(next_type)
                     _digest_state_container.set_last_text(text)
+                    set_config('alternate_digest_last_text', text)
+                    if _digest_state_container.get_digest_data():
+                        set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
 
                     # Ensure photo state is explicitly recorded via the single source of truth
                     _set_digest_is_photo(is_photo_message)
@@ -646,6 +673,9 @@ async def alternate_digest_job(context):
                     edited = True
                     _digest_state_container.set_current_type(next_type)
                     _digest_state_container.set_last_text(text)
+                    set_config('alternate_digest_last_text', text)
+                    if _digest_state_container.get_digest_data():
+                        set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
                     try:
                         await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
                         logger.info(f"Закреплён дайджест {last_message_id}")
@@ -766,6 +796,9 @@ async def alternate_digest_job(context):
                 set_config('alternate_digest_last_created', str(time.time()))
                 _digest_state_container.set_current_type(next_type)
                 _digest_state_container.set_last_text(text)
+                set_config('alternate_digest_last_text', text)
+                if _digest_state_container.get_digest_data():
+                    set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
                 logger.info(f"alternate_digest_job: saved new message_id = {msg.message_id}")
 
                 # Запускаем быстрый 15-секундный цикл (только в памяти)
