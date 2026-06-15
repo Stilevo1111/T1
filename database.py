@@ -136,6 +136,14 @@ class UserCache:
 
     def set(self, telegram_id, data):
         """Установить данные пользователя в кеш"""
+        # Handle string keys for non-user caches (like 'dota_week_top')
+        if isinstance(telegram_id, str):
+            with self._lock:
+                if len(self._cache) >= self.MAX_CACHE_SIZE:
+                    self._evict_lru()
+                self._cache[telegram_id] = data
+            return
+        
         # Prevent SteamID64 from being used as telegram_id key
         if isinstance(telegram_id, int) and telegram_id > 76561190000000000:
             logger.warning(f"UserCache.set: rejecting SteamID64 as telegram_id key={telegram_id}")
