@@ -2107,32 +2107,13 @@ def get_user_by_steam_id(steam_id: int):
 def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id=None):
     """Обновление fissure + optionally last_message_id in one query"""
     logger.info(f"update_fissure called: telegram_id={telegram_id}, fissure={fissure}, last_fissure={last_fissure}, growth={growth}")
-    user = get_user(telegram_id)
 
-    if user:
-        user['fissure'] = fissure
-        user['last_fissure'] = last_fissure
-        user['total_growth'] = user.get('total_growth', 0) + growth
-        user['total_rolls'] = user.get('total_rolls', 0) + 1
-        user['weekly_rolls'] = user.get('weekly_rolls', 0) + 1
-        user['weekly_growth'] = user.get('weekly_growth', 0) + max(0, growth)
-
+    try:
+        db = Database()
+        scheme = get_db_type()
         win = 1 if growth > 0 else 0
         lose = 1 if growth < 0 else 0
 
-        # Track separate win and lose streaks
-        current_win_streak = user.get('current_win_streak', 0) + 1 if win else 0
-        current_lose_streak = user.get('current_lose_streak', 0) + 1 if lose else 0
-
-        user['current_win_streak'] = current_win_streak
-        user['current_lose_streak'] = current_lose_streak
-        user['current_streak'] = current_lose_streak if lose else current_win_streak
-
-        user_cache.set(telegram_id, user)
-
-        # Сразу сохраняем в БД
-        db = Database()
-        scheme = get_db_type()
         if "postgres" in scheme:
             query = """
                 UPDATE users SET fissure=%s, last_fissure=%s, 
@@ -2167,33 +2148,24 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
                 WHERE telegram_id=?
             """
             db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, last_message_id, telegram_id))
-        logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
 
-        # Инвалидируем кеш конкретного пользователя - чтобы другие контейнеры получили свежие данные
-        user_cache.delete(telegram_id)
-        # Сбрасываем кеш топа при изменении fissure
-        top_cache.invalidate_top_cache()
-    else:
-        # Пользователь не найден - создаем нового
-        logger.info(f"update_fissure: пользователь не найден, создаём нового для telegram_id={telegram_id}")
-        db = Database()
-        db.add_user(telegram_id, "", "", "")
-        # Теперь пробуем снова
-        user = db.get_user(telegram_id)
+        # Update cache after successful DB update
+        user = user_cache.get(telegram_id)
         if user:
             user['fissure'] = fissure
             user['last_fissure'] = last_fissure
-            user['total_growth'] = growth
-            user['total_rolls'] = 1
-            user['weekly_rolls'] = 1
-            user['weekly_growth'] = max(0, growth)
-            user['current_streak'] = 1 if growth > 0 else 0
-            user['best_streak'] = 1 if growth > 0 else 0
+            user['total_growth'] = user.get('total_growth', 0) + growth
+            user['total_rolls'] = user.get('total_rolls', 0) + 1
+            user['weekly_rolls'] = user.get('weekly_rolls', 0) + 1
+            user['weekly_growth'] = user.get('weekly_growth', 0) + max(0, growth)
             user_cache.set(telegram_id, user)
-            # Сразу сохраняем в БД
-            _save_user_to_db_immediately(telegram_id, user)
-            # Сбрасываем кеш топа при создании нового пользователя
-            top_cache.invalidate_top_cache()
+
+        logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
+
+        # Invalidate top cache
+        top_cache.invalidate_top_cache()
+    except Exception as e:
+        logger.error(f"Error updating fissure: {e}")
 
 
 def set_user_in_chat(telegram_id: int, in_chat: bool):
