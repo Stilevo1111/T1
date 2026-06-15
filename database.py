@@ -1949,7 +1949,7 @@ class Database:
 # Функции для совместимости со старым кодом
 def get_user(telegram_id, username=None):
     """Получить пользователя - сначала из кеша, потом из БД"""
-    # Пробуем получить из кеша
+    # Пробуем получить из кэша
     cached_user = user_cache.get(telegram_id)
     if cached_user:
         msg_count = cached_user.get('message_count', 0)
@@ -1963,7 +1963,7 @@ def get_user(telegram_id, username=None):
             user_cache.set(telegram_id, cached_user)
         return cached_user
 
-    # Нет в кеше - читаем из БД
+    # Нет в кэше - читаем из БД
     db = Database()
     user = db.get_user(telegram_id, username)
 
@@ -1979,7 +1979,13 @@ def get_user(telegram_id, username=None):
             user['fissure'] = 0.1
         user_cache.set(telegram_id, user)
     else:
-        logger.warning(f"get_user: user {telegram_id} NOT found in cache or DB")
+        # Пользователь не найден - создаём нового
+        logger.info(f"get_user: user {telegram_id} NOT found, creating new")
+        db.add_user(telegram_id, username or "Unknown", None, None)
+        user = db.get_user(telegram_id)
+        if user:
+            user.setdefault('fissure', 0.1)
+            user_cache.set(telegram_id, user)
 
     return user
 
