@@ -2454,6 +2454,23 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+async def refreshmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Принудительное обновление MMR топа"""
+    logger.info(f"User {update.effective_user.id} called refreshmmr")
+    
+    try:
+        from database import update_dota_week_top_cache
+        from dota_mmr import update_user_mmr
+        
+        await update_all_mmr_job(context)
+        update_dota_week_top_cache()
+        
+        await update.message.reply_text("✅ Топ MMR обновлён принудительно")
+    except Exception as e:
+        logger.error(f"refreshmmr error: {e}")
+        await update.message.reply_text(f"❌ Ошибка обновления: {e}")
+
+
 @rate_limit(tokens=1)
 async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Топ игроков по MMR за неделю"""
@@ -3307,6 +3324,7 @@ async def main():
         app.add_handler(CommandHandler("info", info))
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
+        app.add_handler(CommandHandler("refreshmmr", refreshmmr))
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler(("digestnow", "dotadigestnow", "setdigestchat"), digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
