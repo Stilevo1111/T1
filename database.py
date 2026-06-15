@@ -2188,6 +2188,8 @@ def set_user_in_chat(telegram_id: int, in_chat: bool):
             cursor.execute("UPDATE users SET in_chat = ? WHERE telegram_id = ?", (1 if in_chat else 0, telegram_id))
         conn.commit()
         cursor.close()
+        # Invalidate user cache to force fresh read from DB
+        user_cache.delete(telegram_id)
         # Сбрасываем кеш топов
         top_cache.invalidate_top_cache()
         user_cache.delete('dota_digest_stats')  # Invalidate dota digest cache
