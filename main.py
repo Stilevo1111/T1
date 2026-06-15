@@ -3155,52 +3155,52 @@ async def main():
         init_db()
         migrate_db()
 
-        from database import get_all_users, user_cache, restore_dota_week_top_cache, logger, get_db_type, get_connection
+        from database import get_all_users, user_cache, restore_dota_week_top_cache, get_db_type, get_connection
         
         # Test DB connection
         try:
             db_type = get_db_type()
-            logger.info(f"DB type: {db_type}")
+            logging.info(f"DB type: {db_type}")
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM users")
             count = cursor.fetchone()[0]
-            logger.info(f"Database connection OK: {count} users in DB")
+            logging.info(f"Database connection OK: {count} users in DB")
             from database import release_connection
             release_connection(conn)
         except Exception as e:
-            logger.error(f"Database connection failed: {e}")
+            logging.error(f"Database connection failed: {e}")
         
         try:
             all_users = get_all_users()
-            logger.info(f"get_all_users returned {len(all_users)} users")
+            logging.info(f"get_all_users returned {len(all_users)} users")
             loaded_count = 0
             for u in all_users:
                 try:
                     user_cache.set(u['telegram_id'], u)
                     loaded_count += 1
                 except Exception as e:
-                    logger.error(f"Failed to cache user {u.get('telegram_id')}: {e}")
-            logger.info(f"Loaded {loaded_count} users into cache on startup")
+                    logging.error(f"Failed to cache user {u.get('telegram_id')}: {e}")
+            logging.info(f"Loaded {loaded_count} users into cache on startup")
         except Exception as e:
-            logger.error(f"Failed to load users into cache: {e}")
+            logging.error(f"Failed to load users into cache: {e}")
             all_users = []
 
 # Восстанавливаем кеш Dota Week Top из базы (если есть)
         if restore_dota_week_top_cache():
-            logger.info("Dota week top cache restored from database on startup")
+            logging.info("Dota week top cache restored from database on startup")
         else:
             from database import update_dota_week_top_cache
             await asyncio.to_thread(update_dota_week_top_cache)
-            logger.info("Dota week top cache initialized on startup")
+            logging.info("Dota week top cache initialized on startup")
 
         # Pre-load start card background image (async)
         async def preload_start_card_bg():
             try:
                 await asyncio.to_thread(_get_start_card_background)
-                logger.info("Start card background pre-loaded")
+                logging.info("Start card background pre-loaded")
             except Exception as e:
-                logger.warning(f"Could not pre-load start card background: {e}")
+                logging.warning(f"Could not pre-load start card background: {e}")
         asyncio.create_task(preload_start_card_bg())
 
         job_queue = JobQueue()
