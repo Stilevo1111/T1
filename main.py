@@ -2402,11 +2402,16 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.debug(f"Could not delete last bot message: {e}")
 
-    try:
-        # Invalidate top cache to ensure fresh data after manual DB changes
-        top_cache.invalidate_top_cache()
+try:
         top_users = get_fissure_top(10)
         user_rank = get_fissure_rank(update.effective_user.id)
+        # Ensure profile shows same fissure - refresh user cache from DB
+        db_user = user_cache.get(update.effective_user.id)
+        if db_user and top_users:
+            for t in top_users:
+                if t.get('telegram_id') == update.effective_user.id:
+                    db_user['fissure'] = t.get('fissure', db_user.get('fissure', 0))
+                    break
         user = get_user(update.effective_user.id, update.effective_user.username)
         username = update.effective_user.username or update.effective_user.first_name
 
