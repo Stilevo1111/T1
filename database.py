@@ -11,6 +11,7 @@ import urllib.parse as urlparse
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 import psycopg2
@@ -136,7 +137,7 @@ class UserCache:
             data = self._cache.get(telegram_id)
             return copy.deepcopy(data) if data else None
 
-    def set(self, telegram_id, data):
+    def set(self, telegram_id, data, skip_dirty=False):
         """Установить данные пользователя в кеш"""
         # Handle string keys for non-user caches (like 'dota_week_top')
         if isinstance(telegram_id, str):
@@ -154,7 +155,7 @@ class UserCache:
             if len(self._cache) >= self.MAX_CACHE_SIZE:
                 self._evict_lru()
             self._cache[telegram_id] = data
-            self._dirty[telegram_id] = True
+            self._dirty[telegram_id] = not skip_dirty
             # Update steam index
             steam_id = data.get('steam_id')
             if steam_id and isinstance(steam_id, int):
@@ -331,6 +332,7 @@ def flush_users_cache():
             if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
                 logger.warning(f"flush_users_cache: skipping user with invalid telegram_id={telegram_id}")
                 continue
+
             user_data = user_cache.get(telegram_id)
             if user_data:
                 batch_data.append((
@@ -2005,7 +2007,7 @@ def get_user(telegram_id, username=None):
         user.setdefault('total_rolls', 0)
         user.setdefault('best_streak', 0)
         user.setdefault('current_streak', 0)
-        user_cache.set(telegram_id, user)
+        user_cache.set(telegram_id, user, skip_dirty=True)
         return user
 
     # Пользователь не найден - создаём нового
