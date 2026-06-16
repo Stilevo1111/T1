@@ -124,8 +124,11 @@ async def fetch_render_usage():
                 if resp.status == 200:
                     data = await resp.json()
                     if data and "data" in data:
-                        mins = data["data"]["service"]["metrics"]["usedMinutes"] or 0
+                        service = data.get("data", {}).get("service", {})
+                        metrics = service.get("metrics", {}) or {}
+                        mins = metrics.get("usedMinutes", 0) or 0
                         record_render_hours(mins / 60)
+                        logger.info(f"Render API returned {mins} minutes")
                         return mins / 60
                 logger.debug(f"Render API returned {resp.status}")
                 return None
