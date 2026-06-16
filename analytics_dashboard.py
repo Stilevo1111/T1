@@ -3,83 +3,134 @@ Analytics Dashboard - ресурсы: OpenDota токены, Neon Hours, Render 
 """
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
-# Start time for Render uptime calculation
 _START_TIME = time.time()
 
-# Данные об использовании (считаем в реальном времени)
+_RESOURCE_LIMITS = {
+    "opendota_tokens_daily": 3000,
+    "neon_hours_monthly": 100,
+    "render_hours_monthly": 750,
+}
+
 _resource_usage = {
-    "opendota_tokens": [],  # [(timestamp, tokens_used)]
-    "neon_hours": [],       # [(timestamp, hours_used)]
-    "render_mins": [],      # Will calculate from uptime
-    "last_neon_reset": 0   # Track when we last calculated DB usage
+    "opendota_tokens": [],
+    "neon_hours": [],
+    "render_hours": [],
 }
 
 def record_opendota_tokens(tokens_used: int):
-    """Записать использование токенов OpenDota."""
     _resource_usage["opendota_tokens"].append((time.time(), tokens_used))
 
 def record_neon_hours(hours: float):
-    """Записать использование часов Neon (вызывается раз в час)."""
     _resource_usage["neon_hours"].append((time.time(), hours))
 
-def record_render_mins(mins: int):
-    """Записать использование минут Render."""
-    _resource_usage["render_mins"].append((time.time(), mins))
+def record_render_hours(hours: float):
+    _resource_usage["render_hours"].append((time.time(), hours))
 
-def get_resource_stats(period_hours: int = 24):
-    """Получить статистику за период."""
-    cutoff = time.time() - period_hours * 3600
+def get_resource_stats():
+    now = time.time()
+    day_ago = now - 24 * 3600
+    month_ago = now - 30 * 24 * 3600
     
-    def sum_usage(data):
-        return sum(amt for ts, amt in data if ts >= cutoff)
+    opendota_today = sum(t for ts, t in _resource_usage["opendota_tokens"] if ts >= day_ago)
+    neon_month = sum(h for ts, h in _resource_usage["neon_hours"] if ts >= month_ago)
+    render_month = sum(h for ts, h in _resource_usage["render_hours"] if ts >= month_ago)
     
-    # Calculate Render uptime automatically
-    render_uptime_mins = int((time.time() - _START_TIME) / 60)
+    render_uptime = int((now - _START_TIME) / 3600) if not render_month else int(render_month)
     
     return {
-        "opendota_tokens_24h": sum_usage(_resource_usage["opendota_tokens"]),
-        "neon_hours_24h": sum_usage(_resource_usage["neon_hours"]),
-        "render_mins_24h": render_uptime_mins,
-        "estimated_cost_usd": (
-            sum_usage(_resource_usage["neon_hours"]) * 0.02 +  # ~0.02$/час Neon
-            render_uptime_mins * 0.0005   # ~$0.0005/мин Render
+        "opendota_today": opendota_today,
+        "opendota_limit": _RESOURCE_LIMITS["opendota_tokens_daily"],
+        "neon_month": neon_month,
+        "neon_limit": _RESOURCE_LIMITS["neon_hours_monthly"],
+        "render_hours": render_uptime,
+        "render_limit": _RESOURCE_LIMITS["render_hours_monthly"],
+        "estimated_daily_cost": (
+            neon_month * 0.02 / 30 +
+            render_uptime * 0.0005 * 24 / 30
         )
     }
 
 def generate_dashboard_text():
-    """Сгенерировать текст для /about."""
-    stats = get_resource_stats(24)
+    stats = get_resource_stats()
     
     lines = [
-        "🤖 <b>Fissure Bot Stats</b>",
-        "",
-        f"🔤 OpenDota токены (24ч): {stats['opendota_tokens_24h']:,}",
-        f"⏱️ Neon Hours (24ч): {stats['neon_hours_24h']:.1f}h",
-        f"⚡ Render mins (24ч): {stats['render_mins_24h']:,}",
-        f"💰 Стоимость (24ч): ${stats['estimated_cost_usd']:.2f}",
-        "",
-        "📅 Данные обновляются в реальном времени"
+        "📈 OpenDota: {opendota_today:,} / {opendota_limit:,}",
+        "💾 База данных: {neon_month:.1f} / {neon_limit}",
+        "🌐 Сервер: {render_hours} / {render_limit}",
+        "💰 Оценочная стоимость: ~${estimated_daily_cost:.2f}д".format(**stats),
     ]
     return "\n".join(lines)
 
-# Автозапись для существующих функций
-_original_get = None
 
-def patch_opendota_tracking():
-    """Патчить existing функции для учёта токенов."""
-    from dota_mmr import get_dota_data as _get_dota_data
-    
-    async def patched_get_dota_data(*args, **kwargs):
-        result = await _get_dota_data(*args, **kwargs)
-        if result:
-            record_opendota_tokens(1)  # Примерно 1 запрос = 1 токен
-        return result
-    
-    # Сохранить оригинал для вызова
-    global _original_get
-    _original_get = _get_dota_data
-    return patched_get_dota_data
+async def fetch_neon_usage():
+    """Fetch actual Neon.tech usage (requires NEON_API_KEY and NEON_ORG_ID)."""
+    try:
+        import os
+        api_key = os.getenv("NEON_API_KEY")
+        org_id = os.getenv("NEON_ORG_ID")
+        if not api_key or not org_id:
+            return None
+        
+        import aiohttp
+        now = datetime.now(timezone.utc)
+        from_time = (now - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        to_time = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        
+        url = ("https://console.neon.tech/api/v2/consumption_history/v2/projects"
+               f"?org_id={org_id}&from={from_time}&to={to_time}"
+               "&granularity=hourly&metrics=compute_unit_seconds")
+        
+        headers = {"Authorization": f"Bearer {api_key}"}
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data and "data" in data:
+                        total_seconds = sum(
+                            entry.get("compute_unit_seconds", 0) or 0 
+                            for entry in data["data"]
+                        )
+                        hours = total_seconds / 3600
+                        record_neon_hours(hours)
+                        return hours
+                logger.debug(f"Neon API returned {resp.status}")
+                return None
+    except Exception as e:
+        logger.debug(f"Neon usage fetch failed: {e}")
+        return None
+
+
+async def fetch_render_usage():
+    """Fetch actual Render.com usage (requires RENDER_API_KEY)."""
+    try:
+        import os
+        api_key = os.getenv("RENDER_API_KEY")
+        service_id = os.getenv("RENDER_SERVICE_ID")
+        if not api_key or not service_id:
+            return None
+        
+        import aiohttp
+        query = f'{{service(id: "{service_id}") {{metrics {{usedMinutes}}}}}}'
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.render.com/graphql",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"query": query}
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data and "data" in data:
+                        mins = data["data"]["service"]["metrics"]["usedMinutes"] or 0
+                        record_render_hours(mins / 60)
+                        return mins / 60
+                logger.debug(f"Render API returned {resp.status}")
+                return None
+    except Exception as e:
+        logger.debug(f"Render usage fetch failed: {e}")
+        return None

@@ -1495,7 +1495,9 @@ async def resolve_avatar_url_for_card(
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show bot stats and resource usage."""
     try:
-        from analytics_dashboard import generate_dashboard_text
+        from analytics_dashboard import generate_dashboard_text, fetch_neon_usage, fetch_render_usage
+        await fetch_neon_usage()
+        await fetch_render_usage()
         text = generate_dashboard_text()
         await update.message.reply_text(text, parse_mode="HTML")
     except Exception as e:
@@ -2831,12 +2833,19 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Отправляем фото с баннером и кнопкой (без подписи)
+    # Get resource stats text
+    from analytics_dashboard import generate_dashboard_text, fetch_neon_usage, fetch_render_usage
+    await fetch_neon_usage()
+    await fetch_render_usage()
+    resource_text = generate_dashboard_text()
+
+    # Отправляем фото с баннером и кнопкой
     result_msg = await context.bot.send_photo(
         chat_id=chat_id,
         photo=info_banner_url,
-        caption=None,
-        reply_markup=reply_markup
+        caption=resource_text,
+        reply_markup=reply_markup,
+        parse_mode="HTML"
     )
 
     # Отслеживаем это сообщение для будущего удаления

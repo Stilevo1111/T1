@@ -1453,9 +1453,18 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         # Проверяем смену недели - если неделя изменилась, сбрасываем статистику
         user_week_start = user.get('week_start_date')
         current_week_start = week_start_msk.strftime("%Y-%m-%d")
-
-        if user_week_start and user_week_start != current_week_start:
-            logger.info(f"Week changed for {telegram_id}: {user_week_start} -> {current_week_start}, resetting week stats")
+        
+        # Normalize user_week_start to string for comparison
+        if user_week_start:
+            if hasattr(user_week_start, 'strftime'):
+                user_week_start_str = user_week_start.strftime("%Y-%m-%d")
+            else:
+                user_week_start_str = str(user_week_start)
+        else:
+            user_week_start_str = None
+        
+        if user_week_start_str and user_week_start_str != current_week_start:
+            logger.info(f"Week changed for {telegram_id}: {user_week_start_str} -> {current_week_start}, resetting week stats")
             week_games = 0
             week_wins = 0
             max_streak = 0
