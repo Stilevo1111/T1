@@ -1660,7 +1660,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 rank_tier=rank_tier,
                 weekly_mvp=weekly_mvp,
                 weekly_top2=weekly_top2,
-                weekly_top3=weekly_top3
+                weekly_top3=weekly_top3,
+                week_wins=None,
+                week_losses=None
             )
 
             if card_data:
@@ -1696,7 +1698,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 rank_tier=0,
                 weekly_mvp=0,
                 weekly_top2=0,
-                weekly_top3=0
+                weekly_top3=0,
+                week_wins=None,
+                week_losses=None
             )
 
             if card_data:
@@ -2585,21 +2589,25 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             winner_wr = round((winner_week_wins / winner_week_games * 100), 1) if winner_week_games > 0 else 0
 
             try:
-                from dota_mmr import generate_top_card
+                from dota_mmr import generate_start_card
                 banner_bytes = await asyncio.to_thread(
-                    generate_top_card,
+                    generate_start_card,
                     avatar_url=winner_avatar,
+                    message_count=None,
                     username=winner_name,
-                    telegram_id=winner.get('telegram_id'),
-                    fissure=0,
-                    extra_text=f"{winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%",
+                    steam_nickname=winner_name,
                     rank_tier=winner_rank_tier,
-                    show_avatar=True
+                    weekly_mvp=winner.get('weekly_mvp_count') or 0,
+                    weekly_top2=winner.get('weekly_top2_count') or 0,
+                    weekly_top3=winner.get('weekly_top3_count') or 0,
+                    week_wins=winner_week_wins,
+                    week_losses=winner_week_losses
                 )
                 topmmr_banner_url = io.BytesIO(banner_bytes) if banner_bytes else topmmr_banner_url
             except Exception as e:
                 logger.warning(f"Could not generate MMR top card: {e}")
 
+            # Build the top list text
             lines = []
 
             def get_emoji_num(n):
@@ -2635,8 +2643,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%")
                 else:
                     lines.append(" └ Нет игр за неделю")
-
-
 
             top_text = "\n".join(lines)
 
@@ -3024,6 +3030,51 @@ async def delete_last_bot_message_safe(bot, chat_id, user_id):
 async def health_check(request):
     """Health check endpoint"""
     return web.Response(text="Bot is working", status=200)
+
+
+async def steam_debug(request):
+    """Debug endpoint to check steam_id issues"""
+    try:
+        from database import get_all_users_with_steam, get_db_type
+        db_type = get_db_type()
+        
+        # Get count of users with steam_id
+        conn = None
+        try:
+            from database import get_connection, release_connection
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            if "postgres" in db_type:
+                cursor.execute("SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL")
+                steam_count = cursor.fetchone()[0] if cursor.description else 0
+                cursor.execute("SELECT COUNT(*) FROM users")
+                total_count = cursor.fetchone()[0] if cursor.description else 0
+            else:
+                cursor.execute("SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL")
+                steam_count = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) FROM users")
+                total_count = cursor.fetchone()[0]
+            
+            cursor.close()
+            
+            # Get some sample users
+            users = await asyncio.to_thread(get_all_users_with_steam)
+            sample = [{"telegram_id": u.get("telegram_id"), "steam_id": u.get("steam_id")} for u in users[:5]]
+            
+            result = {
+                "db_type": db_type,
+                "total_users": total_count,
+                "users_with_steam": steam_count,
+                "sample": sample
+            }
+            return web.Response(text=json.dumps(result, indent=2), status=200)
+        finally:
+            if conn:
+                release_connection(conn)
+    except Exception as e:
+        import traceback
+        return web.Response(text=f"Error: {e}\n{traceback.format_exc()}", status=500)
 
 
 health_check_handler = None
@@ -3445,6 +3496,7 @@ async def main():
             web_app.router.add_get('/health', health_handler)
             web_app.router.add_get('/api/recent-rolls', recent_rolls_handler)
             web_app.router.add_get('/api/top-mmr', top_mmr_handler)
+            web_app.router.add_get('/api/steam-debug', steam_debug)
             runner = web.AppRunner(web_app)
             await runner.setup()
             port = int(os.getenv('PORT', 10000))
@@ -3506,6 +3558,7 @@ async def main():
             web_app.router.add_get('/health', health_check_handler)
             web_app.router.add_get('/api/recent-rolls', recent_rolls_handler)
             web_app.router.add_get('/api/top-mmr', top_mmr_handler)
+            web_app.router.add_get('/api/steam-debug', steam_debug)
 
             async def reset_circuit(request):
                 try:

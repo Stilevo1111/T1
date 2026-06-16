@@ -109,29 +109,36 @@ async def fetch_render_usage():
     """Fetch actual Render.com usage (requires RENDER_API_KEY)."""
     try:
         import os
+        from datetime import datetime
         api_key = os.getenv("RENDER_API_KEY")
-        service_id = os.getenv("RENDER_SERVICE_ID")
-        if not api_key or not service_id:
+        service_id = os.getenv("RENDER_SERVICE_ID", "srv-d5rhtsh4tr6s73e39k20")
+        if not api_key:
             return None
         
         import aiohttp
-        query = f'{{service(id: "{service_id}") {{metrics {{usedMinutes}}}}}}'
-        
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.render.com/graphql",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={"query": query}
+            # Get last live deploy to calculate current uptime
+            async with session.get(
+                f"https://api.render.com/v1/services/{service_id}/deploys",
+                headers={"Authorization": f"Bearer {api_key}"}
             ) as resp:
                 if resp.status == 200:
-                    data = await resp.json()
-                    if data and "data" in data:
-                        service = data.get("data", {}).get("service", {})
-                        metrics = service.get("metrics", {}) or {}
-                        mins = metrics.get("usedMinutes", 0) or 0
-                        record_render_hours(mins / 60)
-                        logger.info(f"Render API returned {mins} minutes")
-                        return mins / 60
+                    deploys = await resp.json()
+                    last_live = None
+                    for item in deploys:
+                        deploy = item.get("deploy", {})
+                        if deploy.get("status") == "live":
+                            started = deploy.get("startedAt")
+                            if started:
+                                last_live = datetime.fromisoformat(started.replace("Z", "+00:00"))
+                                break
+                    
+                    if last_live:
+                        now = datetime.now(timezone.utc)
+                        uptime_hours = (now - last_live).total_seconds() / 3600
+                        record_render_hours(uptime_hours)
+                        logger.info(f"Render uptime calculated: {uptime_hours:.1f}h from deploy {deploy.get('id', 'unknown')}")
+                        return uptime_hours
                 logger.debug(f"Render API returned {resp.status}")
                 return None
     except Exception as e:

@@ -2198,16 +2198,16 @@ def set_user_in_chat(telegram_id: int, in_chat: bool):
 
 
 def delete_user(telegram_id: int):
-    """Удалить пользователя из базы данных"""
+    """Отключить пользователя из чата (ставим in_chat=FALSE, данные сохраняются)"""
     conn = None
     try:
         conn = get_connection()
         scheme = get_db_type()
         cursor = conn.cursor()
         if "postgres" in scheme:
-            cursor.execute("DELETE FROM users WHERE telegram_id = %s", (telegram_id,))
+            cursor.execute("UPDATE users SET in_chat = FALSE, last_fissure = 0 WHERE telegram_id = %s", (telegram_id,))
         else:
-            cursor.execute("DELETE FROM users WHERE telegram_id = ?", (telegram_id,))
+            cursor.execute("UPDATE users SET in_chat = 0, last_fissure = 0 WHERE telegram_id = ?", (telegram_id,))
         conn.commit()
         cursor.close()
         # Сбрасываем кеши
@@ -2230,43 +2230,45 @@ def delete_user(telegram_id: int):
 
 
 def cleanup_left_users():
-    """Удалить пользователей, вышедших из чата более 7 дней назад (чтобы не удалять новых/созданных по ошибке)"""
+    """Отключить пользователей, не появлявшихся более 7 дней (НЕ удаляем, просто отключаем)"""
     conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
         scheme = get_db_type()
-        # First, fix any NULL fissure values
-        if "postgres" in scheme:
-            cursor.execute("UPDATE users SET fissure = 0.1 WHERE fissure IS NULL")
-            conn.commit()
-        else:
-            cursor.execute("UPDATE users SET fissure = 0.1 WHERE fissure IS NULL")
-            conn.commit()
-        # Only delete users who left more than 7 days ago - protects against INSERT without in_chat=TRUE
+        
+        # Disable users who left more than 7 days ago, but NEVER disable users with Steam
         if "postgres" in scheme:
             cursor.execute("""
-                DELETE FROM users 
-                WHERE in_chat = FALSE 
-                AND created_at < CURRENT_TIMESTAMP - INTERVAL '7 days'
+                UPDATE users 
+                SET in_chat = FALSE, 
+                    fissure = 0.1, 
+                    last_fissure = 0
+                WHERE in_chat = TRUE 
+                AND steam_id IS NULL
+                AND last_activity < CURRENT_TIMESTAMP - INTERVAL '7 days'
             """)
         else:
             cursor.execute("""
-                DELETE FROM users 
-                WHERE in_chat = 0 
-                AND created_at < datetime('now', '-7 days')
+                UPDATE users 
+                SET in_chat = 0, 
+                    fissure = 0.1, 
+                    last_fissure = 0
+                WHERE (in_chat = 1 OR in_chat IS NULL)
+                AND steam_id IS NULL
+                AND last_activity < datetime('now', '-7 days')
             """)
-        deleted = cursor.rowcount
+        disabled = cursor.rowcount
         conn.commit()
         cursor.close()
-        if deleted:
+        if disabled:
             top_cache.invalidate_top_cache()
             user_cache.delete('dota_digest_stats')
             user_cache.delete('digest_stats')
             user_cache.delete('dota_week_top')
             user_cache.delete('weekly_digest_stats')
-        logger.info(f"cleanup_left_users: deleted {deleted} users who left chat >7 days ago")
-        return deleted
+        logger.info(f"cleanup_left_users: disabled {disabled} inactive users (no Steam, no activity 7 days)")
+        return disabled
     except Exception as e:
         logger.error(f"cleanup_left_users error: {e}")
         return 0
