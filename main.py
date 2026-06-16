@@ -3327,13 +3327,10 @@ async def main():
             logger.error(f"Failed to load users into cache: {e}")
             all_users = []
 
-# Восстанавливаем кеш Dota Week Top из базы (если есть)
-        if restore_dota_week_top_cache():
-            logger.info("Dota week top cache restored from database on startup")
-        else:
-            from database import update_dota_week_top_cache
-            await asyncio.to_thread(update_dota_week_top_cache)
-            logger.info("Dota week top cache initialized on startup")
+# Инициализируем Dota Week Top кеш из актуальных данных БД
+        from database import update_dota_week_top_cache
+        await asyncio.to_thread(update_dota_week_top_cache)
+        logger.info("Dota week top cache initialized from DB on startup")
         
         # Start background retry for circuit breaker
         try:
@@ -3712,14 +3709,7 @@ if __name__ == "__main__":
 
     atexit.register(_emergency_flush)
 
-    # Restore Dota week top cache on startup (for quick top display before MMR job)
-    try:
-        from database import restore_dota_week_top_cache
-        if restore_dota_week_top_cache():
-            logger.info("Restored dota_week_top cache on startup")
-    except Exception as e:
-        logger.debug(f"Could not restore dota_week_top cache: {e}")
-
+    # Dota week top cache loaded in startup handler above
     try:
         from image_cache import preload_heroes
 

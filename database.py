@@ -465,8 +465,6 @@ def update_dota_week_top_cache():
 
     # Сохраняем в кеш (память + база)
     user_cache.set('dota_week_top', top_users)
-    # Сохраняем в базу для восстановления после рестарта
-    set_config('dota_week_top_cache', json.dumps(top_users))
     logger.info(f"update_dota_week_top_cache: cached {len(top_users)} users")
 
 
