@@ -56,14 +56,12 @@ def get_resource_stats():
 
 def generate_dashboard_text():
     stats = get_resource_stats()
-    
-    lines = [
-        "📈 OpenDota: {opendota_today:,} / {opendota_limit:,}",
-        "💾 База данных: {neon_month:.1f} / {neon_limit}",
-        "🌐 Сервер: {render_hours} / {render_limit}",
-        "💰 Оценочная стоимость: ~${estimated_daily_cost:.2f}д".format(**stats),
-    ]
-    return "\n".join(lines)
+    return (
+        f"📈 OpenDota: {stats['opendota_today']:,} / {stats['opendota_limit']:,}\n"
+        f"💾 База данных: {stats['neon_month']:.1f} / {stats['neon_limit']}\n"
+        f"🌐 Сервер: {stats['render_hours']} / {stats['render_limit']}\n"
+        f"💰 Оценочная стоимость: ~${stats['estimated_daily_cost']:.2f}д"
+    )
 
 
 async def fetch_neon_usage():
