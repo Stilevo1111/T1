@@ -268,7 +268,11 @@ def _api_get(url: str, params: dict = None, max_retries: int = 2, timeout: int =
                     continue
                 return None
             elif r.status_code >= 400:
-                logger.error(f"API error {r.status_code} for URL: {url}")
+                if r.status_code == 403:
+                    _circuit_breaker_record_failure()
+                    logger.warning(f"OpenDota API returned 403 Forbidden - possible API key issue or ban")
+                else:
+                    logger.error(f"API error {r.status_code} for URL: {url}")
                 return None
             return None
         except requests.exceptions.ReadTimeout as e:
