@@ -43,7 +43,6 @@ from database import (
     get_fissure_top,
     get_user,
     get_user_by_username,
-    get_user_fresh,
     init_db,
     migrate_db,
     release_connection,
@@ -2205,8 +2204,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # /profile @username или /profile username — ищем другого пользователя
             target_username = context.args[0].lstrip("@")
             if target_username:
-                # Invalidate cache to get fresh data
-                user_cache.delete('username_lookup')
                 target_user = await asyncio.to_thread(get_user_by_username, target_username)
                 if not target_user:
                     msg = await context.bot.send_message(
@@ -2220,8 +2217,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not target_user:
             user_obj = update.effective_user
             username = user_obj.username or user_obj.first_name or "Unknown"
-            # Use fresh DB data for own profile
-            target_user = get_user_fresh(user_obj.id, username)
+            target_user = get_user(user_obj.id, username)
 
             try:
                 loading_msg = await context.bot.send_message(

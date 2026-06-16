@@ -165,6 +165,10 @@ class UserCache:
                     if tid == telegram_id:
                         del self._steam_index[sid]
                         break
+    
+    def set_without_dirty(self, telegram_id, data):
+        """Установить данные без установки dirty-флага (для загрузки из БД)"""
+        self.set(telegram_id, data, skip_dirty=True)
 
     def mark_dirty(self, telegram_id):
         """Пометить пользователя как изменённого"""
@@ -2018,30 +2022,10 @@ def get_user(telegram_id, username=None):
     user = db.get_user(telegram_id)
     if user:
         user.setdefault('fissure', 0.1)
-        user_cache.set(telegram_id, user)
+        user_cache.set(telegram_id, user, skip_dirty=True)
         return user
     
     logger.warning(f"get_user: failed to create user {telegram_id}")
-    return None
-
-
-def get_user_fresh(telegram_id, username=None):
-    """Получить пользователя ТОЛЬКО из БД (без кеша) - для профиля"""
-    db = Database()
-    user = db.get_user(telegram_id, username)
-    
-    if user:
-        logger.info(f"get_user_fresh: DB hit for {telegram_id}, fissure={user.get('fissure')}")
-        user.setdefault('weekly_mvp_count', 0)
-        user.setdefault('weekly_top2_count', 0)
-        user.setdefault('weekly_top3_count', 0)
-        user.setdefault('analytics_cache', None)
-        user.setdefault('analytics_updated_at', None)
-        user.setdefault('total_rolls', 0)
-        user.setdefault('best_streak', 0)
-        user.setdefault('current_streak', 0)
-        # Don't save to cache - just return fresh DB data
-        return user
     return None
 
 
@@ -2184,7 +2168,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
             db_user = db.get_user(telegram_id)
             if db_user:
                 db_user.setdefault('fissure', 0.1)
-                user_cache.set(telegram_id, db_user)
+                user_cache.set(telegram_id, db_user, skip_dirty=True)
 
         logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
 
@@ -2373,7 +2357,7 @@ def update_user_field(telegram_id, field, value):
 
         # Важные поля — сразу в БД
         immediate_fields = {
-            'steam_id', 'steam_nickname', 'mmr', 'rank_tier', 'wins', 'losses',
+            'fissure', 'last_fissure', 'steam_id', 'steam_nickname', 'mmr', 'rank_tier', 'wins', 'losses',
             'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'week_start_date',
             'weekly_mvp_count', 'weekly_top2_count', 'weekly_top3_count',
         }
