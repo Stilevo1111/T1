@@ -2025,6 +2025,26 @@ def get_user(telegram_id, username=None):
     return None
 
 
+def get_user_fresh(telegram_id, username=None):
+    """Получить пользователя ТОЛЬКО из БД (без кеша) - для профиля"""
+    db = Database()
+    user = db.get_user(telegram_id, username)
+    
+    if user:
+        logger.info(f"get_user_fresh: DB hit for {telegram_id}, fissure={user.get('fissure')}")
+        user.setdefault('weekly_mvp_count', 0)
+        user.setdefault('weekly_top2_count', 0)
+        user.setdefault('weekly_top3_count', 0)
+        user.setdefault('analytics_cache', None)
+        user.setdefault('analytics_updated_at', None)
+        user.setdefault('total_rolls', 0)
+        user.setdefault('best_streak', 0)
+        user.setdefault('current_streak', 0)
+        # Don't save to cache - just return fresh DB data
+        return user
+    return None
+
+
 def get_user_by_username(username):
     """Найти пользователя по username (без @). Ищет сначала в кеше, потом в БД."""
     username = username.lstrip("@").lower()
