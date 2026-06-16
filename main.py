@@ -1790,28 +1790,44 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         # === GREETING REACTIONS ===
-        if data == "greeting_good":
-            # Add 👍 reaction to the greeting message
+        if data and data.startswith("greeting_"):
+            emoji = "👍" if "good" in data else "❤️"
+            reaction_type = "good" if "good" in data else "bad"
+            
+            from datetime import datetime as dt
+            from database import get_config, set_config
+            date_str = dt.now(timezone(timedelta(hours=3))).strftime("%Y-%m-%d")
+            key = f"greeting_{date_str}_{reaction_type}"
+            
+            # Increment counter
+            current = get_config(key) or 0
+            set_config(key, current + 1)
+            
+            # Add reaction to message
             try:
                 await context.bot.set_message_reaction(
                     chat_id=chat_id,
                     message_id=callback_query.message.message_id,
-                    reaction={"emoji": "👍"}
+                    reaction={"emoji": emoji}
                 )
             except Exception:
                 pass
-            return
-
-        if data == "greeting_bad":
-            # Add ❤️ reaction to the greeting message
+            
+            # Update button text with new count
             try:
-                await context.bot.set_message_reaction(
+                good_count = get_config(f"greeting_{date_str}_good") or 0
+                bad_count = get_config(f"greeting_{date_str}_bad") or 0
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton(f"👍 {good_count}", callback_data="greeting_good"), 
+                     InlineKeyboardButton(f"❤️ {bad_count}", callback_data="greeting_bad")]
+                ])
+                await context.bot.edit_message_reply_markup(
                     chat_id=chat_id,
                     message_id=callback_query.message.message_id,
-                    reaction={"emoji": "❤️"}
+                    reply_markup=keyboard
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not update greeting buttons: {e}")
             return
 
         # === LINK HANDLER ===
