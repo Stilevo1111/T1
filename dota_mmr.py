@@ -80,8 +80,8 @@ _circuit_breaker = {
     "state": "CLOSED",  # CLOSED, OPEN, HALF_OPEN
     "failure_count": 0,
     "last_failure_time": 0,
-    "failure_threshold": 5,  # Количество неудач перед открытием (быстрее реагируем)
-    "recovery_timeout": 120,   # 2 минуты до попытки восстановления (увеличено для стабильности)
+    "failure_threshold": 3,  # Быстрее реагируем
+    "recovery_timeout": 60,    # 1 минута до попытки восстановления
 }
 
 def reset_circuit_breaker():
@@ -90,6 +90,28 @@ def reset_circuit_breaker():
     _circuit_breaker["failure_count"] = 0
     _circuit_breaker["last_failure_time"] = 0
     logger.info("Circuit breaker manually reset to CLOSED")
+
+
+# Background retry task
+_retry_task = None
+
+def start_background_retry(max_retries=3, retry_interval=30):
+    """Start background task for circuit breaker recovery."""
+    global _retry_task
+    
+    def retry_loop():
+        while True:
+            time.sleep(retry_interval)
+            if _circuit_breaker["state"] == "OPEN":
+                now = time.time()
+                if now - _circuit_breaker.get("last_failure_time", 0) > _circuit_breaker["recovery_timeout"]:
+                    logger.info("Background retry: attempting circuit breaker recovery")
+                    _circuit_breaker["state"] = "HALF_OPEN"
+    
+    if _retry_task is None:
+        _retry_task = threading.Thread(target=retry_loop, daemon=True)
+        _retry_task.start()
+        logger.info("Background retry task started")
 
 def _circuit_breaker_can_execute() -> bool:
     """Проверить можно ли выполнять запрос (Circuit Breaker pattern)"""

@@ -3222,6 +3222,14 @@ async def main():
             from database import update_dota_week_top_cache
             await asyncio.to_thread(update_dota_week_top_cache)
             logger.info("Dota week top cache initialized on startup")
+        
+        # Start background retry for circuit breaker
+        try:
+            from dota_mmr import start_background_retry
+            start_background_retry()
+            logger.info("Background retry started for circuit breaker")
+        except Exception as e:
+            logger.warning(f"Could not start background retry: {e}")
 
         # Pre-load start card background image (async)
         async def preload_start_card_bg():
