@@ -88,12 +88,14 @@ async def fetch_neon_usage():
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     data = await resp.json()
+                    logger.info(f"Neon API response: {data}")
                     if data and "data" in data:
                         total_seconds = sum(
                             entry.get("compute_unit_seconds", 0) or 0 
                             for entry in data["data"]
                         )
                         hours = total_seconds / 3600
+                        logger.info(f"Neon compute time: {total_seconds}s = {hours}h")
                         record_neon_hours(hours)
                         return hours
                 logger.debug(f"Neon API returned {resp.status}")
