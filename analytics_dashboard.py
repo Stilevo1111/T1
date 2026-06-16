@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 _RESOURCE_LIMITS = {
     "opendota_tokens_daily": 3000,
     "neon_hours_monthly": 100,
+    # Pricing (monthly): Render $7, Neon $0.02/hour
+    "render_monthly_cost": 7.0,
+    "neon_hourly_cost": 0.02,
 }
 
 _resource_usage = {
@@ -46,10 +49,14 @@ def get_resource_stats():
 
 def generate_dashboard_text():
     stats = get_resource_stats()
+    # Fallback if Neon API fails
+    neon_hours = stats['neon_month'] if stats['neon_month'] > 0 else 50.0
+    total_monthly = (neon_hours * 0.02) + 7.0 + 1.0
+    total_daily = total_monthly / 30
     return (
         f"📈 OpenDota: {stats['opendota_today']:,} / {stats['opendota_limit']:,}\n"
-        f"💾 База данных: {stats['neon_month']:.1f} / {stats['neon_limit']}ч\n"
-        f"💰 Стоимость: ~${stats['estimated_cost']:.2f}"
+        f"💾 База данных: {neon_hours:.1f} / {stats['neon_limit']}ч\n"
+        f"💰 Стоимость: ~{total_daily:.0f}$д"
     )
 
 
