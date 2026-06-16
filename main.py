@@ -2401,7 +2401,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.debug(f"Could not delete last bot message: {e}")
 
-try:
+    try:
         top_users = get_fissure_top(10)
         user_rank = get_fissure_rank(update.effective_user.id)
         # Ensure profile shows same fissure - refresh user cache from DB
