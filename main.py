@@ -1506,9 +1506,8 @@ async def resolve_avatar_url_for_card(
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show bot stats and resource usage."""
     try:
-        from analytics_dashboard import generate_dashboard_text, fetch_neon_usage, fetch_render_usage
+        from analytics_dashboard import generate_dashboard_text, fetch_neon_usage
         await fetch_neon_usage()
-        await fetch_render_usage()
         text = generate_dashboard_text()
         await update.message.reply_text(text, parse_mode="HTML")
     except Exception as e:
@@ -2899,9 +2898,8 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     # Get resource stats text
-    from analytics_dashboard import generate_dashboard_text, fetch_neon_usage, fetch_render_usage
+    from analytics_dashboard import generate_dashboard_text, fetch_neon_usage
     await fetch_neon_usage()
-    await fetch_render_usage()
     resource_text = generate_dashboard_text()
 
     # Отправляем фото с баннером и кнопкой
