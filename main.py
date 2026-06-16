@@ -378,7 +378,10 @@ async def morning_greeting_job(context):
             return
 
         bot = context.application.bot
-        await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=main_menu(), parse_mode="HTML")
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("👍", callback_data="greeting_good"), InlineKeyboardButton("❤️", callback_data="greeting_bad")]
+        ])
+        await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=keyboard, parse_mode="HTML")
 
         set_config('daily_greeting_sent', today_str)
         logger.info(f"Утреннее приветствие отправлено в чат {digest_chat_id}")
@@ -413,7 +416,10 @@ async def night_greeting_job(context):
             return
 
         bot = context.application.bot
-        await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=main_menu(), parse_mode="HTML")
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("👍", callback_data="greeting_good"), InlineKeyboardButton("❤️", callback_data="greeting_bad")]
+        ])
+        await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=keyboard, parse_mode="HTML")
 
         set_config('night_greeting_sent', today_str)
         logger.info(f"Вечернее приветствие отправлено в чат {digest_chat_id}")
@@ -1783,6 +1789,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await callback_query.answer()
 
     try:
+        # === GREETING REACTIONS ===
+        if data == "greeting_good":
+            # Add 👍 reaction to the greeting message
+            try:
+                await context.bot.set_message_reaction(
+                    chat_id=chat_id,
+                    message_id=callback_query.message.message_id,
+                    reaction={"emoji": "👍"}
+                )
+            except Exception:
+                pass
+            return
+
+        if data == "greeting_bad":
+            # Add ❤️ reaction to the greeting message
+            try:
+                await context.bot.set_message_reaction(
+                    chat_id=chat_id,
+                    message_id=callback_query.message.message_id,
+                    reaction={"emoji": "❤️"}
+                )
+            except Exception:
+                pass
+            return
+
         # === LINK HANDLER ===
         if data == "link":
             await link(update, context)
