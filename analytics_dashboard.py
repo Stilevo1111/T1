@@ -39,7 +39,7 @@ def get_resource_stats():
     neon_month = sum(h for ts, h in _resource_usage["neon_hours"] if ts >= month_ago)
     render_month = sum(h for ts, h in _resource_usage["render_hours"] if ts >= month_ago)
     
-    render_uptime = int((now - _START_TIME) / 3600) if not render_month else int(render_month)
+    render_uptime = int(render_month) if render_month > 0 else int((now - _START_TIME) / 3600)
     
     return {
         "opendota_today": opendota_today,
