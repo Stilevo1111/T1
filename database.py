@@ -1265,29 +1265,28 @@ class Database:
         
         try:
             if "postgres" in scheme:
-                query = '''
-                    INSERT INTO users (telegram_id, username, first_name, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at, message_count, in_chat)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, 0, TRUE)
-                    ON CONFLICT (telegram_id) 
-                    DO UPDATE SET 
-                        username = EXCLUDED.username,
-                        first_name = EXCLUDED.first_name,
-                        in_chat = TRUE,
-                        last_activity = CURRENT_TIMESTAMP
-                '''
-                result = self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0), fetch="one")
-                return result["id"] if result else telegram_id
+                # First check if user exists
+                existing = self.execute_query("SELECT telegram_id FROM users WHERE telegram_id = %s", (telegram_id,), fetch="one")
+                if existing:
+                    # Update existing user
+                    self.execute_query(
+                        "UPDATE users SET username = %s, first_name = %s, in_chat = TRUE, last_activity = CURRENT_TIMESTAMP WHERE telegram_id = %s",
+                        (username, first_name, telegram_id)
+                    )
+                else:
+                    # Insert new user
+                    self.execute_query(
+                        "INSERT INTO users (telegram_id, username, first_name, fissure, created_at, in_chat) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, TRUE)",
+                        (telegram_id, username, first_name, 0.1)
+                    )
+                return telegram_id
             else:
-                query = '''
-                    INSERT INTO users (telegram_id, username, first_name, fissure, last_fissure, last_message_id, total_growth, total_rolls, created_at, message_count, in_chat)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 0, 1)
-                    ON CONFLICT(telegram_id) DO UPDATE SET
-                        username = excluded.username,
-                        first_name = excluded.first_name,
-                        in_chat = 1
-                '''
-                self.execute_query(query, (telegram_id, username, first_name, 0.1, 0, 0, 0, 0))
-                return None
+                # SQLite - INSERT with ON CONFLICT DO UPDATE works fine
+                self.execute_query(
+                    "INSERT INTO users (telegram_id, username, first_name, fissure, created_at, in_chat) VALUES (?, ?, ?, ?, datetime('now'), 1) ON CONFLICT(telegram_id) DO UPDATE SET username = COALESCE(username, excluded.username), first_name = COALESCE(first_name, excluded.first_name), in_chat = 1",
+                    (telegram_id, username, first_name, 0.1)
+                )
+                return telegram_id
         except Exception as e:
             error_msg = str(e) if str(e) else "unknown error"
             error_type = type(e).__name__
