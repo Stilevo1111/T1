@@ -1123,6 +1123,10 @@ async def update_all_mmr_job(context):
         # Clear top cache to force refresh on next read
         get_dota_week_top_from_db._cache = (None, 0)
 
+        # Invalidate dota_digest_stats cache to force fresh data on next read
+        from database import user_cache
+        user_cache.delete('dota_digest_stats')
+
         # Refresh Dota digest cache
         try:
             from digest import refresh_dota_digest_cache
