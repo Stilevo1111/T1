@@ -75,7 +75,7 @@ async def fetch_neon_usage():
         
         import aiohttp
         now = datetime.now(timezone.utc)
-        from_time = (now - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        from_time = (now - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
         to_time = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         
         url = ("https://console.neon.tech/api/v2/consumption_history/v2/projects"
