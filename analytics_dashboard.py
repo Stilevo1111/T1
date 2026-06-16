@@ -25,10 +25,15 @@ def record_neon_hours(hours: float):
 
 def get_resource_stats():
     now = time.time()
-    day_ago = now - 24 * 3600
-    month_ago = now - 30 * 24 * 3600
+    # Calculate reset time at 03:00 MSK
+    msk_now = datetime.now(timezone.utc) + timedelta(hours=3)
+    msk_reset = msk_now.replace(hour=3, minute=0, second=0, microsecond=0)
+    if msk_now.hour < 3:
+        msk_reset = msk_reset - timedelta(days=1)
+    reset_ts = msk_reset.timestamp()
     
-    opendota_today = sum(t for ts, t in _resource_usage["opendota_tokens"] if ts >= day_ago)
+    opendota_today = sum(t for ts, t in _resource_usage["opendota_tokens"] if ts >= reset_ts)
+    month_ago = now - 30 * 24 * 3600
     neon_month = sum(h for ts, h in _resource_usage["neon_hours"] if ts >= month_ago)
     
     return {
