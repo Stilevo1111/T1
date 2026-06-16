@@ -1492,6 +1492,16 @@ async def resolve_avatar_url_for_card(
     return DEFAULT_AVATAR_URL
 
 
+async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show bot stats and resource usage."""
+    try:
+        from analytics_dashboard import generate_dashboard_text
+        text = generate_dashboard_text()
+        await update.message.reply_text(text, parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"about error: {e}")
+        await update.message.reply_text("Stats unavailable")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command - show profile card"""
     loading_msg = None
@@ -3362,6 +3372,7 @@ async def main():
 
 
         app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("about", about))
         app.add_handler(CallbackQueryHandler(button_callback))
         app.add_handler(CommandHandler(("fissure", "fissura"), fissure))
         app.add_handler(CommandHandler("profile", stats))

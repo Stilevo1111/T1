@@ -250,6 +250,12 @@ def _api_get(url: str, params: dict = None, max_retries: int = 2, timeout: int =
             r = requests.get(url, params=params or {}, timeout=current_timeout)
             if r.status_code == 200:
                 _circuit_breaker_record_success()
+                # Record OpenDota token usage
+                try:
+                    from analytics_dashboard import record_opendota_tokens
+                    record_opendota_tokens(1)
+                except Exception:
+                    pass
                 return r.json()
             elif r.status_code == 429:
                 wait_time = 5 * (attempt + 1)
