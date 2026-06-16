@@ -85,29 +85,29 @@ if not TOKEN:
     logger.warning("BOT_TOKEN is not set!")
 
 MORNING_GREETINGS = [
-    "<b>⚔️ Доброе утро, тима!</b>\n\n<i>👍 – доброе утро всем \n❤️ – я сегодня один играю</i>",
-    "<b>🛡️ Респавн успешный. Жизнь началась.</b>\n\n<i>👍 – отличное начало \n❤️ – а я ещё сплю</i>",
-    "<b>🌄 Кофе + бкб. День не пробьёт.</b>\n\n<i>👍 – хороший настрой \n❤️ – я без кофе сегодня</i>",
-    "<b>🍃 Лёгкой линии сегодня, бро!</b>\n\n<i>👍 – и тебе лёгкой \n❤️ – мне и сложная норм</i>",
-    "<b>☀️ Мягкое утро, яркие кувшины!</b>\n\n<i>👍 – спасибо за позитив \n❤️ – мне и раковина важна</i>",
-    "<b>🌅 Планка дня: не рваться в одиночку.</b>\n\n<i>👍 – учту на зубок \n❤️ – я как всегда в одиночку</i>",
-    "<b>🚀 День стартовал, фарм в дело!</b>\n\n<i>👍 – давай порвёмся \n❤️ – а мне и так норм</i>",
-    "<b>🎯 Доброе утро, тима! Криты — в плюс.</b>\n\n<i>👍 – доброе утро \n❤️ – я пока в фарме</i>",
-    "<b>🔮 Доброе утро, мана пополнена — твори чудеса!</b>\n\n<i>👍 – удачного дня \n❤️ – я на последнем байте</i>",
-    "<b>💪 Доброе утро, ХП восполнен — сила внутри!</b>\n\n<i>👍 – в рейд \n❤️ – я в саппорте</i>",
+    "<b>⚔️ Доброе утро, тима!</b>\n\n<i>❤️ – доброе утро всем \n💔 – я сегодня один играю</i>",
+    "<b>🛡️ Респавн успешный. Жизнь началась.</b>\n\n<i>❤️ – отличное начало \n💔 – а я ещё сплю</i>",
+    "<b>🌄 Кофе + бкб. День не пробьёт.</b>\n\n<i>❤️ – хороший настрой \n💔 – я без кофе сегодня</i>",
+    "<b>🍃 Лёгкой линии сегодня, бро!</b>\n\n<i>❤️ – и тебе лёгкой \n💔 – мне и сложная норм</i>",
+    "<b>☀️ Мягкое утро, яркие кувшины!</b>\n\n<i>❤️ – спасибо за позитив \n💔 – мне и раковина важна</i>",
+    "<b>🌅 Планка дня: не рваться в одиночку.</b>\n\n<i>❤️ – учту на зубок \n💔 – я как всегда в одиночку</i>",
+    "<b>🚀 День стартовал, фарм в дело!</b>\n\n<i>❤️ – давай порвёмся \n💔 – а мне и так норм</i>",
+    "<b>🎯 Доброе утро, тима! Криты — в плюс.</b>\n\n<i>❤️ – доброе утро \n💔 – сегодня не критует</i>",
+    "<b>🔮 Доброе утро, мана пополнена — твори чудеса!</b>\n\n<i>❤️ – удачного дня \n💔 – сегодня без чудес</i>",
+    "<b>💪 Доброе утро, ХП восполнен — сила внутри!</b>\n\n<i>❤️ – в рейд \n💔 – дайте фласку</i>",
 ]
 
 EVENING_GREETINGS = [
-    "<b>🌙 Спокойной ночи! Восстанавливай хп.</b>\n\n<i>👍 – спокойной ночи \n❤️ – я ещё немного поиграю</i>",
-    "<b>🛌 Карта погашена. Сладких снов.</b>\n\n<i>👍 – приятных снов \n❤️ – а я ещё не ложусь</i>",
-    "<b>🌃 Хорошая катка была. Отдыхай.</b>\n\n<i>👍 – да, пора отдыхать \n❤️ – я на ещё одну</i>",
-    "<b>✨ Ночная руна. Восстанавливай хп.</b>\n\n<i>👍 – спокойной ночи \n❤️ – я ещё побегаю</i>",
-    "<b>🌌 Варды сняты. Спи спокойно.</b>\n\n<i>👍 – и тебе сладких снов \n❤️ – я пока с вардами постою</i>",
-    "<b>🕯️ Выход из игры. Сладких снов.</b>\n\n<i>👍 – ладно, иду спать \n❤️ – у меня ещё дела</i>",
-    "<b>🎮 Дота спит. И ты ложись.</b>\n\n<i>👍 – согласен, отдыхаю \n❤️ – я без саппорта, но спасибо</i>",
-    "<b>🛡️ Отдых — лучший саппорт. Сладких снов.</b>\n\n<i>👍 – хорошей ночи \n❤️ – а мне и в темноте хорошо</i>",
-    "<b>🌙 Фарми сны, а не крипов.</b>\n\n<i>👍 – спокойной ночи \n❤️ – я ещё немного поиграю</i>",
-    "<b>💤 Тьма на карте. Доброй ночи.</b>\n\n<i>👍 – приятных снов \n❤️ – а я ещё не ложусь</i>",
+    "<b>🌙 Спокойной ночи! Восстанавливай хп.</b>\n\n<i>❤️ – спокойной ночи \n💔 – я ещё немного поиграю</i>",
+    "<b>🛌 Карта погашена. Сладких снов.</b>\n\n<i>❤️ – приятных снов \n💔 – а я ещё не ложусь</i>",
+    "<b>🌃 Хорошая катка была. Отдыхай.</b>\n\n<i>❤️ – да, пора отдыхать \n💔 – я на ещё одну</i>",
+    "<b>✨ Ночная руна. Восстанавливай хп.</b>\n\n<i>❤️ – спокойной ночи \n💔 – я ещё побегаю</i>",
+    "<b>🌌 Варды сняты. Спи спокойно.</b>\n\n<i>❤️ – и тебе сладких снов \n💔 – я пока с вардами постою</i>",
+    "<b>🕯️ Выход из игры. Сладких снов.</b>\n\n<i>❤️ – ладно, иду спать \n💔 – у меня ещё дела</i>",
+    "<b>🎮 Дота спит. И ты ложись.</b>\n\n<i>❤️ – согласен, отдыхаю \n💔 – я без саппорта</i>",
+    "<b>🛡️ Отдых — лучший саппорт. Сладких снов.</b>\n\n<i>❤️ – хорошей ночи \n💔 – а мне и в темноте хорошо</i>",
+    "<b>🌙 Фарми сны, а не крипов.</b>\n\n<i>❤️ – спокойной ночи \n💔 – я ещё немного поиграю</i>",
+    "<b>💤 Тьма на карте. Доброй ночи.</b>\n\n<i>❤️ – приятных снов \n💔 – а я ещё не ложусь</i>",
 ]
 
 _EVENING_GREETINGS_DUP = [
@@ -378,7 +378,7 @@ async def morning_greeting_job(context):
 
         bot = context.application.bot
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("👍", callback_data="greeting_good"), InlineKeyboardButton("❤️", callback_data="greeting_bad")]
+            [InlineKeyboardButton("❤️", callback_data="greeting_good"), InlineKeyboardButton("💔", callback_data="greeting_bad")]
         ])
         await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=keyboard, parse_mode="HTML")
 
@@ -416,7 +416,7 @@ async def night_greeting_job(context):
 
         bot = context.application.bot
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("👍", callback_data="greeting_good"), InlineKeyboardButton("❤️", callback_data="greeting_bad")]
+            [InlineKeyboardButton("❤️", callback_data="greeting_good"), InlineKeyboardButton("💔", callback_data="greeting_bad")]
         ])
         await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=keyboard, parse_mode="HTML")
 
@@ -1817,8 +1817,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 good_count = get_config(f"greeting_{date_str}_good") or 0
                 bad_count = get_config(f"greeting_{date_str}_bad") or 0
                 keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"👍 {good_count}", callback_data="greeting_good"), 
-                     InlineKeyboardButton(f"❤️ {bad_count}", callback_data="greeting_bad")]
+                    [InlineKeyboardButton(f"❤️ {good_count}", callback_data="greeting_good"), 
+                     InlineKeyboardButton(f"💔 {bad_count}", callback_data="greeting_bad")]
                 ])
                 await context.bot.edit_message_reply_markup(
                     chat_id=chat_id,
