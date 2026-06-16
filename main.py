@@ -532,7 +532,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="🪝 Загрузка графика..."
+                text="🪝 Хукаю граф..."
             )
             logger.info(f"Created loading message in analyze: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
         except Exception as e:
@@ -1507,8 +1507,8 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show bot stats and resource usage."""
     try:
         from analytics_dashboard import generate_dashboard_text, fetch_neon_usage
-        await fetch_neon_usage()
-        text = generate_dashboard_text()
+        neon_hours = await fetch_neon_usage()
+        text = generate_dashboard_text(neon_hours)
         await update.message.reply_text(text, parse_mode="HTML")
     except Exception as e:
         logger.error(f"about error: {e}")
@@ -2899,8 +2899,8 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Get resource stats text
     from analytics_dashboard import generate_dashboard_text, fetch_neon_usage
-    await fetch_neon_usage()
-    resource_text = generate_dashboard_text()
+    neon_hours = await fetch_neon_usage()
+    resource_text = generate_dashboard_text(neon_hours)
 
     # Отправляем фото с баннером и кнопкой
     result_msg = await context.bot.send_photo(
