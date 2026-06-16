@@ -894,6 +894,10 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
             chart = await _create_visual_chart(cached.get("history", []))
             return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY")}
 
+    # Check if user has Steam account BEFORE fetching matches
+    if not user or not user.get("steam_id"):
+        return {"error": "no_steam_linked", "message": "🔗 Привяжите Steam в профиле, чтобы увидеть аналитику"}
+    
     matches = await get_last_matches(telegram_id)
 
     if len(matches) < 5:
@@ -965,6 +969,10 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
     Returns:
         dict с ключами 'image', 'history', 'matches', 'role' или None если данных мало.
     """
+    # Check if user has Steam account BEFORE fetching matches
+    if not user or not user.get("steam_id"):
+        return {"error": "no_steam_linked", "message": "🔗 Привяжите Steam в профиле, чтобы увидеть аналитику"}
+    
     matches = await get_last_matches(telegram_id)
 
     if len(matches) < 5:
