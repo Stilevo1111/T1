@@ -2911,6 +2911,21 @@ def get_dota_week_top(limit=10, force_refresh=False):
                     return []
 
             if not all_users:
+                # Fallback to config cache (persists across restarts)
+                try:
+                    cached = get_config('dota_week_top_cache')
+                    if cached:
+                        import json
+                        top_users = json.loads(cached)
+                        logger.info(f"get_dota_week_top: using config cache ({len(top_users)} users)")
+                        for u in top_users:
+                            if 'telegram_id' in u:
+                                user_cache.set(u['telegram_id'], u)
+                        user_cache.set('dota_week_top', top_users)
+                        user_cache.set('dota_week_top_ts', time.time())
+                        return top_users[:limit]
+                except Exception as e:
+                    logger.debug(f"get_dota_week_top: config cache fallback failed: {e}")
                 get_dota_week_top._calculating[0] = False
                 return []
 
