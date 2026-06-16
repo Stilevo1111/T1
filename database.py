@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -132,7 +133,8 @@ class UserCache:
 
     def get(self, telegram_id: int) -> dict[str, Any] | None:
         with self._lock:
-            return self._cache.get(telegram_id)
+            data = self._cache.get(telegram_id)
+            return copy.deepcopy(data) if data else None
 
     def set(self, telegram_id, data):
         """Установить данные пользователя в кеш"""
