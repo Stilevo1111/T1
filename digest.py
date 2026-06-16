@@ -848,6 +848,11 @@ async def alternate_digest_job(context):
 
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
+        # Fallback: ensure cache is preserved for next attempt
+        saved_last_text = get_config('alternate_digest_last_text')
+        if saved_last_text and _digest_state_container.get_last_text() is None:
+            _digest_state_container.set_last_text(saved_last_text)
+            logger.info("alternate_digest_job: preserved last_text in cache after error")
 
 
 # ============================================================
