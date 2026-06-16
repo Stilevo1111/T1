@@ -7,11 +7,15 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
+# Start time for Render uptime calculation
+_START_TIME = time.time()
+
 # Данные об использовании (считаем в реальном времени)
 _resource_usage = {
     "opendota_tokens": [],  # [(timestamp, tokens_used)]
     "neon_hours": [],       # [(timestamp, hours_used)]
-    "render_mins": []      # [(timestamp, mins_used)]
+    "render_mins": [],      # Will calculate from uptime
+    "last_neon_reset": 0   # Track when we last calculated DB usage
 }
 
 def record_opendota_tokens(tokens_used: int):
@@ -19,7 +23,7 @@ def record_opendota_tokens(tokens_used: int):
     _resource_usage["opendota_tokens"].append((time.time(), tokens_used))
 
 def record_neon_hours(hours: float):
-    """Записать использование часов Neon."""
+    """Записать использование часов Neon (вызывается раз в час)."""
     _resource_usage["neon_hours"].append((time.time(), hours))
 
 def record_render_mins(mins: int):
@@ -33,13 +37,16 @@ def get_resource_stats(period_hours: int = 24):
     def sum_usage(data):
         return sum(amt for ts, amt in data if ts >= cutoff)
     
+    # Calculate Render uptime automatically
+    render_uptime_mins = int((time.time() - _START_TIME) / 60)
+    
     return {
         "opendota_tokens_24h": sum_usage(_resource_usage["opendota_tokens"]),
         "neon_hours_24h": sum_usage(_resource_usage["neon_hours"]),
-        "render_mins_24h": sum_usage(_resource_usage["render_mins"]),
+        "render_mins_24h": render_uptime_mins,
         "estimated_cost_usd": (
             sum_usage(_resource_usage["neon_hours"]) * 0.02 +  # ~0.02$/час Neon
-            sum_usage(_resource_usage["render_mins"]) * 0.0005   # ~$0.0005/мин Render
+            render_uptime_mins * 0.0005   # ~$0.0005/мин Render
         )
     }
 

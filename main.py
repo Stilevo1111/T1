@@ -3519,6 +3519,9 @@ async def main():
                     try:
                         await asyncio.sleep(1500)  # Ping every 25 minutes to prevent Render sleep
                         from database import get_aiohttp_session
+                        from analytics_dashboard import record_neon_hours
+                        # Record Neon DB usage (approximate - every 25 min = 0.42h)
+                        record_neon_hours(0.42)
                         session = await get_aiohttp_session()
                         # Ping health endpoint
                         await session.get(ping_url, timeout=aiohttp.ClientTimeout(total=30))
