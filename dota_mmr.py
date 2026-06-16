@@ -1754,17 +1754,11 @@ def generate_start_card(
 
         # Messages label - white
         msg_label_y = username_y + int(50 * scale)
-        if week_wins is not None and week_losses is not None:
-            draw.text((info_x + username_x_offset, msg_label_y), "За неделю:", fill=(255, 255, 255), font=font_small)
-        else:
-            draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(255, 255, 255), font=font_small)
+        draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(255, 255, 255), font=font_small)
 
         # Number - white
         msg_num_y = msg_label_y + int(28 * scale)
-        if week_wins is not None and week_losses is not None:
-            draw.text((info_x + username_x_offset, msg_num_y), f"{week_wins}W/{week_losses}L", fill=(255, 255, 255), font=font_title)
-        else:
-            draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
+        draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
 
 # Rank icon - only show if rank_tier > 0
         if rank_tier > 0 and rank_icon:
