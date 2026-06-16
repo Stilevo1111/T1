@@ -1809,7 +1809,7 @@ class Database:
         """Получить текущую позицию пользователя (динамически, без обновления всех)"""
         try:
             query = "SELECT COUNT(*) + 1 FROM users WHERE fissure > (SELECT fissure FROM users WHERE telegram_id = %s)"
-            result = self.execute_query(query, (telegram_id,))
+            result = self.execute_query(query, (telegram_id,), fetch="one")
             if result is None:
                 return 0
             if isinstance(result, dict):

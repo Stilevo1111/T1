@@ -668,7 +668,10 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Track background task for this user to cancel on subsequent requests
         user_id_for_tracking = update.effective_user.id
-        existing_task = getattr(analyze_command, '_active_tasks', {}).pop(user_id_for_tracking, None)
+        # Initialize _active_tasks BEFORE pop to avoid race condition
+        if not hasattr(analyze_command, '_active_tasks'):
+            analyze_command._active_tasks = {}
+        existing_task = analyze_command._active_tasks.pop(user_id_for_tracking, None)
         if existing_task and not existing_task.done():
             logger.info(f"Canceling previous analytics task for user {user_id_for_tracking}")
             existing_task.cancel()
@@ -680,8 +683,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Start background task and track it
         task = asyncio.create_task(generate_and_update_analytics())
         task.add_done_callback(lambda t: analyze_command._active_tasks.pop(user_id_for_tracking, None))
-        if not hasattr(analyze_command, '_active_tasks'):
-            analyze_command._active_tasks = {}
         analyze_command._active_tasks[user_id_for_tracking] = task
 
         # Start cleanup task

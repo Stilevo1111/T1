@@ -252,9 +252,12 @@ def _build_grid(hero_stats):
     for pos in range(1, 6):
         if len(grid[pos]) < 5:
             needed_roles = pos_role_map[pos]
+            needed_roles_set = set(needed_roles)
             for h in all_heroes_sorted:
                 if h['id'] not in {hero['id'] for pos_list in grid.values() for hero in pos_list}:
-                    if any(role in needed_roles for role in h.get('roles', [])):
+                    # Используем пересечение множеств вместо substring check
+                    hero_roles = set(h.get('roles', []))
+                    if hero_roles & needed_roles_set:
                         grid[pos].append(h)
                         if len(grid[pos]) >= 5:
                             break

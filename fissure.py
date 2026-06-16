@@ -472,7 +472,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Weekend bonus APPLIED TO ROLL AFTER STREAK
         if is_weekend and roll > 0 and not is_fatal and cascade_count == 1:
             bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
-            bonus_amount = roll * bonus_multiplier
+            # Используем base_roll_for_text для корректного отображения
+            bonus_amount = base_roll_for_text * bonus_multiplier
             roll = int(roll * bonus_multiplier)
             weekend_bonus = f"🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {bonus_amount:.1f} СМ"
         else:

@@ -4,15 +4,9 @@ import logging
 import os
 import time
 
+from bot_utils import _telegram_error_contains
+
 logger = logging.getLogger(__name__)
-
-
-def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
-    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
-    if error is None:
-        return False
-    msg = str(error).lower()
-    return any(p.lower() in msg for p in phrases)
 
 
 # =====================================================
@@ -794,13 +788,17 @@ async def alternate_digest_job(context):
 
                 # Закрепляем новое сообщение
                 try:
-                    # Открепляем ВСЕ закреплённые сообщения перед закреплением нового
-                    # Это решает проблему гонки между воркерами — только последний останется
-                    try:
-                        await bot.unpin_all_chat_messages(chat_id=int(digest_chat_id))
-                        logger.info("Откреплены все предыдущие закреплённые сообщения")
-                    except Exception as e:
-                        logger.debug(f"Не удалось открепить все сообщения: {e}")
+                    # Открепляем только старое сообщение дайджеста (если оно отличается от нового)
+                    # ⚠️ БЫЛО: unpin_all_chat_messages — снимало ВСЕ закрепы в чате (правила, анонсы и т.д.)
+                    if last_message_id and str(last_message_id) != str(msg.message_id):
+                        try:
+                            await bot.unpin_chat_message(
+                                chat_id=int(digest_chat_id),
+                                message_id=int(last_message_id)
+                            )
+                            logger.info(f"Откреплено старое сообщение дайджеста {last_message_id}")
+                        except Exception as e:
+                            logger.debug(f"Не удалось открепить старый дайджест: {e}")
 
                     await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
                     logger.info(f"Дайджест {msg.message_id} закреплён")
