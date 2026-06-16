@@ -76,7 +76,7 @@ class RateLimiter:
             else:
                 # Not enough tokens, calculate wait time
                 needed = tokens - self.tokens
-                wait_time = needed / self.tokens_per_second
+                wait_time = needed / max(self.tokens_per_second, 0.1)
                 logger.debug(f"Rate limiter: waiting {wait_time:.2f}s for {tokens} tokens")
                 await asyncio.sleep(wait_time)
                 # Retry after waiting
