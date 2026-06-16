@@ -1118,8 +1118,10 @@ async def update_all_mmr_job(context):
             await asyncio.to_thread(batch_save_mmr, all_updated_users)
 
         # Update top cache once after all updates
-        from database import update_dota_week_top_cache
+        from database import update_dota_week_top_cache, get_dota_week_top_from_db
         update_dota_week_top_cache()
+        # Clear top cache to force refresh on next read
+        get_dota_week_top_from_db._cache = (None, 0)
 
         # Refresh Dota digest cache
         try:
