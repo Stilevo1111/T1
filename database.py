@@ -383,6 +383,9 @@ def flush_users_cache():
             for i in range(flushed):
                 telegram_id = batch_data[i][-1]  # telegram_id is last element
                 user_cache.clear_dirty(telegram_id)
+            
+            # Invalidate top cache after DB flush - ensures consistency across /top, /profile, /rank
+            top_cache.invalidate_top_cache()
 
         conn.commit()
 
@@ -401,17 +404,16 @@ def flush_users_cache():
 
 
 def update_dota_week_top_cache():
-    """Обновление кеша топа MMR из данных пользователей"""
+    """Обновление кэша топа MMR из данных пользователей"""
     all_users = user_cache.get_all_users()
 
     # Если в кеше нет пользователей - загружаем из БД
     if not all_users:
         logger.info("update_dota_week_top_cache: no users in cache, loading from DB")
         try:
-            # Note: get_all_users_with_steam is defined at line 2802, called at runtime so it works
             db_users = get_all_users_with_steam()
             for u in db_users:
-                user_cache.set(u['telegram_id'], u)
+                user_cache.set(u['telegram_id'], u, skip_dirty=True)
             all_users = user_cache.get_all_users()
             logger.info(f"update_dota_week_top_cache: loaded {len(all_users)} users from DB to cache")
         except Exception as e:

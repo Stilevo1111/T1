@@ -2204,6 +2204,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # /profile @username или /profile username — ищем другого пользователя
             target_username = context.args[0].lstrip("@")
             if target_username:
+                # Invalidate cache to get fresh data
+                user_cache.delete('username_lookup')
                 target_user = await asyncio.to_thread(get_user_by_username, target_username)
                 if not target_user:
                     msg = await context.bot.send_message(
@@ -2217,6 +2219,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not target_user:
             user_obj = update.effective_user
             username = user_obj.username or user_obj.first_name or "Unknown"
+            # Invalidate cache to get fresh DB data
+            user_cache.remove(user_obj.id)
             target_user = get_user(user_obj.id, username)
 
             try:
@@ -2403,6 +2407,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug(f"Could not delete last bot message: {e}")
 
     try:
+        # Invalidate top cache to ensure fresh data after manual DB changes
+        top_cache.invalidate_top_cache()
         top_users = get_fissure_top(10)
         user_rank = get_fissure_rank(update.effective_user.id)
         user = get_user(update.effective_user.id, update.effective_user.username)
@@ -3318,7 +3324,7 @@ async def main():
             loaded_count = 0
             for u in all_users:
                 try:
-                    user_cache.set(u['telegram_id'], u)
+                    user_cache.set(u['telegram_id'], u, skip_dirty=True)
                     loaded_count += 1
                 except Exception as e:
                     logger.error(f"Failed to cache user {u.get('telegram_id')}: {e}")
