@@ -41,15 +41,15 @@ def get_resource_stats():
         "opendota_limit": _RESOURCE_LIMITS["opendota_tokens_daily"],
         "neon_month": neon_month,
         "neon_limit": _RESOURCE_LIMITS["neon_hours_monthly"],
-        "estimated_daily_cost": neon_month * 0.02 / 30,
+        "estimated_cost": neon_month * 0.02,
     }
 
 def generate_dashboard_text():
     stats = get_resource_stats()
     return (
         f"📈 OpenDota: {stats['opendota_today']:,} / {stats['opendota_limit']:,}\n"
-        f"💾 База данных: {stats['neon_month']:.1f} / {stats['neon_limit']}\n"
-        f"💰 Оценочная стоимость: ~${stats['estimated_daily_cost']:.2f}д"
+        f"💾 База данных: {stats['neon_month']:.1f} / {stats['neon_limit']}ч\n"
+        f"💰 Стоимость: ~${stats['estimated_cost']:.2f}"
     )
 
 
