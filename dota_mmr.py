@@ -1501,8 +1501,8 @@ def generate_start_card(
     weekly_mvp: int = 0,
     weekly_top2: int = 0,
     weekly_top3: int = 0,
-    week_wins: int = None,
-    week_losses: int = None
+    week_wins: int = 0,
+    week_losses: int = 0
 ) -> bytes | None:
     """Сгенерировать карточку для /start существующего пользователя"""
     try:
