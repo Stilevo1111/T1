@@ -3315,11 +3315,11 @@ def _get_all_users_query(load_all=False, allow_non_steam=False):
             FROM users{where}
         """
         if "postgres" in scheme:
-            cursor.execute(sql, params)
+            cursor.execute(sql)
             users = cursor.fetchall()
             columns = [desc[0] for desc in cursor.description]
         else:
-            cursor.execute(sql.replace("%s", "?"), params)
+            cursor.execute(sql)
             users = cursor.fetchall()
             columns = [desc[0] for desc in cursor.description]
         cursor.close()
