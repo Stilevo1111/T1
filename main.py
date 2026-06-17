@@ -1796,7 +1796,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             key = f"greeting_{date_str}_{reaction_type}"
             
             # Increment counter
-            current = get_config(key) or 0
+            current = int(get_config(key) or 0)
             set_config(key, current + 1)
             
             # Add reaction to message
@@ -1811,8 +1811,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Update button text with new count
             try:
-                good_count = get_config(f"greeting_{date_str}_good") or 0
-                bad_count = get_config(f"greeting_{date_str}_bad") or 0
+                good_count = int(get_config(f"greeting_{date_str}_good") or 0
+                bad_count = int(get_config(f"greeting_{date_str}_bad") or 0
                 keyboard = InlineKeyboardMarkup([
                     [InlineKeyboardButton(f"❤️ {good_count}", callback_data="greeting_good"), 
                      InlineKeyboardButton(f"💔 {bad_count}", callback_data="greeting_bad")]
