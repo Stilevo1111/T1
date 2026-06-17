@@ -1302,15 +1302,17 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             if time.time() - last_updated < 4 * 3600:  # 4 hours
                 return {"success": True, "rank_up": None}
 
-        # Try API multiple times with delays to avoid rate limit spam
-        for api_attempt in range(3):
+        # Keep trying API until we get data (with delays to avoid rate limit spam)
+        stats = None
+        start_time = time.time()
+        max_wait = 120  # Maximum wait time in seconds
+        while not stats and (time.time() - start_time) < max_wait:
             stats = get_player_stats(user["steam_id"], use_cache=False)
             if stats:
                 break
-            if api_attempt < 2:
-                wait_time = (api_attempt + 1) * 5  # 5s, 10s delays
-                logger.info(f"topmmr: API attempt {api_attempt + 1} failed, waiting {wait_time}s...")
-                time.sleep(wait_time)
+            wait_time = 10
+            logger.info(f"topmmr: waiting for API, sleeping {wait_time}s...")
+            time.sleep(wait_time)
         logger.info(f"topmmr: get_player_stats returned: {stats}")
         
         if not stats:
