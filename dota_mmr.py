@@ -1677,6 +1677,68 @@ def generate_start_card(
         icons['silver'] = create_medal_image(2, (192, 192, 192, 255), (128, 128, 128, 255))
         icons['bronze'] = create_medal_image(3, (205, 127, 50, 255), (139, 69, 19, 255))
 
+        rank_icon = None
+        rank_icon_size = int(80 * scale)
+        if rank_tier > 0:
+            tier = rank_tier // 10
+            star = rank_tier % 10
+            if star == 0:
+                star = 5
+
+            rank_urls = {
+                (1, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/85/SeasonalRank1-1.png",
+                (1, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/e/ee/SeasonalRank1-2.png",
+                (1, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/0/05/SeasonalRank1-3.png",
+                (1, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/6/6d/SeasonalRank1-4.png",
+                (1, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/2/2b/SeasonalRank1-5.png",
+
+                (2, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/c/c7/SeasonalRank2-1.png",
+                (2, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/2/2c/SeasonalRank2-2.png",
+                (2, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/f/f5/SeasonalRank2-3.png",
+                (2, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/b/b4/SeasonalRank2-4.png",
+                (2, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/3/32/SeasonalRank2-5.png",
+
+                (3, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/82/SeasonalRank3-1.png",
+                (3, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/6/6e/SeasonalRank3-2.png",
+                (3, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/6/67/SeasonalRank3-3.png",
+                (3, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/87/SeasonalRank3-4.png",
+                (3, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/b/b1/SeasonalRank3-5.png",
+
+                (4, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/7/76/SeasonalRank4-1.png",
+                (4, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/87/SeasonalRank4-2.png",
+                (4, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/6/60/SeasonalRank4-3.png",
+                (4, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/4/4a/SeasonalRank4-4.png",
+                (4, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/a/a3/SeasonalRank4-5.png",
+
+                (5, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/7/79/SeasonalRank5-1.png",
+                (5, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/5/52/SeasonalRank5-2.png",
+                (5, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/88/SeasonalRank5-3.png",
+                (5, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/2/25/SeasonalRank5-4.png",
+                (5, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/8e/SeasonalRank5-5.png",
+
+                (6, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/e/e0/SeasonalRank6-1.png",
+                (6, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/1/1c/SeasonalRank6-2.png",
+                (6, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/d/da/SeasonalRank6-3.png",
+                (6, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/d/db/SeasonalRank6-4.png",
+                (6, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/4/47/SeasonalRank6-5.png",
+
+                (7, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/b/b7/SeasonalRank7-1.png",
+                (7, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/8f/SeasonalRank7-2.png",
+                (7, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/f/fd/SeasonalRank7-3.png",
+                (7, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/1/13/SeasonalRank7-4.png",
+                (7, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/3/33/SeasonalRank7-5.png",
+            }
+
+            rank_url = rank_urls.get((tier, star))
+            if rank_url:
+                try:
+                    resp = requests.get(rank_url, timeout=4)
+                    if resp.status_code == 200:
+                        rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                        rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
+                except Exception:
+                    pass
+
         username_y = info_y
         username_x_offset = 0
         if steam_nickname:
@@ -1696,6 +1758,11 @@ def generate_start_card(
             draw.text((info_x + username_x_offset, msg_num_y), f"{week_wins}W/{week_losses}L/{wr}%", fill=(255, 255, 255), font=font_title)
         else:
             draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
+
+        if rank_tier > 0 and rank_icon:
+            rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
+            rank_y = avatar_y + avatar_size - rank_icon_size // 2
+            img.paste(rank_icon, (rank_x, rank_y), rank_icon)
 
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=90)
@@ -1778,33 +1845,31 @@ def generate_top_card(
 
         info_x = avatar_x + avatar_size + int(30 * scale)
         info_y = avatar_y + int(20 * scale)
-        
-        rank_icon = None
-        rank_icon_size = int(80 * scale)
 
         try:
-            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(24 * scale))
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(40 * scale))
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(26 * scale))
+            font_fissure = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(36 * scale))
         except Exception:
-            font_title = font_small = ImageFont.load_default()
+            font_title = font_small = font_fissure = ImageFont.load_default()
 
         display_name = f"@{username}" if username else str(telegram_id) if telegram_id else "Unknown"
         draw.text((info_x, info_y), display_name, fill=(255, 255, 255), font=font_title)
 
         if fissure > 0:
-            fissure_label_y = info_y + int(50 * scale)
-            draw.text((info_x, fissure_label_y), "Длина фиссуры:", fill=(255, 255, 255), font=font_small)
-            fissure_y = fissure_label_y + int(28 * scale)
+            fissure_y = info_y + int(60 * scale) + 5
             fissure_text = f"{fissure:.0f} См."
-            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_title)
+            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_fissure)
 
         if extra_text:
             if fissure > 0:
                 extra_y = fissure_y + int(35 * scale) + 5
             else:
                 extra_y = info_y + int(55 * scale) + 5
-            draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_title)
+            draw.text((info_x, extra_y), extra_text, fill=(255, 255, 255), font=font_small)
 
+        rank_icon_size = int(80 * scale)
+        rank_icon = None
         if rank_tier > 0:
             tier = rank_tier // 10
             star = rank_tier % 10
@@ -1817,42 +1882,36 @@ def generate_top_card(
                 (1, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/0/05/SeasonalRank1-3.png",
                 (1, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/6/6d/SeasonalRank1-4.png",
                 (1, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/2/2b/SeasonalRank1-5.png",
-
                 (2, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/c/c7/SeasonalRank2-1.png",
                 (2, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/2/2c/SeasonalRank2-2.png",
                 (2, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/f/f5/SeasonalRank2-3.png",
                 (2, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/b/b4/SeasonalRank2-4.png",
                 (2, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/3/32/SeasonalRank2-5.png",
-
                 (3, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/82/SeasonalRank3-1.png",
                 (3, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/6/6e/SeasonalRank3-2.png",
                 (3, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/6/67/SeasonalRank3-3.png",
                 (3, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/87/SeasonalRank3-4.png",
                 (3, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/b/b1/SeasonalRank3-5.png",
-
                 (4, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/7/76/SeasonalRank4-1.png",
                 (4, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/87/SeasonalRank4-2.png",
                 (4, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/6/60/SeasonalRank4-3.png",
                 (4, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/4/4a/SeasonalRank4-4.png",
                 (4, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/a/a3/SeasonalRank4-5.png",
-
                 (5, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/7/79/SeasonalRank5-1.png",
                 (5, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/5/52/SeasonalRank5-2.png",
                 (5, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/88/SeasonalRank5-3.png",
                 (5, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/2/25/SeasonalRank5-4.png",
                 (5, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/8e/SeasonalRank5-5.png",
-
                 (6, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/e/e0/SeasonalRank6-1.png",
                 (6, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/1/1c/SeasonalRank6-2.png",
                 (6, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/d/da/SeasonalRank6-3.png",
                 (6, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/d/db/SeasonalRank6-4.png",
                 (6, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/4/47/SeasonalRank6-5.png",
-
                 (7, 1): "https://static.wikia.nocookie.net/dota2_gamepedia/images/b/b7/SeasonalRank7-1.png",
                 (7, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/8f/SeasonalRank7-2.png",
                 (7, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/f/fd/SeasonalRank7-3.png",
                 (7, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/1/13/SeasonalRank7-4.png",
-(7, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/3/33/SeasonalRank7-5.png",
+                (7, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/3/33/SeasonalRank7-5.png",
             }
 
             rank_url = rank_urls.get((tier, star))
@@ -1862,16 +1921,11 @@ def generate_top_card(
                     if resp.status_code == 200:
                         rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
                         rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
-                    else:
-                        logger.warning(f"Failed to load rank icon: HTTP {resp.status_code}")
+                        rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
+                        rank_y = avatar_y + avatar_size - rank_icon_size // 2
+                        img.paste(rank_icon, (rank_x, rank_y), rank_icon)
                 except Exception as e:
                     logger.warning(f"Exception loading rank icon: {e}")
-
-            # Rank icon overlay - show if available
-            if rank_tier > 0 and rank_icon:
-                rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
-                rank_y = avatar_y + avatar_size - rank_icon_size // 2
-                img.paste(rank_icon, (rank_x, rank_y), rank_icon)
 
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=90)

@@ -53,7 +53,7 @@ def generate_dashboard_text():
     total_daily = total_monthly / 30
     return (
         f"📈 OpenDota: {stats['opendota_today']:,} / {stats['opendota_limit']:,}\n"
-        f"💰 Стоимость: ~{total_daily:.0f}$д"
+        f"💰 Стоимость: ~0.99$д"
     )
 
 
