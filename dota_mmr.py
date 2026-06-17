@@ -1277,8 +1277,8 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
 # ========================
 
 def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
-    # Force reset circuit breaker to ensure we attempt API calls
-    global _circuit_breaker
+    # Force reset all API state to ensure we attempt API calls
+    global _circuit_breaker, _api_rate_limit, _opendota_rate_limited_until
     if _circuit_breaker["state"] != "CLOSED":
         logger.info(f"update_user_mmr: resetting circuit breaker from {_circuit_breaker['state']}")
         _circuit_breaker = {
@@ -1288,6 +1288,9 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             "failure_threshold": 5,
             "recovery_timeout": 120,
         }
+    # Also reset rate limit state
+    _api_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
+    _opendota_rate_limited_until = 0
     try:
         user = get_user(telegram_id)
         if not user or not user.get("steam_id"):
@@ -1303,7 +1306,22 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         stats = get_player_stats(user["steam_id"], use_cache=False)
         logger.info(f"topmmr: get_player_stats returned: {stats}")
         if not stats:
-            return {"success": False, "rank_up": None}
+            logger.warning(f"topmmr: API failed for user {telegram_id}, returning cached/zero data")
+            # Return minimal data to still show in top
+            cached = _get_cached(f"player_{user['steam_id']}")
+            if cached:
+                stats = cached
+            else:
+                stats = {
+                    "nickname": user.get("steam_nickname", "Unknown"),
+                    "avatar": user.get("avatar"),
+                    "mmr": user.get("mmr", 0),
+                    "rank_tier": user.get("rank_tier", 0),
+                    "total_games": 0,
+                    "wins": 0,
+                    "losses": 0,
+                    "winrate": 0.0,
+                }
 
         # Получаем последние матчи для расчёта недельной статистики
         # Фиксированная неделя: с понедельника по воскресенье
