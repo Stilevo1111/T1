@@ -1302,12 +1302,19 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             if time.time() - last_updated < 4 * 3600:  # 4 hours
                 return {"success": True, "rank_up": None}
 
-        logger.info(f"topmmr: calling get_player_stats for steam_id={user['steam_id']}")
-        stats = get_player_stats(user["steam_id"], use_cache=False)
+        # Try API multiple times with delays to avoid rate limit spam
+        for api_attempt in range(3):
+            stats = get_player_stats(user["steam_id"], use_cache=False)
+            if stats:
+                break
+            if api_attempt < 2:
+                wait_time = (api_attempt + 1) * 5  # 5s, 10s delays
+                logger.info(f"topmmr: API attempt {api_attempt + 1} failed, waiting {wait_time}s...")
+                time.sleep(wait_time)
         logger.info(f"topmmr: get_player_stats returned: {stats}")
+        
         if not stats:
-            logger.warning(f"topmmr: API failed for user {telegram_id}, returning cached/zero data")
-            # Return minimal data to still show in top
+            logger.warning(f"topmmr: API failed for user {telegram_id} after retries, using cached data")
             cached = _get_cached(f"player_{user['steam_id']}")
             if cached:
                 stats = cached
