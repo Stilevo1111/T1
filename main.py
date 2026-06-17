@@ -560,8 +560,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 )
                             except Exception:
                                 pass
-                            if chart_data.get("error") == "opendota_rate_limit":
-                                schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.application.job_queue)
+                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.application.job_queue)
                         return
 
                     if chart_data.get("api_fallback"):
@@ -1506,9 +1505,8 @@ async def resolve_avatar_url_for_card(
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show bot stats and resource usage."""
     try:
-        from analytics_dashboard import generate_dashboard_text, fetch_neon_usage
-        neon_hours = await fetch_neon_usage()
-        text = generate_dashboard_text(neon_hours)
+        from analytics_dashboard import generate_dashboard_text
+        text = generate_dashboard_text()
         await update.message.reply_text(text, parse_mode="HTML")
     except Exception as e:
         logger.error(f"about error: {e}")
@@ -1617,7 +1615,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="🪝 Загрузка..."
+                text="🪝 Хукаю..."
             )
             logger.info(f"Created loading message in start: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
         except Exception as e:
@@ -1756,7 +1754,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Handle analytics_show separately with loading indicator (as chat message)
     if data == "analytics_show":
         await callback_query.answer()
-        loading_msg = await context.bot.send_message(chat_id=chat_id, text="🪝 Загрузка аналитики...")
+        loading_msg = await context.bot.send_message(chat_id=chat_id, text="🪝 Хукаю аналитику...")
 
         try:
             await _show_analytics_page(callback_query, 0, context, loading_msg=loading_msg)
@@ -2221,7 +2219,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 loading_msg = await context.bot.send_message(
                     chat_id=chat_id,
-                    text="🪝 Загрузка..."
+                    text="🪝 Хукаю..."
                 )
                 logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
             except Exception as e:
@@ -2633,6 +2631,28 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Generate MMR top banner with winner info
             winner = top_users[0]
             winner_avatar = winner.get('avatar')
+            winner_telegram_id = winner.get('telegram_id')
+
+            # Fallback to Telegram avatar if Steam avatar not available
+            if not winner_avatar or not str(winner_avatar).strip():
+                winner_avatar = None
+            elif not str(winner_avatar).startswith('http'):
+                winner_avatar = None
+
+            if not winner_avatar and winner_telegram_id:
+                try:
+                    tg_avatar = await get_user_avatar_url(context.bot, winner_telegram_id)
+                    if tg_avatar:
+                        winner_avatar = tg_avatar
+                        logger.info(f"topmmr: using Telegram fallback avatar for user {winner_telegram_id}")
+                except Exception as e:
+                    logger.debug(f"Could not get Telegram avatar for topmmr user: {e}")
+
+            # If still no avatar, use DEFAULT_AVATAR_URL
+            if not winner_avatar:
+                winner_avatar = DEFAULT_AVATAR_URL
+                logger.info(f"topmmr: using DEFAULT_AVATAR_URL for user {winner_telegram_id}")
+
             winner_name = winner.get('steam_nickname') or winner.get('username') or winner.get('first_name')
             winner_rank_tier = winner.get('rank_tier', 0)
             winner_week_games = winner.get('week_games') or 0
@@ -2898,9 +2918,8 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     # Get resource stats text
-    from analytics_dashboard import generate_dashboard_text, fetch_neon_usage
-    neon_hours = await fetch_neon_usage()
-    resource_text = generate_dashboard_text(neon_hours)
+    from analytics_dashboard import generate_dashboard_text
+    resource_text = generate_dashboard_text()
 
     # Отправляем фото с баннером и кнопкой
     result_msg = await context.bot.send_photo(

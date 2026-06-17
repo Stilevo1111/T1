@@ -1632,8 +1632,8 @@ def generate_start_card(
 
         # Шрифты - увеличенные для Retina
         try:
-            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(24 * scale))
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(40 * scale))
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(26 * scale))
         except Exception:
             font_title = ImageFont.load_default()
             font_small = ImageFont.load_default()
@@ -1676,6 +1676,26 @@ def generate_start_card(
         icons['gold'] = create_medal_image(1, (255, 215, 0, 255), (184, 134, 11, 255))
         icons['silver'] = create_medal_image(2, (192, 192, 192, 255), (128, 128, 128, 255))
         icons['bronze'] = create_medal_image(3, (205, 127, 50, 255), (139, 69, 19, 255))
+
+        username_y = info_y
+        username_x_offset = 0
+        if steam_nickname:
+            draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(255, 255, 255), font=font_title)
+        elif username:
+            draw.text((info_x + username_x_offset, username_y), f"@{username}", fill=(255, 255, 255), font=font_title)
+
+        msg_label_y = username_y + int(50 * scale)
+        if week_wins is not None and week_losses is not None:
+            draw.text((info_x + username_x_offset, msg_label_y), "За неделю:", fill=(255, 255, 255), font=font_small)
+        else:
+            draw.text((info_x + username_x_offset, msg_label_y), "Всего сообщений:", fill=(255, 255, 255), font=font_small)
+
+        msg_num_y = msg_label_y + int(28 * scale)
+        if week_wins is not None and week_losses is not None:
+            wr = round((week_wins / (week_wins + week_losses) * 100), 1) if (week_wins + week_losses) > 0 else 0
+            draw.text((info_x + username_x_offset, msg_num_y), f"{week_wins}W/{week_losses}L/{wr}%", fill=(255, 255, 255), font=font_title)
+        else:
+            draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
 
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=90)
@@ -1758,6 +1778,9 @@ def generate_top_card(
 
         info_x = avatar_x + avatar_size + int(30 * scale)
         info_y = avatar_y + int(20 * scale)
+        
+        rank_icon = None
+        rank_icon_size = int(80 * scale)
 
         try:
             font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(36 * scale))
@@ -1829,23 +1852,26 @@ def generate_top_card(
                 (7, 2): "https://static.wikia.nocookie.net/dota2_gamepedia/images/8/8f/SeasonalRank7-2.png",
                 (7, 3): "https://static.wikia.nocookie.net/dota2_gamepedia/images/f/fd/SeasonalRank7-3.png",
                 (7, 4): "https://static.wikia.nocookie.net/dota2_gamepedia/images/1/13/SeasonalRank7-4.png",
-                (7, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/3/33/SeasonalRank7-5.png",
+(7, 5): "https://static.wikia.nocookie.net/dota2_gamepedia/images/3/33/SeasonalRank7-5.png",
             }
 
             rank_url = rank_urls.get((tier, star))
             if rank_url:
                 try:
-                    rank_icon = None
-                    rank_icon_size = int(80 * scale)
                     resp = requests.get(rank_url, timeout=4)
                     if resp.status_code == 200:
                         rank_icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
                         rank_icon = rank_icon.resize((rank_icon_size, rank_icon_size), Image.LANCZOS)
-                        rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
-                        rank_y = avatar_y + avatar_size - rank_icon_size // 2
-                        img.paste(rank_icon, (rank_x, rank_y), rank_icon)
+                    else:
+                        logger.warning(f"Failed to load rank icon: HTTP {resp.status_code}")
                 except Exception as e:
                     logger.warning(f"Exception loading rank icon: {e}")
+
+            # Rank icon overlay - show if available
+            if rank_tier > 0 and rank_icon:
+                rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
+                rank_y = avatar_y + avatar_size - rank_icon_size // 2
+                img.paste(rank_icon, (rank_x, rank_y), rank_icon)
 
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=90)
