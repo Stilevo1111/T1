@@ -257,7 +257,12 @@ def _api_get(url: str, params: dict = None, max_retries: int = 2, timeout: int =
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping request, API unavailable")
         return None
-
+    
+    if is_opendota_rate_limited():
+        remaining = get_opendota_rate_limit_time_remaining()
+        logger.warning(f"OpenDota still rate limited, waiting {remaining}s...")
+        time.sleep(remaining + 1)
+    
     try:
         _check_rate_limit()
     except RateLimitWaitError as e:
@@ -346,7 +351,12 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping async request, API unavailable")
         return None
-
+    
+    if is_opendota_rate_limited():
+        remaining = get_opendota_rate_limit_time_remaining()
+        logger.warning(f"OpenDota still rate limited, waiting {remaining}s...")
+        await asyncio.sleep(remaining + 1)
+    
     await _check_rate_limit_async()
 
     for attempt in range(max_retries):
@@ -986,7 +996,6 @@ def search_player(nickname: str) -> dict:
 
 def get_recent_matches(steam_id: int, limit: int = 5) -> list:
     """Получить последние матчи игрока"""
-    # Проверяем кеш матчей пользователя
     if steam_id in _user_matches_cache:
         cached_data, cached_time = _user_matches_cache[steam_id]
         if time.time() - cached_time < USER_MATCHES_CACHE_TTL:
@@ -995,11 +1004,18 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
     try:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
-
-        matches = _api_get(url, {"limit": limit, "sort": "-start_time"})
+        
+        # Keep trying until we get matches (up to 60s to handle rate limits)
+        start_time = time.time()
+        max_wait = 60
+        matches = None
+        while matches is None and (time.time() - start_time) < max_wait:
+            matches = _api_get(url, {"limit": limit, "sort": "-start_time"}, max_retries=2)
+            if matches is None:
+                time.sleep(10)
+        
         matches = matches or []
         
-        # Сохраняем в кеш матчей пользователя
         _user_matches_cache[steam_id] = (matches, time.time())
         
         return matches
@@ -1013,7 +1029,6 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
     if steam_id is None:
         return []
     
-    # Проверяем кеш матчей пользователя
     if steam_id in _user_matches_cache:
         cached_data, cached_time = _user_matches_cache[steam_id]
         if time.time() - cached_time < USER_MATCHES_CACHE_TTL:
@@ -1022,11 +1037,17 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
     try:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
-
-        matches = await _api_get_async(url, {"limit": limit, "sort": "-start_time"})
+        
+        start_time = time.time()
+        max_wait = 60
+        matches = None
+        while matches is None and (time.time() - start_time) < max_wait:
+            matches = await _api_get_async(url, {"limit": limit, "sort": "-start_time"})
+            if matches is None:
+                await asyncio.sleep(10)
+        
         matches = matches or []
         
-        # Сохраняем в кеш матчей пользователя
         _user_matches_cache[steam_id] = (matches, time.time())
         
         return matches
