@@ -1907,9 +1907,9 @@ def generate_top_card(
         if fissure > 0:
             fissure_label_y = info_y + int(50 * scale)
             draw.text((info_x, fissure_label_y), "Длина фиссуры:", fill=(255, 255, 255), font=font_small)
-            fissure_y = fissure_label_y + int(28 * scale) + 5
+            fissure_y = fissure_label_y + int(28 * scale)
             fissure_text = f"{fissure:.0f} см"
-            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_title)
+            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_fissure)
 
         if extra_text:
             if fissure > 0:
