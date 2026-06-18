@@ -532,7 +532,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="<b>🪝Хукаю график...</b>"
+                text="<b>🪝Хукаю график...</b>",
+                parse_mode="HTML"
             )
             logger.info(f"Created loading message in analyze: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
         except Exception as e:
@@ -1754,7 +1755,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Handle analytics_show separately with loading indicator (as chat message)
     if data == "analytics_show":
         await callback_query.answer()
-        loading_msg = await context.bot.send_message(chat_id=chat_id, text="<b>🪝Хукаю аналитику...</b>")
+        loading_msg = await context.bot.send_message(chat_id=chat_id, text="<b>🪝Хукаю аналитику...</b>", parse_mode="HTML")
 
         try:
             await _show_analytics_page(callback_query, 0, context, loading_msg=loading_msg)
@@ -2219,7 +2220,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 loading_msg = await context.bot.send_message(
                     chat_id=chat_id,
-                    text="<b>🪝Хукаю...</b>"
+                    text="<b>🪝Хукаю...</b>",
+                    parse_mode="HTML"
                 )
                 logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
             except Exception as e:
