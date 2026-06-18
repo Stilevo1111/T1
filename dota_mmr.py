@@ -1904,12 +1904,12 @@ def generate_top_card(
         display_name = f"@{username}" if username else str(telegram_id) if telegram_id else "Unknown"
         draw.text((info_x, info_y), display_name, fill=(255, 255, 255), font=font_title)
 
-        if fissure > 0:
+if fissure > 0:
             fissure_label_y = info_y + int(50 * scale)
             draw.text((info_x, fissure_label_y), "Длина фиссуры:", fill=(255, 255, 255), font=font_small)
-            fissure_y = fissure_label_y + int(28 * scale)
-            fissure_text = f"{fissure:.0f} См."
-            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_fissure)
+            fissure_y = fissure_label_y + int(28 * scale) + 5
+            fissure_text = f"{fissure:.0f} см"
+            draw.text((info_x, fissure_y), fissure_text, fill=(255, 255, 255), font=font_title)
 
         if extra_text:
             if fissure > 0:
