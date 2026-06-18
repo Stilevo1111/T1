@@ -1616,7 +1616,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             loading_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text="🪝 Хукаю..."
+                text="<b>🪝Хукаю...</b>",
+                parse_mode="HTML"
             )
             logger.info(f"Created loading message in start: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
         except Exception as e:
