@@ -2264,9 +2264,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 if steam_id:
                     try:
-                        matches, top_heroes = await asyncio.gather(
-                            get_recent_matches_async(steam_id, limit=10),
-                            get_top_heroes_async(steam_id, last_n=10, top_k=5)
+                        matches, top_heroes = await asyncio.wait_for(
+                            asyncio.gather(
+                                get_recent_matches_async(steam_id, limit=10),
+                                get_top_heroes_async(steam_id, last_n=10, top_k=5)
+                            ),
+                            timeout=20.0
                         )
                         logger.info(f"Steam {steam_id}: got {len(matches)} matches, {len(top_heroes) if top_heroes else 0} heroes")
                     except TimeoutError:

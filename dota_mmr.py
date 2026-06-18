@@ -687,7 +687,7 @@ async def get_top_heroes_async(steam_id: int, last_n: int = 10, top_k: int = 3) 
         if not matches:
             return []
 
-        heroes_data = get_heroes_data()
+        heroes_data = await asyncio.to_thread(get_heroes_data)
         if not heroes_data:
             return []
 
