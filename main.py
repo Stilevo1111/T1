@@ -2323,7 +2323,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if top_heroes:
             try:
                 from dota_mmr import generate_heroes_image
-                img_bytes = await asyncio.to_thread(generate_heroes_image, top_heroes)
+                img_bytes = await asyncio.wait_for(
+                    asyncio.to_thread(generate_heroes_image, top_heroes),
+                    timeout=10.0
+                )
                 if img_bytes:
                     profile_banner_url = io.BytesIO(img_bytes)
                     logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
