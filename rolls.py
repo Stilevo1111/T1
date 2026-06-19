@@ -370,10 +370,21 @@ def calculate_fissure_roll(current_fissure: float) -> RollResult:
     if lucky is not None:
         return lucky, "🍀 УДАЧНЫЙ РОЛЛ!", False, False
 
-    # Normal balanced distribution (-15 ... +75)
-    # ~55% chance for positive rolls, ~45% for negative/neutral
+    if random.random() < 0.25:
+        lottery_rolls: list[tuple[float, str]] = [
+            (-25, "💸 РУНДОМ: ОГРОМНАЯ ПОТЕРЯ!"),
+            (-20, "💸 РУНДОМ: БОЛЬШОЙ МИНУС!"),
+            (-10, "😱 РУНДОМ: ПРОСТО ПЛОХО!"),
+            (+25, "🍀 РУНДОМ: УДАЧА!"),
+            (+40, "🍀 РУНДОМ: БОЛЬШОЙ КИБОРГ!"),
+            (+60, "🍀 РУНДОМ: ЭТО ТЫ!"),
+            (+100, "🍀 РУНДОМ: БОГ ПОБЕДИЛ!"),
+        ]
+        roll, msg = random.choice(lottery_rolls)
+        return roll, msg, False, False
+
     weighted_rolls: list[tuple[float, int]] = [
-        (-15, 5), (-10, 5), (-7, 6), (-5, 6), (-3, 5), (-1, 4), (0, 3),
+        (-15, 6), (-10, 6), (-7, 7), (-5, 7), (-3, 6), (-1, 5), (0, 3),
         (1, 6), (3, 6), (5, 5), (7, 5), (10, 6), (15, 5), (20, 4),
         (30, 2), (50, 2), (75, 1)
     ]
