@@ -227,6 +227,29 @@ async def fetch_hero_icon(session, icon_path):
         return None
 
 
+async def _enrich_hero_icons(hero_stats):
+    from dota_mmr import get_hero_list
+    heroes_info = await get_hero_list()
+    if not heroes_info:
+        return None
+    hero_map = {h.get("id"): h for h in heroes_info}
+    for hs in hero_stats:
+        hero_id = hs.get("hero_id")
+        if hero_id in hero_map:
+            info = hero_map[hero_id]
+            img_value = info.get("img", "")
+            if img_value and img_value.isdigit():
+                hero_name = info.get("name", "").replace("npc_dota_hero_", "")
+                hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
+            elif img_value and "/apps/dota2/images/dota/heroes/" in img_value:
+                import re
+                match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', img_value)
+                if match:
+                    hero_name = match.group(1)
+                    hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
+    return hero_stats
+
+
 async def _enrich_with_hero_data(hero_stats):
     from dota_mmr import get_hero_list
     heroes_info = await get_hero_list()
@@ -500,9 +523,12 @@ async def get_dota_data(days=7, force_refresh=False):
             cached_data = cache_dict.get("data")
             cached_ts = cache_dict.get("timestamp", 0)
             if cached_data and (now - cached_ts) < HERO_META_CONFIG_TTL:
-                logger.info("Using cached hero meta from DB config")
+                logger.info("Using cached hero meta from DB config, re-enriching")
                 _hero_meta_cache["data"] = cached_data
                 _hero_meta_cache["timestamp"] = cached_ts
+                enriched = await _enrich_hero_icons(cached_data)
+                if enriched:
+                    return enriched
                 return cached_data
     except Exception as e:
         logger.warning(f"Failed to read hero meta from DB config: {e}")
