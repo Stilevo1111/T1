@@ -235,18 +235,31 @@ async def _enrich_hero_icons(hero_stats):
     hero_map = {h.get("id"): h for h in heroes_info}
     for hs in hero_stats:
         hero_id = hs.get("hero_id")
-        if hero_id in hero_map:
+        # Check current img value for numeric ID in URL
+        current_img = hs.get("img", "")
+        if current_img:
+            match = re.search(r'/heroes/(\d+)\.png$', current_img)
+            if match:
+                # Use hero name from hero_map instead
+                if hero_id in hero_map:
+                    hero_name = hero_map[hero_id].get("name", "").replace("npc_dota_hero_", "")
+                    hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
+                else:
+                    continue
+        # Also enrich from info.get("img") if it has numeric ID
+        elif hero_id in hero_map:
             info = hero_map[hero_id]
             img_value = info.get("img", "")
-            if img_value and img_value.isdigit():
-                hero_name = info.get("name", "").replace("npc_dota_hero_", "")
-                hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
-            elif img_value and "/apps/dota2/images/dota/heroes/" in img_value:
-                import re
-                match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', img_value)
+            if img_value:
+                match = re.search(r'/heroes/(\d+)\.png$', img_value)
                 if match:
-                    hero_name = match.group(1)
+                    hero_name = info.get("name", "").replace("npc_dota_hero_", "")
                     hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
+                elif "/apps/dota2/images/dota/heroes/" in img_value:
+                    match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', img_value)
+                    if match:
+                        hero_name = match.group(1)
+                        hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
     return hero_stats
 
 
