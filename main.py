@@ -57,7 +57,6 @@ from database import (
 
 from dota_mmr import _get_start_card_background, update_user_mmr
 from mute import register_handlers as register_mute_handlers
-from techies import techies_command
 from rate_limiter import is_rate_limited, rate_limit, set_rate_limited
 
 structlog.configure(
@@ -3542,10 +3541,7 @@ async def main():
         app.add_handler(CommandHandler("resetgame", reset_game))
         app.add_handler(CommandHandler("testgreeting", test_greeting))
         app.add_handler(CommandHandler("testmvp", test_mvp_winner))
-
-        # Еженедельная аналитика
         app.add_handler(CommandHandler("analyze", analyze_command))
-        app.add_handler(CommandHandler("techies", techies_command))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 

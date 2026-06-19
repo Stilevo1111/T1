@@ -44,6 +44,7 @@ from rolls import (
     MULTICAST_TEXTS,
 )
 from stats import get_event_chances
+from techies import handle_techies_button as handle_techies_event
 
 # Fissure-specific in-memory state (moved from main.py for clean extraction)
 _user_fissure_processing: dict[int, float] = {}
@@ -331,11 +332,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Один рандом: что выпало?
         event_roll = random.random()
-        multicast_chance, zeus_chance = get_event_chances()
+        multicast_chance, zeus_chance, techies_chance = get_event_chances()
         anim_msg = None
 
         if event_roll < zeus_chance:
-            # ⚡ ЗЕВС — отдельное событие，без ролла
             zeus_triggered = True
             await handle_zeus_event(
                 context.bot,
@@ -352,7 +352,23 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update_last_message_id,
                 zeus_strike
             )
-            return  # exit without roll
+            return
+
+        if event_roll < zeus_chance + zeus_chance + techies_chance:
+            await handle_techies_event(
+                context.bot,
+                chat_id,
+                user,
+                user_obj,
+                display_username,
+                now,
+                main_menu,
+                set_last_bot_message,
+                schedule_delete,
+                update_fissure,
+                update_last_message_id
+            )
+            return
 
         # Остальные события (обычный ролл или мулькаст)
         original_roll = None
