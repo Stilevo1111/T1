@@ -53,7 +53,7 @@ async def handle_techies_event(bot, chat_id, user, user_obj, display_username, n
         "Выбирай с умом, сапёр... 💣"
     )
     
-    msg = await bot.send_photo(chat_id=chat_id, photo=TECHIES_BANNER_URL, caption=text, reply_markup=keyboard)
+    msg = await bot.send_photo(chat_id=chat_id, photo=TECHIES_BANNER_URL, caption=text, reply_markup=keyboard, parse_mode="HTML")
     set_last_bot_message(chat_id, msg.message_id)
 
 async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
@@ -88,7 +88,8 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
     await update.message.reply_photo(
         photo=TECHIES_BANNER_URL,
         caption=text,
-        reply_markup=keyboard
+        reply_markup=keyboard,
+        parse_mode="HTML"
     )
 
 async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
