@@ -123,8 +123,8 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
     current_fissure = user.get("fissure", 0) or 0
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🧨 Левая", disabled=True),
-         InlineKeyboardButton("🧨 Правая", disabled=True)]
+        [InlineKeyboardButton("🧨 Левая", callback_data="noop"),
+         InlineKeyboardButton("🧨 Правая", callback_data="noop")]
     ])
     
     if elapsed > 15 or button_pressed != correct_button:
