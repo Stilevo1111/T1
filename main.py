@@ -2558,6 +2558,32 @@ async def refreshmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"refreshmmr error: {e}")
         await update.message.reply_text(f"❌ Ошибка обновления: {e}")
 
+async def testtechies(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from techies import handle_techies_event
+    user = update.effective_user
+    user_data = {
+        "id": user.id,
+        "first_name": user.first_name,
+        "username": user.username,
+        "fissure": 100.0
+    }
+    user_obj = type('User', (), {'id': user.id, 'first_name': user.first_name, 'username': user.username})()
+    display_username = f"<a href=\"tg://user?id={user.id}\">{user.first_name}</a>"
+    import time
+    await handle_techies_event(
+        context.bot,
+        update.effective_chat.id,
+        user_data,
+        user_obj,
+        display_username,
+        time.time(),
+        None,
+        lambda chat_id, msg_id: None,
+        lambda: None,
+        lambda uid, fissure, ts, growth: None,
+        lambda uid, ts: None
+    )
+
 
 @rate_limit(tokens=1)
 async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3542,6 +3568,7 @@ async def main():
         app.add_handler(CommandHandler("testgreeting", test_greeting))
         app.add_handler(CommandHandler("testmvp", test_mvp_winner))
         app.add_handler(CommandHandler("analyze", analyze_command))
+        app.add_handler(CommandHandler("testtechies", testtechies))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
