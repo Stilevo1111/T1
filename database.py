@@ -514,7 +514,6 @@ def get_pg_connection():
             if _pg_pool is None:
                 try:
                     from psycopg2 import pool
-                    # Ensure SSL for Neon PostgreSQL
                     import urllib.parse as urlparse
                     parsed = urlparse.urlparse(DATABASE_URL)
                     dsn = DATABASE_URL
@@ -529,24 +528,27 @@ def get_pg_connection():
                     logger.warning(f"Failed to create psycopg2 pool: {e}")
                     _pg_pool = None
     if _pg_pool is None:
-        # Fallback to direct connection
         return get_connection()
     try:
         conn = _pg_pool.getconn()
-        # Test connection is alive - conn.closed is 0 for open connections
         if conn and not conn.closed:
-            return conn
-        else:
-            # Connection is closed, close it and reset pool
             try:
-                conn.close()
-            except Exception:
-                pass
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.close()
+                return conn
+            except Exception as e:
+                logger.warning(f"Connection is broken, resetting pool: {e}")
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                _reset_persistent_pg_conn(str(e))
+        else:
             _reset_persistent_pg_conn("closed connection returned from pool")
     except Exception as e:
-        logger.warning(f"Pool connection closed, recreating: {e}")
+        logger.warning(f"Pool connection error, recreating: {e}")
         _reset_persistent_pg_conn(str(e))
-    # Recreate pool with proper SSL settings
     try:
         from psycopg2 import pool
         import urllib.parse as urlparse
@@ -555,10 +557,14 @@ def get_pg_connection():
         if "postgres" in parsed.scheme and "sslmode" not in dsn:
             dsn = f"{dsn}?sslmode=require&connect_timeout=10"
         _pg_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=5, dsn=dsn)
-        return _pg_pool.getconn()
+        conn = _pg_pool.getconn()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.close()
+        return conn
     except Exception as e:
         logger.warning(f"Failed to get pg connection: {e}")
-    return get_connection()
+        return get_connection()
 
 def release_pg_connection(conn):
     """Release a PostgreSQL connection back to the pool"""
