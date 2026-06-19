@@ -610,6 +610,7 @@ def get_heroes_data() -> dict:
                 "short_name": short_name,
                 "image_url": f"{HERO_IMAGE_BASE}/{short_name}.png",
                 "icon_url": f"{HERO_ICON_BASE}/{short_name}.png",
+                "img": f"{HERO_IMAGE_BASE}/{short_name}.png",
             }
 
         _set_cached("heroes_data", heroes)

@@ -375,7 +375,17 @@ async def _get_hero_stats_from_db(days=7):
             if hero_id in hero_map:
                 info = hero_map[hero_id]
                 hs["localized_name"] = info.get("localized_name", f"Hero {hero_id}")
-                hs["img"] = info.get("img", f"/apps/dota2/images/dota/heroes/{info.get('name', hero_id).replace('npc_dota_hero_', '')}_sb.png")
+                img_url = info.get("img", "")
+                if img_url and "/apps/dota2/images/dota/heroes/" in img_url:
+                    import re
+                    match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', img_url)
+                    if match:
+                        hero_name = match.group(1)
+                        hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
+                    else:
+                        hs["img"] = img_url
+                else:
+                    hs["img"] = img_url or f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{info.get('name', hero_id).replace('npc_dota_hero_', '')}.png"
                 hs["roles"] = info.get("roles", [])
             # Calculate winrate always
             if hs["pub_pick"] > 0:
