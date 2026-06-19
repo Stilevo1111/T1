@@ -199,8 +199,9 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         return
     
     session_key = f"{query.message.chat_id}_{user_id}"
-    if session_key in _active_techies_sessions:
-        del _active_techies_sessions[session_key]
+    if session_key not in _active_techies_sessions:
+        return
+    del _active_techies_sessions[session_key]
     
     try:
         start_time = float(start_time_str) / 1000
