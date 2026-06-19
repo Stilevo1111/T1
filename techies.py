@@ -1,7 +1,7 @@
 import random
 import time
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
 BANNER_URL = "https://i.ibb.co/PzzFJwwk/Gemini-Generated-Image-e3k1zhe3k1zhe3k1.png"
@@ -150,4 +150,4 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         new_fissure = current_fissure
         text = f"😇 ОБЕЗВРЕЖЕНО!\n🩸 Techies: {phrase}\n\n📏 {current_fissure:.1f} см"
     
-    await query.edit_message_media(photo=TECHIES_BANNER_URL, caption=text, reply_markup=keyboard)
+    await query.edit_message_media(media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text), reply_markup=keyboard)
