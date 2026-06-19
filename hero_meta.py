@@ -130,26 +130,42 @@ async def fetch_hero_icon(session, icon_path):
     # BUILD URL
     # ==========================================
 
-    # Clean the path - remove trailing ? or query params that might cause issues
-    icon_path = icon_path.split("?")[0].rstrip("/")
+    icon_url = None
 
-    # Convert old format /apps/dota2/images/dota/heroes/{name}_sb.png to new format
-    # New format: /apps/dota2/images/dota_react/heroes/{name}.png
-    if "/apps/dota2/images/dota/heroes/" in icon_path:
-        match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', icon_path)
-        if match:
-            hero_name = match.group(1)
+    # Handle numeric IDs (convert to hero name lookup)
+    if icon_path and icon_path.isdigit():
+        from dota_mmr import get_hero_list
+        heroes = await get_hero_list()
+        hero_name = None
+        for h in heroes:
+            if h.get("id") == int(icon_path):
+                hero_name = h.get("name", "").replace("npc_dota_hero_", "")
+                break
+        if hero_name:
             icon_url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
         else:
-            icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
-    elif icon_path.startswith('/'):
-        icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
-
-    elif not icon_path.startswith('http'):
-        icon_url = f"https://cdn.cloudflare.steamstatic.com/{icon_path}"
-
+            icon_url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{icon_path}.png"
     else:
-        icon_url = icon_path
+        # Clean the path - remove trailing ? or query params that might cause issues
+        icon_path = icon_path.split("?")[0].rstrip("/")
+
+        # Convert old format /apps/dota2/images/dota/heroes/{name}_sb.png to new format
+        # New format: /apps/dota2/images/dota_react/heroes/{name}.png
+        if "/apps/dota2/images/dota/heroes/" in icon_path:
+            match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', icon_path)
+            if match:
+                hero_name = match.group(1)
+                icon_url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
+            else:
+                icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
+        elif icon_path.startswith('/'):
+            icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
+
+        elif not icon_path.startswith('http'):
+            icon_url = f"https://cdn.cloudflare.steamstatic.com/{icon_path}"
+
+        else:
+            icon_url = icon_path
 
     # ==========================================
     # CACHE FILE NAME
@@ -277,11 +293,9 @@ def _build_grid(hero_stats):
 
 async def _get_hero_stats_from_db(days=7):
     """Get hero statistics from local database instead of OD explorer API."""
-    import time
     from database import get_connection, urlparse, DATABASE_URL
-    # Import inside function to avoid circular dependency
     from dota_mmr import get_hero_list
-    
+
     now = int(time.time())
     week_ago = now - (days * 24 * 60 * 60)
     
@@ -375,17 +389,21 @@ async def _get_hero_stats_from_db(days=7):
             if hero_id in hero_map:
                 info = hero_map[hero_id]
                 hs["localized_name"] = info.get("localized_name", f"Hero {hero_id}")
-                img_url = info.get("img", "")
-                if img_url and "/apps/dota2/images/dota/heroes/" in img_url:
+                img_value = info.get("img", "")
+                if img_value and "/apps/dota2/images/dota/heroes/" in img_value:
                     import re
-                    match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', img_url)
+                    match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', img_value)
                     if match:
                         hero_name = match.group(1)
                         hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
                     else:
-                        hs["img"] = img_url
+                        hs["img"] = img_value
+                elif img_value and img_value.isdigit():
+                    hero_name = info.get("name", "").replace("npc_dota_hero_", "")
+                    hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
                 else:
-                    hs["img"] = img_url or f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{info.get('name', hero_id).replace('npc_dota_hero_', '')}.png"
+                    hero_name = info.get("name", "").replace("npc_dota_hero_", "")
+                    hs["img"] = img_value or f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
                 hs["roles"] = info.get("roles", [])
             # Calculate winrate always
             if hs["pub_pick"] > 0:
@@ -466,7 +484,6 @@ HERO_META_BANNER_KEY = 'hero_meta_banner'  # Cached PNG bytes
 
 
 async def get_dota_data(days=7, force_refresh=False):
-    import time
     now = int(time.time())
 
     # Check cache first

@@ -454,13 +454,22 @@ async def alternate_digest_job(context):
 
             next_type = "0"  # Всегда один тип для объединённого дайджеста
 
-            # Check if message exists - if not, create it
+            # Try to edit existing message or create new
             if existing_msg_id and int(existing_msg_id) > 0:
-                # Message_id exists, will try to edit it in the else branch
-                # If edit fails, it will create new message
-                pass
+                try:
+                    await bot.edit_message_text(
+                        chat_id=int(digest_chat_id),
+                        message_id=int(existing_msg_id),
+                        text=text,
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"Updated cached digest message {existing_msg_id}")
+                    return
+                except Exception as e:
+                    logger.info(f"Failed to edit cached message, creating new: {e}")
+                    set_config('alternate_digest_message_id', None)
+                    should_create_new = True
             else:
-                logger.info("No message_id, creating new")
                 should_create_new = True
 
         # Иначе - генерируем новый дайджест или обновляем данные
