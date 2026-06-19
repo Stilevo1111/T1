@@ -366,7 +366,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 set_last_bot_message,
                 schedule_delete,
                 update_fissure,
-                update_last_message_id
+                update_last_message_id,
+                context.application.job_queue
             )
             return
 
