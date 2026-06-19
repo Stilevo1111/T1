@@ -354,7 +354,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        if event_roll < zeus_chance + zeus_chance + techies_chance:
+        if event_roll < zeus_chance + techies_chance:
             await handle_techies_event(
                 context.bot,
                 chat_id,
@@ -375,7 +375,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         slot_msg_ids = []
 
-        if event_roll < zeus_chance + multicast_chance:
+        if event_roll < zeus_chance + techies_chance + multicast_chance:
             # 🎰 МУЛЬТИКАСТ — слоты как в казино
             slot_emojis = ["🍒", "🍋", "🍇", "🔔", "💎"]
             multicast_text = ""
