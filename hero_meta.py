@@ -571,22 +571,23 @@ def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, g
 async def get_hero_meta_image():
     """Generate hero meta infographic. Falls back to cached banner if no data."""
     try:
-        # Check for cached banner first (always available)
-        try:
-            from database import get_config
-            cached_banner = get_config(HERO_META_BANNER_KEY)
-            if cached_banner:
-                import base64
-                logger.info("Using cached hero meta banner from DB")
-                return base64.b64decode(cached_banner)
-        except Exception as e:
-            logger.debug(f"Failed to read cached banner: {e}")
-        
+        # Get fresh data first
         data = await get_dota_data()
         if not data:
             logger.error("No data from OpenDota")
-            logger.info("Using fallback banner")
+            # Try cached banner as fallback
+            try:
+                from database import get_config
+                cached_banner = get_config(HERO_META_BANNER_KEY)
+                if cached_banner:
+                    import base64
+                    logger.info("Using cached hero meta banner from DB (no fresh data)")
+                    return base64.b64decode(cached_banner)
+            except Exception as e:
+                logger.debug(f"Failed to read cached banner: {e}")
             return get_static_fallback_banner()
+        
+        # Data available, generate new banner
         banner = await create_infographic(data)
         if banner:
             # Save banner to DB for next time
