@@ -2278,8 +2278,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                         matches, top_heroes = await asyncio.wait_for(
                             asyncio.gather(
-                                get_recent_matches_async(steam_id, limit=10),
-                                get_top_heroes_async(steam_id, last_n=10, top_k=5)
+                                get_recent_matches_async(steam_id, limit=20),
+                                get_top_heroes_async(steam_id, last_n=20, top_k=5)
                             ),
                             timeout=20.0
                         )
