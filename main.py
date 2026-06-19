@@ -1539,9 +1539,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _USER_START_COOLDOWN[user_id] = current_time
 
         user_id = update.effective_user.id
-        telegram_username = update.effective_user.username  # только Telegram username (может быть None)
+        telegram_username = update.effective_user.username
         first_name = update.effective_user.first_name or "Friend"
-        display_username = telegram_username or first_name  # для отображения в карточке
+        if telegram_username:
+            display_username = f"<a href=\"tg://resolve?username={telegram_username}\">@{telegram_username}</a>"
+        else:
+            display_username = first_name
 
         # Получаем пользователя без авто-создания (wrapped in thread to avoid blocking event loop)
         db_user = await asyncio.to_thread(get_user, user_id)
@@ -2568,7 +2571,10 @@ async def testtechies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "fissure": 100.0
     }
     user_obj = type('User', (), {'id': user.id, 'first_name': user.first_name, 'username': user.username})()
-    display_username = f"<a href=\"tg://user?id={user.id}\">{user.first_name}</a>"
+    if user.username:
+        display_username = f"<a href=\"tg://resolve?username={user.username}\">@{user.username}</a>"
+    else:
+        display_username = f"<a href=\"tg://user?id={user.id}\">{user.first_name}</a>"
     import time
     await handle_techies_event(
         context.bot,

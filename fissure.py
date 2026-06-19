@@ -275,7 +275,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {update.effective_user.id} called fissure")
 
     user_obj = update.effective_user
-    username = user_obj.username or user_obj.first_name
+    username = user_obj.username
+    if username:
+        display_username = f"<a href=\"tg://resolve?username={username}\">@{username}</a>"
+    else:
+        display_username = f"<a href=\"tg://user?id={user_obj.id}\">{user_obj.first_name}</a>"
     chat_id = update.message.chat_id
     chat_type = update.message.chat.type
     user_msg_id = update.message.message_id
@@ -300,7 +304,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        user = get_user(user_obj.id, username)
+        user = get_user(user_obj.id, display_username)
         logger.info(f"user data: {user}")
 
         # Check cooldown
@@ -328,7 +332,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         zeus_triggered = False
         zeus_text = ""
         cascade_count = 1
-        display_username = f"<a href=\"tg://user?id={user_obj.id}\">{username}</a>"
 
         # Один рандом: что выпало?
         event_roll = random.random()
