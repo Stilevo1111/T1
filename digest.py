@@ -454,6 +454,17 @@ async def alternate_digest_job(context):
 
             next_type = "0"  # Всегда один тип для объединённого дайджеста
 
+            # Check if message exists - if not, create it
+            if existing_msg_id and int(existing_msg_id) > 0:
+                try:
+                    await bot.get_message(chat_id=int(digest_chat_id), message_id=int(existing_msg_id))
+                    logger.info("Cached message exists, skipping send")
+                except Exception as e:
+                    logger.info(f"Cached message not found ({e}), creating new")
+                    should_create_new = True
+                    existing_msg_id = None
+                    set_config('alternate_digest_message_id', None)
+
         # Иначе - генерируем новый дайджест или обновляем данные
         else:
             logger.info("Генерируем новый или обновляем существующий дайджест")
