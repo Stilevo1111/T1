@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import os
+import re
 import time
 
 from pathlib import Path
@@ -132,7 +133,16 @@ async def fetch_hero_icon(session, icon_path):
     # Clean the path - remove trailing ? or query params that might cause issues
     icon_path = icon_path.split("?")[0].rstrip("/")
 
-    if icon_path.startswith('/'):
+    # Convert old format /apps/dota2/images/dota/heroes/{name}_sb.png to new format
+    # New format: /apps/dota2/images/dota_react/heroes/{name}.png
+    if "/apps/dota2/images/dota/heroes/" in icon_path:
+        match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', icon_path)
+        if match:
+            hero_name = match.group(1)
+            icon_url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
+        else:
+            icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
+    elif icon_path.startswith('/'):
         icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
 
     elif not icon_path.startswith('http'):
@@ -586,7 +596,6 @@ async def get_hero_meta_image():
                 set_config(HERO_META_BANNER_KEY, base64.b64encode(banner).decode())
             except Exception as e:
                 logger.warning(f"Failed to cache hero meta banner: {e}")
-            return banner
             return banner
         logger.warning("create_infographic returned None, using fallback")
         return get_static_fallback_banner()
