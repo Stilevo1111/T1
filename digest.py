@@ -428,10 +428,11 @@ async def alternate_digest_job(context):
             should_create_new = True
             logger.info("Rotation interval reached, will create new digest")
 
-        # 2. No message_id in config at all (and cache empty) — first time, create new
-        elif cache["text"] is None and not existing_msg_id:
-            should_create_new = True
-            logger.info("Кеш пуст и нет сохранённого сообщения — создаём новое")
+        # 2. No message_id in config (and cache empty or same as cache) — create new if needed
+        elif not existing_msg_id:
+            if cache["text"] is None:
+                should_create_new = True
+                logger.info("Кеш пуст и нет сохранённого сообщения — создаём новое")
 
         # 3. Cache expired (TTL) - REFRESH DATA in existing message
         elif now - cache["created_at"] > cache["cache_ttl"]:
