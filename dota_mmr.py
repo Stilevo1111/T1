@@ -699,7 +699,7 @@ async def get_top_heroes_async(steam_id: int, last_n: int = 10, top_k: int = 3) 
                 hero_counts[hero_id] += 1
 
         result = []
-        for hero_id, count in hero_counts.most_common(top_k):
+        for hero_id, count in hero_counts.most_common():
             hero_info = heroes_data.get(hero_id)
             if hero_info:
                 result.append({
@@ -710,6 +710,8 @@ async def get_top_heroes_async(steam_id: int, last_n: int = 10, top_k: int = 3) 
                     "icon_url": hero_info["icon_url"],
                     "picks": count,
                 })
+                if len(result) >= top_k:
+                    break
 
         _heroes_image_cache[cache_key] = (result, time.time())
         return result
