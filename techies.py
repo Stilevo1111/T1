@@ -140,7 +140,16 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
     correct_button = random.choice(["left", "right"])
     start_time = time.time()
     
-    display_username = f"<a href=\"tg://user?id={user_id}\">{user.first_name}</a>"
+    username = user.get("username")
+    if username:
+        display_username = f"<a href=\"tg://resolve?username={username}\">@{username}</a>"
+    else:
+        user = get_user(user_id)
+    username = user.get("username") if user else None
+    if username:
+        display_username = f"<a href=\"tg://resolve?username={username}\">@{username}</a>"
+    else:
+        display_username = f"<a href=\"tg://user?id={user_id}\">{user.first_name if user else 'Гость'}</a>"
     
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🧨 Левая", callback_data=f"techies_left_{user_id}_{correct_button}_{int(start_time*1000)}"),
