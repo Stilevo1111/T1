@@ -57,6 +57,7 @@ from database import (
 
 from dota_mmr import _get_start_card_background, update_user_mmr
 from mute import register_handlers as register_mute_handlers
+from techies import techies_command
 from rate_limiter import is_rate_limited, rate_limit, set_rate_limited
 
 structlog.configure(
@@ -1833,6 +1834,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await link(update, context)
             return
 
+        # === TECHIES HANDLER ===
+        if data and data.startswith("techies_"):
+            from techies import handle_techies_button
+            await handle_techies_button(update, context)
+            return
+
     except Exception as e:
         logger.error(f"Error in button_callback: {e}", exc_info=True)
         await callback_query.answer(text="Ошибка при обработке кнопки", show_alert=True)
@@ -3538,6 +3545,7 @@ async def main():
 
         # Еженедельная аналитика
         app.add_handler(CommandHandler("analyze", analyze_command))
+        app.add_handler(CommandHandler("techies", techies_command))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
