@@ -456,14 +456,12 @@ async def alternate_digest_job(context):
 
             # Check if message exists - if not, create it
             if existing_msg_id and int(existing_msg_id) > 0:
-                try:
-                    await bot.get_message(chat_id=int(digest_chat_id), message_id=int(existing_msg_id))
-                    logger.info("Cached message exists, skipping send")
-                except Exception as e:
-                    logger.info(f"Cached message not found ({e}), creating new")
-                    should_create_new = True
-                    existing_msg_id = None
-                    set_config('alternate_digest_message_id', None)
+                # Message_id exists, will try to edit it in the else branch
+                # If edit fails, it will create new message
+                pass
+            else:
+                logger.info("No message_id, creating new")
+                should_create_new = True
 
         # Иначе - генерируем новый дайджест или обновляем данные
         else:
