@@ -44,7 +44,7 @@ async def handle_techies_event(bot, chat_id, user, user_obj, display_username, n
     ])
     
     text = (
-        "🎲 dvarubla2\n\n"
+        f"🎲 {display_username}\n\n"
         "🧨 МИНА ЗАЛОЖЕНА!\n"
         "😈 Techies: «Угадай, пока не бабахнуло...»\n"
         "⏱️ 15 секунд до взрыва!\n\n"
@@ -68,13 +68,15 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
     correct_button = random.choice(["left", "right"])
     start_time = time.time()
     
+    display_username = f"<a href=\"tg://user?id={user_id}\">{user.first_name}</a>"
+    
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🧨 Левая", callback_data=f"techies_left_{user_id}_{correct_button}_{int(start_time*1000)}"),
          InlineKeyboardButton("🧨 Правая", callback_data=f"techies_right_{user_id}_{correct_button}_{int(start_time*1000)}")]
     ])
     
     text = (
-        "🎲 dvarubla2\n\n"
+        f"🎲 {display_username}\n\n"
         "🧨 МИНА ЗАЛОЖЕНА!\n"
         "😈 Techies: «Угадай, пока не бабахнуло...»\n"
         "⏱️ 15 секунд до взрыва!\n\n"
