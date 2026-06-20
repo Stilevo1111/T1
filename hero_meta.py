@@ -228,44 +228,15 @@ async def fetch_hero_icon(session, icon_path):
 
 
 async def _enrich_hero_icons(hero_stats):
-    from dota_mmr import get_hero_list
-    heroes_info = await get_hero_list()
-    if not heroes_info:
+    from dota_mmr import get_heroes_data
+    heroes_data = get_heroes_data()
+    if not heroes_data:
         return None
-    hero_map = {h.get("id"): h for h in heroes_info}
     for hs in hero_stats:
-        hero_id = hs.get("hero_id", hs.get("id"))  # Support both field names
-        # Normalize hero_id to int for lookup
-        try:
-            hero_id_int = int(hero_id)
-        except (TypeError, ValueError):
-            hero_id_int = hero_id
-        # Check current img value for numeric ID in URL
-        current_img = hs.get("img", "")
-        if current_img:
-            # Match numeric ID in path like /heroes/54.png
-            match = re.search(r'/heroes/(\d+)\.png', current_img)
-            if match:
-                # Use hero name from hero_map instead
-                if hero_id_int in hero_map:
-                    hero_name = hero_map[hero_id_int].get("name", "").replace("npc_dota_hero_", "")
-                    hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
-                else:
-                    logger.warning(f"Hero {hero_id_int} not found in hero_map for re-enrichment")
-        # Also enrich from info.get("img") if it has numeric ID
-        elif hero_id_int in hero_map:
-            info = hero_map[hero_id_int]
-            img_value = info.get("img", "")
-            if img_value:
-                match = re.search(r'/heroes/(\d+)\.png', img_value)
-                if match:
-                    hero_name = info.get("name", "").replace("npc_dota_hero_", "")
-                    hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
-                elif "/apps/dota2/images/dota/heroes/" in img_value:
-                    match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', img_value)
-                    if match:
-                        hero_name = match.group(1)
-                        hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
+        hero_id = hs.get("hero_id", hs.get("id"))
+        hero_info = heroes_data.get(hero_id)
+        if hero_info:
+            hs["img"] = hero_info.get("img", "")
     return hero_stats
 
 
