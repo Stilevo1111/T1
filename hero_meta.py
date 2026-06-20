@@ -234,24 +234,23 @@ async def _enrich_hero_icons(hero_stats):
         return None
     hero_map = {h.get("id"): h for h in heroes_info}
     for hs in hero_stats:
-        hero_id = hs.get("hero_id")
+        hero_id = hs.get("hero_id", hs.get("id"))  # Support both field names
         # Check current img value for numeric ID in URL
         current_img = hs.get("img", "")
         if current_img:
-            match = re.search(r'/heroes/(\d+)\.png$', current_img)
+            # Match numeric ID in path like /heroes/54.png
+            match = re.search(r'/heroes/(\d+)\.png', current_img)
             if match:
                 # Use hero name from hero_map instead
                 if hero_id in hero_map:
                     hero_name = hero_map[hero_id].get("name", "").replace("npc_dota_hero_", "")
                     hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
-                else:
-                    continue
         # Also enrich from info.get("img") if it has numeric ID
         elif hero_id in hero_map:
             info = hero_map[hero_id]
             img_value = info.get("img", "")
             if img_value:
-                match = re.search(r'/heroes/(\d+)\.png$', img_value)
+                match = re.search(r'/heroes/(\d+)\.png', img_value)
                 if match:
                     hero_name = info.get("name", "").replace("npc_dota_hero_", "")
                     hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
