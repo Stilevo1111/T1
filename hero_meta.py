@@ -423,30 +423,16 @@ async def _get_hero_stats_from_db(days=7):
     hero_stats = list(hero_position_stats.values())
     
 # Enrich with hero data (names, icons)
-    heroes_info = await get_hero_list()
-    if heroes_info:
-        hero_map = {h.get("id"): h for h in heroes_info}
+    from dota_mmr import get_heroes_data
+    heroes_data = get_heroes_data()
+    if heroes_data:
         for hs in hero_stats:
             hero_id = hs.get("hero_id")
-            if hero_id in hero_map:
-                info = hero_map[hero_id]
-                hs["localized_name"] = info.get("localized_name", f"Hero {hero_id}")
-                img_value = info.get("img", "")
-                if img_value and "/apps/dota2/images/dota/heroes/" in img_value:
-                    import re
-                    match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', img_value)
-                    if match:
-                        hero_name = match.group(1)
-                        hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
-                    else:
-                        hs["img"] = img_value
-                elif img_value and re.search(r'/heroes/(\d+)\.png', img_value):
-                    hero_name = info.get("name", "").replace("npc_dota_hero_", "")
-                    hs["img"] = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
-                else:
-                    hero_name = info.get("name", "").replace("npc_dota_hero_", "")
-                    hs["img"] = img_value or f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
-                hs["roles"] = info.get("roles", [])
+            hero_info = heroes_data.get(hero_id)
+            if hero_info:
+                hs["localized_name"] = hero_info.get("name", f"Hero {hero_id}")
+                hs["img"] = hero_info.get("img", "")
+                hs["roles"] = hero_info.get("roles", [])
             # Calculate winrate always
             if hs["pub_pick"] > 0:
                 hs["winrate"] = hs["pub_win"] / hs["pub_pick"]
