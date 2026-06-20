@@ -44,7 +44,7 @@ from rolls import (
     MULTICAST_TEXTS,
 )
 from stats import get_event_chances
-from techies import handle_techies_button as handle_techies_event
+from techies import handle_techies_event
 
 # Fissure-specific in-memory state (moved from main.py for clean extraction)
 _user_fissure_processing: dict[int, float] = {}
