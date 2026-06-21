@@ -1448,16 +1448,16 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                             match_id BIGINT UNIQUE,
                             hero_id INTEGER,
                             player_slot INTEGER,
-                            radiant_win BOOLEAN,
+                            radiant_win INTEGER,
                             start_time INTEGER,
                             steam_id BIGINT
                         )
-                    """)
+                        """)
                     for match in matches:
                         match_id = match.get("match_id")
                         hero_id = match.get("hero_id")
                         player_slot = match.get("player_slot")
-                        radiant_win = match.get("radiant_win")
+                        radiant_win = 1 if match.get("radiant_win") else 0
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
                         if match_id and hero_id is not None:
@@ -1476,12 +1476,12 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                             start_time INTEGER,
                             steam_id INTEGER
                         )
-                    """)
+                        """)
                     for match in matches:
                         match_id = match.get("match_id")
                         hero_id = match.get("hero_id")
                         player_slot = match.get("player_slot")
-                        radiant_win = match.get("radiant_win")
+                        radiant_win = 1 if match.get("radiant_win") else 0
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
                         if match_id and hero_id is not None:

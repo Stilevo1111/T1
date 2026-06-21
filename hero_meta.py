@@ -256,7 +256,7 @@ async def _enrich_with_hero_data(hero_stats):
 
 
 def _build_grid(hero_stats):
-    MIN_MATCHES = 1  # Need at least 1 game
+    MIN_MATCHES = 3  # Need at least 3 games for reliable stats
     hero_best_position = {}
     for hero in hero_stats:
         matches = hero.get("pub_pick", hero.get("pro_pick", 0))
@@ -294,9 +294,9 @@ def _build_grid(hero_stats):
         by_position[hero['position']].append(hero)
     grid = {}
     for pos in range(1, 6):
-        heroes = sorted(by_position[pos], key=lambda h: -h['winrate'])
+        heroes = sorted(by_position[pos], key=lambda h: -h['score'])
         grid[pos] = heroes[:5]
-    all_heroes_sorted = sorted(processed_heroes, key=lambda h: -h['winrate'])
+    all_heroes_sorted = sorted(processed_heroes, key=lambda h: -h['score'])
     pos_role_map = {1: ["Carry"], 2: ["Mid"], 3: ["Offlane"], 4: ["Support", "Soft Support"], 5: ["Hard Support"]}
     for pos in range(1, 6):
         if len(grid[pos]) < 5:
@@ -310,7 +310,7 @@ def _build_grid(hero_stats):
                         grid[pos].append(h)
                         if len(grid[pos]) >= 5:
                             break
-            grid[pos] = sorted(grid[pos], key=lambda h: -h['winrate'])
+            grid[pos] = sorted(grid[pos], key=lambda h: -h['score'])
     return grid
 
 
