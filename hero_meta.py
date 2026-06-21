@@ -473,10 +473,10 @@ async def create_infographic(hero_stats):
     row_height = (bg_height - margin_y - 10) // 5
     icon_height = min(int((row_height - 25) * 1.163), row_height - 5)
     try:
-        font_lg = ImageFont.truetype(FONT_PATH, 14)
+        font_lg = ImageFont.truetype(FONT_PATH, 16)
         for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
             try:
-                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 14)
+                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 16)
                 break
             except:
                 continue
@@ -617,11 +617,11 @@ def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, g
                 tw = bb[2] - bb[0]
                 th = bb[3] - bb[1]
                 tx = icon_x + pw // 2 - tw // 2
-                ty = icon_y + nh + 2 - 12 - th
+                ty = icon_y + nh + 2 - 8 - th
                 draw.text((tx, ty), wr_text, fill=(255, 255, 255), font=font_lg)
             except Exception:
-                draw.text((icon_x + pw // 2 - 20, icon_y + nh - 30),
-                          wr_text, fill=(255, 255, 255), font=font_lg)
+                draw.text((icon_x + pw // 2 - 25, icon_y + nh - 28),
+                  wr_text, fill=(255, 255, 255), font=font_lg)
 
     buf = io.BytesIO()
     base.save(buf, format='PNG')
