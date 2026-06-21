@@ -1013,7 +1013,7 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
         max_wait = 60
         matches = None
         while matches is None and (time.time() - start_time) < max_wait:
-            matches = _api_get(url, {"limit": limit, "sort": "-start_time"}, max_retries=2)
+            matches = _api_get(url, {"limit": limit, "sort": "-start_time", "radiant_win": 1}, max_retries=2)
             if matches is None:
                 time.sleep(10)
         
@@ -1458,10 +1458,13 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         match_id = match.get("match_id")
                         hero_id = match.get("hero_id", 0)
                         player_slot = match.get("player_slot")
-                        radiant_win = 1 if match.get("radiant_win") in (True, 1, "true", "1", "True") else 0
+                        radiant_win = match.get("radiant_win")
+                        if radiant_win is None:
+                            radiant_win = None  # Will be fetched from match details
+                        radiant_win_int = 1 if radiant_win in (True, 1, "true", "1", "True") else 0
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
-                        logger.info(f"topmmr: Hero meta saving - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win}, steam_id={steam_id}")
+                        logger.info(f"topmmr: Hero meta saving - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win_int}, steam_id={steam_id}")
                         if match_id and hero_id is not None:
                             cursor.execute("""
                                 INSERT INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
