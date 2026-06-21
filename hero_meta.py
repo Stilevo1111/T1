@@ -379,9 +379,7 @@ async def _get_hero_stats_from_db(days=7):
                 hero_id,
                 COUNT(*) as pub_pick,
                 SUM(CASE 
-                    WHEN radiant_win = true AND player_slot < 128 THEN 1
-                    WHEN radiant_win = false AND player_slot >= 128 THEN 1
-                    ELSE 0 
+                    WHEN radiant_win = 1 THEN 1 ELSE 0 
                 END) as pub_win
             FROM public_player_matches
             WHERE start_time >= %s AND steam_id IS NOT NULL
