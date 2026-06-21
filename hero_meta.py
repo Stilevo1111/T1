@@ -329,46 +329,32 @@ async def _get_hero_stats_from_db(days=7):
     
     cursor = conn.cursor()
     
-    # Ensure table exists with correct schema
     try:
-        if "postgres" in scheme:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS public_player_matches (
+                match_id BIGINT UNIQUE,
+                hero_id INTEGER,
+                player_slot INTEGER,
+                radiant_win INTEGER,
+                start_time INTEGER,
+                steam_id BIGINT
+            )
+            """)
+        # Migrate existing boolean column to integer if needed
+        try:
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS public_player_matches (
-                    match_id BIGINT UNIQUE,
-                    hero_id INTEGER,
-                    player_slot INTEGER,
-                    radiant_win INTEGER,
-                    start_time INTEGER,
-                    steam_id BIGINT
-                )
+                DO $$ 
+                BEGIN 
+                    IF EXISTS (SELECT 1 FROM information_schema.columns 
+                               WHERE table_name = 'public_player_matches' 
+                               AND column_name = 'radiant_win' 
+                               AND data_type = 'boolean') THEN
+                        ALTER TABLE public_player_matches ALTER COLUMN radiant_win TYPE INTEGER USING (CASE WHEN radiant_win THEN 1 ELSE 0 END);
+                    END IF;
+                END $$
                 """)
-            # Migrate existing boolean column to integer if needed
-            try:
-                cursor.execute("""
-                    DO $$ 
-                    BEGIN 
-                        IF EXISTS (SELECT 1 FROM information_schema.columns 
-                                   WHERE table_name = 'public_player_matches' 
-                                   AND column_name = 'radiant_win' 
-                                   AND data_type = 'boolean') THEN
-                            ALTER TABLE public_player_matches DROP COLUMN radiant_win;
-                            ALTER TABLE public_player_matches ADD COLUMN radiant_win INTEGER;
-                        END IF;
-                    END $$
-                    """)
-            except Exception:
-                pass
-        else:
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS public_player_matches (
-                    match_id INTEGER UNIQUE,
-                    hero_id INTEGER,
-                    player_slot INTEGER,
-                    radiant_win INTEGER,
-                    start_time INTEGER,
-                    steam_id INTEGER
-                )
-                """)
+        except Exception:
+            pass
     except Exception:
         pass
     
@@ -390,11 +376,7 @@ async def _get_hero_stats_from_db(days=7):
             SELECT 
                 hero_id,
                 COUNT(*) as pub_pick,
-                SUM(CASE 
-                    WHEN (radiant_win = 1 AND player_slot < 128) OR
-                         (radiant_win = 0 AND player_slot >= 128)
-                    THEN 1 ELSE 0 
-                END) as pub_win
+                SUM(CASE WHEN radiant_win = 1 THEN 1 ELSE 0 END) as pub_win
             FROM public_player_matches
             WHERE start_time >= ? AND steam_id IS NOT NULL
             GROUP BY hero_id
