@@ -1013,13 +1013,15 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
         max_wait = 60
         matches = None
         while matches is None and (time.time() - start_time) < max_wait:
-            matches = _api_get(url, {"limit": limit, "sort": "-start_time", "radiant_win": 1}, max_retries=2)
+            matches = _api_get(url, {"limit": limit, "sort": "-start_time"}, max_retries=2)
             if matches is None:
                 time.sleep(10)
         
         matches = matches or []
         
-        _user_matches_cache[steam_id] = (matches, time.time())
+        # Don't cache empty results - might be due to rate limits
+        if matches:
+            _user_matches_cache[steam_id] = (matches, time.time())
         
         return matches
     except Exception as e:
