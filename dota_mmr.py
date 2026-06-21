@@ -1337,7 +1337,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             wait_time = 10
             logger.info(f"topmmr: waiting for API, sleeping {wait_time}s...")
             time.sleep(wait_time)
-        logger.info(f"topmmr: get_player_stats returned: {stats}")
+        logger.info(f"topmmr: get_player_stats returned: steam32={user.get('steam_id')}, success={stats is not None}")
         
         if not stats:
             logger.warning(f"topmmr: API failed for user {telegram_id} after retries, using cached data")
@@ -1369,7 +1369,9 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
 
         # Получаем последние матчи недели (максимум 10)
         matches = get_recent_matches(user["steam_id"], limit=10)
-
+        if not matches:
+            logger.warning(f"topmmr: No matches returned for steam_id={user.get('steam_id')}, skipping hero meta save")
+        
         # Логируем все полученные матчи
         if matches:
             logger.info(f"topmmr: total matches received from API: {len(matches)}")
@@ -1458,19 +1460,30 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         match_id = match.get("match_id")
                         hero_id = match.get("hero_id", 0)
                         player_slot = match.get("player_slot")
-                        radiant_win = match.get("radiant_win")
-                        if radiant_win is None:
-                            radiant_win = None  # Will be fetched from match details
-                        radiant_win_int = 1 if radiant_win in (True, 1, "true", "1", "True") else 0
+                        player_radiant = match.get("radiant")
+                        player_win = match.get("win")
+                        
+                        # radiant_win = 1 if Radiant team won
+                        # player_win = True if player's team won
+                        # If player is radiant and won, or not radiant and lost -> radiant_win depends on match
+                        if player_radiant is None and player_slot is not None:
+                            player_radiant = player_slot < 128
+                        if player_win is True:
+                            radiant_win_int = 1 if player_radiant else 0
+                        elif player_win is False:
+                            radiant_win_int = 0 if player_radiant else 1
+                        else:
+                            radiant_win_int = 0  # Fallback
+                        
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
-                        logger.info(f"topmmr: Hero meta saving - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win_int}, steam_id={steam_id}")
+                        logger.info(f"topmmr: Hero meta saving - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win_int} (player_radiant={player_radiant}, player_win={player_win}), steam_id={steam_id}")
                         if match_id and hero_id is not None:
                             cursor.execute("""
                                 INSERT INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
                                 VALUES (%s, %s, %s, %s, %s, %s)
                                 ON CONFLICT DO NOTHING
-                            """, (match_id, hero_id, player_slot, radiant_win, start_time, steam_id))
+                            """, (match_id, hero_id, player_slot, radiant_win_int, start_time, steam_id))
                 else:
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS public_player_matches (
@@ -1486,15 +1499,32 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         match_id = match.get("match_id")
                         hero_id = match.get("hero_id", 0)
                         player_slot = match.get("player_slot")
-                        radiant_win = 1 if match.get("radiant_win") in (True, 1, "true", "1", "True") else 0
+                        player_radiant = match.get("radiant")
+                        player_win = match.get("win")
+                        
+                        if player_radiant is None and player_slot is not None:
+                            player_radiant = player_slot < 128
+                        if player_win is True:
+                            radiant_win_int = 1 if player_radiant else 0
+                        elif player_win is False:
+                            radiant_win_int = 0 if player_radiant else 1
+                        else:
+                            radiant_win_int = 0  # Fallback
+                        
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
-                        logger.info(f"topmmr: Hero meta saving (SQLite) - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win}, steam_id={steam_id}")
+                        logger.info(f"topmmr: Hero meta saving (SQLite) - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win_int} (player_radiant={player_radiant}, player_win={player_win}), steam_id={steam_id}")
                         if match_id and hero_id is not None:
                             cursor.execute("""
                                 INSERT OR IGNORE INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
                                 VALUES (?, ?, ?, ?, ?, ?)
-                            """, (match_id, hero_id, player_slot, radiant_win, start_time, steam_id))
+                            """, (match_id, hero_id, player_slot, radiant_win_int, start_time, steam_id))
+                        logger.info(f"topmmr: Hero meta saving (SQLite) - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win_int}, steam_id={steam_id}")
+                        if match_id and hero_id is not None:
+                            cursor.execute("""
+                                INSERT OR IGNORE INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                            """, (match_id, hero_id, player_slot, radiant_win_int, start_time, steam_id))
                 conn.commit()
             except Exception as e:
                 logger.warning(f"Failed to save matches to public_player_matches: {e}")
