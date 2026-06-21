@@ -340,7 +340,7 @@ async def _get_hero_stats_from_db(days=7):
     except Exception:
         pass
     
-# Query hero stats grouped by hero_id only (sum all positions for meta)
+    # Query hero stats grouped by hero_id only (sum all positions for meta)
     if "postgres" in scheme:
         cursor.execute("""
             SELECT 
@@ -401,10 +401,10 @@ async def _get_hero_stats_from_db(days=7):
             "winrate": winrate,
             "localized_name": hero_name,
             "img": hero_info.get("img", ""),
-            "roles": hero_info.get("roles", []),
+"roles": hero_info.get("roles", []),
         })
     
-return hero_stats
+    return hero_stats
 
 
 async def create_infographic(hero_stats):
