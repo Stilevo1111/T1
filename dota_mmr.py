@@ -1458,7 +1458,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         match_id = match.get("match_id")
                         hero_id = match.get("hero_id", 0)
                         player_slot = match.get("player_slot")
-                        radiant_win = 1 if match.get("radiant_win") else 0
+                        radiant_win = 1 if match.get("radiant_win") in (True, 1, "true", "1", "True") else 0
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
                         logger.info(f"topmmr: Hero meta saving - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win}, steam_id={steam_id}")
@@ -1483,7 +1483,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         match_id = match.get("match_id")
                         hero_id = match.get("hero_id", 0)
                         player_slot = match.get("player_slot")
-                        radiant_win = 1 if match.get("radiant_win") else 0
+                        radiant_win = 1 if match.get("radiant_win") in (True, 1, "true", "1", "True") else 0
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
                         logger.info(f"topmmr: Hero meta saving (SQLite) - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win}, steam_id={steam_id}")

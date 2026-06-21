@@ -256,7 +256,7 @@ async def _enrich_with_hero_data(hero_stats):
 
 
 def _build_grid(hero_stats):
-    MIN_MATCHES = 3  # Need at least 3 games for reliable stats
+    MIN_MATCHES = 1  # Need at least 1 game
     hero_best_position = {}
     for hero in hero_stats:
         matches = hero.get("pub_pick", hero.get("pro_pick", 0))
@@ -321,6 +321,7 @@ async def _get_hero_stats_from_db(days=7):
 
     now = int(time.time())
     week_ago = now - (days * 24 * 60 * 60)
+    logger.info(f"_get_hero_stats_from_db: querying matches since {week_ago} (now={now})")
     
     conn = get_connection()
     url = urlparse.urlparse(DATABASE_URL)
@@ -328,18 +329,46 @@ async def _get_hero_stats_from_db(days=7):
     
     cursor = conn.cursor()
     
-    # Ensure table exists
+    # Ensure table exists with correct schema
     try:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS public_player_matches (
-                match_id BIGINT UNIQUE,
-                hero_id INTEGER,
-                player_slot INTEGER,
-                radiant_win INTEGER,
-                start_time INTEGER,
-                steam_id INTEGER
-            )
-        """)
+        if "postgres" in scheme:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS public_player_matches (
+                    match_id BIGINT UNIQUE,
+                    hero_id INTEGER,
+                    player_slot INTEGER,
+                    radiant_win INTEGER,
+                    start_time INTEGER,
+                    steam_id BIGINT
+                )
+                """)
+            # Migrate existing boolean column to integer if needed
+            try:
+                cursor.execute("""
+                    DO $$ 
+                    BEGIN 
+                        IF EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name = 'public_player_matches' 
+                                   AND column_name = 'radiant_win' 
+                                   AND data_type = 'boolean') THEN
+                            ALTER TABLE public_player_matches DROP COLUMN radiant_win;
+                            ALTER TABLE public_player_matches ADD COLUMN radiant_win INTEGER;
+                        END IF;
+                    END $$
+                    """)
+            except Exception:
+                pass
+        else:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS public_player_matches (
+                    match_id INTEGER UNIQUE,
+                    hero_id INTEGER,
+                    player_slot INTEGER,
+                    radiant_win INTEGER,
+                    start_time INTEGER,
+                    steam_id INTEGER
+                )
+                """)
     except Exception:
         pass
     
@@ -374,6 +403,7 @@ async def _get_hero_stats_from_db(days=7):
         """, (week_ago,))
     
     rows = cursor.fetchall()
+    logger.info(f"_get_hero_stats_from_db: found {len(rows)} hero rows")
     
     # Get hero data for position detection
     from dota_mmr import get_heroes_data
@@ -384,6 +414,8 @@ async def _get_hero_stats_from_db(days=7):
         hero_id = row[0]
         pub_pick = row[1] or 0
         pub_win = row[2] or 0
+        pub_win = int(pub_win) if pub_win else 0
+        logger.info(f"_get_hero_stats_from_db: hero_id={hero_id}, pub_pick={pub_pick}, pub_win={pub_win}")
         
         # Determine position from hero_positions first
         hero_info = heroes_data.get(hero_id, {}) if heroes_data else {}
