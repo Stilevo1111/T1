@@ -1436,6 +1436,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
 
 # Save matches to public_player_matches for hero meta
         if matches:
+            logger.info(f"topmmr: Saving {len(matches)} matches to public_player_matches for hero meta (steam_id={user.get('steam_id')})")
             try:
                 from database import get_connection, DATABASE_URL, urlparse
                 conn = get_connection()
@@ -1455,11 +1456,12 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         """)
                     for match in matches:
                         match_id = match.get("match_id")
-                        hero_id = match.get("hero_id")
+                        hero_id = match.get("hero_id", 0)
                         player_slot = match.get("player_slot")
                         radiant_win = 1 if match.get("radiant_win") else 0
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
+                        logger.info(f"topmmr: Hero meta saving - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win}, steam_id={steam_id}")
                         if match_id and hero_id is not None:
                             cursor.execute("""
                                 INSERT INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
@@ -1479,11 +1481,12 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         """)
                     for match in matches:
                         match_id = match.get("match_id")
-                        hero_id = match.get("hero_id")
+                        hero_id = match.get("hero_id", 0)
                         player_slot = match.get("player_slot")
                         radiant_win = 1 if match.get("radiant_win") else 0
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
+                        logger.info(f"topmmr: Hero meta saving (SQLite) - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win}, steam_id={steam_id}")
                         if match_id and hero_id is not None:
                             cursor.execute("""
                                 INSERT OR IGNORE INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
