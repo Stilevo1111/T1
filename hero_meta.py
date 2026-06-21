@@ -282,6 +282,9 @@ def _build_grid(hero_stats):
                 'position': pos,
                 'score': score,
                 'winrate': winrate,
+                'pub_pick': matches,
+                'pub_win': wins,
+                'pub_losses': matches - wins,
                 'matches': matches,
                 'roles': hero.get("roles", []),
             }
@@ -352,7 +355,7 @@ async def _get_hero_stats_from_db(days=7):
                     THEN 1 ELSE 0 
                 END) as pub_win
             FROM public_player_matches
-            WHERE start_time >= %s
+            WHERE start_time >= %s AND steam_id IS NOT NULL
             GROUP BY hero_id
         """, (week_ago,))
     else:
@@ -366,7 +369,7 @@ async def _get_hero_stats_from_db(days=7):
                     THEN 1 ELSE 0 
                 END) as pub_win
             FROM public_player_matches
-            WHERE start_time >= ?
+            WHERE start_time >= ? AND steam_id IS NOT NULL
             GROUP BY hero_id
         """, (week_ago,))
     
@@ -392,12 +395,14 @@ async def _get_hero_stats_from_db(days=7):
             position = detect_hero_position({"roles": hero_info.get("roles", [])})
         
         winrate = pub_win / pub_pick if pub_pick > 0 else 0
+        pub_losses = pub_pick - pub_win
         
         hero_stats.append({
             "hero_id": hero_id,
             "position": position,
             "pub_pick": pub_pick,
             "pub_win": pub_win,
+            "pub_losses": pub_losses,
             "winrate": winrate,
             "localized_name": hero_name,
             "img": hero_info.get("img", ""),
@@ -436,10 +441,10 @@ async def create_infographic(hero_stats):
     row_height = (bg_height - margin_y - 10) // 5
     icon_height = min(int((row_height - 25) * 1.163), row_height - 5)
     try:
-        font_lg = ImageFont.truetype(FONT_PATH, 28)
+        font_lg = ImageFont.truetype(FONT_PATH, 14)
         for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
             try:
-                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 28)
+                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 14)
                 break
             except:
                 continue
@@ -573,7 +578,7 @@ def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, g
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
 
-            wr_text = "%d%%" % round(hero['winrate'] * 100)
+            wr_text = "%dW/%dL/%.1f%%" % (hero['pub_win'], hero['pub_losses'], hero['winrate'] * 100)
 
             try:
                 bb = draw.textbbox((0, 0), wr_text, font=font_lg)
