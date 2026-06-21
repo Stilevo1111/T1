@@ -1322,11 +1322,16 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         if not user or not user.get("steam_id"):
             return {"success": False, "rank_up": None}
 
-        # Simple per-process cache: skip heavy work if we updated this user recently (helps on restart + repeated calls)
+        # Get matches for hero_meta immediately (before any cache returns)
+        matches = get_recent_matches(user["steam_id"], limit=10)
+        logger.info(f"topmmr: Got {len(matches)} matches for hero meta from steam_id={user.get('steam_id')}")
+
+        # Simple per-process cache: skip heavy API call if we updated this user recently (helps on restart + repeated calls)
+        # But still process week stats from matches
         last_updated = user.get('mmr_last_updated')
         if last_updated and isinstance(last_updated, (int, float)):
             if time.time() - last_updated < 4 * 3600:  # 4 hours
-                return {"success": True, "rank_up": None}
+                logger.info(f"topmmr: Cache hit for MMR - will use cached stats but still process week from matches")
 
         # Keep trying API until we get data (with delays to avoid rate limit spam)
         stats = None
@@ -1368,11 +1373,6 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         week_start_utc = week_start_msk.astimezone(UTC)
         logger.info(f"topmmr: week start (MSK) = {week_start_msk} (Monday)")
         logger.info(f"topmmr: week start (UTC) = {week_start_utc} (Monday)")
-
-        # Получаем последние матчи недели (максимум 10)
-        matches = get_recent_matches(user["steam_id"], limit=10)
-        if not matches:
-            logger.warning(f"topmmr: No matches returned for steam_id={user.get('steam_id')}, skipping hero meta save")
         
         # Логируем все полученные матчи
         if matches:
