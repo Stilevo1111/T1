@@ -340,12 +340,11 @@ async def _get_hero_stats_from_db(days=7):
     except Exception:
         pass
     
-    # Query hero stats grouped by hero_id and position
+# Query hero stats grouped by hero_id only (sum all positions for meta)
     if "postgres" in scheme:
         cursor.execute("""
             SELECT 
                 hero_id,
-                player_slot,
                 COUNT(*) as pub_pick,
                 SUM(CASE 
                     WHEN (radiant_win = TRUE AND player_slot < 128) OR
@@ -354,13 +353,12 @@ async def _get_hero_stats_from_db(days=7):
                 END) as pub_win
             FROM public_player_matches
             WHERE start_time >= %s
-            GROUP BY hero_id, player_slot
+            GROUP BY hero_id
         """, (week_ago,))
     else:
         cursor.execute("""
             SELECT 
                 hero_id,
-                player_slot,
                 COUNT(*) as pub_pick,
                 SUM(CASE 
                     WHEN (radiant_win = 1 AND player_slot < 128) OR
@@ -369,55 +367,44 @@ async def _get_hero_stats_from_db(days=7):
                 END) as pub_win
             FROM public_player_matches
             WHERE start_time >= ?
-            GROUP BY hero_id, player_slot
+            GROUP BY hero_id
         """, (week_ago,))
     
     rows = cursor.fetchall()
     
-    hero_position_stats = {}
-    for row in rows:
-        hero_id = row[0]
-        player_slot = row[1] if row[1] is not None else 0
-        
-        if player_slot < 0:
-            continue
-            
-        # Calculate position (0-4 -> 1-5)
-        position = player_slot % 5 if player_slot < 128 else (player_slot - 128) % 5
-        pos_map = {0: 1, 1: 2, 2: 3, 3: 4, 4: 5}
-        actual_pos = pos_map.get(position, 1)
-        
-        key = (hero_id, actual_pos)
-        if key not in hero_position_stats:
-            hero_position_stats[key] = {
-                "hero_id": hero_id, 
-                "position": actual_pos, 
-                "pub_pick": 0, 
-                "pub_win": 0
-            }
-        hero_position_stats[key]["pub_pick"] += row[2] or 0
-        hero_position_stats[key]["pub_win"] += row[3] or 0
-    
-    hero_stats = list(hero_position_stats.values())
-    
-# Enrich with hero data (names, icons)
+    # Get hero data for position detection
     from dota_mmr import get_heroes_data
     heroes_data = get_heroes_data()
-    if heroes_data:
-        for hs in hero_stats:
-            hero_id = hs.get("hero_id")
-            hero_info = heroes_data.get(hero_id)
-            if hero_info:
-                hs["localized_name"] = hero_info.get("name", f"Hero {hero_id}")
-                hs["img"] = hero_info.get("img", "")
-                hs["roles"] = hero_info.get("roles", [])
-            # Calculate winrate always
-            if hs["pub_pick"] > 0:
-                hs["winrate"] = hs["pub_win"] / hs["pub_pick"]
-            else:
-                hs["winrate"] = 0
-
-    return hero_stats
+    
+    hero_stats = []
+    for row in rows:
+        hero_id = row[0]
+        pub_pick = row[1] or 0
+        pub_win = row[2] or 0
+        
+        # Determine position from hero_positions first
+        hero_info = heroes_data.get(hero_id, {}) if heroes_data else {}
+        hero_name = hero_info.get("name", f"Hero {hero_id}")
+        
+        if hero_name and hero_name in hero_positions:
+            position = hero_positions[hero_name]
+        else:
+            position = detect_hero_position({"roles": hero_info.get("roles", [])})
+        
+        winrate = pub_win / pub_pick if pub_pick > 0 else 0
+        
+        hero_stats.append({
+            "hero_id": hero_id,
+            "position": position,
+            "pub_pick": pub_pick,
+            "pub_win": pub_win,
+            "winrate": winrate,
+            "localized_name": hero_name,
+            "img": hero_info.get("img", ""),
+            "roles": hero_info.get("roles", []),
+        })
+    
+return hero_stats
 
 
 async def create_infographic(hero_stats):
