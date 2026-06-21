@@ -265,12 +265,19 @@ def _build_grid(hero_stats):
         if matches < MIN_MATCHES:
             continue
         score = winrate * math.log10(matches + 1)
-        pos = hero.get("position", detect_hero_position(hero))
         hero_id = hero.get("hero_id", hero.get("id"))
+        # Priority: hero_positions > position from data > detect from roles
+        hero_name = hero.get("localized_name", hero.get("name", ""))
+        if hero_name and hero_name in hero_positions:
+            pos = hero_positions[hero_name]  # Use manual position first
+        elif hero.get("position"):
+            pos = hero.get("position")  # Use position from data
+        else:
+            pos = detect_hero_position(hero)  # Fallback to role detection
         if hero_id not in hero_best_position or winrate > hero_best_position[hero_id]["winrate"]:
             hero_best_position[hero_id] = {
                 'id': hero_id,
-                'name': hero.get("localized_name", 'Hero %d' % hero_id),
+                'name': hero_name,
                 'img': hero.get("img", ""),
                 'position': pos,
                 'score': score,

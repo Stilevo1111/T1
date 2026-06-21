@@ -106,16 +106,16 @@ hero_positions: dict[str, int] = {
     "Bounty Hunter": 4,
     "Hoodwink": 4,
     "Mirana": 4,
-    "Rubick": 4,
+"Rubick": 4,
     "Phoenix": 4,
     "Pudge": 4,
     "Snapfire": 4,
-    "Techies": 4,
     "Vengeful Spirit": 4,
     "Windranger": 4,
     "Marci": 4,
     "Dark Willow": 4,
     "Enchantress": 4,
+    "Death Prophet": 2,  # Best Pos 2 (Mid)
     # POS 5 — Hard Support
     "Crystal Maiden": 5,
     "Lion": 5,
