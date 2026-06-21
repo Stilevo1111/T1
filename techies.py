@@ -32,7 +32,7 @@ FAIL_PHRASES = [
 
 _active_techies_sessions = {}
 
-def generate_mines(count: int = 1) -> list[float]:
+def generate_mines(count: int = 4) -> list[float]:
     return [round(random.uniform(0.0, 10.0), 1) for _ in range(count)]
 
 TECHIES_BANNER_URL = "https://i.ibb.co/PzzFJwwk/Gemini-Generated-Image-e3k1zhe3k1zhe3k1.png"
