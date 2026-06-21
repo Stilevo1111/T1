@@ -1149,9 +1149,8 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
                 wins = 0
                 losses = 0
 
-        # Используем mmr_estimate для более точного MMR
-        mmr_estimate = player_data.get("mmr_estimate", {}).get("estimate", 0)
-        mmr = mmr_estimate or rank_to_mmr(rank_tier)
+        # Используем реальный MMR из API (solo_competitive_mmr или mmr_estimate)
+        mmr = player_data.get("solo_competitive_mmr") or player_data.get("mmr_estimate", {}).get("estimate", 0) or rank_to_mmr(rank_tier)
 
         # Вычисляем винрейт
         winrate = safe_winrate(wins, total_games)
