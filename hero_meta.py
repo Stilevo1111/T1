@@ -379,9 +379,9 @@ async def _get_hero_stats_from_db(days=7):
                 hero_id,
                 COUNT(*) as pub_pick,
                 SUM(CASE 
-                    WHEN (radiant_win = 1 AND player_slot < 128) OR
-                         (radiant_win = 0 AND player_slot >= 128)
-                    THEN 1 ELSE 0 
+                    WHEN radiant_win = true AND player_slot < 128 THEN 1
+                    WHEN radiant_win = false AND player_slot >= 128 THEN 1
+                    ELSE 0 
                 END) as pub_win
             FROM public_player_matches
             WHERE start_time >= %s AND steam_id IS NOT NULL
@@ -473,10 +473,10 @@ async def create_infographic(hero_stats):
     row_height = (bg_height - margin_y - 10) // 5
     icon_height = min(int((row_height - 25) * 1.163), row_height - 5)
     try:
-        font_lg = ImageFont.truetype(FONT_PATH, 16)
+        font_lg = ImageFont.truetype(FONT_PATH, 18)
         for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
             try:
-                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 16)
+                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 18)
                 break
             except:
                 continue
@@ -617,10 +617,10 @@ def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, g
                 tw = bb[2] - bb[0]
                 th = bb[3] - bb[1]
                 tx = icon_x + pw // 2 - tw // 2
-                ty = icon_y + nh + 2 - 8 - th
+                ty = icon_y + nh + 2 - 6 - th
                 draw.text((tx, ty), wr_text, fill=(255, 255, 255), font=font_lg)
             except Exception:
-                draw.text((icon_x + pw // 2 - 25, icon_y + nh - 28),
+                draw.text((icon_x + pw // 2 - 30, icon_y + nh - 26),
                   wr_text, fill=(255, 255, 255), font=font_lg)
 
     buf = io.BytesIO()
