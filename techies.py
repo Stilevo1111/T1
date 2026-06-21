@@ -1,11 +1,15 @@
 import random
 import time
 import asyncio
+import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
+logger = logging.getLogger(__name__)
+
 BANNER_URL = "https://i.ibb.co/PzzFJwwk/Gemini-Generated-Image-e3k1zhe3k1zhe3k1.png"
+TECHIES_BANNER_URL = BANNER_URL
 
 SUCCESS_PHRASES = [
     "«Ха! Сегодня без взрывов. Скучно... но Фиссура цела 😮‍💨»",
@@ -35,7 +39,61 @@ _active_techies_sessions = {}
 def generate_mines(count: int = 4) -> list[float]:
     return [round(random.uniform(0.0, 10.0), 1) for _ in range(count)]
 
-TECHIES_BANNER_URL = "https://i.ibb.co/PzzFJwwk/Gemini-Generated-Image-e3k1zhe3k1zhe3k1.png"
+async def _techies_timeout_fallback(bot, chat_id, msg_id, user_id, display_username, start_time, correct_button):
+    """Fallback timeout handler using asyncio.sleep instead of job_queue"""
+    await asyncio.sleep(15)
+    
+    session_key = f"{chat_id}_{user_id}"
+    if session_key not in _active_techies_sessions:
+        return
+    
+    del _active_techies_sessions[session_key]
+    
+    from database import get_user, update_fissure
+    user = get_user(user_id)
+    if not user:
+        return
+    
+    current_fissure = user.get("fissure", 0) or 0
+    mines = generate_mines()
+    total_damage = sum(mines)
+    
+    new_fissure = max(0.1, current_fissure - total_damage)
+    update_fissure(user_id, new_fissure, time.time(), 0)
+    
+    phrase = random.choice(FAIL_PHRASES)
+    
+    text = (
+        "💥 БАБАХ!\n"
+        f"😈 Techies: {phrase}\n\n"
+    )
+    for i, mine in enumerate(mines, 1):
+        text += f"💣 Мина {i} - {mine} см\n"
+    text += f"\n📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🧨 Левая", callback_data="noop"),
+         InlineKeyboardButton("🧨 Правая", callback_data="noop")]
+    ])
+    
+    try:
+        await bot.edit_message_media(
+            chat_id=chat_id,
+            message_id=msg_id,
+            media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text),
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        logger.error(f"_techies_timeout_fallback edit_message_media failed: {e}")
+        try:
+            await bot.edit_message_caption(
+                chat_id=chat_id,
+                message_id=msg_id,
+                caption=text,
+                reply_markup=keyboard
+            )
+        except Exception as e2:
+            logger.error(f"_techies_timeout_fallback edit_message_caption also failed: {e2}")
 
 async def _techies_timeout_job(context):
     data = context.job.data
@@ -85,8 +143,17 @@ async def _techies_timeout_job(context):
             media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text),
             reply_markup=keyboard
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"edit_message_media failed: {e}, trying edit_message_caption")
+        try:
+            await bot.edit_message_caption(
+                chat_id=chat_id,
+                message_id=msg_id,
+                caption=text,
+                reply_markup=keyboard
+            )
+        except Exception as e2:
+            logger.error(f"edit_message_caption also failed: {e2}")
 
 async def handle_techies_event(bot, chat_id, user, user_obj, display_username, now, main_menu, set_last_bot_message, schedule_delete, update_fissure, update_last_message_id, job_queue=None):
     correct_button = random.choice(["left", "right"])
@@ -113,6 +180,8 @@ async def handle_techies_event(bot, chat_id, user, user_obj, display_username, n
     msg = await bot.send_photo(chat_id=chat_id, photo=BANNER_URL, caption=text, reply_markup=keyboard, parse_mode="HTML")
     set_last_bot_message(chat_id, msg.message_id)
     
+    logger.info(f"handle_techies_event: job_queue={job_queue is not None}, scheduling timeout for {chat_id}_{msg.message_id}")
+    
     if job_queue:
         job_queue.run_once(
             _techies_timeout_job,
@@ -127,6 +196,9 @@ async def handle_techies_event(bot, chat_id, user, user_obj, display_username, n
             },
             name=f"techies_timeout_{chat_id}_{msg.message_id}"
         )
+    else:
+        # Fallback: schedule timeout using asyncio
+        asyncio.create_task(_techies_timeout_fallback(bot, chat_id, msg.message_id, user_obj.id, display_username, start_time, correct_button))
 
 async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
     from database import get_user
@@ -145,11 +217,11 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
         display_username = f"<a href=\"tg://resolve?username={username}\">@{username}</a>"
     else:
         user = get_user(user_id)
-    username = user.get("username") if user else None
-    if username:
-        display_username = f"<a href=\"tg://resolve?username={username}\">@{username}</a>"
-    else:
-        display_username = f"<a href=\"tg://user?id={user_id}\">{user.first_name if user else 'Гость'}</a>"
+        username = user.get("username") if user else None
+        if username:
+            display_username = f"<a href=\"tg://resolve?username={username}\">@{username}</a>"
+        else:
+            display_username = f"<a href=\"tg://user?id={user_id}\">{user.first_name if user else 'Гость'}</a>"
     
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🧨 Левая", callback_data=f"techies_left_{user_id}_{correct_button}_{int(start_time*1000)}"),
