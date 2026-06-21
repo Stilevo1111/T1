@@ -1045,7 +1045,7 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
         max_wait = 60
         matches = None
         while matches is None and (time.time() - start_time) < max_wait:
-            matches = await _api_get_async(url, {"limit": limit, "sort": "-start_time"})
+            matches = await _api_get_async(url, {"limit": limit, "sort": "-start_time", "radiant_win": 1})
             if matches is None:
                 await asyncio.sleep(10)
         
