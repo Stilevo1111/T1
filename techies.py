@@ -76,7 +76,7 @@ async def _techies_timeout_fallback(bot, chat_id, msg_id, user_id, display_usern
         await bot.edit_message_media(
             chat_id=chat_id,
             message_id=msg_id,
-            media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text),
+            media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text, parse_mode="HTML"),
             reply_markup=None
         )
     except Exception as e:
@@ -86,7 +86,8 @@ async def _techies_timeout_fallback(bot, chat_id, msg_id, user_id, display_usern
                 chat_id=chat_id,
                 message_id=msg_id,
                 caption=text,
-                reply_markup=None
+                reply_markup=None,
+                parse_mode="HTML"
             )
         except Exception as e2:
             logger.error(f"_techies_timeout_fallback edit_message_caption also failed: {e2}")
@@ -132,7 +133,7 @@ async def _techies_timeout_job(context):
         await bot.edit_message_media(
             chat_id=chat_id,
             message_id=msg_id,
-            media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text),
+            media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text, parse_mode="HTML"),
             reply_markup=None
         )
     except Exception as e:
@@ -142,7 +143,8 @@ async def _techies_timeout_job(context):
                 chat_id=chat_id,
                 message_id=msg_id,
                 caption=text,
-                reply_markup=None
+                reply_markup=None,
+                parse_mode="HTML"
             )
         except Exception as e2:
             logger.error(f"edit_message_caption also failed: {e2}")
@@ -318,4 +320,4 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         new_fissure = current_fissure
         text = f"🎲 {display_username}\n\n😇 ОБЕЗВРЕЖЕНО!\n🩸 Techies: {phrase}\n\n📏 {current_fissure:.1f} см"
     
-    await query.edit_message_media(media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text), reply_markup=None)
+    await query.edit_message_media(media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text, parse_mode="HTML"), reply_markup=None)
