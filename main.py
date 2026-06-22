@@ -1019,7 +1019,7 @@ async def claim_or_check_weekly_leader():
     """
     instance_id = os.getenv("RENDER_INSTANCE_ID") or f"local_{os.getpid()}"
     now = time.time()
-    LEADER_TIMEOUT = 300  # 5 minutes — sufficient for weekly champion card + send
+    LEADER_TIMEOUT = 3600  # 1 hour — weekly jobs may take long and run infrequently
 
     current_leader = None
     last_seen = 0.0
@@ -3558,7 +3558,22 @@ async def main():
                 except Exception as e:
                     logger.error(f"Startup weekly reset error: {e}")
 
-
+        # Если бот стартует в воскресенье после 23:00 MSK - проверяем, не нужно ли объявить чемпиона
+        from datetime import datetime as dt
+        from datetime import timedelta, timezone
+        MSK = timezone(timedelta(hours=3))
+        now_msk = dt.now(MSK)
+        if now_msk.weekday() == 6:  # Воскресенье
+            from database import get_config as _get_cfg, set_config as _set_cfg
+            monday_msk = now_msk - timedelta(days=now_msk.weekday())
+            current_week_start = monday_msk.strftime("%Y-%m-%d")
+            last_announced = _get_cfg('mmr_week_top_announced')
+            if last_announced != current_week_start:
+                try:
+                    await announce_weekly_mmr_winner(app.bot)
+                    logger.info("Startup: weekly champion announced on Sunday startup")
+                except Exception as e:
+                    logger.error(f"Startup weekly champion announcement error: {e}")
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("about", about))
