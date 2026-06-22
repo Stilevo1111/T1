@@ -1541,10 +1541,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         telegram_username = update.effective_user.username
         first_name = update.effective_user.first_name or "Friend"
-        if telegram_username:
-            display_username = f"<a href=\"tg://resolve?username={telegram_username}\">@{telegram_username}</a>"
-        else:
-            display_username = first_name
+        plain_username = telegram_username or first_name
 
         # Получаем пользователя без авто-создания (wrapped in thread to avoid blocking event loop)
         db_user = await asyncio.to_thread(get_user, user_id)
@@ -1662,7 +1659,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 generate_start_card,
                 avatar_url=avatar_url,
                 message_count=message_count,
-                username=display_username,
+                username=plain_username,
                 steam_nickname=steam_nickname,
                 rank_tier=rank_tier,
                 weekly_mvp=weekly_mvp,
@@ -1673,9 +1670,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             if card_data:
+                name_display = make_clickable(plain_username, user_id)
+                text = f"👤 {name_display}"
                 msg = await context.bot.send_photo(
                     chat_id=chat_id,
                     photo=card_data,
+                    caption=text,
+                    parse_mode="HTML",
                     reply_markup=main_menu()
                 )
                 set_last_bot_message(chat_id, user_id, msg.message_id)
@@ -1700,7 +1701,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 generate_start_card,
                 avatar_url=avatar_url,
                 message_count=message_count,
-                username=display_username,
+                username=plain_username,
                 steam_nickname=None,
                 rank_tier=0,
                 weekly_mvp=0,
@@ -1711,9 +1712,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             if card_data:
+                name_display = make_clickable(plain_username, user_id)
+                text = f"👤 {name_display}"
                 msg = await context.bot.send_photo(
                     chat_id=chat_id,
                     photo=card_data,
+                    caption=text,
+                    parse_mode="HTML",
                     reply_markup=main_menu()
                 )
                 set_last_bot_message(chat_id, user_id, msg.message_id)
