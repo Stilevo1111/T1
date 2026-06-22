@@ -443,7 +443,10 @@ async def alternate_digest_job(context):
             should_refresh_data = True
             logger.info(f"Данные в БД обновились ({_data_refresh_interval}с), обновляем")
 
-# Если кеш валиден - используем его и обновляем объединённый дайджест
+        # Проверяем, является ли сообщение фото или текстом
+        is_photo_message = _get_digest_is_photo()
+
+        # Если кеш валиден - используем его и обновляем объединённый дайджест
         if not should_create_new and not should_refresh_data:
             logger.info(f"Используем кешированный дайджест (создан {now - cache['created_at']:.0f}с назад)")
 
@@ -452,17 +455,25 @@ async def alternate_digest_job(context):
             if not text:
                 text = "<b>📊 Данные для дайджеста пока не доступны</b>\n\nПопробуйте позже!"
 
-            next_type = "0"  # Всегда один тип для объединённого дайджеста
+            next_type = "0"
 
-            # Try to edit existing message or create new
+            # Try to edit existing message with correct method for message type
             if existing_msg_id and int(existing_msg_id) > 0:
                 try:
-                    await bot.edit_message_text(
-                        chat_id=int(digest_chat_id),
-                        message_id=int(existing_msg_id),
-                        text=text,
-                        parse_mode="HTML"
-                    )
+                    if is_photo_message:
+                        await bot.edit_message_caption(
+                            chat_id=int(digest_chat_id),
+                            message_id=int(existing_msg_id),
+                            caption=text,
+                            parse_mode="HTML"
+                        )
+                    else:
+                        await bot.edit_message_text(
+                            chat_id=int(digest_chat_id),
+                            message_id=int(existing_msg_id),
+                            text=text,
+                            parse_mode="HTML"
+                        )
                     logger.info(f"Updated cached digest message {existing_msg_id}")
                     return
                 except Exception as e:
@@ -567,9 +578,6 @@ async def alternate_digest_job(context):
 
         logger.info(f"alternate_digest_job: text = {text[:100]}...")
         edited = False
-
-        # Проверяем, является ли сообщение фото или текстом
-        is_photo_message = _get_digest_is_photo()
 
         if last_message_id:
             logger.info(f"alternate_digest_job: attempting to edit message {last_message_id}")
@@ -736,11 +744,37 @@ async def alternate_digest_job(context):
                         set_config('last_hero_meta_update', int(now))
                         _digest_state_container.set_last_hero_meta_refresh(now)
                         logger.info("Hero meta banner generated for digest")
-                        # Если баннер готов и сообщение существует - нужно создать новое сообщение с фото
+                        # Если баннер готов и сообщение существует - обновляем фото в существующем сообщении
                         if last_message_id:
-                            should_create_new = True
-                            set_config('alternate_digest_message_id', None)
-                            last_message_id = None
+                            try:
+                                from io import BytesIO
+                                from telegram import InputMediaPhoto
+                                photo_buf = BytesIO(hero_meta_banner)
+                                photo_buf.name = "hero_meta_banner.png"
+                                await bot.edit_message_media(
+                                    chat_id=int(digest_chat_id),
+                                    message_id=int(last_message_id),
+                                    media=InputMediaPhoto(media=photo_buf, caption=text, parse_mode="HTML")
+                                )
+                                logger.info(f"Обновлён баннер в существующем дайджесте {last_message_id}")
+                                _set_digest_is_photo(True)
+                                edited = True
+                                _digest_state_container.set_current_type(next_type)
+                                _digest_state_container.set_last_text(text)
+                                set_config('alternate_digest_last_text', text)
+                                if _digest_state_container.get_digest_data():
+                                    set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
+                                start_fast_digest_loop(bot, int(digest_chat_id), int(last_message_id), True)
+                                try:
+                                    await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=int(last_message_id), disable_notification=True)
+                                except Exception:
+                                    pass
+                                return
+                            except Exception as e:
+                                logger.warning(f"Не удалось обновить баннер в существующем сообщении, создаём новое: {e}")
+                                should_create_new = True
+                                set_config('alternate_digest_message_id', None)
+                                last_message_id = None
                     else:
                         logger.info("Hero meta banner skipped (no data)")
                 except Exception as e:
