@@ -64,6 +64,7 @@ async def _techies_timeout_fallback(bot, chat_id, msg_id, user_id, display_usern
     phrase = random.choice(FAIL_PHRASES)
     
     text = (
+        f"🎲 {display_username}\n\n"
         "💥 БАБАХ!\n"
         f"😈 Techies: {phrase}\n\n"
     )
@@ -71,17 +72,12 @@ async def _techies_timeout_fallback(bot, chat_id, msg_id, user_id, display_usern
         text += f"💣 Мина {i} - {mine} см\n"
     text += f"\n📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
     
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🧨 Левая", callback_data="noop"),
-         InlineKeyboardButton("🧨 Правая", callback_data="noop")]
-    ])
-    
     try:
         await bot.edit_message_media(
             chat_id=chat_id,
             message_id=msg_id,
             media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text),
-            reply_markup=keyboard
+            reply_markup=None
         )
     except Exception as e:
         logger.error(f"_techies_timeout_fallback edit_message_media failed: {e}")
@@ -90,7 +86,7 @@ async def _techies_timeout_fallback(bot, chat_id, msg_id, user_id, display_usern
                 chat_id=chat_id,
                 message_id=msg_id,
                 caption=text,
-                reply_markup=keyboard
+                reply_markup=None
             )
         except Exception as e2:
             logger.error(f"_techies_timeout_fallback edit_message_caption also failed: {e2}")
@@ -123,6 +119,7 @@ async def _techies_timeout_job(context):
     phrase = random.choice(FAIL_PHRASES)
     
     text = (
+        f"🎲 {display_username}\n\n"
         "💥 БАБАХ!\n"
         f"😈 Techies: {phrase}\n\n"
     )
@@ -130,18 +127,13 @@ async def _techies_timeout_job(context):
         text += f"💣 Мина {i} - {mine} см\n"
     text += f"\n📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
     
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🧨 Левая", callback_data="noop"),
-         InlineKeyboardButton("🧨 Правая", callback_data="noop")]
-    ])
-    
     bot = context.application.bot
     try:
         await bot.edit_message_media(
             chat_id=chat_id,
             message_id=msg_id,
             media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text),
-            reply_markup=keyboard
+            reply_markup=None
         )
     except Exception as e:
         logger.error(f"edit_message_media failed: {e}, trying edit_message_caption")
@@ -150,7 +142,7 @@ async def _techies_timeout_job(context):
                 chat_id=chat_id,
                 message_id=msg_id,
                 caption=text,
-                reply_markup=keyboard
+                reply_markup=None
             )
         except Exception as e2:
             logger.error(f"edit_message_caption also failed: {e2}")
@@ -298,10 +290,11 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
     
     current_fissure = user.get("fissure", 0) or 0
     
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🧨 Левая", callback_data="noop"),
-         InlineKeyboardButton("🧨 Правая", callback_data="noop")]
-    ])
+    username = query.from_user.username
+    if username:
+        display_username = f"<a href=\"tg://resolve?username={username}\">@{username}</a>"
+    else:
+        display_username = f"<a href=\"tg://user?id={user_id}\">{query.from_user.first_name or 'Гость'}</a>"
     
     if elapsed > 15 or button_pressed != correct_button:
         mines = generate_mines()
@@ -313,6 +306,7 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         phrase = random.choice(FAIL_PHRASES)
         
         text = (
+            f"🎲 {display_username}\n\n"
             "💥 БАБАХ!\n"
             f"😈 Techies: {phrase}\n\n"
         )
@@ -322,6 +316,6 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
     else:
         phrase = random.choice(SUCCESS_PHRASES)
         new_fissure = current_fissure
-        text = f"😇 ОБЕЗВРЕЖЕНО!\n🩸 Techies: {phrase}\n\n📏 {current_fissure:.1f} см"
+        text = f"🎲 {display_username}\n\n😇 ОБЕЗВРЕЖЕНО!\n🩸 Techies: {phrase}\n\n📏 {current_fissure:.1f} см"
     
-    await query.edit_message_media(media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text), reply_markup=keyboard)
+    await query.edit_message_media(media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text), reply_markup=None)
