@@ -365,7 +365,8 @@ async def _get_hero_stats_from_db(days=7):
                 hero_id,
                 COUNT(*) as pub_pick,
                 SUM(CASE 
-                    WHEN radiant_win = 1 THEN 1 ELSE 0 
+                    WHEN (radiant_win = 1 AND player_slot < 128) OR (radiant_win = 0 AND player_slot >= 128) THEN 1 
+                    ELSE 0 
                 END) as pub_win
             FROM public_player_matches
             WHERE start_time >= %s AND steam_id IS NOT NULL
@@ -376,7 +377,10 @@ async def _get_hero_stats_from_db(days=7):
             SELECT 
                 hero_id,
                 COUNT(*) as pub_pick,
-                SUM(CASE WHEN radiant_win = 1 THEN 1 ELSE 0 END) as pub_win
+                SUM(CASE 
+                    WHEN (radiant_win = 1 AND player_slot < 128) OR (radiant_win = 0 AND player_slot >= 128) THEN 1 
+                    ELSE 0 
+                END) as pub_win
             FROM public_player_matches
             WHERE start_time >= ? AND steam_id IS NOT NULL
             GROUP BY hero_id

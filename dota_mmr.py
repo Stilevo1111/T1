@@ -1469,17 +1469,13 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         hero_id = match.get("hero_id", 0)
                         player_slot = match.get("player_slot")
                         radiant_win_api = match.get("radiant_win")
-                        # Player on Radiant if player_slot < 128 (slots 0-127 are Radiant)
-                        player_is_radiant = player_slot is not None and player_slot < 128
-                        # Player win = (Radiant win AND player on Radiant) OR (Not Radiant win AND player on Dire)
-                        player_win = False
-                        if radiant_win_api is not None:
-                            player_win = (radiant_win_api is True and player_is_radiant) or (radiant_win_api is False and not player_is_radiant)
-                        radiant_win_int = 1 if player_win else 0
+                        # Store API radiant_win as-is (Radiant team won = 1/True, Dire won = 0/False)
+                        # player_slot is saved separately; hero meta SQL derives player win from both
+                        radiant_win_int = 1 if radiant_win_api else 0
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
                         logger.info(f"topmmr: Hero meta saving - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win_int} (api_radiant_win={radiant_win_api}, player_slot={player_slot}), steam_id={steam_id}")
-                        if match_id and hero_id is not None:
+                        if match_id and hero_id is not None and player_slot is not None:
                             cursor.execute("""
                                 INSERT INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
                                 VALUES (%s, %s, %s, %s, %s, %s)
@@ -1501,15 +1497,11 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         hero_id = match.get("hero_id", 0)
                         player_slot = match.get("player_slot")
                         radiant_win_api = match.get("radiant_win")
-                        player_is_radiant = player_slot is not None and player_slot < 128
-                        player_win = False
-                        if radiant_win_api is not None:
-                            player_win = (radiant_win_api is True and player_is_radiant) or (radiant_win_api is False and not player_is_radiant)
-                        radiant_win_int = 1 if player_win else 0
+                        radiant_win_int = 1 if radiant_win_api else 0
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
                         logger.info(f"topmmr: Hero meta saving (SQLite) - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win_int} (api_radiant_win={radiant_win_api}, player_slot={player_slot}), steam_id={steam_id}")
-                        if match_id and hero_id is not None:
+                        if match_id and hero_id is not None and player_slot is not None:
                             cursor.execute("""
                                 INSERT OR IGNORE INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
                                 VALUES (?, ?, ?, ?, ?, ?)
