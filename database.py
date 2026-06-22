@@ -1465,14 +1465,15 @@ class Database:
                     last_activity = CURRENT_TIMESTAMP,
                     current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
                     current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                    current_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
+                    current_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
                     best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END),
                     best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END)
                     WHERE telegram_id=?
                 """
-                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, max(growth, 0), win, lose, win, win, lose, telegram_id))
+                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, max(growth, 0), win, lose, lose, win, win, lose, telegram_id))
         except Exception as e:
             logger.error(f"Error updating fissure: {e}")
+        user_cache.delete('digest_stats')
 
     def update_last_message_id(self, telegram_id, message_id):
         """Обновление ID последнего сообщения пользователя"""
