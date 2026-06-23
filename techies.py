@@ -36,8 +36,8 @@ FAIL_PHRASES = [
 
 _active_techies_sessions = {}
 
-def generate_mines(count: int = 4) -> list[float]:
-    return [round(random.uniform(0.0, 10.0), 1) for _ in range(count)]
+def generate_mines(count: int = 4) -> list[int]:
+    return [random.randint(1, 10) for _ in range(count)]
 
 async def _techies_timeout_fallback(bot, chat_id, msg_id, user_id, display_username, start_time, correct_button):
     """Fallback timeout handler using asyncio.sleep instead of job_queue"""
@@ -172,7 +172,7 @@ async def handle_techies_event(bot, chat_id, user, user_obj, display_username, n
     )
     
     msg = await bot.send_photo(chat_id=chat_id, photo=BANNER_URL, caption=text, reply_markup=keyboard, parse_mode="HTML")
-    set_last_bot_message(chat_id, msg.message_id)
+    set_last_bot_message(chat_id, user_obj.id, msg.message_id)
     
     logger.info(f"handle_techies_event: job_queue={job_queue is not None}, scheduling timeout for {chat_id}_{msg.message_id}")
     
