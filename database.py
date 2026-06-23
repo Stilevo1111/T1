@@ -2289,6 +2289,31 @@ def cleanup_left_users():
         release_connection(conn)
 
 
+def cleanup_old_matches():
+    """Удалить матчи старше 7 дней из public_player_matches"""
+    conn = None
+    try:
+        conn = get_connection()
+        scheme = get_db_type()
+        cursor = conn.cursor()
+        week_ago = int(time.time()) - (7 * 24 * 3600)
+        if "postgres" in scheme:
+            cursor.execute("DELETE FROM public_player_matches WHERE start_time < %s", (week_ago,))
+        else:
+            cursor.execute("DELETE FROM public_player_matches WHERE start_time < ?", (week_ago,))
+        deleted = cursor.rowcount
+        conn.commit()
+        cursor.close()
+        if deleted:
+            logger.info(f"cleanup_old_matches: удалено {deleted} записей старше 7 дней")
+        return deleted
+    except Exception as e:
+        logger.error(f"cleanup_old_matches error: {e}")
+        return 0
+    finally:
+        release_connection(conn)
+
+
 def get_fissure_top(limit=10):
     """Получение топа пользователей - из кеша"""
     cache_key = f'fissure_top_{limit}'

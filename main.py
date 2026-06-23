@@ -1062,7 +1062,7 @@ async def update_all_mmr_job(context):
             return
 
         logger.info("Запуск ежечасного обновления MMR")
-        from database import batch_save_mmr, get_all_users_with_steam
+        from database import batch_save_mmr, get_all_users_with_steam, cleanup_old_matches
 
         # Fetch users in thread to avoid blocking event loop on DB query
         users = await asyncio.to_thread(get_all_users_with_steam)
@@ -1140,6 +1140,13 @@ async def update_all_mmr_job(context):
             logger.warning(f"Could not refresh Dota digest cache from MMR job: {e}")
 
         logger.info(f"MMR обновлён для {success_count}/{len(users)} пользователей")
+
+        # Очищаем матчи старше 7 дней из public_player_matches
+        try:
+            await asyncio.to_thread(cleanup_old_matches)
+            logger.info("Очистка старых матчей из public_player_matches завершена")
+        except Exception as e:
+            logger.warning(f"Ошибка очистки старых матчей: {e}")
 
         # Получаем digest_chat_id из конфига
         digest_chat_id = get_config('digest_chat_id')
