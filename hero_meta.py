@@ -353,8 +353,8 @@ async def _get_hero_stats_from_db(days=7):
                     END IF;
                 END $$
                 """)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"hero_meta migration warning: {e}")
     except Exception:
         pass
     

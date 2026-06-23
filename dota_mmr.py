@@ -1480,7 +1480,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                                 INSERT INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
                                 VALUES (%s, %s, %s, %s, %s, %s)
                                 ON CONFLICT DO NOTHING
-                            """, (match_id, hero_id, player_slot, radiant_win_api, start_time, steam_id))
+                            """, (match_id, hero_id, player_slot, radiant_win_int, start_time, steam_id))
                 else:
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS public_player_matches (
