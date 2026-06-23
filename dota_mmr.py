@@ -1509,6 +1509,13 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                 conn.commit()
             except Exception as e:
                 logger.warning(f"Failed to save matches to public_player_matches: {e}")
+            # Invalidate hero meta cache so next read gets fresh data
+            if matches:
+                try:
+                    from hero_meta import clear_hero_meta_cache
+                    clear_hero_meta_cache()
+                except Exception as e:
+                    logger.debug(f"Failed to invalidate hero meta cache: {e}")
         
         logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}, week_streak={max_streak}")
         
