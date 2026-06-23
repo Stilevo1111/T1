@@ -104,8 +104,9 @@ async def _techies_timeout_job(context):
     correct_button = data['correct_button']
     
     session_key = f"{chat_id}_{user_id}"
-    if session_key in _active_techies_sessions:
-        del _active_techies_sessions[session_key]
+    if session_key not in _active_techies_sessions:
+        return
+    del _active_techies_sessions[session_key]
     
     from database import get_user, update_fissure
     user = get_user(user_id)
