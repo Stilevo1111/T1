@@ -94,7 +94,7 @@ def is_valid_telegram_id(user_id):
 
 
 def make_clickable(name, user_id, max_length=12):
-    """Создать кликабельный никейм для Telegram"""
+    """Создать кликабельный никейм для Telegram — всегда открывает профиль по user_id, без @-упоминаний и уведомлений"""
     try:
         uid = int(user_id) if user_id else 0
     except (ValueError, TypeError):
@@ -102,17 +102,14 @@ def make_clickable(name, user_id, max_length=12):
 
     if name and name != "None" and uid > 0:
         display_name = name
-        username = None
         try:
             cached = user_cache.get(uid)
             if cached:
                 display_name = cached.get('steam_nickname') or cached.get('username') or name
-                username = cached.get('username')
             else:
                 db_user = get_user(uid)
                 if db_user:
                     display_name = db_user.get('steam_nickname') or db_user.get('username') or name
-                    username = db_user.get('username')
         except Exception:
             pass
 
@@ -125,8 +122,6 @@ def make_clickable(name, user_id, max_length=12):
         if len(display_name) > max_length:
             display_name = display_name[:max_length-1] + "."
 
-        if username and username not in ('None', None, ''):
-            return f'<a href="tg://resolve?username={username}">{display_name}</a>'
         return f'<a href="tg://user?id={uid}">{display_name}</a>'
     return name if name and name != "None" else "—"
 
