@@ -773,10 +773,33 @@ async def alternate_digest_job(context):
                                     pass
                                 return
                             except Exception as e:
-                                logger.warning(f"Не удалось обновить баннер в существующем сообщении, создаём новое: {e}")
-                                should_create_new = True
-                                set_config('alternate_digest_message_id', None)
-                                last_message_id = None
+                                logger.warning(f"Не удалось обновить медиа в существующем сообщении: {e}")
+                                try:
+                                    await bot.edit_message_caption(
+                                        chat_id=int(digest_chat_id),
+                                        message_id=int(last_message_id),
+                                        caption=text,
+                                        parse_mode="HTML"
+                                    )
+                                    logger.info(f"Обновлён caption в существующем дайджесте {last_message_id}")
+                                    _set_digest_is_photo(True)
+                                    edited = True
+                                    _digest_state_container.set_current_type(next_type)
+                                    _digest_state_container.set_last_text(text)
+                                    set_config('alternate_digest_last_text', text)
+                                    if _digest_state_container.get_digest_data():
+                                        set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
+                                    start_fast_digest_loop(bot, int(digest_chat_id), int(last_message_id), True)
+                                    try:
+                                        await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=int(last_message_id), disable_notification=True)
+                                    except Exception:
+                                        pass
+                                    return
+                                except Exception as e2:
+                                    logger.warning(f"Не удалось обновить caption, создаём новое: {e2}")
+                                    should_create_new = True
+                                    set_config('alternate_digest_message_id', None)
+                                    last_message_id = None
                     else:
                         logger.info("Hero meta banner skipped (no data)")
                 except Exception as e:
