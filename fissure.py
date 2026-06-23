@@ -502,10 +502,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         display_roll = roll
 
         # Вычисляем result_text на основе базового ролла
-        roll_key_text = min(base_roll_for_text, 75)
-        roll_key_text = max(roll_key_text, -15)
-        if roll_key_text in ROLL_TEXTS:
-            result_text = random.choice(ROLL_TEXTS[roll_key_text])
+        if base_roll_for_text in ROLL_TEXTS:
+            result_text = random.choice(ROLL_TEXTS[base_roll_for_text])
         else:
             result_text = f"{'+' if base_roll_for_text > 0 else ''}{base_roll_for_text} см"
 
@@ -539,10 +537,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         extra_text = ""
         # Для мультикаста используем original_roll для выбора мема
         roll_for_meme = original_roll if original_roll is not None else roll
-        roll_key = min(roll_for_meme, 75)
-        roll_key = max(roll_key, -15)
-        if roll_key in ROLL_MEMES and random.random() < 0.5:
-            extra_text = random.choice(ROLL_MEMES[roll_key])
+        if roll_for_meme in ROLL_MEMES and random.random() < 0.5:
+            extra_text = random.choice(ROLL_MEMES[roll_for_meme])
         elif not is_weekend and roll > 0 and not is_fatal:
             extra_text = random.choice(CATEGORY_PHRASES[category])
 
