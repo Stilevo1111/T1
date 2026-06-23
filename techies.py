@@ -6,6 +6,8 @@ import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
+from bot_utils import make_clickable
+
 logger = logging.getLogger(__name__)
 
 BANNER_URL = "https://i.ibb.co/PzzFJwwk/Gemini-Generated-Image-e3k1zhe3k1zhe3k1.png"
@@ -207,15 +209,7 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
     start_time = time.time()
     
     username = user.get("username")
-    if username:
-        display_username = f"<a href=\"tg://resolve?username={username}\">@{username}</a>"
-    else:
-        user = get_user(user_id)
-        username = user.get("username") if user else None
-        if username:
-            display_username = f"<a href=\"tg://resolve?username={username}\">@{username}</a>"
-        else:
-            display_username = f"<a href=\"tg://user?id={user_id}\">{user.first_name if user else 'Гость'}</a>"
+    display_username = make_clickable(username or (user.first_name if user else "Гость"), user_id)
     
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🧨 Левая", callback_data=f"techies_left_{user_id}_{correct_button}_{int(start_time*1000)}"),
@@ -293,10 +287,7 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
     current_fissure = user.get("fissure", 0) or 0
     
     username = query.from_user.username
-    if username:
-        display_username = f"<a href=\"tg://resolve?username={username}\">@{username}</a>"
-    else:
-        display_username = f"<a href=\"tg://user?id={user_id}\">{query.from_user.first_name or 'Гость'}</a>"
+    display_username = make_clickable(username or query.from_user.first_name or "Гость", user_id)
     
     if elapsed > 15 or button_pressed != correct_button:
         mines = generate_mines()

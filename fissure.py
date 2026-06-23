@@ -22,6 +22,7 @@ from bot_utils import (
     delete_last_bot_message,
     format_time,
     main_menu,
+    make_clickable,
     schedule_delete,
     set_last_bot_message,
 )
@@ -276,10 +277,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_obj = update.effective_user
     username = user_obj.username
-    if username:
-        display_username = f"<a href=\"tg://resolve?username={username}\">@{username}</a>"
-    else:
-        display_username = f"<a href=\"tg://user?id={user_obj.id}\">{user_obj.first_name}</a>"
+    display_username = make_clickable(username or user_obj.first_name or "Игрок", user_obj.id)
     chat_id = update.message.chat_id
     chat_type = update.message.chat.type
     user_msg_id = update.message.message_id
@@ -304,7 +302,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        user = get_user(user_obj.id, display_username)
+        user = get_user(user_obj.id, username)
         logger.info(f"user data: {user}")
 
         # Check cooldown
