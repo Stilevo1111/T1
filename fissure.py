@@ -501,11 +501,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         display_roll = roll
 
-        # Вычисляем result_text на основе базового ролла
-        if base_roll_for_text in ROLL_TEXTS:
-            result_text = random.choice(ROLL_TEXTS[base_roll_for_text])
+        # Вычисляем result_text на основе финального ролла (после всех бонусов)
+        roll_key_text = min(roll, 75)
+        roll_key_text = max(roll_key_text, -15)
+        if roll_key_text in ROLL_TEXTS:
+            result_text = random.choice(ROLL_TEXTS[roll_key_text])
         else:
-            result_text = f"{'+' if base_roll_for_text > 0 else ''}{base_roll_for_text} см"
+            result_text = f"{'+' if roll > 0 else ''}{roll} см"
 
         old_fissure = user.get("fissure", 0)
 
