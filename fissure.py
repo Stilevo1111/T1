@@ -502,10 +502,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         display_roll = roll
 
         # Вычисляем result_text на основе финального ролла (после всех бонусов)
-        roll_key_text = min(roll, 75)
-        roll_key_text = max(roll_key_text, -15)
-        if roll_key_text in ROLL_TEXTS:
-            result_text = random.choice(ROLL_TEXTS[roll_key_text])
+        if roll in ROLL_TEXTS:
+            result_text = random.choice(ROLL_TEXTS[roll])
         else:
             result_text = f"{'+' if roll > 0 else ''}{roll} см"
 
