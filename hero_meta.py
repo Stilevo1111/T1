@@ -497,6 +497,17 @@ HERO_META_CONFIG_TTL = 7 * 24 * 3600  # 7 days
 HERO_META_BANNER_KEY = 'hero_meta_banner'  # Cached PNG bytes
 
 
+def clear_hero_meta_cache():
+    _hero_meta_cache["data"] = None
+    _hero_meta_cache["timestamp"] = 0
+    try:
+        from database import set_config
+        set_config(HERO_META_CONFIG_KEY, "")
+        set_config(HERO_META_BANNER_KEY, "")
+    except Exception as e:
+        logger.debug(f"Failed to clear hero meta DB cache: {e}")
+
+
 async def get_dota_data(days=7, force_refresh=False):
     now = int(time.time())
 

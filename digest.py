@@ -738,7 +738,9 @@ async def alternate_digest_job(context):
             
             if need_hero_meta:
                 try:
-                    from hero_meta import get_hero_meta_image
+                    from hero_meta import get_hero_meta_image, clear_hero_meta_cache
+                    if should_create_new:
+                        clear_hero_meta_cache()
                     hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=90.0)
                     if hero_meta_banner:
                         set_config('last_hero_meta_update', int(now))
