@@ -746,6 +746,8 @@ async def alternate_digest_job(context):
                         set_config('last_hero_meta_update', int(now))
                         _digest_state_container.set_last_hero_meta_refresh(now)
                         logger.info("Hero meta banner generated for digest")
+                        # Сохраняем оригинальный ID до попытки редактирования
+                        original_msg_id = last_message_id
                         # Если баннер готов и сообщение существует - обновляем фото в существующем сообщении
                         if last_message_id:
                             try:
@@ -807,12 +809,12 @@ async def alternate_digest_job(context):
                     hero_meta_banner = None
 
             # Удаляем старое сообщение если есть
-            if last_message_id:
+            if original_msg_id:
                 try:
-                    msg_id_int = int(last_message_id)
+                    msg_id_int = int(original_msg_id)
                     if msg_id_int > 0:
                         await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
-                        logger.info(f"Удалено старое сообщение {last_message_id}")
+                        logger.info(f"Удалено старое сообщение {original_msg_id}")
                 except Exception as e:
                     logger.debug(f"Старое сообщение уже удалено: {e}")
                 set_config('alternate_digest_message_id', None)
