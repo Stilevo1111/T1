@@ -2169,6 +2169,10 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
             user['total_rolls'] = user.get('total_rolls', 0) + 1
             user['weekly_rolls'] = user.get('weekly_rolls', 0) + 1
             user['weekly_growth'] = user.get('weekly_growth', 0) + max(0, growth)
+            user['current_win_streak'] = (user.get('current_win_streak', 0) + 1) if win else 0
+            user['current_lose_streak'] = (user.get('current_lose_streak', 0) + 1) if lose else 0
+            user['current_streak'] = (user.get('current_win_streak', 0) + 1) if win else ((user.get('current_lose_streak', 0) + 1) if lose else 0)
+            user['best_streak'] = max(user.get('best_streak', 0), user['current_streak'])
             user_cache.set(telegram_id, user)
         else:
             # Cache miss - fetch updated user from DB using same connection
