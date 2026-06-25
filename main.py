@@ -2600,7 +2600,8 @@ async def testtechies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lambda: None,
         lambda uid, fissure, ts, growth: None,
         lambda uid, ts: None,
-        context.application.job_queue
+        context.application.job_queue,
+        lambda uid, uname, growth, new_fissure, cascade: None
     )
 
 

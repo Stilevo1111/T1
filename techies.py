@@ -152,7 +152,7 @@ async def _techies_timeout_job(context):
         except Exception as e2:
             logger.error(f"edit_message_caption also failed: {e2}")
 
-async def handle_techies_event(bot, chat_id, user, user_obj, display_username, now, main_menu, set_last_bot_message, schedule_delete, update_fissure, update_last_message_id, job_queue=None):
+async def handle_techies_event(bot, chat_id, user, user_obj, display_username, now, main_menu, set_last_bot_message, schedule_delete, update_fissure, update_last_message_id, job_queue=None, record_recent_fissure_roll=None):
     correct_button = random.choice(["left", "right"])
     start_time = time.time()
     
@@ -296,6 +296,8 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         
         new_fissure = max(0.1, current_fissure - total_damage)
         update_fissure(user_id, new_fissure, time.time(), 0)
+        if record_recent_fissure_roll:
+            record_recent_fissure_roll(user_id, username or str(user_id), -total_damage, new_fissure, cascade=0)
         
         phrase = random.choice(FAIL_PHRASES)
         
@@ -311,5 +313,7 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         phrase = random.choice(SUCCESS_PHRASES)
         new_fissure = current_fissure
         text = f"🎲 {display_username}\n\n😇 ОБЕЗВРЕЖЕНО!\n🩸 Techies: {phrase}\n\n📏 {current_fissure:.1f} см"
+        if record_recent_fissure_roll:
+            record_recent_fissure_roll(user_id, username or str(user_id), 0, new_fissure, cascade=0)
     
     await query.edit_message_media(media=InputMediaPhoto(media=TECHIES_BANNER_URL, caption=text, parse_mode="HTML"), reply_markup=None)
