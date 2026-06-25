@@ -140,7 +140,7 @@ async def send_fissure_cooldown_response(bot, chat_id, user_id, text, banner_url
     await asyncio.sleep(0.1)
 
 
-async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now, ZEUS_TEXTS, main_menu, set_last_bot_message, schedule_delete, update_fissure, update_last_message_id, zeus_strike):
+async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now, ZEUS_TEXTS, main_menu, set_last_bot_message, schedule_delete, update_fissure, update_last_message_id, zeus_strike, record_recent_fissure_roll=None):
     """
     Handles the Zeus strike event (no roll, -2.5% to all fissures).
     Logic and all messages are 100% preserved from the original.
@@ -167,6 +167,9 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
         parse_mode="HTML",
         reply_markup=main_menu()
     )
+    if record_recent_fissure_roll:
+        record_recent_fissure_roll(user_obj.id, user_obj.username, 0, user.get("fissure", 0), cascade=0)
+
     set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
     schedule_delete(bot, chat_id, result_msg.message_id, 600, None)  # job_queue passed from caller if needed
     update_fissure(user_obj.id, user.get("fissure", 0), now, 0, last_message_id=result_msg.message_id)
