@@ -551,6 +551,14 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             mc_level = f"×{cascade_count}"
             roll_final = roll
             
+            base_for_text = original_roll
+            roll_key_text = min(base_for_text, 75)
+            roll_key_text = max(roll_key_text, -15)
+            if roll_key_text in ROLL_TEXTS:
+                result_text = random.choice(ROLL_TEXTS[roll_key_text])
+            else:
+                result_text = f"{'+' if base_for_text > 0 else ''}{base_for_text} см"
+            
             # Для мультикаста добавляем extra_text (мем)
             if cascade_count == 1:
                 extra_text = ""
