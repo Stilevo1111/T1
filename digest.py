@@ -934,6 +934,59 @@ async def alternate_digest_job(context):
             logger.info("alternate_digest_job: preserved last_text in cache after error")
 
 
+async def morning_digest_job(context):
+    """Утренний дайджест в 9:00 MSK — удаляет старый пост, сбрасывает hero meta кеш и создаёт новый"""
+    from database import (
+        get_config,
+        get_digest_stats,
+        get_dota_week_top,
+        set_config,
+        update_digest_snapshot,
+        user_cache,
+    )
+    from main import is_rate_limited
+    from hero_meta import clear_hero_meta_cache
+
+    try:
+        if is_rate_limited():
+            logger.warning("morning_digest_job: skipped - bot is rate limited")
+            return
+
+        if not await claim_or_check_digest_leader():
+            logger.info("morning_digest_job: skipped - not leader")
+            return
+
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            logger.info("morning_digest_job: no digest_chat_id configured")
+            return
+
+        bot = context.application.bot
+        old_msg_id = get_config('alternate_digest_message_id')
+
+        # Удаляем старое сообщение если есть
+        if old_msg_id:
+            try:
+                msg_id_int = int(old_msg_id)
+                if msg_id_int > 0:
+                    await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
+                    logger.info(f"morning_digest_job: удалён старый дайджест {old_msg_id}")
+            except Exception as e:
+                logger.debug(f"morning_digest_job: старое сообщение уже удалено: {e}")
+            set_config('alternate_digest_message_id', None)
+            _digest_state_container.set_last_hero_meta_refresh(0)
+
+        # Сбрасываем кеш hero meta чтобы взять свежие данные
+        clear_hero_meta_cache()
+        logger.info("morning_digest_job: hero meta cache cleared")
+
+        # Принудительно создаём новый дайджест
+        await alternate_digest_job(context)
+
+    except Exception as e:
+        logger.error(f"Ошибка в morning_digest_job: {e}", exc_info=True)
+
+
 # ============================================================
 # Internal helpers for photo/text message type (single source of truth)
 #

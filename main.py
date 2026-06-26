@@ -1401,7 +1401,7 @@ from constants import (
     JOB_COOLDOWN,
     WELCOME_PHRASES,
 )
-from digest import alternate_digest_job
+from digest import alternate_digest_job, morning_digest_job
 
 # Импорт из fissure
 from fissure import (
@@ -3523,6 +3523,12 @@ async def main():
             weekly_mmr_reset_job,
             time=datetime.time(hour=21, minute=0),  # 21:00 UTC = 00:00 MSK
             days=(0,),  # Только понедельник
+        )
+
+        # ✅ Утренний дайджест каждый день в 9:00 MSK (6:00 UTC) — новый пост с обновлённой hero meta
+        job_queue.run_daily(
+            morning_digest_job,
+            time=datetime.time(hour=6, minute=0),  # 6:00 UTC = 9:00 MSK
         )
 
         # Если бот стартует в понедельник после 00:00 - выполняем сброс немедленно
