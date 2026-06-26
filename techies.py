@@ -92,7 +92,16 @@ async def _techies_timeout_fallback(bot, chat_id, msg_id, user_id, display_usern
                 parse_mode="HTML"
             )
         except Exception as e2:
-            logger.error(f"_techies_timeout_fallback edit_message_caption also failed: {e2}")
+            logger.error(f"_techies_timeout_fallback edit_message_caption also failed: {e2}, sending new message")
+            try:
+                await bot.send_photo(
+                    chat_id=chat_id,
+                    photo=TECHIES_BANNER_URL,
+                    caption=text,
+                    parse_mode="HTML"
+                )
+            except Exception as e3:
+                logger.error(f"_techies_timeout_fallback send_photo also failed: {e3}")
 
 async def _techies_timeout_job(context):
     data = context.job.data
@@ -150,7 +159,16 @@ async def _techies_timeout_job(context):
                 parse_mode="HTML"
             )
         except Exception as e2:
-            logger.error(f"edit_message_caption also failed: {e2}")
+            logger.error(f"edit_message_caption also failed: {e2}, sending new message")
+            try:
+                await bot.send_photo(
+                    chat_id=chat_id,
+                    photo=TECHIES_BANNER_URL,
+                    caption=text,
+                    parse_mode="HTML"
+                )
+            except Exception as e3:
+                logger.error(f"send_photo also failed: {e3}")
 
 async def handle_techies_event(bot, chat_id, user, user_obj, display_username, now, main_menu, set_last_bot_message, schedule_delete, update_fissure, update_last_message_id, job_queue=None, record_recent_fissure_roll=None):
     correct_button = random.choice(["left", "right"])
