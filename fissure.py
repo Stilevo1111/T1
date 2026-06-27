@@ -485,22 +485,21 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if original_roll is not None:
             base_roll_for_text = original_roll
 
+        # Weekend bonus APPLIED TO STREAK BONUS ONLY (not to full roll)
+        weekend_bonus = ""
+        bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS) if is_weekend and roll > 0 and not is_fatal and cascade_count == 1 else None
+
         # СТРИК-БОНУС: добавляем к базовому роллу
         if cascade_count <= 1:  # No streak during multicast
             current_win_streak = user.get('current_win_streak', 0)
             roll, streak_text = calculate_streak_bonus(current_win_streak, roll)
+            # Apply weekend multiplier to streak bonus only
+            if bonus_multiplier and current_win_streak > 0:
+                streak_bonus_amount = current_win_streak * (bonus_multiplier - 1)  # Additional bonus from multiplier
+                roll = roll + streak_bonus_amount
+                weekend_bonus = f"🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {current_win_streak * bonus_multiplier:.1f} СМ"
         else:
             streak_text = ""
-
-        # Weekend bonus APPLIED TO ROLL AFTER STREAK
-        if is_weekend and roll > 0 and not is_fatal and cascade_count == 1:
-            bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
-            # Используем base_roll_for_text для корректного отображения
-            bonus_amount = base_roll_for_text * bonus_multiplier
-            roll = int(roll * bonus_multiplier)
-            weekend_bonus = f"🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {bonus_amount:.1f} СМ"
-        else:
-            weekend_bonus = ""
 
         display_roll = roll
 
