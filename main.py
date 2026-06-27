@@ -1844,6 +1844,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # === LINK HANDLER ===
+        if data == "roll_fissure":
+            from telegram import Update
+            await callback_query.answer()
+            fake_update = Update(
+                update_id=update.update_id,
+                message=callback_query.message
+            )
+            await fissure(fake_update, context)
+            return
+
         if data == "link":
             await link(update, context)
             return
@@ -3297,7 +3307,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     logger.debug(f"Could not set in_chat=True for {user_id}: {e}")
 
                 phrase = random.choice(WELCOME_PHRASES)
-                keyboard = [[InlineKeyboardButton("🔑 Привязать Аккаунт", callback_data="link")]]
+                keyboard = [[InlineKeyboardButton("🎲 Ролл Фиссуры", callback_data="roll_fissure"), InlineKeyboardButton("🔑 Привязать Аккаунт", callback_data="link")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
                 # Используем text_mention если есть username
