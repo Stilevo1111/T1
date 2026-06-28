@@ -455,12 +455,12 @@ async def create_infographic(hero_stats):
     gap_between_cols = 15
     col_width = (bg_width - 2 * margin_x - 6 * gap_between_cols) // 5
     row_height = (bg_height - margin_y - 10) // 5
-    icon_height = min(int((row_height - 25) * 1.163), row_height - 8)
+    icon_height = min(int((row_height - 25) * 1.163), row_height - 10)
     try:
-        font_lg = ImageFont.truetype(FONT_PATH, 20)
+        font_lg = ImageFont.truetype(FONT_PATH, 22)
         for bn in ['arialbd.ttf', 'Arial-Bold.ttf', 'DejaVuSans-Bold.ttf']:
             try:
-                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 20)
+                font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 22)
                 break
             except:
                 continue
@@ -605,7 +605,7 @@ def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, g
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
 
-            wr_text = "%dW/%dL/%.1f%%" % (hero['pub_win'], hero['pub_losses'], hero['winrate'] * 100)
+            wr_text = "%dW/%dL/%d%%" % (hero['pub_win'], hero['pub_losses'], hero['winrate'] * 100)
 
             try:
                 bb = draw.textbbox((0, 0), wr_text, font=font_lg)
