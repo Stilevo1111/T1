@@ -1403,10 +1403,12 @@ from constants import (
 )
 from digest import alternate_digest_job, morning_digest_job
 
-# Импорт из fissure
+# Импорт из bot_utils и fissure
+from bot_utils import (
+    recent_fissure_rolls,
+)
 from fissure import (
     fissure,
-    recent_fissure_rolls,
 )
 
 # All roll data (ROLL_MEMES, CATEGORY_PHRASES), welcome phrases,
@@ -1844,14 +1846,40 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # === LINK HANDLER ===
+        # === ROLL FISSURE HANDLER (callback from welcome message) ===
         if data == "roll_fissure":
-            from telegram import Update
             await callback_query.answer()
-            fake_update = Update(
-                update_id=update.update_id,
-                message=callback_query.message
-            )
-            await fissure(fake_update, context)
+            user_obj = callback_query.from_user
+            chat_id = callback_query.message.chat_id
+            chat_type = 'private'
+
+            class _FakeChat:
+                id = chat_id
+                type = chat_type
+
+            class _FakeUser:
+                id = user_obj.id
+                is_bot = user_obj.is_bot
+                first_name = user_obj.first_name or ''
+                username = user_obj.username
+                last_name = getattr(user_obj, 'last_name', None)
+                language_code = getattr(user_obj, 'language_code', None)
+
+            class _FakeMsg:
+                message_id = 0
+                chat_id = chat_id
+                chat = _FakeChat()
+                from_user = _FakeUser()
+                date = int(time.time())
+                text = '/fissure'
+
+            class _FakeUpdate:
+                update_id = update.update_id
+                message = _FakeMsg()
+                effective_user = _FakeUser()
+                effective_chat = _FakeChat()
+
+            await fissure(_FakeUpdate(), context)
             return
 
         if data == "link":
@@ -3307,7 +3335,10 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     logger.debug(f"Could not set in_chat=True for {user_id}: {e}")
 
                 phrase = random.choice(WELCOME_PHRASES)
-                keyboard = [[InlineKeyboardButton("🎲 Ролл Фиссуры", callback_data="roll_fissure"), InlineKeyboardButton("🔑 Привязать Аккаунт", callback_data="link")]]
+                keyboard = [
+                    [InlineKeyboardButton("🎲 Ролл Фиссуры", callback_data="roll_fissure")],
+                    [InlineKeyboardButton("🔑 Привязать Аккаунт", callback_data="link")]
+                ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
                 # Используем text_mention если есть username

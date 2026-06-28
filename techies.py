@@ -6,7 +6,7 @@ import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
-from bot_utils import make_clickable
+from bot_utils import make_clickable, record_recent_fissure_roll
 
 logger = logging.getLogger(__name__)
 

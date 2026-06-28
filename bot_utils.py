@@ -6,6 +6,7 @@ Extracted from main.py without any behavior changes.
 import asyncio
 import logging
 import time
+from collections import deque
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
@@ -13,6 +14,19 @@ from database import get_user, user_cache
 from rate_limiter import rate_limit
 
 logger = logging.getLogger(__name__)
+
+recent_fissure_rolls = deque(maxlen=50)
+
+def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_fissure: float, cascade: int = 1):
+    """Append one fissure roll event to the in-memory ring buffer (no DB write)."""
+    recent_fissure_rolls.append({
+        "ts": time.time(),
+        "user_id": user_id,
+        "username": (username or "unknown")[:25],
+        "growth": round(growth, 1),
+        "fissure": round(new_fissure, 1),
+        "cascade": cascade
+    })
 
 _bot_can_delete_ttl = 3600
 _BOT_CAN_DELETE_CACHE_MAX = 200

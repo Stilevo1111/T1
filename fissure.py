@@ -23,6 +23,8 @@ from bot_utils import (
     format_time,
     main_menu,
     make_clickable,
+    record_recent_fissure_roll,
+    recent_fissure_rolls,
     schedule_delete,
     set_last_bot_message,
 )
@@ -49,22 +51,6 @@ from techies import handle_techies_event
 
 # Fissure-specific in-memory state (moved from main.py for clean extraction)
 _user_fissure_processing: dict[int, float] = {}
-
-# In-memory ring buffer for last fissure rolls (for website /api/recent-rolls)
-# Zero DB writes — pure RAM, maxlen 50
-recent_fissure_rolls = deque(maxlen=50)
-
-
-def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_fissure: float, cascade: int = 1):
-    """Append one fissure roll event to the in-memory ring buffer (no DB write)."""
-    recent_fissure_rolls.append({
-        "ts": time.time(),
-        "user_id": user_id,
-        "username": (username or "unknown")[:25],
-        "growth": round(growth, 1),
-        "fissure": round(new_fissure, 1),
-        "cascade": cascade
-    })
 
 
 logger = logging.getLogger(__name__)
