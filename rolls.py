@@ -184,14 +184,7 @@ for _v in range(-25, 101):
                 f"😢 БОЛЬНО! {_v} см...",
                 f"💔 НЕУДАЧА {_v} см.",
                 f"💀 ПОПАЛ! {_v} СМ...",
-                f"🔻 ВНИЗ! «{_rand.choice(_NEG_QUOTES)}»."
-            ]
-        elif _v >= -15:
-            ROLL_TEXTS[_v] = [
-                f"💥 КАТАСТРОФА! {_v} см!!!",
-                f"🌋 АПОКАЛИПСИС! {_v} см!!!",
-                f"😵 СЕРВЕР УПАЛ! {_v} СМ!!!",
-                f"🔻 ПЛАХ! «{_rand.choice(_NEG_QUOTES)}»!!!"
+                f"🔻 ВНИЗ! «{_rand.choice(_NEG_QUOTES)}»..."
             ]
         elif _v >= -25:
             ROLL_TEXTS[_v] = [
