@@ -88,38 +88,115 @@ ROLL_TEXTS = {
 }
 
 # Автозаполнение пропущенных значений роллов цитатами по диапазонам
+
+# Цитаты для высоких роллов (80+)
+_HIGH_ROLL_QUOTES = [
+    "ТЫ МЕГА ЗВЕЗДА!",
+    "ГОРИ И ГОРИ!",
+    "МОЛНИЯ УДАЧИ!",
+    "ФИССУРА В ОГНЕ!",
+    "ЭТО ТЫ СВОЙ?",
+    "БОЖЕСТВЕННЫЙ РОСТ!",
+    "КОНЕЧНОСТЬ ДОСТИГНУТА!",
+    "ПРОДВИНУТЫЙ УРОВЕНЬ!",
+]
+
+# Цитаты для средних роллов (30-79)
+_MID_ROLL_QUOTES = [
+    "ВОЛШЕБСТВО НАКРЫЛОСЬ!",
+    "СИЛА НА СТОРОНЕ!",
+    "РЕЗОНАНС УДАЧИ!",
+    "ФИССУРА РАСТЁТ!",
+    "КОМАНДА ПОБЕДЫ!",
+    "МАГНИТ ИСКРЫ!",
+    "ПРОБИВАЕМСЯ ВВЕРХ!",
+    "ТРЕНД МНОГО!",
+]
+
+# Цитаты для малых роллов (1-29)
+_LOW_ROLL_QUOTES = [
+    "Маленький шаг, большой рост!",
+    "Прибавка к силе!",
+    "Формируем фундамент!",
+    "Рост не остановить!",
+    "Тихий, но верный!",
+    "Позитивный сигнал!",
+    "Всё в порядке!",
+    "Едем вперёд!",
+]
+
+# Цитаты для негативных роллов
+_NEG_QUOTES = [
+    "Сферы упали...",
+    "Нужна поддержка!",
+    "Не время отчаивать!",
+    "Рикошет вниз!",
+    "Временный спад!",
+    "Только начинается!",
+    "Отхождение прошло!",
+    "Всё исправится!",
+]
+
 for _v in range(-25, 101):
     if _v not in ROLL_TEXTS:
-        if _v >= 100:
-            ROLL_TEXTS[_v] = ["🏆 ЛЕГЕНДАРНЫЙ РОЛЛ!!! +{v} СМ!!!".format(v=_v), "💥 МЕГАДРОП!!! +{v} СМ!!!".format(v=_v), "🎯 ШОТ! +{v} СМ!!!".format(v=_v)]
-        elif _v >= 80:
-            ROLL_TEXTS[_v] = ["🔥🔥🔥 НЕВЕРОЯТНО! +{v} см!".format(v=_v), "💰 ДЖЕКПОТ! +{v} см за раз!".format(v=_v)]
-        elif _v >= 60:
-            ROLL_TEXTS[_v] = ["🔥🔥🔥 НЕВЕРОЯТНО! +{v} см!".format(v=_v), "💰 ДЖЕКПОТ! +{v} см за раз!".format(v=_v), "🦸 ЛЕГЕНДАРНО! +{v} СМ!".format(v=_v)]
+        import random as _rand
+        if _v >= 80:
+            base = _rand.choice(["🏆", "💥", "🔥🔥🔥", "🌟"])
+            quote = _rand.choice(_HIGH_ROLL_QUOTES)
+            ROLL_TEXTS[_v] = [
+                f"{base} ЛЕГЕНДАРНЫЙ +{_v} СМ!!!",
+                f"{base} МЕГАДРОП! +{_v} см!",
+                f"🎯 ШОТ! +{_v} СМ!!!",
+                f"{base} +{_v} см! «{quote}»"
+            ]
         elif _v >= 45:
-            ROLL_TEXTS[_v] = ["🚀 КОСМОС! +{v} см!".format(v=_v), "🍀 СУПЕР УДАЧА! +{v} см!".format(v=_v), "⚡ СИЛА УЛЬТЫ! +{v} СМ!".format(v=_v)]
-        elif _v >= 30:
-            ROLL_TEXTS[_v] = ["🚀 КОСМОС! +{v} см!".format(v=_v), "🍀 СУПЕР УДАЧА! +{v} см!".format(v=_v), "🔥 МЕГА КИЛЛ! +{v} СМ!".format(v=_v)]
-        elif _v >= 20:
-            ROLL_TEXTS[_v] = ["💪 MEGA УСПЕХ! +{v} см!".format(v=_v), "🎯 ТОЧНО В ДЕСЯТКУ! +{v} см!".format(v=_v), "💪 НЕУДЕРЖИМ! +{v} СМ!".format(v=_v)]
-        elif _v >= 15:
-            ROLL_TEXTS[_v] = ["🔥 ОТЛИЧНО! +{v} СМ!".format(v=_v), "🚀 РАСТИ! +{v} СМ!".format(v=_v), "💪 КРАСАВА! +{v} СМ!".format(v=_v)]
+            base = _rand.choice(["🚀", "🍀", "⚡"])
+            quote = _rand.choice(_MID_ROLL_QUOTES)
+            ROLL_TEXTS[_v] = [
+                f"{base} КОСМОС! +{_v} см!",
+                f"{base} СУПЕР УДАЧА! +{_v} см!",
+                f"{base} МЕГА КИЛЛ! +{_v} СМ!",
+                f"{base} +{_v} см! «{quote}»"
+            ]
         elif _v >= 10:
-            ROLL_TEXTS[_v] = ["🌟 ЛЕГЕНДА! +{v} см!".format(v=_v), "🔥 ОГОНЬ! +{v} см!".format(v=_v), "🎮 УБИЙСТВЕННАЯ СЕРИЯ! +{v} СМ!".format(v=_v)]
-        elif _v >= 5:
-            ROLL_TEXTS[_v] = ["🎉 УРА! +{v} см!".format(v=_v), "👍 ОТЛИЧНО! +{v} см!".format(v=_v), "👍 КРАСАВА! +{v} СМ!".format(v=_v)]
+            base = _rand.choice(["🔥", "💪", "🌟", "🎉"])
+            quote = _rand.choice(_LOW_ROLL_QUOTES)
+            ROLL_TEXTS[_v] = [
+                f"{base} ОТЛИЧНО! +{_v} СМ!",
+                f"🚀 РАСТИ! +{_v} СМ!",
+                f"{base} КРАСАВА! +{_v} СМ!",
+                f"{base} +{_v} см! «{quote}»"
+            ]
         elif _v >= 1:
-            ROLL_TEXTS[_v] = ["✅ OK! +{v} см".format(v=_v), "💪 ЕСТЬ РОСТ! +{v} см".format(v=_v), "🙄 ПОВЕЗЛО! +{v} СМ".format(v=_v)]
+            ROLL_TEXTS[_v] = [
+                f"✅ OK! +{_v} см",
+                f"💪 ЕСТЬ РОСТ! +{_v} см",
+                f"🙄 ПОВЕЗЛО! +{_v} СМ"
+            ]
         elif _v >= -5:
-            ROLL_TEXTS[_v] = ["😬 НЕМНОГО БОЛЬНО! {v} см".format(v=_v), "📉 УПАЛ {v} см".format(v=_v)]
+            ROLL_TEXTS[_v] = [
+                f"😬 НЕМНОГО БОЛЬНО! {_v} см",
+                f"📉 УПАЛ {_v} см"
+            ]
         elif _v >= -10:
-            ROLL_TEXTS[_v] = ["😢 БОЛЬНО! {v} см...".format(v=_v), "💔 НЕУДАЧА {v} см".format(v=_v), "💀 ПОПАЛ! {v} СМ...".format(v=_v)]
+            ROLL_TEXTS[_v] = [
+                f"😢 БОЛЬНО! {_v} см...",
+                f"💔 НЕУДАЧА {_v} см",
+                f"💀 ПОПАЛ! {_v} СМ..."
+            ]
         elif _v >= -15:
-            ROLL_TEXTS[_v] = ["💥 КАТАСТРОФА! {v} см!!!".format(v=_v), "🌋 АПОКАЛИПСИС! {v} см!!!".format(v=_v), "😵 СЕРВЕР УПАЛ! {v} СМ!!!".format(v=_v)]
+            ROLL_TEXTS[_v] = [
+                f"💥 КАТАСТРОФА! {_v} см!!!",
+                f"🌋 АПОКАЛИПСИС! {_v} см!!!",
+                f"😵 СЕРВЕР УПАЛ! {_v} СМ!!!"
+            ]
         elif _v >= -25:
-            ROLL_TEXTS[_v] = ["☠️ ТОТАЛЬНЫЙ КРАХ! {v} см!!!".format(v=_v), "💀 КОНЕЦ ИГРЫ! {v} СМ!!!".format(v=_v)]
+            ROLL_TEXTS[_v] = [
+                f"☠️ ТОТАЛЬНЫЙ КРАХ! {_v} см!!!",
+                f"💀 КОНЕЦ ИГРЫ! {_v} СМ!!!"
+            ]
 
-del _v
+del _v, _HIGH_ROLL_QUOTES, _MID_ROLL_QUOTES, _LOW_ROLL_QUOTES, _NEG_QUOTES, _rand
 
 # =====================
 # ROLL MEMES (organized by severity)
@@ -496,7 +573,7 @@ def calculate_streak_bonus(current_win_streak: int, base_roll: float) -> tuple[f
     if current_win_streak > 0 and base_roll > 0:
         streak_bonus = current_win_streak
         new_roll = base_roll + streak_bonus
-        streak_text = f"🔥 СТРИК x{current_win_streak}: +{streak_bonus} см"
+        streak_text = f"🔥 СТРИК x{current_win_streak}: +{streak_bonus} см."
         return new_roll, streak_text
     return base_roll, ""
 

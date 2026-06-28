@@ -365,6 +365,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Остальные события (обычный ролл или мулькаст)
         original_roll = None
+        base_roll_before_streak = None  # Сохраняем ролл ДО стрика для вывода
 
         slot_msg_ids = []
 
@@ -377,6 +378,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Get base roll first
             roll, special_message, is_fatal, got_help = calculate_fissure_roll(user.get("fissure", 0))
+            base_roll_before_streak = roll  # Сохраняем исходный ролл
             current_win_streak = user.get('current_win_streak', 0)
             roll, streak_text = calculate_streak_bonus(current_win_streak, roll)
 
@@ -461,6 +463,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
             roll, special_message, is_fatal, got_help = calculate_fissure_roll(user.get("fissure", 0))
+            base_roll_before_streak = roll  # Сохраняем исходный ролл
             current_win_streak = user.get('current_win_streak', 0)
             roll, streak_text = calculate_streak_bonus(current_win_streak, roll)
 
@@ -470,25 +473,28 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         roll, protection_msg = apply_fissure_protection(user.get("fissure", 0), roll, is_fatal)
 
-        # STORE ORIGINAL ROLL FOR DISPLAY
+        # STORE ORIGINAL ROLL FOR DISPLAY (before weekend multiplier)
         base_roll_for_text = roll
         if original_roll is not None:
             base_roll_for_text = original_roll
+        
+        # Use base_roll_before_streak (roll before streak) for display
+        roll_for_result = base_roll_before_streak if base_roll_before_streak is not None else base_roll_for_text
 
         # Weekend bonus APPLIED TO WHOLE ROLL (only for normal rolls, not multicast)
         weekend_bonus = ""
         bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS) if is_weekend and roll > 0 and not is_fatal and cascade_count == 1 else None
         if bonus_multiplier:
             roll = roll * bonus_multiplier
-            weekend_bonus = f"🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f}"
+            weekend_bonus = f"🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {roll:.1f} см."
 
         display_roll = roll
 
-        # Вычисляем result_text на основе финального ролла (после всех бонусов)
-        if roll in ROLL_TEXTS:
-            result_text = random.choice(ROLL_TEXTS[roll])
+        # Вычисляем result_text на основе базового ролла (до стрика и weekend множителя)
+        if roll_for_result in ROLL_TEXTS:
+            result_text = random.choice(ROLL_TEXTS[roll_for_result])
         else:
-            result_text = f"{'+' if roll > 0 else ''}{roll} см"
+            result_text = f"{'+' if roll_for_result > 0 else ''}{roll_for_result} см"
 
         old_fissure = user.get("fissure", 0)
 
@@ -548,12 +554,14 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{result_text}\n"
             )
             if streak_text:
-                text = f"{text}{streak_text}\n"
+                text = f"{text}{streak_text}\n\n"
+            if weekend_bonus:
+                text = f"{text}{weekend_bonus}\n"
             if extra_text:
                 text = f"{text}{extra_text}\n"
             if multicast_text:
                 text = f"{text}\n\n{multicast_text}"
-            text = f"{text}⚡ МУЛЬТИКАСТ{mc_level}  {roll_final} CM"
+            text = f"{text}⚡ МУЛЬТЬКАСТ{mc_level}  {roll_final} CM"
         else:
             # Старый дизайн без мультикаста
             text = (
@@ -561,15 +569,14 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{result_text}\n"
             )
             if streak_text:
-                text = f"{text}{streak_text}\n"
+                text = f"{text}{streak_text}\n\n"
+            if weekend_bonus:
+                text = f"{text}{weekend_bonus}\n"
             if extra_text:
                 text = f"{text}{extra_text}"
 
         if is_fatal and protection_msg:
             text = f"{text}\n{protection_msg}"
-
-        if weekend_bonus:
-            text = f"{text}\n{weekend_bonus}"
 
         # Строчка с изменением фиссуры - ВСЕГДА В САМОМ КОНЦЕ
         text = f"{text}\n\n📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
