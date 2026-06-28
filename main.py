@@ -718,7 +718,7 @@ def _get_player_stats_wrapper(steam_id, use_cache):
 
 @rate_limit(tokens=1)
 async def weekly_champion_announcement_job(context):
-    """Объявление чемпиона недели в воскресенье 23:30 MSK (только лидер)."""
+    """Объявление чемпиона недели в субботу 23:30 MSK (только лидер)."""
     if not await claim_or_check_weekly_leader():
         return
     try:
@@ -779,7 +779,7 @@ async def weekly_mmr_reset_job(context):
         logger.error(f"weekly_mmr_reset_job: ошибка при сбросе статистики: {e}")
 
 async def announce_weekly_mmr_winner(bot):
-    """Отправляет поздравление победителю недельного топа MMR в воскресенье."""
+    """Отправляет поздравление победителю недельного топа MMR в субботу."""
     from datetime import datetime as dt
     MSK = timezone(timedelta(hours=3))
     today_msk = dt.now(MSK)
@@ -814,16 +814,16 @@ async def announce_weekly_mmr_winner(bot):
     cursor.close()
     release_connection(conn)
 
-    is_sunday = today_msk.weekday() == 6
+    is_saturday = today_msk.weekday() == 5
 
-    # Объявление только в воскресенье
-    if not is_sunday:
-        logger.info("announce_weekly_mmr_winner: не воскресенье - пропускаем")
+    # Объявление только в субботу
+    if not is_saturday:
+        logger.info("announce_weekly_mmr_winner: не суббота - пропускаем")
         return False
 
-    # В воскресенье проверяем, что есть игроки с данными за текущую неделю
+    # В субботу проверяем, что есть игроки с данными за текущую неделю
     if active_players_count == 0:
-        logger.info("announce_weekly_mmr_winner: в воскресенье active_players_count == 0 - данных за неделю ещё нет")
+        logger.info("announce_weekly_mmr_winner: в субботу active_players_count == 0 - данных за неделю ещё нет")
         return False
 
     digest_chat_id = get_config('digest_chat_id')
@@ -3554,11 +3554,11 @@ async def main():
 
         # Топ MMR обновляется в update_all_mmr_job после обновления всех игроков
 
-        # ✅ Объявление чемпиона недели в воскресенье 23:00 MSK
+        # ✅ Объявление чемпиона недели в субботу 23:00 MSK
         job_queue.run_daily(
             weekly_champion_announcement_job,
             time=datetime.time(hour=20, minute=0),  # 20:00 UTC = 23:00 MSK
-            days=(6,)  # Только воскресенье
+            days=(5,)  # Только суббота
         )
 
 # ✅ Сброс MMR статистики в понедельник 00:00 MSK (начало новой недели)
@@ -3620,12 +3620,12 @@ async def main():
                 except Exception as e:
                     logger.error(f"Startup weekly reset error: {e}")
 
-        # Если бот стартует в воскресенье после 23:00 MSK - проверяем, не нужно ли объявить чемпиона
+        # Если бот стартует в субботу после 23:00 MSK - проверяем, не нужно ли объявить чемпиона
         from datetime import datetime as dt
         from datetime import timedelta, timezone
         MSK = timezone(timedelta(hours=3))
         now_msk = dt.now(MSK)
-        if now_msk.weekday() == 6:  # Воскресенье
+        if now_msk.weekday() == 5:  # Суббота
             from database import get_config as _get_cfg, set_config as _set_cfg
             monday_msk = now_msk - timedelta(days=now_msk.weekday())
             current_week_start = monday_msk.strftime("%Y-%m-%d")
@@ -3633,7 +3633,7 @@ async def main():
             if last_announced != current_week_start:
                 try:
                     await announce_weekly_mmr_winner(app.bot)
-                    logger.info("Startup: weekly champion announced on Sunday startup")
+                    logger.info("Startup: weekly champion announced on Saturday startup")
                 except Exception as e:
                     logger.error(f"Startup weekly champion announcement error: {e}")
 
