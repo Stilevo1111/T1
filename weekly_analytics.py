@@ -896,7 +896,7 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
 
     # Check if user has Steam account BEFORE fetching matches
     if not user or not user.get("steam_id"):
-        return {"error": "no_steam_linked", "message": "🔗 Привяжите Steam в профиле, чтобы увидеть аналитику"}
+        return {"error": "no_steam_linked", "message": "🔗 Привяжите Аккаунт, чтобы увидеть аналитику"}
     
     matches = await get_last_matches(telegram_id)
 
@@ -971,7 +971,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
     """
     # Check if user has Steam account BEFORE fetching matches
     if not user or not user.get("steam_id"):
-        return {"error": "no_steam_linked", "message": "🔗 Привяжите Steam в профиле, чтобы увидеть аналитику"}
+        return {"error": "no_steam_linked", "message": "🔗 Привяжите Аккаунт, чтобы увидеть аналитику"}
     
     matches = await get_last_matches(telegram_id)
 
