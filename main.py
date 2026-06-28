@@ -1867,15 +1867,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             class _FakeMsg:
                 message_id = 0
-                chat_id = chat_id
                 chat = _FakeChat()
                 from_user = _FakeUser()
                 date = int(time.time())
                 text = '/fissure'
 
+            fake_msg = _FakeMsg()
+            fake_msg.chat_id = chat_id
+
             class _FakeUpdate:
                 update_id = update.update_id
-                message = _FakeMsg()
+                message = fake_msg
                 effective_user = _FakeUser()
                 effective_chat = _FakeChat()
 
