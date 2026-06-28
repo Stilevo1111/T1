@@ -175,25 +175,29 @@ for _v in range(-25, 101):
             ]
         elif _v >= -5:
             ROLL_TEXTS[_v] = [
-                f"😬 НЕМНОГО БОЛЬНО! {_v} см",
-                f"📉 УПАЛ {_v} см"
+                f"😬 НЕМНОГО БОЛЬНО! {_v} см.",
+                f"📉 УПАЛ {_v} см.",
+                f"☠️ ТОТАЛЬНЫЙ СПАД! «{_rand.choice(_NEG_QUOTES)}»."
             ]
         elif _v >= -10:
             ROLL_TEXTS[_v] = [
                 f"😢 БОЛЬНО! {_v} см...",
-                f"💔 НЕУДАЧА {_v} см",
-                f"💀 ПОПАЛ! {_v} СМ..."
+                f"💔 НЕУДАЧА {_v} см.",
+                f"💀 ПОПАЛ! {_v} СМ...",
+                f"🔻 ВНИЗ! «{_rand.choice(_NEG_QUOTES)}»."
             ]
         elif _v >= -15:
             ROLL_TEXTS[_v] = [
                 f"💥 КАТАСТРОФА! {_v} см!!!",
                 f"🌋 АПОКАЛИПСИС! {_v} см!!!",
-                f"😵 СЕРВЕР УПАЛ! {_v} СМ!!!"
+                f"😵 СЕРВЕР УПАЛ! {_v} СМ!!!",
+                f"🔻 ПЛАХ! «{_rand.choice(_NEG_QUOTES)}»!!!"
             ]
         elif _v >= -25:
             ROLL_TEXTS[_v] = [
                 f"☠️ ТОТАЛЬНЫЙ КРАХ! {_v} см!!!",
-                f"💀 КОНЕЦ ИГРЫ! {_v} СМ!!!"
+                f"💀 КОНЕЦ ИГРЫ! {_v} СМ!!!",
+                f"🔻 ФАТАЛ! «{_rand.choice(_NEG_QUOTES)}»!!!"
             ]
 
 del _v, _HIGH_ROLL_QUOTES, _MID_ROLL_QUOTES, _LOW_ROLL_QUOTES, _NEG_QUOTES, _rand
