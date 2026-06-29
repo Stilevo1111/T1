@@ -427,7 +427,7 @@ HERO_CACHE_DIR = Path(__file__).parent / "assets" / "heroes_webp"
 HERO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
 HEROES_STRIP_BG_URL = get_banner_path("heroes_strip")
-HEROES_STRIP_BG_CACHE = "heroes_strip_stat_1744.png"
+HEROES_STRIP_BG_CACHE = "heroes_strip.webp"
 
 
 def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None:
@@ -540,7 +540,7 @@ def _heroes_strip_gradient(canvas_width: int, canvas_height: int):
 
 def _compose_heroes_strip_background(canvas_width: int, canvas_height: int):
     """
-    Холст фиксированный (иконки как раньше). Фон ImgBB — оригинальные пиксели, без resize.
+    Холст фиксированный (иконки как ранье). Фон ImgBB — оригинальные пиксели, без resize.
     Совпадение с холстом — один в один; больше — центр-обрезка; меньше — центр на градиенте.
     """
     import io
@@ -556,12 +556,19 @@ def _compose_heroes_strip_background(canvas_width: int, canvas_height: int):
             except Exception:
                 pass
         if not data:
-            resp = requests.get(HEROES_STRIP_BG_URL, timeout=12)
-            if resp.status_code == 200 and resp.content:
-                data = resp.content
+            bg_path = get_banner_path("heroes_strip")
+            if isinstance(bg_path, Path) and bg_path.exists():
+                data = bg_path.read_bytes()
+            else:
                 try:
-                    cache_file.parent.mkdir(parents=True, exist_ok=True)
-                    cache_file.write_bytes(data)
+                    resp = requests.get(str(bg_path), timeout=12)
+                    if resp.status_code == 200 and resp.content:
+                        data = resp.content
+                        try:
+                            cache_file.parent.mkdir(parents=True, exist_ok=True)
+                            cache_file.write_bytes(data)
+                        except Exception:
+                            pass
                 except Exception:
                     pass
         if not data:
