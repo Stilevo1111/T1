@@ -3014,7 +3014,7 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug(f"Не удалось удалить последнее сообщение бота: {e}")
 
     # URL баннера
-    info_banner_url = "https://i.ibb.co/zWW6DvLW/photo-2026-05-19-02-50-04.png"
+    info_banner_url = get_banner_path("info_banner")
 
     # Создаем inline клавиатуру с кнопкой
     keyboard = [[
