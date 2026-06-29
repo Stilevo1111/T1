@@ -33,6 +33,7 @@ import io
 import json
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 
 import aiohttp
 from PIL import Image
@@ -1438,7 +1439,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     """Non-blocking chart generation - prepares data then runs matplotlib in thread pool."""
     import aiohttp
     from constants import get_banner_path
-    from pathlib import Path
 
     global _CHART_BG_CACHE
 
