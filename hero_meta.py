@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 
-BACKGROUND_PATH = "background_new.png"
+BACKGROUND_PATH = "images/banners/heroes_strip.webp"
 
 FONT_PATHS = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
