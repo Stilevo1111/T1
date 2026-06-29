@@ -1455,6 +1455,17 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                 cursor = conn.cursor()
                 if "postgres" in scheme:
                     cursor.execute("""
+                        DO $$ 
+                        BEGIN 
+                            IF EXISTS (SELECT 1 FROM information_schema.columns 
+                                     WHERE table_name = 'public_player_matches' 
+                                     AND column_name = 'radiant_win' 
+                                     AND data_type = 'boolean') THEN
+                                ALTER TABLE public_player_matches ALTER COLUMN radiant_win TYPE INTEGER USING (CASE WHEN radiant_win THEN 1 ELSE 0 END);
+                            END IF;
+                        END $$
+                        """)
+                    cursor.execute("""
                         CREATE TABLE IF NOT EXISTS public_player_matches (
                             match_id BIGINT UNIQUE,
                             hero_id INTEGER,
