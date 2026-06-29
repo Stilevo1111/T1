@@ -53,6 +53,7 @@ hero_positions: dict[str, int] = {
     "Chaos Knight": 1,
     "Lifestealer": 1,
     "Alchemist": 1,
+    "Naga Serena": 1,
     # POS 2 — Mid
     "Ember Spirit": 2,
     "Storm Spirit": 2,
