@@ -9,13 +9,6 @@ __all__ = [
     # Cooldown
     "COOLDOWN",
     # Banners
-    "COOLDOWN_BANNER_URL",
-    "PROFILE_BANNER_URL",
-    "TOP_BANNER_URL",
-    "TOPMMR_BANNER_URL",
-    "LINK_BANNER_URL",
-    "SETDIGEST_BANNER_URL",
-    "ZEUS_BANNER_URL",
     "BANNER_DIR",
     "get_banner_path",
     # Timeouts / delays
@@ -42,15 +35,6 @@ __all__ = [
 
 # Cooldown for fissure rolls (24 hours)
 COOLDOWN = 86400
-
-# Banner URLs
-COOLDOWN_BANNER_URL = "https://i.ibb.co/FkzCZxNG/m-Yqbu.jpg"
-PROFILE_BANNER_URL = "https://i.ibb.co/n8g8yQYt/dasdsadasdsadasdsad.png"
-TOP_BANNER_URL = "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
-TOPMMR_BANNER_URL = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
-LINK_BANNER_URL = "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"
-SETDIGEST_BANNER_URL = "https://i.ibb.co/LXsGsfxZ/213.png"
-ZEUS_BANNER_URL = "https://i.ibb.co/0jg01gWW/Gemini-Generated-Image-wyz68gwyz68gwyz6-1.png"
 
 # Local banner directory
 BANNER_DIR = Path(__file__).parent / "images" / "banners"
@@ -108,15 +92,6 @@ WELCOME_PHRASES = [
 ]
 
 # Local banner helper
-def get_banner_path(banner_name: str) -> str | Path:
-    """Get local banner path, returns URL if not found locally."""
-    local = BANNER_DIR / f"{banner_name}.webp"
-    if local.exists():
-        return local
-    local = BANNER_DIR / f"{banner_name}.jpg"
-    if local.exists():
-        return local
-    local_png = BANNER_DIR / f"{banner_name}.png"
-    if local_png.exists():
-        return local_png
-    return COOLDOWN_BANNER_URL
+def get_banner_path(banner_name: str) -> Path:
+    """Get local banner path."""
+    return BANNER_DIR / f"{banner_name}.webp"
