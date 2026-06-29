@@ -1853,6 +1853,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id = callback_query.message.chat_id
             chat_type = 'private'
 
+            # Ensure user account exists before rolling
+            get_user(user_obj.id, user_obj.username)
+
             class _FakeChat:
                 id = chat_id
                 type = chat_type
