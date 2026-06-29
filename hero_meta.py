@@ -31,7 +31,7 @@ _explorer_cache = {"data": None, "timestamp": 0, "fallback_used": False}
 
 logger = logging.getLogger(__name__)
 
-BACKGROUND_PATH = "background_new.png"
+BACKGROUND_PATH = "images/banners/background.webp"
 
 ICON_CACHE_DIR = Path("cache/meta_icons")
 ICON_CACHE_DIR.mkdir(parents=True, exist_ok=True)
