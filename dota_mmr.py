@@ -793,7 +793,7 @@ def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
 
 
 def generate_heroes_image(top_heroes: list) -> bytes | None:
-    """Сгенерировать картинку с иконками топ-героев: центральный крупнее, к краям меньше."""
+    """Сгенерировать картинку с иконками топ-героев: иконки как раньше, но фиксированная сетка 10 позиций."""
     global _heroes_image_cache
 
     try:
@@ -809,44 +809,23 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
             logger.warning("generate_heroes_image: top_heroes is empty")
             return None
 
-        # Limit number of heroes to prevent memory issues
-        if len(top_heroes) > 10:
-            logger.info(f"Limiting heroes from {len(top_heroes)} to 10")
-            top_heroes = top_heroes[:10]
-
-        logger.info(f"generate_heroes_image: generating for {len(top_heroes)} heroes")
         target_width = 1744
         target_height = 592
         img = _compose_heroes_strip_background(target_width, target_height)
-        padding = 100
+
+        icon_size = 210
         gap = 18
-        min_side, max_side = 210, 368
+        padding = 100
 
-        n = len(top_heroes)
+        available_width = target_width - 2 * padding
+        total_gaps_width = 9 * gap
+        col_width = (available_width - total_gaps_width) // 10
 
-        top_heroes = sorted(top_heroes, key=lambda h: h.get("picks", 0), reverse=True)
-
-        center = (n - 1) / 2.0
-        max_dist = max(abs(i - center) for i in range(n))
-        if max_dist < 1e-9:
-            max_dist = 1.0
-        sizes = []
-        for i in range(n):
-            dist = abs(i - center)
-            ratio = 1.0 - (dist / max_dist)
-            sz = int(round(min_side + (max_side - min_side) * ratio))
-            sizes.append(max(96, sz))
-
-        available = target_width - 2 * padding
-        total_w = sum(sizes) + gap * max(0, n - 1)
-
-        if total_w > available > 0:
-            scale = available / total_w
-            sizes = [max(88, int(round(s * scale))) for s in sizes]
-            gap = max(8, int(round(gap * scale)))
-            total_w = sum(sizes) + gap * max(0, n - 1)
-
-        start_x = max(padding, (target_width - total_w) // 2)
+        hero_positions = []
+        for i in range(10):
+            x = padding + i * (col_width + gap)
+            y = (target_height - icon_size) // 2
+            hero_positions.append((x, y))
 
         draw = ImageDraw.Draw(img)
 
@@ -859,11 +838,8 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                 if data:
                     icon_data_map[sh] = data
 
-        x = start_x
         for i, hero in enumerate(top_heroes):
-            icon_size = sizes[i]
-            y = (target_height - icon_size) // 2
-
+            x, y = hero_positions[i]
             hero_short = hero.get("short_name", "")
             icon_data = icon_data_map.get(hero_short)
 

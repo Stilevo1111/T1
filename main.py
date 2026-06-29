@@ -2386,7 +2386,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += "\n\n💡 /profile ＠ник — чужой профиль"
 
         # Banner URL - для Steam использовать картинку с героями
-        profile_banner_url = get_banner_path("profile")
+        profile_banner_url = get_banner_path("heroes_profil")
 
         if top_heroes:
             try:
