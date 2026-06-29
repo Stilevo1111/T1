@@ -339,11 +339,31 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
 
     if hero_name:
         file_name = _normalize_hero_file_name(hero_name)
-        path = f"assets/heroes_webp/{file_name}.webp"
-
+        cache_file = Path("hero_cache") / f"{file_name}.webp"
+        icon = None
+        
         try:
-            icon = Image.open(path).convert("RGBA")
-            # FIFO eviction: when cache is full, remove oldest 25% of entries
+            if cache_file.exists():
+                icon = Image.open(cache_file).convert("RGBA")
+        except Exception:
+            pass
+        
+        if icon is None:
+            try:
+                import requests
+                url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{file_name}.png"
+                resp = requests.get(url, timeout=5)
+                if resp.status_code == 200:
+                    icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                    try:
+                        cache_file.parent.mkdir(parents=True, exist_ok=True)
+                        icon.save(cache_file, "WEBP", quality=85)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        
+        if icon:
             if len(_HERO_ICON_CACHE) >= _HERO_ICON_CACHE_MAX:
                 keys_to_remove = list(_HERO_ICON_CACHE.keys())[:_HERO_ICON_CACHE_MAX // 4]
                 for k in keys_to_remove:
@@ -351,15 +371,7 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
             _HERO_ICON_CACHE[hero_id] = icon
             return icon
 
-        except Exception:
-
-            logger.warning(
-                f"Failed load icon: {hero_name}"
-            )
-
-    # Fallback to default icon
     try:
-        # Create a gray placeholder icon
         img = Image.new("RGBA", (64, 64), (128, 128, 128, 255))
         return img
     except Exception:
