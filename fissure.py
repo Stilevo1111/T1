@@ -311,7 +311,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 set_last_bot_message,
                 schedule_delete,
                 update_last_message_id,
-                context.application.job_queue
+                context.job_queue
             )
             return
 
@@ -359,7 +359,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 schedule_delete,
                 update_fissure,
                 update_last_message_id,
-                context.application.job_queue,
+                context.job_queue,
                 record_recent_fissure_roll
             )
             return
@@ -632,7 +632,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
         # ВСЕГДА удаляем сообщение через 30 секунд во всех чатах
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
 
         # Small delay to ensure message is visible before any further processing
         await asyncio.sleep(0.1)
@@ -641,7 +641,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if slot_msg_ids:
             await asyncio.sleep(0.2)
             for msg_id in slot_msg_ids:
-                schedule_delete(context.bot, chat_id, msg_id, 30, context.application.job_queue)
+                schedule_delete(context.bot, chat_id, msg_id, 30, context.job_queue)
 
         # Сохраняем fissure + last_message_id одним запросом
         update_fissure(user_obj.id, new_fissure, now, growth, last_message_id=result_msg.message_id)
@@ -658,7 +658,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text=f"❌ Ошибка обработки запроса\n<code>{e}</code>",
                 parse_mode="HTML"
             )
-            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
         except Exception:
             pass
     finally:

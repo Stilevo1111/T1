@@ -226,7 +226,7 @@ async def _do_give_gag(
         from main import schedule_delete
         schedule_delete(
             context.bot, chat_id, announce_msg.message_id,
-            _MUTE_DURATION_SEC, context.application.job_queue
+            _MUTE_DURATION_SEC, context.job_queue
         )
     except Exception:
         logger.debug("schedule_delete import failed, using asyncio fallback", exc_info=True)

@@ -719,6 +719,7 @@ async def alternate_digest_job(context):
         # Если не удалось редактировать - создаём новое
         logger.info(f"alternate_digest_job: edited = {edited}, will create new message")
         if not edited:
+            original_msg_id = None
             # Проверяем анти-спам - защита от дублирования
             # Increased to 5 minutes: if two instances race on startup/restart,
             # the second one will almost always see the recent creation and skip.

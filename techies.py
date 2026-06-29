@@ -252,8 +252,8 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
         parse_mode="HTML"
     )
     
-    if context.application.job_queue:
-        context.application.job_queue.run_once(
+    if context.job_queue:
+        context.job_queue.run_once(
             _techies_timeout_job,
             15,
             data={

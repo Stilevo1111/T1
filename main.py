@@ -561,7 +561,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 )
                             except Exception:
                                 pass
-                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.application.job_queue)
+                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.job_queue)
                         return
 
                     if chart_data.get("api_fallback"):
@@ -616,7 +616,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 reply_markup=reply_markup
                             )
                             context.user_data['analytics_chart_msg_id'] = loading_msg.message_id
-                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 30, context.application.job_queue)
+                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 30, context.job_queue)
                         except Exception:
                             photo_buf.seek(0)
                             msg_id = loading_msg.message_id if loading_msg else None
@@ -639,7 +639,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             )
                             context.user_data['analytics_chart_msg_id'] = result_msg.message_id
                             set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-                            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+                            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
                             update_last_message_id(update.effective_user.id, result_msg.message_id)
                     else:
                         error_text = "⚠️ Не удалось сгенерировать график аналитики. Попробуйте позже."
@@ -649,7 +649,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 message_id=loading_msg.message_id,
                                 text=error_text
                             )
-                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.application.job_queue)
+                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.job_queue)
                         except Exception:
                             pass
 
@@ -666,7 +666,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     pass
 
-                schedule_delete(context.bot, chat_id, err_msg_id, 10, context.application.job_queue)
+                schedule_delete(context.bot, chat_id, err_msg_id, 10, context.job_queue)
 
 # Import required classes
         from telegram import InputMediaPhoto
@@ -706,7 +706,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=f"Ошибка анализа: {e}"
         )
         set_last_bot_message(chat_id, update.effective_user.id, msg.message_id)
-        schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+        schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
         update_last_message_id(update.effective_user.id, msg.message_id)
 
 
@@ -1691,7 +1691,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 set_last_bot_message(chat_id, user_id, msg.message_id)
                 update_last_message_id(user_id, msg.message_id)
-                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
                 if loading_msg:
                     try:
                         await context.bot.delete_message(chat_id, loading_msg.message_id)
@@ -1733,7 +1733,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 set_last_bot_message(chat_id, user_id, msg.message_id)
                 update_last_message_id(user_id, msg.message_id)
-                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
             else:
                 await menu_handler(update, context)
             if loading_msg:
@@ -1786,7 +1786,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if msg_id:
                     try:
                         await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="❌ Ошибка загрузки данных")
-                        schedule_delete(context.bot, chat_id, msg_id, 30, context.application.job_queue)
+                        schedule_delete(context.bot, chat_id, msg_id, 30, context.job_queue)
                     except Exception:
                         pass
         return
@@ -2158,7 +2158,7 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             msg = await context.bot.send_message(chat_id=chat_id, text="✅ Фиссура дайджест обновлён!")
             if chat.type in ['group', 'supergroup', 'channel']:
-                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
 
         elif command == "dotadigestnow":
             from digest import set_digest_type
@@ -2172,7 +2172,7 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             msg = await context.bot.send_message(chat_id=chat_id, text="✅ Dota дайджест для этого чата создан/обновлён.")
             if chat.type in ['group', 'supergroup', 'channel']:
-                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
 
     except Exception as e:
         logger.error(f"Error in digest_handler: {e}", exc_info=True)
@@ -2180,7 +2180,7 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             err_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Не удалось создать дайджест сейчас", reply_markup=main_menu())
             chat = update.effective_chat
             if chat and chat.type in ['group', 'supergroup', 'channel']:
-                schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.application.job_queue)
+                schedule_delete(context.bot, chat.id, err_msg.message_id, 30, context.job_queue)
         except Exception:
             pass
 
@@ -2200,7 +2200,7 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await asyncio.sleep(0.1)
 
     if chat.type in ['group', 'supergroup', 'channel']:
-        schedule_delete(context.bot, chat.id, msg.message_id, 30, context.application.job_queue)
+        schedule_delete(context.bot, chat.id, msg.message_id, 30, context.job_queue)
 
 
 async def recent_rolls_handler(request):
@@ -2274,7 +2274,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         chat_id=chat_id,
                         text=f"❌ Игрок @{target_username} не найден"
                     )
-                    schedule_delete(context.bot, chat_id, msg.message_id, 15, context.application.job_queue)
+                    schedule_delete(context.bot, chat_id, msg.message_id, 15, context.job_queue)
                     return
                 viewing_other = True
 
@@ -2419,7 +2419,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
 
     except TimeoutError as e:
@@ -2589,14 +2589,14 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
         update_last_message_id(update.effective_user.id, result_msg.message_id)
 
     except Exception as e:
         logger.error(f"Error in top: {e}", exc_info=True)
         try:
             msg = await update.message.reply_text("❌ Ошибка получения топа", reply_markup=main_menu())
-            schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.application.job_queue)
+            schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.job_queue)
         except Exception:
             pass
 
@@ -2644,7 +2644,7 @@ async def testtechies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lambda: None,
         lambda uid, fissure, ts, growth: None,
         lambda uid, ts: None,
-        context.application.job_queue,
+        context.job_queue,
         lambda uid, uname, growth, new_fissure, cascade: None
     )
 
@@ -2730,7 +2730,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=main_menu()
             )
             set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
             return
         else:
             # Generate MMR top banner with winner info
@@ -2863,7 +2863,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             add_bot_message(chat_id, user_obj.id, result_msg.message_id)
             set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
-            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
             update_last_message_id(user_obj.id, result_msg.message_id)
 
             # Small delay for message visibility
@@ -2877,7 +2877,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text="❌ Ошибка получения топа",
                 reply_markup=main_menu()
             )
-            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.application.job_queue)
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
         except Exception:
             try:
                 msg = await context.bot.send_message(
@@ -2885,7 +2885,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text="❌ Ошибка получения топа MMR",
                     reply_markup=main_menu()
                 )
-                schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.application.job_queue)
+                schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.job_queue)
             except Exception:
                 pass
 
@@ -2945,7 +2945,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text=result.get('message'))
             # Track this message for future deletion
             set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
             update_last_message_id(update.effective_user.id, result_msg.message_id)
 
             # Small delay to ensure message is visible
@@ -2953,7 +2953,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Error in link: {e}", exc_info=True)
             msg = await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Ошибка привязки Dota аккаунта", reply_markup=main_menu())
-            schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.application.job_queue)
+            schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.job_queue)
         return
 
     # Если нет аргумента - отправляем инструкцию
@@ -2982,7 +2982,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Track this message for future deletion
     set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
     add_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-    schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+    schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
     update_last_message_id(update.effective_user.id, result_msg.message_id)
 
     # Small delay to ensure message is visible
@@ -3038,7 +3038,7 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Отслеживаем это сообщение для будущего удаления
     set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
     add_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-    schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.application.job_queue)
+    schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
     update_last_message_id(update.effective_user.id, result_msg.message_id)
 
     # Небольшая задержка для обеспечения видимости сообщения
