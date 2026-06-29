@@ -217,7 +217,7 @@ async def fetch_hero_icon(session, icon_path):
 
         filename = os.path.basename(urlparse(icon_url).path)
         hero_name = filename.replace("_sb.png", "").replace(".png", "")
-        local_path = Path("assets/heroes") / f"{hero_name}.png"
+        local_path = Path("assets/heroes_webp") / f"{hero_name}.webp"
         if local_path.exists():
             try:
                 return Image.open(local_path).convert("RGBA")

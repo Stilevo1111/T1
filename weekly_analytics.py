@@ -339,7 +339,7 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
 
     if hero_name:
         file_name = _normalize_hero_file_name(hero_name)
-        path = f"assets/heroes/{file_name}.png"
+        path = f"assets/heroes_webp/{file_name}.webp"
 
         try:
             icon = Image.open(path).convert("RGBA")

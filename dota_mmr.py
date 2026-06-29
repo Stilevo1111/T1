@@ -423,7 +423,7 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
 
 HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes"
 
-HERO_CACHE_DIR = Path(__file__).parent / "assets" / "heroes"
+HERO_CACHE_DIR = Path(__file__).parent / "assets" / "heroes_webp"
 HERO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
 HEROES_STRIP_BG_URL = get_banner_path("heroes_strip")
@@ -438,7 +438,7 @@ def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None
     except ImportError:
         pass
 
-    cache_file = HERO_CACHE_DIR / f"{hero_short_name}.png"
+    cache_file = HERO_CACHE_DIR / f"{hero_short_name}.webp"
     if cache_file.exists():
         try:
             return cache_file.read_bytes()
@@ -465,8 +465,8 @@ def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | 
     """Портрет героя (dota_react/heroes/*.png) — выше разрешение, чем icons/*.png."""
     if not hero_short_name:
         return None
-    cache_dir = Path(__file__).parent / "hero_cache" / "portraits"
-    cache_file = cache_dir / f"{hero_short_name}.png"
+    cache_dir = HERO_CACHE_DIR
+    cache_file = cache_dir / f"{hero_short_name}.webp"
     if cache_file.exists():
         try:
             return cache_file.read_bytes()
@@ -493,7 +493,7 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
     if not hero_short_name:
         return None
 
-    cache_file = HERO_CACHE_DIR / f"{hero_short_name}.png"
+    cache_file = HERO_CACHE_DIR / f"{hero_short_name}.webp"
 
     # Load from cache
     if cache_file.exists():
