@@ -1758,7 +1758,7 @@ def generate_start_card(
         icons['bronze'] = create_medal_image(3, (205, 127, 50, 255), (139, 69, 19, 255))
 
         rank_icon = None
-        rank_icon_size = int(100 * scale)
+        rank_icon_size = int(120 * scale)
         if rank_tier > 0:
             tier = rank_tier // 10
             star = rank_tier % 10
