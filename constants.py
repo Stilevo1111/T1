@@ -119,19 +119,4 @@ def get_banner_path(banner_name: str) -> str | Path:
     local_png = BANNER_DIR / f"{banner_name}.png"
     if local_png.exists():
         return local_png
-    return {
-        "cooldown": COOLDOWN_BANNER_URL,
-        "profile": PROFILE_BANNER_URL,
-        "top": TOP_BANNER_URL,
-        "topmmr": TOPMMR_BANNER_URL,
-        "link": LINK_BANNER_URL,
-        "zeus": ZEUS_BANNER_URL,
-        "winner": "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg",
-        "rankup": "https://i.ibb.co/HLF6JJTw/ji8hy.jpg",
-        "default_avatar": "https://i.ibb.co/nMSN7mHM/photo-2025-12-29-00-02-39.jpg",
-        "roll_fatal": "https://i.ibb.co/WN5CBpqR/dsad23.png",
-        "roll_normal": "https://i.ibb.co/Mk35C5PY/Hf-S7B.jpg",
-        "background": "https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png",
-        "heroes_strip": "https://i.ibb.co/4Zr4fgNb/image.png",
-        "chart_bg_fallback": "https://i.ibb.co/jkTWqcHn/pngdsadsad.png",
-    }.get(banner_name, COOLDOWN_BANNER_URL)
+    return COOLDOWN_BANNER_URL
