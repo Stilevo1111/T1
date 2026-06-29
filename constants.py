@@ -3,6 +3,8 @@ Global constants for the fissure bot.
 Extracted from main.py without changing any behavior.
 """
 
+from pathlib import Path
+
 __all__ = [
     # Cooldown
     "COOLDOWN",
@@ -14,6 +16,8 @@ __all__ = [
     "LINK_BANNER_URL",
     "SETDIGEST_BANNER_URL",
     "ZEUS_BANNER_URL",
+    "BANNER_DIR",
+    "get_banner_path",
     # Timeouts / delays
     "DICE_ANIMATION_DELAY",
     "USER_PROCESSING_TTL",
@@ -47,6 +51,9 @@ TOPMMR_BANNER_URL = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
 LINK_BANNER_URL = "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"
 SETDIGEST_BANNER_URL = "https://i.ibb.co/LXsGsfxZ/213.png"
 ZEUS_BANNER_URL = "https://i.ibb.co/0jg01gWW/Gemini-Generated-Image-wyz68gwyz68gwyz6-1.png"
+
+# Local banner directory
+BANNER_DIR = Path(__file__).parent / "images" / "banners"
 
 # Timeouts and delays
 DICE_ANIMATION_DELAY = 1.0
@@ -99,3 +106,32 @@ WELCOME_PHRASES = [
     "Чего встал? Primal Beast топнул — пол треснул🦍",
     "Сладкий! Queen of Pain услышала твой голос👑",
 ]
+
+# Local banner helper
+def get_banner_path(banner_name: str) -> str | Path:
+    """Get local banner path, returns URL if not found locally."""
+    local = BANNER_DIR / f"{banner_name}.webp"
+    if local.exists():
+        return local
+    local = BANNER_DIR / f"{banner_name}.jpg"
+    if local.exists():
+        return local
+    local_png = BANNER_DIR / f"{banner_name}.png"
+    if local_png.exists():
+        return local_png
+    return {
+        "cooldown": COOLDOWN_BANNER_URL,
+        "profile": PROFILE_BANNER_URL,
+        "top": TOP_BANNER_URL,
+        "topmmr": TOPMMR_BANNER_URL,
+        "link": LINK_BANNER_URL,
+        "zeus": ZEUS_BANNER_URL,
+        "winner": "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg",
+        "rankup": "https://i.ibb.co/HLF6JJTw/ji8hy.jpg",
+        "default_avatar": "https://i.ibb.co/nMSN7mHM/photo-2025-12-29-00-02-39.jpg",
+        "roll_fatal": "https://i.ibb.co/WN5CBpqR/dsad23.png",
+        "roll_normal": "https://i.ibb.co/Mk35C5PY/Hf-S7B.jpg",
+        "background": "https://i.ibb.co/ZzWpzWN0/photo-2026-04-18-22-24-21.png",
+        "heroes_strip": "https://i.ibb.co/4Zr4fgNb/image.png",
+        "chart_bg_fallback": "https://i.ibb.co/jkTWqcHn/pngdsadsad.png",
+    }.get(banner_name, COOLDOWN_BANNER_URL)

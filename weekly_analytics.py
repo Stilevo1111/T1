@@ -1,23 +1,23 @@
+from __future__ import annotations
+
 """
 Еженедельная аналитика игроков Dota 2.
 
 Модуль генерирует текстовые отчёты, таблицы сравнения с про-игроками
 и визуальные чарты по последним матчам пользователя.
-
-Публичный API:
-- generate_weekly_analytics
-- generate_chart_only
-- get_analytics_pages
-- get_last_matches
-- fetch_match_details
-- calculate_player_stats
-- detect_role_from_history
-
-Все изменения в этом файле должны сохранять точное поведение
-и текст/изображения, которые видит пользователь.
 """
 
-from __future__ import annotations
+# Public API:
+# - generate_weekly_analytics
+# - generate_chart_only
+# - get_analytics_pages
+# - get_last_matches
+# - fetch_match_details
+# - calculate_player_stats
+# - detect_role_from_history
+#
+# All changes in this file must preserve exact behavior
+# and text/images that the user sees.
 
 import asyncio
 from typing import Any
@@ -1425,27 +1425,23 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 async def _create_visual_chart(history: list[dict]) -> bytes | None:
     """Non-blocking chart generation - prepares data then runs matplotlib in thread pool."""
     import aiohttp
+    from constants import get_banner_path
+    from pathlib import Path
 
     global _CHART_BG_CACHE
 
-    # Load background if needed (async)
     if _CHART_BG_CACHE is None:
         try:
             from database import get_aiohttp_session
             import io
             session = await get_aiohttp_session()
-            # Try webp first, then png
-            background_url_webp = "https://i.ibb.co/4g1t8xQ/chart-bg.webp"
+            # Try local first, then remote
+            local_bg = get_banner_path("chart_bg_fallback")
             background_url_png = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
             content = None
-            # Try webp
-            try:
-                async with session.get(background_url_webp, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status == 200:
-                        content = await resp.read()
-            except Exception:
-                pass
-            # Try png if webp failed
+            if isinstance(local_bg, Path) and local_bg.exists():
+                content = local_bg.read_bytes()
+            # Try png if local failed
             if content is None:
                 try:
                     async with session.get(background_url_png, timeout=aiohttp.ClientTimeout(total=10)) as resp:

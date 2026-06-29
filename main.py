@@ -949,7 +949,7 @@ async def announce_weekly_mmr_winner(bot):
                 parse_mode="HTML"
             )
         else:
-            winner_banner_url = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
+            winner_banner_url = get_banner_path("topmmr")
             await bot.send_photo(
                 chat_id=digest_chat_id,
                 photo=winner_banner_url,
@@ -1187,7 +1187,7 @@ async def update_all_mmr_job(context):
                     else:
                         name_display = make_clickable(username, telegram_id)
                         text = f"{name_display} повысил ранг!\n{rank_info['old_rank']} → {rank_info['new_rank']}"
-                        rank_up_banner_url = "https://i.ibb.co/HLF6JJTw/ji8hy.jpg"
+                        rank_up_banner_url = get_banner_path("rankup")
                         await context.bot.send_photo(chat_id=digest_chat_id, photo=rank_up_banner_url, caption=text, parse_mode="HTML")
                 except Exception as notify_err:
                     logger.error(f"Ошибка отправки уведомления о ранк-апе: {notify_err}")
@@ -1400,6 +1400,7 @@ from constants import (
     COOLDOWN,
     JOB_COOLDOWN,
     WELCOME_PHRASES,
+    get_banner_path,
 )
 from digest import alternate_digest_job, morning_digest_job
 
@@ -1459,7 +1460,7 @@ async def fetch_hero_icon(url, session=None, size=96):
 
 
 
-DEFAULT_AVATAR_URL = "https://i.ibb.co/nMSN7mHM/photo-2025-12-29-00-02-39.jpg"
+DEFAULT_AVATAR_URL = get_banner_path("default_avatar")
 
 async def get_user_avatar_url(bot, user_id: int) -> str | None:
     """Полный URL аватарки Telegram (для загрузки в generate_start_card)."""
@@ -1580,7 +1581,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if is_new_user:
             # Для нового пользователя отправляем приветственный баннер и возвращаемся
             chat_id = update.effective_chat.id
-            banner_url = "https://i.ibb.co/LXsGsfxZ/213.png"
+            banner_url = get_banner_path("cooldown")
             text = "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
             msg = await context.bot.send_photo(
                 chat_id=chat_id,
@@ -2385,7 +2386,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += "\n\n💡 /profile ＠ник — чужой профиль"
 
         # Banner URL - для Steam использовать картинку с героями
-        profile_banner_url = "https://i.ibb.co/n8g8yQYt/dasdsadasdsadasdsad.png"
+        profile_banner_url = get_banner_path("profile")
 
         if top_heroes:
             try:
@@ -2540,10 +2541,10 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 rank_tier=winner_rank_tier,
                 show_avatar=True
             )
-            banner_url = io.BytesIO(banner_bytes) if banner_bytes else "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
+            banner_url = io.BytesIO(banner_bytes) if banner_bytes else get_banner_path("top")
         except Exception as e:
             logger.warning(f"Could not generate top card: {e}")
-            banner_url = "https://i.ibb.co/1fbJD2hb/l-Ij20.jpg"
+            banner_url = get_banner_path("top")
 
         text = ""
         medals = {1: "🥇", 2: "🥈", 3: "🥉"}
@@ -2962,7 +2963,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.debug(f"Could not delete last bot message: {e}")
 
-    link_banner_url = "https://i.ibb.co/0jdSyXWx/MZXz-H.jpg"
+    link_banner_url = get_banner_path("link")
     link_text = ("🦞 *Привязать Аккаунт Dota 2*\n\n"
     "Добавить в друзья → Ваш ID → копировать →\n"
     "`/link 347614947`\n\n"
@@ -3078,7 +3079,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                     # User not found in DB, create them first
                     telegram_username = update.effective_user.username
                     first_name = update.effective_user.first_name
-                    fallback_name = telegram_username or first_name or "Unknown"
+                    fallback_name = telegram_username or first_name or f"Player{user_id}"
                     db = Database()
                     db.add_user(user_id, fallback_name, None, None)
                     db_user = get_user(user_id)  # Get the newly created user
@@ -3316,7 +3317,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     db_user = get_user(user_id)  # без создания
                     if db_user is None:
                         # Новый пользователь — создаём с лучшим доступным именем
-                        fallback_name = telegram_username or user_obj.first_name or "Unknown"
+                        fallback_name = telegram_username or user_obj.first_name or f"Player{user_id}"
                         db = Database()
                         db.add_user(user_id, fallback_name, None, None)
                         logger.info(f"Created new user {user_id} with name '{fallback_name}'")

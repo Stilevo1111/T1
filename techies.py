@@ -7,10 +7,10 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
 from bot_utils import make_clickable, record_recent_fissure_roll
+from constants import get_banner_path
 
 logger = logging.getLogger(__name__)
-
-BANNER_URL = "https://i.ibb.co/PzzFJwwk/Gemini-Generated-Image-e3k1zhe3k1zhe3k1.png"
+BANNER_URL = get_banner_path("techies")
 TECHIES_BANNER_URL = BANNER_URL
 
 SUCCESS_PHRASES = [

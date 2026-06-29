@@ -119,11 +119,15 @@ def make_clickable(name, user_id, max_length=12):
         try:
             cached = user_cache.get(uid)
             if cached:
-                display_name = cached.get('steam_nickname') or cached.get('username') or name
+                cached_name = cached.get('steam_nickname') or cached.get('username') or name
+                if cached_name and cached_name != "Unknown":
+                    display_name = cached_name
             else:
                 db_user = get_user(uid)
                 if db_user:
-                    display_name = db_user.get('steam_nickname') or db_user.get('username') or name
+                    db_name = db_user.get('steam_nickname') or db_user.get('username') or name
+                    if db_name and db_name != "Unknown":
+                        display_name = db_name
         except Exception:
             pass
 
@@ -137,6 +141,7 @@ def make_clickable(name, user_id, max_length=12):
             display_name = display_name[:max_length-1] + "."
 
         return f'<a href="tg://user?id={uid}">{display_name}</a>'
+
     return name if name and name != "None" else "—"
 
 

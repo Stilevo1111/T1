@@ -28,6 +28,7 @@ from bot_utils import (
     schedule_delete,
     set_last_bot_message,
 )
+from constants import get_banner_path
 from constants import (
     COOLDOWN,
     WEEKEND_BONUS_MULTIPLIERS,
@@ -145,7 +146,7 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
         f"📏 {new_fissure:.1f} см"
     )
 
-    zeus_banner_url = "https://i.ibb.co/0jg01gWW/Gemini-Generated-Image-wyz68gwyz68gwyz6-1.png"
+    zeus_banner_url = get_banner_path("zeus")
     result_msg = await bot.send_photo(
         chat_id=chat_id,
         photo=zeus_banner_url,
@@ -299,7 +300,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = build_fissure_cooldown_bar_and_text(
                 now, user.get("last_fissure"), COOLDOWN, format_time
             )
-            cooldown_banner_url = "https://i.ibb.co/FkzCZxNG/m-Yqbu.jpg"
+            cooldown_banner_url = get_banner_path("cooldown")
             await send_fissure_cooldown_response(
                 context.bot,
                 chat_id,
@@ -378,9 +379,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Get base roll first
             roll, special_message, is_fatal, got_help = calculate_fissure_roll(user.get("fissure", 0))
-            base_roll_before_streak = roll  # Сохраняем исходный ролл
+            base_roll_before_streak = roll  # Сохраняем исходный ролл (без стрика)
             current_win_streak = user.get('current_win_streak', 0)
             roll, streak_text = calculate_streak_bonus(current_win_streak, roll)
+            # Сохраняем стрик-ролл для мульткаста (стрик входит в расчет)
+            streak_roll = roll
 
             # Проверяем переход на x2 (скрытый рандом 75%)
             if random.random() < 0.75:
@@ -448,10 +451,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 slot_msg_ids.append(msg.message_id)
                 await asyncio.sleep(0.5)
 
-            # Сохраняем original_roll ДО умножения!
+            # Сохраняем base_roll как original_roll для отображения
+            saved_original_roll = base_roll_before_streak
             roll, original_roll, multicast_text = process_multicast_result(
-                roll, cascade_count, MULTICAST_TEXTS
+                streak_roll, cascade_count, MULTICAST_TEXTS
             )
+            # Восстанавливаем base_roll для отображения
+            original_roll = saved_original_roll
             logger.info(f"fissure multicast: roll after multiply={roll}, cascade_count={cascade_count}")
             if cascade_count >= 4:
                 pass
@@ -466,6 +472,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             base_roll_before_streak = roll  # Сохраняем исходный ролл
             current_win_streak = user.get('current_win_streak', 0)
             roll, streak_text = calculate_streak_bonus(current_win_streak, roll)
+            # Для обычного ролла original_roll = roll со стриком
+            original_roll = None  # Сохраняем None чтобы не входить в мультфилияр
 
         # Даем время slot сообщениям отправиться перед итоговым
         if cascade_count > 1:
@@ -478,8 +486,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if original_roll is not None:
             base_roll_for_text = original_roll
         
-        # Use base_roll_before_streak (roll before streak) for display
-        roll_for_result = base_roll_before_streak if base_roll_before_streak is not None else base_roll_for_text
+        # Use original_roll (base roll saved before streak and multicast) for display
+        roll_for_result = original_roll if original_roll is not None else roll
 
         # Weekend bonus APPLIED TO WHOLE ROLL (only for normal rolls, not multicast)
         weekend_bonus = ""
@@ -532,12 +540,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             extra_text = random.choice(CATEGORY_PHRASES[category])
 
         if cascade_count > 1 and original_roll is not None:
-            logger.info(f"DEBUG: original_roll={original_roll}, cascade_count={cascade_count}, roll_final={original_roll * cascade_count}")
+            logger.info(f"DEBUG: original_roll={original_roll}, cascade_count={cascade_count}, roll_final={roll}")
             roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
             mc_level = f"×{cascade_count}"
             roll_final = roll
             
-            base_for_text = original_roll
+            base_for_text = original_roll  # Базовый ролл для текста (восстановленный)
             roll_key_text = min(base_for_text, 75)
             roll_key_text = max(roll_key_text, -15)
             if roll_key_text in ROLL_TEXTS:
@@ -589,9 +597,9 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Шапка: старая для обычных, новая для мультикаста
         if cascade_count > 1:
             # Баннер для мультикаста
-            roll_banner_url = "https://i.ibb.co/WN5CBpqR/dsad23.png"
+            roll_banner_url = get_banner_path("roll_fatal")
         else:
-            roll_banner_url = "https://i.ibb.co/Mk35C5PY/Hf-S7B.jpg"
+            roll_banner_url = get_banner_path("roll_normal")
 
         try:
             if roll_banner_url:
