@@ -554,8 +554,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 result_text = f"{'+' if base_for_text > 0 else ''}{base_for_text} см"
             
             # Для мультикаста добавляем extra_text (мем)
-            if cascade_count == 1:
-                extra_text = ""
+            if cascade_count > 1:
+                extra_text = ""  # Только Ogre Magi цитаты в мультфильме
             
             text = (
                 f"🎲 {display_username}\n\n"
