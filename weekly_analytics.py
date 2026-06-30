@@ -996,7 +996,7 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
                 logger.info(f"generate_chart_only: using cached data for user {telegram_id}")
                 chart = await _create_visual_chart(cached.get("history", []))
                 return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY"), "api_fallback": True}
-        return {"error": "opendota_rate_limit", "message": "⚠️ OpenDota API недоступен. Данные могут быть устаревшими."}
+        return {"error": "opendota_rate_limit", "message": "⚠️ OpenDota API временно недоступен. Вернётся, когда кто-то купит варды 👁️"}
 
     # Matches are already sorted newest-first from API, keep this order
 
@@ -1101,7 +1101,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
                     "stats": cached.get("stats"),
                     "api_fallback": True,
                     "error": "opendota_rate_limit",
-                    "message": "⚠️ OpenDota API недоступен. Данные могут быть устаревшими."
+                    "message": "⚠️ OpenDota API временно недоступен. Вернётся, когда кто-то купит варды 👁️."
                 }
     logger.info(f"generate_weekly_analytics: after fetch_match_details, gpm={sum(m.get('gold_per_min', 0) for m in matches)}")
 
