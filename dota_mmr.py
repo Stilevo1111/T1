@@ -1323,19 +1323,10 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                 except Exception:
                     pass
 
-                # Allow linking with placeholder data - stats will be fetched when profile becomes public
-                stats = {
-                    "nickname": "Неизвестный игрок",
-                    "avatar": None,
-                    "mmr": 0,
-                    "rank_tier": 0,
-                    "wins": 0,
-                    "losses": 0,
-                    "winrate": 0.0
-                }
+                # Allow linking even if profile is private — stats will be fetched when profile becomes public
+                # Don't overwrite steam_nickname/avatar with placeholders: preserve existing names/avatars
                 update_user_fields_batch(telegram_id, {
                     "steam_id": steam_id,
-                    "steam_nickname": "Неизвестный игрок",
                     "mmr": 0,
                     "rank_tier": 0,
                     "wins": 0,

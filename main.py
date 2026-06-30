@@ -2532,7 +2532,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not get Telegram avatar for top user: {e}")
 
-        winner_name = winner.get('username') or winner.get('steam_nickname') or winner.get('first_name')
+        winner_name = winner.get('username') or winner.get('first_name') or str(winner.get('telegram_id', 'Игрок'))
         winner_fissure = winner.get('fissure', 0)
         winner_rank_tier = winner.get('rank_tier', 0)
 
@@ -2572,13 +2572,11 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ''.join(emoji_digits[d] for d in str(n))
 
         for i, user_top in enumerate(top_users, 1):
-            name = (user_top.get('username') or user_top.get('steam_nickname') or user_top.get('first_name') or 'Unknown').strip()
-            if not name:
-                name = str(user_top.get('telegram_id', 'Unknown'))
-            if len(name) > 12:
-                name = name[:12]
+            raw_name = (user_top.get('username') or user_top.get('first_name') or str(user_top.get('telegram_id', 'Игрок'))).strip()
+            name = raw_name[:12] if len(raw_name) > 12 else raw_name
             telegram_id = user_top.get('telegram_id')
-            clickable_name = f'<b>{make_clickable(name, telegram_id)}</b>'
+            display = name[1:] if name.startswith('@') else name
+            clickable_name = f'<b><a href="tg://user?id={telegram_id}">{display}</a></b>'
             fissure = user_top.get('fissure', 0)
             medal = medals.get(i)
             if medal:
@@ -2587,7 +2585,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += f"{get_emoji_num(i)} {clickable_name} - {fissure:.1f} см\n"
 
         user_fissure = user.get('fissure', 0) if user else 0
-        clickable_username = make_clickable(username, update.effective_user.id)
+        clickable_username = f'<a href="tg://user?id={update.effective_user.id}">{"@" + username if username and not username.startswith("@") else username}</a>'
         if user_rank:
             text += f"\n{get_emoji_num(user_rank)} <b>{clickable_username} - {user_fissure:.1f} см</b>"
         else:
@@ -2720,7 +2718,11 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user:
             user_week_games = user.get('week_games') or 0
             user_week_wins = user.get('week_wins') or 0
-            user_username = user.get('steam_nickname') or user.get('username') or user.get('first_name') or 'Unknown'
+            raw_user_name = user.get('steam_nickname') or user.get('username') or user.get('first_name')
+            if raw_user_name and raw_user_name not in ("Unknown", "Неизвестный игрок"):
+                user_username = raw_user_name
+            else:
+                user_username = user.get('username') or user.get('first_name') or str(user.get('telegram_id', 'Игрок'))
             user_week_losses = user_week_games - user_week_wins
 
             # Check if user is already in the top list
@@ -2772,7 +2774,11 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 winner_avatar = DEFAULT_AVATAR_URL
                 logger.info(f"topmmr: using DEFAULT_AVATAR_URL for user {winner_telegram_id}")
 
-            winner_name = winner.get('steam_nickname') or winner.get('username') or winner.get('first_name')
+            raw_winner_name = winner.get('steam_nickname') or winner.get('username') or winner.get('first_name')
+            if raw_winner_name and raw_winner_name not in ("Unknown", "Неизвестный игрок"):
+                winner_name = raw_winner_name
+            else:
+                winner_name = winner.get('username') or winner.get('first_name') or str(winner.get('telegram_id', 'Игрок'))
             winner_rank_tier = winner.get('rank_tier', 0)
             winner_week_games = winner.get('week_games') or 0
             winner_week_wins = winner.get('week_wins') or 0
@@ -2810,7 +2816,10 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return ''.join(emoji_digits[d] for d in str(n))
 
             for i, player in enumerate(top_users, 1):
-                username = player.get('steam_nickname') or player.get('username') or 'Unknown'
+                raw_uname = player.get('steam_nickname') or player.get('username') or player.get('first_name')
+                if not raw_uname or raw_uname in ("Unknown", "Неизвестный игрок"):
+                    raw_uname = player.get('username') or player.get('first_name') or str(player.get('telegram_id', 'Игрок'))
+                username = raw_uname
                 rank_tier = player.get('rank_tier', 0)
                 week_games = player.get('week_games') or 0
                 week_wins = player.get('week_wins') or 0
@@ -3443,6 +3452,28 @@ async def main():
             release_connection(conn)
         except Exception as e:
             logger.error(f"Failed to fix NULL fissure values: {e}")
+
+        # Clean up stale placeholder nicknames (e.g. "Неизвестный игрок", "Unknown") 
+        # that were saved when Steam stats couldn't be fetched during linking.
+        # These placeholders override Telegram usernames in display, so clear them
+        # to restore correct names. Real Steam nicknames will be re-fetched by
+        # update_user_mmr when profiles become public.
+        try:
+            db_type = get_db_type()
+            conn = get_connection()
+            cursor = conn.cursor()
+            if "postgres" in db_type:
+                cursor.execute("UPDATE users SET steam_nickname = NULL WHERE steam_nickname IN ('Неизвестный игрок', 'Unknown')")
+            else:
+                cursor.execute("UPDATE users SET steam_nickname = NULL WHERE steam_nickname IN ('Неизвестный игрок', 'Unknown')")
+            conn.commit()
+            fixed_names = cursor.rowcount
+            cursor.close()
+            logger.info(f"Cleaned {fixed_names} stale placeholder nicknames")
+            from database import release_connection
+            release_connection(conn)
+        except Exception as e:
+            logger.error(f"Failed to clean placeholder nicknames: {e}")
         
         # Test DB connection
         try:

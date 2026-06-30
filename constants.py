@@ -92,6 +92,14 @@ WELCOME_PHRASES = [
 ]
 
 # Local banner helper
+COOLDOWN_BANNERS = ["cooldown", "cooldown_2"]
+
 def get_banner_path(banner_name: str) -> Path:
     """Get local banner path."""
     return BANNER_DIR / f"{banner_name}.webp"
+
+def get_random_cooldown_banner_path() -> Path:
+    """Get a random cooldown banner path."""
+    import random
+    name = random.choice(COOLDOWN_BANNERS)
+    return BANNER_DIR / f"{name}.webp"

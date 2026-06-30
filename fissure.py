@@ -28,7 +28,7 @@ from bot_utils import (
     schedule_delete,
     set_last_bot_message,
 )
-from constants import get_banner_path
+from constants import get_banner_path, get_random_cooldown_banner_path
 from constants import (
     COOLDOWN,
     WEEKEND_BONUS_MULTIPLIERS,
@@ -300,7 +300,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = build_fissure_cooldown_bar_and_text(
                 now, user.get("last_fissure"), COOLDOWN, format_time
             )
-            cooldown_banner_url = get_banner_path("cooldown")
+            cooldown_banner_url = get_random_cooldown_banner_path()
             await send_fissure_cooldown_response(
                 context.bot,
                 chat_id,
