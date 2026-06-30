@@ -1064,7 +1064,22 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
     matches = await get_last_matches(telegram_id)
 
     if len(matches) < 5:
-        return None
+        user = await asyncio.to_thread(get_user, telegram_id)
+        if user and user.get('analytics_cache'):
+            cached = json.loads(user['analytics_cache'])
+            if cached.get('matches') and len(cached.get('matches', [])) >= 3:
+                logger.info(f"generate_weekly_analytics: using cached data for user {telegram_id}")
+                return {
+                    "image": cached.get("image"),
+                    "history": cached.get("history", []),
+                    "matches": cached.get("matches", []),
+                    "pro_text": cached.get("pro_text", ""),
+                    "detailed_text": cached.get("detailed_text", ""),
+                    "role": cached.get("role", "CARRY"),
+                    "stats": cached.get("stats"),
+                    "api_fallback": True
+                }
+        logger.info(f"generate_weekly_analytics: only {len(matches)} matches, using what we have")
 
     # Matches are already sorted newest-first from API, keep this order
     # Role detection using OpenDota hero roles + match stats
