@@ -1831,27 +1831,6 @@ def generate_start_card(
             except Exception:
                 pass
 
-        # Генерируем медали программно (прозрачные PNG с цифрами)
-        def create_medal_image(number, color, text_color):
-            img = Image.new("RGBA", (icon_size, icon_size), (0, 0, 0, 0))
-            draw = ImageDraw.Draw(img)
-            draw.ellipse([4, 4, icon_size-4, icon_size-4], fill=color)
-            try:
-                font_medal = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
-            except Exception:
-                font_medal = ImageFont.load_default()
-            bbox = draw.textbbox((0, 0), str(number), font=font_medal)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-            x = (icon_size - text_width) // 2
-            y = (icon_size - text_height) // 2 - 2
-            draw.text((x, y), str(number), fill=text_color, font=font_medal)
-            return img
-
-        icons['gold'] = create_medal_image(1, (255, 215, 0, 255), (184, 134, 11, 255))
-        icons['silver'] = create_medal_image(2, (192, 192, 192, 255), (128, 128, 128, 255))
-        icons['bronze'] = create_medal_image(3, (205, 127, 50, 255), (139, 69, 19, 255))
-
         rank_icon = None
         rank_icon_size = int(100 * scale)
         if rank_tier > 0:
