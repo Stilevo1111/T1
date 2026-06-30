@@ -1101,7 +1101,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
                     "stats": cached.get("stats"),
                     "api_fallback": True,
                     "error": "opendota_rate_limit",
-                    "message": "⚠️ OpenDota API временно недоступен. Вернётся, когда кто-то купит варды 👁️."
+                    "message": "⚠️ OpenDota API временно недоступен. Вернётся, когда кто-то купит варды 👁️"
                 }
     logger.info(f"generate_weekly_analytics: after fetch_match_details, gpm={sum(m.get('gold_per_min', 0) for m in matches)}")
 
