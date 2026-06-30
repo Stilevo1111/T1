@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import functools
 import io
 import logging
@@ -426,8 +426,8 @@ HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota
 HERO_CACHE_DIR = Path(__file__).parent / "assets" / "heroes_webp"
 HERO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
-HEROES_STRIP_BG_URL = get_banner_path("heroes_strip")
-HEROES_STRIP_BG_CACHE = "heroes_strip.webp"
+HEROES_STRIP_BG_URL = get_banner_path("heroes_profil")
+HEROES_STRIP_BG_CACHE = "heroes_profil.webp"
 
 
 def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None:
@@ -556,7 +556,7 @@ def _compose_heroes_strip_background(canvas_width: int, canvas_height: int):
             except Exception:
                 pass
         if not data:
-            bg_path = get_banner_path("heroes_strip")
+            bg_path = get_banner_path("heroes_profil")
             if isinstance(bg_path, Path) and bg_path.exists():
                 data = bg_path.read_bytes()
             else:
@@ -575,31 +575,8 @@ def _compose_heroes_strip_background(canvas_width: int, canvas_height: int):
             return _heroes_strip_gradient(canvas_width, canvas_height)
 
         nat = Image.open(io.BytesIO(data)).convert("RGB")
-        w, h = nat.size
-
-        if w == canvas_width and h == canvas_height:
-            return nat.copy()
-
-        if w >= canvas_width and h >= canvas_height:
-            left = (w - canvas_width) // 2
-            top = (h - canvas_height) // 2
-            return nat.crop((left, top, left + canvas_width, top + canvas_height))
-
-        img = nat
-        w, h = img.size
-        while w > canvas_width:
-            left = (w - canvas_width) // 2
-            img = img.crop((left, 0, left + canvas_width, h))
-            w, h = img.size
-        while h > canvas_height:
-            top = (h - canvas_height) // 2
-            img = img.crop((0, top, w, top + canvas_height))
-            w, h = img.size
-
-        canvas = _heroes_strip_gradient(canvas_width, canvas_height)
-        w, h = img.size
-        canvas.paste(img, ((canvas_width - w) // 2, (canvas_height - h) // 2))
-        return canvas
+        nat = nat.resize((canvas_width, canvas_height), Image.LANCZOS)
+        return nat
     except Exception as e:
         logger.debug(f"heroes strip background: {e}")
         return _heroes_strip_gradient(canvas_width, canvas_height)
