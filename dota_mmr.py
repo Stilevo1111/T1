@@ -1928,7 +1928,7 @@ def generate_top_card(
         avatar_y = int((height - avatar_size) // 2 - 10)
 
         avatar_loaded = False
-        logger.info(f"generate_top_card: avatar_url={avatar_url[:50] if avatar_url else None}, show_avatar={show_avatar}")
+        logger.info(f"generate_top_card: avatar_url={str(avatar_url)[:50] if avatar_url else None}, show_avatar={show_avatar}")
         if avatar_url and show_avatar and str(avatar_url).strip().lower().startswith(('http://', 'https://')):
             try:
                 if os.path.isfile(avatar_url):

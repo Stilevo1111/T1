@@ -2542,7 +2542,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"top: using DEFAULT_AVATAR_URL for user {winner_telegram_id}")
 
         avatar_source = "steam" if winner.get('avatar') else ("telegram" if winner_avatar and winner_avatar != DEFAULT_AVATAR_URL else "default")
-        logger.info(f"top: winner_avatar={winner_avatar[:50] if winner_avatar else None}, avatar_source={avatar_source}, winner_name={winner_name}")
+        logger.info(f"top: winner_avatar={str(winner_avatar)[:50] if winner_avatar else None}, avatar_source={avatar_source}, winner_name={winner_name}")
 
         try:
             from dota_mmr import generate_top_card
