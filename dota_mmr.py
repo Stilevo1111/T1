@@ -61,7 +61,7 @@ def _get_start_card_background():
             _START_CARD_BACKGROUND_RESIZED = bg_image
             _START_CARD_BACKGROUND_CACHED = True
             return bg_image
-        resp = requests.get(local_bg, timeout=30)
+        resp = requests.get(str(local_bg), timeout=30)
         if resp.status_code == 200:
             bg_image = Image.open(io.BytesIO(resp.content)).convert("RGB")
             bg_image = bg_image.resize((1024, 500), Image.LANCZOS)
