@@ -232,7 +232,7 @@ async def handle_multicast_animation(bot, chat_id, random_module, MULTICAST_TEXT
                 slots = random_module.sample(slot_emojis, 3)
                 msg = await bot.send_message(
                     chat_id=chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x4"
+                    text=f"🎰 {' | '.join(slots)} | x3"
                 )
                 slot_msg_ids.append(msg.message_id)
                 await asyncio.sleep(0.5)
@@ -241,7 +241,7 @@ async def handle_multicast_animation(bot, chat_id, random_module, MULTICAST_TEXT
             slots = random_module.sample(slot_emojis, 3)
             msg = await bot.send_message(
                 chat_id=chat_id,
-                text=f"🎰 {' | '.join(slots)} | x3"
+                text=f"🎰 {' | '.join(slots)} | x2"
             )
             slot_msg_ids.append(msg.message_id)
             await asyncio.sleep(0.5)
@@ -250,7 +250,7 @@ async def handle_multicast_animation(bot, chat_id, random_module, MULTICAST_TEXT
         slots = random_module.sample(slot_emojis, 3)
         msg = await bot.send_message(
             chat_id=chat_id,
-            text=f"🎰 {' | '.join(slots)} | x2"
+            text=f"🎰 {' | '.join(slots)} | x1"
         )
         slot_msg_ids.append(msg.message_id)
         await asyncio.sleep(0.5)
