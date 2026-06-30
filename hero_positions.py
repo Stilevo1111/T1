@@ -146,4 +146,20 @@ hero_positions: dict[str, int] = {
     "Windranger": 2,  # Best Pos 2
     "Magnus": 2,  # Best Pos 2
     "Pudge": 4,  # Best Pos 4
+    # === MISSING HEROES (no prior entry) ===
+    "Abaddon": 4,  # Support/Disabler - most common pos 4
+    "Ancient Apparition": 5,  # Pure support
+    "Arc Warden": 1,  # Carry
+    "Batrider": 4,  # Initiator/Disabler - pos 4
+    "Clockwerk": 3,  # Initiator/Disabler/Durable - pos 3
+    "Earthshaker": 4,  # Support/Initiator - pos 4
+    "Elder Titan": 3,  # Initiator/Disabler/Durable - pos 3
+    "Enigma": 3,  # Disabler/Initiator/Pusher - pos 3
+    "Io": 5,  # Support - pos 5
+    "Largo": 3,  # Durable/Disabler - pos 3
+    "Meepo": 1,  # Carry
+    "Omniknight": 5,  # Support/Durable - pos 5
+    "Shadow Demon": 4,  # Support/Disabler - pos 4
+    "Techies": 4,  # Nuker/Disabler - pos 4
+    "Undying": 5,  # Support/Durable - pos 5
 }
