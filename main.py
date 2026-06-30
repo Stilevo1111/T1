@@ -2218,7 +2218,7 @@ async def top_mmr_handler(request):
     from database import get_dota_mmr_top
     try:
         top_users = get_dota_mmr_top(50)
-        data = [{"username": u.get("username", "Unknown"), "mmr": u.get("mmr", 0)} for u in top_users]
+        data = [{"username": u.get("username", "Unknown"), "mmr": u.get("mmr", 0), "rank_tier": u.get("rank_tier", 0)} for u in top_users]
         resp = web.Response(text=json.dumps(data, ensure_ascii=False), content_type="application/json")
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
