@@ -928,7 +928,7 @@ async def announce_weekly_mmr_winner(bot):
         steam_id=winner.get('steam_id'),
         db_avatar=winner.get('avatar'),
     )
-    logger.info(f"Champion card avatar for {username}: {avatar_url[:80] if avatar_url else 'none'}...")
+    logger.info(f"Champion card avatar for {username}: {str(avatar_url)[:80] if avatar_url else 'none'}...")
 
     # Асинхронно генерируем карточку (безопасно для event loop)
     try:

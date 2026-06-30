@@ -1765,11 +1765,11 @@ def generate_start_card(
                         timeout=10,
                         headers={"User-Agent": "fissure-bot/1.0"},
                     )
-                    logger.info(f"Avatar request status: {resp.status_code} url={avatar_url[:80]}")
+                    logger.info(f"Avatar request status: {resp.status_code} url={str(avatar_url)[:80]}")
                     if resp.status_code == 200 and resp.content:
                         avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA")
                     else:
-                        logger.warning(f"Avatar download failed: status={resp.status_code}, url={avatar_url[:80]}")
+                        logger.warning(f"Avatar download failed: status={resp.status_code}, url={str(avatar_url)[:80]}")
                         avatar = None
                 if avatar:
                     # Check image size to prevent memory issues - max 512px
