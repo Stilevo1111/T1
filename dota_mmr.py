@@ -426,8 +426,8 @@ HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota
 HERO_CACHE_DIR = Path(__file__).parent / "assets" / "heroes_webp"
 HERO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
-HEROES_STRIP_BG_URL = get_banner_path("heroes_profil")
-HEROES_STRIP_BG_CACHE = "heroes_profil.webp"
+HEROES_STRIP_BG_URL = get_banner_path("heroes_strip")
+HEROES_STRIP_BG_CACHE = "heroes_strip.webp"
 
 
 def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None:
@@ -556,7 +556,7 @@ def _compose_heroes_strip_background(canvas_width: int, canvas_height: int):
             except Exception:
                 pass
         if not data:
-            bg_path = get_banner_path("heroes_profil")
+            bg_path = get_banner_path("heroes_strip")
             if isinstance(bg_path, Path) and bg_path.exists():
                 data = bg_path.read_bytes()
             else:
