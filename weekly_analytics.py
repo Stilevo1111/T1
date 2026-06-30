@@ -1079,7 +1079,8 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
                     "stats": cached.get("stats"),
                     "api_fallback": True
                 }
-        logger.info(f"generate_weekly_analytics: only {len(matches)} matches, using what we have")
+
+    logger.info(f"generate_weekly_analytics: {len(matches)} matches available")
 
     # Matches are already sorted newest-first from API, keep this order
     # Role detection using OpenDota hero roles + match stats
