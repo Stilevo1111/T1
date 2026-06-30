@@ -292,13 +292,13 @@ async def _load_heroes() -> dict[int, str]:
 # _load_heroes() returns names like "anti_mage", "necrophos" etc (after removing npc_dota_hero_ prefix)
 HERO_NAME_MAP: dict[str, str] = {
     "anti_mage": "antimage",
-    "necrophos": "necrolyte",  # OpenDota: necrophos, File: necrolyte.png
+    "necrophos": "necrophos",
     "queenofpain": "queenofpain",
     "skywrath_mage": "skywrath_mage",
     "outworld_destroyer": "outworld_destroyer",
     "lone_druid": "lone_druid",
     "centaur": "centaur",
-    "magnataur": "magnataur",  # File is magnataur.png
+    "magnataur": "magnataur",
     "doom_bringer": "doom_bringer",
     "witchdoctor": "witch_doctor",
     "keeper_of_the_light": "keeper_of_the_light",
@@ -306,6 +306,81 @@ HERO_NAME_MAP: dict[str, str] = {
     "shadow_shaman": "shadow_shaman",
     "life_stealer": "life_stealer",
     "abyssal_underlord": "abyssal_underlord",
+    "crystal_maiden": "crystal_maiden",
+    "tusk": "tusk",
+    "brewmaster": "brewmaster",
+    "oracle": "oracle",
+    "techies": "techies",
+    "ember_spirit": "ember_spirit",
+    "earth_spirit": "earth_spirit",
+    "terrorblade": "terrorblade",
+    "phoenix": "phoenix",
+    "winter_wyvern": "winter_wyvern",
+    "dark_seer": "dark_seer",
+    "riki": "riki",
+    "chen": "chen",
+    "enigma": "enigma",
+    "huskar": "huskar",
+    "leoric": "leoric",
+    "slardar": "slardar",
+    "phantom_assassin": "phantom_assassin",
+    "phantom_lancer": "phantom_lancer",
+    "faceless_void": "faceless_void",
+    "death_prophet": "death_prophet",
+    "sven": "sven",
+    "luna": "luna",
+    "dragon_knight": "dragon_knight",
+    "vengeful_spirit": "vengeful_spirit",
+    "warlock": "warlock",
+    "shadow_demon": "shadow_demon",
+    "zeus": "zeus",
+    "razor": "razor",
+    "axe": "axe",
+    "pudge": "pudge",
+    "sand_king": "sand_king",
+    "clinkz": "clinkz",
+    "templar_assassin": "templar_assassin",
+    "viper": "viper",
+    "mirana": "mirana",
+    "morphling": "morphling",
+    "storm_spirit": "storm_spirit",
+    "wraith_king": "wraith_king",
+    "invoker": "invoker",
+    "abaddon": "abaddon",
+    "ancient_apparition": "ancient_apparition",
+    "arc_warden": "arc_warden",
+    "bloodseeker": "bloodseeker",
+    "bounty_hunter": "bounty_hunter",
+    "broodmother": "broodmother",
+    "disruptor": "disruptor",
+    "doom": "doom",
+    "elder_titan": "elder_titan",
+    "enchantress": "enchantress",
+    "earthshaker": "earthshaker",
+    "legion_commander": "legion_commander",
+    "lich": "lich",
+    "lifestealer": "lifestealer",
+    "lion": "lion",
+    "meepo": "meepo",
+    "natures_prophet": "natures_prophet",
+    "od": "outworld_destroyer",
+    "ogre_magi": "ogre_magi",
+    "omniknight": "omniknight",
+    "pugna": "pugna",
+    "rubick": "rubick",
+    "slark": "slark",
+    "sniper": "sniper",
+    "spectre": "spectre",
+    "spirit_breaker": "spirit_breaker",
+    "tidehunter": "tidehunter",
+    "timber_saw": "timber_saw",
+    "tinker": "tinker",
+    "tiny": "tiny",
+    "treant_protector": "treant_protector",
+    "undying": "undying",
+    "venomancer": "venomancer",
+    "vicetime": "vicetime",
+    "weaver": "weaver",
 }
 
 def _normalize_hero_file_name(internal_name: str) -> str:
@@ -983,6 +1058,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
         dict с ключами 'image', 'history', 'matches', 'role' или None если данных мало.
     """
     # Check if user has Steam account BEFORE fetching matches
+    user = await asyncio.to_thread(get_user, telegram_id)
     if not user or not user.get("steam_id"):
         return {"error": "no_steam_linked", "message": "🔗 Привяжите Аккаунт, чтобы увидеть аналитику"}
     
@@ -1283,16 +1359,6 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         ),
         pe.Normal()
     ])
-
-    ax.fill_between(
-        x_smooth,
-        y_smooth,
-        0,
-        color="#f4c430",
-        alpha=0.12,
-        interpolate=True,
-        zorder=2
-    )
 
     ax.scatter(
         x,

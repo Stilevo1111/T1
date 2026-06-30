@@ -468,6 +468,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
+            cascade_count = 1
             roll, special_message, is_fatal, got_help = calculate_fissure_roll(user.get("fissure", 0))
             base_roll_before_streak = roll  # Сохраняем исходный ролл
             current_win_streak = user.get('current_win_streak', 0)

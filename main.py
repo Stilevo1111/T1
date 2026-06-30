@@ -545,10 +545,10 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             nonlocal loading_msg
             try:
                 from weekly_analytics import (
-                    generate_chart_only,
+                    generate_weekly_analytics,
                     get_last_matches,
                 )
-                chart_data = await generate_chart_only(update.effective_user.id)
+                chart_data = await generate_weekly_analytics(update.effective_user.id)
 
                 if chart_data:
                     if isinstance(chart_data, dict) and chart_data.get("error") in ("opendota_rate_limit", "no_steam_linked"):
@@ -564,13 +564,13 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.job_queue)
                         return
 
-                    if chart_data.get("api_fallback"):
-                        logger.info("Using cached API data for analytics")
-
                     history = chart_data.get("history", [])
                     matches = chart_data.get("matches", [])
                     chart_image = chart_data.get("image")
                     role_from_chart = chart_data.get("role", "CARRY")
+                    pro_text = chart_data.get("pro_text", "")
+                    detailed_text = chart_data.get("detailed_text", "")
+                    stats = chart_data.get("stats")
 
                     if not matches:
                         try:
@@ -586,13 +586,18 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     import os
                     os.makedirs("charts", exist_ok=True)
 
-                    context.user_data['analytics_stats'] = None
+                    context.user_data['analytics_stats'] = stats
                     context.user_data['analytics_role'] = role_from_chart
                     context.user_data['analytics_page'] = 0
                     context.user_data['analytics_history'] = history
                     context.user_data['analytics_matches'] = matches
-                    context.user_data['analytics_pages'] = [None, None]
-                    context.user_data['analytics_generated'] = set()
+                    context.user_data['analytics_pages'] = [
+                        {"title": "🆚Сравнение с Pro", "text": pro_text} if pro_text else None,
+                        {"title": "📊 Подробное сравнение", "text": detailed_text} if detailed_text else None
+                    ]
+                    context.user_data['analytics_generated'] = {
+                        i for i, p in enumerate([pro_text, detailed_text]) if p is not None
+                    }
 
                     old_table_msg_id = context.user_data.get('analytics_table_msg_id')
                     if old_table_msg_id:

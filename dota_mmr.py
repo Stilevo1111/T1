@@ -429,6 +429,103 @@ HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_
 HEROES_STRIP_BG_URL = get_banner_path("heroes_profil")
 HEROES_STRIP_BG_CACHE = "heroes_profil.webp"
 
+HERO_NAME_TO_CDN: dict[str, str] = {
+    "anti_mage": "antimage",
+    "necrophos": "necrophos",
+    "queenofpain": "queenofpain",
+    "skywrath_mage": "skywrath_mage",
+    "outworld_destroyer": "outworld_destroyer",
+    "lone_druid": "lone_druid",
+    "centaur": "centaur",
+    "magnataur": "magnataur",
+    "doom_bringer": "doom_bringer",
+    "witchdoctor": "witch_doctor",
+    "keeper_of_the_light": "keeper_of_the_light",
+    "nightstalker": "night_stalker",
+    "shadow_shaman": "shadow_shaman",
+    "life_stealer": "life_stealer",
+    "abyssal_underlord": "abyssal_underlord",
+    "crystal_maiden": "crystal_maiden",
+    "tusk": "tusk",
+    "brewmaster": "brewmaster",
+    "oracle": "oracle",
+    "techies": "techies",
+    "ember_spirit": "ember_spirit",
+    "earth_spirit": "earth_spirit",
+    "terrorblade": "terrorblade",
+    "phoenix": "phoenix",
+    "winter_wyvern": "winter_wyvern",
+    "dark_seer": "dark_seer",
+    "riki": "riki",
+    "chen": "chen",
+    "enigma": "enigma",
+    "huskar": "huskar",
+    "leoric": "leoric",
+    "slardar": "slardar",
+    "phantom_assassin": "phantom_assassin",
+    "phantom_lancer": "phantom_lancer",
+    "faceless_void": "faceless_void",
+    "death_prophet": "death_prophet",
+    "sven": "sven",
+    "luna": "luna",
+    "dragon_knight": "dragon_knight",
+    "vengeful_spirit": "vengeful_spirit",
+    "warlock": "warlock",
+    "shadow_demon": "shadow_demon",
+    "zeus": "zeus",
+    "razor": "razor",
+    "axe": "axe",
+    "pudge": "pudge",
+    "sand_king": "sand_king",
+    "clinkz": "clinkz",
+    "templar_assassin": "templar_assassin",
+    "viper": "viper",
+    "mirana": "mirana",
+    "morphling": "morphling",
+    "storm_spirit": "storm_spirit",
+    "wraith_king": "wraith_king",
+    "invoker": "invoker",
+    "abaddon": "abaddon",
+    "ancient_apparition": "ancient_apparition",
+    "arc_warden": "arc_warden",
+    "bloodseeker": "bloodseeker",
+    "bounty_hunter": "bounty_hunter",
+    "broodmother": "broodmother",
+    "disruptor": "disruptor",
+    "doom": "doom",
+    "elder_titan": "elder_titan",
+    "enchantress": "enchantress",
+    "earthshaker": "earthshaker",
+    "legion_commander": "legion_commander",
+    "lich": "lich",
+    "lifestealer": "lifestealer",
+    "lion": "lion",
+    "meepo": "meepo",
+    "natures_prophet": "natures_prophet",
+    "od": "outworld_destroyer",
+    "ogre_magi": "ogre_magi",
+    "omniknight": "omniknight",
+    "pugna": "pugna",
+    "rubick": "rubick",
+    "slark": "slark",
+    "sniper": "sniper",
+    "spectre": "spectre",
+    "spirit_breaker": "spirit_breaker",
+    "tidehunter": "tidehunter",
+    "timber_saw": "timber_saw",
+    "tinker": "tinker",
+    "tiny": "tiny",
+    "treant_protector": "treant_protector",
+    "undying": "undying",
+    "venomancer": "venomancer",
+    "vicetime": "vicetime",
+    "weaver": "weaver",
+}
+
+def _get_cdn_hero_name(short_name: str) -> str:
+    """Convert OpenDota hero name to Steam CDN file name"""
+    return HERO_NAME_TO_CDN.get(short_name, short_name)
+
 
 def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None:
     """Get hero icon with caching"""
@@ -438,7 +535,8 @@ def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None
     except ImportError:
         pass
 
-    cache_file = HERO_CACHE_DIR / f"{hero_short_name}.webp"
+    cdn_name = _get_cdn_hero_name(hero_short_name)
+    cache_file = HERO_CACHE_DIR / f"{cdn_name}.webp"
     if cache_file.exists():
         try:
             return cache_file.read_bytes()
@@ -446,7 +544,7 @@ def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None
             pass
 
     try:
-        url = f"{HERO_ICON_BASE}/{hero_short_name}.png"
+        url = f"{HERO_ICON_BASE}/{cdn_name}.png"
         resp = requests.get(url, timeout=timeout)
         if resp.status_code == 200:
             data = resp.content
@@ -465,15 +563,16 @@ def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | 
     """Портрет героя (dota_react/heroes/*.png) — выше разрешение, чем icons/*.png."""
     if not hero_short_name:
         return None
+    cdn_name = _get_cdn_hero_name(hero_short_name)
     cache_dir = HERO_CACHE_DIR
-    cache_file = cache_dir / f"{hero_short_name}.webp"
+    cache_file = cache_dir / f"{cdn_name}.webp"
     if cache_file.exists():
         try:
             return cache_file.read_bytes()
         except Exception:
             pass
     try:
-        url = f"{HERO_IMAGE_BASE}/{hero_short_name}.png"
+        url = f"{HERO_IMAGE_BASE}/{cdn_name}.png"
         resp = requests.get(url, timeout=3)
         if resp.status_code == 200:
             data = resp.content
@@ -493,17 +592,16 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
     if not hero_short_name:
         return None
 
-    cache_file = HERO_CACHE_DIR / f"{hero_short_name}.webp"
+    cdn_name = _get_cdn_hero_name(hero_short_name)
+    cache_file = HERO_CACHE_DIR / f"{cdn_name}.webp"
 
-    # Load from cache
     if cache_file.exists():
         try:
             return Image.open(cache_file).convert("RGBA")
         except Exception:
             logger.exception("Failed to load cached hero portrait")
 
-    # Download and cache
-    url = f"{HERO_IMAGE_BASE}/{hero_short_name}.png"
+    url = f"{HERO_IMAGE_BASE}/{cdn_name}.png"
     try:
         from database import get_aiohttp_session
         session = await get_aiohttp_session()
@@ -512,13 +610,11 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
                 return None
             data = await resp.read()
 
-        # Save to cache
         try:
             cache_file.write_bytes(data)
         except Exception:
             logger.exception("Failed to save hero portrait to cache")
 
-        # Return PIL image
         return Image.open(io.BytesIO(data)).convert("RGBA")
 
     except Exception:
@@ -597,15 +693,15 @@ def get_heroes_data() -> dict:
         heroes = {}
         for hero in data:
             hero_id = hero["id"]
-            # npc_dota_hero_antimage -> antimage
             short_name = hero["name"].replace("npc_dota_hero_", "")
+            cdn_name = _get_cdn_hero_name(short_name)
             heroes[hero_id] = {
                 "id": hero_id,
                 "name": hero["localized_name"],
                 "short_name": short_name,
-                "image_url": f"{HERO_IMAGE_BASE}/{short_name}.png",
-                "icon_url": f"{HERO_ICON_BASE}/{short_name}.png",
-                "img": f"{HERO_IMAGE_BASE}/{short_name}.png",
+                "image_url": f"{HERO_IMAGE_BASE}/{cdn_name}.png",
+                "icon_url": f"{HERO_ICON_BASE}/{cdn_name}.png",
+                "img": f"{HERO_IMAGE_BASE}/{cdn_name}.png",
             }
 
         _set_cached("heroes_data", heroes)
