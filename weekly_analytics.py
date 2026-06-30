@@ -1084,6 +1084,24 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
 
     # Enrich matches with detailed stats (GPM, XPM, last_hits, etc.)
     matches = await fetch_match_details(matches, user["steam_id"])
+    if all(m.get("gold_per_min", 0) == 0 for m in matches) and len(matches) > 0:
+        logger.warning("API returned no stats data - falling back to cached or error")
+        if user.get('analytics_cache'):
+            cached = json.loads(user['analytics_cache'])
+            if cached.get('matches'):
+                matches = cached.get('matches')
+            if cached.get('pro_text') and cached.get('detailed_text'):
+                return {
+                    "image": cached.get("image"),
+                    "history": cached.get("history", []),
+                    "matches": matches,
+                    "pro_text": cached.get("pro_text", ""),
+                    "detailed_text": cached.get("detailed_text", ""),
+                    "role": cached.get("role", "CARRY"),
+                    "stats": cached.get("stats"),
+                    "api_fallback": True,
+                    "message": "⚠️ OpenDota API недоступен. Данные могут быть устаревшими."
+                }
     logger.info(f"generate_weekly_analytics: after fetch_match_details, gpm={sum(m.get('gold_per_min', 0) for m in matches)}")
 
     # Matches are already sorted newest-first from API, keep this order
