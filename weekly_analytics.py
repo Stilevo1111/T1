@@ -1244,7 +1244,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
         cache_data = json.dumps(cache_dict)
         db = Database()
         db.execute_query(
-            "UPDATE users SET analytics_cache = ?, analytics_updated_at = ? WHERE telegram_id = ?",
+            "UPDATE users SET analytics_cache = %s, analytics_updated_at = %s WHERE telegram_id = %s",
             (cache_data, datetime.now(UTC).isoformat(), telegram_id)
         )
         logger.info(f"Saved analytics cache for {telegram_id}")
