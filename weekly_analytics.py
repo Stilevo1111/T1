@@ -1084,7 +1084,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
 
     # Enrich matches with detailed stats (GPM, XPM, last_hits, etc.)
     matches = await fetch_match_details(matches, user["steam_id"])
-        logger.info(f"generate_weekly_analytics: after fetch_match_details, gpm={sum(m.get('gold_per_min', 0) for m in matches)}")
+    logger.info(f"generate_weekly_analytics: after fetch_match_details, gpm={sum(m.get('gold_per_min', 0) for m in matches)}")
 
     # Matches are already sorted newest-first from API, keep this order
     # Role detection using OpenDota hero roles + match stats
@@ -1112,11 +1112,18 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
 
         # Use gold_per_min directly from match data (it's already computed by OpenDota)
         gpm = m.get("gold_per_min", 0)
+        xpm = m.get("xp_per_min", 0)
+        last_hits = m.get("last_hits", 0)
+        denies = m.get("denies", 0)
+        hero_damage = m.get("hero_damage", 0)
+        tower_damage = m.get("tower_damage", 0)
+        creeps_stacked = m.get("creeps_stacked", 0)
         # Fallback: if GPM zero, estimate from last_hits
-        if gpm == 0:
-            last_hits = m.get("last_hits", 0)
-            if last_hits > 0:
-                gpm = last_hits * 60
+        duration = m.get("duration", 600)
+        if gpm == 0 and last_hits > 0:
+            gpm = last_hits * 60 / max(duration / 60, 1) if duration > 0 else 300
+        if xpm == 0:
+            xpm = gpm * 0.8  # typical ratio
 
         kills = m.get("kills", 0)
         deaths = m.get("deaths", 0)
