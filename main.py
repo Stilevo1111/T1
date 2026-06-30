@@ -1806,6 +1806,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error in button_callback: {e}", exc_info=True)
         return
 
+    # Techies buttons answer inside handler (wrong-user alert / already exploded)
+    if data and data.startswith("techies_"):
+        from techies import handle_techies_button
+        await handle_techies_button(update, context)
+        return
+
     # Answer immediately for other button types
     await callback_query.answer()
 
@@ -1895,12 +1901,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if data == "link":
             await link(update, context)
-            return
-
-        # === TECHIES HANDLER ===
-        if data and data.startswith("techies_"):
-            from techies import handle_techies_button
-            await handle_techies_button(update, context)
             return
 
     except Exception as e:
@@ -2396,23 +2396,26 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 text += "\n\n💡 /profile ＠ник — чужой профиль"
 
-        # Banner URL - для Steam использовать картинку с героями
-        profile_banner_url = get_banner_path("heroes_profil")
+        # Banner URL — со Steam: генерация с героями, без Steam: статичный profile.webp
+        if target_user.get('steam_id'):
+            profile_banner_url = get_banner_path("heroes_profil")
 
-        if top_heroes:
-            try:
-                from dota_mmr import generate_heroes_image
-                img_bytes = await asyncio.wait_for(
-                    asyncio.to_thread(generate_heroes_image, top_heroes),
-                    timeout=10.0
-                )
-                if img_bytes:
-                    profile_banner_url = io.BytesIO(img_bytes)
-                    logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
-            except TimeoutError:
-                logger.warning("Timeout generating heroes image, using default banner")
-            except Exception as e:
-                logger.error(f"Could not generate heroes image: {e}", exc_info=True)
+            if top_heroes:
+                try:
+                    from dota_mmr import generate_heroes_image
+                    img_bytes = await asyncio.wait_for(
+                        asyncio.to_thread(generate_heroes_image, top_heroes),
+                        timeout=10.0
+                    )
+                    if img_bytes:
+                        profile_banner_url = io.BytesIO(img_bytes)
+                        logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
+                except TimeoutError:
+                    logger.warning("Timeout generating heroes image, using default banner")
+                except Exception as e:
+                    logger.error(f"Could not generate heroes image: {e}", exc_info=True)
+        else:
+            profile_banner_url = get_banner_path("profile")
 
         result_msg = await context.bot.send_photo(
             chat_id=update.message.chat_id,
