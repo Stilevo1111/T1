@@ -1082,6 +1082,10 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
 
     logger.info(f"generate_weekly_analytics: {len(matches)} matches available")
 
+    # Enrich matches with detailed stats (GPM, XPM, last_hits, etc.)
+    matches = await fetch_match_details(matches, user["steam_id"])
+        logger.info(f"generate_weekly_analytics: after fetch_match_details, gpm={sum(m.get('gold_per_min', 0) for m in matches)}")
+
     # Matches are already sorted newest-first from API, keep this order
     # Role detection using OpenDota hero roles + match stats
     role = await detect_role_from_history(matches)
