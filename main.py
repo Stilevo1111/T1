@@ -2322,12 +2322,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             target_name = user_obj.username or user_obj.first_name
         display_username = make_clickable(target_name, target_id)
 
-        text = f"👑 {display_username}"
-
-        if target_user.get('steam_id'):
-            steam_id = target_user.get('steam_id')
-            steam_url = f"https://steamcommunity.com/profiles/{steam_id}"
-            text += f"\n\n🔗 <a href=\"{steam_url}\">Steam</a>"
+        text = f"👑 {display_username} 🔗 Steam"
 
         text += f"\n\n🍆 Фиссура: {target_user.get('fissure', 0):.1f} см\n🎲 Броски: {target_user.get('total_rolls', 0)} 🍀Стрик: {target_user.get('current_streak', 0)}/{target_user.get('best_streak', 0)}"
 
