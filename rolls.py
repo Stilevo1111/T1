@@ -454,15 +454,17 @@ CATEGORY_PHRASES = {
 def _get_early_game_roll(current_fissure: float) -> RollResult | None:
     """Early game protection and big bonus for very small fissures (< 5)."""
     if current_fissure < 5:
-        if random.random() < 0.8:
+        if random.random() < 0.6:
             bonus_options = [
-                (5, 30), (10, 25), (20, 20), (30, 15), (50, 10)
+                (-5, 20), (-3, 20), (-1, 30), (5, 15), (10, 10), (20, 5), (30, 5)
             ]
             values, weights = zip(*bonus_options)
             roll = random.choices(values, weights=weights)[0]
-            return roll, "✨ МАКСИМАЛЬНАЯ ПОМОЩЬ!", False, True
+            if roll > 0:
+                return roll, "✨ МАКСИМАЛЬНАЯ ПОМОЩЬ!", False, True
+            return roll, "", False, False
 
-        protected_rolls = [1, 3, 5, 10, 20]
+        protected_rolls = [-5, -3, -1, 1, 3, 5, 10]
         roll = random.choice(protected_rolls)
         return roll, "🛡 ЗАЩИЩЁННЫЙ РОЛЛ", False, True
     return None
@@ -470,8 +472,8 @@ def _get_early_game_roll(current_fissure: float) -> RollResult | None:
 
 def _get_improved_roll(current_fissure: float) -> float | None:
     """Medium fissure bonus rolls."""
-    if 5 <= current_fissure < 20 and random.random() < 0.4:
-        improved_options = [3, 5, 10, 20]
+    if 5 <= current_fissure < 20 and random.random() < 0.25:
+        improved_options = [3, 5, 10, 20, -5, -3, -1]
         return random.choice(improved_options)
     return None
 
@@ -479,9 +481,9 @@ def _get_improved_roll(current_fissure: float) -> float | None:
 def _get_lucky_bonus(current_fissure: float) -> float | None:
     """Lucky bonus for large fissures."""
     if current_fissure >= 20:
-        chance = 0.2 if current_fissure < 100 else 0.1
+        chance = 0.1 if current_fissure < 100 else 0.05
         if random.random() < chance:
-            return random.choice([5, 10, 20])
+            return random.choice([5, 10, 20, -5, -3, -10, -15])
     return None
 
 
@@ -520,10 +522,11 @@ def calculate_fissure_roll(current_fissure: float) -> RollResult:
     if lucky is not None:
         return lucky, "🍀 УДАЧНЫЙ РОЛЛ!", False, False
 
-    if random.random() < 0.25:
+    if random.random() < 0.20:
         lottery_rolls: list[tuple[float, str]] = [
             (-25, "💸 РУНДОМ: ОГРОМНАЯ ПОТЕРЯ!"),
             (-20, "💸 РУНДОМ: БОЛЬШОЙ МИНУС!"),
+            (-15, "😱 РУНДОМ: БОЛЬШОЙ МИНУС!"),
             (-10, "😱 РУНДОМ: ПРОСТО ПЛОХО!"),
             (+25, "🍀 РУНДОМ: УДАЧА!"),
             (+40, "🍀 РУНДОМ: БОЛЬШОЙ КИБОРГ!"),
