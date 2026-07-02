@@ -39,6 +39,9 @@ class User:
     total_rolls: int = 0
     current_streak: int = 0
     best_streak: int = 0
+    current_win_streak: int = 0
+    current_lose_streak: int = 0
+    best_lose_streak: int = 0
     message_count: int = 0
 
     @classmethod
@@ -55,6 +58,9 @@ class User:
                 total_rolls=row.get("total_rolls", 0),
                 current_streak=row.get("current_streak", 0),
                 best_streak=row.get("best_streak", 0),
+                current_win_streak=row.get("current_win_streak", 0),
+                current_lose_streak=row.get("current_lose_streak", 0),
+                best_lose_streak=row.get("best_lose_streak", 0),
                 message_count=row.get("message_count", 0),
             )
         return cls(
@@ -68,6 +74,9 @@ class User:
             total_rolls=row[7] if len(row) > 7 else 0,
             current_streak=row[8] if len(row) > 8 else 0,
             best_streak=row[9] if len(row) > 9 else 0,
+            current_win_streak=row[22] if len(row) > 22 else 0,
+            current_lose_streak=row[23] if len(row) > 23 else 0,
+            best_lose_streak=row[24] if len(row) > 24 else 0,
             message_count=row[10] if len(row) > 10 else 0,
         )
 
@@ -1336,6 +1345,9 @@ class Database:
                         "total_rolls": int(user["total_rolls"]) if user["total_rolls"] is not None else 0,
                         "best_streak": int(user["best_streak"]) if user["best_streak"] is not None else 0,
                         "current_streak": int(user["current_streak"]) if user["current_streak"] is not None else 0,
+                        "current_win_streak": int(user["current_win_streak"]) if user["current_win_streak"] is not None else 0,
+                        "current_lose_streak": int(user["current_lose_streak"]) if user["current_lose_streak"] is not None else 0,
+                        "best_lose_streak": int(user["best_lose_streak"]) if user["best_lose_streak"] is not None else 0,
                         "steam_id": user["steam_id"],
                         "steam_nickname": user["steam_nickname"],
                         "mmr": int(user["mmr"]) if user["mmr"] is not None else 0,
@@ -1405,6 +1417,9 @@ class Database:
                             "last_dota_wins": int(u["last_dota_wins"]) if u["last_dota_wins"] is not None else 0,
                             "week_start_date": u.get("week_start_date"),
                             "message_count": int(u["message_count"]) if u["message_count"] is not None else 0,
+                            "current_win_streak": int(u["current_win_streak"]) if u["current_win_streak"] is not None else 0,
+                            "current_lose_streak": int(u["current_lose_streak"]) if u["current_lose_streak"] is not None else 0,
+                            "best_lose_streak": int(u["best_lose_streak"]) if u["best_lose_streak"] is not None else 0,
                             "weekly_mvp_count": int(u["weekly_mvp_count"]) if u["weekly_mvp_count"] is not None else 0,
                             "weekly_top2_count": int(u["weekly_top2_count"]) if u["weekly_top2_count"] is not None else 0,
                             "weekly_top3_count": int(u["weekly_top3_count"]) if u["weekly_top3_count"] is not None else 0,
@@ -1448,12 +1463,12 @@ class Database:
                     last_activity = CURRENT_TIMESTAMP,
                     current_win_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
                     current_lose_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                    current_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
-                    best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END),
-                    best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END)
+                    current_streak = CASE WHEN %s = 1 THEN current_win_streak WHEN %s = 1 THEN current_lose_streak ELSE 0 END,
+                    best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_win_streak WHEN %s = 1 THEN current_lose_streak ELSE 0 END),
+                    best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak WHEN %s = 1 THEN current_win_streak ELSE 0 END)
                     WHERE telegram_id=%s
                 """
-                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, max(growth, 0), win, lose, lose, win, win, lose, telegram_id))
+                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, max(growth, 0), win, lose, lose, win, win, lose, lose, win, telegram_id))
             else:
                 query = """
                     UPDATE users SET fissure=?, last_fissure=?, 
@@ -1465,12 +1480,12 @@ class Database:
                     last_activity = CURRENT_TIMESTAMP,
                     current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
                     current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                    current_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
-                    best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END),
-                    best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END)
+                    current_streak = CASE WHEN ? = 1 THEN current_win_streak WHEN ? = 1 THEN current_lose_streak ELSE 0 END,
+                    best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak WHEN ? = 1 THEN current_lose_streak ELSE 0 END),
+                    best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak WHEN ? = 1 THEN current_win_streak ELSE 0 END)
                     WHERE telegram_id=?
                 """
-                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, max(growth, 0), win, lose, lose, win, win, lose, telegram_id))
+                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, max(growth, 0), win, lose, lose, win, win, lose, lose, win, telegram_id))
         except Exception as e:
             logger.error(f"Error updating fissure: {e}")
         user_cache.delete('digest_stats')
@@ -1999,6 +2014,8 @@ def get_user(telegram_id, username=None):
         cached_user.setdefault('total_rolls', 0)
         cached_user.setdefault('best_streak', 0)
         cached_user.setdefault('current_streak', 0)
+        cached_user.setdefault('current_win_streak', 0)
+        cached_user.setdefault('current_lose_streak', 0)
         cached_user.setdefault('weekly_mvp_count', 0)
         cached_user.setdefault('weekly_top2_count', 0)
         cached_user.setdefault('weekly_top3_count', 0)
@@ -2020,6 +2037,8 @@ def get_user(telegram_id, username=None):
         user.setdefault('total_rolls', 0)
         user.setdefault('best_streak', 0)
         user.setdefault('current_streak', 0)
+        user.setdefault('current_win_streak', 0)
+        user.setdefault('current_lose_streak', 0)
         user_cache.set(telegram_id, user, skip_dirty=True)
         return user
 
@@ -2031,7 +2050,7 @@ def get_user(telegram_id, username=None):
         user.setdefault('fissure', 0.1)
         user_cache.set(telegram_id, user, skip_dirty=True)
         return user
-    
+
     logger.warning(f"get_user: failed to create user {telegram_id}")
     return None
 
@@ -2135,13 +2154,13 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
                 last_activity = CURRENT_TIMESTAMP,
                 current_win_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
                 current_lose_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                current_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
-                best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END),
-                best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END),
+                current_streak = CASE WHEN %s = 1 THEN current_win_streak WHEN %s = 1 THEN current_lose_streak ELSE 0 END,
+                best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_win_streak WHEN %s = 1 THEN current_lose_streak ELSE 0 END),
+                best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak WHEN %s = 1 THEN current_win_streak ELSE 0 END),
                 last_message_id = COALESCE(%s, last_message_id)
                 WHERE telegram_id=%s
             """
-            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, last_message_id, telegram_id))
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, lose, win, last_message_id, telegram_id))
         else:
             query = """
                 UPDATE users SET fissure=?, last_fissure=?, 
@@ -2152,13 +2171,13 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
                 last_activity = CURRENT_TIMESTAMP,
                 current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
                 current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                current_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END),
-                best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END),
+                current_streak = CASE WHEN ? = 1 THEN current_win_streak WHEN ? = 1 THEN current_lose_streak ELSE 0 END,
+                best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak WHEN ? = 1 THEN current_lose_streak ELSE 0 END),
+                best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak WHEN ? = 1 THEN current_win_streak ELSE 0 END),
                 last_message_id = COALESCE(?, last_message_id)
                 WHERE telegram_id=?
             """
-            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, last_message_id, telegram_id))
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, lose, win, last_message_id, telegram_id))
 
         # Update cache after successful DB update
         user = user_cache.get(telegram_id)
@@ -2171,7 +2190,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
             user['weekly_growth'] = user.get('weekly_growth', 0) + max(0, growth)
             user['current_win_streak'] = (user.get('current_win_streak', 0) + 1) if win else 0
             user['current_lose_streak'] = (user.get('current_lose_streak', 0) + 1) if lose else 0
-            user['current_streak'] = (user.get('current_win_streak', 0) + 1) if win else ((user.get('current_lose_streak', 0) + 1) if lose else 0)
+            user['current_streak'] = user.get('current_win_streak', 0) if win else (user.get('current_lose_streak', 0) if lose else 0)
             user['best_streak'] = max(user.get('best_streak', 0), user['current_streak'])
             user_cache.set(telegram_id, user)
         else:
