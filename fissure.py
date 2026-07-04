@@ -499,7 +499,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         display_roll = roll
 
-        # Вычисляем result_text на основе базового ролла (до стрика и weekend множителя)
         if roll_for_result in ROLL_TEXTS:
             result_text = random.choice(ROLL_TEXTS[roll_for_result])
         else:
