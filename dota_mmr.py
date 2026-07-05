@@ -1306,7 +1306,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                     "losses": 0,
                     "week_start_date": datetime.now(UTC).date().isoformat()
                 })
-                return {"success": True, "message": "✅ Аккаунт привязан! Статистика будет доступна, когда профиль станет публичным (Steam → Settings → Privacy → Game Details → Public)"}
+                return {"success": True, "message": "✅ Аккаунт привязан! Статистика OpenDota временно недоступна для этого игрока. Попробуйте позже."}
         else:
             # иначе ищем по никнейму через OpenDota
             logger.info(f"Searching player by nickname: {identifier}")
