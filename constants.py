@@ -55,8 +55,8 @@ ZEUS_DEFAULT_CHANCE = 0.10
 TECHIES_DEFAULT_CHANCE = 0.15
 
 # Texts
-MORNING_DIGEST_HEADER = "🌅ФИССУРА ДАЙДЖЕСТ"
-MORNING_DIGEST_FOOTER = "🔺 = рост позиций в топе\n🔻 = топ падение\n🍀 = текущий стрик побед"
+MORNING_DIGEST_HEADER = "🌅 ФИССУРА ДАЙДЖЕСТ"
+MORNING_DIGEST_FOOTER = "🔺 = рост позиций в топе\n🔻 = топ падение\n🔸 = текущий стрик побед"
 DOTA_DIGEST_HEADER = "🎮 DOTA ДАЙДЖЕСТ 📊"
 DOTA_DIGEST_FOOTER = "🔺 = лучший винрейт за неделю\n🔻 = худший винрейт за неделю\n🔸 = текущий стрик побед"
 
