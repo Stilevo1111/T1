@@ -185,7 +185,7 @@ for _v in range(-25, 101):
             ROLL_TEXTS[_v] = [
                 f"☠️ ТОТАЛЬНЫЙ КРАХ! {_v} см!!!",
                 f"💀 КОНЕЦ ИГРЫ! {_v} см!!!",
-                f"🔻 ФАТАЛ! «{_rand.choice(_NEG_QUOTES)}»!!!"
+                f"🔻 ФАТАЛ! {_v} см!!! «{_rand.choice(_NEG_QUOTES)}»!!!"
             ]
 
 del _v, _HIGH_ROLL_QUOTES, _MID_ROLL_QUOTES, _LOW_ROLL_QUOTES, _NEG_QUOTES, _rand
