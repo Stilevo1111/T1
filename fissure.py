@@ -530,7 +530,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         extra_text = ""
         roll_for_meme = original_roll if original_roll is not None else roll
-        extra_text = get_hero_quote(roll_for_meme)
+        if cascade_count > 1 and original_roll is not None:
+            extra_text = ""
+        else:
+            extra_text = get_hero_quote(roll_for_meme)
 
         if cascade_count > 1 and original_roll is not None:
             logger.info(f"DEBUG: original_roll={original_roll}, cascade_count={cascade_count}, roll_final={roll}")
