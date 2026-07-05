@@ -537,7 +537,7 @@ def calculate_fissure_roll(current_fissure: float) -> RollResult:
         return roll, msg, False, False
 
     weighted_rolls: list[tuple[float, int]] = [
-        (-15, 8), (-10, 8), (-7, 8), (-5, 8), (-3, 7), (-1, 6), (0, 4),
+        (-15, 8), (-10, 8), (-7, 8), (-5, 8), (-3, 7), (-1, 6), (0, 2),
         (1, 6), (3, 5), (5, 4), (7, 3), (10, 3), (15, 2), (20, 1),
         (30, 1), (50, 1), (75, 1)
     ]
