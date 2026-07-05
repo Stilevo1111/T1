@@ -69,7 +69,7 @@ def _build_mine_text(display_username: str) -> str:
     return (
         f"🎲 {display_username}\n\n"
         "🧨 МИНА ЗАЛОЖЕНА!\n"
-        "😈 Techies: «Угадай, пока не бабахнуло...»\n"
+        "😈 Скви, Сплин и Спун: «Угадай, пока не бабахнуло...»\n"
         f"⏱️ {TECHIES_TIMEOUT_SEC} секунд до взрыва!\n\n"
         "Одна кнопка сохранит Фиссуру,\n"
         "другая — взорвёт её к чертям.\n"
@@ -151,7 +151,7 @@ async def _apply_techies_explosion(
     text = (
         f"🎲 {session['display_username']}\n\n"
         "💥 БАБАХ!\n"
-        f"😈 Techies: {phrase}\n\n"
+        f"😈 Скви, Сплин и Спун: {phrase}\n\n"
     )
     for i, mine in enumerate(mines, 1):
         text += f"💣 Мина {i} - {mine} см\n"
@@ -338,7 +338,7 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         text = (
             f"🎲 {display_username}\n\n"
             "💥 БАБАХ!\n"
-            f"😈 Techies: {phrase}\n\n"
+            f"😈 Скви, Сплин и Спун: {phrase}\n\n"
         )
         for i, mine in enumerate(mines, 1):
             text += f"💣 Мина {i} - {mine} см\n"
@@ -347,7 +347,7 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         phrase = random.choice(SUCCESS_PHRASES)
         text = (
             f"🎲 {display_username}\n\n"
-            f"😇 ОБЕЗВРЕЖЕНО!\n🩸 Techies: {phrase}\n\n"
+            f"😇 ОБЕЗВРЕЖЕНО!\n🩸 Скви, Сплин и Спун: {phrase}\n\n"
             f"📏 {current_fissure:.1f} см"
         )
         if record_recent_fissure_roll:
