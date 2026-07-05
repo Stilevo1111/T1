@@ -51,7 +51,7 @@ WEEKEND_BONUS_MULTIPLIERS = [1.5, 2, 2.5]
 
 # Default event chances (can be overridden in DB)
 MULTICAST_DEFAULT_CHANCE = 0.15
-ZEUS_DEFAULT_CHANCE = 0.04
+ZEUS_DEFAULT_CHANCE = 0.10
 TECHIES_DEFAULT_CHANCE = 0.15
 
 # Texts
@@ -60,7 +60,7 @@ MORNING_DIGEST_FOOTER = "🔺 = рост позиций в топе\n🔻 = то
 DOTA_DIGEST_HEADER = "🎮 DOTA ДАЙДЖЕСТ 📊"
 DOTA_DIGEST_FOOTER = "🔺 = лучший винрейт за неделю\n🔻 = худший винрейт за неделю\n🔸 = текущий стрик побед"
 
-# Zeus texts (moved here for centralization)
+# Владыка небес texts (moved here for centralization)
 ZEUS_TEXTS = [
     "⚡️ Владыка небес «Ничто не укроется от моего гнева!»",
     "⚡️ Владыка небес «Ты не против меня!»",
