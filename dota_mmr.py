@@ -1187,22 +1187,18 @@ def is_win_api(match_id: int, steam_id: int) -> bool:
 
 def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) -> dict:
     try:
-        # Проверяем кеш
         cache_key = f"player_{steam_id}"
         if use_cache:
             cached = _get_cached(cache_key)
             if cached:
-                # Возвращаем кешированные данные мгновенно
                 return cached
 
         account_id = steam64_to_account_id(steam_id)
 
-        # Получаем основную информацию об игроке
         player_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}", timeout=timeout)
-        if not player_data:
+        if not player_data or not isinstance(player_data, dict):
             logger.warning(f"Player data not found for account_id: {account_id}")
             logger.warning(f"API URL used: {OPENDOTA_API_URL}/players/{account_id}")
-            # Возвращаем кешированные данные если есть, даже если API недоступен
             if use_cache:
                 cached = _get_cached(cache_key)
                 if cached:
@@ -1210,36 +1206,20 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
                     return cached
             return None
 
-        profile = player_data.get("profile", {})
+        profile = player_data.get("profile") or {}
         rank_tier = player_data.get("rank_tier") or 0
 
-        # Получаем статистику побед/поражений
         wl_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}/wl", timeout=timeout)
-        if wl_data:
+        if wl_data and isinstance(wl_data, dict):
             wins = wl_data.get("win", 0)
             losses = wl_data.get("lose", 0)
             total_games = wins + losses
         else:
             logger.warning(f"Win/Loss data not found for account_id: {account_id}")
-            # Пытаемся получить винрейт из кеша если API недоступен
-            if use_cache:
-                cached = _get_cached(cache_key)
-                if cached:
-                    logger.info(f"Using cached win/loss data for {steam_id} due to API failure")
-                    wins = cached.get("wins", 0)
-                    losses = cached.get("losses", 0)
-                    total_games = wins + losses
-                else:
-                    total_games = 0
-                    wins = 0
-                    losses = 0
-            else:
-                total_games = 0
-                wins = 0
-                losses = 0
+            wins = 0
+            losses = 0
+            total_games = 0
 
-        # Используем реальный MMR из API (solo_competitive_mmr или mmr_estimate)
-        # Если rank_tier = 0 (не в калибровке), берём mmr_estimate
         solo_mmr = player_data.get("solo_competitive_mmr")
         if solo_mmr:
             mmr = solo_mmr
@@ -1248,7 +1228,6 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
         else:
             mmr = rank_to_mmr(rank_tier)
 
-        # Вычисляем винрейт
         winrate = safe_winrate(wins, total_games)
 
         result = {
@@ -1262,14 +1241,11 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
             "winrate": winrate,
         }
 
-        # Сохраняем в кеш
         _set_cached(cache_key, result)
-
         return result
 
     except Exception as e:
         logger.error(f"stats error: {e}", exc_info=True)
-        # При любой ошибке возвращаем кешированные данные если есть
         if use_cache:
             cached = _get_cached(cache_key)
             if cached:
@@ -1310,9 +1286,8 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
             stats = get_player_stats(steam_id)
             logger.info(f"Player stats result: {stats is not None}")
 
-            if not stats:
-                # Try to verify SteamID exists via Steam API or allow placeholder linking
-                # This handles cases where profile is private but SteamID is valid
+            invalid_stats = not stats or stats.get("nickname") == "Unknown"
+            if invalid_stats:
                 try:
                     from database import get_user_by_steam_id
                     existing_user = get_user_by_steam_id(steam_id)
@@ -1323,8 +1298,6 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                 except Exception:
                     pass
 
-                # Allow linking even if profile is private — stats will be fetched when profile becomes public
-                # Don't overwrite steam_nickname/avatar with placeholders: preserve existing names/avatars
                 update_user_fields_batch(telegram_id, {
                     "steam_id": steam_id,
                     "mmr": 0,
