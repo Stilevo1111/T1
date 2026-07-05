@@ -550,14 +550,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             text = (
                 f"🎲 {display_username}\n\n"
+                f"{extra_text}\n\n"
                 f"{result_text}\n"
             )
             if streak_text:
                 text = f"{text}{streak_text}\n\n"
             if weekend_bonus:
                 text = f"{text}{weekend_bonus}\n"
-            if extra_text:
-                text = f"{text}{extra_text}\n"
             if multicast_text:
                 text = f"{text}\n\n{multicast_text}"
             text = f"{text}⚡ МУЛЬТЬКАСТ{mc_level}  {roll_final} CM"
@@ -565,14 +564,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Старый дизайн без мультикаста
             text = (
                 f"🎲 {display_username}\n\n"
+                f"{extra_text}\n\n"
                 f"{result_text}\n"
             )
             if streak_text:
                 text = f"{text}{streak_text}\n\n"
             if weekend_bonus:
                 text = f"{text}{weekend_bonus}\n"
-            if extra_text:
-                text = f"{text}{extra_text}"
 
         if is_fatal and protection_msg:
             text = f"{text}\n{protection_msg}"
