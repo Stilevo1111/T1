@@ -42,8 +42,9 @@ from rolls import (
     calculate_fissure_roll,
     calculate_new_fissure,
     calculate_streak_bonus,
+    get_roll_text,
+    get_hero_quote,
     ROLL_TEXTS,
-    ROLL_MEMES,
     CATEGORY_PHRASES,
     MULTICAST_TEXTS,
 )
@@ -499,10 +500,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         display_roll = roll
 
-        if roll_for_result in ROLL_TEXTS:
-            result_text = random.choice(ROLL_TEXTS[roll_for_result])
-        else:
-            result_text = f"{'+' if roll_for_result > 0 else ''}{roll_for_result} см"
+        result_text = get_roll_text(roll_for_result)
 
         old_fissure = user.get("fissure", 0)
 
@@ -534,8 +532,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         extra_text = ""
         # Для мультикаста используем original_roll для выбора мема
         roll_for_meme = original_roll if original_roll is not None else roll
-        if roll_for_meme in ROLL_MEMES and random.random() < 0.5:
-            extra_text = random.choice(ROLL_MEMES[roll_for_meme])
+        if random.random() < 0.5:
+            extra_text = get_hero_quote(roll_for_meme)
         elif not is_weekend and roll > 0 and not is_fatal:
             extra_text = random.choice(CATEGORY_PHRASES[category])
 
@@ -546,12 +544,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             roll_final = roll
             
             base_for_text = original_roll  # Базовый ролл для текста (восстановленный)
-            roll_key_text = min(base_for_text, 75)
-            roll_key_text = max(roll_key_text, -15)
-            if roll_key_text in ROLL_TEXTS:
-                result_text = random.choice(ROLL_TEXTS[roll_key_text])
-            else:
-                result_text = f"{'+' if base_for_text > 0 else ''}{base_for_text} см"
+            result_text = get_roll_text(base_for_text)
             
             # Для мультикаста добавляем extra_text (мем)
             if cascade_count > 1:
