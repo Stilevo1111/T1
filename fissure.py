@@ -45,7 +45,6 @@ from rolls import (
     get_roll_text,
     get_hero_quote,
     ROLL_TEXTS,
-    CATEGORY_PHRASES,
     MULTICAST_TEXTS,
 )
 from stats import get_event_chances
@@ -530,12 +529,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             category = "same"
 
         extra_text = ""
-        # Для мультикаста используем original_roll для выбора мема
         roll_for_meme = original_roll if original_roll is not None else roll
-        if random.random() < 0.5:
-            extra_text = get_hero_quote(roll_for_meme)
-        elif not is_weekend and roll > 0 and not is_fatal:
-            extra_text = random.choice(CATEGORY_PHRASES[category])
+        extra_text = get_hero_quote(roll_for_meme)
 
         if cascade_count > 1 and original_roll is not None:
             logger.info(f"DEBUG: original_roll={original_roll}, cascade_count={cascade_count}, roll_final={roll}")
@@ -548,7 +543,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Для мультикаста добавляем extra_text (мем)
             if cascade_count > 1:
-                extra_text = ""  # Только Ogre Magi цитаты в мультфильме
+                pass
             
             text = (
                 f"🎲 {display_username}\n\n"
