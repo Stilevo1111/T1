@@ -671,7 +671,7 @@ def get_hero_quote(roll_value: float) -> str:
         else:
             hero = "🔨Рейгор Каменное Копыто"
 
-    return f"{hero} 🗣️{quote}"
+    return f"{hero} 🗣️ {quote}"
 
 
 def apply_fissure_protection(current_fissure: float, roll: float, is_fatal: bool) -> ProtectionResult:
