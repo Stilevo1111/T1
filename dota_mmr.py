@@ -1381,7 +1381,13 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         if not user or not user.get("steam_id"):
             return {"success": False, "rank_up": None}
 
-        # Get matches for hero_meta immediately (before any cache returns)
+        steam_id = user["steam_id"]
+        last_updated = user.get("mmr_last_updated")
+        if last_updated and isinstance(last_updated, (int, float)) and time.time() - last_updated < 12 * 3600:
+            recent_check = get_recent_matches(steam_id, limit=1)
+            if not recent_check:
+                return {"success": True, "skipped": True, "mmr": user.get("mmr", 0)}
+
         matches = get_recent_matches(user["steam_id"], limit=10)
         logger.info(f"topmmr: Got {len(matches)} matches for hero meta from steam_id={user.get('steam_id')}")
 
