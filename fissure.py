@@ -451,13 +451,15 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 slot_msg_ids.append(msg.message_id)
                 await asyncio.sleep(0.5)
 
-            # Сохраняем base_roll как original_roll для отображения
-            saved_original_roll = base_roll_before_streak
-            roll, original_roll, multicast_text = process_multicast_result(
-                streak_roll, cascade_count, MULTICAST_TEXTS
-            )
-            # Восстанавливаем base_roll для отображения
-            original_roll = saved_original_roll
+# Сохраняем base_roll как original_roll для отображения
+saved_original_roll = base_roll_before_streak
+roll, original_roll, multicast_text = process_multicast_result(
+    streak_roll, cascade_count, MULTICAST_TEXTS
+)
+# Восстанавливаем base_roll для отображения
+original_roll = saved_original_roll
+# Сохраняем значение после применения множителя (до бонуса выходного дня)
+multiplied_roll = roll
             logger.info(f"fissure multicast: roll after multiply={roll}, cascade_count={cascade_count}")
             if cascade_count >= 4:
                 pass
@@ -535,49 +537,48 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             extra_text = get_hero_quote(roll_for_meme)
 
-        if cascade_count > 1 and original_roll is not None:
-            logger.info(f"DEBUG: original_roll={original_roll}, cascade_count={cascade_count}, roll_final={roll}")
-            roll_display = f"+{original_roll}" if original_roll > 0 else str(original_roll)
-            mc_level = f"×{cascade_count}"
-            roll_final = roll
+# Build message parts in order
+        parts = []
+        parts.append(f"🎲 {display_username}")
+        
+        if extra_text:
+            parts.append(extra_text)
             
+        # Determine roll text to use
+        if cascade_count > 1 and original_roll is not None:
             base_for_text = original_roll  # Базовый ролл для текста (восстановленный)
             result_text = get_roll_text(base_for_text)
-            
-            # Для мультикаста добавляем extra_text (мем)
-            if cascade_count > 1:
-                pass
-            
-            text = (
-                f"🎲 {display_username}\n\n"
-                f"{extra_text}\n\n"
-                f"{result_text}\n"
-            )
-            if streak_text:
-                text = f"{text}{streak_text}\n\n"
-            if weekend_bonus:
-                text = f"{text}{weekend_bonus}\n"
-            if multicast_text:
-                text = f"{text}\n\n{multicast_text}"
-            text = f"{text}⚡ МУЛЬТЬКАСТ{mc_level}  {roll_final} CM"
+            # Для мультикаста добавляем extra_text (мем) в отдельную часть если нужно
+            # Но extra_text уже добавлен выше как hero quote
+            pass
         else:
-            # Старый дизайн без мультикаста
-            text = (
-                f"🎲 {display_username}\n\n"
-                f"{extra_text}\n\n"
-                f"{result_text}\n"
-            )
-            if streak_text:
-                text = f"{text}{streak_text}\n\n"
-            if weekend_bonus:
-                text = f"{text}{weekend_bonus}\n"
-
+            result_text = get_roll_text(roll_for_result)
+            
+        parts.append(result_text)
+        
+        if streak_text:
+            parts.append(streak_text)
+        if weekend_bonus:
+            parts.append(weekend_bonus)
+            
+# Add multicast indicator if applicable (only for multicast rolls)
+        if cascade_count > 1:
+            # Show multiplier with emoji and the total contribution after multiplier
+            m_display = f"+{multiplied_roll}" if multiplied_roll > 0 else str(multiplied_roll)
+            parts.append(f"⚡ МУЛЬТИКАСТ×{cascade_count} {m_display} см!")
+        # For regular rolls, the number is already included in the roll text, so no need to repeat it
+        
+# Join parts with single blank line between them
+        text = "\n\n".join(parts)
+        
+        # Add protection message if applicable (separated by single newline)
         if is_fatal and protection_msg:
             text = f"{text}\n{protection_msg}"
-
-        # Строчка с изменением фиссуры - ВСЕГДА В САМОМ КОНЦЕ
+        
+        # Add fissure change line (always at the end, preceded by blank line)
         text = f"{text}\n\n📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
-
+        
+        # Add Zeus text if applicable (separated by single newline)
         if zeus_text:
             text = f"{text}\n{zeus_text}"
 
