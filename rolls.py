@@ -179,7 +179,7 @@ for _v in range(-25, 101):
             ROLL_TEXTS[_v] = [
                 f"💤 НЕТ ИЗМЕНЕНИЙ!",
                 f"⚖️ СТАТУС КВО!",
-                f"🔻 МИР КВО! «{_rand.choice(_NEG_QUOTES)}»!"
+                f"🌿 Мирное равновесие! Никто не пострадал!"
             ]
         elif _v < -15:
             ROLL_TEXTS[_v] = [
@@ -445,6 +445,8 @@ def calculate_fissure_roll(current_fissure: float) -> RollResult:
         positive_max = spread + max(0, int(current_fissure * 0.08))
 
     roll = random.randint(negative_max, positive_max)
+    if roll == 0:
+        roll = random.choice([-1, 1])
     return roll, "", False, False
 
 
