@@ -451,15 +451,15 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 slot_msg_ids.append(msg.message_id)
                 await asyncio.sleep(0.5)
 
-# Сохраняем base_roll как original_roll для отображения
-saved_original_roll = base_roll_before_streak
-roll, original_roll, multicast_text = process_multicast_result(
-    streak_roll, cascade_count, MULTICAST_TEXTS
-)
-# Восстанавливаем base_roll для отображения
-original_roll = saved_original_roll
-# Сохраняем значение после применения множителя (до бонуса выходного дня)
-multiplied_roll = roll
+            # Сохраняем base_roll как original_roll для отображения
+            saved_original_roll = base_roll_before_streak
+            roll, original_roll, multicast_text = process_multicast_result(
+                streak_roll, cascade_count, MULTICAST_TEXTS
+            )
+            # Восстанавливаем base_roll для отображения
+            original_roll = saved_original_roll
+            # Сохраняем значение после применения множителя (до бонуса выходного дня)
+            multiplied_roll = roll
             logger.info(f"fissure multicast: roll after multiply={roll}, cascade_count={cascade_count}")
             if cascade_count >= 4:
                 pass
