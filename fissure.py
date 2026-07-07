@@ -293,7 +293,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         user = get_user(user_obj.id, username)
-        logger.info(f"user data: {user}")
+        _log_user = {k: v for k, v in user.items() if k != "analytics_cache"}
+        logger.info(f"user data: {_log_user}")
 
         # Check cooldown
         if now - (user.get("last_fissure") or 0) < COOLDOWN:
