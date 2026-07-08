@@ -2857,19 +2857,20 @@ def update_weekly_digest_snapshot():
     top_cache.invalidate_top_cache()
     return result
 
-def get_dota_mmr_top(limit=10):
-    """Получение топа игроков Dota 2 по MMR с кешем"""
+def get_dota_mmr_top(limit=50):
+    """Получение топа игроков Dota 2 по MMR с кешем (всегда сохраняет макс 50)"""
     from main import get_config, set_config
 
-    # Попытка загрузить из кеша config
-    cached = get_config('mmr_top_cache')
-    if cached:
-        try:
-            cached_top = json.loads(cached)
-            logger.info(f"get_dota_mmr_top: loaded from cache, {len(cached_top)} users")
-            return cached_top[:limit]
-        except Exception as e:
-            logger.warning(f"Failed to load MMR top cache: {e}")
+    # При запросе 50+ игнорируем кэш, чтобы не получить урезанные данные
+    if limit < 50:
+        cached = get_config('mmr_top_cache')
+        if cached:
+            try:
+                cached_top = json.loads(cached)
+                logger.info(f"get_dota_mmr_top: loaded from cache, {len(cached_top)} users")
+                return cached_top[:limit]
+            except Exception as e:
+                logger.warning(f"Failed to load MMR top cache: {e}")
 
     try:
         conn = get_connection()
