@@ -720,8 +720,14 @@ async def alternate_digest_job(context):
                         _set_digest_is_photo(True)
                         try:
                             await _ensure_pinned(bot, digest_chat_id, msg_id_int)
-                    except Exception as e2:
-                        logger.warning(f"Не удалось отредактировать caption: {e2}")
+                        except Exception as e2:
+                            logger.warning(f"Не удалось отредактировать caption: {e2}")
+                            set_config('alternate_digest_message_id', None)
+                            last_message_id = None
+                            edited = False
+                            should_create_new = True
+                    except Exception as e_caption:
+                        logger.warning(f"Не удалось отредактировать caption: {e_caption}")
                         set_config('alternate_digest_message_id', None)
                         last_message_id = None
                         edited = False
