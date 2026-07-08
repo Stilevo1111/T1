@@ -177,6 +177,29 @@ _cache = {}
 CACHE_TTL = 300  # 5 минут
 CACHE_MAX_SIZE = 100  # максимальное количество записей в кеше
 
+# Negative cache: аккаунты/эндпоинты, которые точно не найдены (404).
+# Позволяет не дёргать API повторно и не spin-ить retry-цикл на несуществующих игроках.
+_NEG_CACHE = {}
+_NEG_TTL = 3600  # 1 час
+
+
+def _mark_not_found(url: str):
+    """Запомнить, что эндпоинт вернул 404 (аккаунт не существует / профиль скрыт)."""
+    _NEG_CACHE[url] = time.time() + _NEG_TTL
+
+
+def _is_not_found(url: str) -> bool:
+    exp = _NEG_CACHE.get(url)
+    if exp and exp > time.time():
+        return True
+    if exp is not None:
+        del _NEG_CACHE[url]
+    return False
+
+
+def _clear_not_found(url: str):
+    _NEG_CACHE.pop(url, None)
+
 # Кеш матчей пользователей (30 минут - экономим API)
 _user_matches_cache = {}
 USER_MATCHES_CACHE_TTL = 1800  # 30 минут
@@ -315,6 +338,11 @@ def _api_get(url: str, params: dict = None, max_retries: int = 2, timeout: int =
                 if r.status_code == 403:
                     _circuit_breaker_record_failure()
                     logger.warning(f"OpenDota API returned 403 Forbidden - possible API key issue or ban")
+                elif r.status_code == 404:
+                    # Аккаунт/эндпоинт точно не существует — кешируем как "not found",
+                    # чтобы не дёргать API повторно и не spin-ить retry-цикл.
+                    _mark_not_found(url)
+                    logger.error(f"API error 404 for URL: {url}")
                 else:
                     logger.error(f"API error {r.status_code} for URL: {url}")
                 return None
@@ -1194,8 +1222,18 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
                 return cached
 
         account_id = steam64_to_account_id(steam_id)
+        players_url = f"{OPENDOTA_API_URL}/players/{account_id}"
 
-        player_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}", timeout=timeout)
+        # Если аккаунт уже известен как несуществующий (404), пропускаем обращение к API.
+        if _is_not_found(players_url):
+            logger.debug(f"Player {account_id} known not found (negative cache), skipping API")
+            if use_cache:
+                cached = _get_cached(cache_key)
+                if cached:
+                    return cached
+            return None
+
+        player_data = _api_get(players_url, timeout=timeout)
         if not player_data or not isinstance(player_data, dict):
             logger.warning(f"Player data not found for account_id: {account_id}")
             logger.warning(f"API URL used: {OPENDOTA_API_URL}/players/{account_id}")
@@ -1282,6 +1320,8 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
             logger.info(f"Getting player stats for steam_id: {steam_id}")
             account_id = steam64_to_account_id(steam_id)
             logger.info(f"Using account_id: {account_id} for API call")
+            # Сбрасываем negative cache на случай, если аккаунт ранее не находился
+            _clear_not_found(f"{OPENDOTA_API_URL}/players/{account_id}")
 
             stats = get_player_stats(steam_id)
             logger.info(f"Player stats result: {stats is not None}")
@@ -1403,6 +1443,11 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         start_time = time.time()
         max_wait = 120  # Maximum wait time in seconds
         while not stats and (time.time() - start_time) < max_wait:
+            # Если аккаунт точно не существует (404) — не spin-им retry-цикл, выходим сразу.
+            players_url = f"{OPENDOTA_API_URL}/players/{steam64_to_account_id(user['steam_id'])}"
+            if _is_not_found(players_url):
+                logger.info(f"topmmr: player {user['steam_id']} known not found, skipping retries")
+                break
             stats = get_player_stats(user["steam_id"], use_cache=False)
             if stats:
                 break

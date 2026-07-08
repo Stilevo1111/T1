@@ -9,6 +9,27 @@ from bot_utils import _telegram_error_contains
 logger = logging.getLogger(__name__)
 
 
+async def _ensure_pinned(bot, chat_id, msg_id):
+    """Закрепить дайджест, только если закреплён другой (или ещё не закреплён этот) message_id.
+
+    Позволяет не вызывать pinChatMessage при каждом редактировании одного и того же сообщения
+    (раньше пинилось заново каждые 30 мин)."""
+    from database import get_config, set_config
+    pinned = get_config('alternate_digest_pinned_id')
+    try:
+        pinned_id = int(pinned) if pinned else 0
+    except (ValueError, TypeError):
+        pinned_id = 0
+    if pinned_id == msg_id:
+        return
+    try:
+        await bot.pin_chat_message(chat_id=int(chat_id), message_id=int(msg_id), disable_notification=True)
+        set_config('alternate_digest_pinned_id', str(msg_id))
+        logger.info(f"Закреплён дайджест {msg_id}")
+    except Exception as e:
+        logger.debug(f"Не удалось закрепить: {e}")
+
+
 # =====================================================
 # DIGEST STATE - encapsulated for multi-instance safety
 # =====================================================
@@ -616,11 +637,8 @@ async def alternate_digest_job(context):
 
                     # Обновляем fast tick с актуальным message_id (always from the authoritative source)
                     start_fast_digest_loop(bot, int(digest_chat_id), msg_id_int, _get_digest_is_photo())
-                    try:
-                        await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
-                        logger.info(f"Закреплён дайджест {last_message_id}")
-                    except Exception as e:
-                        logger.debug(f"Не удалось закрепить: {e}")
+
+                    await _ensure_pinned(bot, digest_chat_id, msg_id_int)
             except (ValueError, TypeError) as e:
                 logger.warning(f"Invalid alternate_digest_message_id format: {last_message_id}, error: {e}")
                 set_config('alternate_digest_message_id', None)
@@ -684,11 +702,7 @@ async def alternate_digest_job(context):
                     set_config('alternate_digest_last_text', text)
                     if _digest_state_container.get_digest_data():
                         set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
-                    try:
-                        await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
-                        logger.info(f"Закреплён дайджест {last_message_id}")
-                    except Exception as e:
-                        logger.debug(f"Не удалось закрепить: {e}")
+                    await _ensure_pinned(bot, digest_chat_id, msg_id_int)
                 elif _telegram_error_contains(e, "there is no text in the message to edit"):
                     # Сообщение - фото, нужно использовать editMessageCaption
                     logger.info(f"Сообщение {last_message_id} - фото, используем editMessageCaption")
@@ -705,10 +719,7 @@ async def alternate_digest_job(context):
                         _digest_state_container.set_last_text(text)
                         _set_digest_is_photo(True)
                         try:
-                            await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=msg_id_int, disable_notification=True)
-                            logger.info(f"Закреплён дайджест {last_message_id}")
-                        except Exception as e:
-                            logger.debug(f"Не удалось закрепить: {e}")
+                            await _ensure_pinned(bot, digest_chat_id, msg_id_int)
                     except Exception as e2:
                         logger.warning(f"Не удалось отредактировать caption: {e2}")
                         set_config('alternate_digest_message_id', None)
@@ -770,10 +781,7 @@ async def alternate_digest_job(context):
                                 if _digest_state_container.get_digest_data():
                                     set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
                                 start_fast_digest_loop(bot, int(digest_chat_id), int(last_message_id), True)
-                                try:
-                                    await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=int(last_message_id), disable_notification=True)
-                                except Exception:
-                                    pass
+                                await _ensure_pinned(bot, digest_chat_id, last_message_id)
                                 return
                             except Exception as e:
                                 logger.warning(f"Не удалось обновить медиа в существующем сообщении: {e}")
@@ -793,10 +801,7 @@ async def alternate_digest_job(context):
                                     if _digest_state_container.get_digest_data():
                                         set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
                                     start_fast_digest_loop(bot, int(digest_chat_id), int(last_message_id), True)
-                                    try:
-                                        await bot.pin_chat_message(chat_id=int(digest_chat_id), message_id=int(last_message_id), disable_notification=True)
-                                    except Exception:
-                                        pass
+                                    await _ensure_pinned(bot, digest_chat_id, last_message_id)
                                     return
                                 except Exception as e2:
                                     logger.warning(f"Не удалось обновить caption, создаём новое: {e2}")
@@ -880,7 +885,7 @@ async def alternate_digest_job(context):
                         except Exception as e:
                             logger.debug(f"Не удалось открепить старый дайджест: {e}")
 
-                    await bot.pin_chat_message(chat_id=digest_chat_id, message_id=msg.message_id, disable_notification=True)
+                    await _ensure_pinned(bot, digest_chat_id, msg.message_id)
                     logger.info(f"Дайджест {msg.message_id} закреплён")
 
                     # Удаляем системное сообщение о закрепе, если есть права

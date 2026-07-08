@@ -2963,6 +2963,15 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not delete last bot message: {e}")
 
             if result.get('success'):
+                # Приоритетно подгружаем полные данные пользователя сразу после привязки,
+                # чтобы /analytics, дайджест и топы отражали свежую стату без ожидания джоба.
+                try:
+                    from weekly_analytics import generate_weekly_analytics
+                    asyncio.create_task(generate_weekly_analytics(update.effective_user.id))
+                    logger.info(f"Scheduled analytics preload for user {update.effective_user.id} after link")
+                except Exception as e:
+                    logger.debug(f"Could not schedule analytics preload: {e}")
+
                 result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text=result.get('message'))
             else:
                 result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text=result.get('message'))
@@ -3845,7 +3854,7 @@ async def main():
             """Re-register webhook periodically to recover from Render cold starts"""
             while True:
                 try:
-                    await asyncio.sleep(300)  # Check every 5 minutes
+                    await asyncio.sleep(900)  # Проверяем раз в 15 минут (раньше было 5 мин — слишком шумно)
                     webhook_info = await app.bot.get_webhook_info()
                     if not webhook_info.url:
                         logger.warning("Webhook lost, re-registering...")

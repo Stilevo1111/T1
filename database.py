@@ -515,6 +515,30 @@ SCHEMA_VERSION_KEY = "schema_version"
 _pg_pool = None
 _pg_pool_lock = threading.Lock()
 
+def _pg_dsn():
+    """DSN для PostgreSQL-пула: sslmode, connect_timeout и TCP keepalive.
+
+    keepalives не даёт прокси/серверу разорвать idle-соединение
+    (причина предупреждений 'SSL connection has been closed unexpectedly')."""
+    import urllib.parse as urlparse
+    parsed = urlparse.urlparse(DATABASE_URL)
+    dsn = DATABASE_URL
+    params = []
+    if "postgres" in parsed.scheme and "sslmode" not in dsn:
+        params.append("sslmode=require")
+    if "connect_timeout" not in dsn:
+        params.append("connect_timeout=10")
+    # TCP keepalive, чтобы idle-соединения не рвались
+    params.append("keepalives=1")
+    params.append("keepalives_idle=240")
+    params.append("keepalives_interval=30")
+    params.append("keepalives_count=5")
+    if params:
+        sep = "&" if "?" in dsn else "?"
+        dsn = f"{dsn}{sep}{'&'.join(params)}"
+    return dsn
+
+
 def get_pg_connection():
     """Get a PostgreSQL connection from the pool"""
     global _pg_pool
@@ -525,9 +549,7 @@ def get_pg_connection():
                     from psycopg2 import pool
                     import urllib.parse as urlparse
                     parsed = urlparse.urlparse(DATABASE_URL)
-                    dsn = DATABASE_URL
-                    if "postgres" in parsed.scheme and "sslmode" not in dsn:
-                        dsn = f"{dsn}?sslmode=require&connect_timeout=10"
+                    dsn = _pg_dsn()
                     _pg_pool = pool.ThreadedConnectionPool(
                         minconn=1,
                         maxconn=5,
@@ -547,7 +569,7 @@ def get_pg_connection():
                 cursor.close()
                 return conn
             except Exception as e:
-                logger.warning(f"Connection is broken, resetting pool: {e}")
+                logger.debug(f"Connection is broken, resetting pool: {e}")
                 try:
                     conn.close()
                 except Exception:
@@ -562,9 +584,7 @@ def get_pg_connection():
         from psycopg2 import pool
         import urllib.parse as urlparse
         parsed = urlparse.urlparse(DATABASE_URL)
-        dsn = DATABASE_URL
-        if "postgres" in parsed.scheme and "sslmode" not in dsn:
-            dsn = f"{dsn}?sslmode=require&connect_timeout=10"
+        dsn = _pg_dsn()
         _pg_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=5, dsn=dsn)
         conn = _pg_pool.getconn()
         cursor = conn.cursor()
@@ -667,6 +687,11 @@ def _postgres_connect_kwargs():
         "port": url.port or 5432,
         "sslmode": sslmode,
         "connect_timeout": 10,
+        # TCP keepalive: не даём прокси/серверу разорвать idle-соединение (причина "SSL connection has been closed unexpectedly")
+        "keepalives": 1,
+        "keepalives_idle": 240,
+        "keepalives_interval": 30,
+        "keepalives_count": 5,
     }
     # Add statement timeout to prevent runaway queries
     query.pop("options", None)

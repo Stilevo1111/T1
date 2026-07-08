@@ -82,6 +82,24 @@ def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
 # Track last bot message per user per chat for cleanup
 last_bot_message = {}  # {chat_id: {user_id: message_id or list}}
 
+# Время отправки отслеживаемых сообщений, чтобы не пытаться удалять старые (>48ч),
+# которые Telegram не разрешает удалять обычному боту (гарантированный 400).
+_message_timestamps = {}  # {(chat_id, msg_id): sent_time}
+
+_DELETE_MAX_AGE = 48 * 3600  # 48 часов
+
+
+def _record_message_time(chat_id, msg_id):
+    if isinstance(msg_id, int) and msg_id > 0:
+        _message_timestamps[(chat_id, msg_id)] = time.time()
+
+
+def _is_message_too_old(chat_id, msg_id):
+    ts = _message_timestamps.get((chat_id, msg_id))
+    if ts is None:
+        return False  # не знаем время — пытаемся удалить (обратная совместимость)
+    return (time.time() - ts) > _DELETE_MAX_AGE
+
 
 def format_time(seconds):
     """Format seconds as HHч MMм"""
@@ -160,8 +178,11 @@ async def delete_last_bot_message(bot, chat_id, user_id):
                 seen.add(msg_id)
 
         for msg_id in unique_msg_ids:
+            if _is_message_too_old(chat_id, msg_id):
+                logger.debug(f"Skipping delete of old message {msg_id} (>48h) in chat={chat_id}")
+                continue
             try:
-                logger.info(f"delete_last_bot_message: attempting to delete msg_id={msg_id} in chat={chat_id}")
+                logger.debug(f"delete_last_bot_message: attempting to delete msg_id={msg_id} in chat={chat_id}")
                 await bot.delete_message(chat_id, msg_id)
                 logger.info(f"Deleted last bot message for user {user_id}: {msg_id}")
             except Exception as e:
@@ -187,6 +208,7 @@ def set_last_bot_message(chat_id, user_id, message_id):
     if chat_id not in last_bot_message:
         last_bot_message[chat_id] = {}
     last_bot_message[chat_id][user_id] = message_id
+    _record_message_time(chat_id, message_id)
 
 
 def add_bot_message(chat_id, user_id, message_id):
@@ -203,6 +225,7 @@ def add_bot_message(chat_id, user_id, message_id):
         last_bot_message[chat_id][user_id] = msg_list[-2:]
     else:
         last_bot_message[chat_id][user_id] = [message_id]
+    _record_message_time(chat_id, message_id)
 
     if len(last_bot_message) > 500:
         last_bot_message.clear()
@@ -262,7 +285,7 @@ async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
     else:
         await asyncio.sleep(delay)
         try:
-            logger.info(f"delete_after_delay: attempting to delete msg_id={msg_id} in chat={chat_id}")
+            logger.debug(f"delete_after_delay: attempting to delete msg_id={msg_id} in chat={chat_id}")
             await bot.delete_message(chat_id, msg_id)
             logger.info(f"Deleted delayed message {msg_id} in chat {chat_id}")
         except Exception as e:
@@ -283,7 +306,7 @@ async def delete_message_job(context):
         return
 
     try:
-        logger.info(f"delete_message_job: attempting to delete msg_id={msg_id} in chat={chat_id}")
+        logger.debug(f"delete_message_job: attempting to delete msg_id={msg_id} in chat={chat_id}")
         await bot.delete_message(chat_id, msg_id)
         logger.info(f"Deleted scheduled message {msg_id} in chat {chat_id}")
     except Exception as e:
