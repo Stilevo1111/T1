@@ -10,16 +10,18 @@ logger = logging.getLogger(__name__)
 
 
 async def _ensure_pinned(bot, chat_id, msg_id):
-    """Закрепить дайджест, только если закреплён другой (или ещё не закреплён этот) message_id.
-
-    Позволяет не вызывать pinChatMessage при каждом редактировании одного и того же сообщения
-    (раньше пинилось заново каждые 30 мин)."""
+    """Закрепить дайджест, открепив предыдущий, чтобы в чате оставался только один закреп."""
     from database import get_config, set_config
     pinned = get_config('alternate_digest_pinned_id')
     try:
         pinned_id = int(pinned) if pinned else 0
     except (ValueError, TypeError):
         pinned_id = 0
+    if pinned_id and pinned_id != msg_id:
+        try:
+            await bot.unpin_chat_message(chat_id=int(chat_id), message_id=pinned_id)
+        except Exception as e:
+            logger.debug(f"Не удалось открепить старый дайджест {pinned_id}: {e}")
     if pinned_id == msg_id:
         return
     try:
