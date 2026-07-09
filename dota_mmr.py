@@ -283,10 +283,7 @@ def _clear_cache():
 
 
 def _api_get(url: str, params: dict = None, max_retries: int = 2, timeout: int = 8) -> dict:
-    """Универсальная функция для API-запросов с обработкой ошибок, кешем и повторными попытками"""
-    cached = _get_cached(url)
-    if cached is not None:
-        return cached
+    """Универсальная функция для API-запросов с обработкой ошибок и повторными попытками"""
     
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping request, API unavailable")
