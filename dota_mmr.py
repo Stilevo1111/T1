@@ -1551,8 +1551,9 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
 # Save matches to public_player_matches for hero meta
         if matches:
             logger.info(f"topmmr: Saving {len(matches)} matches to public_player_matches for hero meta (steam_id={user.get('steam_id')})")
+            conn = None
             try:
-                from database import get_connection, DATABASE_URL, urlparse
+                from database import get_connection, release_pg_connection, DATABASE_URL, urlparse
                 conn = get_connection()
                 url = urlparse.urlparse(DATABASE_URL)
                 scheme = url.scheme
@@ -1624,6 +1625,9 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                 conn.commit()
             except Exception as e:
                 logger.warning(f"Failed to save matches to public_player_matches: {e}")
+            finally:
+                if conn is not None:
+                    release_pg_connection(conn)
             # Invalidate hero meta cache so next read gets fresh data
             if matches:
                 try:

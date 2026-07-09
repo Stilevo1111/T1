@@ -552,7 +552,7 @@ def get_pg_connection():
                     dsn = _pg_dsn()
                     _pg_pool = pool.ThreadedConnectionPool(
                         minconn=1,
-                        maxconn=5,
+                        maxconn=15,
                         dsn=dsn
                     )
                 except Exception as e:
@@ -585,7 +585,7 @@ def get_pg_connection():
         import urllib.parse as urlparse
         parsed = urlparse.urlparse(DATABASE_URL)
         dsn = _pg_dsn()
-        _pg_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=5, dsn=dsn)
+        _pg_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=15, dsn=dsn)
         conn = _pg_pool.getconn()
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
