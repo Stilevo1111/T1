@@ -2944,6 +2944,7 @@ def get_dota_mmr_top(limit=50):
                             ELSE 0 END as winrate
                     FROM users
                     WHERE steam_id IS NOT NULL
+                       AND (in_chat = TRUE OR in_chat IS NULL)
                     ORDER BY
                         COALESCE(rank_tier, 0) DESC,
                         mmr DESC,
@@ -2977,6 +2978,7 @@ def get_dota_mmr_top(limit=50):
                                ELSE 0 END as winrate
                  FROM users
                  WHERE steam_id IS NOT NULL
+                    AND (in_chat = 1 OR in_chat IS NULL)
                     ORDER BY
                         COALESCE(rank_tier, 0) DESC,
                         mmr DESC,
@@ -3172,6 +3174,7 @@ def _get_dota_week_top_query(limit):
             cursor.execute("""
                 SELECT COUNT(*) FROM users
                 WHERE steam_id IS NOT NULL
+                  AND (in_chat = TRUE OR in_chat IS NULL)
             """)
             total_with_steam = cursor.fetchone()[0]
             logger.info(f"get_dota_week_top: {total_with_steam} users with steam_id")
@@ -3190,15 +3193,16 @@ def _get_dota_week_top_query(limit):
                                CASE WHEN week_games > 0 
                                     THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
                                     ELSE 0 END as winrate,
-                               COALESCE(week_current_streak, 0) as week_current_streak
-                        FROM users
-                        WHERE steam_id IS NOT NULL
-                    )
-                    SELECT telegram_id, username, steam_nickname, mmr,
-                               COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
-                               winrate, week_current_streak
-                    FROM wr_calc
-                    ORDER BY 
+                                COALESCE(week_current_streak, 0) as week_current_streak
+                         FROM users
+                         WHERE steam_id IS NOT NULL
+                            AND (in_chat = TRUE OR in_chat IS NULL)
+                     )
+                     SELECT telegram_id, username, steam_nickname, mmr,
+                                COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
+                                winrate, week_current_streak
+                     FROM wr_calc
+                     ORDER BY
                         CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
                         CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
                         (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
@@ -3216,14 +3220,15 @@ def _get_dota_week_top_query(limit):
                                     THEN ROUND(week_wins * 100.0 / week_games, 1) 
                                     ELSE 0 END as winrate,
                               COALESCE(week_current_streak, 0) as week_current_streak
-                        FROM users
-                        WHERE steam_id IS NOT NULL
-                    )
-                    SELECT telegram_id, username, steam_nickname, mmr,
-                              COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
-                              winrate, week_current_streak
-                    FROM wr_calc
-                    ORDER BY 
+                         FROM users
+                         WHERE steam_id IS NOT NULL
+                            AND (in_chat = 1 OR in_chat IS NULL)
+                     )
+                     SELECT telegram_id, username, steam_nickname, mmr,
+                               COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
+                               winrate, week_current_streak
+                     FROM wr_calc
+                     ORDER BY
                         CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
                         CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
                         (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
