@@ -1671,11 +1671,11 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             logger.info(f"Rank UP for {telegram_id}: {old_rank_tier} -> {new_rank_tier}")
             rank_up = {"old_rank": rank_to_string(old_rank_tier), "new_rank": rank_to_string(new_rank_tier)}
 
-        # Only update week stats if we have matches
+        _ret = None
         if matches:
             logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_streak={max_streak}, week_start={week_start_utc}")
             
-            update_user_fields_batch(telegram_id, {
+            _ret = update_user_fields_batch(telegram_id, {
                 "week_games": week_games,
                 "week_wins": week_wins,
                 "week_best_streak": max_streak,
@@ -1688,11 +1688,10 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                 "avatar": stats.get("avatar"),
                 "steam_nickname": stats.get("nickname"),
                 "mmr_last_updated": time.time()
-            }, update_top_cache=update_top_cache)
+            }, save_to_db=False, update_top_cache=update_top_cache)
         else:
-            # No matches - only update non-week stats
             logger.info("No matches this week, skipping week stats update")
-            update_user_fields_batch(telegram_id, {
+            _ret = update_user_fields_batch(telegram_id, {
                 "rank_tier": new_rank_tier,
                 "wins": stats.get("wins", 0),
                 "losses": stats.get("losses", 0),
@@ -1700,9 +1699,13 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                 "avatar": stats.get("avatar"),
                 "steam_nickname": stats.get("nickname"),
                 "mmr_last_updated": time.time()
-            }, update_top_cache=update_top_cache)
+            }, save_to_db=False, update_top_cache=update_top_cache)
 
-        return {"success": True, "rank_up": rank_up, "mmr": stats.get("mmr"), "week_games": week_games, "week_wins": week_wins, "week_best_streak": max_streak, "week_current_streak": week_current_streak, "week_start_date": current_week_start}
+        _wg = _ret.get('week_games') if isinstance(_ret, dict) else week_games
+        _ww = _ret.get('week_wins') if isinstance(_ret, dict) else week_wins
+        _wbs = _ret.get('week_best_streak') if isinstance(_ret, dict) else max_streak
+        _wcs = _ret.get('week_current_streak') if isinstance(_ret, dict) else week_current_streak
+        return {"success": True, "rank_up": rank_up, "mmr": stats.get("mmr"), "week_games": _wg or 0, "week_wins": _ww or 0, "week_best_streak": _wbs, "week_current_streak": _wcs, "week_start_date": current_week_start}
 
     except Exception as e:
         logger.error(f"update error: {e}", exc_info=True)

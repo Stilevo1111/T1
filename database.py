@@ -1723,7 +1723,6 @@ class Database:
                 else:
                     self.execute_query("DELETE FROM bot_config WHERE key = ?", (key,))
                 logger.debug(f"set_config deleted key={key}")
-                return True
 
             if get_db_type() == "postgresql":
                 query = """
@@ -2487,7 +2486,40 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
     if not user:
         return False
 
-    # Обновляем все поля в кеше
+    # Always accumulate week stats against DB/cache so callers get correct totals
+    if any(f in fields for f in ('week_games', 'week_wins', 'week_best_streak', 'week_current_streak')):
+        try:
+            db = Database()
+            existing = db.execute_query(
+                "SELECT week_games, week_wins, week_best_streak, week_current_streak FROM users WHERE telegram_id = %s",
+                (telegram_id,), fetch="one"
+            )
+        except Exception:
+            existing = None
+        if existing:
+            if isinstance(existing, dict):
+                old_g = existing.get('week_games')
+                old_w = existing.get('week_wins')
+                old_bs = existing.get('week_best_streak')
+                old_cs = existing.get('week_current_streak')
+            else:
+                old_g = existing[0]
+                old_w = existing[1]
+                old_bs = existing[2] if len(existing) > 2 else None
+                old_cs = existing[3] if len(existing) > 3 else None
+            if old_g is not None:
+                _acc = dict(fields)
+                _acc['week_games'] = (_acc.get('week_games') or 0) + (int(old_g) if old_g is not None else 0)
+                _acc['week_wins'] = (_acc.get('week_wins') or 0) + (int(old_w) if old_w is not None else 0)
+                if 'week_best_streak' in _acc and old_bs is not None:
+                    _acc['week_best_streak'] = max(_acc.get('week_best_streak', 0), int(old_bs))
+                if 'week_current_streak' in _acc and old_cs is not None:
+                    _acc['week_current_streak'] = _acc.get('week_current_streak', 0) + int(old_cs)
+                fields = _acc
+                for k, v in fields.items():
+                    user[k] = v
+
+    # Затем обновляем все поля в кеше
     for field, value in fields.items():
         user[field] = value
 
@@ -2514,7 +2546,7 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
     user_cache.delete('dota_digest_stats')
     top_cache.invalidate_top_cache()
 
-    return True
+    return fields
 
 
 # Whitelist of allowed field names for security in _save_user_to_db_immediately
