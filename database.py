@@ -339,12 +339,11 @@ class UserStateManager:
         return self._user_cache.get_all_users()
 
 
-user_state_manager = UserStateManager(user_cache, top_cache)
-
-
 # Глобальные экземпляры кешей (оптимизировано для экономии CU в serverless)
 config_cache = TTLCache(default_ttl=300)  # 5 минут для конфигурации
 top_cache = TTLCache(default_ttl=1800)  # 30 минут для топов и рангов
+
+user_state_manager = UserStateManager(user_cache, top_cache)
 
 _aiohttp_session = None
 
@@ -3144,7 +3143,7 @@ def get_dota_week_top_from_db(limit=10, force_refresh=False):
     _TTL = 1800  # 30 минут
 
     cache_key = f'_dota_week_top_db_{limit}'
-    if not hasattr(get_dota_week_top_from_db, '_cache'):
+    if not hasattr(get_dota_week_top_from_db, '_cache') or not isinstance(get_dota_week_top_from_db._cache, dict):
         get_dota_week_top_from_db._cache = {}
 
     cached_data, cached_time = get_dota_week_top_from_db._cache.get(cache_key, (None, 0))
