@@ -1743,6 +1743,7 @@ def generate_start_card(
     week_wins: int = 0,
     week_losses: int = 0
 ) -> bytes | None:
+    logger.info(f"generate_start_card INPUT: username={username} steam_nickname={steam_nickname} rank_tier={rank_tier} week_wins={week_wins} week_losses={week_losses}")
     """Сгенерировать карточку для /start существующего пользователя"""
     try:
         import io
@@ -1895,6 +1896,7 @@ def generate_start_card(
         if week_wins is not None and week_losses is not None:
             wr = round((week_wins / (week_wins + week_losses) * 100), 1) if (week_wins + week_losses) > 0 else 0
             draw.text((info_x + username_x_offset, msg_num_y), f"{week_wins}W/{week_losses}L/{wr}%", fill=(255, 255, 255), font=font_title)
+            logger.info(f"generate_start_card: drew week stats {week_wins}W/{week_losses}L/{wr}% for {username or steam_nickname}")
         else:
             draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
 

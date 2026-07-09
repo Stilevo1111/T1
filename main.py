@@ -1183,7 +1183,9 @@ async def update_all_mmr_job(context):
                         rank_tier=rank_tier,
                         weekly_mvp=0,
                         weekly_top2=0,
-                        weekly_top3=0
+                        weekly_top3=0,
+                        week_wins=user.get('week_wins', 0),
+                        week_losses=(user.get('week_games', 0) or 0) - (user.get('week_wins', 0) or 0)
                     )
 
                     if card_data:
@@ -2337,6 +2339,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             week_wins = target_user.get('week_wins') or 0
             week_losses = week_games - week_wins
             winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
+            logger.info(f"stats: profile week stats uid={target_user.get('telegram_id')} steam={target_user.get('steam_id')} week_games={week_games} week_wins={week_wins} week_losses={week_losses} winrate={winrate}")
 
             try:
                 from dota_mmr import get_recent_matches_async, get_top_heroes_async
@@ -2425,7 +2428,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML",
             reply_markup=main_menu()
         )
-        logger.info(f"Profile photo sent successfully, result_msg_id={result_msg.message_id}")
+        logger.info(f"stats: profile card sent uid={target_user.get('telegram_id')} week_games={week_games} week_wins={week_wins} msg_id={result_msg.message_id}")
 
         if loading_msg:
             try:
