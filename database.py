@@ -2909,19 +2909,18 @@ def update_weekly_digest_snapshot():
     return result
 
 def get_dota_mmr_top(limit=50):
-    """Получение топа игроков Dota 2 по MMR с кешем (всегда сохраняет макс 50)"""
+    """Получение топа игроков Dota 2 по MMR с кешем (limit-aware)"""
     from main import get_config, set_config
 
-    # При запросе 50+ игнорируем кэш, чтобы не получить урезанные данные
-    if limit < 50:
-        cached = get_config('mmr_top_cache')
-        if cached:
-            try:
-                cached_top = json.loads(cached)
-                logger.info(f"get_dota_mmr_top: loaded from cache, {len(cached_top)} users")
-                return cached_top[:limit]
-            except Exception as e:
-                logger.warning(f"Failed to load MMR top cache: {e}")
+    cache_key = f'mmr_top_cache_{limit}'
+    cached = get_config(cache_key)
+    if cached:
+        try:
+            cached_top = json.loads(cached)
+            logger.info(f"get_dota_mmr_top: loaded from cache, {len(cached_top)} users")
+            return cached_top[:limit]
+        except Exception as e:
+            logger.warning(f"Failed to load MMR top cache: {e}")
 
     try:
         conn = get_connection()
@@ -2958,7 +2957,7 @@ def get_dota_mmr_top(limit=50):
 
                 if result:
                     try:
-                        set_config('mmr_top_cache', json.dumps(result))
+                        set_config(cache_key, json.dumps(result))
                         logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
                     except Exception as e:
                         logger.warning(f"Failed to save MMR top cache: {e}")
@@ -2991,7 +2990,7 @@ def get_dota_mmr_top(limit=50):
 
                 if result:
                     try:
-                        set_config('mmr_top_cache', json.dumps(result))
+                        set_config(cache_key, json.dumps(result))
                         logger.info(f"get_dota_mmr_top: saved to cache, {len(result)} users")
                     except Exception as e:
                         logger.warning(f"Failed to save MMR top cache: {e}")
@@ -3140,20 +3139,18 @@ def get_dota_week_top_from_db(limit=10, force_refresh=False):
 
     _TTL = 1800  # 30 минут
 
-    # Простой кеш в памяти
+    cache_key = f'_dota_week_top_db_{limit}'
     if not hasattr(get_dota_week_top_from_db, '_cache'):
-        get_dota_week_top_from_db._cache = (None, 0)
+        get_dota_week_top_from_db._cache = {}
 
-    cached_data, cached_time = get_dota_week_top_from_db._cache
+    cached_data, cached_time = get_dota_week_top_from_db._cache.get(cache_key, (None, 0))
     if cached_data and (time.time() - cached_time) < _TTL and not force_refresh:
         logger.info(f"get_dota_week_top_from_db: returning cached top ({len(cached_data)} users)")
         return cached_data[:limit]
 
     result = _get_dota_week_top_query(limit)
 
-    # Сохраняем в кеш
-    get_dota_week_top_from_db._cache = (result, time.time())
-
+    get_dota_week_top_from_db._cache[cache_key] = (result, time.time())
     return result
 
 
