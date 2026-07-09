@@ -3,7 +3,7 @@ import time
 import asyncio
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InputFile
 from telegram.ext import ContextTypes
 
 from bot_utils import make_clickable, record_recent_fissure_roll
@@ -90,7 +90,7 @@ def _pop_session(chat_id: int, user_id: int) -> dict | None:
 
 
 async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str) -> None:
-    media = InputMediaPhoto(media=str(TECHIES_BANNER_URL), caption=text, parse_mode="HTML")
+    media = InputMediaPhoto(media=InputFile(TECHIES_BANNER_URL), caption=text, parse_mode="HTML")
     try:
         await bot.edit_message_media(
             chat_id=chat_id,

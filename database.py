@@ -598,8 +598,27 @@ def get_pg_connection():
 def release_pg_connection(conn):
     """Release a PostgreSQL connection back to the pool"""
     global _pg_pool
+    if conn is None:
+        return
+    # Только PG-соединения (psycopg2) принадлежат пулу. SQLite-фолбэк-конн,
+    # который возвращает get_pg_connection при сбое пула, сюда попадать не должен
+    # (иначе psycopg2 бросает "trying to put unkeyed connection").
+    try:
+        from psycopg2 import extensions as _pg_ext
+    except Exception:
+        _pg_ext = None
+    if _pg_ext is not None and not isinstance(conn, _pg_ext.connection):
+        return
     if _pg_pool is not None:
-        _pg_pool.putconn(conn)
+        try:
+            _pg_pool.putconn(conn)
+        except Exception:
+            # Конн взят из старого/закрытого пула или чужого пула после ресета —
+            # просто закрываем, чтобы не терять данные и не спамить ошибками.
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def close_pg_pool():
