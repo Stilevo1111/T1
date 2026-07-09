@@ -1116,8 +1116,9 @@ def search_player(nickname: str) -> dict:
 
 def get_recent_matches(steam_id: int, limit: int = 5) -> list:
     """Получить последние матчи игрока"""
-    if steam_id in _user_matches_cache:
-        cached_data, cached_time = _user_matches_cache[steam_id]
+    cache_key = (steam_id, limit)
+    if cache_key in _user_matches_cache:
+        cached_data, cached_time = _user_matches_cache[cache_key]
         if time.time() - cached_time < USER_MATCHES_CACHE_TTL:
             return cached_data
     
@@ -1138,7 +1139,7 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
         
         # Don't cache empty results - might be due to rate limits
         if matches:
-            _user_matches_cache[steam_id] = (matches, time.time())
+            _user_matches_cache[cache_key] = (matches, time.time())
         
         return matches
     except Exception as e:
@@ -1151,8 +1152,9 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
     if steam_id is None:
         return []
     
-    if steam_id in _user_matches_cache:
-        cached_data, cached_time = _user_matches_cache[steam_id]
+    cache_key = (steam_id, limit)
+    if cache_key in _user_matches_cache:
+        cached_data, cached_time = _user_matches_cache[cache_key]
         if time.time() - cached_time < USER_MATCHES_CACHE_TTL:
             return cached_data
     
@@ -1170,7 +1172,9 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
         
         matches = matches or []
         
-        _user_matches_cache[steam_id] = (matches, time.time())
+        # Don't cache empty results - might be due to rate limits
+        if matches:
+            _user_matches_cache[cache_key] = (matches, time.time())
         
         return matches
     except Exception as e:
@@ -1428,7 +1432,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             if not recent_check:
                 return {"success": True, "skipped": True, "mmr": user.get("mmr", 0)}
 
-        matches = get_recent_matches(user["steam_id"], limit=10)
+        matches = get_recent_matches(user["steam_id"], limit=50)
         logger.info(f"topmmr: Got {len(matches)} matches for hero meta from steam_id={user.get('steam_id')}")
 
         # Simple per-process cache: skip heavy API call if we updated this user recently (helps on restart + repeated calls)
