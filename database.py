@@ -2491,31 +2491,19 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
         try:
             db = Database()
             existing = db.execute_query(
-                "SELECT week_games, week_wins, week_best_streak, week_current_streak FROM users WHERE telegram_id = %s",
+                "SELECT week_games, week_wins, week_best_streak, week_current_streak, week_start_date FROM users WHERE telegram_id = %s",
                 (telegram_id,), fetch="one"
             )
         except Exception:
             existing = None
         if existing:
             if isinstance(existing, dict):
-                old_g = existing.get('week_games')
-                old_w = existing.get('week_wins')
-                old_bs = existing.get('week_best_streak')
-                old_cs = existing.get('week_current_streak')
+                old_week_start = existing.get('week_start_date')
             else:
-                old_g = existing[0]
-                old_w = existing[1]
-                old_bs = existing[2] if len(existing) > 2 else None
-                old_cs = existing[3] if len(existing) > 3 else None
-            if old_g is not None:
-                _acc = dict(fields)
-                _acc['week_games'] = (_acc.get('week_games') or 0) + (int(old_g) if old_g is not None else 0)
-                _acc['week_wins'] = (_acc.get('week_wins') or 0) + (int(old_w) if old_w is not None else 0)
-                if 'week_best_streak' in _acc and old_bs is not None:
-                    _acc['week_best_streak'] = max(_acc.get('week_best_streak', 0), int(old_bs))
-                if 'week_current_streak' in _acc and old_cs is not None:
-                    _acc['week_current_streak'] = _acc.get('week_current_streak', 0) + int(old_cs)
-                fields = _acc
+                old_week_start = existing[4] if len(existing) > 4 else None
+            new_week_start = fields.get('week_start_date')
+            week_changed = bool(new_week_start and old_week_start and str(new_week_start) != str(old_week_start))
+            if week_changed or old_week_start is None:
                 for k, v in fields.items():
                     user[k] = v
 
