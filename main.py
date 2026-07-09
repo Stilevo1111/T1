@@ -53,6 +53,7 @@ from database import (
     update_last_message_id,
     update_user_fields_batch,
     user_cache,
+    user_state_manager,
 )
 
 from dota_mmr import _get_start_card_background, update_user_mmr

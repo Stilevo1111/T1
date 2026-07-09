@@ -295,6 +295,53 @@ class TTLCache:
         return 0
 
 
+class UserStateManager:
+    """Unified state manager for user data with atomic cache invalidation."""
+
+    _DEPENDENT_KEYS = (
+        'dota_week_top', 'dota_week_top_ts',
+        'digest_stats', 'weekly_digest_stats', 'dota_digest_stats',
+    )
+
+    def __init__(self, user_cache: UserCache, top_cache: TTLCache) -> None:
+        self._user_cache = user_cache
+        self._top_cache = top_cache
+
+    def get_user(self, telegram_id: int) -> dict[str, Any] | None:
+        return self._user_cache.get(telegram_id)
+
+    def apply_user_update(self, telegram_id: int, fields: dict, save_to_db: bool = True) -> dict:
+        user = self._user_cache.get(telegram_id)
+        if not user:
+            return {}
+
+        for key, value in fields.items():
+            user[key] = value
+
+        self._user_cache.set(telegram_id, user)
+        self._user_cache.mark_dirty(telegram_id)
+
+        if save_to_db:
+            _save_user_to_db_immediately(telegram_id, user)
+
+        self._invalidate_dependent_caches(telegram_id)
+        return dict(user)
+
+    def _invalidate_dependent_caches(self, telegram_id: int) -> None:
+        for key in self._DEPENDENT_KEYS:
+            self._user_cache.delete(key)
+        self._top_cache.invalidate_top_cache()
+
+    def flush_dirty(self) -> int:
+        return flush_users_cache()
+
+    def get_all_users(self):
+        return self._user_cache.get_all_users()
+
+
+user_state_manager = UserStateManager(user_cache, top_cache)
+
+
 # Глобальные экземпляры кешей (оптимизировано для экономии CU в serverless)
 config_cache = TTLCache(default_ttl=300)  # 5 минут для конфигурации
 top_cache = TTLCache(default_ttl=1800)  # 30 минут для топов и рангов
@@ -2179,7 +2226,7 @@ def get_user_by_steam_id(steam_id: int):
 
 def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id=None):
     """Обновление fissure + optionally last_message_id in one query"""
-    logger.info(f"update_fissure called: telegram_id={telegram_id}, fissure={fissure}, last_fissure={last_fissure}, growth={growth}")
+    logger.info(f"update_fissure called: telegram_id={telegram_id}, fissure={fissure}, growth={growth}")
 
     try:
         db = Database()
@@ -2189,7 +2236,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
 
         if "postgres" in scheme:
             query = """
-                UPDATE users SET fissure=%s, last_fissure=%s, 
+                UPDATE users SET fissure=%s, last_fissure=%s,
                 total_growth = total_growth + %s,
                 total_rolls = total_rolls + 1,
                 weekly_rolls = weekly_rolls + 1,
@@ -2206,7 +2253,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
             db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, lose, win, last_message_id, telegram_id))
         else:
             query = """
-                UPDATE users SET fissure=?, last_fissure=?, 
+                UPDATE users SET fissure=?, last_fissure=?,
                 total_growth = total_growth + ?,
                 total_rolls = total_rolls + 1,
                 weekly_rolls = weekly_rolls + 1,
@@ -2222,31 +2269,30 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
             """
             db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, lose, win, last_message_id, telegram_id))
 
-        # Update cache after successful DB update
         user = user_cache.get(telegram_id)
         if user:
-            user['fissure'] = fissure
-            user['last_fissure'] = last_fissure
-            user['total_growth'] = user.get('total_growth', 0) + growth
-            user['total_rolls'] = user.get('total_rolls', 0) + 1
-            user['weekly_rolls'] = user.get('weekly_rolls', 0) + 1
-            user['weekly_growth'] = user.get('weekly_growth', 0) + max(0, growth)
-            user['current_win_streak'] = (user.get('current_win_streak', 0) + 1) if win else 0
-            user['current_lose_streak'] = (user.get('current_lose_streak', 0) + 1) if lose else 0
-            user['current_streak'] = user.get('current_win_streak', 0) if win else (user.get('current_lose_streak', 0) if lose else 0)
-            user['best_streak'] = max(user.get('best_streak', 0), user['current_streak'])
-            user_cache.set(telegram_id, user)
+            update_fields = {
+                'fissure': fissure,
+                'last_fissure': last_fissure,
+                'total_growth': user.get('total_growth', 0) + growth,
+                'total_rolls': user.get('total_rolls', 0) + 1,
+                'weekly_rolls': user.get('weekly_rolls', 0) + 1,
+                'weekly_growth': user.get('weekly_growth', 0) + max(0, growth),
+                'current_win_streak': (user.get('current_win_streak', 0) + 1) if win else 0,
+                'current_lose_streak': (user.get('current_lose_streak', 0) + 1) if lose else 0,
+                'current_streak': user.get('current_win_streak', 0) if win else (user.get('current_lose_streak', 0) if lose else 0),
+                'best_streak': max(user.get('best_streak', 0), (user.get('current_win_streak', 0) if win else (user.get('current_lose_streak', 0) if lose else 0))),
+            }
+            if last_message_id:
+                update_fields['last_message_id'] = last_message_id
+            user_state_manager.apply_user_update(telegram_id, update_fields, save_to_db=False)
         else:
-            # Cache miss - fetch updated user from DB using same connection
             db_user = db.get_user(telegram_id)
             if db_user:
                 db_user.setdefault('fissure', 0.1)
-                user_cache.set(telegram_id, db_user, skip_dirty=True)
+                user_cache.set_without_dirty(telegram_id, db_user)
 
         logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
-
-        # Invalidate top cache
-        top_cache.invalidate_top_cache()
     except Exception as e:
         logger.error(f"Error updating fissure: {e}")
 
@@ -2441,7 +2487,6 @@ def update_last_message_id(telegram_id, message_id):
 
 def update_user_field(telegram_id, field, value):
     """Обновление любого поля пользователя - пишем в кеш и сразу в БД"""
-    # Validate telegram_id is not SteamID64
     if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
         logger.warning(f"update_user_field: invalid telegram_id={telegram_id}, skipping")
         return False
@@ -2453,7 +2498,6 @@ def update_user_field(telegram_id, field, value):
         user_cache.set(telegram_id, user)
         user_cache.mark_dirty(telegram_id)
 
-        # Важные поля — сразу в БД
         immediate_fields = {
             'fissure', 'last_fissure', 'steam_id', 'steam_nickname', 'mmr', 'rank_tier', 'wins', 'losses',
             'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'week_start_date',
@@ -2462,13 +2506,7 @@ def update_user_field(telegram_id, field, value):
         if field in immediate_fields:
             _save_user_to_db_immediately(telegram_id, user)
 
-        # Сбрасываем кеши дайджестов при изменении данных пользователя
-        user_cache.delete('digest_stats')
-        user_cache.delete('weekly_digest_stats')
-        user_cache.delete('dota_digest_stats')
-        # Сбрасываем кеш топа при изменении данных пользователей
-        top_cache.invalidate_top_cache()
-
+        user_state_manager.apply_user_update(telegram_id, {field: value}, save_to_db=False)
         return True
     return False
 
@@ -2477,7 +2515,6 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
     """Массовое обновление полей - обновление кеша + опционально БД.
     update_top_cache=False allows the caller (MMR job) to do exactly one rebuild after the full loop.
     """
-    # Validate telegram_id is not SteamID64
     if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
         logger.warning(f"update_user_fields_batch: invalid telegram_id={telegram_id}, skipping")
         return False
@@ -2486,7 +2523,6 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
     if not user:
         return False
 
-    # Always accumulate week stats against DB/cache so callers get correct totals
     if any(f in fields for f in ('week_games', 'week_wins', 'week_best_streak', 'week_current_streak')):
         try:
             db = Database()
@@ -2507,33 +2543,13 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
                 for k, v in fields.items():
                     user[k] = v
 
-    # Затем обновляем все поля в кеше
     for field, value in fields.items():
         user[field] = value
 
-    user_cache.set(telegram_id, user)
-    user_cache.mark_dirty(telegram_id)
-
-    # Сохраняем в БД только если нужно (по умолчанию да)
     if save_to_db:
         _save_user_to_db_immediately(telegram_id, user)
 
-    # Обновляем кеш топа MMR только если caller разрешил (MMR job делает это один раз после всего цикла)
-    dota_fields = ['mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'steam_nickname', 'steam_id']
-    if update_top_cache and any(f in dota_fields for f in fields):
-        update_dota_week_top_cache()
-
-    # Сбрасываем кеш топа недели при новом steam_id
-    if 'steam_id' in fields and fields['steam_id']:
-        user_cache.delete('dota_week_top')
-        user_cache.delete('dota_week_top_ts')
-
-    # Сбрасываем кеши дайджестов
-    user_cache.delete('digest_stats')
-    user_cache.delete('weekly_digest_stats')
-    user_cache.delete('dota_digest_stats')
-    top_cache.invalidate_top_cache()
-
+    user_state_manager.apply_user_update(telegram_id, fields, save_to_db=False)
     return fields
 
 
