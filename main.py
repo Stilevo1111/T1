@@ -2334,6 +2334,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"\n\n🍆 Фиссура: {target_user.get('fissure', 0):.1f} см\n🎲 Броски: {target_user.get('total_rolls', 0)} 🍀Стрик: {target_user.get('current_streak', 0)}/{target_user.get('best_streak', 0)}"
 
         # Dota stats (без стрика)
+        week_games = 0
+        week_wins = 0
         if target_user.get('steam_id'):
             week_games = target_user.get('week_games') or 0
             week_wins = target_user.get('week_wins') or 0
