@@ -1211,6 +1211,33 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
 
     match_count = len(matches)
 
+    if match_count == 0:
+        user_stats = {
+            "wr": 0.0,
+            "lh": 0.0,
+            "deny": 0.0,
+            "stacks": 0.0,
+            "gpm": 0.0,
+            "xpm": 0.0,
+            "h_dmg": 0.0,
+            "t_dmg": 0.0,
+            "util": 0.0,
+            "apm": 0.0,
+            "deaths": 0.0,
+            "kda_number": 0.0,
+            "kda": "0.0/0.0/0.0"
+        }
+        tables = _generate_report_text(role, user_stats)
+        chart_image = await _create_visual_chart(game_history)
+        data = {
+            "image": chart_image,
+            "history": game_history,
+            "pro_text": tables["pro"],
+            "detailed_text": tables["detailed"],
+        }
+        data.update(user_stats)
+        return data
+
     avg_gpm = total_gpm / match_count
     avg_lh = total_lh_10min / match_count
     avg_apm = total_apm / match_count
