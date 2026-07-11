@@ -198,8 +198,6 @@ def _start_techies_session(
 
 
 async def handle_techies_event(
-    update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработать запуск мини-игры Техиес (inline-кнопка)."""
     bot,
     chat_id,
     user,
@@ -213,7 +211,8 @@ async def handle_techies_event(
     update_last_message_id,
     job_queue=None,
     record_recent_fissure_roll=None,
-):
+) -> None:
+    """Обработать запуск мини-игры Техиес (inline-кнопка)."""
     correct_button = random.choice(["left", "right"])
     start_time = time.time()
     current_fissure = user.get("fissure", 0) or 0
