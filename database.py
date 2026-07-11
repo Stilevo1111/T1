@@ -2617,38 +2617,61 @@ def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
         top_cache.invalidate_top_cache()
     return result
 
-def zeus_strike(percent=0.025):
+def zeus_strike(percent=0.025, exclude_telegram_id=None):
     """Удар Зевса: уменьшить fissure ВСЕХ игроков на percent (батчевая версия).
+    Исключает пользователя exclude_telegram_id из удара.
     Возвращает (affected_count, total_cm_reduced).
     """
     db = Database()
     scheme = get_db_type()
 
-    logger.info(f"zeus_strike (batched): percent={percent}")
+    logger.info(f"zeus_strike (batched): percent={percent}, exclude={exclude_telegram_id}")
 
     try:
         if "postgres" in scheme:
-            select_query = "SELECT fissure FROM users WHERE fissure > 0.1"
-            rows = db.execute_query(select_query, fetch="all")
+            if exclude_telegram_id:
+                select_query = "SELECT fissure FROM users WHERE fissure > 0.1 AND telegram_id != %s"
+                params_select = (exclude_telegram_id,)
+                query = """
+                    UPDATE users 
+                    SET fissure = GREATEST(0.1, fissure * (1 - %s))
+                    WHERE fissure > 0.1 AND telegram_id != %s
+                """
+                params_update = (percent, exclude_telegram_id)
+            else:
+                select_query = "SELECT fissure FROM users WHERE fissure > 0.1"
+                params_select = None
+                query = """
+                    UPDATE users 
+                    SET fissure = GREATEST(0.1, fissure * (1 - %s))
+                    WHERE fissure > 0.1
+                """
+                params_update = (percent,)
+            rows = db.execute_query(select_query, params_select, fetch="all")
             old_fissures = [float(r["fissure"]) for r in rows]
-
-            query = """
-                UPDATE users 
-                SET fissure = GREATEST(0.1, fissure * (1 - %s))
-                WHERE fissure > 0.1
-            """
-            db.execute_query(query, (percent,))
+            db.execute_query(query, params_update)
         else:
-            select_query = "SELECT fissure FROM users WHERE fissure > 0.1"
-            rows = db.execute_query(select_query, fetch="all")
+            if exclude_telegram_id:
+                select_query = "SELECT fissure FROM users WHERE fissure > 0.1 AND telegram_id != ?"
+                params_select = (exclude_telegram_id,)
+                query = """
+                    UPDATE users 
+                    SET fissure = MAX(0.1, fissure * (1 - ?))
+                    WHERE fissure > 0.1 AND telegram_id != ?
+                """
+                params_update = (percent, exclude_telegram_id)
+            else:
+                select_query = "SELECT fissure FROM users WHERE fissure > 0.1"
+                params_select = None
+                query = """
+                    UPDATE users 
+                    SET fissure = MAX(0.1, fissure * (1 - ?))
+                    WHERE fissure > 0.1
+                """
+                params_update = (percent,)
+            rows = db.execute_query(select_query, params_select, fetch="all")
             old_fissures = [float(r[0]) for r in rows]
-
-            query = """
-                UPDATE users 
-                SET fissure = MAX(0.1, fissure * (1 - ?))
-                WHERE fissure > 0.1
-            """
-            db.execute_query(query, (percent,))
+            db.execute_query(query, params_update)
 
         total_reduced = sum(
             max(0.0, f - max(0.1, f * (1 - percent)))
