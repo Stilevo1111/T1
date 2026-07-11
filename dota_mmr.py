@@ -1735,8 +1735,6 @@ def get_week_top(limit=10, force_refresh=False):
 # ========================
 
 def generate_start_card(
-    avatar_url, message_count, username, steam_nickname, rank_tier, weekly_mvp=0, weekly_top2=0, weekly_top3=0, week_wins=0, week_losses=0):
-    """Сгенерировать PNG-карточку профиля (аватар + ранг + медали MVP/топ) через Pillow. Возвращает bytes или None."""
     avatar_url: str = None,
     message_count: int = 0,
     username: str = None,
