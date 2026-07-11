@@ -854,7 +854,7 @@ async def announce_weekly_mmr_winner(bot):
     week_wins = winner.get('week_wins') or 0
     week_games = winner.get('week_games') or 0
     week_losses = week_games - week_wins
-            winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
+    winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
     rank_tier = winner.get('rank_tier', 0)
     telegram_id = winner.get('telegram_id')
 
