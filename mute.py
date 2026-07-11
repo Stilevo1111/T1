@@ -100,11 +100,7 @@ def add_fissure(user_id: int, amount_cm: float) -> None:
 # ─── Поиск пользователя по @username в чате ──────────────────────────────────
 
 async def get_user_by_username_in_chat(
-    bot, chat_id: int, username: str, context: ContextTypes.DEFAULT_TYPE = None) -> int | None:
-    """Найти telegram_id пользователя по @username в пределах чата (с учётом кэша участников)."""
-    chat_id: int,
-    username: str,
-    context: ContextTypes.DEFAULT_TYPE,
+    bot, chat_id: int, username: str, context: ContextTypes.DEFAULT_TYPE = None
 ) -> dict | None:
     """
     Найти пользователя Telegram по сокращённому username (без @) среди участников чата.
