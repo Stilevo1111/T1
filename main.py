@@ -724,7 +724,7 @@ def _get_player_stats_wrapper(steam_id, use_cache):
 
 @rate_limit(tokens=1)
 async def weekly_champion_announcement_job(context):
-    """Объявление чемпиона недели в воскресенье 23:30 MSK (только лидер)."""
+    """Объявление чемпиона недели в воскресенье 21:00 MSK (только лидер)."""
     if not await claim_or_check_weekly_leader():
         return
     try:
@@ -3618,11 +3618,11 @@ async def main():
 
         # Топ MMR обновляется в update_all_mmr_job после обновления всех игроков
 
-        # ✅ Объявление чемпиона недели в воскресенье 23:00 MSK
+        # ✅ Объявление чемпиона недели в воскресенье 21:00 MSK
         job_queue.run_daily(
             weekly_champion_announcement_job,
-            time=datetime.time(hour=20, minute=0),  # 20:00 UTC = 23:00 MSK
-            days=(6,)  # Только суббота
+            time=datetime.time(hour=18, minute=0),  # 18:00 UTC = 21:00 MSK
+            days=(6,)  # Только воскресенье
         )
 
 # ✅ Сброс MMR статистики в понедельник 00:00 MSK (начало новой недели)
@@ -3684,12 +3684,12 @@ async def main():
                 except Exception as e:
                     logger.error(f"Startup weekly reset error: {e}")
 
-        # Если бот стартует в воскресенье после 23:00 MSK - проверяем, не нужно ли объявить чемпиона
+        # Если бот стартует в воскресенье после 21:00 MSK - проверяем, не нужно ли объявить чемпиона
         from datetime import datetime as dt
         from datetime import timedelta, timezone
         MSK = timezone(timedelta(hours=3))
         now_msk = dt.now(MSK)
-        if now_msk.weekday() == 6:  # Воскресенье
+        if now_msk.weekday() == 6 and now_msk.hour >= 21:  # Воскресенье после 21:00 MSK
             from database import get_config as _get_cfg, set_config as _set_cfg
             monday_msk = now_msk - timedelta(days=now_msk.weekday())
             current_week_start = monday_msk.strftime("%Y-%m-%d")
