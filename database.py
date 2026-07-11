@@ -144,7 +144,7 @@ class UserCache:
     def get(self, telegram_id: int) -> dict[str, Any] | None:
         with self._lock:
             data = self._cache.get(telegram_id)
-            return copy.deepcopy(data) if data else None
+            return copy.deepcopy(data) if data is not None else None
 
     def set(self, telegram_id, data, skip_dirty=False):
         """Установить данные пользователя в кеш"""
