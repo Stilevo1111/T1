@@ -2340,7 +2340,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             week_games = target_user.get('week_games') or 0
             week_wins = target_user.get('week_wins') or 0
             week_losses = week_games - week_wins
-    winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
+            winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
             logger.info(f"stats: profile week stats uid={target_user.get('telegram_id')} steam={target_user.get('steam_id')} week_games={week_games} week_wins={week_wins} week_losses={week_losses} winrate={winrate}")
 
             try:
