@@ -1388,7 +1388,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         wins = stats.get("wins", 0)
         losses = stats.get("losses", 0)
         total = wins + losses
-        winrate = stats.get("winrate", 0)
+        winrate = round(stats.get("winrate", 0))
 
         return {
             "success": True,

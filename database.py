@@ -2980,7 +2980,7 @@ def get_dota_mmr_top(limit=50):
                             rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
                     avatar, fissure,
                     CASE WHEN week_games > 0
-                            THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1)
+                            THEN ROUND((week_wins::numeric / week_games::numeric) * 100)
                             ELSE 0 END as winrate
                     FROM users
                     WHERE steam_id IS NOT NULL
@@ -3014,7 +3014,7 @@ def get_dota_mmr_top(limit=50):
                            rank_tier, wins, losses, COALESCE(week_current_streak, 0) as week_current_streak,
                     avatar, fissure,
                     CASE WHEN week_games > 0
-                               THEN ROUND(week_wins * 100.0 / week_games, 1)
+                               THEN ROUND(week_wins * 100.0 / week_games)
                                ELSE 0 END as winrate
                  FROM users
                  WHERE steam_id IS NOT NULL
@@ -3230,9 +3230,9 @@ def _get_dota_week_top_query(limit):
                     WITH wr_calc AS (
                         SELECT telegram_id, username, steam_nickname, mmr, 
                                week_games, week_wins, rank_tier, steam_id, avatar,
-                               CASE WHEN week_games > 0 
-                                    THEN ROUND((week_wins::numeric / week_games::numeric) * 100, 1) 
-                                    ELSE 0 END as winrate,
+                                CASE WHEN week_games > 0 
+                                     THEN ROUND((week_wins::numeric / week_games::numeric) * 100) 
+                                     ELSE 0 END as winrate,
                                 COALESCE(week_current_streak, 0) as week_current_streak
                          FROM users
                          WHERE steam_id IS NOT NULL
@@ -3256,9 +3256,9 @@ def _get_dota_week_top_query(limit):
                     WITH wr_calc AS (
                         SELECT telegram_id, username, steam_nickname, mmr, 
                                week_games, week_wins, rank_tier, steam_id, avatar,
-                               CASE WHEN week_games > 0 
-                                    THEN ROUND(week_wins * 100.0 / week_games, 1) 
-                                    ELSE 0 END as winrate,
+                                CASE WHEN week_games > 0 
+                                     THEN ROUND(week_wins * 100.0 / week_games) 
+                                     ELSE 0 END as winrate,
                               COALESCE(week_current_streak, 0) as week_current_streak
                          FROM users
                          WHERE steam_id IS NOT NULL
