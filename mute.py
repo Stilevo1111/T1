@@ -159,12 +159,7 @@ async def get_user_by_username_in_chat(
 # ─── Основная логика выдачи кляпа ───────────────────────────────────────────
 
 async def _do_give_gag(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, target_id: int, target_name: str, admin_id: int, admin_name: str) -> None:
-    """Выдать кляп: списать 10 см у админа, удалять сообщения жертвы 30с, снять по таймеру."""
-    admin: dict,
-    victim: dict,
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
+    update: Update, context: ContextTypes.DEFAULT_TYPE, target_id: int, target_name: str, admin_id: int, admin_name: str
 ) -> bool:
     """Выдать кляп жертве, списать 10 см фиссуры с админа."""
     admin_id   = admin["telegram_id"]
@@ -249,8 +244,6 @@ async def _delayed_delete(bot, chat_id: int, msg_id: int, delay: int) -> None:
 
 
 def _schedule_gag_release(
-    user_id: int, release_time: datetime):
-    """Запланировать снятие кляпа по времени ( таймер release_time)."""
     victim_id: int,
     chat_id: int,
     chat_type: str,
@@ -269,8 +262,6 @@ def _schedule_gag_release(
 
 
 async def _gag_timeout_job(
-    context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Фоновый job: снимает кляпы, чьё время истекло."""
     victim_id: int,
     chat_id: int,
     chat_type: str,
@@ -338,10 +329,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def _can_admin_bypass(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, target_id: int) -> bool:
-    """Проверка: может ли админ выдать кляп цели (баланс ≥ 10 см, не самому себе, права)."""
-    context: ContextTypes.DEFAULT_TYPE,
-    update: Update,
+    update: Update, context: ContextTypes.DEFAULT_TYPE, target_id: int
 ) -> bool:
     """Администраторы могут обходить кляп."""
     try:
