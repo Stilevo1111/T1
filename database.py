@@ -788,7 +788,6 @@ def get_connection():
 
 def _create_new_connection(db_type):
     """Создать новое соединение с БД"""
-    """Создать новое соединение с БД"""
     if db_type == "postgresql":
         try:
             conn = psycopg2.connect(**_postgres_connect_kwargs())

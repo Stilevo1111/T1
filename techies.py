@@ -42,6 +42,7 @@ _active_techies_sessions: dict[str, dict] = {}
 
 
 def generate_mines(count: int = 4) -> list[int]:
+    """Сгенерировать позиции мин (0/1) для мини-игры Техиес."""
     return [random.randint(1, 10) for _ in range(count)]
 
 
@@ -126,6 +127,8 @@ async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str) -> Non
 
 
 async def _apply_techies_explosion(
+    bot, chat_id: int, user_id: int, user_obj: dict, record_roll=None) -> None:
+    """Применить результат взрыва Техиес: уменьшить/сохранить фиссуру и отправить ответ."""
     bot,
     session: dict,
     record_roll=None,
@@ -175,6 +178,8 @@ async def _techies_timeout_worker(bot, session_key: str, record_roll=None) -> No
 
 
 def _start_techies_session(
+    chat_id: int, user_id: int, correct_button: str, duration: int = TECHIES_TIMEOUT_SEC) -> dict:
+    """Создать сессию мини-игры Техиес (выбрать правильную кнопку, запустить таймаут)."""
     bot,
     chat_id: int,
     user_id: int,
@@ -204,6 +209,8 @@ def _start_techies_session(
 
 
 async def handle_techies_event(
+    update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработать запуск мини-игры Техиес (inline-кнопка)."""
     bot,
     chat_id,
     user,
@@ -248,6 +255,7 @@ async def handle_techies_event(
 
 
 async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /techies: запустить мини-игру со случайным взрывом/сохранением фиссуры."""
     from database import get_user
 
     user_id = update.effective_user.id
@@ -284,6 +292,7 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
 
 
 async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
+    """Обработать нажатие кнопки в мини-игре Техиес (попал/не попал в мину)."""
     from database import get_user, update_user_field
 
     query = update.callback_query

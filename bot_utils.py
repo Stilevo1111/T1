@@ -90,11 +90,13 @@ _DELETE_MAX_AGE = 48 * 3600  # 48 часов
 
 
 def _record_message_time(chat_id, msg_id):
+    """Запомнить время отправки бот-сообщения (для проверки возраста перед удалением)."""
     if isinstance(msg_id, int) and msg_id > 0:
         _message_timestamps[(chat_id, msg_id)] = time.time()
 
 
 def _is_message_too_old(chat_id, msg_id):
+    """True, если сообщение старше _DELETE_MAX_AGE (удалять его Telegram уже не даст)."""
     ts = _message_timestamps.get((chat_id, msg_id))
     if ts is None:
         return False  # не знаем время — пытаемся удалить (обратная совместимость)
@@ -233,6 +235,7 @@ def add_bot_message(chat_id, user_id, message_id):
 
 
 def main_menu():
+    """Клавиатура главного меню (ReplyKeyboard): ролл, профиль, топы, привязка, аналитика."""
     keyboard = [
         [KeyboardButton("🎲 Ролл Фиссуры"), KeyboardButton("👤 Профиль")],
         [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],

@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import functools
 import io
 import logging
@@ -1215,6 +1215,7 @@ def is_win_api(match_id: int, steam_id: int) -> bool:
 # ========================
 
 def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) -> dict:
+    """Синхронно получить статистику игрока (последние матчи, герои, винрейт) из OpenDota с кэшем."""
     try:
         cache_key = f"player_{steam_id}"
         if use_cache:
@@ -1298,6 +1299,7 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
 # ========================
 
 def register_steam(telegram_id: int, identifier: str) -> dict:
+    """Привязать Steam-аккаунт к пользователю: парсит identifier, сохраняет steam_id/nickname, делает первый апдейт MMR."""
     try:
         logger.info(f"Registering Steam for user {telegram_id} with identifier: {identifier}")
 
@@ -1403,6 +1405,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
 # ========================
 
 def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
+    """Обновить MMR/ранг/недельную статистику пользователя из OpenDota. Возвращает dict с ключами success/mmr/rank_up/steam_nickname/week_*."""
     # Force reset all API state to ensure we attempt API calls
     global _circuit_breaker, _api_rate_limit, _opendota_rate_limited_until
     if _circuit_breaker["state"] != "CLOSED":
@@ -1732,6 +1735,8 @@ def get_week_top(limit=10, force_refresh=False):
 # ========================
 
 def generate_start_card(
+    avatar_url, message_count, username, steam_nickname, rank_tier, weekly_mvp=0, weekly_top2=0, weekly_top3=0, week_wins=0, week_losses=0):
+    """Сгенерировать PNG-карточку профиля (аватар + ранг + медали MVP/топ) через Pillow. Возвращает bytes или None."""
     avatar_url: str = None,
     message_count: int = 0,
     username: str = None,

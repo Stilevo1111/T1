@@ -18,7 +18,7 @@ class RedisCache:
         self._connected = False
 
     async def connect(self) -> bool:
-        """Test connection to Redis"""
+        """Проверить соединение с Redis; при сбое помечает клиент неподключённым (fallback на in-memory)."""
         try:
             await self.client.ping()
             self._connected = True
@@ -30,25 +30,25 @@ class RedisCache:
             return False
 
     async def get(self, key: str) -> Any | None:
-        """Get value from cache"""
+        """Прочитать значение из кэша (JSON-десериализация). При недоступности Redis — None."""
         if not self._connected:
             return None
         try:
-            data = await self.client.get(key)
-            return json.loads(data) if data else None
+            value = await self.client.get(key)
+            return json.loads(value) if value else None
         except Exception as e:
-            logger.debug(f"Cache miss for {key}: {e}")
+            logger.warning(f"Redis get failed: {e}")
             return None
 
     async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
-        """Set value in cache with TTL"""
+        """Записать значение в кэш с TTL (сек). Возвращает успех операции."""
         if not self._connected:
             return False
         try:
-            await self.client.setex(key, ttl, json.dumps(value))
+            await self.client.set(key, json.dumps(value), ex=ttl)
             return True
         except Exception as e:
-            logger.error(f"Cache set failed for {key}: {e}")
+            logger.warning(f"Redis set failed: {e}")
             return False
 
     async def delete(self, key: str) -> bool:

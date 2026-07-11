@@ -557,6 +557,9 @@ async def _detect_role_from_hero_counts(matches: list[dict[str, Any]]) -> str:
 
 
 async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
+    """Определить роль игрока (CARRY/MID/OFFLANE/SUPPORT) по героям в истории матчей."""
+
+
     """
     Определяет наиболее вероятную роль игрока на основе его недавних матчей.
     """
@@ -597,6 +600,9 @@ async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
 
 
 def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
+    """Посчитать агрегированную статистику игрока (KDA, импакт, винрейт) по списку матчей."""
+
+
     """
     Рассчитывает средние показатели игрока по последним матчам.
     """
@@ -725,6 +731,9 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
 # =========================================================
 
 async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> list[dict[str, Any]]:
+    """Дополнить матчи деталями (герои, импакт, длительность) через OpenDota."""
+
+
     """
     Загружает детальную информацию по каждому матчу (GPM, XPM, actions и т.д.) параллельно.
     """
@@ -787,6 +796,9 @@ async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> l
 
 
 async def get_last_matches(telegram_id: int, limit: int = 10) -> list[dict[str, Any]]:
+    """Получить последние матчи пользователя (через Steam→OpenDota), limit по умолчанию 10."""
+
+
     """
     Загружает последние матчи игрока через OpenDota API.
     """
@@ -931,6 +943,9 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
 
 
 def get_analytics_pages(role: str, stats: dict[str, Any]) -> list[dict[str, Any]]:
+    """Построить страницы аналитики (сравнение с про, детальное) для инлайн-клавиатуры /analyze."""
+
+
     """
     Генерирует страницы (таблицы) сравнения статистики игрока с про-игроками
     для выбранной роли.

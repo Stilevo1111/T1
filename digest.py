@@ -183,6 +183,7 @@ def invalidate_digest_cache():
 
 
 def refresh_dota_digest_cache():
+    """Пересчитать и закэшировать данные Dota-дайджеста (топы MMR за неделю)."""
     """Refreshes Dota digest data in _digest_state.
     Called from the hourly MMR job to keep combined digest fresh.
     """
@@ -284,6 +285,7 @@ def stop_fast_digest_loop():
 # =====================================================
 
 def get_instance_id():
+    """Идентификатор инстанса (RENDER_INSTANCE_ID или local_<pid>) для leader-election."""
     return os.getenv("RENDER_INSTANCE_ID") or f"local_{os.getpid()}"
 
 

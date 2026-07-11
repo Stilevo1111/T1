@@ -73,6 +73,7 @@ def _get_gag_expiry(user_id: int) -> datetime | None:
 
 
 def _is_gagged(user_id: int) -> bool:
+    """True, если пользователь сейчас под кляпом (активный таймер)."""
     return _get_gag_expiry(user_id) is not None
 
 
@@ -99,6 +100,8 @@ def add_fissure(user_id: int, amount_cm: float) -> None:
 # ─── Поиск пользователя по @username в чате ──────────────────────────────────
 
 async def get_user_by_username_in_chat(
+    bot, chat_id: int, username: str, context: ContextTypes.DEFAULT_TYPE = None) -> int | None:
+    """Найти telegram_id пользователя по @username в пределах чата (с учётом кэша участников)."""
     chat_id: int,
     username: str,
     context: ContextTypes.DEFAULT_TYPE,
@@ -160,6 +163,8 @@ async def get_user_by_username_in_chat(
 # ─── Основная логика выдачи кляпа ───────────────────────────────────────────
 
 async def _do_give_gag(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, target_id: int, target_name: str, admin_id: int, admin_name: str) -> None:
+    """Выдать кляп: списать 10 см у админа, удалять сообщения жертвы 30с, снять по таймеру."""
     admin: dict,
     victim: dict,
     update: Update,
@@ -239,7 +244,7 @@ async def _do_give_gag(
 
 
 async def _delayed_delete(bot, chat_id: int, msg_id: int, delay: int) -> None:
-    """Fallback: удалить сообщение через delay секунд."""
+    """Отложенно удалить сообщение (через asyncio.sleep) — fallback для мьют-очистки."""
     await asyncio.sleep(delay)
     try:
         await bot.delete_message(chat_id, msg_id)
@@ -248,6 +253,8 @@ async def _delayed_delete(bot, chat_id: int, msg_id: int, delay: int) -> None:
 
 
 def _schedule_gag_release(
+    user_id: int, release_time: datetime):
+    """Запланировать снятие кляпа по времени ( таймер release_time)."""
     victim_id: int,
     chat_id: int,
     chat_type: str,
@@ -266,6 +273,8 @@ def _schedule_gag_release(
 
 
 async def _gag_timeout_job(
+    context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Фоновый job: снимает кляпы, чьё время истекло."""
     victim_id: int,
     chat_id: int,
     chat_type: str,
@@ -333,6 +342,8 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def _can_admin_bypass(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, target_id: int) -> bool:
+    """Проверка: может ли админ выдать кляп цели (баланс ≥ 10 см, не самому себе, права)."""
     context: ContextTypes.DEFAULT_TYPE,
     update: Update,
 ) -> bool:
