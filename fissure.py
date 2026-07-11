@@ -132,8 +132,9 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
     Handles the Zeus strike event (no roll, -2.5% to all fissures).
     Logic and all messages are 100% preserved from the original.
     """
-    affected = zeus_strike(percent=0.025)
+    affected, total_cm = zeus_strike(percent=0.025)
 
+    user = get_user(user_obj.id, user_obj.username)
     new_fissure = user.get("fissure", 0)
     update_fissure(user_obj.id, new_fissure, now, 0)
 
@@ -142,7 +143,8 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
     text = (
         f"🎲 {display_username}\n\n"
         f"{zeus_text}\n\n"
-        f"💀 Все Фиссуры −2.5%, {affected} жертв.\n\n"
+        f"💀 Все Фиссуры −2.5%, {affected} жертв.\n"
+        f"📉 Суммарно отнято: {total_cm} см\n\n"
         f"📏 {new_fissure:.1f} см"
     )
 

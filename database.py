@@ -1864,21 +1864,21 @@ class Database:
                 if growth_cm > 0 and growth_cm > top_growth_cm:
                     top_growth_cm = growth_cm
                     nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
-                    top_growth_user = nick if nick and nick != "None" else str(telegram_id)
+                    top_growth_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else str(telegram_id)
                     top_growth_id = telegram_id
 
                 # also track drop (fissure decrease) - only if delta is negative (fissure decreased)
                 if delta < top_drop_cm:
                     top_drop_cm = delta
                     nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
-                    top_drop_user = nick if nick and nick != "None" else str(telegram_id)
+                    top_drop_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else str(telegram_id)
                     top_drop_id = telegram_id
 
                 if u["current_win_streak"] > top_streak:
                     top_streak = u["current_win_streak"]
                     top_streak_id = telegram_id
                     nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
-                    top_streak_user = nick if nick and nick != "None" else str(telegram_id)
+                    top_streak_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else str(telegram_id)
 
             if top_drop_cm == float('inf'):
                 top_drop_cm = 0.0
@@ -2618,7 +2618,9 @@ def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
     return result
 
 def zeus_strike(percent=0.025):
-    """Удар Зевса: уменьшить fissure ВСЕХ игроков на percent (батчевая версия)."""
+    """Удар Зевса: уменьшить fissure ВСЕХ игроков на percent (батчевая версия).
+    Возвращает (affected_count, total_cm_reduced).
+    """
     db = Database()
     scheme = get_db_type()
 
@@ -2626,29 +2628,42 @@ def zeus_strike(percent=0.025):
 
     try:
         if "postgres" in scheme:
+            select_query = "SELECT fissure FROM users WHERE fissure > 0.1"
+            rows = db.execute_query(select_query, fetch="all")
+            old_fissures = [float(r["fissure"]) for r in rows]
+
             query = """
                 UPDATE users 
                 SET fissure = GREATEST(0.1, fissure * (1 - %s))
                 WHERE fissure > 0.1
             """
-            affected = db.execute_query(query, (percent,))
+            db.execute_query(query, (percent,))
         else:
+            select_query = "SELECT fissure FROM users WHERE fissure > 0.1"
+            rows = db.execute_query(select_query, fetch="all")
+            old_fissures = [float(r[0]) for r in rows]
+
             query = """
                 UPDATE users 
                 SET fissure = MAX(0.1, fissure * (1 - ?))
                 WHERE fissure > 0.1
             """
-            affected = db.execute_query(query, (percent,))
+            db.execute_query(query, (percent,))
 
-        # Очищаем кеши
+        total_reduced = sum(
+            max(0.0, f - max(0.1, f * (1 - percent)))
+            for f in old_fissures
+        )
+        affected = len(old_fissures)
+
         user_cache.clear()
         top_cache.invalidate_top_cache()
 
-        return affected or 0
+        return affected, round(total_reduced, 1)
 
     except Exception as e:
         logger.error(f"zeus_strike error: {e}")
-        return 0
+        return 0, 0.0
 
 def reset_all_fissure_data():
     """Сбрасывает cm,rolls и cooldown для всех пользователей"""
