@@ -854,7 +854,7 @@ async def announce_weekly_mmr_winner(bot):
     week_wins = winner.get('week_wins') or 0
     week_games = winner.get('week_games') or 0
     week_losses = week_games - week_wins
-    winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
+            winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
     rank_tier = winner.get('rank_tier', 0)
     telegram_id = winner.get('telegram_id')
 
@@ -1305,14 +1305,14 @@ async def dota_digest_job(context):
         top_games = top_by_net.get('week_games', 0)
         top_wins = top_by_net.get('week_wins', 0)
         top_losses = top_games - top_wins
-        top_winrate = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
+        top_winrate = round((top_wins / top_games * 100)) if top_games > 0 else 0
 
         bottom_player = bottom_by_net.get('steam_nickname', 'None')
         bottom_id = bottom_by_net.get('telegram_id')
         bottom_games = bottom_by_net.get('week_games', 0)
         bottom_wins = bottom_by_net.get('week_wins', 0)
         bottom_losses = bottom_games - bottom_wins
-        bottom_winrate = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
+        bottom_winrate = round((bottom_wins / bottom_games * 100)) if bottom_games > 0 else 0
 
         if top_streak_player:
             streak_player = top_streak_player.get('steam_nickname', 'None')
@@ -2340,7 +2340,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             week_games = target_user.get('week_games') or 0
             week_wins = target_user.get('week_wins') or 0
             week_losses = week_games - week_wins
-            winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
+    winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
             logger.info(f"stats: profile week stats uid={target_user.get('telegram_id')} steam={target_user.get('steam_id')} week_games={week_games} week_wins={week_wins} week_losses={week_losses} winrate={winrate}")
 
             try:
@@ -2789,7 +2789,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             winner_week_games = winner.get('week_games') or 0
             winner_week_wins = winner.get('week_wins') or 0
             winner_week_losses = winner_week_games - winner_week_wins
-            winner_wr = round((winner_week_wins / winner_week_games * 100), 1) if winner_week_games > 0 else 0
+            winner_wr = round((winner_week_wins / winner_week_games * 100)) if winner_week_games > 0 else 0
 
             try:
                 from dota_mmr import generate_start_card
@@ -2845,7 +2845,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 clickable_name = make_clickable(username, player_id)
                 lines.append(f"{medal} <b>{clickable_name}</b> - {rank_str}")
                 if week_games > 0:
-                    wr = round((week_wins / week_games) * 100, 1)
+                    wr = round((week_wins / week_games) * 100) if week_games > 0 else 0
                     lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%")
                 else:
                     lines.append(" └ Нет игр за неделю")
@@ -2865,7 +2865,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Add the current user's position (always show it at the bottom)
             if user and user_week_games > 0:
-                user_wr = round((user_week_wins / user_week_games) * 100, 1)
+                user_wr = round((user_week_wins / user_week_games) * 100) if user_week_games > 0 else 0
                 user_rank_str = rank_to_string(user.get('rank_tier', 0))
                 user_display = make_clickable(user_username, user.get('telegram_id'))
                 top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}</b> - {user_rank_str}\n"

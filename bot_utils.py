@@ -134,7 +134,7 @@ def make_clickable(name, user_id, max_length=12):
     except (ValueError, TypeError):
         uid = 0
 
-    if name and name != "None" and uid > 0:
+    if name and name != "None" and is_valid_telegram_id(uid):
         display_name = name
         try:
             cached = user_cache.get(uid)

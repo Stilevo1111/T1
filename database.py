@@ -494,7 +494,7 @@ def update_dota_week_top_cache():
 
         week_games = user.get('week_games') or 0
         week_wins = user.get('week_wins') or 0
-        winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
+        winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
 
         top_users.append({
             'telegram_id': telegram_id,
@@ -1798,7 +1798,7 @@ class Database:
             # Используем execute_query для безопасного выполнения
             if get_db_type() == "postgresql":
                 query = """
-                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, daily_best_growth
+                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, current_win_streak, daily_best_growth
                     FROM users
                     WHERE in_chat = TRUE
                 """
@@ -1813,11 +1813,12 @@ class Database:
                         "digest_position": int(r["digest_position"] or 0),
                         "digest_fissure": float(r["digest_fissure"] or 0.0),
                         "current_streak": int(r["current_streak"] or 0),
+                        "current_win_streak": int(r["current_win_streak"] or 0),
                         "daily_best_growth": float(r["daily_best_growth"] or 0.0),
                     })
             else:
                 query = """
-                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, daily_best_growth
+                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, current_win_streak, daily_best_growth
                     FROM users
                     WHERE in_chat = 1 OR in_chat IS NULL
                 """
@@ -1832,7 +1833,8 @@ class Database:
                         "digest_position": int(r[4] or 0),
                         "digest_fissure": float(r[5] or 0.0),
                         "current_streak": int(r[6] or 0),
-                        "daily_best_growth": float(r[7] or 0.0),
+                        "current_win_streak": int(r[7] or 0),
+                        "daily_best_growth": float(r[8] or 0.0),
                     })
 
             top_growth_user = None
@@ -1872,8 +1874,8 @@ class Database:
                     top_drop_user = nick if nick and nick != "None" else str(telegram_id)
                     top_drop_id = telegram_id
 
-                if u["current_streak"] > top_streak:
-                    top_streak = u["current_streak"]
+                if u["current_win_streak"] > top_streak:
+                    top_streak = u["current_win_streak"]
                     top_streak_id = telegram_id
                     nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
                     top_streak_user = nick if nick and nick != "None" else str(telegram_id)
@@ -2242,9 +2244,9 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
                 last_activity = CURRENT_TIMESTAMP,
                 current_win_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
                 current_lose_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                current_streak = CASE WHEN %s = 1 THEN current_win_streak WHEN %s = 1 THEN current_lose_streak ELSE 0 END,
-                best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_win_streak WHEN %s = 1 THEN current_lose_streak ELSE 0 END),
-                best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak WHEN %s = 1 THEN current_win_streak ELSE 0 END),
+                current_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END,
+                best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_win_streak + 1 WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END),
+                best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE best_lose_streak END),
                 last_message_id = COALESCE(%s, last_message_id)
                 WHERE telegram_id=%s
             """
@@ -2259,9 +2261,9 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
                 last_activity = CURRENT_TIMESTAMP,
                 current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
                 current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                current_streak = CASE WHEN ? = 1 THEN current_win_streak WHEN ? = 1 THEN current_lose_streak ELSE 0 END,
-                best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak WHEN ? = 1 THEN current_lose_streak ELSE 0 END),
-                best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak WHEN ? = 1 THEN current_win_streak ELSE 0 END),
+                current_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
+                best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak + 1 WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END),
+                best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE best_lose_streak END),
                 last_message_id = COALESCE(?, last_message_id)
                 WHERE telegram_id=?
             """
@@ -2278,8 +2280,9 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
                 'weekly_growth': user.get('weekly_growth', 0) + max(0, growth),
                 'current_win_streak': (user.get('current_win_streak', 0) + 1) if win else 0,
                 'current_lose_streak': (user.get('current_lose_streak', 0) + 1) if lose else 0,
-                'current_streak': user.get('current_win_streak', 0) if win else (user.get('current_lose_streak', 0) if lose else 0),
-                'best_streak': max(user.get('best_streak', 0), (user.get('current_win_streak', 0) if win else (user.get('current_lose_streak', 0) if lose else 0))),
+                'current_streak': (user.get('current_win_streak', 0) + 1) if win else ((user.get('current_lose_streak', 0) + 1) if lose else 0),
+                'best_streak': max(user.get('best_streak', 0), (user.get('current_win_streak', 0) + 1) if win else ((user.get('current_lose_streak', 0) + 1) if lose else 0)),
+                'best_lose_streak': max(user.get('best_lose_streak', 0), (user.get('current_lose_streak', 0) + 1) if lose else 0),
             }
             if last_message_id:
                 update_fields['last_message_id'] = last_message_id
@@ -3095,7 +3098,7 @@ def get_dota_week_top(limit=10, force_refresh=False):
                     continue
 
                 week_wins = user.get('week_wins', 0)
-                winrate = round((week_wins / week_games * 100), 1) if week_games > 0 else 0
+                winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
 
                 rank_tier = user.get('rank_tier')
                 if rank_tier is None or rank_tier == 0:

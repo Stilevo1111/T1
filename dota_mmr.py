@@ -1032,7 +1032,7 @@ def parse_steam_identifier(identifier: str) -> int:
 
 
 def safe_winrate(wins: int, games: int) -> float:
-    return round((wins / games * 100), 1) if games > 0 else 0
+    return round((wins / games * 100)) if games > 0 else 0
 
 
 # ========================
@@ -1899,7 +1899,7 @@ def generate_start_card(
 
         msg_num_y = msg_label_y + int(28 * scale)
         if week_wins is not None and week_losses is not None:
-            wr = round((week_wins / (week_wins + week_losses) * 100), 1) if (week_wins + week_losses) > 0 else 0
+            wr = round((week_wins / (week_wins + week_losses) * 100)) if (week_wins + week_losses) > 0 else 0
             draw.text((info_x + username_x_offset, msg_num_y), f"{week_wins}W/{week_losses}L/{wr}%", fill=(255, 255, 255), font=font_title)
             logger.info(f"generate_start_card: drew week stats {week_wins}W/{week_losses}L/{wr}% for {username or steam_nickname}")
         else:

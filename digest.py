@@ -228,11 +228,11 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
 
             top_games = top_by_net.get('week_games', 0)
             top_wins = top_by_net.get('week_wins', 0)
-            top_wr = round((top_wins / top_games * 100), 1) if top_games > 0 else 0
+            top_wr = round((top_wins / top_games * 100)) if top_games > 0 else 0
 
             bottom_games = bottom_by_net.get('week_games', 0)
             bottom_wins = bottom_by_net.get('week_wins', 0)
-            bottom_wr = round((bottom_wins / bottom_games * 100), 1) if bottom_games > 0 else 0
+            bottom_wr = round((bottom_wins / bottom_games * 100)) if bottom_games > 0 else 0
 
             parts.append(f"📈{top_name} {top_wins}W/{top_games-top_wins}L ≈{top_wr}%\n")
             parts.append(f"📉{bottom_name} {bottom_wins}W/{bottom_games-bottom_wins}L ≈{bottom_wr}%\n")
