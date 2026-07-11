@@ -127,12 +127,9 @@ async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str) -> Non
 
 
 async def _apply_techies_explosion(
-    bot, chat_id: int, user_id: int, user_obj: dict, record_roll=None) -> None:
-    """Применить результат взрыва Техиес: уменьшить/сохранить фиссуру и отправить ответ."""
-    bot,
-    session: dict,
-    record_roll=None,
+    bot, chat_id: int, user_id: int, user_obj: dict, record_roll=None
 ) -> None:
+    """Применить результат взрыва Техиес: уменьшить/сохранить фиссуру и отправить ответ."""
     from database import get_user, update_user_field
 
     user_id = session["user_id"]
@@ -178,17 +175,9 @@ async def _techies_timeout_worker(bot, session_key: str, record_roll=None) -> No
 
 
 def _start_techies_session(
-    chat_id: int, user_id: int, correct_button: str, duration: int = TECHIES_TIMEOUT_SEC) -> dict:
+    chat_id: int, user_id: int, msg_id: int, correct_button: str, start_time: float, display_username: str, record_roll=None
+) -> dict:
     """Создать сессию мини-игры Техиес (выбрать правильную кнопку, запустить таймаут)."""
-    bot,
-    chat_id: int,
-    user_id: int,
-    msg_id: int,
-    correct_button: str,
-    start_time: float,
-    display_username: str,
-    record_roll=None,
-) -> None:
     session_key = _session_key(chat_id, user_id)
     _cancel_timeout_task(_active_techies_sessions.get(session_key))
 
