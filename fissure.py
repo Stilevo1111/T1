@@ -34,7 +34,7 @@ from constants import (
     WEEKEND_BONUS_MULTIPLIERS,
     ZEUS_TEXTS,
 )
-from database import get_user, update_fissure, update_last_message_id, zeus_strike
+from database import get_user, update_fissure, update_last_message_id, zeus_strike, user_cache
 from digest import invalidate_digest_cache
 from rate_limiter import is_rate_limited
 from rolls import (
@@ -294,6 +294,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
+        user_cache.remove(user_obj.id)
         user = get_user(user_obj.id, username)
         _log_user = {k: v for k, v in user.items() if k != "analytics_cache"}
         logger.info(f"user data: {_log_user}")
