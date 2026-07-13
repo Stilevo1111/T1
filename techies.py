@@ -175,7 +175,7 @@ async def _techies_timeout_worker(bot, session_key: str, record_roll=None) -> No
 
 
 def _start_techies_session(
-    chat_id: int, user_id: int, msg_id: int, correct_button: str, start_time: float, display_username: str, record_roll=None
+    bot, chat_id: int, user_id: int, msg_id: int, correct_button: str, start_time: float, display_username: str, record_roll=None
 ) -> dict:
     """Создать сессию мини-игры Техиес (выбрать правильную кнопку, запустить таймаут)."""
     session_key = _session_key(chat_id, user_id)

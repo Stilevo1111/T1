@@ -2241,6 +2241,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
                 total_rolls = total_rolls + 1,
                 weekly_rolls = weekly_rolls + 1,
                 weekly_growth = weekly_growth + %s,
+                daily_best_growth = GREATEST(daily_best_growth, %s),
                 last_activity = CURRENT_TIMESTAMP,
                 current_win_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
                 current_lose_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END,
@@ -2250,7 +2251,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
                 last_message_id = COALESCE(%s, last_message_id)
                 WHERE telegram_id=%s
             """
-            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, lose, win, last_message_id, telegram_id))
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), max(0, growth), win, lose, lose, win, win, lose, lose, last_message_id, telegram_id))
         else:
             query = """
                 UPDATE users SET fissure=?, last_fissure=?,
@@ -2258,6 +2259,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
                 total_rolls = total_rolls + 1,
                 weekly_rolls = weekly_rolls + 1,
                 weekly_growth = weekly_growth + ?,
+                daily_best_growth = MAX(daily_best_growth, ?),
                 last_activity = CURRENT_TIMESTAMP,
                 current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
                 current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
@@ -2267,7 +2269,7 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
                 last_message_id = COALESCE(?, last_message_id)
                 WHERE telegram_id=?
             """
-            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), win, lose, lose, win, win, lose, lose, win, last_message_id, telegram_id))
+            db.execute_query(query, (fissure, last_fissure, growth, max(0, growth), max(0, growth), win, lose, lose, win, win, lose, lose, last_message_id, telegram_id))
 
         user = user_cache.get(telegram_id)
         if user:
