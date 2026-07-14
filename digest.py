@@ -178,6 +178,92 @@ def invalidate_digest_cache():
 
 
 # =====================================================
+# Instant digest refresh (right after a roll, debounced)
+# =====================================================
+
+INSTANT_REFRESH_DEBOUNCE = 10  # секунд между мгновенными апдейтами (coalesce burst-роллов)
+
+
+def schedule_instant_digest_refresh(context):
+    """Запланировать лёгкую правку закреплённого дайджеста сразу после ролла.
+
+    Дебаунс: если job уже запланирован в этом окне — не планируем повторно,
+    все роллы в окне DEBOUNCE отразятся одной правкой через DEBOUNCE секунд.
+    Только edit caption/text существующего сообщения (без create/регенерации баннера).
+    """
+    try:
+        if context.job_queue.get_jobs_by_name("instant_digest_refresh"):
+            return
+        context.job_queue.run_once(
+            _instant_digest_refresh_job, INSTANT_REFRESH_DEBOUNCE, name="instant_digest_refresh"
+        )
+    except Exception as e:
+        logger.debug(f"Could not schedule instant digest refresh: {e}")
+
+
+async def _instant_digest_refresh_job(context):
+    """Лёгкая правка существующего дайджеста свежими fissure-данными после ролла.
+
+    Безопасно для multi-instance (только лидер-инстанс) и respect Telegram rate-limit.
+    Не создаёт новое сообщение и не регенерирует hero-meta баннер.
+    """
+    # Только лидер-инстанс редактирует дайджест (Render free = 2 контейнера)
+    if not await claim_or_check_digest_leader():
+        return
+
+    # Защита от всплесков Telegram API
+    try:
+        from main import is_rate_limited
+        if is_rate_limited():
+            logger.warning("instant_digest_refresh: skipped - rate limited")
+            return
+    except Exception:
+        pass
+
+    from database import get_config, set_config, get_digest_stats, get_dota_week_top
+    try:
+        digest_chat_id = get_config('digest_chat_id')
+        msg_id = get_config('alternate_digest_message_id')
+        if not digest_chat_id or not msg_id:
+            return
+
+        # Свежие fissure-данные (кэш уже сброшен invalidate_digest_cache после ролла)
+        fresh = get_digest_stats()
+        _digest_state_container.set_digest_data(fresh)
+        # Dota-данные переиспользуем из кеша (меняются раз в час); если пусты — обновим
+        if _digest_state_container.get_dota_data() is None:
+            try:
+                _digest_state_container.set_dota_data(get_dota_week_top(limit=30, force_refresh=True))
+            except Exception:
+                pass
+
+        text = _build_digest_text_for_type("0")
+        if not text:
+            return
+        # Ничего не изменилось — не бьём API
+        if _digest_state_container.get_last_text() == text:
+            return
+
+        bot = context.application.bot
+        is_photo = _get_digest_is_photo()
+        if is_photo:
+            await bot.edit_message_caption(
+                chat_id=int(digest_chat_id), message_id=int(msg_id),
+                caption=text, parse_mode="HTML"
+            )
+        else:
+            await bot.edit_message_text(
+                chat_id=int(digest_chat_id), message_id=int(msg_id),
+                text=text, parse_mode="HTML"
+            )
+        _digest_state_container.set_last_text(text)
+        set_config('alternate_digest_last_text', text)
+        logger.info(f"instant_digest_refresh: обновлён дайджест {msg_id}")
+    except Exception as e:
+        logger.warning(f"instant_digest_refresh failed: {e}")
+
+
+# =====================================================
 # Digest cache refresh (hourly, for combined Fissure + Dota display)
 # =====================================================
 
@@ -473,7 +559,22 @@ async def alternate_digest_job(context):
 
         # Если кеш валиден - используем его и обновляем объединённый дайджест
         if not should_create_new and not should_refresh_data:
-            logger.info(f"Используем кешированный дайджест (создан {now - cache['created_at']:.0f}с назад)")
+            logger.info(f"Используем кешированный дайджест (создан {now - cache['created_at']:.0f}с назад), обновляем данные из БД")
+
+            # Всегда берём свежие данные из БД, чтобы дайджест не показывал устаревшие
+            # или "пустые" значения (например, после invalidate_digest_cache, вызываемого
+            # после каждого ролла, fissure-данные сбрасываются в None).
+            if _digest_state_container.get_digest_data() is None or now - _digest_state_container.get_last_data_refresh() > _data_refresh_interval:
+                try:
+                    _digest_state_container.set_digest_data(get_digest_stats())
+                    _digest_state_container.set_last_data_refresh(now)
+                except Exception as e:
+                    logger.warning(f"Не удалось обновить fissure-данные дайджеста: {e}")
+            if _digest_state_container.get_dota_data() is None or now - _digest_state_container.get_last_data_refresh() > _data_refresh_interval:
+                try:
+                    _digest_state_container.set_dota_data(get_dota_week_top(limit=30, force_refresh=True))
+                except Exception as e:
+                    logger.warning(f"Не удалось обновить dota-данные дайджеста: {e}")
 
             # Генерируем объединённый текст (Fissure + Dota)
             text = _build_digest_text_for_type("0")
@@ -541,10 +642,10 @@ async def alternate_digest_job(context):
                 _digest_state_container.set_digest_data(get_digest_stats())
                 _digest_state_container.set_last_data_refresh(now)
 
-            # То же для Dota данных
-            if _digest_state_container.get_dota_data() is None:
+            # То же для Dota данных (force_refresh — чтобы не использовать 1-часовой кеш get_dota_week_top)
+            if _digest_state_container.get_dota_data() is None or now - _digest_state_container.get_last_data_refresh() > _data_refresh_interval:
                 logger.info("Обновляем Dota данные для дайджеста из БД")
-                _digest_state_container.set_dota_data(get_dota_week_top(limit=30))
+                _digest_state_container.set_dota_data(get_dota_week_top(limit=30, force_refresh=True))
             if _digest_state_container.get_dota_data() is None:
                 logger.info("Dota данные пусты, пробуем get_dota_week_top_from_db")
                 from database import get_dota_week_top_from_db

@@ -546,6 +546,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Инвалидируем кеш дайджеста чтобы следующий job показал свежие данные
         invalidate_digest_cache()
 
+        # Мгновенный (дебаунснутый) апдейт закреплённого дайджеста сразу после ролла
+        try:
+            from digest import schedule_instant_digest_refresh
+            schedule_instant_digest_refresh(context)
+        except Exception:
+            pass
+
     except Exception as e:
         tb = traceback.format_exc()
         logger.error(f"Error in fissure: {e}\n{tb}")
