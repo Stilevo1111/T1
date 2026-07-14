@@ -3552,8 +3552,8 @@ async def main():
         # Create HTTPXRequest with increased timeouts to prevent Telegram API timeouts
         request = HTTPXRequest(
             connection_pool_size=8,
-            read_timeout=30.0,
-            write_timeout=30.0,
+            read_timeout=60.0,
+            write_timeout=60.0,
             connect_timeout=30.0,
             pool_timeout=30.0
         )
