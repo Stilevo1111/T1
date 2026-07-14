@@ -2273,8 +2273,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         matches = []
 
         if context.args and context.args[0]:
-            # /profile @username или /profile username — ищем другого пользователя
-            target_username = context.args[0].lstrip("@")
+            # /profile @username, /profile username или /profile <steam ник (в т.ч. с пробелами)
+            target_username = " ".join(context.args).lstrip("@")
             if target_username:
                 target_user = await asyncio.to_thread(get_user_by_username, target_username)
                 if not target_user:
@@ -2318,7 +2318,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Форматируем username как кликабельную ссылку
         if viewing_other:
             target_id = target_user.get('telegram_id', 0)
-            target_name = target_user.get('username') or target_user.get('steam_nickname') or 'Unknown'
+            _uname = target_user.get('username')
+            if not _uname or _uname == "Unknown":
+                _uname = target_user.get('steam_nickname')
+            target_name = _uname or 'Unknown'
         else:
             user_obj = update.effective_user
             target_id = user_obj.id
@@ -2327,7 +2330,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         steam_id = target_user.get('steam_id')
         if steam_id:
-            text = f"👑 {display_username} 🔗 <a href=\"https://steamcommunity.com/profiles/{steam_id}\">Steam</a>"
+            text = (
+                f"👑 {display_username} "
+                f"🔗 <a href=\"https://steamcommunity.com/profiles/{steam_id}\">Steam</a> "
+                f"📊 <a href=\"https://www.dotabuff.com/players/{steam_id}\">DotaBuff</a>"
+            )
         else:
             text = f"👑 {display_username}"
 

@@ -2146,7 +2146,8 @@ def get_user(telegram_id, username=None):
 
 
 def get_user_by_username(username):
-    """Найти пользователя по username (без @). Ищет сначала в кеше, потом в БД."""
+    """Найти пользователя по username ИЛИ steam_nickname (без @, регистр не важен).
+    Сначала ищем в кеше, потом в БД."""
     username = username.lstrip("@").lower()
 
     cached = user_cache.get('username_lookup')
@@ -2162,9 +2163,17 @@ def get_user_by_username(username):
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
         if "postgres" in scheme:
-            cursor.execute("SELECT telegram_id, username FROM users WHERE LOWER(username) = %s LIMIT 1", (username,))
+            cursor.execute(
+                "SELECT telegram_id, username, steam_nickname FROM users "
+                "WHERE LOWER(username) = %s OR LOWER(steam_nickname) = %s LIMIT 1",
+                (username, username),
+            )
         else:
-            cursor.execute("SELECT telegram_id, username FROM users WHERE LOWER(username) = ? LIMIT 1", (username,))
+            cursor.execute(
+                "SELECT telegram_id, username, steam_nickname FROM users "
+                "WHERE LOWER(username) = ? OR LOWER(steam_nickname) = ? LIMIT 1",
+                (username, username),
+            )
         result = cursor.fetchone()
         cursor.close()
         conn.commit() if "postgres" in scheme else None
