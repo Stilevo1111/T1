@@ -2333,7 +2333,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = (
                 f"👑 {display_username} "
                 f"🔗 <a href=\"https://steamcommunity.com/profiles/{steam_id}\">Steam</a> "
-                f"📊 <a href=\"https://www.dotabuff.com/players/{steam_id}\">DotaBuff</a>"
+                f"🔗 <a href=\"https://www.dotabuff.com/players/{steam_id}\">DotaBuff</a>"
             )
         else:
             text = f"👑 {display_username}"
