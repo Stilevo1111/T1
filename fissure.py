@@ -136,7 +136,6 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
 
     user = get_user(user_obj.id, user_obj.username)
     new_fissure = user.get("fissure", 0)
-    update_fissure(user_obj.id, new_fissure, now, 0)
 
     zeus_text = random.choice(ZEUS_TEXTS)
 
@@ -182,83 +181,8 @@ def process_multicast_result(roll, cascade_count, MULTICAST_TEXTS):
     return roll, original_roll, multicast_text
 
 
-async def handle_multicast_animation(bot, chat_id, random_module, MULTICAST_TEXTS, slot_emojis=None):
-    """
-    Handles the full multicast slot animation logic (x2, x3, x4).
-    Returns: (cascade_count, multicast_text, slot_msg_ids)
-    Logic and messages are 100% preserved from the original.
-    """
-    if slot_emojis is None:
-        slot_emojis = ["🍒", "🍋", "🍇", "🔔", "💎"]
-
-    slot_msg_ids = []
-    cascade_count = 1
-    multicast_text = ""
-
-    if random_module.random() < 0.75:
-        cascade_count = 2
-        jackpot_symbol = random_module.choice(slot_emojis)
-        slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-
-        msg = await bot.send_message(
-            chat_id=chat_id,
-            text=f"🎰 {' | '.join(slots)} | x2"
-        )
-        slot_msg_ids.append(msg.message_id)
-        await asyncio.sleep(1)
-
-        if random_module.random() < 0.25:
-            cascade_count = 3
-            jackpot_symbol = random_module.choice(slot_emojis)
-            slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-
-            msg = await bot.send_message(
-                chat_id=chat_id,
-                text=f"🎰 {' | '.join(slots)} | x3"
-            )
-            slot_msg_ids.append(msg.message_id)
-            await asyncio.sleep(1)
-
-            if random_module.random() < 0.15:
-                cascade_count = 4
-                jackpot_symbol = random_module.choice(slot_emojis)
-                slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-
-                msg = await bot.send_message(
-                    chat_id=chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x4"
-                )
-                slot_msg_ids.append(msg.message_id)
-                await asyncio.sleep(0.5)
-            else:
-                slots = random_module.sample(slot_emojis, 3)
-                msg = await bot.send_message(
-                    chat_id=chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x3"
-                )
-                slot_msg_ids.append(msg.message_id)
-                await asyncio.sleep(0.5)
-                cascade_count = 3
-        else:
-            slots = random_module.sample(slot_emojis, 3)
-            msg = await bot.send_message(
-                chat_id=chat_id,
-                text=f"🎰 {' | '.join(slots)} | x2"
-            )
-            slot_msg_ids.append(msg.message_id)
-            await asyncio.sleep(0.5)
-            cascade_count = 2
-    else:
-        slots = random_module.sample(slot_emojis, 3)
-        msg = await bot.send_message(
-            chat_id=chat_id,
-            text=f"🎰 {' | '.join(slots)} | x1"
-        )
-        slot_msg_ids.append(msg.message_id)
-        await asyncio.sleep(0.5)
-
-    return cascade_count, multicast_text, slot_msg_ids
-
+# =====================
+# MAIN FISSURE HANDLER (extracted from main.py - behavior 100% preserved)
 # =====================
 # MAIN FISSURE HANDLER (extracted from main.py - behavior 100% preserved)
 # =====================
@@ -380,6 +304,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             multicast_text = ""
             cascade_count = 1
             slot_msg_ids = []
+            is_multicast = True
 
             # Get base roll first
             roll, special_message, is_fatal, got_help = calculate_fissure_roll(user.get("fissure", 0))
@@ -475,6 +400,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
             cascade_count = 1
+            is_multicast = False
             roll, special_message, is_fatal, got_help = calculate_fissure_roll(user.get("fissure", 0))
             base_roll_before_streak = roll  # Сохраняем исходный ролл
             current_win_streak = user.get('current_win_streak', 0)
@@ -488,33 +414,26 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         roll, protection_msg = apply_fissure_protection(user.get("fissure", 0), roll, is_fatal)
 
-        # STORE ORIGINAL ROLL FOR DISPLAY (before weekend multiplier)
-        base_roll_for_text = roll
-        if original_roll is not None:
-            base_roll_for_text = original_roll
-        
-        # Use original_roll (base roll saved before streak and multicast) for display
-        roll_for_result = original_roll if original_roll is not None else roll
+        # Displayed roll is the BASE roll (before streak/multicast) so the breakdown
+        # below (+streak, xN) always adds up to the actually applied roll.
+        display_roll = base_roll_before_streak
 
-        # Weekend bonus APPLIED TO WHOLE ROLL (only for normal rolls, not multicast)
+        # Weekend bonus applies ONLY to genuine normal rolls. A x1 "miss" slot still
+        # goes through the multicast branch, so we exclude it via is_multicast.
         weekend_bonus = ""
-        bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS) if is_weekend and roll > 0 and not is_fatal and cascade_count == 1 else None
-        if bonus_multiplier:
+        bonus_multiplier = None
+        if is_weekend and roll > 0 and not is_fatal and not is_multicast:
+            bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
             roll = roll * bonus_multiplier
             weekend_bonus = f"🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {roll:.1f} см."
 
-        display_roll = roll
-
-        result_text = get_roll_text(roll_for_result)
+        result_text = get_roll_text(display_roll)
 
         old_fissure = user.get("fissure", 0)
 
-        # Считаем новую фиссуру: база - 5% Зевса + ролл (фиссуры < 5 защищены от Зевса)
-        if zeus_triggered and user.get("fissure", 0) >= 5:
-            base_fissure = user.get("fissure", 0) * 0.95
-        else:
-            base_fissure = user.get("fissure", 0)
-        base_fissure = max(0.1, base_fissure)
+        # New fissure = current + applied roll. Zeus is handled in a separate branch
+        # above and returns early, so it never reaches here.
+        base_fissure = max(0.1, user.get("fissure", 0))
         new_fissure = calculate_new_fissure(base_fissure, roll)
         growth = new_fissure - old_fissure
 
@@ -534,54 +453,38 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             category = "same"
 
-        extra_text = ""
-        roll_for_meme = original_roll if original_roll is not None else roll
-        if cascade_count > 1 and original_roll is not None:
-            extra_text = ""
-        else:
-            extra_text = get_hero_quote(roll_for_meme)
+        # Hero quote is based on the base roll (before streak/multicast)
+        extra_text = get_hero_quote(display_roll)
 
-# Build message parts in order
+        # Build message parts in order
         parts = []
         parts.append(f"🎲 {display_username}")
-        
+
         if extra_text:
             parts.append(extra_text)
-            
-        # Determine roll text to use
-        if cascade_count > 1 and original_roll is not None:
-            base_for_text = original_roll  # Базовый ролл для текста (восстановленный)
-            result_text = get_roll_text(base_for_text)
-            # Для мультикаста добавляем extra_text (мем) в отдельную часть если нужно
-            # Но extra_text уже добавлен выше как hero quote
-            pass
-        else:
-            result_text = get_roll_text(roll_for_result)
-            
+
         parts.append(result_text)
-        
+
         if streak_text:
             parts.append(streak_text)
         if weekend_bonus:
             parts.append(weekend_bonus)
-            
-# Add multicast indicator if applicable (only for multicast rolls)
+
+        # Multicast indicator (only when an actual multiplier happened)
         if cascade_count > 1:
-            # Show multiplier with emoji and the total contribution after multiplier
             m_display = f"+{multiplied_roll}" if multiplied_roll > 0 else str(multiplied_roll)
             parts.append(f"⚡ МУЛЬТИКАСТ×{cascade_count} {m_display} см!")
-        # For regular rolls, the number is already included in the roll text, so no need to repeat it
-        
-# Join parts with single blank line between them
+
+        # Join parts with single blank line between them
         text = "\n\n".join(parts)
-        
+
         # Add protection message if applicable (separated by single newline)
         if is_fatal and protection_msg:
             text = f"{text}\n{protection_msg}"
-        
+
         # Add fissure change line (always at the end, preceded by blank line)
         text = f"{text}\n\n📏 {old_fissure:.1f} см → {new_fissure:.1f} см"
-        
+
         # Add Zeus text if applicable (separated by single newline)
         if zeus_text:
             text = f"{text}\n{zeus_text}"

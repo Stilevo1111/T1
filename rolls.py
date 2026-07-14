@@ -382,50 +382,6 @@ CATEGORY_PHRASES = {
 }
 
 
-# --- Private helpers (pure, no side effects, behavior unchanged) ---
-
-def _get_early_game_roll(current_fissure: float) -> RollResult | None:
-    """Early game protection and big bonus for very small fissures (< 5)."""
-    if current_fissure < 5:
-        if random.random() < 0.6:
-            bonus_options = [
-                (-5, 20), (-3, 20), (-1, 30), (5, 15), (10, 10), (20, 5), (30, 5)
-            ]
-            values, weights = zip(*bonus_options)
-            roll = random.choices(values, weights=weights)[0]
-            if roll > 0:
-                return roll, "✨ МАКСИМАЛЬНАЯ ПОМОЩЬ!", False, True
-            return roll, "", False, False
-
-        protected_rolls = [-5, -3, -1, 1, 3, 5, 10]
-        roll = random.choice(protected_rolls)
-        return roll, "🛡 ЗАЩИЩЁННЫЙ РОЛЛ", False, True
-    return None
-
-
-def _get_improved_roll(current_fissure: float) -> float | None:
-    """Medium fissure bonus rolls."""
-    if 5 <= current_fissure < 20 and random.random() < 0.25:
-        improved_options = [3, 5, 10, 20, -5, -3, -1]
-        return random.choice(improved_options)
-    return None
-
-
-def _get_lucky_bonus(current_fissure: float) -> float | None:
-    """Lucky bonus for large fissures."""
-    if current_fissure >= 20:
-        chance = 0.1 if current_fissure < 100 else 0.05
-        if random.random() < chance:
-            return random.choice([5, 10, 20, -5, -3, -10, -15])
-    return None
-
-
-def _weighted_choice(weighted: list[tuple[float, int]]) -> float:
-    """Generic weighted random choice."""
-    values, weights = zip(*weighted)
-    return random.choices(values, weights=weights)[0]
-
-
 # =====================
 # ROLL CALCULATION FUNCTIONS
 # =====================
@@ -434,20 +390,26 @@ def calculate_fissure_roll(current_fissure: float) -> RollResult:
     """
     Calculates new roll based on current fissure size.
     Returns: RollResult = (roll_value, message, is_fatal, got_help)
+
+    The formula is continuous across the whole range (no cliffs):
+      - spread scales with the fissure size (5..60),
+      - downside is bounded by the current fissure (can't drop below ~0),
+      - small fissures (<5 cm) get an early-game boost that fades smoothly
+        to 0 by 5 cm instead of switching abruptly to the linear formula.
+    A catastrophic roll (<= FATAL_ROLL) is flagged as fatal so the protection
+    and "fatal" category in the handler become reachable.
     """
-    if current_fissure < 5:
-        spread = 5
-        negative_max = -min(spread, max(1, int(current_fissure - 0.1)))
-        positive_max = spread + 50
-    else:
-        spread = min(60, max(5, int(current_fissure * 0.35)))
-        negative_max = -min(spread, max(1, int(current_fissure - 0.1)))
-        positive_max = spread + max(0, int(current_fissure * 0.08))
+    spread = min(60, max(5, int(current_fissure * 0.35)))
+    negative_max = -min(spread, max(1, int(current_fissure - 0.1)))
+    early_bonus = int(max(0, 5 - current_fissure) * 10)
+    positive_max = spread + max(0, int(current_fissure * 0.08)) + early_bonus
 
     roll = random.randint(negative_max, positive_max)
     if roll == 0:
         roll = random.choice([-1, 1])
-    return roll, "", False, False
+
+    is_fatal = roll <= FATAL_ROLL
+    return roll, "", is_fatal, False
 
 
 def get_roll_text(roll_value: float) -> str:
