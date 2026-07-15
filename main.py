@@ -3161,6 +3161,11 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
 
         text = update.message.text.strip()
         
+        # Ignore inline query results (messages starting with @bot_username)
+        if text.startswith("@"):
+            logger.info(f"menu_handler: ignoring inline query result: '{text}'")
+            return
+        
         # Check for "пати" keyword (case-insensitive, can be just the word)
         text_lower = text.lower()
         if text_lower in ("пати", "party", "парті") or "пати" in text_lower:

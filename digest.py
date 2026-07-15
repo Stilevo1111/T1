@@ -584,7 +584,7 @@ async def alternate_digest_job(context):
             next_type = "0"
 
             # Try to edit existing message with correct method for message type
-            if existing_msg_id and int(existing_msg_id) > 0:
+            if existing_msg_id and str(existing_msg_id).lower() not in ("none", "null", "") and int(existing_msg_id) > 0:
                 try:
                     if is_photo_message:
                         await bot.edit_message_caption(
