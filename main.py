@@ -3739,7 +3739,7 @@ async def main():
         app.add_handler(CommandHandler("testgreeting", test_greeting))
         app.add_handler(CommandHandler("testmvp", test_mvp_winner))
         app.add_handler(CommandHandler("analyze", analyze_command))
-        app.add_handler(CommandHandler(("party", "пати"), party_command))
+        app.add_handler(CommandHandler(("party", "party"), party_command))
         app.add_handler(CommandHandler("testtechies", testtechies))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
