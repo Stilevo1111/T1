@@ -36,7 +36,7 @@ from __future__ import annotations
 import logging
 import os
 
-from telegram import InlineKeyboardButton
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ def get_week_wr(user: dict) -> int:
     return round((wins / games) * 100) if games > 0 else 0
 
 
-def build_inline_keyboard(players: list) -> list:
+def build_inline_keyboard(players: list) -> InlineKeyboardMarkup:
     buttons = []
     for i, p in enumerate(players, 1):
         username = p.get("username") or p.get("steam_nickname") or ""
@@ -62,7 +62,7 @@ def build_inline_keyboard(players: list) -> list:
             username = "bot"
         btn = InlineKeyboardButton(str(i), switch_inline_query_current_chat=f"@{username}")
         buttons.append(btn)
-    return [buttons[:4], buttons[4:8]]
+    return InlineKeyboardMarkup([buttons[:4], buttons[4:8]])
 
 
 async def party_command(update, context):

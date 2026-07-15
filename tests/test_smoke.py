@@ -153,6 +153,7 @@ def test_party_week_wr_calculation():
 def test_party_inline_keyboard_format():
     """build_inline_keyboard should create correct 2x4 button layout."""
     from party import build_inline_keyboard
+    from telegram import InlineKeyboardMarkup
 
     players = [
         {"username": "user1", "steam_nickname": "Nick1"},
@@ -167,11 +168,13 @@ def test_party_inline_keyboard_format():
 
     keyboard = build_inline_keyboard(players)
 
-    assert len(keyboard) == 2, "Keyboard should have 2 rows"
-    assert len(keyboard[0]) == 4, "First row should have 4 buttons"
-    assert len(keyboard[1]) == 4, "Second row should have 4 buttons"
+    assert isinstance(keyboard, InlineKeyboardMarkup), "Keyboard should be InlineKeyboardMarkup"
+    keyboard_rows = keyboard.inline_keyboard
+    assert len(keyboard_rows) == 2, "Keyboard should have 2 rows"
+    assert len(keyboard_rows[0]) == 4, "First row should have 4 buttons"
+    assert len(keyboard_rows[1]) == 4, "Second row should have 4 buttons"
 
-    for row in keyboard:
+    for row in keyboard_rows:
         for btn in row:
             assert hasattr(btn, 'text')
             assert hasattr(btn, 'switch_inline_query_current_chat')
@@ -180,6 +183,7 @@ def test_party_inline_keyboard_format():
 def test_party_inline_keyboard_fewer_players():
     """build_inline_keyboard should handle fewer than 8 players."""
     from party import build_inline_keyboard
+    from telegram import InlineKeyboardMarkup
 
     players = [
         {"username": "user1", "steam_nickname": "Nick1"},
@@ -188,8 +192,10 @@ def test_party_inline_keyboard_fewer_players():
 
     keyboard = build_inline_keyboard(players)
 
-    assert len(keyboard) == 1, "Keyboard should have 1 row"
-    assert len(keyboard[0]) == 2, "First row should have 2 buttons"
+    assert isinstance(keyboard, InlineKeyboardMarkup), "Keyboard should be InlineKeyboardMarkup"
+    keyboard_rows = keyboard.inline_keyboard
+    assert len(keyboard_rows) == 1, "Keyboard should have 1 row"
+    assert len(keyboard_rows[0]) == 2, "First row should have 2 buttons"
 
 
 def test_party_config_defaults():
