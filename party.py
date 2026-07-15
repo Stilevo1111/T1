@@ -40,8 +40,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 logger = logging.getLogger(__name__)
 
-PARTY_MAX_ABOVE = int(os.getenv("PARTY_MAX_ABOVE", "4"))
-PARTY_MAX_BELOW = int(os.getenv("PARTY_MAX_BELOW", "4"))
+PARTY_MAX_ABOVE = 4
+PARTY_MAX_BELOW = 4
 
 
 def get_week_wr(user: dict) -> int:
@@ -122,7 +122,9 @@ async def party_for_user(chat_id, chat_type, requester, context):
 
         lines = []
         for idx, p in enumerate(players, 1):
-            if idx == PARTY_MAX_ABOVE + 1:
+            # Central position (5th) is marked with 🔍
+            # 1-4: players above, 5: you, 6-9: players below
+            if idx == 5:
                 rank = "🔍"
             else:
                 rank = f"{idx}️⃣"
