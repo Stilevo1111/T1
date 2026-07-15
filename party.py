@@ -161,7 +161,7 @@ async def party_for_user(chat_id, chat_type, requester, context):
             else:
                 name = f"<b>{steam_nick}</b>"
             if has_games:
-                second = f"└ {mmr} • 🔥{get_week_wr(p)}%"
+                second = f"└ {mmr} • WR {get_week_wr(p)}%"
             else:
                 second = f"└ {mmr} • Нет игр за неделю"
             lines.append(f"{rank}{name} - {player_rank}")
