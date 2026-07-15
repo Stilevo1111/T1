@@ -132,9 +132,12 @@ async def party_for_user(chat_id, chat_type, requester, context):
             players = []
 
         lines = []
-        number_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "🔍", "6️⃣", "7️⃣", "8️⃣", "9️⃣"]
+        # Players numbered 1-8, with your position (🔍) in the center
+        number_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣"]
         for idx, p in enumerate(players, 1):
-            if idx <= len(number_emojis):
+            if idx == 5:
+                rank = "🔍"
+            elif idx <= len(number_emojis):
                 rank = number_emojis[idx - 1]
             else:
                 rank = f"{idx}️⃣"
