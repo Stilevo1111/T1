@@ -3287,31 +3287,39 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
         text = update.message.text.strip()
         
         # Handle inline query results (messages like "@DotaFull_bot @username")
+        # Skip messages that look like bot responses (starting with @bot_username)
         if text.startswith("@") and " " in text:
             parts = text.split()
             if len(parts) >= 2 and parts[0].startswith("@"):
-                inline_username = parts[1]
+                first_mention = parts[0]
+                second_mention = parts[1] if len(parts) > 1 else ""
+                
+                # Skip if this looks like a bot response message (e.g., "@DotaFull_bot @username")
+                # Bot's inline query results typically have bot_username as first mention
+                # We want to process only when the user explicitly mentions someone: "@username"
+                inline_username = second_mention
                 if inline_username.startswith("@"):
                     inline_username = inline_username[1:]
-                logger.info(f"menu_handler: handling inline query result for user: {inline_username}")
                 
-                chat_id = update.message.chat_id
-                chat_type = update.message.chat.type
-                
-                if chat_type in ['group', 'supergroup', 'channel']:
-                    user_msg_id = update.message.message_id
-                    asyncio.create_task(delete_user_message_safely(context.bot, chat_id, user_msg_id))
-                
-                requester = get_user_by_username(inline_username)
-                if not requester:
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text=f"❌ Пользователь @{inline_username} не найден в базе.",
-                    )
+                # Validate: inline_username should be alphanumeric (Telegram usernames)
+                if inline_username and inline_username.replace("_", "").replace("-", "").isalnum():
+                    logger.info(f"menu_handler: handling inline query result for user: {inline_username}")
+                    
+                    chat_id = update.message.chat_id
+                    chat_type = update.message.chat.type
+                    
+                    if chat_type in ['group', 'supergroup', 'channel']:
+                        user_msg_id = update.message.message_id
+                        asyncio.create_task(delete_user_message_safely(context.bot, chat_id, user_msg_id))
+                    
+                    requester = get_user_by_username(inline_username)
+                    if not requester:
+                        # User not found in database - skip silently (could be a bot response or unknown user)
+                        logger.info(f"menu_handler: inline query user @{inline_username} not found, skipping")
+                        return
+                    
+                    await party_for_user(chat_id, chat_type, requester, context)
                     return
-                
-                await party_for_user(chat_id, chat_type, requester, context)
-                return
         
         menu_buttons = {
             "🎲 Ролл Фиссуры": "🎲 Ролл Фиссуры",
