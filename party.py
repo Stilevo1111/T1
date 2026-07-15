@@ -119,19 +119,14 @@ async def party_for_user(chat_id, chat_type, requester, context):
 
         req_mmr = requester.get("mmr") or 0
 
-        # Players above (sorted by MMR descending, take up to 4)
-        above = sorted([c for c in candidates if (c.get("mmr") or 0) > req_mmr], key=lambda c: (c.get("mmr") or 0), reverse=True)
+        # Sort all players by MMR descending (best on top, worst on bottom)
+        sorted_candidates = sorted(candidates, key=lambda c: (c.get("mmr") or 0), reverse=True)
         
-        # If not enough players above, fill with players having MMR just below target
-        if len(above) < 4:
-            fillers = sorted([c for c in candidates if (c.get("mmr") or 0) <= req_mmr], key=lambda c: (c.get("mmr") or 0), reverse=True)
-            while len(above) < 4 and fillers:
-                above.append(fillers.pop(0))
+        # Take top 4 above (with higher MMR)
+        above = [c for c in sorted_candidates if (c.get("mmr") or 0) > req_mmr][:4]
         
-        above = above[:4]
-        
-        # Players below (sorted by MMR ascending, take up to 4)
-        below = sorted([c for c in candidates if (c.get("mmr") or 0) < req_mmr], key=lambda c: (c.get("mmr") or 0))[:PARTY_MAX_BELOW]
+        # Take bottom 4 below (with lower MMR)
+        below = [c for c in sorted_candidates if (c.get("mmr") or 0) < req_mmr][-4:][::-1]  # reverse to show worst first
 
         players = above + [requester] + below
 
