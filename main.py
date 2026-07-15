@@ -88,7 +88,7 @@ if not TOKEN:
 # Anti-spam tracking for party invitations
 _party_invite_tracking = {}
 PARTY_INVITE_COOLDOWN = 10  # seconds between invites from same user
-PARTY_INVITE_MAX_PER_HOUR = 50  # max invites per user per hour
+PARTY_INVITE_MAX_PER_HOUR = 3  # max invites per user per hour
 
 MORNING_GREETINGS = [
     "<b>⚔️ Доброе утро, тима!</b>\n\n<i>❤️ – доброе утро всем \n💔 – я сегодня один играю</i>",
