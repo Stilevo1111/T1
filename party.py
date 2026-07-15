@@ -132,15 +132,16 @@ async def party_for_user(chat_id, chat_type, requester, context):
             players = []
 
         lines = []
-        # Players numbered 1-8, with your position (🔍) in the center
-        number_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣"]
+        # Players numbered: 1-4 above, 5=your position (🔍), 6-8 below
+        # But display numbering: 1-4, 🔍, then 5-8 for below players
         for idx, p in enumerate(players, 1):
             if idx == 5:
                 rank = "🔍"
-            elif idx <= len(number_emojis):
-                rank = number_emojis[idx - 1]
-            else:
+            elif idx <= 4:
                 rank = f"{idx}️⃣"
+            else:
+                # idx 6,7,8,9 → display as 5,6,7,8
+                rank = f"{idx - 1}"
             telegram_id = p.get("telegram_id")
             steam_nick = p.get("steam_nickname") or "—"
             rank_tier = p.get("rank_tier", 0) or 0
