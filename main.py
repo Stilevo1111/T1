@@ -1877,32 +1877,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username = f"tg{invited_player.get('telegram_id')}" if invited_player.get("telegram_id") else "пользователь"
         
         # Get invited player stats
-        steam_nick = invited_player.get("steam_nickname") or username
-        mmr = invited_player.get("mmr", 0) or 0
-        rank_tier = invited_player.get("rank_tier", 0) or 0
-        week_games = invited_player.get("week_games", 0) or 0
-        week_wins = invited_player.get("week_wins", 0) or 0
-        winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
-        
-        # Calculate rank name
-        rank_names = {
-            1: "Herald", 2: "Herald II", 3: "Herald III", 4: "Herald IV", 5: "Herald V",
-            6: "Guardian", 7: "Guardian II", 8: "Guardian III", 9: "Guardian IV", 10: "Guardian V",
-            11: "Ancient", 12: "Ancient II", 13: "Ancient III", 14: "Ancient IV", 15: "Ancient V",
-            16: "Legend", 17: "Legend II", 18: "Legend III", 19: "Legend IV", 20: "Legend V",
-            21: "Divine", 22: "Divine II", 23: "Divine III", 24: "Divine IV", 25: "Divine V",
-            26: "Immortal", 27: "Immortal II", 28: "Immortal III", 29: "Immortal IV", 30: "Immortal V"
-        }
-        invited_rank_name = rank_names.get(rank_tier, f"Рыцарь {(rank_tier % 5) + 1}")
-        
-        # Get inviter rank
-        inviter_rank_tier = inviter.get("rank_tier", 0) or 0 if inviter else 0
-        inviter_rank_name = rank_names.get(inviter_rank_tier, f"Рыцарь {(inviter_rank_tier % 5) + 1}")
-        
-        # Build invitation text
-        inviter_name = callback_query.from_user.first_name or "друг"
+        invited_rank_tier = invited_player.get("rank_tier", 0) or 0
+        invited_mmr = invited_player.get("mmr", 0) or 0
         
         # Get inviter stats for the invitation
+        inviter_name = callback_query.from_user.first_name or "друг"
         inviter_mmr = 0
         inviter_week_games = 0
         inviter_week_wins = 0
@@ -1912,11 +1891,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             inviter_week_wins = inviter.get("week_wins", 0) or 0
         inviter_winrate = round((inviter_week_wins / inviter_week_games * 100)) if inviter_week_games > 0 else 0
         
+        # Use rank_to_string from dota_mmr for real ranks
+        from dota_mmr import rank_to_string
+        invited_rank_name = rank_to_string(invited_rank_tier)
+        inviter_rank_name = rank_to_string(inviter.get("rank_tier", 0) or 0 if inviter else 0)
+        
         invitation_text = (
-            f"👤 @{username}\n"
-            f"   {invited_rank_name}\n\n"
-            f"👤 @{inviter_name}\n"
-            f"   {inviter_rank_name} приглашает тебя в пати!\n"
+            f"👤 @{username}, {invited_rank_name}\n\n"
+            f"👤 @{inviter_name}, {inviter_rank_name} приглашает тебя в пати!\n"
             f"└  MMR: {inviter_mmr} • WR: {inviter_winrate}%\n"
             f"🔥 Готов к игре?"
         )
