@@ -55,6 +55,10 @@ def get_week_wr(user: dict) -> int:
 def build_callback_keyboard(players: list) -> InlineKeyboardMarkup:
     buttons = []
     for i, p in enumerate(players, 1):
+        # Skip position 5 (your position - 🔍)
+        if i == 5:
+            continue
+        
         telegram_id = p.get("telegram_id")
         username = p.get("username") or ""
         if username and username.startswith("@"):
@@ -62,9 +66,11 @@ def build_callback_keyboard(players: list) -> InlineKeyboardMarkup:
         if not username or username == "—":
             username = f"tg{telegram_id}" if telegram_id else "bot"
         
-        # Position 5 (center) shows as 🔍
-        if i == 5:
-            btn_text = "🔍"
+        # Display numbering: 1-4, then 5-8 for below players
+        if i <= 4:
+            btn_text = str(i)
+        elif i > 5:
+            btn_text = str(i - 1)  # 6→5, 7→6, 8→7, 9→8
         else:
             btn_text = str(i)
         
