@@ -1823,7 +1823,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_techies_button(update, context, record_recent_fissure_roll)
         return
 
-    # Party buttons - send @username with party invitation (with anti-spam protection)
+# Party buttons - send @username with party invitation (with anti-spam protection)
     if data and data.startswith("party_user:"):
         import time
         from datetime import datetime, timedelta
@@ -1836,6 +1836,87 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if now - last_invite < PARTY_INVITE_COOLDOWN:
             await callback_query.answer()
             return
+        
+        # Check hourly limit
+        if inviter_id in _party_invite_tracking:
+            invite_times = _party_invite_tracking[inviter_id]
+            hour_ago = now - 3600
+            invite_times = [t for t in invite_times if t > hour_ago]
+            _party_invite_tracking[inviter_id] = invite_times
+            if len(invite_times) >= PARTY_INVITE_MAX_PER_HOUR:
+                await callback_query.answer()
+                return
+        
+        await callback_query.answer()
+        user_identifier = data.split(":", 1)[1]
+        chat_id = callback_query.message.chat_id
+        
+        # Get the invited player
+        invited_player = None
+        if user_identifier.isdigit():
+            from database import get_user
+            invited_player = get_user(int(user_identifier))
+        else:
+            invited_player = get_user_by_username(user_identifier)
+        
+        if not invited_player:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"❌ Пользователь не найден.",
+            )
+            return
+        
+        # Get inviter data
+        inviter = get_user(inviter_id)
+        
+        # Build invitation message
+        username = invited_player.get("username") or ""
+        if username and username.startswith("@"):
+            username = username[1:]
+        if not username:
+            username = f"tg{invited_player.get('telegram_id')}" if invited_player.get("telegram_id") else "пользователь"
+        
+        # Get invited player stats
+        steam_nick = invited_player.get("steam_nickname") or username
+        mmr = invited_player.get("mmr", 0) or 0
+        rank_tier = invited_player.get("rank_tier", 0) or 0
+        week_games = invited_player.get("week_games", 0) or 0
+        week_wins = invited_player.get("week_wins", 0) or 0
+        winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
+        
+        # Calculate rank name
+        rank_names = {
+            1: "Herald", 2: "Herald II", 3: "Herald III", 4: "Herald IV", 5: "Herald V",
+            6: "Guardian", 7: "Guardian II", 8: "Guardian III", 9: "Guardian IV", 10: "Guardian V",
+            11: "Ancient", 12: "Ancient II", 13: "Ancient III", 14: "Ancient IV", 15: "Ancient V",
+            16: "Legend", 17: "Legend II", 18: "Legend III", 19: "Legend IV", 20: "Legend V",
+            21: "Divine", 22: "Divine II", 23: "Divine III", 24: "Divine IV", 25: "Divine V",
+            26: "Immortal", 27: "Immortal II", 28: "Immortal III", 29: "Immortal IV", 30: "Immortal V"
+        }
+        invited_rank_name = rank_names.get(rank_tier, f"Рыцарь {(rank_tier % 5) + 1}")
+        
+        # Get inviter rank
+        inviter_rank_tier = inviter.get("rank_tier", 0) or 0 if inviter else 0
+        inviter_rank_name = rank_names.get(inviter_rank_tier, f"Рыцарь {(inviter_rank_tier % 5) + 1}")
+        
+        # Build invitation text
+        inviter_name = callback_query.from_user.first_name or "друг"
+        
+        invitation_text = (
+            f"🎮 @{username}\n"
+            f"👤 {steam_nick} — {invited_rank_name}\n\n"
+            f"👥 @{inviter_name} ({inviter_rank_name}) приглашает тебя в пати!\n"
+            f"📊 MMR: {mmr} • WR: {winrate}%{' за неделю' if week_games > 0 else ''}\n"
+            f"🔥 Готов к игре?"
+        )
+        
+        # Update tracking
+        if inviter_id not in _party_invite_tracking:
+            _party_invite_tracking[inviter_id] = []
+        _party_invite_tracking[inviter_id].append(now)
+        
+        await context.bot.send_message(chat_id=chat_id, text=invitation_text, parse_mode="HTML")
+        return
         
         # Check hourly limit
         if inviter_id in _party_invite_tracking:
