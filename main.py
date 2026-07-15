@@ -1913,10 +1913,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         inviter_winrate = round((inviter_week_wins / inviter_week_games * 100)) if inviter_week_games > 0 else 0
         
         invitation_text = (
-            f"🎮 @{username}\n"
-            f"👤 {steam_nick} — {invited_rank_name}\n\n"
-            f"👥 @{inviter_name} ({inviter_rank_name}) приглашает тебя в пати!\n"
-            f"📊 MMR: {inviter_mmr} • WR: {inviter_winrate}%{' за неделю' if inviter_week_games > 0 else ''}\n"
+            f"👤 @{username}\n"
+            f"   {invited_rank_name}\n\n"
+            f"👤 @{inviter_name}\n"
+            f"   {inviter_rank_name} приглашает тебя в пати!\n"
+            f"└  MMR: {inviter_mmr} • WR: {inviter_winrate}%\n"
             f"🔥 Готов к игре?"
         )
         

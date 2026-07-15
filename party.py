@@ -110,6 +110,16 @@ async def party_for_user(chat_id, chat_type, requester, context):
         if not players:
             players = []
 
+        # Rank name mapping
+        rank_names = {
+            1: "Рыцарь 1", 2: "Рыцарь 2", 3: "Рыцарь 3", 4: "Рыцарь 4", 5: "Рыцарь 5",
+            6: "Граф", 7: "Граф II", 8: "Граф III", 9: "Граф IV", 10: "Граф V",
+            11: "Древо", 12: "Древо II", 13: "Древо III", 14: "Древо IV", 15: "Древо V",
+            16: "Легенда", 17: "Легенда II", 18: "Легенда III", 19: "Легенда IV", 20: "Легенда V",
+            21: "Божество", 22: "Божество II", 23: "Божество III", 24: "Божество IV", 25: "Божество V",
+            26: "Бессмертный", 27: "Бессмертный II", 28: "Бессмертный III", 29: "Бессмертный IV", 30: "Бессмертный V"
+        }
+        
         lines = []
         for idx, p in enumerate(players, 1):
             if idx == PARTY_MAX_ABOVE + 1:
@@ -121,6 +131,7 @@ async def party_for_user(chat_id, chat_type, requester, context):
             rank_tier = p.get("rank_tier", 0) or 0
             mmr = p.get("mmr") or 0
             has_games = (p.get("week_games") or 0) > 0
+            player_rank = rank_names.get(rank_tier, f"Рыцарь {(rank_tier % 5) + 1}")
             if telegram_id:
                 name = f"<b>{make_clickable(steam_nick, telegram_id)}</b>"
             else:
@@ -129,7 +140,7 @@ async def party_for_user(chat_id, chat_type, requester, context):
                 second = f"└ {mmr} • 🔥{get_week_wr(p)}%"
             else:
                 second = f"└ {mmr} • Нет игр за неделю"
-            lines.append(f"{rank}{name} - Рыцарь 3")
+            lines.append(f"{rank}{name} - {player_rank}")
             lines.append(second)
 
         text = "\n".join(lines) if lines else "❌ Не найдено игроков для подбора."
