@@ -1897,8 +1897,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         inviter_rank_name = rank_to_string(inviter.get("rank_tier", 0) or 0 if inviter else 0)
         
         invitation_text = (
-            f"👤 @{username}, 🔥 Готов к игре?\n\n"
-            f"👤 @{inviter_name}, приглашает тебя в пати!\n"
+            f"👤 @{username},  Готов к игре?\n\n"
+            f"👤 @{inviter_name},  приглашает тебя в пати!\n"
             f"└  MMR: {inviter_mmr} • WR: {inviter_winrate}%"
         )
         
