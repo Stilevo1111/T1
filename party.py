@@ -120,10 +120,10 @@ async def party_for_user(chat_id, chat_type, requester, context):
         req_mmr = requester.get("mmr") or 0
 
         # Players above (sorted by MMR difference ascending, take up to 4)
-        above = sorted([c for c in candidates if (c.get("mmr") or 0) > req_mmr], key=lambda c: (c.get("mmr") or 0) - req_mmr)[:4]
+        above = sorted([c for c in candidates if (c.get("mmr") or 0) > req_mmr], key=lambda c: float(c.get("mmr") or 0) - req_mmr)[:4]
         
         # Players below (sorted by MMR difference ascending, take up to 4)
-        below = sorted([c for c in candidates if (c.get("mmr") or 0) < req_mmr], key=lambda c: req_mmr - (c.get("mmr") or 0))[:4]
+        below = sorted([c for c in candidates if (c.get("mmr") or 0) < req_mmr], key=lambda c: req_mmr - float(c.get("mmr") or 0))[:4]
 
         players = above + [requester] + below
 
