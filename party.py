@@ -107,7 +107,7 @@ async def party_for_user(chat_id, chat_type, requester, context):
 
         players = higher + [requester] + lower
 
-if not players:
+        if not players:
             players = []
 
         lines = []
