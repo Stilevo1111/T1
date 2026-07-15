@@ -3313,26 +3313,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                 await party_for_user(chat_id, chat_type, requester, context)
                 return
         
-        # Check for "пати" keyword (case-insensitive, can be just the word)
-        text_lower = text.lower()
-        if text_lower in ("пати", "party", "парті") or "пати" in text_lower:
-            logger.info(f"menu_handler: detected 'пати' keyword, calling party_command")
-            # Delete user's message only in groups/channels
-            chat_id = update.message.chat_id
-            chat_type = update.message.chat.type
-            if chat_type in ['group', 'supergroup', 'channel']:
-                user_msg_id = update.message.message_id
-                asyncio.create_task(delete_user_message_safely(context.bot, chat_id, user_msg_id))
-            await party_command(update, context)
-            return
-        
         menu_buttons = {
             "🎲 Ролл Фиссуры": "🎲 Ролл Фиссуры",
             "👤 Профиль": "👤 Профиль",
             "🏆 Топ Фиссур": "🏆 Топ Фиссур",
             "🏆 Топ MMR": "🏆 Топ MMR",
             "🔎 Аналитика": "🔎 Аналитика",
-            "🔑 Привязать Аккаунт": "🔑 Привязать Аккаунт"
+            "🔑 Привязать Аккаунт": "🔑 Привязать Аккаунт",
+            "🎮 Пати": "🎮 Пати"
         }
 
         logger.info(f"menu_handler: text='{text}' (len={len(text)}), menu_buttons_keys={list(menu_buttons.keys())}")
@@ -3393,6 +3381,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             await analyze_command(update, context)
         elif button_found == "🔑 Привязать Аккаунт":
             await link(update, context)
+        elif button_found == "🎮 Пати":
+            await party_command(update, context)
 
     except Exception as e:
         logger.error(f"Error in menu_handler: {e}", exc_info=True)
