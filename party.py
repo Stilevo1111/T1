@@ -115,18 +115,15 @@ async def party_for_user(chat_id, chat_type, requester, context):
 
         from database import get_all_users_with_steam
         candidates = get_all_users_with_steam() or []
-        candidates = [c for c in candidates if c.get("steam_id") and c.get("telegram_id") != requester.get("telegram_id")]
+        candidates = [c for c in candidates if c.get("steam_id") and c.get("telegram_id") != requester.get("telegram_id") and (c.get("mmr") or 0) > 0]
 
         req_mmr = requester.get("mmr") or 0
 
-        # Sort all players by MMR descending (best on top, worst on bottom)
-        sorted_candidates = sorted(candidates, key=lambda c: (c.get("mmr") or 0), reverse=True)
+        # Players above (sorted by MMR difference ascending, take up to 4)
+        above = sorted([c for c in candidates if (c.get("mmr") or 0) > req_mmr], key=lambda c: (c.get("mmr") or 0) - req_mmr)[:4]
         
-        # Take top 4 above (with higher MMR)
-        above = [c for c in sorted_candidates if (c.get("mmr") or 0) > req_mmr][:4]
-        
-        # Take bottom 4 below (with lower MMR)
-        below = [c for c in sorted_candidates if (c.get("mmr") or 0) < req_mmr][-4:][::-1]  # reverse to show worst first
+        # Players below (sorted by MMR difference ascending, take up to 4)
+        below = sorted([c for c in candidates if (c.get("mmr") or 0) < req_mmr], key=lambda c: req_mmr - (c.get("mmr") or 0))[:4]
 
         players = above + [requester] + below
 
