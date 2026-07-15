@@ -127,7 +127,7 @@ async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str) -> Non
 
 
 async def _apply_techies_explosion(
-    bot, chat_id: int, user_id: int, user_obj: dict, record_roll=None
+    bot, session: dict, record_roll=None
 ) -> None:
     """Применить результат взрыва Техиес: уменьшить/сохранить фиссуру и отправить ответ."""
     from database import get_user, update_user_field
@@ -279,7 +279,7 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
     )
 
 
-async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
+async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE, record_recent_fissure_roll=None):
     """Обработать нажатие кнопки в мини-игре Техиес (попал/не попал в мину)."""
     from database import get_user, update_user_field
 

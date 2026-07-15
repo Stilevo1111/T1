@@ -1,0 +1,150 @@
+"""
+Команда /party — подбор игроков по близости MMR.
+
+Алгоритм:
+  1. Находим игроков с MMR выше пользователя (по наименьшей разнице), до PARTY_MAX_ABOVE шт.
+  2. Выводим самого пользователя в центре списка (позиция 5, помечается 🔍).
+  3. Находим игроков с MMR ниже пользователя (по наименьшей разнице), до PARTY_MAX_BELOW шт.
+
+Итого: до (4 + 1 + 3) = 8 игроков.
+
+Формат вывода:
+  1️⃣Nick
+  └📈5450•🔥67%
+  2️⃣Nick
+  └📈5400•🔥65%
+  🔍MyNick
+  └📈5320•Нет игр за неделю
+  5️⃣Nick
+  └📈5300•🔥63%
+  6️⃣Nick
+  └📈5260•🔥59%
+  7️⃣Nick
+  └📈5220•🔥57%
+  8️⃣Nick
+  └📈5180•🔥55%
+
+Кнопки: InlineKeyboard с switch_inline_query_current_chat="@username".
+  При нажатии поле ввода чата предзаполняется @username (без отправки).
+
+Важно: для работы inline-кнопок бот должен иметь включённый inline-режим
+(BotFather /setinline). Бот должен также обрабатывать inline_query.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+
+from telegram import InlineKeyboardButton
+
+logger = logging.getLogger(__name__)
+
+PARTY_MAX_ABOVE = int(os.getenv("PARTY_MAX_ABOVE", "4"))
+PARTY_MAX_BELOW = int(os.getenv("PARTY_MAX_BELOW", "3"))
+
+
+def get_week_wr(user: dict) -> int:
+    games = user.get("week_games") or 0
+    if games == 0:
+        return 0
+    wins = user.get("week_wins") or 0
+    return round((wins / games) * 100) if games > 0 else 0
+
+
+def build_inline_keyboard(players: list) -> list:
+    buttons = []
+    for i, p in enumerate(players, 1):
+        username = p.get("username") or p.get("steam_nickname") or ""
+        if username.startswith("@"):
+            username = username[1:]
+        if not username:
+            username = "bot"
+        btn = InlineKeyboardButton(str(i), switch_inline_query_current_chat=f"@{username}")
+        buttons.append(btn)
+    return [buttons[:4], buttons[4:8]]
+
+
+async def party_command(update, context):
+    logger.info(f"User {update.effective_user.id} called party")
+
+    chat_id = update.message.chat_id
+    chat_type = update.message.chat.type
+
+    if chat_type in ("group", "supergroup", "channel"):
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
+
+    try:
+        user_obj = update.effective_user
+        from database import get_user, get_all_users_with_steam
+        requester = get_user(user_obj.id, user_obj.username or user_obj.first_name or "Unknown")
+        if not requester:
+            requester = {
+                "telegram_id": user_obj.id,
+                "username": user_obj.username or user_obj.first_name or "Unknown",
+                "steam_id": None,
+                "mmr": 0,
+                "week_games": 0,
+                "week_wins": 0,
+            }
+
+        if not requester.get("steam_id"):
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="❌ Привяжи Steam через /link, чтобы подобрать игроков.",
+            )
+            return
+
+        loading = await context.bot.send_message(chat_id=chat_id, text="<b>🪝 Ищу игроков...</b>", parse_mode="HTML")
+
+        candidates = get_all_users_with_steam() or []
+        candidates = [c for c in candidates if c.get("steam_id") and c.get("telegram_id") != requester.get("telegram_id")]
+
+        req_mmr = requester.get("mmr") or 0
+
+        higher = sorted([c for c in candidates if (c.get("mmr") or 0) > req_mmr], key=lambda c: abs((c.get("mmr") or 0) - req_mmr))[:PARTY_MAX_ABOVE]
+        lower = sorted([c for c in candidates if (c.get("mmr") or 0) < req_mmr], key=lambda c: abs((c.get("mmr") or 0) - req_mmr))[:PARTY_MAX_BELOW]
+
+        players = higher + [requester] + lower
+
+        if not players:
+            players = []
+
+        lines = []
+        for idx, p in enumerate(players, 1):
+            if idx == PARTY_MAX_ABOVE + 1:
+                rank = "🔍"
+            else:
+                rank = f"{idx}️⃣"
+            name = p.get("steam_nickname") or p.get("username") or "—"
+            mmr = p.get("mmr") or 0
+            has_games = (p.get("week_games") or 0) > 0
+            if has_games:
+                second = f"└📈{mmr}•🔥{get_week_wr(p)}%"
+            else:
+                second = f"└📈{mmr}•Нет игр за неделю"
+            lines.append(rank + name)
+            lines.append(second)
+
+        text = "\n".join(lines) if lines else "❌ Не найдено игроков для подбора."
+
+        try:
+            await loading.delete()
+        except Exception:
+            pass
+
+        if players:
+            keyboard = build_inline_keyboard(players)
+            await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
+        else:
+            await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+
+    except Exception as e:
+        logger.error(f"Error in party_command: {e}", exc_info=True)
+        try:
+            await context.bot.send_message(chat_id=chat_id, text="❌ Ошибка подбора. Попробуй позже.")
+        except Exception:
+            pass

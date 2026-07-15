@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 20
     RATE_LIMIT_WINDOW: int = 60
 
+    # Party command settings
+    PARTY_MAX_ABOVE: int = 4
+    PARTY_MAX_BELOW: int = 3
+
     @property
     def is_postgresql(self) -> bool:
         return "postgres" in self.DATABASE_URL or "postgresql" in self.DATABASE_URL

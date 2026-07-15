@@ -1401,6 +1401,7 @@ from bot_utils import (
     delete_last_bot_message,
     main_menu,
     make_clickable,
+    record_recent_fissure_roll,
     schedule_delete,
     set_last_bot_message,
 )
@@ -1419,6 +1420,7 @@ from bot_utils import (
 from fissure import (
     fissure,
 )
+from party import party_command
 
 # All roll data (ROLL_MEMES, CATEGORY_PHRASES), welcome phrases,
 # multicast/zeus defaults, weekend multipliers and digest headers
@@ -1812,7 +1814,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Techies buttons answer inside handler (wrong-user alert / already exploded)
     if data and data.startswith("techies_"):
         from techies import handle_techies_button
-        await handle_techies_button(update, context)
+        await handle_techies_button(update, context, record_recent_fissure_roll)
         return
 
     # Answer immediately for other button types
@@ -3158,6 +3160,20 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             return
 
         text = update.message.text.strip()
+        
+        # Check for "пати" keyword (case-insensitive, can be just the word)
+        text_lower = text.lower()
+        if text_lower in ("пати", "party", "парті") or "пати" in text_lower:
+            logger.info(f"menu_handler: detected 'пати' keyword, calling party_command")
+            # Delete user's message only in groups/channels
+            chat_id = update.message.chat_id
+            chat_type = update.message.chat.type
+            if chat_type in ['group', 'supergroup', 'channel']:
+                user_msg_id = update.message.message_id
+                asyncio.create_task(delete_user_message_safely(context.bot, chat_id, user_msg_id))
+            await party_command(update, context)
+            return
+        
         menu_buttons = {
             "🎲 Ролл Фиссуры": "🎲 Ролл Фиссуры",
             "👤 Профиль": "👤 Профиль",
@@ -3723,6 +3739,7 @@ async def main():
         app.add_handler(CommandHandler("testgreeting", test_greeting))
         app.add_handler(CommandHandler("testmvp", test_mvp_winner))
         app.add_handler(CommandHandler("analyze", analyze_command))
+        app.add_handler(CommandHandler(("party", "пати"), party_command))
         app.add_handler(CommandHandler("testtechies", testtechies))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))

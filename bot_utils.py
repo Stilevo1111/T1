@@ -68,6 +68,7 @@ __all__ = [
     "ManualContext",
     "last_bot_message",
     "bot_can_delete",
+    "record_recent_fissure_roll",
 ]
 
 

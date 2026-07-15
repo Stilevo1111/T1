@@ -26,6 +26,7 @@ def test_core_modules_import():
         "bot_utils",
         "fissure",
         "constants",
+        "party",
     ]
 
     for mod_name in modules:
@@ -123,6 +124,82 @@ def test_start_cooldown_lru():
 
     assert len(_USER_START_COOLDOWN) <= 1000
     print('test_start_cooldown_lru: PASSED')
+
+
+def test_party_has_public_api():
+    """party.py should expose the public helper functions used by main."""
+    import party
+
+    required = [
+        "party_command",
+        "get_week_wr",
+        "build_inline_keyboard",
+    ]
+
+    for name in required:
+        assert hasattr(party, name), f"Missing public API from party: {name}"
+
+
+def test_party_week_wr_calculation():
+    """get_week_wr should calculate correct winrate percentages."""
+    from party import get_week_wr
+
+    assert get_week_wr({"week_games": 0, "week_wins": 0}) == 0
+    assert get_week_wr({"week_games": 10, "week_wins": 5}) == 50
+    assert get_week_wr({"week_games": 10, "week_wins": 7}) == 70
+    assert get_week_wr({"week_games": 3, "week_wins": 1}) == 33
+
+
+def test_party_inline_keyboard_format():
+    """build_inline_keyboard should create correct 2x4 button layout."""
+    from party import build_inline_keyboard
+
+    players = [
+        {"username": "user1", "steam_nickname": "Nick1"},
+        {"username": "user2", "steam_nickname": "Nick2"},
+        {"username": "user3", "steam_nickname": "Nick3"},
+        {"username": "user4", "steam_nickname": "Nick4"},
+        {"username": "user5", "steam_nickname": "Nick5"},
+        {"username": "user6", "steam_nickname": "Nick6"},
+        {"username": "user7", "steam_nickname": "Nick7"},
+        {"username": "user8", "steam_nickname": "Nick8"},
+    ]
+
+    keyboard = build_inline_keyboard(players)
+
+    assert len(keyboard) == 2, "Keyboard should have 2 rows"
+    assert len(keyboard[0]) == 4, "First row should have 4 buttons"
+    assert len(keyboard[1]) == 4, "Second row should have 4 buttons"
+
+    for row in keyboard:
+        for btn in row:
+            assert hasattr(btn, 'text')
+            assert hasattr(btn, 'switch_inline_query_current_chat')
+
+
+def test_party_inline_keyboard_fewer_players():
+    """build_inline_keyboard should handle fewer than 8 players."""
+    from party import build_inline_keyboard
+
+    players = [
+        {"username": "user1", "steam_nickname": "Nick1"},
+        {"username": "user2", "steam_nickname": "Nick2"},
+    ]
+
+    keyboard = build_inline_keyboard(players)
+
+    assert len(keyboard) == 1, "Keyboard should have 1 row"
+    assert len(keyboard[0]) == 2, "First row should have 2 buttons"
+
+
+def test_party_config_defaults():
+    """Party module should have configurable limits with sensible defaults."""
+    import party
+
+    assert hasattr(party, 'PARTY_MAX_ABOVE')
+    assert hasattr(party, 'PARTY_MAX_BELOW')
+    assert party.PARTY_MAX_ABOVE == 4
+    assert party.PARTY_MAX_BELOW == 3
 
 
 if __name__ == "__main__":
