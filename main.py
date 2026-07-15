@@ -3293,7 +3293,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             "🏆 Топ MMR": "🏆 Топ MMR",
             "🔎 Аналитика": "🔎 Аналитика",
             "🔑 Привязать Аккаунт": "🔑 Привязать Аккаунт",
-            "🎮 Пати": "🎮 Пати"
+            "🎮 Поиск пати": "🎮 Поиск пати"
         }
 
         logger.info(f"menu_handler: text='{text}' (len={len(text)}), menu_buttons_keys={list(menu_buttons.keys())}")
@@ -3354,7 +3354,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             await analyze_command(update, context)
         elif button_found == "🔑 Привязать Аккаунт":
             await link(update, context)
-        elif button_found == "🎮 Пати":
+        elif button_found == "🎮 Поиск пати":
             await party_command(update, context)
 
     except Exception as e:

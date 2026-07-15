@@ -241,7 +241,7 @@ def main_menu():
         [KeyboardButton("🎲 Ролл Фиссуры"), KeyboardButton("👤 Профиль")],
         [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
         [KeyboardButton("🔑 Привязать Аккаунт"), KeyboardButton("🔎 Аналитика")],
-        [KeyboardButton("🎮 Пати")],
+        [KeyboardButton("🎮 Поиск пати")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
