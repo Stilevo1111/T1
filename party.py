@@ -66,14 +66,15 @@ def build_callback_keyboard(players: list) -> InlineKeyboardMarkup:
         if not username or username == "—":
             username = f"tg{telegram_id}" if telegram_id else "bot"
         
-        # Display numbering: 1-4, then 5-8 for below players
+        # Display numbering with emojis: 1-4, 5-8
         if i <= 4:
-            btn_text = str(i)
+            num = i
         elif i > 5:
-            btn_text = str(i - 1)  # 6→5, 7→6, 8→7, 9→8
+            num = i - 1  # 6→5, 7→6, 8→7, 9→8
         else:
-            btn_text = str(i)
+            num = i
         
+        btn_text = f"{num}️⃣"
         btn = InlineKeyboardButton(btn_text, callback_data=f"party_user:{username}")
         buttons.append(btn)
     
@@ -146,8 +147,8 @@ async def party_for_user(chat_id, chat_type, requester, context):
             elif idx <= 4:
                 rank = f"{idx}️⃣"
             else:
-                # idx 6,7,8,9 → display as 5,6,7,8
-                rank = f"{idx - 1}"
+                # idx 6,7,8,9 → display as 5,6,7,8 with emoji
+                rank = f"{idx - 1}️⃣"
             telegram_id = p.get("telegram_id")
             steam_nick = p.get("steam_nickname") or "—"
             rank_tier = p.get("rank_tier", 0) or 0
