@@ -112,10 +112,21 @@ async def party_for_user(chat_id, chat_type, requester, context):
 
         req_mmr = requester.get("mmr") or 0
 
-        higher = sorted([c for c in candidates if (c.get("mmr") or 0) > req_mmr], key=lambda c: abs((c.get("mmr") or 0) - req_mmr))[:PARTY_MAX_ABOVE]
-        lower = sorted([c for c in candidates if (c.get("mmr") or 0) < req_mmr], key=lambda c: abs((c.get("mmr") or 0) - req_mmr))[:PARTY_MAX_BELOW]
+        # Players above (sorted by MMR difference, take up to 4)
+        above = sorted([c for c in candidates if (c.get("mmr") or 0) > req_mmr], key=lambda c: abs((c.get("mmr") or 0) - req_mmr))
+        
+        # If not enough players above, fill with players having MMR just below target
+        if len(above) < 4:
+            fillers = sorted([c for c in candidates if (c.get("mmr") or 0) <= req_mmr], key=lambda c: abs((c.get("mmr") or 0) - req_mmr))
+            while len(above) < 4 and fillers:
+                above.append(fillers.pop(0))
+        
+        above = above[:4]
+        
+        # Players below (sorted by MMR difference, take up to 4)
+        below = sorted([c for c in candidates if (c.get("mmr") or 0) < req_mmr], key=lambda c: abs((c.get("mmr") or 0) - req_mmr))[:PARTY_MAX_BELOW]
 
-        players = higher + [requester] + lower
+        players = above + [requester] + below
 
         if not players:
             players = []
