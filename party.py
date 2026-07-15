@@ -143,7 +143,19 @@ if not players:
 
         if players:
             keyboard = build_callback_keyboard(players)
-            await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
+            result_msg = await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
+            # Schedule auto-delete after 30 seconds
+            try:
+                import asyncio
+                async def delete_after_delay():
+                    await asyncio.sleep(30)
+                    try:
+                        await context.bot.delete_message(chat_id=chat_id, message_id=result_msg.message_id)
+                    except Exception:
+                        pass
+                asyncio.create_task(delete_after_delay())
+            except Exception:
+                pass
         else:
             await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
 
