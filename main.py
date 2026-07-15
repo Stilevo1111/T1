@@ -1817,13 +1817,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error in button_callback: {e}", exc_info=True)
         return
 
-    # Techies buttons answer inside handler (wrong-user alert / already exploded)
+# Techies buttons answer inside handler (wrong-user alert / already exploded)
     if data and data.startswith("techies_"):
         from techies import handle_techies_button
         await handle_techies_button(update, context, record_recent_fissure_roll)
         return
 
-# Party buttons - send @username with party invitation (with anti-spam protection)
+    # Party buttons - send @username with party invitation (with anti-spam protection)
     if data and data.startswith("party_user:"):
         import time
         from datetime import datetime, timedelta
@@ -1914,77 +1914,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if inviter_id not in _party_invite_tracking:
             _party_invite_tracking[inviter_id] = []
         _party_invite_tracking[inviter_id].append(now)
-        
-        await context.bot.send_message(chat_id=chat_id, text=invitation_text, parse_mode="HTML")
-        return
-        
-        # Check hourly limit
-        if inviter_id in _party_invite_tracking:
-            invite_times = _party_invite_tracking[inviter_id]
-            hour_ago = now - 3600
-            invite_times = [t for t in invite_times if t > hour_ago]
-            _party_invite_tracking[inviter_id] = invite_times
-            if len(invite_times) >= PARTY_INVITE_MAX_PER_HOUR:
-                await callback_query.answer()
-                return
-        
-await callback_query.answer()
-        user_identifier = data.split(":", 1)[1]
-        chat_id = callback_query.message.chat_id
-        
-        requester = None
-        if user_identifier.isdigit():
-            from database import get_user
-            requester = get_user(int(user_identifier))
-        else:
-            requester = get_user_by_username(user_identifier)
-        
-        if not requester:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"❌ Пользователь не найден.",
-            )
-            return
-        
-        # Build invitation message
-        username = requester.get("username") or ""
-        if username and username.startswith("@"):
-            username = username[1:]
-        if not username:
-            username = f"tg{requester.get('telegram_id')}" if requester.get("telegram_id") else "пользователь"
-        
-        # Get player stats for the invitation
-        steam_nick = requester.get("steam_nickname") or username
-        mmr = requester.get("mmr", 0) or 0
-        rank_tier = requester.get("rank_tier", 0) or 0
-        week_games = requester.get("week_games", 0) or 0
-        week_wins = requester.get("week_wins", 0) or 0
-        winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
-        
-        # Calculate rank name
-        rank_names = {
-            1: "Herald", 2: "Herald II", 3: "Herald III", 4: "Herald IV", 5: "Herald V",
-            6: "Guardian", 7: "Guardian II", 8: "Guardian III", 9: "Guardian IV", 10: "Guardian V",
-            11: "Ancient", 12: "Ancient II", 13: "Ancient III", 14: "Ancient IV", 15: "Ancient V",
-            16: "Legend", 17: "Legend II", 18: "Legend III", 19: "Legend IV", 20: "Legend V",
-            21: "Divine", 22: "Divine II", 23: "Divine III", 24: "Divine IV", 25: "Divine V",
-            26: "Immortal", 27: "Immortal II", 28: "Immortal III", 29: "Immortal IV", 30: "Immortal V"
-        }
-        rank_name = rank_names.get(rank_tier, f"Рыцарь {(rank_tier % 5) + 1}")
-        
-        # Get inviter info
-        inviter = requester.get("steam_nickname") or "ты"
-        
-        # Build invitation text
-        inviter_name = callback_query.from_user.first_name or "друг"
-        
-        invitation_text = (
-            f"🎮 @{username}\n"
-            f"👤 {steam_nick} — {rank_name}\n"
-            f"📊 MMR: {mmr} • WR: {winrate}%{' за неделю' if week_games > 0 else ''}\n\n"
-            f"👥 @{inviter_name} приглашает тебя в пати!\n"
-            f"🔥 Готов к игре?"
-        )
         
         await context.bot.send_message(chat_id=chat_id, text=invitation_text, parse_mode="HTML")
         return
