@@ -41,7 +41,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 logger = logging.getLogger(__name__)
 
 PARTY_MAX_ABOVE = int(os.getenv("PARTY_MAX_ABOVE", "4"))
-PARTY_MAX_BELOW = int(os.getenv("PARTY_MAX_BELOW", "3"))
+PARTY_MAX_BELOW = int(os.getenv("PARTY_MAX_BELOW", "4"))
 
 
 def get_week_wr(user: dict) -> int:
@@ -56,17 +56,27 @@ def build_callback_keyboard(players: list) -> InlineKeyboardMarkup:
     buttons = []
     for i, p in enumerate(players, 1):
         telegram_id = p.get("telegram_id")
-        if not telegram_id:
-            username = p.get("username") or ""
-            if username and username.startswith("@"):
-                username = username[1:]
-            if not username or username == "—":
-                username = "bot"
-            btn = InlineKeyboardButton(str(i), callback_data=f"party_user:{username}")
+        username = p.get("username") or ""
+        if username and username.startswith("@"):
+            username = username[1:]
+        if not username or username == "—":
+            username = f"tg{telegram_id}" if telegram_id else "bot"
+        
+        # Position 5 (center) shows as 🔍
+        if i == 5:
+            btn_text = "🔍"
         else:
-            btn = InlineKeyboardButton(str(i), callback_data=f"party_user:{telegram_id}")
+            btn_text = str(i)
+        
+        btn = InlineKeyboardButton(btn_text, callback_data=f"party_user:{username}")
         buttons.append(btn)
-    return InlineKeyboardMarkup([buttons[:4], buttons[4:8]])
+    
+    # Layout: 4 buttons per row
+    rows = []
+    for i in range(0, len(buttons), 4):
+        rows.append(buttons[i:i+4])
+    
+    return InlineKeyboardMarkup(rows)
 
 
 def build_inline_keyboard(players: list) -> InlineKeyboardMarkup:
