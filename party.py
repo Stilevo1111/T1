@@ -36,6 +36,7 @@ from __future__ import annotations
 import logging
 import os
 
+from bot_utils import make_clickable
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 logger = logging.getLogger(__name__)
@@ -55,11 +56,14 @@ def get_week_wr(user: dict) -> int:
 def build_inline_keyboard(players: list) -> InlineKeyboardMarkup:
     buttons = []
     for i, p in enumerate(players, 1):
-        username = p.get("username") or p.get("steam_nickname") or ""
-        if username.startswith("@"):
+        telegram_id = p.get("telegram_id")
+        username = p.get("username") or ""
+        if username and username.startswith("@"):
             username = username[1:]
-        if not username:
-            username = "bot"
+        if username and " " in username:
+            username = username.split()[0]
+        if not username or username == "—":
+            username = f"tg{telegram_id}" if telegram_id else "bot"
         btn = InlineKeyboardButton(str(i), switch_inline_query_current_chat=f"@{username}")
         buttons.append(btn)
     return InlineKeyboardMarkup([buttons[:4], buttons[4:8]])
@@ -119,14 +123,20 @@ async def party_command(update, context):
                 rank = "🔍"
             else:
                 rank = f"{idx}️⃣"
-            name = p.get("steam_nickname") or p.get("username") or "—"
+            telegram_id = p.get("telegram_id")
+            steam_nick = p.get("steam_nickname") or p.get("username") or "—"
+            rank_tier = p.get("rank_tier", 0) or 0
             mmr = p.get("mmr") or 0
             has_games = (p.get("week_games") or 0) > 0
-            if has_games:
-                second = f"└📈{mmr}•🔥{get_week_wr(p)}%"
+            if telegram_id:
+                name = f"<b>{make_clickable(steam_nick, telegram_id)}</b>"
             else:
-                second = f"└📈{mmr}•Нет игр за неделю"
-            lines.append(rank + name)
+                name = f"<b>{steam_nick}</b>"
+            if has_games:
+                second = f"└ {mmr} • 🔥{get_week_wr(p)}%"
+            else:
+                second = f"└ {mmr} • Нет игр за неделю"
+            lines.append(f"{rank}{name} - Рыцарь 3")
             lines.append(second)
 
         text = "\n".join(lines) if lines else "❌ Не найдено игроков для подбора."
