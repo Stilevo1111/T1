@@ -1420,7 +1420,7 @@ from bot_utils import (
 from fissure import (
     fissure,
 )
-from party import party_command
+from party import party_command, party_for_user
 
 # All roll data (ROLL_MEMES, CATEGORY_PHRASES), welcome phrases,
 # multicast/zeus defaults, weekend multipliers and digest headers
@@ -1815,6 +1815,35 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data and data.startswith("techies_"):
         from techies import handle_techies_button
         await handle_techies_button(update, context, record_recent_fissure_roll)
+        return
+
+    # Party buttons - send @username with party invitation
+    if data and data.startswith("party_user:"):
+        await callback_query.answer()
+        user_identifier = data.split(":", 1)[1]
+        chat_id = callback_query.message.chat_id
+        
+        requester = None
+        if user_identifier.isdigit():
+            from database import get_user
+            requester = get_user(int(user_identifier))
+        else:
+            requester = get_user_by_username(user_identifier)
+        
+        if not requester:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"❌ Пользователь не найден.",
+            )
+            return
+        
+        username = requester.get("username") or ""
+        if username and username.startswith("@"):
+            username = username[1:]
+        if not username:
+            username = f"tg{requester.get('telegram_id')}" if requester.get("telegram_id") else "пользователь"
+        
+        await context.bot.send_message(chat_id=chat_id, text=f"@{username}\nПриглашение в пати")
         return
 
     # Answer immediately for other button types
@@ -3161,10 +3190,32 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
 
         text = update.message.text.strip()
         
-        # Ignore inline query results (messages starting with @bot_username)
-        if text.startswith("@"):
-            logger.info(f"menu_handler: ignoring inline query result: '{text}'")
-            return
+        # Handle inline query results (messages like "@DotaFull_bot @username")
+        if text.startswith("@") and " " in text:
+            parts = text.split()
+            if len(parts) >= 2 and parts[0].startswith("@"):
+                inline_username = parts[1]
+                if inline_username.startswith("@"):
+                    inline_username = inline_username[1:]
+                logger.info(f"menu_handler: handling inline query result for user: {inline_username}")
+                
+                chat_id = update.message.chat_id
+                chat_type = update.message.chat.type
+                
+                if chat_type in ['group', 'supergroup', 'channel']:
+                    user_msg_id = update.message.message_id
+                    asyncio.create_task(delete_user_message_safely(context.bot, chat_id, user_msg_id))
+                
+                requester = get_user_by_username(inline_username)
+                if not requester:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"❌ Пользователь @{inline_username} не найден в базе.",
+                    )
+                    return
+                
+                await party_for_user(chat_id, chat_type, requester, context)
+                return
         
         # Check for "пати" keyword (case-insensitive, can be just the word)
         text_lower = text.lower()

@@ -24,11 +24,10 @@
   8️⃣Nick
   └📈5180•🔥55%
 
-Кнопки: InlineKeyboard с switch_inline_query_current_chat="@username".
-  При нажатии поле ввода чата предзаполняется @username (без отправки).
+Кнопки: InlineKeyboard с callback_data (не inline-кнопки).
+  При нажатии на цифру в чат отправляется @username игрока.
 
-Важно: для работы inline-кнопок бот должен иметь включённый inline-режим
-(BotFather /setinline). Бот должен также обрабатывать inline_query.
+Важно: inline-режим бота НЕ требуется.
 """
 
 from __future__ import annotations
@@ -53,6 +52,23 @@ def get_week_wr(user: dict) -> int:
     return round((wins / games) * 100) if games > 0 else 0
 
 
+def build_callback_keyboard(players: list) -> InlineKeyboardMarkup:
+    buttons = []
+    for i, p in enumerate(players, 1):
+        telegram_id = p.get("telegram_id")
+        if not telegram_id:
+            username = p.get("username") or ""
+            if username and username.startswith("@"):
+                username = username[1:]
+            if not username or username == "—":
+                username = "bot"
+            btn = InlineKeyboardButton(str(i), callback_data=f"party_user:{username}")
+        else:
+            btn = InlineKeyboardButton(str(i), callback_data=f"party_user:{telegram_id}")
+        buttons.append(btn)
+    return InlineKeyboardMarkup([buttons[:4], buttons[4:8]])
+
+
 def build_inline_keyboard(players: list) -> InlineKeyboardMarkup:
     buttons = []
     for i, p in enumerate(players, 1):
@@ -69,41 +85,18 @@ def build_inline_keyboard(players: list) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([buttons[:4], buttons[4:8]])
 
 
-async def party_command(update, context):
-    logger.info(f"User {update.effective_user.id} called party")
-
-    chat_id = update.message.chat_id
-    chat_type = update.message.chat.type
-
-    if chat_type in ("group", "supergroup", "channel"):
-        try:
-            await update.message.delete()
-        except Exception:
-            pass
+async def party_for_user(chat_id, chat_type, requester, context):
+    if not requester.get("steam_id"):
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ Привяжи Steam через /link, чтобы подобрать игроков.",
+        )
+        return
 
     try:
-        user_obj = update.effective_user
-        from database import get_user, get_all_users_with_steam
-        requester = get_user(user_obj.id, user_obj.username or user_obj.first_name or "Unknown")
-        if not requester:
-            requester = {
-                "telegram_id": user_obj.id,
-                "username": user_obj.username or user_obj.first_name or "Unknown",
-                "steam_id": None,
-                "mmr": 0,
-                "week_games": 0,
-                "week_wins": 0,
-            }
-
-        if not requester.get("steam_id"):
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="❌ Привяжи Steam через /link, чтобы подобрать игроков.",
-            )
-            return
-
         loading = await context.bot.send_message(chat_id=chat_id, text="<b>🪝 Ищу игроков...</b>", parse_mode="HTML")
 
+        from database import get_all_users_with_steam
         candidates = get_all_users_with_steam() or []
         candidates = [c for c in candidates if c.get("steam_id") and c.get("telegram_id") != requester.get("telegram_id")]
 
@@ -124,7 +117,7 @@ async def party_command(update, context):
             else:
                 rank = f"{idx}️⃣"
             telegram_id = p.get("telegram_id")
-            steam_nick = p.get("steam_nickname") or p.get("username") or "—"
+            steam_nick = p.get("steam_nickname") or "—"
             rank_tier = p.get("rank_tier", 0) or 0
             mmr = p.get("mmr") or 0
             has_games = (p.get("week_games") or 0) > 0
@@ -147,10 +140,46 @@ async def party_command(update, context):
             pass
 
         if players:
-            keyboard = build_inline_keyboard(players)
+            keyboard = build_callback_keyboard(players)
             await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
         else:
             await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+
+    except Exception as e:
+        logger.error(f"Error in party_for_user: {e}", exc_info=True)
+        try:
+            await context.bot.send_message(chat_id=chat_id, text="❌ Ошибка подбора. Попробуй позже.")
+        except Exception:
+            pass
+
+
+async def party_command(update, context):
+    logger.info(f"User {update.effective_user.id} called party")
+
+    chat_id = update.message.chat_id
+    chat_type = update.message.chat.type
+
+    if chat_type in ("group", "supergroup", "channel"):
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
+
+    try:
+        user_obj = update.effective_user
+        from database import get_user
+        requester = get_user(user_obj.id, user_obj.username or user_obj.first_name or "Unknown")
+        if not requester:
+            requester = {
+                "telegram_id": user_obj.id,
+                "username": user_obj.username or user_obj.first_name or "Unknown",
+                "steam_id": None,
+                "mmr": 0,
+                "week_games": 0,
+                "week_wins": 0,
+            }
+
+        await party_for_user(chat_id, chat_type, requester, context)
 
     except Exception as e:
         logger.error(f"Error in party_command: {e}", exc_info=True)
