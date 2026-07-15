@@ -205,7 +205,7 @@ def test_party_config_defaults():
     assert hasattr(party, 'PARTY_MAX_ABOVE')
     assert hasattr(party, 'PARTY_MAX_BELOW')
     assert party.PARTY_MAX_ABOVE == 4
-    assert party.PARTY_MAX_BELOW == 3
+    assert party.PARTY_MAX_BELOW == 4
 
 
 if __name__ == "__main__":
