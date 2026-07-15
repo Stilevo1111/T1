@@ -1881,7 +1881,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         invited_mmr = invited_player.get("mmr", 0) or 0
         
         # Get inviter stats for the invitation
-        inviter_name = callback_query.from_user.first_name or "друг"
+        inviter_username = inviter.get("username") or "" if inviter else ""
+        if inviter_username and inviter_username.startswith("@"):
+            inviter_username = inviter_username[1:]
+        if not inviter_username:
+            inviter_username = f"tg{inviter_id}" if inviter_id else "пользователь"
+        
         inviter_mmr = 0
         inviter_week_games = 0
         inviter_week_wins = 0
@@ -1898,7 +1903,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         invitation_text = (
             f"👤 @{username},  Готов к игре?\n\n"
-            f"👤 @{inviter_name},  приглашает тебя в пати!\n"
+            f"👤 @{inviter_username},  приглашает тебя в пати!\n"
             f"└  MMR: {inviter_mmr} • WR: {inviter_winrate}%"
         )
         
