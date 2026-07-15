@@ -1439,7 +1439,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         # But still process week stats from matches
         last_updated = user.get('mmr_last_updated')
         if last_updated and isinstance(last_updated, (int, float)):
-            if time.time() - last_updated < 3600:  # 1 hour
+            if time.time() - last_updated < 4 * 3600:  # 4 hours (OpenDota API limit: 3000 tokens/day)
                 logger.info(f"topmmr: Cache hit for MMR - will use cached stats but still process week from matches")
 
         # Keep trying API until we get data (with delays to avoid rate limit spam)
