@@ -1851,10 +1851,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_identifier = data.split(":", 1)[1]
         chat_id = callback_query.message.chat_id
         
+        # Import get_user for this handler
+        from database import get_user
+        
         # Get the invited player
         invited_player = None
         if user_identifier.isdigit():
-            from database import get_user
             invited_player = get_user(int(user_identifier))
         else:
             invited_player = get_user_by_username(user_identifier)
