@@ -2754,7 +2754,8 @@ def batch_save_mmr(users_data: list):
                     week_wins = CASE WHEN %s IS NOT NULL THEN %s ELSE week_wins END,
                     week_best_streak = CASE WHEN %s IS NOT NULL THEN %s ELSE week_best_streak END,
                     week_current_streak = CASE WHEN %s IS NOT NULL THEN %s ELSE week_current_streak END,
-                    week_start_date = COALESCE(%s, week_start_date)
+                    week_start_date = COALESCE(%s, week_start_date),
+                    mmr_last_updated = COALESCE(%s, mmr_last_updated)
                 WHERE telegram_id = %s
             """
         else:
@@ -2767,7 +2768,8 @@ def batch_save_mmr(users_data: list):
                     week_wins = CASE WHEN ? IS NOT NULL THEN ? ELSE week_wins END,
                     week_best_streak = CASE WHEN ? IS NOT NULL THEN ? ELSE week_best_streak END,
                     week_current_streak = CASE WHEN ? IS NOT NULL THEN ? ELSE week_current_streak END,
-                    week_start_date = COALESCE(?, week_start_date)
+                    week_start_date = COALESCE(?, week_start_date),
+                    mmr_last_updated = COALESCE(?, mmr_last_updated)
                 WHERE telegram_id = ?
             """
 
@@ -2780,6 +2782,7 @@ def batch_save_mmr(users_data: list):
                 u.get("week_best_streak"), u.get("week_best_streak"),
                 u.get("week_current_streak"), u.get("week_current_streak"),
                 u.get("week_start_date"),
+                u.get("mmr_last_updated"),
                 u["telegram_id"]
             ))
 

@@ -1126,7 +1126,8 @@ async def update_all_mmr_job(context):
                         'week_wins': result.get('week_wins') if result.get('week_wins') else None,
                         'week_best_streak': result.get('week_best_streak'),
                         'week_current_streak': result.get('week_current_streak'),
-                        'week_start_date': result.get('week_start_date')
+                        'week_start_date': result.get('week_start_date'),
+                        'mmr_last_updated': result.get('mmr_last_updated')
                     })
 
         # Batch save all updated MMR data at once
