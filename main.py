@@ -3042,6 +3042,13 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Приоритетно подгружаем полные данные пользователя сразу после привязки,
                 # чтобы /analytics, дайджест и топы отражали свежую стату без ожидания джоба.
                 try:
+                    from dota_mmr import update_user_mmr
+                    asyncio.create_task(update_user_mmr(update.effective_user.id))
+                    logger.info(f"Scheduled MMR update for user {update.effective_user.id} after link")
+                except Exception as e:
+                    logger.debug(f"Could not schedule MMR update after link: {e}")
+                
+                try:
                     from weekly_analytics import generate_weekly_analytics
                     asyncio.create_task(generate_weekly_analytics(update.effective_user.id))
                     logger.info(f"Scheduled analytics preload for user {update.effective_user.id} after link")
