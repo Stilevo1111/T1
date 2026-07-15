@@ -1904,7 +1904,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         invitation_text = (
             f"👤 @{username},  Готов к игре?\n\n"
             f"👤 @{inviter_username},  приглашает тебя в пати!\n"
-            f"└  MMR: {inviter_mmr} • WR: {inviter_winrate}%"
+            f"└  MMR: {inviter_mmr} • WR: {inviter_winrate}% за неделю."
         )
         
         # Update tracking
