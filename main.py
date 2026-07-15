@@ -85,6 +85,11 @@ TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     logger.warning("BOT_TOKEN is not set!")
 
+# Anti-spam tracking for party invitations
+_party_invite_tracking = {}
+PARTY_INVITE_COOLDOWN = 10  # seconds between invites from same user
+PARTY_INVITE_MAX_PER_HOUR = 50  # max invites per user per hour
+
 MORNING_GREETINGS = [
     "<b>⚔️ Доброе утро, тима!</b>\n\n<i>❤️ – доброе утро всем \n💔 – я сегодня один играю</i>",
     "<b>🛡️ Респавн успешный. Жизнь началась.</b>\n\n<i>❤️ – отличное начало \n💔 – а я ещё сплю</i>",
@@ -1817,8 +1822,30 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_techies_button(update, context, record_recent_fissure_roll)
         return
 
-    # Party buttons - send @username with party invitation
+    # Party buttons - send @username with party invitation (with anti-spam protection)
     if data and data.startswith("party_user:"):
+        import time
+        from datetime import datetime, timedelta
+        
+        inviter_id = callback_query.from_user.id
+        now = time.time()
+        
+        # Check cooldown
+        last_invite = _party_invite_tracking.get(inviter_id, 0)
+        if now - last_invite < PARTY_INVITE_COOLDOWN:
+            await callback_query.answer()
+            return
+        
+        # Check hourly limit
+        if inviter_id in _party_invite_tracking:
+            invite_times = _party_invite_tracking[inviter_id]
+            hour_ago = now - 3600
+            invite_times = [t for t in invite_times if t > hour_ago]
+            _party_invite_tracking[inviter_id] = invite_times
+            if len(invite_times) >= PARTY_INVITE_MAX_PER_HOUR:
+                await callback_query.answer()
+                return
+        
         await callback_query.answer()
         user_identifier = data.split(":", 1)[1]
         chat_id = callback_query.message.chat_id
@@ -1842,6 +1869,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username = username[1:]
         if not username:
             username = f"tg{requester.get('telegram_id')}" if requester.get("telegram_id") else "пользователь"
+        
+        # Update tracking
+        if inviter_id not in _party_invite_tracking:
+            _party_invite_tracking[inviter_id] = []
+        _party_invite_tracking[inviter_id].append(now)
         
         await context.bot.send_message(chat_id=chat_id, text=f"@{username}\nПриглашение в пати")
         return
