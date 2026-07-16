@@ -1912,11 +1912,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"└  MMR: {inviter_mmr} • WR: {inviter_winrate}% за неделю."
         )
         
-        # Update tracking
-        if inviter_id not in _party_invite_tracking:
-            _party_invite_tracking[inviter_id] = []
-        _party_invite_tracking[inviter_id].append(now)
-        
         await context.bot.send_message(chat_id=chat_id, text=invitation_text, parse_mode="HTML")
         return
 
