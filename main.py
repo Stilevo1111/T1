@@ -1832,24 +1832,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Check cooldown - simple time-based check
         last_invite_time = _party_invite_tracking.get(inviter_id, 0)
+        # Ensure last_invite_time is a number (handle old data)
+        if not isinstance(last_invite_time, (int, float)):
+            last_invite_time = 0
         if now - last_invite_time < PARTY_INVITE_COOLDOWN:
             await callback_query.answer()
             return
         
         # Check hourly limit
-        if inviter_id in _party_invite_tracking:
-            last_time = _party_invite_tracking[inviter_id]
-            hour_ago = now - 3600
-            if last_time > hour_ago:
-                # Count invites in the last hour
-                invite_count = _party_invite_tracking.get(f"{inviter_id}_count", 0)
-                if invite_count >= PARTY_INVITE_MAX_PER_HOUR:
-                    await callback_query.answer()
-                    return
+        hour_ago = now - 3600
+        invite_count = _party_invite_tracking.get(f"{inviter_id}_count", 0)
+        if now - last_invite_time < 3600 and invite_count >= PARTY_INVITE_MAX_PER_HOUR:
+            await callback_query.answer()
+            return
         
         # Update tracking
         _party_invite_tracking[inviter_id] = now
-        _party_invite_tracking[f"{inviter_id}_count"] = _party_invite_tracking.get(f"{inviter_id}_count", 0) + 1
+        _party_invite_tracking[f"{inviter_id}_count"] = invite_count + 1
         
         await callback_query.answer()
         user_identifier = data.split(":", 1)[1]
