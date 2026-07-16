@@ -1967,8 +1967,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_obj = callback_query.from_user
             chat_id = callback_query.message.chat_id
             chat_type = 'private'
-
+            
             # Ensure user account exists before rolling
+            from database import get_user
             get_user(user_obj.id, user_obj.username)
 
             class _FakeChat:
