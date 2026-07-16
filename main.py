@@ -87,8 +87,8 @@ if not TOKEN:
 
 # Anti-spam tracking for party invitations
 _party_invite_tracking = {}
-PARTY_INVITE_COOLDOWN = 10  # seconds between invites from same user
-PARTY_INVITE_MAX_PER_HOUR = 3  # max invites per user per hour
+PARTY_INVITE_COOLDOWN = 5  # seconds between invites from same user
+PARTY_INVITE_MAX_PER_HOUR = 720  # max invites per user per hour (1 every 5 seconds)
 
 MORNING_GREETINGS = [
     "<b>⚔️ Доброе утро, тима!</b>\n\n<i>❤️ – доброе утро всем \n💔 – я сегодня один играю</i>",
@@ -1826,26 +1826,30 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Party buttons - send @username with party invitation (with anti-spam protection)
     if data and data.startswith("party_user:"):
         import time
-        from datetime import datetime, timedelta
         
         inviter_id = callback_query.from_user.id
         now = time.time()
         
-        # Check cooldown
-        last_invite = _party_invite_tracking.get(inviter_id, 0)
-        if now - last_invite < PARTY_INVITE_COOLDOWN:
+        # Check cooldown - simple time-based check
+        last_invite_time = _party_invite_tracking.get(inviter_id, 0)
+        if now - last_invite_time < PARTY_INVITE_COOLDOWN:
             await callback_query.answer()
             return
         
         # Check hourly limit
         if inviter_id in _party_invite_tracking:
-            invite_times = _party_invite_tracking[inviter_id]
+            last_time = _party_invite_tracking[inviter_id]
             hour_ago = now - 3600
-            invite_times = [t for t in invite_times if t > hour_ago]
-            _party_invite_tracking[inviter_id] = invite_times
-            if len(invite_times) >= PARTY_INVITE_MAX_PER_HOUR:
-                await callback_query.answer()
-                return
+            if last_time > hour_ago:
+                # Count invites in the last hour
+                invite_count = _party_invite_tracking.get(f"{inviter_id}_count", 0)
+                if invite_count >= PARTY_INVITE_MAX_PER_HOUR:
+                    await callback_query.answer()
+                    return
+        
+        # Update tracking
+        _party_invite_tracking[inviter_id] = now
+        _party_invite_tracking[f"{inviter_id}_count"] = _party_invite_tracking.get(f"{inviter_id}_count", 0) + 1
         
         await callback_query.answer()
         user_identifier = data.split(":", 1)[1]
