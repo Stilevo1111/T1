@@ -1963,6 +1963,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # === LINK HANDLER ===
         # === ROLL FISSURE HANDLER (callback from welcome message) ===
         if data == "roll_fissure":
+            import time
             await callback_query.answer()
             user_obj = callback_query.from_user
             chat_id = callback_query.message.chat_id
