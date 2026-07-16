@@ -117,7 +117,7 @@ async def party_for_user(chat_id, chat_type, requester, context):
         candidates = get_all_users_with_steam() or []
         candidates = [c for c in candidates if c.get("steam_id") and c.get("telegram_id") != requester.get("telegram_id")]
 
-        req_mmr = requester.get("mmr") or 0
+        req_mmr = float(requester.get("mmr") or 0) if isinstance(requester.get("mmr"), (int, float, str)) else 0
 
         # Players above (sorted by MMR difference ascending, take up to 4)
         above = sorted([c for c in candidates if (c.get("mmr") or 0) > req_mmr], key=lambda c: float(c.get("mmr") or 0) - req_mmr)[:4]
