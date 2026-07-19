@@ -1817,7 +1817,43 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error in button_callback: {e}", exc_info=True)
         return
 
-# Techies buttons answer inside handler (wrong-user alert / already exploded)
+    # Link button handler (callback from menu)
+    if data == "link":
+        await callback_query.answer()
+        chat_id = callback_query.message.chat_id if callback_query.message else None
+        if not chat_id:
+            chat_id = update.effective_chat.id
+        
+        from bot_utils import delete_last_bot_message
+        try:
+            await delete_last_bot_message(context.bot, chat_id, callback_query.from_user.id)
+        except Exception as e:
+            logger.debug(f"Could not delete last bot message: {e}")
+        
+        link_banner_url = get_banner_path("link")
+        link_text = ("🦞 *Привязать Аккаунт Dota 2*\n\n"
+            "Добавить в друзья → Ваш ID → копировать →\n"
+            "`/link 347614947`\n\n"
+            "Или ссылку на dotabuff →\n"
+            "`/link https://ru.dotabuff.com/players/347614699`\n\n"
+            "⚠️ в игре:\n"
+            "Настройки → расширенные → сообщество → общедоступная история матчей (вкл)")
+
+        from bot_utils import set_last_bot_message, add_bot_message, schedule_delete, update_last_message_id
+        result_msg = await context.bot.send_photo(
+            chat_id=chat_id,
+            photo=link_banner_url,
+            caption=link_text,
+            parse_mode='Markdown',
+            reply_markup=main_menu()
+        )
+        set_last_bot_message(chat_id, callback_query.from_user.id, result_msg.message_id)
+        add_bot_message(chat_id, callback_query.from_user.id, result_msg.message_id)
+        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
+        update_last_message_id(callback_query.from_user.id, result_msg.message_id)
+        return
+
+    # Techies buttons answer inside handler (wrong-user alert / already exploded)
     if data and data.startswith("techies_"):
         from techies import handle_techies_button
         await handle_techies_button(update, context, record_recent_fissure_roll)
