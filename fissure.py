@@ -156,7 +156,7 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
         reply_markup=main_menu()
     )
     if record_recent_fissure_roll:
-        record_recent_fissure_roll(user_obj.id, user_obj.username, 0, user.get("fissure", 0), cascade=0)
+        record_recent_fissure_roll(user_obj.id, user_obj.username, 0, user.get("fissure", 0), cascade=0, event_type="zeus")
 
     set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
     schedule_delete(bot, chat_id, result_msg.message_id, 600, None)  # job_queue passed from caller if needed
@@ -438,7 +438,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         growth = new_fissure - old_fissure
 
         # Record for website live feed (in-memory only, zero DB cost)
-        record_recent_fissure_roll(user_obj.id, username, growth, new_fissure, cascade_count)
+        event = "multicast" if cascade_count > 1 else "roll"
+        record_recent_fissure_roll(user_obj.id, username, growth, new_fissure, cascade_count, event_type=event)
 
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
 

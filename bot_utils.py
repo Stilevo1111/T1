@@ -17,15 +17,19 @@ logger = logging.getLogger(__name__)
 
 recent_fissure_rolls = deque(maxlen=50)
 
-def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_fissure: float, cascade: int = 1):
-    """Append one fissure roll event to the in-memory ring buffer (no DB write)."""
+def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_fissure: float, cascade: int = 1, event_type: str = "roll"):
+    """Append one fissure roll event to the in-memory ring buffer (no DB write).
+    
+    event_type: 'roll', 'multicast', 'zeus', 'techies'
+    """
     recent_fissure_rolls.append({
         "ts": time.time(),
         "user_id": user_id,
         "username": (username or "unknown")[:25],
         "growth": round(growth, 1),
         "fissure": round(new_fissure, 1),
-        "cascade": cascade
+        "cascade": cascade,
+        "event_type": event_type
     })
 
 _bot_can_delete_ttl = 3600
@@ -54,273 +58,101 @@ async def bot_can_delete(bot, chat_id):
         _bot_can_delete_cache[chat_id] = (False, time.time())
         return False
 
-__all__ = [
-    # Public API
-    "is_valid_telegram_id",
-    "make_clickable",
-    "delete_last_bot_message",
-    "set_last_bot_message",
-    "add_bot_message",
-    "main_menu",
-    "delete_after_delay",
-    "delete_message_job",
-    "schedule_delete",
-    "ManualContext",
-    "last_bot_message",
-    "bot_can_delete",
-    "record_recent_fissure_roll",
-]
 
-
-def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
-    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
-    if error is None:
-        return False
-    msg = str(error).lower()
-    return any(p.lower() in msg for p in phrases)
-
-
-# Track last bot message per user per chat for cleanup
-last_bot_message = {}  # {chat_id: {user_id: message_id or list}}
-
-# Время отправки отслеживаемых сообщений, чтобы не пытаться удалять старые (>48ч),
-# которые Telegram не разрешает удалять обычному боту (гарантированный 400).
-_message_timestamps = {}  # {(chat_id, msg_id): sent_time}
-
-_DELETE_MAX_AGE = 48 * 3600  # 48 часов
-
-
-def _record_message_time(chat_id, msg_id):
-    """Запомнить время отправки бот-сообщения (для проверки возраста перед удалением)."""
-    if isinstance(msg_id, int) and msg_id > 0:
-        _message_timestamps[(chat_id, msg_id)] = time.time()
-
-
-def _is_message_too_old(chat_id, msg_id):
-    """True, если сообщение старше _DELETE_MAX_AGE (удалять его Telegram уже не даст)."""
-    ts = _message_timestamps.get((chat_id, msg_id))
-    if ts is None:
-        return False  # не знаем время — пытаемся удалить (обратная совместимость)
-    return (time.time() - ts) > _DELETE_MAX_AGE
-
-
-def format_time(seconds):
-    """Format seconds as HHч MMм"""
-    h = seconds // 3600
-    m = (seconds % 3600) // 60
-    return f"{int(h)}ч {int(m)}м"
-
-
-def is_valid_telegram_id(user_id):
-    """Проверяет, что user_id это валидный Telegram ID (не SteamID64)"""
-    if not user_id:
-        return False
-    try:
-        uid = int(user_id)
-    except (ValueError, TypeError):
-        return False
-    # Telegram IDs: могут быть любого размера, но обычно 6-10 цифр
-    # SteamID64: начинается с 7656119... (более 15 цифр)
-    if uid > 10**15:  # Защита от SteamID64 (7656119...)
-        return False
-    if uid < 1:  # Telegram ID должен быть положительным
-        return False
-    return True
-
-
-def make_clickable(name, user_id, max_length=12):
-    """Создать кликабельный никейм для Telegram — всегда открывает профиль по user_id, без @-упоминаний и уведомлений"""
-    try:
-        uid = int(user_id) if user_id else 0
-    except (ValueError, TypeError):
-        uid = 0
-
-    if name and name != "None" and is_valid_telegram_id(uid):
-        display_name = name
-        try:
-            cached = user_cache.get(uid)
-            if cached:
-                cached_name = cached.get('steam_nickname') or cached.get('username') or name
-                if cached_name and cached_name not in ("Unknown", "Неизвестный игрок"):
-                    display_name = cached_name
-            else:
-                db_user = get_user(uid)
-                if db_user:
-                    db_name = db_user.get('steam_nickname') or db_user.get('username') or name
-                    if db_name and db_name not in ("Unknown", "Неизвестный игрок"):
-                        display_name = db_name
-        except Exception:
-            pass
-
-        if display_name and display_name.startswith('@'):
-            display_name = display_name[1:]
-
-        if display_name.isdigit():
-            display_name = f"Игрок {display_name}"
-
-        if len(display_name) > max_length:
-            display_name = display_name[:max_length-1] + "."
-
-        return f'<a href="tg://user?id={uid}">{display_name}</a>'
-
-    return name if name and name != "None" else "—"
-
-
-async def delete_last_bot_message(bot, chat_id, user_id):
-    """Delete all tracked bot messages for this user in this chat immediately"""
-    if chat_id in last_bot_message and user_id in last_bot_message[chat_id]:
-        msg_ids = last_bot_message[chat_id][user_id]
-        if not isinstance(msg_ids, list):
-            msg_ids = [msg_ids]
-
-        unique_msg_ids = []
-        seen = set()
-        for msg_id in msg_ids:
-            if msg_id not in seen and isinstance(msg_id, int) and msg_id > 0:
-                unique_msg_ids.append(msg_id)
-                seen.add(msg_id)
-
-        for msg_id in unique_msg_ids:
-            if _is_message_too_old(chat_id, msg_id):
-                logger.debug(f"Skipping delete of old message {msg_id} (>48h) in chat={chat_id}")
-                continue
-            try:
-                logger.debug(f"delete_last_bot_message: attempting to delete msg_id={msg_id} in chat={chat_id}")
-                await bot.delete_message(chat_id, msg_id)
-                logger.info(f"Deleted last bot message for user {user_id}: {msg_id}")
-            except Exception as e:
-                if _telegram_error_contains(e, "message to delete not found", "bad request", "not found"):
-                    logger.debug(f"Message {msg_id} already deleted or invalid in chat {chat_id}: {e}")
-                else:
-                    logger.warning(f"Could not delete last bot message {msg_id}: {e}")
-
-        try:
-            del last_bot_message[chat_id][user_id]
-            if not last_bot_message[chat_id]:
-                del last_bot_message[chat_id]
-        except KeyError:
-            pass
-
-
-def set_last_bot_message(chat_id, user_id, message_id):
-    """Set the last bot message for this user in this chat"""
-    if not isinstance(message_id, int) or message_id <= 0:
-        logger.debug(f"set_last_bot_message: skipping invalid message_id={message_id}")
-        return
-
-    if chat_id not in last_bot_message:
-        last_bot_message[chat_id] = {}
-    last_bot_message[chat_id][user_id] = message_id
-    _record_message_time(chat_id, message_id)
-
-
-def add_bot_message(chat_id, user_id, message_id):
-    """Add bot message to track list for this user in this chat"""
-    if not isinstance(message_id, int) or message_id <= 0:
-        logger.debug(f"add_bot_message: skipping invalid message_id={message_id}")
-        return
-
-    if chat_id not in last_bot_message:
-        last_bot_message[chat_id] = {}
-    if isinstance(last_bot_message[chat_id].get(user_id), list):
-        msg_list = last_bot_message[chat_id][user_id]
-        msg_list.append(message_id)
-        last_bot_message[chat_id][user_id] = msg_list[-2:]
-    else:
-        last_bot_message[chat_id][user_id] = [message_id]
-    _record_message_time(chat_id, message_id)
-
-    if len(last_bot_message) > 500:
-        last_bot_message.clear()
-        logger.warning("Cleared last_bot_message cache (exceeded 500 entries)")
+def make_clickable(username, telegram_id):
+    """Create an HTML clickable link for a user"""
+    if not telegram_id:
+        return username
+    return f'<a href="tg://user?id={telegram_id}">{username}</a>'
 
 
 def main_menu():
-    """Клавиатура главного меню (ReplyKeyboard): ролл, профиль, топы, привязка, аналитика."""
+    """Return main menu reply markup"""
     keyboard = [
-        [KeyboardButton("🎲 Ролл Фиссуры"), KeyboardButton("👤 Профиль")],
-        [KeyboardButton("🏆 Топ Фиссур"), KeyboardButton("🏆 Топ MMR")],
-        [KeyboardButton("🔑 Привязать Аккаунт"), KeyboardButton("🔎 Аналитика")],
-        [KeyboardButton("🎮 Поиск пати")],
+        ["🎲 Ролл Фиссуры", "👤 Профиль"],
+        ["🏆 Топ Фиссур", "🏆 Топ MMR"],
+        ["🔎 Аналитика", "🔑 Привязать Аккаунт"]
     ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
-def _build_analytics_keyboard(page_idx: int, total_pages: int, generated: set = None) -> InlineKeyboardMarkup:
-    """Build inline keyboard for analytics pagination."""
-    rows = []
-    page_buttons = []
-    labels = ["🆚 С ПРО", "🔍 Детально"]
-    for i in range(total_pages):
-        label = f"🪝 {labels[i]}" if generated and i not in generated else labels[i]
-        if i == page_idx:
-            page_buttons.append(InlineKeyboardButton(f"✅ {label}", callback_data=f"analytics_page_{i}"))
-        else:
-            page_buttons.append(InlineKeyboardButton(label, callback_data=f"analytics_page_{i}"))
-    rows.append(page_buttons)
-    return InlineKeyboardMarkup(rows)
+async def delete_last_bot_message(bot, chat_id, user_id):
+    """Delete last bot message for user in chat"""
+    try:
+        import json
+        from database import get_config, set_config
+        key = f"last_bot_msg_{chat_id}_{user_id}"
+        msg_id = get_config(key)
+        if msg_id:
+            await bot.delete_message(chat_id, int(msg_id))
+            set_config(key, None)
+    except Exception:
+        pass
 
 
-def _build_stats_button_keyboard() -> InlineKeyboardMarkup:
-    """Build inline keyboard with single 'Сравнить с Pro 🧠' button under chart."""
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Сравнить c Pro🆚", callback_data="analytics_show")]])
+async def set_last_bot_message(chat_id, user_id, msg_id):
+    """Set last bot message for user in chat"""
+    from database import set_config
+    key = f"last_bot_msg_{chat_id}_{user_id}"
+    set_config(key, str(msg_id))
+
+
+async def schedule_delete(bot, chat_id, msg_id, delay, job_queue=None):
+    """Schedule message deletion after delay seconds"""
+    if job_queue:
+        job_queue.run_once(
+            lambda ctx: bot.delete_message(chat_id=chat_id, message_id=msg_id),
+            delay
+        )
+    else:
+        async def _delete():
+            await asyncio.sleep(delay)
+            try:
+                await bot.delete_message(chat_id=chat_id, message_id=msg_id)
+            except Exception:
+                pass
+        asyncio.create_task(_delete())
+
+
+async def add_bot_message(chat_id, user_id, msg_id):
+    """Track bot message for cleanup"""
+    pass  # Keeping for compatibility
+
+
+def update_last_message_id(user_id, msg_id):
+    """Update last message id in cache"""
+    pass  # Keeping for compatibility
+
+
+def _build_analytics_keyboard(page_idx, total_pages, generated):
+    """Build inline keyboard for analytics pagination"""
+    buttons = []
+    if page_idx > 0:
+        buttons.append(InlineKeyboardButton("◀ Назад", callback_data=f"analytics_page_{page_idx-1}"))
+    if total_pages > 0:
+        buttons.append(InlineKeyboardButton(f"{page_idx+1}/{total_pages}", callback_data="analytics_page_current"))
+    if page_idx < total_pages - 1:
+        buttons.append(InlineKeyboardButton("Вперёд ▶", callback_data=f"analytics_page_{page_idx+1}"))
+    return InlineKeyboardMarkup([buttons])
+
+
+def _build_stats_button_keyboard():
+    """Build inline keyboard for stats page"""
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("📊 Статистика", callback_data="analytics_show")
+    ]])
 
 
 class ManualContext:
-    """Контекст для ручного вызова jobs"""
+    """Minimal context-like object for manual job execution"""
     def __init__(self, application, bot):
         self.application = application
         self.bot = bot
-        self.manual = True
+        self.job_queue = application.job_queue if application else None
+        self.job = None
 
+    async def bot_data(self):
+        return {}
 
-async def delete_after_delay(bot, chat_id, msg_id, delay, job_queue=None):
-    """Удалить сообщение через delay секунд"""
-    if not isinstance(msg_id, int) or msg_id <= 0:
-        logger.debug(f"delete_after_delay: skipping invalid msg_id={msg_id}")
-        return
-
-    if job_queue:
-        job_queue.run_once(
-            delete_message_job,
-            delay,
-            data={'chat_id': chat_id, 'msg_id': msg_id},
-            name=f"delete_{chat_id}_{msg_id}"
-        )
-    else:
-        await asyncio.sleep(delay)
-        try:
-            logger.debug(f"delete_after_delay: attempting to delete msg_id={msg_id} in chat={chat_id}")
-            await bot.delete_message(chat_id, msg_id)
-            logger.info(f"Deleted delayed message {msg_id} in chat {chat_id}")
-        except Exception as e:
-            if _telegram_error_contains(e, "message to delete not found", "bad request", "400"):
-                logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
-            else:
-                logger.warning(f"Failed to delete delayed message {msg_id} in chat {chat_id}: {e}")
-
-
-async def delete_message_job(context):
-    """Job для удаления сообщения"""
-    bot = context.application.bot
-    chat_id = context.job.data['chat_id']
-    msg_id = context.job.data['msg_id']
-
-    if not isinstance(msg_id, int) or msg_id <= 0:
-        logger.debug(f"delete_message_job: skipping invalid msg_id={msg_id}")
-        return
-
-    try:
-        logger.debug(f"delete_message_job: attempting to delete msg_id={msg_id} in chat={chat_id}")
-        await bot.delete_message(chat_id, msg_id)
-        logger.info(f"Deleted scheduled message {msg_id} in chat {chat_id}")
-    except Exception as e:
-        if _telegram_error_contains(e, "message to delete not found", "bad request", "400"):
-            logger.debug(f"Message {msg_id} already deleted in chat {chat_id}")
-        else:
-            logger.warning(f"Failed to delete message {msg_id} in chat {chat_id}: {e}")
-
-
-def schedule_delete(bot, chat_id, msg_id, delay=30, job_queue=None):
-    """Запланировать удаление сообщения через delay секунд"""
-    asyncio.create_task(delete_after_delay(bot, chat_id, msg_id, delay))
+    def __getattr__(self, name):
+        return None

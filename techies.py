@@ -328,7 +328,7 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         update_user_field(user_id, "fissure", new_fissure)
         if record_recent_fissure_roll:
             record_recent_fissure_roll(
-                user_id, username or str(user_id), -total_damage, new_fissure, cascade=0
+                user_id, username or str(user_id), -total_damage, new_fissure, cascade=0, event_type="techies"
             )
 
         phrase = random.choice(FAIL_PHRASES)
