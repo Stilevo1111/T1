@@ -3316,11 +3316,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                     button_found = btn_full
                     break
 
-        # If still not exact, try contains match (case-insensitive)
+        # If still not exact, try startswith match (case-insensitive)
         if not button_found and len(text) >= 3:
             text_lower = text.lower()
             for btn_key, btn_full in menu_buttons.items():
-                if btn_key.lower() in text_lower or text_lower in btn_key.lower():
+                # Only match if text starts with button key
+                if text_lower.startswith(btn_key.lower()):
                     button_found = btn_full
                     break
 
@@ -3331,8 +3332,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
 
         logger.info(f"menu_handler: MATCH FOUND - '{button_found}'")
 
-        chat_id = update.message.chat_id
-        chat_type = update.message.chat.type
+        chat_id = update.effective_chat.id
+        chat_type = update.effective_chat.type
         user_id = update.effective_user.id
 
         logger.info(f"User {user_id} pressed button: {button_found} in chat type: {chat_type}")
@@ -3341,7 +3342,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
 
         # Delete user's message only in groups/channels (non-blocking, don't wait)
         if chat_type in ['group', 'supergroup', 'channel']:
-            user_msg_id = update.message.message_id
+            user_msg_id = update.message.message_id if update.message else None
             asyncio.create_task(delete_user_message_safely(context.bot, chat_id, user_msg_id))
 
         # Delete last bot message immediately (non-blocking)
