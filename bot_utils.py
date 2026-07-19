@@ -24,6 +24,24 @@ def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
     msg = str(error).lower()
     return any(p.lower() in msg for p in phrases)
 
+def format_time(seconds: float) -> str:
+    """Format seconds into human-readable time string (e.g., '5m 30s', '1h 23m')."""
+    if seconds is None or seconds < 0:
+        return "0s"
+    seconds = int(seconds)
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    
+    parts = []
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0:
+        parts.append(f"{minutes}m")
+    if secs > 0 or not parts:
+        parts.append(f"{secs}s")
+    return " ".join(parts)
+
 def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_fissure: float, cascade: int = 1, event_type: str = "roll"):
     """Append one fissure roll event to the in-memory ring buffer (no DB write).
     
