@@ -2348,8 +2348,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show stats — свой или чужой профиль: /profile или /profile @username"""
     logger.info(f"User {update.effective_user.id} called stats")
 
-    chat_id = update.message.chat_id
-    chat_type = update.message.chat.type
+    chat_id = update.effective_chat.id
+    chat_type = update.effective_chat.type
 
     loading_msg = None
 
@@ -2556,7 +2556,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             profile_banner_url = get_banner_path("profile")
 
         result_msg = await context.bot.send_photo(
-            chat_id=update.message.chat_id,
+            chat_id=update.effective_chat.id,
             photo=profile_banner_url,
             caption=text,
             parse_mode="HTML",
@@ -2609,16 +2609,17 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show top users"""
     logger.info(f"User {update.effective_user.id} called top")
 
-    chat_id = update.message.chat_id
-    chat_type = update.message.chat.type
+    chat_id = update.effective_chat.id
+    chat_type = update.effective_chat.type
 
     if chat_type in ['group', 'supergroup', 'channel']:
         if await bot_can_delete(context.bot, chat_id):
-            user_msg_id = update.message.message_id
-            try:
-                await context.bot.delete_message(chat_id, user_msg_id)
-            except Exception as e:
-                logger.debug(f"Could not delete user message: {e}")
+            user_msg_id = update.effective_message.message_id if update.effective_message else None
+            if user_msg_id:
+                try:
+                    await context.bot.delete_message(chat_id, user_msg_id)
+                except Exception as e:
+                    logger.debug(f"Could not delete user message: {e}")
 
     try:
         await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
@@ -2641,7 +2642,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not top_users:
             text = "😶 Пока нет игроков. Будь первым!"
             result_msg = await context.bot.send_message(
-                chat_id=update.message.chat_id,
+                chat_id=chat_id,
                 text=text,
                 reply_markup=main_menu()
             )
@@ -2732,7 +2733,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += "\n\n<b><a href=\"https://seredin999.onrender.com/fissure-logs\">📜 История бросков</a></b>"
 
         result_msg = await context.bot.send_photo(
-            chat_id=update.message.chat_id,
+            chat_id=chat_id,
             photo=banner_url,
             caption=text,
             parse_mode="HTML",
@@ -2745,7 +2746,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in top: {e}", exc_info=True)
         try:
-            msg = await update.message.reply_text("❌ Ошибка получения топа", reply_markup=main_menu())
+            msg = await context.bot.send_message("❌ Ошибка получения топа", reply_markup=main_menu(), chat_id=chat_id)
             schedule_delete(context.bot, update.effective_chat.id, msg.message_id, 30, context.job_queue)
         except Exception:
             pass
@@ -2762,10 +2763,10 @@ async def refreshmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update_all_mmr_job(context)
         update_dota_week_top_cache()
         
-        await update.message.reply_text("✅ Топ MMR обновлён принудительно")
+        await context.bot.send_message("✅ Топ MMR обновлён принудительно", chat_id=update.effective_chat.id)
     except Exception as e:
         logger.error(f"refreshmmr error: {e}")
-        await update.message.reply_text(f"❌ Ошибка обновления: {e}")
+        await context.bot.send_message(f"❌ Ошибка обновления: {e}", chat_id=update.effective_chat.id)
 
 async def testtechies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from techies import handle_techies_event
@@ -2808,13 +2809,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
-    chat_id = update.message.chat_id
+    chat_id = update.effective_chat.id
 
     # Delete user message in groups
-    if update.message.chat.type in ['group', 'supergroup', 'channel']:
+    chat_type = update.effective_chat.type
+    if chat_type in ['group', 'supergroup', 'channel']:
         if await bot_can_delete(context.bot, chat_id):
             try:
-                await context.bot.delete_message(chat_id, update.message.message_id)
+                await context.bot.delete_message(chat_id, update.effective_message.message_id if update.effective_message else None)
             except Exception as e:
                 logger.debug(f"Could not delete user message: {e}")
 
