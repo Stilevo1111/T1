@@ -115,14 +115,14 @@ async def delete_last_bot_message(bot, chat_id, user_id):
         pass
 
 
-async def set_last_bot_message(chat_id, user_id, msg_id):
+def set_last_bot_message(chat_id, user_id, msg_id):
     """Set last bot message for user in chat"""
     from database import set_config
     key = f"last_bot_msg_{chat_id}_{user_id}"
     set_config(key, str(msg_id))
 
 
-async def schedule_delete(bot, chat_id, msg_id, delay, job_queue=None):
+def schedule_delete(bot, chat_id, msg_id, delay, job_queue=None):
     """Schedule message deletion after delay seconds"""
     if job_queue:
         job_queue.run_once(
@@ -139,7 +139,7 @@ async def schedule_delete(bot, chat_id, msg_id, delay, job_queue=None):
         asyncio.create_task(_delete())
 
 
-async def add_bot_message(chat_id, user_id, msg_id):
+def add_bot_message(chat_id, user_id, msg_id):
     """Track bot message for cleanup"""
     pass  # Keeping for compatibility
 
