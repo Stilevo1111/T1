@@ -1963,11 +1963,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # === LINK HANDLER ===
         # === ROLL FISSURE HANDLER (callback from welcome message) ===
         if data == "roll_fissure":
-            import time
+            import time as _time
             await callback_query.answer()
             user_obj = callback_query.from_user
             chat_id = callback_query.message.chat_id
             chat_type = 'private'
+            
+            # Get current time for fake message
+            _current_time = int(_time.time())
             
             # Ensure user account exists before rolling
             from database import get_user
@@ -1989,7 +1992,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 message_id = 0
                 chat = _FakeChat()
                 from_user = _FakeUser()
-                date = int(time.time())
+                date = _current_time
                 text = '/fissure'
 
             fake_msg = _FakeMsg()
