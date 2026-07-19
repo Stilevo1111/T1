@@ -17,6 +17,13 @@ logger = logging.getLogger(__name__)
 
 recent_fissure_rolls = deque(maxlen=50)
 
+def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
+    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
+    if error is None:
+        return False
+    msg = str(error).lower()
+    return any(p.lower() in msg for p in phrases)
+
 def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_fissure: float, cascade: int = 1, event_type: str = "roll"):
     """Append one fissure roll event to the in-memory ring buffer (no DB write).
     
