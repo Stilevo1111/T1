@@ -2047,10 +2047,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await fissure(_FakeUpdate(), context)
             return
 
-        if data == "link":
-            await link(update, context)
-            return
-
     except Exception as e:
         logger.error(f"Error in button_callback: {e}", exc_info=True)
         await callback_query.answer(text="Ошибка при обработке кнопки", show_alert=True)

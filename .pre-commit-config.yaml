@@ -1,0 +1,26 @@
+default_language_version:
+  python: python3.11
+
+repos:
+  - repo: local
+    name: ruff
+    entry: ruff check .
+    language: system
+    types: [python]
+    pass_filenames: []
+
+  - repo: local
+    name: mypy
+    entry: mypy .
+    language: system
+    types: [python]
+    pass_filenames: []
+    always_run: true
+
+  - repo: local
+    name: pytest
+    entry: pytest
+    language: system
+    types: [python]
+    pass_filenames: []
+    always_run: true

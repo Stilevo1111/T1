@@ -6,6 +6,36 @@ target-version = "py311"
 select = ["E", "F", "I", "W", "UP"]
 ignore = ["E501"]  # line length handled above
 
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+exclude = [
+    "tests/",
+    "check_",
+    "validate_",
+    "verify_",
+    "temp_",
+    "demo_",
+    "run_syntax",
+    "syntax_check",
+    "compile_check",
+    "check_line",
+    "check_bytes",
+    "check_exact",
+    "check_raw",
+    "line2926",
+    "test_syntax",
+    "test_fix",
+    "test_roll",
+    "verif",
+    "audit",
+    "SUMMARY_FIXES",
+    "AUDIT_REPORT",
+]
+show_error_codes = true
+warn_unused_ignores = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
