@@ -1798,7 +1798,7 @@ class Database:
             # Используем execute_query для безопасного выполнения
             if get_db_type() == "postgresql":
                 query = """
-                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, current_win_streak, daily_best_growth
+                    SELECT telegram_id, username, steam_nickname, steam_id, fissure, digest_position, digest_fissure, current_streak, current_win_streak, daily_best_growth
                     FROM users
                     WHERE in_chat = TRUE
                 """
@@ -1809,6 +1809,7 @@ class Database:
                         "telegram_id": r["telegram_id"],
                         "username": r["username"],
                         "steam_nickname": r["steam_nickname"],
+                        "steam_id": r.get("steam_id"),
                         "fissure": float(r["fissure"] or 0.0),
                         "digest_position": int(r["digest_position"] or 0),
                         "digest_fissure": float(r["digest_fissure"] or 0.0),
@@ -1818,7 +1819,7 @@ class Database:
                     })
             else:
                 query = """
-                    SELECT telegram_id, username, steam_nickname, fissure, digest_position, digest_fissure, current_streak, current_win_streak, daily_best_growth
+                    SELECT telegram_id, username, steam_nickname, steam_id, fissure, digest_position, digest_fissure, current_streak, current_win_streak, daily_best_growth
                     FROM users
                     WHERE in_chat = 1 OR in_chat IS NULL
                 """
@@ -1829,12 +1830,13 @@ class Database:
                         "telegram_id": r[0],
                         "username": r[1],
                         "steam_nickname": r[2],
-                        "fissure": float(r[3] or 0.0),
-                        "digest_position": int(r[4] or 0),
-                        "digest_fissure": float(r[5] or 0.0),
-                        "current_streak": int(r[6] or 0),
-                        "current_win_streak": int(r[7] or 0),
-                        "daily_best_growth": float(r[8] or 0.0),
+                        "steam_id": r[3] if len(r) > 3 else None,
+                        "fissure": float(r[4] or 0.0),
+                        "digest_position": int(r[5] or 0),
+                        "digest_fissure": float(r[6] or 0.0),
+                        "current_streak": int(r[7] or 0),
+                        "current_win_streak": int(r[8] or 0),
+                        "daily_best_growth": float(r[9] if len(r) > 9 else 0.0),
                     })
 
             top_growth_user = None
@@ -1846,6 +1848,9 @@ class Database:
             top_streak_user = None
             top_streak = 0
             top_streak_id = None
+            top_growth_steam_id = None
+            top_drop_steam_id = None
+            top_streak_steam_id = None
 
             for u in users:
                 telegram_id = u.get("telegram_id")
@@ -1866,6 +1871,7 @@ class Database:
                     nick = u.get("steam_nickname") or u.get("username")
                     top_growth_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else None
                     top_growth_id = telegram_id
+                    top_growth_steam_id = u.get("steam_id")
 
                 # also track drop (fissure decrease) - only if delta is negative (fissure decreased)
                 if delta < top_drop_cm:
@@ -1873,10 +1879,12 @@ class Database:
                     nick = u.get("steam_nickname") or u.get("username")
                     top_drop_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else None
                     top_drop_id = telegram_id
+                    top_drop_steam_id = u.get("steam_id")
 
                 if u["current_win_streak"] > top_streak:
                     top_streak = u["current_win_streak"]
                     top_streak_id = telegram_id
+                    top_streak_steam_id = u.get("steam_id")
                     nick = u.get("steam_nickname") or u.get("username")
                     top_streak_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else None
 
@@ -1910,6 +1918,9 @@ class Database:
                 "top_growth_id": top_growth_id,
                 "top_drop_id": top_drop_id,
                 "top_streak_id": top_streak_id,
+                "top_growth_steam_id": top_growth_steam_id,
+                "top_drop_steam_id": top_drop_steam_id,
+                "top_streak_steam_id": top_streak_steam_id,
                 "streak_username": streak_username,
             }
         except Exception as e:
@@ -1921,6 +1932,9 @@ class Database:
                 "top_growth_id": None,
                 "top_drop_id": None,
                 "top_streak_id": None,
+                "top_growth_steam_id": None,
+                "top_drop_steam_id": None,
+                "top_streak_steam_id": None,
                 "streak_username": None
             }
 
@@ -2889,33 +2903,39 @@ def get_digest_stats():
         if last:
             try:
                 result["top_growth"] = tuple(json.loads(last))
-                result["top_growth_id"] = json.loads(last)[2] if len(json.loads(last)) > 2 else None
+                parts = json.loads(last)
+                result["top_growth_id"] = parts[2] if len(parts) > 2 else None
+                result["top_growth_steam_id"] = parts[3] if len(parts) > 3 else None
             except:
                 pass
     else:
-        set_config('last_top_growth', json.dumps(result["top_growth"] + (result["top_growth_id"],)))
+        set_config('last_top_growth', json.dumps(result["top_growth"] + (result["top_growth_id"], result.get("top_growth_steam_id")))
 
     if result["top_drop"][0] == "None":
         last = get_config('last_top_drop')
         if last:
             try:
                 result["top_drop"] = tuple(json.loads(last))
-                result["top_drop_id"] = json.loads(last)[2] if len(json.loads(last)) > 2 else None
+                parts = json.loads(last)
+                result["top_drop_id"] = parts[2] if len(parts) > 2 else None
+                result["top_drop_steam_id"] = parts[3] if len(parts) > 3 else None
             except:
                 pass
     else:
-        set_config('last_top_drop', json.dumps(result["top_drop"] + (result["top_drop_id"],)))
+        set_config('last_top_drop', json.dumps(result["top_drop"] + (result["top_drop_id"], result.get("top_drop_steam_id")))
 
     if result["top_streak"][0] == "None":
         last = get_config('last_top_streak')
         if last:
             try:
                 result["top_streak"] = tuple(json.loads(last))
-                result["top_streak_id"] = json.loads(last)[2] if len(json.loads(last)) > 2 else None
+                parts = json.loads(last)
+                result["top_streak_id"] = parts[2] if len(parts) > 2 else None
+                result["top_streak_steam_id"] = parts[3] if len(parts) > 3 else None
             except:
                 pass
     else:
-        set_config('last_top_streak', json.dumps(result["top_streak"] + (result["top_streak_id"],)))
+        set_config('last_top_streak', json.dumps(result["top_streak"] + (result["top_streak_id"], result.get("top_streak_steam_id")))
 
     user_cache.set('digest_stats', result)
     return result

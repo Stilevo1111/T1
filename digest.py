@@ -344,10 +344,13 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         growth_id = stats.get("top_growth_id")
         drop_id = stats.get("top_drop_id")
         streak_id = stats.get("top_streak_id")
+        growth_steam_id = stats.get("top_growth_steam_id")
+        drop_steam_id = stats.get("top_drop_steam_id")
+        streak_steam_id = stats.get("top_streak_steam_id")
 
-        growth_display = clickable_name(growth_player, growth_id) if growth_id else "—"
-        drop_display = clickable_name(drop_player, drop_id) if drop_id else "—"
-        streak_display = clickable_name(streak_player, streak_id) if streak_id and streak_len > 0 else "—"
+        growth_display = clickable_name(growth_player, growth_id, growth_steam_id) if growth_id else "—"
+        drop_display = clickable_name(drop_player, drop_id, drop_steam_id) if drop_id else "—"
+        streak_display = clickable_name(streak_player, streak_id, streak_steam_id) if streak_id and streak_len > 0 else "—"
 
         parts.append(f"🔺{growth_display} +{growth_pos} см\n" if growth_id and growth_pos > 0 else "🔺—\n")
         parts.append(f"🔻{drop_display} -{abs(drop_cm):.0f} см\n" if drop_id and drop_cm < 0 else "🔻—\n")
