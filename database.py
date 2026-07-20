@@ -2923,7 +2923,7 @@ def get_digest_stats():
             except:
                 pass
     else:
-        set_config('last_top_growth', json.dumps(result["top_growth"] + (result["top_growth_id"], result.get("top_growth_steam_id")))
+        set_config('last_top_growth', json.dumps(result["top_growth"] + (result["top_growth_id"], result.get("top_growth_steam_id"))))
 
     if result["top_drop"][0] == "None":
         last = get_config('last_top_drop')
@@ -2936,7 +2936,7 @@ def get_digest_stats():
             except:
                 pass
     else:
-        set_config('last_top_drop', json.dumps(result["top_drop"] + (result["top_drop_id"], result.get("top_drop_steam_id")))
+        set_config('last_top_drop', json.dumps(result["top_drop"] + (result["top_drop_id"], result.get("top_drop_steam_id"))))
 
     if result["top_streak"][0] == "None":
         last = get_config('last_top_streak')
@@ -2949,7 +2949,7 @@ def get_digest_stats():
             except:
                 pass
     else:
-        set_config('last_top_streak', json.dumps(result["top_streak"] + (result["top_streak_id"], result.get("top_streak_steam_id")))
+        set_config('last_top_streak', json.dumps(result["top_streak"] + (result["top_streak_id"], result.get("top_streak_steam_id"))))
 
     user_cache.set('digest_stats', result)
     return result
