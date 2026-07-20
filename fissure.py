@@ -233,18 +233,30 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 now, last_f, COOLDOWN, format_time
             )
             cooldown_banner_url = get_random_cooldown_banner_path()
-            await send_fissure_cooldown_response(
-                context.bot,
-                chat_id,
-                user_obj.id,
-                text,
-                cooldown_banner_url,
-                main_menu,
-                set_last_bot_message,
-                schedule_delete,
-                update_last_message_id,
-                context.job_queue
-            )
+            try:
+                await send_fissure_cooldown_response(
+                    context.bot,
+                    chat_id,
+                    user_obj.id,
+                    text,
+                    cooldown_banner_url,
+                    main_menu,
+                    set_last_bot_message,
+                    schedule_delete,
+                    update_last_message_id,
+                    context.job_queue
+                )
+            except Exception as e:
+                logger.error(f"fissure: cooldown banner failed, sending text fallback: {e}")
+                try:
+                    msg = await context.bot.send_message(
+                        chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=main_menu()
+                    )
+                    set_last_bot_message(chat_id, user_obj.id, msg.message_id)
+                    schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
+                    update_last_message_id(user_obj.id, msg.message_id)
+                except Exception as e2:
+                    logger.error(f"fissure: cooldown text fallback also failed: {e2}")
             logger.info(f"fissure: cooldown response sent for user {user_obj.id}")
             return
 
