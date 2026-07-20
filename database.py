@@ -1602,13 +1602,13 @@ class Database:
             scheme = url.scheme
 
             if "postgres" in scheme:
-                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure, avatar, rank_tier FROM users WHERE (in_chat = TRUE OR in_chat IS NULL) ORDER BY fissure DESC NULLS LAST LIMIT %s"
+                query = "SELECT telegram_id, username, steam_nickname, first_name, steam_id, fissure, avatar, rank_tier FROM users WHERE (in_chat = TRUE OR in_chat IS NULL) ORDER BY fissure DESC NULLS LAST LIMIT %s"
                 users = self.execute_query(query, (limit,), fetch="all")
-                return [{"telegram_id": u["telegram_id"], "username": u["username"], "steam_nickname": u["steam_nickname"], "first_name": u["first_name"], "fissure": u["fissure"], "avatar": u.get("avatar"), "rank_tier": u.get("rank_tier", 0)} for u in users]
+                return [{"telegram_id": u["telegram_id"], "username": u["username"], "steam_nickname": u["steam_nickname"], "first_name": u["first_name"], "steam_id": u.get("steam_id"), "fissure": u["fissure"], "avatar": u.get("avatar"), "rank_tier": u.get("rank_tier", 0)} for u in users]
             else:
-                query = "SELECT telegram_id, username, steam_nickname, first_name, fissure, avatar, rank_tier FROM users ORDER BY fissure DESC LIMIT ?"
+                query = "SELECT telegram_id, username, steam_nickname, first_name, steam_id, fissure, avatar, rank_tier FROM users ORDER BY fissure DESC LIMIT ?"
                 users = self.execute_query(query, (limit,), fetch="all")
-                return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], "first_name": u[3], "fissure": u[4], "avatar": u[5], "rank_tier": u[6] if len(u) > 6 else 0} for u in users]
+                return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], "first_name": u[3], "steam_id": u[4], "fissure": u[5], "avatar": u[6], "rank_tier": u[7] if len(u) > 7 else 0} for u in users]
         except Exception as e:
             logger.error(f"Error getting fissure top: {e}")
             return []

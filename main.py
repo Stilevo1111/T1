@@ -2787,11 +2787,12 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ''.join(emoji_digits[d] for d in str(n))
 
         for i, user_top in enumerate(top_users, 1):
-            raw_name = (user_top.get('username') or user_top.get('first_name') or str(user_top.get('telegram_id', 'Игрок'))).strip()
+            raw_name = (user_top.get('username') or user_top.get('first_name') or user_top.get('steam_nickname') or str(user_top.get('telegram_id', 'Игрок'))).strip()
             name = raw_name[:12] if len(raw_name) > 12 else raw_name
             telegram_id = user_top.get('telegram_id')
+            steam_id = user_top.get('steam_id')
             display = name[1:] if name.startswith('@') else name
-            display_name = f'<b>{make_clickable(display, telegram_id)}</b>'
+            display_name = f'<b>{clickable_name(display, telegram_id, steam_id)}</b>'
             fissure = user_top.get('fissure', 0)
             medal = medals.get(i)
             if medal:
