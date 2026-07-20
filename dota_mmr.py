@@ -673,6 +673,7 @@ def _compose_heroes_strip_background(canvas_width: int, canvas_height: int):
                 data = cache_file.read_bytes()
             except Exception:
                 pass
+
         if not data:
             bg_path = get_banner_path("heroes_profil")
             if isinstance(bg_path, Path) and bg_path.exists():
@@ -687,6 +688,9 @@ def _compose_heroes_strip_background(canvas_width: int, canvas_height: int):
                             cache_file.write_bytes(data)
                         except Exception:
                             pass
+                except Exception:
+                    pass
+
         if not data:
             return _heroes_strip_gradient(canvas_width, canvas_height)
 
