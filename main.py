@@ -3047,8 +3047,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 player_id = player.get('telegram_id')
                 steam_id = player.get('steam_id')
                 display_name = clickable_name(username, player_id, steam_id)
-                if '1111' in str(username):
-                    logger.info(f"topmmr debug 1111: username={username!r} telegram_id={player_id!r} steam_id={steam_id!r} display_name={display_name!r}")
                 lines.append(f"{medal} <b>{display_name}</b> - {rank_str}")
                 if week_games > 0:
                     wr = round((week_wins / week_games) * 100) if week_games > 0 else 0

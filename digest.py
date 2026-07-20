@@ -312,8 +312,6 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
             top_name = clickable_name(top_by_net.get('steam_nickname') or top_by_net.get('username'), top_by_net.get('telegram_id'), top_by_net.get('steam_id'))
             bottom_name = clickable_name(bottom_by_net.get('steam_nickname') or bottom_by_net.get('username'), bottom_by_net.get('telegram_id'), bottom_by_net.get('steam_id'))
 
-            logger.info(f"digest dota names: top={top_name!r} bottom={bottom_name!r} top_telegram={top_by_net.get('telegram_id')!r} bottom_telegram={bottom_by_net.get('telegram_id')!r} top_steam={top_by_net.get('steam_id')!r} bottom_steam={bottom_by_net.get('steam_id')!r}")
-
             top_games = top_by_net.get('week_games', 0)
             top_wins = top_by_net.get('week_wins', 0)
             top_wr = round((top_wins / top_games * 100)) if top_games > 0 else 0
