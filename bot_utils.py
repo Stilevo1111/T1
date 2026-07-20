@@ -125,10 +125,12 @@ def set_last_bot_message(chat_id, user_id, msg_id):
 def schedule_delete(bot, chat_id, msg_id, delay, job_queue=None):
     """Schedule message deletion after delay seconds"""
     if job_queue:
-        job_queue.run_once(
-            lambda ctx: bot.delete_message(chat_id=chat_id, message_id=msg_id),
-            delay
-        )
+        def _safe_delete(ctx):
+            try:
+                return bot.delete_message(chat_id=chat_id, message_id=msg_id)
+            except Exception:
+                pass
+        job_queue.run_once(_safe_delete, delay)
     else:
         async def _delete():
             await asyncio.sleep(delay)
