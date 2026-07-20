@@ -1080,7 +1080,7 @@ async def update_all_mmr_job(context):
         all_updated_users = []  # Collect all updated data for batch save
 
         # Semaphore to limit concurrent OpenDota API calls
-        MMR_CONCURRENCY_LIMIT = int(os.getenv("MMR_CONCURRENCY_LIMIT", "5"))
+        MMR_CONCURRENCY_LIMIT = int(os.getenv("MMR_CONCURRENCY_LIMIT", "2"))
         mmr_semaphore = asyncio.Semaphore(MMR_CONCURRENCY_LIMIT)
 
         async def update_single_user_mmr_async(user: dict) -> tuple[int, dict | None]:

@@ -73,9 +73,9 @@ STEAM_OFFSET = 76561197960265728
 
 # Rate limiting для OpenDota API
 _api_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
-API_RATE_LIMIT = 20  # максимум запросов в минуту (OpenDota允许30/мин)
+API_RATE_LIMIT = 15  # максимум запросов в минуту (OpenDota允许30/мин, держим запас)
 API_RATE_WINDOW = 60  # окно в секундах
-API_MIN_INTERVAL = 3  # минимум 3 секунды между запросами
+API_MIN_INTERVAL = 5  # минимум 5 секунд между запросами
 
 # Глобальное состояние rate limit для сообщений об ошибках
 _opendota_rate_limited_until = 0  # Unix timestamp, пока API недоступен
@@ -85,8 +85,8 @@ _circuit_breaker = {
     "state": "CLOSED",  # CLOSED, OPEN, HALF_OPEN
     "failure_count": 0,
     "last_failure_time": 0,
-    "failure_threshold": 3,  # Быстрее реагируем
-    "recovery_timeout": 60,    # 1 минута до попытки восстановления
+    "failure_threshold": 5,  # Более терпимо к временным rate limit
+    "recovery_timeout": 120,  # 2 минуты до попытки восстановления
 }
 
 def reset_circuit_breaker():

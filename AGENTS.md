@@ -80,7 +80,7 @@ Telegram-бот «Фиссура» на **Python 3.11** + **python-telegram-bot 
 
 ## Переменные окружения (`.env`)
 `BOT_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `ALLOWED_CHAT_ID`/`ALLOWED_CHATS`,
-`MMR_CONCURRENCY_LIMIT` (лимит параллельных запросов к OpenDota, деф. 5),
+`MMR_CONCURRENCY_LIMIT` (лимит параллельных запросов к OpenDota, деф. 2),
 `OPENAI_API_KEY`, `ADMIN_CHAT_ID`. Шаблон — `.env.example`.
 
 ## Как искать конкретное

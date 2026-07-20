@@ -16,5 +16,5 @@ services:
     value: https://fissure-bot.onrender.com/webhook
   - key: BOT_NAME
     value: fissure_bot
-  - key: MMR_CONCURRENCY_LIMIT
-    value: "5"
+   - key: MMR_CONCURRENCY_LIMIT
+    value: "2"
