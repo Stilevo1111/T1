@@ -357,10 +357,14 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         drop_steam_id = stats.get("top_drop_steam_id")
         streak_steam_id = stats.get("top_streak_steam_id")
 
-        # Show clickable link if we have either telegram_id OR steam_id
-        growth_display = clickable_name(growth_player, growth_id, growth_steam_id) if growth_id or growth_steam_id else "—"
-        drop_display = clickable_name(drop_player, drop_id, drop_steam_id) if drop_id or drop_steam_id else "—"
-        streak_display = clickable_name(streak_player, streak_id, streak_steam_id) if streak_id or streak_steam_id else "—"
+    # Show clickable link if we have either telegram_id OR steam_id
+    growth_display = clickable_name(growth_player, growth_id, growth_steam_id) if growth_id or growth_steam_id else "—"
+    drop_display = clickable_name(drop_player, drop_id, drop_steam_id) if drop_id or drop_steam_id else "—"
+    streak_display = clickable_name(streak_player, streak_id, streak_steam_id) if streak_id or streak_steam_id else "—"
+
+    logger.info(f"DIGEST_DEBUG: growth_player={growth_player!r} growth_id={growth_id!r} growth_steam_id={growth_steam_id!r} growth_display={growth_display!r}")
+    logger.info(f"DIGEST_DEBUG: drop_player={drop_player!r} drop_id={drop_id!r} drop_steam_id={drop_steam_id!r} drop_display={drop_display!r}")
+    logger.info(f"DIGEST_DEBUG: dota_top={mmr_top}")
 
         parts.append(f"🔺{growth_display} +{growth_pos} см\n" if growth_pos > 0 else "🔺—\n")
         parts.append(f"🔻{drop_display} -{abs(drop_cm):.0f} см\n" if drop_cm < 0 else "🔻—\n")
@@ -371,7 +375,9 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         parts.append("🍀—\n")
 
     parts.append("\n\n🔷<a href=\"https://seredin999.onrender.com/patch-fissure\">Подробнее на сайте</a>")
-    return "".join(parts)
+    final_text = "".join(parts)
+    logger.info(f"DIGEST_FINAL_TEXT:\n{final_text}")
+    return final_text
 
 
 def start_fast_digest_loop(bot, chat_id: int, message_id: int, is_photo: bool):

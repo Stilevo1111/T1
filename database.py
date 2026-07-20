@@ -2865,8 +2865,8 @@ def get_digest_stats():
         last = get_config('last_top_growth')
         if last:
             try:
-                result["top_growth"] = tuple(json.loads(last))
                 parts = json.loads(last)
+                result["top_growth"] = tuple(parts[:2])
                 result["top_growth_id"] = parts[2] if len(parts) > 2 else None
                 result["top_growth_steam_id"] = parts[3] if len(parts) > 3 else None
             except Exception as e:
@@ -2879,8 +2879,8 @@ def get_digest_stats():
         last = get_config('last_top_drop')
         if last:
             try:
-                result["top_drop"] = tuple(json.loads(last))
                 parts = json.loads(last)
+                result["top_drop"] = tuple(parts[:2])
                 result["top_drop_id"] = parts[2] if len(parts) > 2 else None
                 result["top_drop_steam_id"] = parts[3] if len(parts) > 3 else None
             except Exception as e:
@@ -2893,8 +2893,8 @@ def get_digest_stats():
         last = get_config('last_top_streak')
         if last:
             try:
-                result["top_streak"] = tuple(json.loads(last))
                 parts = json.loads(last)
+                result["top_streak"] = tuple(parts[:2])
                 result["top_streak_id"] = parts[2] if len(parts) > 2 else None
                 result["top_streak_steam_id"] = parts[3] if len(parts) > 3 else None
             except Exception as e:
