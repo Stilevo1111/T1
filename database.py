@@ -1863,22 +1863,22 @@ class Database:
                 
                 if growth_cm > 0 and growth_cm > top_growth_cm:
                     top_growth_cm = growth_cm
-                    nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
-                    top_growth_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else str(telegram_id)
+                    nick = u.get("steam_nickname") or u.get("username")
+                    top_growth_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else None
                     top_growth_id = telegram_id
 
                 # also track drop (fissure decrease) - only if delta is negative (fissure decreased)
                 if delta < top_drop_cm:
                     top_drop_cm = delta
-                    nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
-                    top_drop_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else str(telegram_id)
+                    nick = u.get("steam_nickname") or u.get("username")
+                    top_drop_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else None
                     top_drop_id = telegram_id
 
                 if u["current_win_streak"] > top_streak:
                     top_streak = u["current_win_streak"]
                     top_streak_id = telegram_id
-                    nick = u.get("steam_nickname") or u.get("username") or str(telegram_id)
-                    top_streak_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else str(telegram_id)
+                    nick = u.get("steam_nickname") or u.get("username")
+                    top_streak_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else None
 
             if top_drop_cm == float('inf'):
                 top_drop_cm = 0.0
@@ -2134,7 +2134,7 @@ def get_user(telegram_id, username=None):
 
     # Пользователь не найден - создаём нового
     logger.info(f"get_user: user {telegram_id} NOT found, creating new")
-    db.add_user(telegram_id, username or "Unknown", None, None)
+    db.add_user(telegram_id, username or f"Player{telegram_id}", None, None)
     user = db.get_user(telegram_id)
     if user:
         user.setdefault('fissure', 0.1)

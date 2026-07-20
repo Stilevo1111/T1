@@ -341,13 +341,17 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         streak_player = streak_data[0] if len(streak_data) > 0 else "None"
         streak_len = streak_data[1] if len(streak_data) > 1 else 0
 
-        growth_display = make_clickable(growth_player, stats.get("top_growth_id")) if growth_player and growth_player != "None" else "—"
-        drop_display = make_clickable(drop_player, stats.get("top_drop_id")) if drop_player and drop_player != "None" else "—"
-        streak_display = make_clickable(streak_player, stats.get("top_streak_id")) if streak_player and streak_player != "None" and streak_len > 0 else "—"
+        growth_id = stats.get("top_growth_id")
+        drop_id = stats.get("top_drop_id")
+        streak_id = stats.get("top_streak_id")
 
-        parts.append(f"🔺{growth_display} +{growth_pos} см\n" if growth_player and growth_player != "None" and growth_pos > 0 else "🔺—\n")
-        parts.append(f"🔻{drop_display} -{abs(drop_cm):.0f} см\n" if drop_player and drop_player != "None" and drop_cm < 0 else "🔻—\n")
-        parts.append(f"🍀{streak_display} {streak_len} побед подряд\n" if streak_len > 0 else "🍀—\n")
+        growth_display = make_clickable(growth_player, growth_id) if growth_id else "—"
+        drop_display = make_clickable(drop_player, drop_id) if drop_id else "—"
+        streak_display = make_clickable(streak_player, streak_id) if streak_id and streak_len > 0 else "—"
+
+        parts.append(f"🔺{growth_display} +{growth_pos} см\n" if growth_id and growth_pos > 0 else "🔺—\n")
+        parts.append(f"🔻{drop_display} -{abs(drop_cm):.0f} см\n" if drop_id and drop_cm < 0 else "🔻—\n")
+        parts.append(f"🍀{streak_display} {streak_len} побед подряд\n" if streak_id and streak_len > 0 else "🍀—\n")
     else:
         parts.append("🔺—\n")
         parts.append("🔻—\n")

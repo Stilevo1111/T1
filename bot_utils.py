@@ -84,11 +84,43 @@ async def bot_can_delete(bot, chat_id):
         return False
 
 
+_BAD_NAMES = ("", "none", "unknown", "неизвестный игрок")
+
+
+def _clean_display_name(username):
+    """Return a clean display name, or None if it is empty/unknown/placeholder."""
+    if username is None:
+        return None
+    name = str(username).strip()
+    if not name:
+        return None
+    # strip leading @ (telegram handles)
+    if name.startswith("@"):
+        name = name[1:].strip()
+    if not name:
+        return None
+    # strip surrounding quotes that sometimes come from DB
+    if (name.startswith('"') and name.endswith('"')) or (name.startswith("'") and name.endswith("'")):
+        name = name[1:-1].strip()
+    if name.lower() in _BAD_NAMES:
+        return None
+    return name
+
+
 def make_clickable(username, telegram_id):
-    """Create an HTML clickable link for a user"""
+    """Create an HTML clickable link for a user.
+
+    Guarantees:
+    - never shows 'Unknown' / 'None' / empty placeholders
+    - always clickable when telegram_id is present (falls back to 'Игрок')
+    - returns a plain (non-clickable) cleaned name only when no telegram_id exists
+    """
+    display = _clean_display_name(username)
+    if not display:
+        display = "Игрок"
     if not telegram_id:
-        return username
-    return f'<a href="tg://user?id={telegram_id}">{username}</a>'
+        return display
+    return f'<a href="tg://user?id={telegram_id}">{display}</a>'
 
 
 def main_menu():

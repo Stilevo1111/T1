@@ -1575,7 +1575,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if db_user is None:
             # Создаём нового пользователя с лучшим доступным именем
-            fallback_name = telegram_username or first_name or "Unknown"
+            fallback_name = telegram_username or first_name or f"Player{user_id}"
             db = Database()
             db.add_user(user_id, fallback_name, None, None)
             logger.info(f"Created new user {user_id} with name '{fallback_name}'")
@@ -2465,7 +2465,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not target_user:
             user_obj = update.effective_user
-            username = user_obj.username or user_obj.first_name or "Unknown"
+            username = user_obj.username or user_obj.first_name or f"Player{user_obj.id}"
             target_user = get_user(user_obj.id, username)
 
             try:
@@ -2787,7 +2787,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             name = raw_name[:12] if len(raw_name) > 12 else raw_name
             telegram_id = user_top.get('telegram_id')
             display = name[1:] if name.startswith('@') else name
-            clickable_name = f'<b><a href="tg://user?id={telegram_id}">{display}</a></b>'
+            clickable_name = f'<b>{make_clickable(display, telegram_id)}</b>'
             fissure = user_top.get('fissure', 0)
             medal = medals.get(i)
             if medal:
@@ -2987,10 +2987,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info(f"topmmr: using DEFAULT_AVATAR_URL for user {winner_telegram_id}")
 
             raw_winner_name = winner.get('steam_nickname') or winner.get('username') or winner.get('first_name')
-            if raw_winner_name and raw_winner_name not in ("Unknown", "Неизвестный игрок"):
-                winner_name = raw_winner_name
-            else:
-                winner_name = winner.get('username') or winner.get('first_name') or str(winner.get('telegram_id', 'Игрок'))
+            winner_name = raw_winner_name or str(winner.get('telegram_id', 'Игрок'))
             winner_rank_tier = winner.get('rank_tier', 0)
             winner_week_games = winner.get('week_games') or 0
             winner_week_wins = winner.get('week_wins') or 0
@@ -3028,9 +3025,8 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return ''.join(emoji_digits[d] for d in str(n))
 
             for i, player in enumerate(top_users, 1):
+                # Prefer Steam nickname for Dota top; fall back to telegram username
                 raw_uname = player.get('steam_nickname') or player.get('username') or player.get('first_name')
-                if not raw_uname or raw_uname in ("Unknown", "Неизвестный игрок"):
-                    raw_uname = player.get('username') or player.get('first_name') or str(player.get('telegram_id', 'Игрок'))
                 username = raw_uname
                 rank_tier = player.get('rank_tier', 0)
                 week_games = player.get('week_games') or 0
