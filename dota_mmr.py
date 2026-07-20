@@ -1904,6 +1904,8 @@ def generate_start_card(
             star = rank_tier % 10
             if star == 0:
                 star = 5
+            if tier == 8:
+                star = 5
 
             cache_key = (tier, star)
             if cache_key in _rank_icons_cache:
@@ -2061,6 +2063,8 @@ def generate_top_card(
             tier = rank_tier // 10
             star = rank_tier % 10
             if star == 0:
+                star = 5
+            if tier == 8:
                 star = 5
 
             cache_key = (tier, star)
