@@ -674,11 +674,13 @@ def get_static_fallback_banner():
         from datetime import datetime, timedelta, timezone
         MSK = timezone(timedelta(hours=3))
         date_text = datetime.now(MSK).strftime("%d.%m.%Y %H:%M")
-try:
+
+        try:
             font = ImageFont.truetype(FONT_PATH, 32)
-    except Exception as e:
-        logger.debug(f"Could not load fallback font: {e}")
-        font = ImageFont.load_default()
+        except Exception as e:
+            logger.debug(f"Could not load fallback font: {e}")
+            font = ImageFont.load_default()
+
         # Removed "Dota 2 Hero Meta" label as requested
         draw.text((20, 20), "Updated: %s" % date_text, fill=(200, 200, 200), font=font)
         draw.text((20, 70), "OpenDota API недоступен", fill=(150, 150, 150), font=font)
