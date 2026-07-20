@@ -2744,7 +2744,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ''.join(emoji_digits[d] for d in str(n))
 
         for i, user_top in enumerate(top_users, 1):
-            raw_name = (user_top.get('username') or user_top.get('first_name') or user_top.get('steam_nickname') or str(user_top.get('telegram_id', 'Игрок'))).strip()
+            raw_name = (user_top.get('steam_nickname') or user_top.get('username') or user_top.get('first_name') or str(user_top.get('telegram_id', 'Игрок'))).strip()
             name = raw_name[:12] if len(raw_name) > 12 else raw_name
             telegram_id = user_top.get('telegram_id')
             steam_id = user_top.get('steam_id')
@@ -2987,8 +2987,9 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return ''.join(emoji_digits[d] for d in str(n))
 
             for i, player in enumerate(top_users, 1):
-                # Prefer Steam nickname for Dota top; fall back to telegram username
                 raw_uname = player.get('steam_nickname') or player.get('username') or player.get('first_name')
+                if not raw_uname or raw_uname in ("None", "Unknown", "Неизвестный игрок") or len(raw_uname.strip()) <= 1:
+                    raw_uname = player.get('username') or player.get('first_name') or str(player.get('telegram_id', 'Игрок'))
                 username = raw_uname
                 rank_tier = player.get('rank_tier', 0)
                 week_games = player.get('week_games') or 0
