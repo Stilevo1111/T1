@@ -1910,6 +1910,8 @@ def generate_start_card(
                 rank_icon = _rank_icons_cache[cache_key].copy()
             else:
                 rank_file = Path(__file__).parent / "images" / "ranks" / f"rank_{tier}_{star}.webp"
+                if not rank_file.exists():
+                    rank_file = Path(__file__).parent / "images" / "ranks" / f"rank_{tier}_{star}.png"
                 if rank_file.exists():
                     try:
                         rank_icon = Image.open(rank_file).convert("RGBA")
@@ -2066,6 +2068,8 @@ def generate_top_card(
                 rank_icon = _rank_icons_cache[cache_key].copy()
             else:
                 rank_file = Path(__file__).parent / "images" / "ranks" / f"rank_{tier}_{star}.webp"
+                if not rank_file.exists():
+                    rank_file = Path(__file__).parent / "images" / "ranks" / f"rank_{tier}_{star}.png"
                 if rank_file.exists():
                     try:
                         rank_icon = Image.open(rank_file).convert("RGBA")
