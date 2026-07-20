@@ -17,14 +17,7 @@ logger = logging.getLogger(__name__)
 
 recent_fissure_rolls = deque(maxlen=50)
 
-def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
-    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
-    if error is None:
-        return False
-    msg = str(error).lower()
-    return any(p.lower() in msg for p in phrases)
-
-def format_time(seconds: float) -> str:
+from utils import _telegram_error_containsdef format_time(seconds: float) -> str:
     """Format seconds into human-readable time string (e.g., '5м 30с', '1ч 23м')."""
     if seconds is None or seconds < 0:
         return "0с"
@@ -161,8 +154,8 @@ async def delete_last_bot_message(bot, chat_id, user_id):
         if msg_id:
             await bot.delete_message(chat_id, int(msg_id))
             set_config(key, None)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Could not delete last bot message: {e}")
 
 
 def set_last_bot_message(chat_id, user_id, msg_id):
@@ -178,27 +171,27 @@ def schedule_delete(bot, chat_id, msg_id, delay, job_queue=None):
         def _safe_delete(ctx):
             try:
                 return bot.delete_message(chat_id=chat_id, message_id=msg_id)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not delete scheduled message: {e}")
         job_queue.run_once(_safe_delete, delay)
     else:
         async def _delete():
             await asyncio.sleep(delay)
             try:
                 await bot.delete_message(chat_id=chat_id, message_id=msg_id)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not delete scheduled message: {e}")
         asyncio.create_task(_delete())
 
 
 def add_bot_message(chat_id, user_id, msg_id):
     """Track bot message for cleanup"""
-    pass  # Keeping for compatibility
+    logger.debug(f"add_bot_message is deprecated; chat_id={chat_id}, user_id={user_id}, msg_id={msg_id}")
 
 
 def update_last_message_id(user_id, msg_id):
     """Update last message id in cache"""
-    pass  # Keeping for compatibility
+    logger.debug(f"update_last_message_id is deprecated; user_id={user_id}, msg_id={msg_id}")
 
 
 def _build_analytics_keyboard(page_idx, total_pages, generated):

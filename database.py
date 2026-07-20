@@ -18,13 +18,7 @@ import psycopg2
 import psycopg2.extras
 
 
-def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
-    if error is None:
-        return False
-    msg = str(error).lower()
-    return any(p.lower() in msg for p in phrases)
-
-logging.basicConfig(level=logging.INFO)
+from utils import _telegram_error_containslogging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -116,9 +110,9 @@ def _mask_db_url(url: str) -> str:
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     DATABASE_URL = "sqlite:///fissure_bot.db"
-    print(f"💡 Используется: {DATABASE_URL}")
+    logger.info(f"💡 Используется: {DATABASE_URL}")
 else:
-    print(f"Using DATABASE_URL: {_mask_db_url(DATABASE_URL)}")
+    logger.info(f"Using DATABASE_URL: {_mask_db_url(DATABASE_URL)}")
 
 
 class UserCache:
@@ -306,9 +300,6 @@ class UserStateManager:
     def __init__(self, user_cache: UserCache, top_cache: TTLCache) -> None:
         self._user_cache = user_cache
         self._top_cache = top_cache
-
-    def get_user(self, telegram_id: int) -> dict[str, Any] | None:
-        return self._user_cache.get(telegram_id)
 
     def apply_user_update(self, telegram_id: int, fields: dict, save_to_db: bool = True) -> dict:
         user = self._user_cache.get(telegram_id)
@@ -1530,54 +1521,6 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting user: {e}")
             return None
-
-    def update_fissure(self, telegram_id, fissure, last_fissure, growth=0):
-        """Обновление данных пользователя"""
-        try:
-            # Используем execute_query для безопасного выполнения
-            url = urlparse.urlparse(DATABASE_URL)
-            scheme = url.scheme
-            win = 1 if growth > 0 else 0
-            lose = 1 if growth < 0 else 0
-
-            weekly_inc = max(0.0, float(growth))
-            if "postgres" in scheme:
-                query = """
-                    UPDATE users SET fissure=%s, last_fissure=%s, 
-                    total_growth = total_growth + %s,
-                    total_rolls = total_rolls + 1,
-                    weekly_rolls = weekly_rolls + 1,
-                    weekly_growth = weekly_growth + %s,
-                    daily_best_growth = GREATEST(daily_best_growth, %s),
-                    last_activity = CURRENT_TIMESTAMP,
-                    current_win_streak = CASE WHEN %s = 1 THEN current_win_streak + 1 ELSE 0 END,
-                    current_lose_streak = CASE WHEN %s = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                    current_streak = CASE WHEN %s = 1 THEN current_win_streak WHEN %s = 1 THEN current_lose_streak ELSE 0 END,
-                    best_streak = GREATEST(best_streak, CASE WHEN %s = 1 THEN current_win_streak WHEN %s = 1 THEN current_lose_streak ELSE 0 END),
-                    best_lose_streak = GREATEST(best_lose_streak, CASE WHEN %s = 1 THEN current_lose_streak WHEN %s = 1 THEN current_win_streak ELSE 0 END)
-                    WHERE telegram_id=%s
-                """
-                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, max(growth, 0), win, lose, lose, win, win, lose, lose, win, telegram_id))
-            else:
-                query = """
-                    UPDATE users SET fissure=?, last_fissure=?, 
-                    total_growth = total_growth + ?,
-                    total_rolls = total_rolls + 1,
-                    weekly_rolls = weekly_rolls + 1,
-                    weekly_growth = weekly_growth + ?,
-                    daily_best_growth = MAX(daily_best_growth, ?),
-                    last_activity = CURRENT_TIMESTAMP,
-                    current_win_streak = CASE WHEN ? = 1 THEN current_win_streak + 1 ELSE 0 END,
-                    current_lose_streak = CASE WHEN ? = 1 THEN current_lose_streak + 1 ELSE 0 END,
-                    current_streak = CASE WHEN ? = 1 THEN current_win_streak WHEN ? = 1 THEN current_lose_streak ELSE 0 END,
-                    best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_win_streak WHEN ? = 1 THEN current_lose_streak ELSE 0 END),
-                    best_lose_streak = MAX(best_lose_streak, CASE WHEN ? = 1 THEN current_lose_streak WHEN ? = 1 THEN current_win_streak ELSE 0 END)
-                    WHERE telegram_id=?
-                """
-                self.execute_query(query, (fissure, last_fissure, growth, weekly_inc, max(growth, 0), win, lose, lose, win, win, lose, lose, win, telegram_id))
-        except Exception as e:
-            logger.error(f"Error updating fissure: {e}")
-        user_cache.delete('digest_stats')
 
     def update_last_message_id(self, telegram_id, message_id):
         """Обновление ID последнего сообщения пользователя"""
@@ -2924,7 +2867,8 @@ def get_digest_stats():
                 parts = json.loads(last)
                 result["top_growth_id"] = parts[2] if len(parts) > 2 else None
                 result["top_growth_steam_id"] = parts[3] if len(parts) > 3 else None
-            except:
+            except Exception as e:
+                logger.warning(f"get_digest_stats: failed to parse last_top_growth: {e}")
                 pass
     else:
         set_config('last_top_growth', json.dumps(result["top_growth"] + (result["top_growth_id"], result.get("top_growth_steam_id"))))
@@ -2937,7 +2881,8 @@ def get_digest_stats():
                 parts = json.loads(last)
                 result["top_drop_id"] = parts[2] if len(parts) > 2 else None
                 result["top_drop_steam_id"] = parts[3] if len(parts) > 3 else None
-            except:
+            except Exception as e:
+                logger.warning(f"get_digest_stats: failed to parse last_top_drop: {e}")
                 pass
     else:
         set_config('last_top_drop', json.dumps(result["top_drop"] + (result["top_drop_id"], result.get("top_drop_steam_id"))))
@@ -2950,7 +2895,8 @@ def get_digest_stats():
                 parts = json.loads(last)
                 result["top_streak_id"] = parts[2] if len(parts) > 2 else None
                 result["top_streak_steam_id"] = parts[3] if len(parts) > 3 else None
-            except:
+            except Exception as e:
+                logger.warning(f"get_digest_stats: failed to parse last_top_streak: {e}")
                 pass
     else:
         set_config('last_top_streak', json.dumps(result["top_streak"] + (result["top_streak_id"], result.get("top_streak_steam_id"))))

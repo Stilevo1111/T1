@@ -417,10 +417,14 @@ async def claim_or_check_digest_leader():
         is_leader = True
     elif not current_leader or (now - last_seen > LEADER_TIMEOUT):
         # Try to claim leadership
-        set_config('digest_leader_id', instance_id)
-        set_config('digest_leader_last_seen', str(now))
-        is_leader = True
-        logger.warning(f"digest: ЗАХВАТИЛ ЛИДЕРСТВО (instance={instance_id})")
+        try:
+            set_config('digest_leader_id', instance_id)
+            set_config('digest_leader_last_seen', str(now))
+            is_leader = True
+            logger.warning(f"digest: ЗАХВАТИЛ ЛИДЕРСТВО (instance={instance_id})")
+        except Exception as e:
+            logger.error(f"digest: failed to claim leadership: {e}")
+            is_leader = False
     else:
         logger.info(f"digest: пропуск (лидер = {current_leader}, я = {instance_id})")
 

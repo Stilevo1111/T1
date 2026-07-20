@@ -149,14 +149,7 @@ _START_COOLDOWN_MAX_SIZE = 1000
 _START_COOLDOWN_TTL = 3600  # 1 hour
 
 
-def _telegram_error_contains(error: Exception, *phrases: str) -> bool:
-    """Проверяет, содержит ли текст ошибки любую из переданных фраз (регистронезависимо)."""
-    if error is None:
-        return False
-    msg = str(error).lower()
-    return any(p.lower() in msg for p in phrases)
-
-
+from utils import _telegram_error_contains
 async def health_check(request):
     """Health check endpoint for Render - verifies DB connectivity"""
     try:
@@ -1419,6 +1412,7 @@ from bot_utils import (
 from constants import (
     COOLDOWN,
     JOB_COOLDOWN,
+    TOPMMR_BANNER_URL,
     WELCOME_PHRASES,
     get_banner_path,
 )
@@ -1640,8 +1634,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Delete last bot message
         try:
             await delete_last_bot_message(context.bot, chat_id, user_id)
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not delete last bot message in start: {e}")
 
 # Send loading message
         try:
@@ -1849,7 +1843,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=chat_id,
             photo=link_banner_url,
             caption=link_text,
-            parse_mode='Markdown',
+        parse_mode='HTML',
             reply_markup=main_menu()
         )
         set_last_bot_message(chat_id, callback_query.from_user.id, result_msg.message_id)
@@ -2865,7 +2859,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(update.effective_user.id)
 
         # Banner URL
-        topmmr_banner_url = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
+        topmmr_banner_url = TOPMMR_BANNER_URL
 
         # Сначала пытаемся получить недельный топ
         logger.info("topmmr: before get_dota_week_top_from_db")
@@ -3192,7 +3186,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=update.effective_chat.id,
         photo=link_banner_url,
         caption=link_text,
-        parse_mode='Markdown',
+        parse_mode='HTML',
         reply_markup=main_menu()
     )
     # Track this message for future deletion

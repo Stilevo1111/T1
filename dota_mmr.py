@@ -61,13 +61,7 @@ def _get_start_card_background():
             _START_CARD_BACKGROUND_RESIZED = bg_image
             _START_CARD_BACKGROUND_CACHED = True
             return bg_image
-        resp = requests.get(str(local_bg), timeout=30)
-        if resp.status_code == 200:
-            bg_image = Image.open(io.BytesIO(resp.content)).convert("RGB")
-            bg_image = bg_image.resize((1024, 500), Image.LANCZOS)
-            _START_CARD_BACKGROUND_RESIZED = bg_image
-            _START_CARD_BACKGROUND_CACHED = True
-            return bg_image
+        logger.warning(f"Start card background not found at {local_bg}")
     except Exception as e:
         logger.error(f"Failed to load start card background: {e}")
     return None

@@ -78,9 +78,8 @@ async def delete_fissure_user_and_last_messages(bot, chat_id, user_id, user_msg_
         if await bot_can_delete(bot, chat_id):
             try:
                 await bot.delete_message(chat_id, user_msg_id)
-            except Exception:
-                # logger is not imported here to keep it minimal; caller can log if needed
-                pass
+            except Exception as e:
+                logger.debug(f"Could not delete user message in delete_fissure_user_and_last_messages: {e}")
 
     # Small delay before deleting last bot message to ensure new message can be sent
     await asyncio.sleep(0.2)
@@ -88,8 +87,8 @@ async def delete_fissure_user_and_last_messages(bot, chat_id, user_id, user_msg_
     # Delete last bot message immediately
     try:
         await delete_last_bot_message(bot, chat_id, user_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Could not delete last bot message in delete_fissure_user_and_last_messages: {e}")
 
 
 def build_fissure_cooldown_bar_and_text(now, last_fissure, COOLDOWN, format_time):
@@ -533,10 +532,17 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             add_bot_message(chat_id, user_obj.id, result_msg.message_id)
         except Exception as e:
             logger.debug(f"Could not send roll banner: {e}")
-            try:
-                await anim_msg.edit_text(text=text, parse_mode="HTML", reply_markup=main_menu())
-                result_msg = anim_msg
-            except Exception:
+            if anim_msg:
+                try:
+                    await anim_msg.edit_text(text=text, parse_mode="HTML", reply_markup=main_menu())
+                    result_msg = anim_msg
+                except Exception as edit_error:
+                    logger.debug(f"Could not edit anim_msg: {edit_error}")
+                    result_msg = await context.bot.send_message(
+                        chat_id=update.message.chat_id, text=text,
+                        parse_mode="HTML", reply_markup=main_menu()
+                    )
+            else:
                 result_msg = await context.bot.send_message(
                     chat_id=update.message.chat_id, text=text,
                     parse_mode="HTML", reply_markup=main_menu()

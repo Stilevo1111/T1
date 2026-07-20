@@ -138,7 +138,7 @@ async def _apply_techies_explosion(
         return
 
     current_fissure = user.get("fissure", 0) or 0
-    mines = generate_mines()
+    mines = session.get("mines", generate_mines())
     total_damage = sum(mines)
     new_fissure = max(0.1, current_fissure - total_damage)
     update_user_field(user_id, "fissure", new_fissure)
@@ -193,6 +193,7 @@ def _start_techies_session(
         "start_time": start_time,
         "display_username": display_username,
         "timeout_task": task,
+        "mines": generate_mines(),
     }
     logger.info(f"techies session started: {session_key}, msg_id={msg_id}")
 

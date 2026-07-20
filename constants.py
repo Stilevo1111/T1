@@ -27,6 +27,8 @@ __all__ = [
     "MORNING_DIGEST_FOOTER",
     "DOTA_DIGEST_HEADER",
     "DOTA_DIGEST_FOOTER",
+    # Assets
+    "TOPMMR_BANNER_URL",
     # Zeus
     "ZEUS_TEXTS",
     # Welcome
@@ -59,6 +61,7 @@ MORNING_DIGEST_HEADER = "🌅 ФИССУРА ДАЙДЖЕСТ"
 MORNING_DIGEST_FOOTER = "🔺 = рост позиций в топе\n🔻 = топ падение\n🔸 = текущий стрик побед"
 DOTA_DIGEST_HEADER = "🎮 DOTA ДАЙДЖЕСТ 📊"
 DOTA_DIGEST_FOOTER = "🔺 = лучший винрейт за неделю\n🔻 = худший винрейт за неделю\n🔸 = текущий стрик побед"
+TOPMMR_BANNER_URL = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
 
 # Владыка небес texts (moved here for centralization)
 ZEUS_TEXTS = [
