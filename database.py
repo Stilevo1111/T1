@@ -1819,7 +1819,9 @@ class Database:
                 if growth_cm > 0 and growth_cm > top_growth_cm:
                     top_growth_cm = growth_cm
                     nick = u.get("steam_nickname") or u.get("username") or u.get("first_name")
-                    top_growth_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else None
+                    if not nick or nick in ("None", "Unknown", "Неизвестный игрок") or len(nick.strip()) <= 1:
+                        nick = u.get("username") or u.get("first_name")
+                    top_growth_user = nick if nick else None
                     top_growth_first_name = u.get("first_name")
                     top_growth_id = telegram_id
                     top_growth_steam_id = u.get("steam_id")
@@ -1828,7 +1830,9 @@ class Database:
                 if delta < top_drop_cm:
                     top_drop_cm = delta
                     nick = u.get("steam_nickname") or u.get("username") or u.get("first_name")
-                    top_drop_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else None
+                    if not nick or nick in ("None", "Unknown", "Неизвестный игрок") or len(nick.strip()) <= 1:
+                        nick = u.get("username") or u.get("first_name")
+                    top_drop_user = nick if nick else None
                     top_drop_first_name = u.get("first_name")
                     top_drop_id = telegram_id
                     top_drop_steam_id = u.get("steam_id")
@@ -1838,7 +1842,9 @@ class Database:
                     top_streak_id = telegram_id
                     top_streak_steam_id = u.get("steam_id")
                     nick = u.get("steam_nickname") or u.get("username") or u.get("first_name")
-                    top_streak_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else None
+                    if not nick or nick in ("None", "Unknown", "Неизвестный игрок") or len(nick.strip()) <= 1:
+                        nick = u.get("username") or u.get("first_name")
+                    top_streak_user = nick if nick else None
                     top_streak_first_name = u.get("first_name")
 
             if top_drop_cm == float('inf'):

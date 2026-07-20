@@ -55,7 +55,6 @@ def get_week_wr(user: dict) -> int:
 def build_callback_keyboard(players: list) -> InlineKeyboardMarkup:
     buttons = []
     for i, p in enumerate(players, 1):
-        # Skip position 5 (your position - 🔍)
         if i == 5:
             continue
         
@@ -66,19 +65,11 @@ def build_callback_keyboard(players: list) -> InlineKeyboardMarkup:
         if not username or username == "—":
             username = f"tg{telegram_id}" if telegram_id else "bot"
         
-        # Display numbering with emojis: 1-4, 5-8
-        if i <= 4:
-            num = i
-        elif i > 5:
-            num = i - 1  # 6→5, 7→6, 8→7, 9→8
-        else:
-            num = i
-        
+        num = i if i <= 4 else (i - 1 if i > 5 else i)
         btn_text = f"{num}️⃣"
         btn = InlineKeyboardButton(btn_text, callback_data=f"party_user:{username}")
         buttons.append(btn)
     
-    # Layout: 4 buttons per row
     rows = []
     for i in range(0, len(buttons), 4):
         rows.append(buttons[i:i+4])
@@ -146,6 +137,8 @@ async def party_for_user(chat_id, chat_type, requester, context):
                 rank = f"{idx - 1}️⃣"
             telegram_id = p.get("telegram_id")
             steam_nick = p.get("steam_nickname") or p.get("username") or None
+            if steam_nick and steam_nick in ("None", "Unknown", "Неизвестный игрок") or len(steam_nick.strip()) <= 1:
+                steam_nick = p.get("username") or p.get("steam_nickname")
             steam_id = p.get("steam_id")
             rank_tier = p.get("rank_tier", 0) or 0
             mmr = p.get("mmr") or 0

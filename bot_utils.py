@@ -129,16 +129,10 @@ def clickable_name(username, telegram_id=None, steam_id=None):
     if not display:
         display = "Игрок"
     if telegram_id is not None and telegram_id != 0:
-        result = f'<a href="tg://user?id={telegram_id}">{display}</a>'
-        logger.info(f"CLICKABLE_NAME: username={username!r} telegram_id={telegram_id!r} steam_id={steam_id!r} -> {result}")
-        return result
+        return f'<a href="tg://user?id={telegram_id}">{display}</a>'
     if steam_id:
-        result = f'<a href="https://steamcommunity.com/profiles/{steam_id}">{display}</a>'
-        logger.info(f"CLICKABLE_NAME: username={username!r} telegram_id={telegram_id!r} steam_id={steam_id!r} -> {result}")
-        return result
-    result = display
-    logger.info(f"CLICKABLE_NAME: username={username!r} telegram_id={telegram_id!r} steam_id={steam_id!r} -> {result}")
-    return result
+        return f'<a href="https://steamcommunity.com/profiles/{steam_id}">{display}</a>'
+    return display
 
 
 def main_menu():
