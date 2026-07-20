@@ -1832,9 +1832,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         link_banner_url = get_banner_path("link")
         link_text = ("🦞 <b>Привязать Аккаунт Dota 2</b>\n\n"
             "Добавить в друзья → Ваш ID → копировать →\n"
-            "`/link 347614947`\n\n"
+            "<code>/link 347614947</code>\n\n"
             "Или ссылку на dotabuff →\n"
-            "`/link https://ru.dotabuff.com/players/347614699`\n\n"
+            "<code>/link https://ru.dotabuff.com/players/347614699</code>\n\n"
             "⚠️ в игре:\n"
             "Настройки → расширенные → сообщество → общедоступная история матчей (вкл)")
 
@@ -3177,9 +3177,9 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     link_banner_url = get_banner_path("link")
     link_text = ("🦞 <b>Привязать Аккаунт Dota 2</b>\n\n"
     "Добавить в друзья → Ваш ID → копировать →\n"
-    "`/link 347614947`\n\n"
+    "<code>/link 347614947</code>\n\n"
     "Или ссылку на dotabuff →\n"
-    "`/link https://ru.dotabuff.com/players/347614699`\n\n"
+    "<code>/link https://ru.dotabuff.com/players/347614699</code>\n\n"
     "⚠️ в игре:\n"
     "Настройки → расширенные → сообщество → общедоступная история матчей (вкл)")
 
