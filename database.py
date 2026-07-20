@@ -3274,10 +3274,10 @@ def _get_dota_week_top_query(limit):
             logger.error(f"get_dota_week_top: failed to count users: {e}")
             total_with_steam = 0
 
-# Если есть пользователи с steam_id, выполняем запрос
+        # Если есть пользователи с steam_id, выполняем запрос
         if total_with_steam > 0:
             # Формула сортировки: сначала с играми за неделю, потом без (по рангу)
-if "postgres" in scheme:
+            if "postgres" in scheme:
                 cursor.execute("""
                     WITH wr_calc AS (
                         SELECT telegram_id, username, first_name, steam_nickname, mmr, 
@@ -3290,7 +3290,7 @@ if "postgres" in scheme:
                          WHERE steam_id IS NOT NULL
                             AND (in_chat = TRUE OR in_chat IS NULL)
                       )
-                      SELECT telegram_id, username, first_name, steam_nickname, mmr,
+                     SELECT telegram_id, username, first_name, steam_nickname, mmr,
                                  COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
                                  winrate, week_current_streak
                       FROM wr_calc
