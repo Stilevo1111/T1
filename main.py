@@ -1308,6 +1308,7 @@ async def dota_digest_job(context):
 
         top_player = top_by_net.get('steam_nickname', 'None')
         top_id = top_by_net.get('telegram_id')
+        top_steam_id = top_by_net.get('steam_id')
         top_games = top_by_net.get('week_games', 0)
         top_wins = top_by_net.get('week_wins', 0)
         top_losses = top_games - top_wins
@@ -1315,6 +1316,7 @@ async def dota_digest_job(context):
 
         bottom_player = bottom_by_net.get('steam_nickname', 'None')
         bottom_id = bottom_by_net.get('telegram_id')
+        bottom_steam_id = bottom_by_net.get('steam_id')
         bottom_games = bottom_by_net.get('week_games', 0)
         bottom_wins = bottom_by_net.get('week_wins', 0)
         bottom_losses = bottom_games - bottom_wins
@@ -1324,15 +1326,17 @@ async def dota_digest_job(context):
             streak_player = top_streak_player.get('steam_nickname', 'None')
             streak_wins = top_streak_player.get('week_current_streak', 0)
             streak_id = top_streak_player.get('telegram_id')
+            streak_steam_id = top_streak_player.get('steam_id')
         else:
             streak_player = 'None'
             streak_wins = 0
             streak_id = None
+            streak_steam_id = None
 
         # Форматируем - показываем net wins (разницу)
-        top_display = make_clickable(top_player, top_id) if top_player and top_player != "None" else "—"
-        bottom_display = make_clickable(bottom_player, bottom_id) if bottom_player and bottom_player != "None" else "—"
-        streak_display = make_clickable(streak_player, streak_id) if streak_player and streak_player != "None" and streak_wins > 0 else "—"
+        top_display = clickable_name(top_player, top_id, top_steam_id) if top_player and top_player != "None" else "—"
+        bottom_display = clickable_name(bottom_player, bottom_id, bottom_steam_id) if bottom_player and bottom_player != "None" else "—"
+        streak_display = clickable_name(streak_player, streak_id, streak_steam_id) if streak_player and streak_player != "None" and streak_wins > 0 else "—"
 
         if top_player and top_player != "None":
             top_part = f"🎯 {top_display}▲ {top_wins}W/{top_losses}L ≈{top_winrate}%"
@@ -1995,43 +1999,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             except Exception as e:
                 logger.debug(f"Could not update greeting buttons: {e}")
-            return
-
-        # === LINK HANDLER (callback from menu button) ===
-        if data == "link":
-            await callback_query.answer()
-            chat_id = callback_query.message.chat_id if callback_query.message else None
-            if not chat_id:
-                chat_id = update.effective_chat.id
-            
-            # Delete previous bot message
-            from bot_utils import delete_last_bot_message
-            try:
-                await delete_last_bot_message(context.bot, chat_id, callback_query.from_user.id)
-            except Exception as e:
-                logger.debug(f"Could not delete last bot message: {e}")
-            
-            link_banner_url = get_banner_path("link")
-            link_text = ("🦞 *Привязать Аккаунт Dota 2*\n\n"
-            "Добавить в друзья → Ваш ID → копировать →\n"
-            "`/link 347614947`\n\n"
-            "Или ссылку на dotabuff →\n"
-            "`/link https://ru.dotabuff.com/players/347614699`\n\n"
-            "⚠️ в игре:\n"
-            "Настройки → расширенные → сообщество → общедоступная история матчей (вкл)")
-
-            from bot_utils import set_last_bot_message, add_bot_message, schedule_delete, update_last_message_id
-            result_msg = await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=link_banner_url,
-                caption=link_text,
-                parse_mode='Markdown',
-                reply_markup=main_menu()
-            )
-            set_last_bot_message(chat_id, callback_query.from_user.id, result_msg.message_id)
-            add_bot_message(chat_id, callback_query.from_user.id, result_msg.message_id)
-            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
-            update_last_message_id(callback_query.from_user.id, result_msg.message_id)
             return
 
         # === ROLL FISSURE HANDLER (callback from welcome message) ===
@@ -3075,12 +3042,12 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user and user_week_games > 0:
                 user_wr = round((user_week_wins / user_week_games) * 100) if user_week_games > 0 else 0
                 user_rank_str = rank_to_string(user.get('rank_tier', 0))
-                user_display = make_clickable(user_username, user.get('telegram_id'))
+                user_display = clickable_name(user_username, user.get('telegram_id'), user.get('steam_id'))
                 top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}</b> - {user_rank_str}\n"
                 top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
             elif user and user_week_games == 0:
                 user_rank_str = rank_to_string(user.get('rank_tier', 0))
-                user_display = make_clickable(user_username, user.get('telegram_id'))
+                user_display = clickable_name(user_username, user.get('telegram_id'), user.get('steam_id'))
                 user_pos_emoji = get_emoji_num(user_pos) if user_pos else "0️⃣"
                 top_text += f"\n{user_pos_emoji} <b>{user_display}</b> - {user_rank_str}\n"
                 top_text += "└ Нет игр за неделю"

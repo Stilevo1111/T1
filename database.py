@@ -74,10 +74,10 @@ class User:
             total_rolls=row[7] if len(row) > 7 else 0,
             current_streak=row[8] if len(row) > 8 else 0,
             best_streak=row[9] if len(row) > 9 else 0,
-            current_win_streak=row[22] if len(row) > 22 else 0,
-            current_lose_streak=row[23] if len(row) > 23 else 0,
-            best_lose_streak=row[24] if len(row) > 24 else 0,
-            message_count=row[10] if len(row) > 10 else 0,
+            current_win_streak=row[41] if len(row) > 41 else 0,
+            current_lose_streak=row[42] if len(row) > 42 else 0,
+            best_lose_streak=row[43] if len(row) > 43 else 0,
+            message_count=row[39] if len(row) > 39 else 0,
         )
 
 
@@ -2325,7 +2325,11 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
             }
             if last_message_id:
                 update_fields['last_message_id'] = last_message_id
-            user_state_manager.apply_user_update(telegram_id, update_fields, save_to_db=False)
+            try:
+                user_state_manager.apply_user_update(telegram_id, update_fields, save_to_db=False)
+            except Exception as cache_error:
+                logger.warning(f"update_fissure: cache update failed for telegram_id={telegram_id}: {cache_error}")
+                user_cache.delete(telegram_id)
         else:
             db_user = db.get_user(telegram_id)
             if db_user:
