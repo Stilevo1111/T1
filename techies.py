@@ -91,7 +91,7 @@ def _pop_session(chat_id: int, user_id: int) -> dict | None:
 
 
 async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str) -> None:
-    media = InputMediaPhoto(media=InputFile(TECHIES_BANNER_URL), caption=text, parse_mode="HTML")
+    media = InputMediaPhoto(media=InputFile(str(TECHIES_BANNER_URL)), caption=text, parse_mode="HTML")
     try:
         await bot.edit_message_media(
             chat_id=chat_id,
@@ -118,7 +118,7 @@ async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str) -> Non
     try:
         await bot.send_photo(
             chat_id=chat_id,
-            photo=TECHIES_BANNER_URL,
+            photo=str(TECHIES_BANNER_URL),
             caption=text,
             parse_mode="HTML",
         )
@@ -262,7 +262,7 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
     text = _build_mine_text(display_username)
 
     msg = await update.message.reply_photo(
-        photo=TECHIES_BANNER_URL,
+        photo=str(TECHIES_BANNER_URL),
         caption=text,
         reply_markup=keyboard,
         parse_mode="HTML",
