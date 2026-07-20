@@ -3957,10 +3957,30 @@ async def main():
 
         logger.info(f"use_polling={use_polling}, webhook_url={webhook_url}, PORT={os.getenv('PORT')}")
 
+        # Register bot commands so the command menu shows up in chats
+        from telegram import BotCommand
+        bot_commands = [
+            BotCommand("start", "Запустить бота"),
+            BotCommand("fissure", "🎲 Ролл Фиссуры"),
+            BotCommand("profile", "👤 Профиль"),
+            BotCommand("top", "🏆 Топ Фиссур"),
+            BotCommand("topmmr", "🏆 Топ MMR"),
+            BotCommand("analyze", "🔎 Аналитика"),
+            BotCommand("link", "🔑 Привязать Аккаунт"),
+            BotCommand("party", "🎮 Поиск пати"),
+            BotCommand("about", "ℹ️ О боте"),
+            BotCommand("info", "📖 Информация"),
+            BotCommand("resetgame", "🔄 Сброс игры"),
+            BotCommand("digestnow", "📊 Обновить дайджест"),
+        ]
+        try:
+            await app.bot.set_my_commands(bot_commands)
+        except Exception as e:
+            logger.warning(f"Could not set bot commands: {e}")
+
         if use_polling or not webhook_url:
             logger.info("Starting bot in POLLING mode")
             await app.bot.delete_webhook(drop_pending_updates=True)
-            await app.bot.set_my_commands([])
 
             from aiohttp import web
             async def health_handler(request):
