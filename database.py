@@ -3155,7 +3155,11 @@ def get_dota_week_top(limit=10, force_refresh=False):
                 rank_tier = user.get('rank_tier')
                 if rank_tier is None or rank_tier == 0:
                     mmr = user.get('mmr', 0)
-                    rank_tier = mmr // 73
+                    try:
+                        from dota_mmr import mmr_to_rank_tier
+                        rank_tier = mmr_to_rank_tier(mmr)
+                    except Exception:
+                        rank_tier = mmr // 73
 
                 top_users.append({
                     'telegram_id': telegram_id,
