@@ -223,7 +223,7 @@ async def handle_techies_event(
 
     msg = await bot.send_photo(
         chat_id=chat_id,
-        photo=BANNER_URL,
+        photo=str(TECHIES_BANNER_URL),
         caption=text,
         reply_markup=keyboard,
         parse_mode="HTML",
