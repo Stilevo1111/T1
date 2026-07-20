@@ -288,9 +288,9 @@ def refresh_dota_digest_cache():
 def _build_digest_text_for_type(digest_type: str) -> str | None:
     """Генерирует объединённый текст дайджеста (Fissure + Dota) в одном сообщении."""
     try:
-        from main import make_clickable
+        from main import make_clickable, clickable_name
     except Exception:
-        from bot_utils import make_clickable
+        from bot_utils import make_clickable, clickable_name
 
     parts = []
 
@@ -309,8 +309,8 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
                 key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), -p.get('week_games', 0))
 )
 
-            top_name = make_clickable(top_by_net.get('steam_nickname') or top_by_net.get('username'), top_by_net.get('telegram_id'))
-            bottom_name = make_clickable(bottom_by_net.get('steam_nickname') or bottom_by_net.get('username'), bottom_by_net.get('telegram_id'))
+            top_name = clickable_name(top_by_net.get('steam_nickname') or top_by_net.get('username'), top_by_net.get('telegram_id'), top_by_net.get('steam_id'))
+            bottom_name = clickable_name(bottom_by_net.get('steam_nickname') or bottom_by_net.get('username'), bottom_by_net.get('telegram_id'), bottom_by_net.get('steam_id'))
 
             top_games = top_by_net.get('week_games', 0)
             top_wins = top_by_net.get('week_wins', 0)
@@ -345,9 +345,9 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         drop_id = stats.get("top_drop_id")
         streak_id = stats.get("top_streak_id")
 
-        growth_display = make_clickable(growth_player, growth_id) if growth_id else "—"
-        drop_display = make_clickable(drop_player, drop_id) if drop_id else "—"
-        streak_display = make_clickable(streak_player, streak_id) if streak_id and streak_len > 0 else "—"
+        growth_display = clickable_name(growth_player, growth_id) if growth_id else "—"
+        drop_display = clickable_name(drop_player, drop_id) if drop_id else "—"
+        streak_display = clickable_name(streak_player, streak_id) if streak_id and streak_len > 0 else "—"
 
         parts.append(f"🔺{growth_display} +{growth_pos} см\n" if growth_id and growth_pos > 0 else "🔺—\n")
         parts.append(f"🔻{drop_display} -{abs(drop_cm):.0f} см\n" if drop_id and drop_cm < 0 else "🔻—\n")

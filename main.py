@@ -1404,6 +1404,7 @@ from bot_utils import (
     _build_analytics_keyboard,
     _build_stats_button_keyboard,
     add_bot_message,
+    clickable_name,
     delete_last_bot_message,
     main_menu,
     make_clickable,
@@ -2787,13 +2788,13 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             name = raw_name[:12] if len(raw_name) > 12 else raw_name
             telegram_id = user_top.get('telegram_id')
             display = name[1:] if name.startswith('@') else name
-            clickable_name = f'<b>{make_clickable(display, telegram_id)}</b>'
+            display_name = f'<b>{make_clickable(display, telegram_id)}</b>'
             fissure = user_top.get('fissure', 0)
             medal = medals.get(i)
             if medal:
-                text += f"{medal} {clickable_name} - {fissure:.1f} см\n"
+                text += f"{medal} {display_name} - {fissure:.1f} см\n"
             else:
-                text += f"{get_emoji_num(i)} {clickable_name} - {fissure:.1f} см\n"
+                text += f"{get_emoji_num(i)} {display_name} - {fissure:.1f} см\n"
 
         user_fissure = user.get('fissure', 0) if user else 0
         clickable_username = f'<a href="tg://user?id={update.effective_user.id}">{"@" + username if username and not username.startswith("@") else username}</a>'
@@ -3044,8 +3045,9 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     medal = get_emoji_num(i)
 
                 player_id = player.get('telegram_id')
-                clickable_name = make_clickable(username, player_id)
-                lines.append(f"{medal} <b>{clickable_name}</b> - {rank_str}")
+                steam_id = player.get('steam_id')
+                display_name = clickable_name(username, player_id, steam_id)
+                lines.append(f"{medal} <b>{display_name}</b> - {rank_str}")
                 if week_games > 0:
                     wr = round((week_wins / week_games) * 100) if week_games > 0 else 0
                     lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%")
