@@ -224,9 +224,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"user data: {_log_user}")
 
         # Check cooldown
-        if now - (user.get("last_fissure") or 0) < COOLDOWN:
+        last_f = user.get("last_fissure") or 0
+        cooldown_diff = now - last_f
+        logger.info(f"fissure cooldown check: now={now} last_f={last_f} diff={cooldown_diff} COOLDOWN={COOLDOWN} is_cooldown={cooldown_diff < COOLDOWN} chat_id={chat_id}")
+        if cooldown_diff < COOLDOWN:
+            logger.info(f"fissure: sending cooldown response for user {user_obj.id}")
             text = build_fissure_cooldown_bar_and_text(
-                now, user.get("last_fissure"), COOLDOWN, format_time
+                now, last_f, COOLDOWN, format_time
             )
             cooldown_banner_url = get_random_cooldown_banner_path()
             await send_fissure_cooldown_response(
@@ -241,6 +245,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update_last_message_id,
                 context.job_queue
             )
+            logger.info(f"fissure: cooldown response sent for user {user_obj.id}")
             return
 
         multicast_text = ""
@@ -567,4 +572,5 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
     finally:
+        logger.info(f"fissure: finished for user {user_obj.id}")
         _user_fissure_processing.pop(user_obj.id, None)
