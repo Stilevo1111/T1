@@ -12,12 +12,13 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
 
 from database import get_user, user_cache
 from rate_limiter import rate_limit
+from utils import _telegram_error_contains
 
 logger = logging.getLogger(__name__)
 
 recent_fissure_rolls = deque(maxlen=50)
 
-from utils import _telegram_error_containsdef format_time(seconds: float) -> str:
+def format_time(seconds: float) -> str:
     """Format seconds into human-readable time string (e.g., '5м 30с', '1ч 23м')."""
     if seconds is None or seconds < 0:
         return "0с"
