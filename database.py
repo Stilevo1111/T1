@@ -1798,7 +1798,7 @@ class Database:
             # Используем execute_query для безопасного выполнения
             if get_db_type() == "postgresql":
                 query = """
-                    SELECT telegram_id, username, steam_nickname, steam_id, fissure, digest_position, digest_fissure, current_streak, current_win_streak, daily_best_growth
+                    SELECT telegram_id, username, first_name, steam_nickname, steam_id, fissure, digest_position, digest_fissure, current_streak, current_win_streak, daily_best_growth
                     FROM users
                     WHERE in_chat = TRUE
                 """
@@ -1808,6 +1808,7 @@ class Database:
                     users.append({
                         "telegram_id": r["telegram_id"],
                         "username": r["username"],
+                        "first_name": r.get("first_name"),
                         "steam_nickname": r["steam_nickname"],
                         "steam_id": r.get("steam_id"),
                         "fissure": float(r["fissure"] or 0.0),
@@ -1819,7 +1820,7 @@ class Database:
                     })
             else:
                 query = """
-                    SELECT telegram_id, username, steam_nickname, steam_id, fissure, digest_position, digest_fissure, current_streak, current_win_streak, daily_best_growth
+                    SELECT telegram_id, username, first_name, steam_nickname, steam_id, fissure, digest_position, digest_fissure, current_streak, current_win_streak, daily_best_growth
                     FROM users
                     WHERE in_chat = 1 OR in_chat IS NULL
                 """
@@ -1829,25 +1830,29 @@ class Database:
                     users.append({
                         "telegram_id": r[0],
                         "username": r[1],
-                        "steam_nickname": r[2],
-                        "steam_id": r[3] if len(r) > 3 else None,
-                        "fissure": float(r[4] or 0.0),
-                        "digest_position": int(r[5] or 0),
-                        "digest_fissure": float(r[6] or 0.0),
-                        "current_streak": int(r[7] or 0),
-                        "current_win_streak": int(r[8] or 0),
-                        "daily_best_growth": float(r[9] if len(r) > 9 else 0.0),
+                        "first_name": r[2] if len(r) > 2 else None,
+                        "steam_nickname": r[3] if len(r) > 3 else None,
+                        "steam_id": r[4] if len(r) > 4 else None,
+                        "fissure": float(r[5] or 0.0),
+                        "digest_position": int(r[6] or 0),
+                        "digest_fissure": float(r[7] or 0.0),
+                        "current_streak": int(r[8] or 0),
+                        "current_win_streak": int(r[9] or 0),
+                        "daily_best_growth": float(r[10] if len(r) > 10 else 0.0),
                     })
 
             top_growth_user = None
             top_growth_cm = 0.0
             top_growth_id = None
+            top_growth_first_name = None
             top_drop_user = None
             top_drop_cm = float('inf')
             top_drop_id = None
+            top_drop_first_name = None
             top_streak_user = None
             top_streak = 0
             top_streak_id = None
+            top_streak_first_name = None
             top_growth_steam_id = None
             top_drop_steam_id = None
             top_streak_steam_id = None
@@ -1868,16 +1873,18 @@ class Database:
                 
                 if growth_cm > 0 and growth_cm > top_growth_cm:
                     top_growth_cm = growth_cm
-                    nick = u.get("steam_nickname") or u.get("username")
+                    nick = u.get("steam_nickname") or u.get("username") or u.get("first_name")
                     top_growth_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else None
+                    top_growth_first_name = u.get("first_name")
                     top_growth_id = telegram_id
                     top_growth_steam_id = u.get("steam_id")
 
                 # also track drop (fissure decrease) - only if delta is negative (fissure decreased)
                 if delta < top_drop_cm:
                     top_drop_cm = delta
-                    nick = u.get("steam_nickname") or u.get("username")
+                    nick = u.get("steam_nickname") or u.get("username") or u.get("first_name")
                     top_drop_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else None
+                    top_drop_first_name = u.get("first_name")
                     top_drop_id = telegram_id
                     top_drop_steam_id = u.get("steam_id")
 
@@ -1885,8 +1892,9 @@ class Database:
                     top_streak = u["current_win_streak"]
                     top_streak_id = telegram_id
                     top_streak_steam_id = u.get("steam_id")
-                    nick = u.get("steam_nickname") or u.get("username")
+                    nick = u.get("steam_nickname") or u.get("username") or u.get("first_name")
                     top_streak_user = nick if nick and nick not in ("None", "Unknown", "Неизвестный игрок") else None
+                    top_streak_first_name = u.get("first_name")
 
             if top_drop_cm == float('inf'):
                 top_drop_cm = 0.0
@@ -1921,6 +1929,9 @@ class Database:
                 "top_growth_steam_id": top_growth_steam_id,
                 "top_drop_steam_id": top_drop_steam_id,
                 "top_streak_steam_id": top_streak_steam_id,
+                "top_growth_first_name": top_growth_first_name,
+                "top_drop_first_name": top_drop_first_name,
+                "top_streak_first_name": top_streak_first_name,
                 "streak_username": streak_username,
             }
         except Exception as e:
@@ -1935,6 +1946,9 @@ class Database:
                 "top_growth_steam_id": None,
                 "top_drop_steam_id": None,
                 "top_streak_steam_id": None,
+                "top_growth_first_name": None,
+                "top_drop_first_name": None,
+                "top_streak_first_name": None,
                 "streak_username": None
             }
 

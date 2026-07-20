@@ -333,12 +333,21 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
     if stats:
         growth_data = stats.get("top_growth", ("None", 0))
         growth_player = growth_data[0] if len(growth_data) > 0 else "None"
+        growth_first_name = stats.get("top_growth_first_name")
+        if growth_player == "None" and growth_first_name:
+            growth_player = growth_first_name
         growth_pos = growth_data[1] if len(growth_data) > 1 else 0
         drop_data = stats.get("top_drop", ("None", 0.0))
         drop_player = drop_data[0] if len(drop_data) > 0 else "None"
+        drop_first_name = stats.get("top_drop_first_name")
+        if drop_player == "None" and drop_first_name:
+            drop_player = drop_first_name
         drop_cm = drop_data[1] if len(drop_data) > 1 else 0.0
         streak_data = stats.get("top_streak", ("None", 0))
         streak_player = streak_data[0] if len(streak_data) > 0 else "None"
+        streak_first_name = stats.get("top_streak_first_name")
+        if streak_player == "None" and streak_first_name:
+            streak_player = streak_first_name
         streak_len = streak_data[1] if len(streak_data) > 1 else 0
 
         growth_id = stats.get("top_growth_id")
