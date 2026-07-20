@@ -35,7 +35,7 @@ from __future__ import annotations
 import logging
 import os
 
-from bot_utils import make_clickable
+from bot_utils import clickable_name, make_clickable
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 logger = logging.getLogger(__name__)
@@ -143,15 +143,13 @@ async def party_for_user(chat_id, chat_type, requester, context):
                 rank = f"{idx - 1}️⃣"
             telegram_id = p.get("telegram_id")
             steam_nick = p.get("steam_nickname") or p.get("username") or None
+            steam_id = p.get("steam_id")
             rank_tier = p.get("rank_tier", 0) or 0
             mmr = p.get("mmr") or 0
             has_games = (p.get("week_games") or 0) > 0
             from dota_mmr import rank_to_string
             player_rank = rank_to_string(rank_tier)
-            if telegram_id:
-                name = f"<b>{make_clickable(steam_nick, telegram_id)}</b>"
-            else:
-                name = f"<b>{steam_nick or '—'}</b>"
+            name = f"<b>{clickable_name(steam_nick or '—', telegram_id, steam_id)}</b>"
             if has_games:
                 second = f"└ {mmr} • WR {get_week_wr(p)}%"
             else:
@@ -163,8 +161,8 @@ async def party_for_user(chat_id, chat_type, requester, context):
 
         try:
             await loading.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not delete loading message: {e}")
 
         if players:
             keyboard = build_callback_keyboard(players)
@@ -179,8 +177,8 @@ async def party_for_user(chat_id, chat_type, requester, context):
                     except Exception:
                         pass
                 asyncio.create_task(delete_after_delay())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not schedule auto-delete: {e}")
         else:
             await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
 
@@ -188,8 +186,8 @@ async def party_for_user(chat_id, chat_type, requester, context):
         logger.error(f"Error in party_for_user: {e}", exc_info=True)
         try:
             await context.bot.send_message(chat_id=chat_id, text="❌ Ошибка подбора. Попробуй позже.")
-        except Exception:
-            pass
+        except Exception as send_error:
+            logger.debug(f"Could not send error message: {send_error}")
 
 
 async def party_command(update, context):
@@ -201,8 +199,8 @@ async def party_command(update, context):
     if chat_type in ("group", "supergroup", "channel"):
         try:
             await update.message.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not delete user message: {e}")
 
     try:
         user_obj = update.effective_user
@@ -224,5 +222,5 @@ async def party_command(update, context):
         logger.error(f"Error in party_command: {e}", exc_info=True)
         try:
             await context.bot.send_message(chat_id=chat_id, text="❌ Ошибка подбора. Попробуй позже.")
-        except Exception:
-            pass
+        except Exception as send_error:
+            logger.debug(f"Could not send error message: {send_error}")
