@@ -2333,11 +2333,13 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             set_config("digest_chat_id", str(chat_id))
 
         if command == "digestnow":
-            from digest import set_digest_type
+            from digest import set_digest_type, _digest_state_container
             set_digest_type("0")
             set_config("alternate_digest_type", "0")
             set_config("alternate_digest_message_id", None)
             set_config("alternate_digest_last_created", "0")
+            _digest_state_container.set_digest_data(None)  # Force fresh fetch
+            _digest_state_container.set_dota_data(None)  # Force fresh fetch
 
             manual_context = ManualContext(context.application, context.bot)
             await alternate_digest_job(manual_context)
@@ -2347,11 +2349,12 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
 
         elif command == "dotadigestnow":
-            from digest import set_digest_type
+            from digest import set_digest_type, _digest_state_container
             set_digest_type("1")
             set_config("alternate_digest_type", "1")
             set_config("alternate_digest_message_id", None)
             set_config("alternate_digest_last_created", "0")
+            _digest_state_container.set_dota_data(None)  # Force fresh fetch
 
             manual_context = ManualContext(context.application, context.bot)
             await alternate_digest_job(manual_context)
