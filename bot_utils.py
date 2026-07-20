@@ -112,13 +112,13 @@ def make_clickable(username, telegram_id):
 
     Guarantees:
     - never shows 'Unknown' / 'None' / empty placeholders
-    - always clickable when telegram_id is present (falls back to 'Игрок')
+    - always clickable when telegram_id is present and non-zero (falls back to 'Игрок')
     - returns a plain (non-clickable) cleaned name only when no telegram_id exists
     """
     display = _clean_display_name(username)
     if not display:
         display = "Игрок"
-    if not telegram_id:
+    if telegram_id is None or telegram_id == 0:
         return display
     return f'<a href="tg://user?id={telegram_id}">{display}</a>'
 
