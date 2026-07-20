@@ -18,7 +18,9 @@ import psycopg2
 import psycopg2.extras
 
 
-from utils import _telegram_error_containslogging.basicConfig(level=logging.INFO)
+from utils import _telegram_error_contains
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @dataclass
