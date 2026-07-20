@@ -3277,10 +3277,10 @@ def _get_dota_week_top_query(limit):
 # Если есть пользователи с steam_id, выполняем запрос
         if total_with_steam > 0:
             # Формула сортировки: сначала с играми за неделю, потом без (по рангу)
-            if "postgres" in scheme:
+if "postgres" in scheme:
                 cursor.execute("""
                     WITH wr_calc AS (
-                        SELECT telegram_id, username, steam_nickname, mmr, 
+                        SELECT telegram_id, username, first_name, steam_nickname, mmr, 
                                week_games, week_wins, rank_tier, steam_id, avatar,
                                 CASE WHEN week_games > 0 
                                      THEN ROUND((week_wins::numeric / week_games::numeric) * 100) 
@@ -3289,24 +3289,24 @@ def _get_dota_week_top_query(limit):
                          FROM users
                          WHERE steam_id IS NOT NULL
                             AND (in_chat = TRUE OR in_chat IS NULL)
-                     )
-                     SELECT telegram_id, username, steam_nickname, mmr,
-                                COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
-                                winrate, week_current_streak
-                     FROM wr_calc
-                     ORDER BY
-                        CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
-                        CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
-                        (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
-                        week_games DESC,
-                        mmr DESC,
-                        rank_tier DESC NULLS LAST
-                    LIMIT %s
+                      )
+                      SELECT telegram_id, username, first_name, steam_nickname, mmr,
+                                 COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
+                                 winrate, week_current_streak
+                      FROM wr_calc
+                      ORDER BY
+                         CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
+                         CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
+                         (COALESCE(week_wins, 0) - (COALESCE(week_games, 0) - COALESCE(week_wins, 0))) DESC,
+                         week_games DESC,
+                         mmr DESC,
+                         rank_tier DESC NULLS LAST
+                     LIMIT %s
                 """, (limit,))
             else:
                 cursor.execute("""
                     WITH wr_calc AS (
-                        SELECT telegram_id, username, steam_nickname, mmr, 
+                        SELECT telegram_id, username, first_name, steam_nickname, mmr,
                                week_games, week_wins, rank_tier, steam_id, avatar,
                                 CASE WHEN week_games > 0 
                                      THEN ROUND(week_wins * 100.0 / week_games) 
@@ -3316,10 +3316,10 @@ def _get_dota_week_top_query(limit):
                          WHERE steam_id IS NOT NULL
                             AND (in_chat = 1 OR in_chat IS NULL)
                      )
-                     SELECT telegram_id, username, steam_nickname, mmr,
-                               COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
-                               winrate, week_current_streak
-                     FROM wr_calc
+SELECT telegram_id, username, first_name, steam_nickname, mmr,
+                                COALESCE(week_games, 0) as week_games, COALESCE(week_wins, 0) as week_wins, COALESCE(rank_tier, 0) as rank_tier, steam_id, avatar,
+                                winrate, week_current_streak
+                      FROM wr_calc
                      ORDER BY
                         CASE WHEN COALESCE(week_games, 0) = 0 THEN 1 ELSE 0 END,
                         CASE WHEN COALESCE(week_games, 0) = 0 THEN COALESCE(rank_tier, 0) END DESC,
@@ -3339,15 +3339,16 @@ def _get_dota_week_top_query(limit):
                 result.append({
                     'telegram_id': u[0],
                     'username': u[1],
-                    'steam_nickname': u[2],
-                    'mmr': u[3],
-                    'week_games': u[4],
-                    'week_wins': u[5],
-                    'rank_tier': u[6] if u[6] else u[3] // 73,
-                    'steam_id': u[7],
-                    'avatar': u[8],
-                    'winrate': u[9],
-                    'week_current_streak': u[10] if len(u) > 10 else 0
+                    'first_name': u[2],
+                    'steam_nickname': u[3],
+                    'mmr': u[4],
+                    'week_games': u[5],
+                    'week_wins': u[6],
+                    'rank_tier': u[7] if u[7] else u[4] // 73,
+                    'steam_id': u[8],
+                    'avatar': u[9],
+                    'winrate': u[10],
+                    'week_current_streak': u[11] if len(u) > 11 else 0
                 })
 
             return result
