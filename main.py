@@ -2537,7 +2537,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     for match in matches:
                         player_slot = match.get('player_slot')
                         radiant_win = match.get('radiant_win', False)
-                        player_was_radiant = player_slot < 127 if player_slot is not None else True
+                        player_was_radiant = player_slot < 128 if player_slot is not None else True
                         is_win = (radiant_win and player_was_radiant) or (not radiant_win and not player_was_radiant)
                         last_10_balls += "🟢" if is_win else "🔴"
                     if last_10_balls:

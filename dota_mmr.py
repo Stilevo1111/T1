@@ -687,8 +687,6 @@ def _compose_heroes_strip_background(canvas_width: int, canvas_height: int):
                             cache_file.write_bytes(data)
                         except Exception:
                             pass
-                except Exception:
-                    pass
         if not data:
             return _heroes_strip_gradient(canvas_width, canvas_height)
 
@@ -1294,10 +1292,14 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
             total_games = 0
 
         solo_mmr = player_data.get("solo_competitive_mmr")
+        competitive_rank = player_data.get("competitive_rank")
+        mmr_estimate = player_data.get("mmr_estimate") or {}
         if solo_mmr:
             mmr = solo_mmr
-        elif player_data.get("mmr_estimate"):
-            mmr = player_data.get("mmr_estimate", {}).get("estimate", 0)
+        elif competitive_rank:
+            mmr = competitive_rank
+        elif mmr_estimate.get("estimate"):
+            mmr = mmr_estimate.get("estimate", 0)
         else:
             mmr = rank_to_mmr(rank_tier)
 
@@ -1539,7 +1541,8 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                             player_is_radiant = match.get("player_slot", 0) < 128
                         is_win = (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win)
                         logger.info(f"topmmr:   -> radiant={player_is_radiant}, radiant_win={radiant_win}, is_win={is_win}")
-                pass
+                    else:
+                        pass
         else:
             logger.warning("topmmr: no matches received from API")
 
@@ -1557,16 +1560,12 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                     if match_date >= week_start_utc:
                         week_games += 1
 
-                        # Определяем победу используя radiant поле из API (приоритет) или player_slot
+                        # Определяем победу используя radiant_win (приоритет) или player_slot
                         player_slot = match.get("player_slot")
                         radiant_win = match.get("radiant_win", False)
                         
-                        # API уже предоставляет radiant булево поле - используем его
-                        player_is_radiant = match.get("radiant")
-                        if player_is_radiant is None and player_slot is not None:
-                            player_is_radiant = player_slot < 128
-                        elif player_is_radiant is None:
-                            player_is_radiant = True
+                        # Игрок находится в Radiant, если player_slot < 128
+                        player_is_radiant = player_slot < 128 if player_slot is not None else True
 
                         # Победа: игрок был на стороне победившей команды
                         is_win = (player_is_radiant and radiant_win) or (not player_is_radiant and not radiant_win)
@@ -1582,10 +1581,10 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         else:
                             current_streak = 0
                             week_current_streak = 0
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Error processing match {match.get('match_id')}: {e}")
 
-# Save matches to public_player_matches for hero meta
+        # Save matches to public_player_matches for hero meta
         if matches:
             logger.info(f"topmmr: Saving {len(matches)} matches to public_player_matches for hero meta (steam_id={user.get('steam_id')})")
             conn = None
