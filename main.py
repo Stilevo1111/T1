@@ -1830,7 +1830,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.debug(f"Could not delete last bot message: {e}")
         
         link_banner_url = get_banner_path("link")
-        link_text = ("🦞 *Привязать Аккаунт Dota 2*\n\n"
+        link_text = ("🦞 <b>Привязать Аккаунт Dota 2</b>\n\n"
             "Добавить в друзья → Ваш ID → копировать →\n"
             "`/link 347614947`\n\n"
             "Или ссылку на dotabuff →\n"
@@ -3175,7 +3175,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug(f"Could not delete last bot message: {e}")
 
     link_banner_url = get_banner_path("link")
-    link_text = ("🦞 *Привязать Аккаунт Dota 2*\n\n"
+    link_text = ("🦞 <b>Привязать Аккаунт Dota 2</b>\n\n"
     "Добавить в друзья → Ваш ID → копировать →\n"
     "`/link 347614947`\n\n"
     "Или ссылку на dotabuff →\n"
