@@ -1789,14 +1789,17 @@ class Database:
             top_growth_user = None
             top_growth_cm = 0.0
             top_growth_id = None
+            top_growth_username = None
             top_growth_first_name = None
             top_drop_user = None
             top_drop_cm = float('inf')
             top_drop_id = None
+            top_drop_username = None
             top_drop_first_name = None
             top_streak_user = None
             top_streak = 0
             top_streak_id = None
+            top_streak_username = None
             top_streak_first_name = None
             top_growth_steam_id = None
             top_drop_steam_id = None
@@ -1824,6 +1827,7 @@ class Database:
                     top_growth_user = nick if nick else None
                     top_growth_first_name = u.get("first_name")
                     top_growth_id = telegram_id
+                    top_growth_username = u.get("username")
                     top_growth_steam_id = u.get("steam_id")
 
                 # also track drop (fissure decrease) - only if delta is negative (fissure decreased)
@@ -1835,6 +1839,7 @@ class Database:
                     top_drop_user = nick if nick else None
                     top_drop_first_name = u.get("first_name")
                     top_drop_id = telegram_id
+                    top_drop_username = u.get("username")
                     top_drop_steam_id = u.get("steam_id")
 
                 if u["current_win_streak"] > top_streak:
@@ -1846,6 +1851,7 @@ class Database:
                         nick = u.get("username") or u.get("first_name")
                     top_streak_user = nick if nick else None
                     top_streak_first_name = u.get("first_name")
+                    top_streak_username = u.get("username")
 
             if top_drop_cm == float('inf'):
                 top_drop_cm = 0.0
@@ -1877,6 +1883,9 @@ class Database:
                 "top_growth_id": top_growth_id,
                 "top_drop_id": top_drop_id,
                 "top_streak_id": top_streak_id,
+                "top_growth_username": top_growth_username,
+                "top_drop_username": top_drop_username,
+                "top_streak_username": top_streak_username,
                 "top_growth_steam_id": top_growth_steam_id,
                 "top_drop_steam_id": top_drop_steam_id,
                 "top_streak_steam_id": top_streak_steam_id,
@@ -1894,6 +1903,9 @@ class Database:
                 "top_growth_id": None,
                 "top_drop_id": None,
                 "top_streak_id": None,
+                "top_growth_username": None,
+                "top_drop_username": None,
+                "top_streak_username": None,
                 "top_growth_steam_id": None,
                 "top_drop_steam_id": None,
                 "top_streak_steam_id": None,

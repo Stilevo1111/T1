@@ -309,8 +309,8 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
                 key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), -p.get('week_games', 0))
 )
 
-            top_name = clickable_name(top_by_net.get('steam_nickname') or top_by_net.get('username') or top_by_net.get('first_name'), top_by_net.get('telegram_id'), top_by_net.get('steam_id'))
-            bottom_name = clickable_name(bottom_by_net.get('steam_nickname') or bottom_by_net.get('username') or bottom_by_net.get('first_name'), bottom_by_net.get('telegram_id'), bottom_by_net.get('steam_id'))
+            top_name = clickable_name(top_by_net.get('username') or top_by_net.get('steam_nickname') or top_by_net.get('first_name'), top_by_net.get('telegram_id'), top_by_net.get('steam_id'))
+            bottom_name = clickable_name(bottom_by_net.get('username') or bottom_by_net.get('steam_nickname') or bottom_by_net.get('first_name'), bottom_by_net.get('telegram_id'), bottom_by_net.get('steam_id'))
 
             top_games = top_by_net.get('week_games', 0)
             top_wins = top_by_net.get('week_wins', 0)
@@ -353,14 +353,18 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         growth_id = stats.get("top_growth_id")
         drop_id = stats.get("top_drop_id")
         streak_id = stats.get("top_streak_id")
+        growth_username = stats.get("top_growth_username")
+        drop_username = stats.get("top_drop_username")
+        streak_username = stats.get("top_streak_username")
         growth_steam_id = stats.get("top_growth_steam_id")
         drop_steam_id = stats.get("top_drop_steam_id")
         streak_steam_id = stats.get("top_streak_steam_id")
 
         # Show clickable link if we have either telegram_id OR steam_id
-        growth_display = clickable_name(growth_player, growth_id, growth_steam_id) if growth_id or growth_steam_id else "—"
-        drop_display = clickable_name(drop_player, drop_id, drop_steam_id) if drop_id or drop_steam_id else "—"
-        streak_display = clickable_name(streak_player, streak_id, streak_steam_id) if streak_id or streak_steam_id else "—"
+        # Use username for t.me link format if available
+        growth_display = clickable_name(growth_username or growth_player, growth_id, growth_steam_id) if growth_id or growth_steam_id else "—"
+        drop_display = clickable_name(drop_username or drop_player, drop_id, drop_steam_id) if drop_id or drop_steam_id else "—"
+        streak_display = clickable_name(streak_username or streak_player, streak_id, streak_steam_id) if streak_id or streak_steam_id else "—"
 
         parts.append(f"🔺{growth_display} +{growth_pos} см\n" if growth_pos > 0 else "🔺—\n")
         parts.append(f"🔻{drop_display} -{abs(drop_cm):.0f} см\n" if drop_cm < 0 else "🔻—\n")
