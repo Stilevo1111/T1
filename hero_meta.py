@@ -443,12 +443,14 @@ async def create_infographic(hero_stats):
     date_text = datetime.now(MSK).strftime("%d.%m.%Y %H:%M")
     try:
         date_font = ImageFont.truetype(FONT_PATH, 24)
-    except:
+    except Exception as e:
+        logger.debug(f"Could not load date font: {e}")
         date_font = ImageFont.load_default()
     try:
         bbox = draw.textbbox((0, 0), date_text, font=date_font)
         tw = bbox[2] - bbox[0]
-    except:
+    except Exception as e:
+        logger.debug(f"Could not calculate text bbox: {e}")
         tw = 0
     draw.text((bg_width - tw - 20, 20), date_text, fill=(255, 255, 255), font=date_font)
     margin_x = 50
@@ -463,9 +465,11 @@ async def create_infographic(hero_stats):
             try:
                 font_lg = ImageFont.truetype("C:/Windows/Fonts/%s" % bn, 22)
                 break
-            except:
+            except Exception as e:
+                logger.debug(f"Could not load font {bn}: {e}")
                 continue
-    except:
+    except Exception as e:
+        logger.debug(f"Could not load large font: {e}")
         font_lg = ImageFont.load_default()
     grid = _build_grid(hero_stats)
     all_heroes = []
@@ -574,7 +578,8 @@ def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, g
                 )
                 try:
                     ph_font = ImageFont.truetype(FONT_PATH, 16)
-                except:
+                except Exception as e:
+                    logger.debug(f"Could not load small font: {e}")
                     ph_font = ImageFont.load_default()
                 draw.text((x + 25, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
                 continue
@@ -669,10 +674,11 @@ def get_static_fallback_banner():
         from datetime import datetime, timedelta, timezone
         MSK = timezone(timedelta(hours=3))
         date_text = datetime.now(MSK).strftime("%d.%m.%Y %H:%M")
-        try:
+try:
             font = ImageFont.truetype(FONT_PATH, 32)
-        except:
-            font = ImageFont.load_default()
+    except Exception as e:
+        logger.debug(f"Could not load fallback font: {e}")
+        font = ImageFont.load_default()
         # Removed "Dota 2 Hero Meta" label as requested
         draw.text((20, 20), "Updated: %s" % date_text, fill=(200, 200, 200), font=font)
         draw.text((20, 70), "OpenDota API недоступен", fill=(150, 150, 150), font=font)
