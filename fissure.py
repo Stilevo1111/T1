@@ -572,8 +572,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             from digest import schedule_instant_digest_refresh
             schedule_instant_digest_refresh(context)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not schedule instant digest refresh: {e}")
 
     except Exception as e:
         tb = traceback.format_exc()
