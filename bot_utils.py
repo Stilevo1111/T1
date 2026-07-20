@@ -127,14 +127,14 @@ def clickable_name(username, telegram_id=None, steam_id=None):
     """Create an HTML clickable link for a user with fallbacks.
 
     Priority:
-    1) Telegram link when telegram_id is present
+    1) Telegram link when telegram_id is present (non-zero integer)
     2) Steam profile link when steam_id is present
     3) Plain cleaned name otherwise
     """
     display = _clean_display_name(username)
     if not display:
         display = "Игрок"
-    if telegram_id:
+    if telegram_id is not None and telegram_id != 0:
         return f'<a href="tg://user?id={telegram_id}">{display}</a>'
     if steam_id:
         return f'<a href="https://steamcommunity.com/profiles/{steam_id}">{display}</a>'
