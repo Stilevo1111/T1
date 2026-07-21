@@ -114,8 +114,12 @@ def make_clickable(username, telegram_id):
         display = "Игрок"
     if telegram_id is None or telegram_id == 0:
         return display
-    if username and not str(username).startswith("@"):
-        return f'<a href="https://t.me/{username}">{display}</a>'
+    if username:
+        clean_username = str(username).strip()
+        if clean_username.startswith("@"):
+            clean_username = clean_username[1:]
+        if clean_username:
+            return f'<a href="https://t.me/{clean_username}">{display}</a>'
     return f'<a href="tg://user?id={telegram_id}">{display}</a>'
 
 
@@ -131,8 +135,12 @@ def clickable_name(username, telegram_id=None, steam_id=None):
     if not display:
         display = "Игрок"
     if telegram_id is not None and telegram_id != 0:
-        if username and not str(username).startswith("@"):
-            return f'<a href="https://t.me/{username}">{display}</a>'
+        if username:
+            clean_username = str(username).strip()
+            if clean_username.startswith("@"):
+                clean_username = clean_username[1:]
+            if clean_username:
+                return f'<a href="https://t.me/{clean_username}">{display}</a>'
         return f'<a href="tg://user?id={telegram_id}">{display}</a>'
     if steam_id:
         return f'<a href="https://steamcommunity.com/profiles/{steam_id}">{display}</a>'
