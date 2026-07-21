@@ -197,19 +197,19 @@ async def _do_give_gag(
     expiry = datetime.now() + timedelta(seconds=_MUTE_DURATION_SEC)
     _gagged_users[victim_id] = expiry
 
-    # ── 6. Анонс в чат (отдельным сообщением, не реплай) ───────────────────
-gag_emoji    = _pick_gag_emoji(victim_id)
-        victim_name  = victim.get("username") or victim.get("first_name") or str(victim_id)
-        admin_name   = admin.get("username") or admin.get("first_name") or str(admin_id)
-        # Use https://t.me/ link when username is available, otherwise fall back to tg://
-        if victim.get("username"):
-            victim_link = f"<a href='https://t.me/{victim.get(\"username\")}'>{victim_name}</a>"
-        else:
-            victim_link = f"<a href='tg://user?id={victim_id}'>${victim_name}</a>"
-        if admin.get("username"):
-            admin_link = f"<a href='https://t.me/{admin.get(\"username\")}'>{admin_name}</a>"
-        else:
-            admin_link = f"<a href='tg://user?id={admin_id}'>{admin_name}</a>"
+# ── 6. Анонс в чат (отдельным сообщением, не реплай) ───────────────────
+     gag_emoji    = _pick_gag_emoji(victim_id)
+     victim_name  = victim.get("username") or victim.get("first_name") or str(victim_id)
+     admin_name   = admin.get("username") or admin.get("first_name") or str(admin_id)
+     # Use https://t.me/ link when username is available, otherwise fall back to tg://
+     if victim.get("username"):
+         victim_link = f"<a href='https://t.me/{victim.get(\"username\")}'>{victim_name}</a>"
+     else:
+         victim_link = f"<a href='tg://user?id={victim_id}'>{{victim_name}}</a>"
+     if admin.get("username"):
+         admin_link = f"<a href='https://t.me/{admin.get(\"username\")}'>{admin_name}</a>"
+     else:
+         admin_link = f"<a href='tg://user?id={admin_id}'>{admin_name}</a>"
     announcement = (
         f"👤 {admin_link} дал(а) кляп {gag_emoji} {victim_link} на 30 секунд."
     )
