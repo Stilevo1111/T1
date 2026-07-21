@@ -1777,6 +1777,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
 
+@rate_limit(tokens=1)
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle button callbacks with pagination support for analytics."""
     callback_query = update.callback_query
@@ -1785,6 +1786,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = callback_query.data
     chat_id = callback_query.message.chat_id if callback_query.message else None
+    logger.info(f"button_callback: user={callback_query.from_user.id} chat={chat_id} data={data}")
 
     # Handle analytics_show separately with loading indicator (as chat message)
     if data == "analytics_show":
@@ -2760,7 +2762,19 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += f"{get_emoji_num(i)} {display_name} - {fissure:.1f} см\n"
 
         user_fissure = user.get('fissure', 0) if user else 0
-        clickable_username = f'<a href="tg://user?id={update.effective_user.id}">{"@" + username if username and not username.startswith("@") else username}</a>'
+        # Try to get a clean username for https://t.me/ link
+        if username:
+            clean_username = username.lstrip('@')
+        else:
+            clean_username = None
+
+        if clean_username:
+            # We have a username suitable for https://t.me/ link
+            clickable_username = f'<a href="https://t.me/{clean_username}">@{clean_username}</a>'
+        else:
+            # Fall back to using first name with tg:// link
+            first_name = update.effective_user.first_name or "Игрок"
+            clickable_username = f'<a href="tg://user?id={update.effective_user.id}">{first_name}</a>'
         if user_rank:
             text += f"\n{get_emoji_num(user_rank)} <b>{clickable_username} - {user_fissure:.1f} см</b>"
         else:
@@ -2814,10 +2828,7 @@ async def testtechies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "fissure": 100.0
     }
     user_obj = type('User', (), {'id': user.id, 'first_name': user.first_name, 'username': user.username})()
-    if user.username:
-        display_username = f"<a href=\"tg://resolve?username={user.username}\">@{user.username}</a>"
-    else:
-        display_username = f"<a href=\"tg://user?id={user.id}\">{user.first_name}</a>"
+    display_username = make_clickable(user.username or user.first_name or "Гость", user.id)
     import time
     await handle_techies_event(
         context.bot,
