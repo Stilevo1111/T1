@@ -2001,7 +2001,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await callback_query.answer()
             user_obj = callback_query.from_user
             chat_id = callback_query.message.chat_id
-            chat_type = 'private'
+            chat_type = callback_query.message.chat.type if callback_query.message else 'private'
+            
+            logger.info(f"roll_fissure: user={user_obj.id} chat={chat_id} chat_type={chat_type}")
             
             # Get current time for fake message
             _current_time = int(_time.time())
@@ -3995,7 +3997,15 @@ async def main():
                 global last_update_time
                 try:
                     update_data = await request.json()
-                    logger.info(f"Webhook received update: {update_data.get('message', {}).get('text', 'unknown')}")
+                    update_type = 'unknown'
+                    update_text = 'unknown'
+                    if 'message' in update_data:
+                        update_type = 'message'
+                        update_text = update_data['message'].get('text', '')
+                    elif 'callback_query' in update_data:
+                        update_type = 'callback_query'
+                        update_text = update_data['callback_query'].get('data', '')
+                    logger.info(f"Webhook received update type={update_type} text={update_text}")
                     update = Update.de_json(update_data, request.app['bot_app'].bot)
                     await request.app['bot_app'].process_update(update)
                     last_update_time = time.time()

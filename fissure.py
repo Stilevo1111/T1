@@ -188,7 +188,7 @@ def process_multicast_result(roll, cascade_count, MULTICAST_TEXTS):
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Increase fissure"""
-    logger.info(f"User {update.effective_user.id} called fissure")
+    logger.info(f" fissure CALLED user={update.effective_user.id} chat={update.effective_chat.id} text={update.message.text if update.message else 'no_message'}")
 
     user_obj = update.effective_user
     username = user_obj.username

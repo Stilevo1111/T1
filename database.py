@@ -2522,7 +2522,7 @@ def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = 
     """Массовое обновление полей - обновление кеша + опционально БД.
     update_top_cache=False allows the caller (MMR job) to do exactly one rebuild after the full loop.
     """
-    if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
+    if not isinstance(telegram_id, int):
         logger.warning(f"update_user_fields_batch: invalid telegram_id={telegram_id}, skipping")
         return False
 
