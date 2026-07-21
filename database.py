@@ -2741,24 +2741,24 @@ def batch_save_mmr(users_data: list):
 
         if "postgres" in scheme:
             query = """
-                UPDATE users SET 
-                    mmr = COALESCE(%s, mmr),
-                    steam_nickname = COALESCE(%s, steam_nickname),
-                    rank_tier = COALESCE(%s, rank_tier),
-                    week_games = CASE WHEN %s IS NOT NULL THEN %s ELSE week_games END,
-                    week_wins = CASE WHEN %s IS NOT NULL THEN %s ELSE week_wins END,
-                    week_best_streak = CASE WHEN %s IS NOT NULL THEN %s ELSE week_best_streak END,
-                    week_current_streak = CASE WHEN %s IS NOT NULL THEN %s ELSE week_current_streak END,
-                    week_start_date = COALESCE(%s, week_start_date),
-                    mmr_last_updated = COALESCE(%s, mmr_last_updated)
-                WHERE telegram_id = %s
-            """
+            UPDATE users SET 
+                mmr = CASE WHEN %s IS NOT NULL AND %s != 0 THEN %s ELSE mmr END,
+                steam_nickname = COALESCE(%s, steam_nickname),
+                rank_tier = CASE WHEN %s IS NOT NULL AND %s != 0 THEN %s ELSE rank_tier END,
+                week_games = CASE WHEN %s IS NOT NULL THEN %s ELSE week_games END,
+                week_wins = CASE WHEN %s IS NOT NULL THEN %s ELSE week_wins END,
+                week_best_streak = CASE WHEN %s IS NOT NULL THEN %s ELSE week_best_streak END,
+                week_current_streak = CASE WHEN %s IS NOT NULL THEN %s ELSE week_current_streak END,
+                week_start_date = COALESCE(%s, week_start_date),
+                mmr_last_updated = COALESCE(%s, mmr_last_updated)
+            WHERE telegram_id = %s
+        """
         else:
             query = """
                 UPDATE users SET 
-                    mmr = COALESCE(?, mmr),
+                    mmr = CASE WHEN ? IS NOT NULL AND ? != 0 THEN ? ELSE mmr END,
                     steam_nickname = COALESCE(?, steam_nickname),
-                    rank_tier = COALESCE(?, rank_tier),
+                    rank_tier = CASE WHEN ? IS NOT NULL AND ? != 0 THEN ? ELSE rank_tier END,
                     week_games = CASE WHEN ? IS NOT NULL THEN ? ELSE week_games END,
                     week_wins = CASE WHEN ? IS NOT NULL THEN ? ELSE week_wins END,
                     week_best_streak = CASE WHEN ? IS NOT NULL THEN ? ELSE week_best_streak END,
@@ -2771,7 +2771,9 @@ def batch_save_mmr(users_data: list):
         rows = []
         for u in users_data:
             rows.append((
-                u.get("mmr"), u.get("steam_nickname"), u.get("rank_tier"),
+                u.get("mmr"), u.get("mmr"), u.get("mmr"),
+                u.get("steam_nickname"),
+                u.get("rank_tier"), u.get("rank_tier"), u.get("rank_tier"),
                 u.get("week_games"), u.get("week_games"),
                 u.get("week_wins"), u.get("week_wins"),
                 u.get("week_best_streak"), u.get("week_best_streak"),

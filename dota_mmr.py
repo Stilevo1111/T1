@@ -1306,7 +1306,9 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
         elif mmr_estimate.get("estimate"):
             mmr = mmr_estimate.get("estimate", 0)
         else:
-            mmr = rank_to_mmr(rank_tier)
+            mmr = None
+            if rank_tier:
+                mmr = rank_to_mmr(rank_tier)
 
         winrate = safe_winrate(wins, total_games)
 
