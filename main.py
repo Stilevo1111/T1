@@ -1952,8 +1952,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=chat_id, text=invitation_text, parse_mode="HTML")
         return
 
-    # Answer immediately for other button types
-    await callback_query.answer()
+    # Answer only for branches that don't handle it themselves (techies, greeting)
+    if data and (data.startswith("techies_") or data.startswith("greeting_")):
+        await callback_query.answer()
 
     try:
         # === GREETING REACTIONS ===
@@ -2028,6 +2029,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             class _FakeMsg:
                 message_id = 0
+                chat_id = chat_id
                 chat = _FakeChat()
                 from_user = _FakeUser()
                 date = _current_time
@@ -2762,19 +2764,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += f"{get_emoji_num(i)} {display_name} - {fissure:.1f} см\n"
 
         user_fissure = user.get('fissure', 0) if user else 0
-        # Try to get a clean username for https://t.me/ link
-        if username:
-            clean_username = username.lstrip('@')
-        else:
-            clean_username = None
-
-        if clean_username:
-            # We have a username suitable for https://t.me/ link
-            clickable_username = f'<a href="https://t.me/{clean_username}">@{clean_username}</a>'
-        else:
-            # Fall back to using first name with tg:// link
-            first_name = update.effective_user.first_name or "Игрок"
-            clickable_username = f'<a href="tg://user?id={update.effective_user.id}">{first_name}</a>'
+        clickable_username = make_clickable(username, update.effective_user.id)
         if user_rank:
             text += f"\n{get_emoji_num(user_rank)} <b>{clickable_username} - {user_fissure:.1f} см</b>"
         else:
