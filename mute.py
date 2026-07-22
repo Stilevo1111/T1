@@ -201,12 +201,14 @@ async def _do_give_gag(
     gag_emoji    = _pick_gag_emoji(victim_id)
     victim_name  = victim.get("username") or victim.get("first_name") or str(victim_id)
     admin_name   = admin.get("username") or admin.get("first_name") or str(admin_id)
-    if victim.get("username"):
-        victim_link = f"<a href='https://t.me/{victim.get(\"username\")}'>{victim_name}</a>"
+    victim_username = victim.get("username")
+    if victim_username:
+        victim_link = f"<a href='https://t.me/{victim_username}'>{victim_name}</a>"
     else:
         victim_link = f"<a href='tg://user?id={victim_id}'>{victim_name}</a>"
-    if admin.get("username"):
-        admin_link = f"<a href='https://t.me/{admin.get(\"username\")}'>{admin_name}</a>"
+    admin_username = admin.get("username")
+    if admin_username:
+        admin_link = f"<a href='https://t.me/{admin_username}'>{admin_name}</a>"
     else:
         admin_link = f"<a href='tg://user?id={admin_id}'>{admin_name}</a>"
     announcement = (
