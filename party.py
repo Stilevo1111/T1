@@ -32,6 +32,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 import os
 
@@ -145,7 +146,7 @@ async def party_for_user(chat_id, chat_type, requester, context):
             has_games = (p.get("week_games") or 0) > 0
             from dota_mmr import rank_to_string
             player_rank = rank_to_string(rank_tier)
-            name = f"<b>{clickable_name(steam_nick or '—', telegram_id, steam_id)}</b>"
+            name = f"<b>{html.escape(steam_nick or '—')}</b>"
             if has_games:
                 second = f"└ {mmr} • WR {get_week_wr(p)}%"
             else:
