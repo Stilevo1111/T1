@@ -2889,11 +2889,12 @@ def get_digest_stats():
                 result["top_growth"] = tuple(parts[:2])
                 result["top_growth_id"] = parts[2] if len(parts) > 2 else None
                 result["top_growth_steam_id"] = parts[3] if len(parts) > 3 else None
+                result["top_growth_username"] = parts[4] if len(parts) > 4 else None
+                result["top_growth_first_name"] = parts[5] if len(parts) > 5 else None
             except Exception as e:
                 logger.warning(f"get_digest_stats: failed to parse last_top_growth: {e}")
                 pass
-    else:
-        set_config('last_top_growth', json.dumps(result["top_growth"] + (result["top_growth_id"], result.get("top_growth_steam_id"))))
+    set_config('last_top_growth', json.dumps(result["top_growth"] + (result["top_growth_id"], result.get("top_growth_steam_id"), result.get("top_growth_username"), result.get("top_growth_first_name"))))
 
     if result["top_drop"][0] == "None":
         last = get_config('last_top_drop')
@@ -2903,11 +2904,12 @@ def get_digest_stats():
                 result["top_drop"] = tuple(parts[:2])
                 result["top_drop_id"] = parts[2] if len(parts) > 2 else None
                 result["top_drop_steam_id"] = parts[3] if len(parts) > 3 else None
+                result["top_drop_username"] = parts[4] if len(parts) > 4 else None
+                result["top_drop_first_name"] = parts[5] if len(parts) > 5 else None
             except Exception as e:
                 logger.warning(f"get_digest_stats: failed to parse last_top_drop: {e}")
                 pass
-    else:
-        set_config('last_top_drop', json.dumps(result["top_drop"] + (result["top_drop_id"], result.get("top_drop_steam_id"))))
+    set_config('last_top_drop', json.dumps(result["top_drop"] + (result["top_drop_id"], result.get("top_drop_steam_id"), result.get("top_drop_username"), result.get("top_drop_first_name"))))
 
     if result["top_streak"][0] == "None":
         last = get_config('last_top_streak')
@@ -2917,11 +2919,12 @@ def get_digest_stats():
                 result["top_streak"] = tuple(parts[:2])
                 result["top_streak_id"] = parts[2] if len(parts) > 2 else None
                 result["top_streak_steam_id"] = parts[3] if len(parts) > 3 else None
+                result["top_streak_username"] = parts[4] if len(parts) > 4 else None
+                result["top_streak_first_name"] = parts[5] if len(parts) > 5 else None
             except Exception as e:
                 logger.warning(f"get_digest_stats: failed to parse last_top_streak: {e}")
                 pass
-    else:
-        set_config('last_top_streak', json.dumps(result["top_streak"] + (result["top_streak_id"], result.get("top_streak_steam_id"))))
+    set_config('last_top_streak', json.dumps(result["top_streak"] + (result["top_streak_id"], result.get("top_streak_steam_id"), result.get("top_streak_username"), result.get("top_streak_first_name"))))
 
     user_cache.set('digest_stats', result)
     return result
