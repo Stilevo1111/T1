@@ -3016,7 +3016,7 @@ def get_dota_mmr_top(limit=50):
                 result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
                         "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
                         "week_games": u[6], "week_wins": u[7],
-                        "rank_tier": u[8] if u[8] else u[3] // 73, "wins": u[9], "losses": u[10], "week_current_streak": u[11],
+                        "rank_tier": u[8] if u[8] else (u[3] // 73 if u[3] else 0), "wins": u[9], "losses": u[10], "week_current_streak": u[11],
                 "avatar": u[12], "fissure": float(u[13]) if u[13] else 0.0} for u in users]
 
                 if result:
@@ -3050,7 +3050,7 @@ def get_dota_mmr_top(limit=50):
                 result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
                         "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
                         "week_games": u[6], "week_wins": u[7],
-                        "rank_tier": u[8] if u[8] else u[3] // 73, "wins": u[9], "losses": u[10], "week_current_streak": u[11],
+                        "rank_tier": u[8] if u[8] else (u[3] // 73 if u[3] else 0), "wins": u[9], "losses": u[10], "week_current_streak": u[11],
                 "avatar": u[12], "fissure": float(u[13]) if u[13] else 0.0} for u in users]
 
                 if result:
@@ -3160,7 +3160,7 @@ def get_dota_week_top(limit=10, force_refresh=False):
 
                 rank_tier = user.get('rank_tier')
                 if rank_tier is None or rank_tier == 0:
-                    mmr = user.get('mmr', 0)
+                    mmr = user.get('mmr', 0) or 0
                     try:
                         from dota_mmr import mmr_to_rank_tier
                         rank_tier = mmr_to_rank_tier(mmr)
@@ -3316,7 +3316,7 @@ SELECT telegram_id, username, first_name, steam_nickname, mmr,
                     'mmr': u[4],
                     'week_games': u[5],
                     'week_wins': u[6],
-                    'rank_tier': u[7] if u[7] else u[4] // 73,
+                    'rank_tier': u[7] if u[7] else (u[4] // 73 if u[4] else 0),
                     'steam_id': u[8],
                     'avatar': u[9],
                     'winrate': u[10],
