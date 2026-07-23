@@ -1149,10 +1149,10 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
         competitive_rank = player_data.get("competitive_rank")
         mmr_estimate = player_data.get("mmr_estimate") or {}
         computed_mmr = player_data.get("computed_mmr")
-        if computed_mmr:
-            mmr = int(round(computed_mmr))
-        elif solo_mmr:
+        if solo_mmr:
             mmr = solo_mmr
+        elif computed_mmr:
+            mmr = int(round(computed_mmr))
         elif competitive_rank:
             mmr = competitive_rank
         elif mmr_estimate.get("estimate"):
