@@ -182,7 +182,7 @@ async def fetch_hero_icon(session, icon_path):
     # LOAD FROM CACHE
     # ==========================================
 
-    if cache_path.exists():
+    if cache_path.exists() and not cache_path.is_dir():
 
         try:
             return Image.open(cache_path).convert("RGBA")
@@ -205,8 +205,12 @@ async def fetch_hero_icon(session, icon_path):
 
             content = await resp.read()
 
-            with open(cache_path, "wb") as f:
-                f.write(content)
+            if filename and not cache_path.is_dir():
+                try:
+                    with open(cache_path, "wb") as f:
+                        f.write(content)
+                except Exception:
+                    logger.exception("Failed to write cached icon")
 
             return Image.open(
                 io.BytesIO(content)

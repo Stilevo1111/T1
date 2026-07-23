@@ -460,7 +460,7 @@ def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None
     except ImportError:
         pass
 
-    cdn_name = _get_cdn_hero_name(hero_short_name)
+    cdn_name = get_cdn_hero_name(hero_short_name)
     cache_file = HERO_CACHE_DIR / f"{cdn_name}.webp"
     if cache_file.exists():
         try:
@@ -488,7 +488,7 @@ def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | 
     """Портрет героя (dota_react/heroes/*.png) — выше разрешение, чем icons/*.png."""
     if not hero_short_name:
         return None
-    cdn_name = _get_cdn_hero_name(hero_short_name)
+    cdn_name = get_cdn_hero_name(hero_short_name)
     cache_dir = HERO_CACHE_DIR
     cache_file = cache_dir / f"{cdn_name}.webp"
     if cache_file.exists():
@@ -517,7 +517,7 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
     if not hero_short_name:
         return None
 
-    cdn_name = _get_cdn_hero_name(hero_short_name)
+    cdn_name = get_cdn_hero_name(hero_short_name)
     cache_file = HERO_CACHE_DIR / f"{cdn_name}.webp"
 
     if cache_file.exists():
@@ -621,7 +621,7 @@ def get_heroes_data() -> dict:
         for hero in data:
             hero_id = hero["id"]
             short_name = hero["name"].replace("npc_dota_hero_", "")
-            cdn_name = _get_cdn_hero_name(short_name)
+            cdn_name = get_cdn_hero_name(short_name)
             heroes[hero_id] = {
                 "id": hero_id,
                 "name": hero["localized_name"],
