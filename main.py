@@ -116,9 +116,6 @@ EVENING_GREETINGS = [
     "<b>💤 Тьма на карте. Доброй ночи.</b>\n\n<i>❤️ – приятных снов \n💔 – а я ещё не ложусь</i>",
 ]
 
-_EVENING_GREETINGS_DUP = [
-]
-
 # Prometheus metrics (optional, for monitoring)
 try:
     from prometheus_client import Counter, Histogram, Gauge, start_http_server
@@ -3142,7 +3139,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # чтобы /analytics, дайджест и топы отражали свежую стату без ожидания джоба.
                 try:
                     from dota_mmr import update_user_mmr
-                    asyncio.create_task(update_user_mmr(update.effective_user.id))
+                    asyncio.create_task(asyncio.to_thread(update_user_mmr, update.effective_user.id))
                     logger.info(f"Scheduled MMR update for user {update.effective_user.id} after link")
                 except Exception as e:
                     logger.debug(f"Could not schedule MMR update after link: {e}")
@@ -3429,6 +3426,14 @@ async def health_check(request):
 async def steam_debug(request):
     """Debug endpoint to check steam_id issues"""
     try:
+        from config import settings
+        admin_chat_id = getattr(settings, 'ADMIN_CHAT_ID', None)
+        if not admin_chat_id:
+            return web.Response(text="Forbidden", status=403)
+        auth_header = request.headers.get("X-Admin-Chat-Id")
+        if not auth_header or str(auth_header) != str(admin_chat_id):
+            return web.Response(text="Forbidden", status=403)
+        
         from database import get_all_users_with_steam, get_db_type
         db_type = get_db_type()
         

@@ -40,6 +40,7 @@ from PIL import Image
 
 from database import Database, get_user
 from dota_mmr import OPENDOTA_API_URL, _api_get_async, steam64_to_account_id
+from hero_names import get_display_name
 from hero_positions import hero_positions
 
 logger = logging.getLogger(__name__)
@@ -425,16 +426,16 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
         
         if icon is None:
             try:
-                import requests
                 url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{file_name}.png"
-                resp = requests.get(url, timeout=5)
-                if resp.status_code == 200:
-                    icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    try:
-                        cache_file.parent.mkdir(parents=True, exist_ok=True)
-                        icon.save(cache_file, "WEBP", quality=85)
-                    except Exception:
-                        pass
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                        if resp.status == 200:
+                            icon = Image.open(io.BytesIO(await resp.read())).convert("RGBA")
+                            try:
+                                cache_file.parent.mkdir(parents=True, exist_ok=True)
+                                icon.save(cache_file, "WEBP", quality=85)
+                            except Exception:
+                                pass
             except Exception:
                 pass
         
@@ -455,53 +456,7 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
 
 def _normalize_hero_name(internal_name: str) -> str:
     """Convert internal hero name (anti_mage) to display name (Anti-Mage)"""
-    # Handle special cases first
-    name_map = {
-        "npc_dota_hero_necrophos": "Necrophos",
-        "npc_dota_hero_queenofpain": "Queen of Pain",
-        "npc_dota_hero_skywrath_mage": "Skywrath Mage",
-        "npc_dota_hero_outworld_destroyer": "Outworld Destroyer",
-        "npc_dota_hero_lone_druid": "Lone Druid",
-        "npc_dota_hero_centaur": "Centaur Warrunner",
-        "npc_dota_hero_magnataur": "Magnus",
-        "npc_dota_hero_axe": "Axe",
-        "npc_dota_hero_doom_bringer": "Doom",
-        "npc_dota_hero_witchdoctor": "Witch Doctor",
-        "npc_dota_hero_keeper_of_the_light": "Keeper of the Light",
-        "npc_dota_hero_nightstalker": "Night Stalker",
-        "npc_dota_hero_shadow_shaman": "Shadow Shaman",
-        "npc_dota_hero_life_stealer": "Lifestealer",
-        "npc_dota_hero_abyssal_underlord": "Underlord",
-    }
-
-    if internal_name in name_map:
-        return name_map[internal_name]
-
-    # Replace npc_dota_hero_ prefix
-    name = internal_name.replace("npc_dota_hero_", "")
-
-    # Convert snake_case to Title Case with spaces
-    # e.g., "anti_mage" -> "Anti Mage" -> handle special cases
-    parts = name.split("_")
-    result = " ".join(p.capitalize() for p in parts)
-
-    # Fix known multi-word hero names
-    multi_word_fixes = {
-        "Anti Mage": "Anti-Mage",
-        "Drow Ranger": "Drow Ranger",  # already correct
-        "Faceless Void": "Faceless Void",  # already correct
-        "Phantom Assassin": "Phantom Assassin",  # already correct
-        "Phantom Lancer": "Phantom Lancer",  # already correct
-        "Shadow Fiend": "Shadow Fiend",  # already correct
-        "Treant Protector": "Treant Protector",  # already correct
-        "Winter Wyvern": "Winter Wyvern",  # already correct
-        "Queen Of Pain": "Queen of Pain",
-        "Skywrath Mage": "Skywrath Mage",
-        "Outworld Destroyer": "Outworld Destroyer",
-        "Dust II": "Dust II",  # handle edge cases
-    }
-
-    return multi_word_fixes.get(result, result)
+    return get_display_name(internal_name)
 
 
 async def _detect_role_from_hero_counts(matches: list[dict[str, Any]]) -> str:

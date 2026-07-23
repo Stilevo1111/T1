@@ -1,16 +1,12 @@
 python-telegram-bot==21.7
 httpx==0.28.1
-APScheduler==3.10.4
 psycopg2==2.9.11
 psycopg-pool==3.2.3
 requests==2.31.0
 alembic==1.16.5
 aiohttp==3.11.11
 Pillow==11.1.0
-plotly==5.24.1
-kaleido==0.2.1
 matplotlib==3.9.2
 numpy>=1.26.0
 pydantic-settings>=2.0.3
 structlog==23.2.0
-dependency-injector>=4.40.0

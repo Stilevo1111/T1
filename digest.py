@@ -378,15 +378,6 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
     return "".join(parts)
 
 
-def start_fast_digest_loop(bot, chat_id: int, message_id: int, is_photo: bool):
-    """Fast tick disabled - digest now updates via alternative_digest_job (40min interval)."""
-    pass
-
-
-def stop_fast_digest_loop():
-    """Fast tick disabled."""
-    pass
-
 # =====================================================
 # Leader Election (for single active instance on Render free)
 # =====================================================
@@ -504,7 +495,6 @@ async def alternate_digest_job(context):
         # === SINGLE ACTIVE INSTANCE (leader election via DB) ===
         # На бесплатном Render может быть 2 контейнера. Только один должен реально работать с дайджестом.
         if not await claim_or_check_digest_leader():
-            stop_fast_digest_loop()
             return
 
         # Блокировка от параллельного запуска - только для критических секций
@@ -766,7 +756,6 @@ async def alternate_digest_job(context):
                     _set_digest_is_photo(is_photo_message)
 
                     # Обновляем fast tick с актуальным message_id (always from the authoritative source)
-                    start_fast_digest_loop(bot, int(digest_chat_id), msg_id_int, _get_digest_is_photo())
 
                     await _ensure_pinned(bot, digest_chat_id, msg_id_int)
             except (ValueError, TypeError) as e:
@@ -916,7 +905,6 @@ async def alternate_digest_job(context):
                                 set_config('alternate_digest_last_text', text)
                                 if _digest_state_container.get_digest_data():
                                     set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
-                                start_fast_digest_loop(bot, int(digest_chat_id), int(last_message_id), True)
                                 await _ensure_pinned(bot, digest_chat_id, last_message_id)
                                 return
                             except Exception as e:
@@ -936,7 +924,6 @@ async def alternate_digest_job(context):
                                     set_config('alternate_digest_last_text', text)
                                     if _digest_state_container.get_digest_data():
                                         set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
-                                    start_fast_digest_loop(bot, int(digest_chat_id), int(last_message_id), True)
                                     await _ensure_pinned(bot, digest_chat_id, last_message_id)
                                     return
                                 except Exception as e2:
@@ -1005,7 +992,6 @@ async def alternate_digest_job(context):
                 logger.info(f"alternate_digest_job: saved new message_id = {msg.message_id}")
 
                 # Запускаем быстрый 15-секундный цикл (только в памяти)
-                start_fast_digest_loop(bot, int(digest_chat_id), msg.message_id, _get_digest_is_photo())
 
                 # Закрепляем новое сообщение
                 try:

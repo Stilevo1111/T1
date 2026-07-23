@@ -219,8 +219,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user_cache.remove(user_obj.id)
         user = get_user(user_obj.id, username)
-        _log_user = {k: v for k, v in user.items() if k != "analytics_cache"}
-        logger.info(f"user data: {_log_user}")
+        _safe_user = {k: v for k, v in user.items() if k not in ("analytics_cache", "steam_id", "steam_nickname", "username", "first_name", "last_name")}
+        logger.info(f"user data: {_safe_user}")
 
         # Check cooldown
         last_f = user.get("last_fissure") or 0

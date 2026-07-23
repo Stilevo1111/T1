@@ -449,105 +449,7 @@ HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_
 HEROES_STRIP_BG_URL = get_banner_path("heroes_profil")
 HEROES_STRIP_BG_CACHE = "heroes_profil.webp"
 
-HERO_NAME_TO_CDN: dict[str, str] = {
-    "anti_mage": "antimage",
-    "necrophos": "necrophos",
-    "queenofpain": "queenofpain",
-    "skywrath_mage": "skywrath_mage",
-    "outworld_destroyer": "obsidian_destroyer",
-    "lone_druid": "lone_druid",
-    "centaur": "centaur",
-    "magnataur": "magnataur",
-    "doom_bringer": "doom_bringer",
-    "witchdoctor": "witch_doctor",
-    "keeper_of_the_light": "keeper_of_the_light",
-    "nightstalker": "night_stalker",
-    "shadow_shaman": "shadow_shaman",
-    "life_stealer": "life_stealer",
-    "abyssal_underlord": "abyssal_underlord",
-    "crystal_maiden": "crystal_maiden",
-    "tusk": "tusk",
-    "brewmaster": "brewmaster",
-    "oracle": "oracle",
-    "techies": "techies",
-    "ember_spirit": "ember_spirit",
-    "earth_spirit": "earth_spirit",
-    "terrorblade": "terrorblade",
-    "phoenix": "phoenix",
-    "winter_wyvern": "winter_wyvern",
-    "dark_seer": "dark_seer",
-    "riki": "riki",
-    "chen": "chen",
-    "enigma": "enigma",
-    "huskar": "huskar",
-    "leoric": "leoric",
-    "slardar": "slardar",
-    "phantom_assassin": "phantom_assassin",
-    "phantom_lancer": "phantom_lancer",
-    "faceless_void": "faceless_void",
-    "death_prophet": "death_prophet",
-    "sven": "sven",
-    "luna": "luna",
-    "dragon_knight": "dragon_knight",
-    "vengeful_spirit": "vengeful_spirit",
-    "warlock": "warlock",
-    "shadow_demon": "shadow_demon",
-    "zeus": "zeus",
-    "razor": "razor",
-    "axe": "axe",
-    "pudge": "pudge",
-    "sand_king": "sand_king",
-    "clinkz": "clinkz",
-    "templar_assassin": "templar_assassin",
-    "viper": "viper",
-    "mirana": "mirana",
-    "morphling": "morphling",
-    "storm_spirit": "storm_spirit",
-    "wraith_king": "skeleton_king",
-    "invoker": "invoker",
-    "abaddon": "abaddon",
-    "ancient_apparition": "ancient_apparition",
-    "arc_warden": "arc_warden",
-    "bloodseeker": "bloodseeker",
-    "bounty_hunter": "bounty_hunter",
-    "broodmother": "broodmother",
-    "disruptor": "disruptor",
-    "doom": "doom",
-    "elder_titan": "elder_titan",
-    "enchantress": "enchantress",
-    "earthshaker": "earthshaker",
-    "legion_commander": "legion_commander",
-    "lich": "lich",
-    "lifestealer": "life_stealer",
-    "lion": "lion",
-    "meepo": "meepo",
-    "natures_prophet": "furion",
-    "ogre_magi": "ogre_magi",
-    "omniknight": "omniknight",
-    "pugna": "pugna",
-    "rubick": "rubick",
-    "slark": "slark",
-    "sniper": "sniper",
-    "spectre": "spectre",
-    "spirit_breaker": "spirit_breaker",
-    "tidehunter": "tidehunter",
-    "clockwerk": "rattletrap",
-    "io": "wisp",
-    "lifestealer": "life_stealer",
-    "necrophos": "necrolyte",
-    "timber_saw": "shredder",
-    "tinker": "tinker",
-    "tiny": "tiny",
-    "treant": "treant",
-    "undying": "undying",
-    "venomancer": "venomancer",
-    "visage": "visage",
-    "weaver": "weaver",
-}
-
-def _get_cdn_hero_name(short_name: str) -> str:
-    """Convert OpenDota hero name to Steam CDN file name"""
-    return HERO_NAME_TO_CDN.get(short_name, short_name)
+from hero_names import HERO_NAME_TO_CDN, get_cdn_hero_name
 
 
 def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None:
@@ -835,59 +737,6 @@ async def get_top_heroes_async(steam_id: int, last_n: int = 10, top_k: int = 3) 
     except Exception as e:
         logger.error(f"get_top_heroes_async error: {e}", exc_info=True)
         return []
-
-
-def generate_event_icon(hero_url: str, label: str = None) -> bytes | None:
-    """Сгенерировать иконку героя (стиль профиля: 63×63, тёмный фон, синяя рамка)"""
-    try:
-        import io
-
-        from PIL import Image, ImageDraw, ImageFont
-
-        icon_size = 63
-        padding = 5
-        label_height = 16 if label else 0
-        width = icon_size + padding * 2
-        height = icon_size + padding * 2 + label_height
-
-        img = Image.new("RGB", (width, height), color=(40, 55, 70))
-        draw = ImageDraw.Draw(img)
-
-        # Загружаем иконку
-        try:
-            resp = requests.get(hero_url, timeout=5)
-            if resp.status_code == 200:
-                icon = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
-                img.paste(icon, (padding, padding), icon)
-        except Exception:
-            draw.rectangle([padding, padding, padding + icon_size, padding + icon_size], fill=(80, 95, 110))
-
-        # Синяя рамка
-        draw.rectangle(
-            [padding - 1, padding - 1, padding + icon_size, padding + icon_size],
-            outline=(120, 170, 210), width=1
-        )
-
-        # Подпись
-        if label:
-            try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 10)
-            except Exception:
-                font = ImageFont.load_default()
-            bbox = draw.textbbox((0, 0), label, font=font)
-            tw = bbox[2] - bbox[0]
-            tx = (width - tw) // 2
-            ty = icon_size + padding * 2
-            draw.text((tx, ty), label, fill=(200, 220, 240), font=font)
-
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=85)
-        buf.seek(0)
-        return buf.read()
-    except Exception as e:
-        logger.error(f"generate_event_icon error: {e}")
-        return None
 
 
 def generate_heroes_image(top_heroes: list) -> bytes | None:
@@ -1451,20 +1300,6 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
 
 def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
     """Обновить MMR/ранг/недельную статистику пользователя из OpenDota. Возвращает dict с ключами success/mmr/rank_up/steam_nickname/week_*."""
-    # Force reset all API state to ensure we attempt API calls
-    global _circuit_breaker, _api_rate_limit, _opendota_rate_limited_until
-    if _circuit_breaker["state"] != "CLOSED":
-        logger.info(f"update_user_mmr: resetting circuit breaker from {_circuit_breaker['state']}")
-        _circuit_breaker = {
-            "state": "CLOSED",
-            "failure_count": 0,
-            "last_failure_time": 0,
-            "failure_threshold": 5,
-            "recovery_timeout": 120,
-        }
-    # Also reset rate limit state
-    _api_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
-    _opendota_rate_limited_until = 0
     try:
         user = get_user(telegram_id)
         if not user or not user.get("steam_id"):

@@ -4,6 +4,7 @@ Extracted from main.py without any behavior changes.
 """
 
 import asyncio
+import html
 import logging
 import time
 from collections import deque
@@ -109,9 +110,7 @@ def make_clickable(username, telegram_id):
     - always clickable when telegram_id is present and non-zero (falls back to 'Игрок')
     - returns a plain (non-clickable) cleaned name only when no telegram_id exists
     """
-    display = _clean_display_name(username)
-    if not display:
-        display = "Игрок"
+    display = html.escape(_clean_display_name(username) or "Игрок")
     if telegram_id is None or telegram_id == 0:
         return display
     if username:
@@ -131,9 +130,7 @@ def clickable_name(username, telegram_id=None, steam_id=None):
     2) Steam profile link when steam_id is present
     3) Plain cleaned name otherwise
     """
-    display = _clean_display_name(username)
-    if not display:
-        display = "Игрок"
+    display = html.escape(_clean_display_name(username) or "Игрок")
     if telegram_id is not None and telegram_id != 0:
         if username:
             clean_username = str(username).strip()
