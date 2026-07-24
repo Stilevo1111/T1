@@ -319,7 +319,7 @@ def _build_grid(hero_stats):
     return grid
 
 
-async def _get_hero_stats_from_db(days=7):
+def _get_hero_stats_from_db(days=7):
     """Get hero statistics from local database instead of OD explorer API."""
     from database import get_connection, urlparse, DATABASE_URL
     from dota_mmr import get_hero_list
@@ -327,13 +327,13 @@ async def _get_hero_stats_from_db(days=7):
     now = int(time.time())
     week_ago = now - (days * 24 * 60 * 60)
     logger.info(f"_get_hero_stats_from_db: querying matches since {week_ago} (now={now})")
-    
+
     conn = get_connection()
     url = urlparse.urlparse(DATABASE_URL)
     scheme = url.scheme
-    
+
     cursor = conn.cursor()
-    
+
     try:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS public_player_matches (
@@ -345,14 +345,13 @@ async def _get_hero_stats_from_db(days=7):
                 steam_id BIGINT
             )
             """)
-        # Migrate existing boolean column to integer if needed
         try:
             cursor.execute("""
-                DO $$ 
-                BEGIN 
-                    IF EXISTS (SELECT 1 FROM information_schema.columns 
-                               WHERE table_name = 'public_player_matches' 
-                               AND column_name = 'radiant_win' 
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name = 'public_player_matches'
+                               AND column_name = 'radiant_win'
                                AND data_type = 'boolean') THEN
                         ALTER TABLE public_player_matches ALTER COLUMN radiant_win TYPE INTEGER USING (CASE WHEN radiant_win THEN 1 ELSE 0 END);
                     END IF;
@@ -362,16 +361,15 @@ async def _get_hero_stats_from_db(days=7):
             logger.warning(f"hero_meta migration warning: {e}")
     except Exception:
         pass
-    
-    # Query hero stats grouped by hero_id only (sum all positions for meta)
+
     if "postgres" in scheme:
         cursor.execute("""
-            SELECT 
+            SELECT
                 hero_id,
                 COUNT(*) as pub_pick,
-                SUM(CASE 
-                    WHEN (radiant_win = 1 AND player_slot < 128) OR (radiant_win = 0 AND player_slot >= 128) THEN 1 
-                    ELSE 0 
+                SUM(CASE
+                    WHEN (radiant_win = 1 AND player_slot < 128) OR (radiant_win = 0 AND player_slot >= 128) THEN 1
+                    ELSE 0
                 END) as pub_win
             FROM public_player_matches
             WHERE start_time >= %s AND steam_id IS NOT NULL
@@ -379,25 +377,24 @@ async def _get_hero_stats_from_db(days=7):
         """, (week_ago,))
     else:
         cursor.execute("""
-            SELECT 
+            SELECT
                 hero_id,
                 COUNT(*) as pub_pick,
-                SUM(CASE 
-                    WHEN (radiant_win = 1 AND player_slot < 128) OR (radiant_win = 0 AND player_slot >= 128) THEN 1 
-                    ELSE 0 
+                SUM(CASE
+                    WHEN (radiant_win = 1 AND player_slot < 128) OR (radiant_win = 0 AND player_slot >= 128) THEN 1
+                    ELSE 0
                 END) as pub_win
             FROM public_player_matches
             WHERE start_time >= ? AND steam_id IS NOT NULL
             GROUP BY hero_id
         """, (week_ago,))
-    
+
     rows = cursor.fetchall()
     logger.info(f"_get_hero_stats_from_db: found {len(rows)} hero rows")
-    
-    # Get hero data for position detection
+
     from dota_mmr import get_heroes_data
     heroes_data = get_heroes_data()
-    
+
     hero_stats = []
     for row in rows:
         hero_id = row[0]
@@ -405,19 +402,18 @@ async def _get_hero_stats_from_db(days=7):
         pub_win = row[2] or 0
         pub_win = int(pub_win) if pub_win else 0
         logger.info(f"_get_hero_stats_from_db: hero_id={hero_id}, pub_pick={pub_pick}, pub_win={pub_win}")
-        
-        # Determine position from hero_positions first
+
         hero_info = heroes_data.get(hero_id, {}) if heroes_data else {}
         hero_name = hero_info.get("name", f"Hero {hero_id}")
-        
+
         if hero_name and hero_name in hero_positions:
             position = hero_positions[hero_name]
         else:
             position = detect_hero_position({"roles": hero_info.get("roles", [])})
-        
+
         winrate = pub_win / pub_pick if pub_pick > 0 else 0
         pub_losses = pub_pick - pub_win
-        
+
         hero_stats.append({
             "hero_id": hero_id,
             "position": position,
@@ -427,9 +423,9 @@ async def _get_hero_stats_from_db(days=7):
             "winrate": winrate,
             "localized_name": hero_name,
             "img": hero_info.get("img", ""),
-"roles": hero_info.get("roles", []),
+            "roles": hero_info.get("roles", []),
         })
-    
+
     return hero_stats
 
 
@@ -546,7 +542,7 @@ async def get_dota_data(days=7, force_refresh=False):
 
     # Get data from local database instead of OD explorer
     try:
-        hero_stats = await _get_hero_stats_from_db(days)
+        hero_stats = await asyncio.to_thread(_get_hero_stats_from_db, days)
         if hero_stats:
             _hero_meta_cache["data"] = hero_stats
             _hero_meta_cache["timestamp"] = now

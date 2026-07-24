@@ -140,7 +140,9 @@ class UserCache:
     def get(self, telegram_id: int) -> dict[str, Any] | None:
         with self._lock:
             data = self._cache.get(telegram_id)
-            return copy.deepcopy(data) if data is not None else None
+            if data is None:
+                return None
+            return dict(data)
 
     def set(self, telegram_id, data, skip_dirty=False):
         """Установить данные пользователя в кеш"""
@@ -1704,15 +1706,15 @@ class Database:
     def set_config(self, key, value):
         """Установить значение конфигурации"""
         try:
-            # Если значение None — удаляем ключ вместо сохранения строки "None"
             if value is None:
                 url = urlparse.urlparse(DATABASE_URL)
                 scheme = url.scheme
-                if "postgres" in str(scheme) if scheme is not None else "":
+                if "postgres" in scheme:
                     self.execute_query("DELETE FROM bot_config WHERE key = %s", (key,))
                 else:
                     self.execute_query("DELETE FROM bot_config WHERE key = ?", (key,))
                 logger.debug(f"set_config deleted key={key}")
+                return True
 
             if get_db_type() == "postgresql":
                 query = """

@@ -833,7 +833,7 @@ async def announce_weekly_mmr_winner(bot):
         return False
 
     from database import get_dota_week_top_from_db
-    top_users = get_dota_week_top_from_db(5)
+    top_users = await asyncio.to_thread(get_dota_week_top_from_db, 5)
     if not top_users or all(u.get('week_games', 0) == 0 for u in top_users):
         logger.info("announce_weekly_mmr_winner: нет данных для топа MMR (никто не играл)")
         set_config('mmr_week_top_announced', current_week_start)
@@ -1126,7 +1126,7 @@ async def update_all_mmr_job(context):
 
         # Update top cache once after all updates
         from database import update_dota_week_top_cache, get_dota_week_top_from_db
-        update_dota_week_top_cache()
+        await asyncio.to_thread(update_dota_week_top_cache)
         # Clear top cache to force refresh on next read
         get_dota_week_top_from_db._cache = (None, 0)
 
@@ -1228,7 +1228,7 @@ async def refresh_digest_message(bot):
             return
 
         # Только обновляем кэш данных, редактирование будет через alternate_digest_job
-        stats = get_digest_stats()
+        stats = await asyncio.to_thread(get_digest_stats)
         set_fissure_digest_data(stats)
         logger.debug("refresh_digest_message: кэш digest_data обновлён, дайджест будет обновлён в следующем тике alternate_digest_job")
 
@@ -1576,7 +1576,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db.add_user(user_id, fallback_name, None, None)
             logger.info(f"Created new user {user_id} with name '{fallback_name}'")
             is_new_user = True
-            user = get_user(user_id)
+            user = await asyncio.to_thread(get_user, user_id)
         else:
             # Существующий пользователь — обновляем username если нужно
             updates = {}
@@ -1894,19 +1894,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Get the invited player
         invited_player = None
         if user_identifier.isdigit():
-            invited_player = get_user(int(user_identifier))
+            invited_player = await asyncio.to_thread(get_user, int(user_identifier))
         else:
-            invited_player = get_user_by_username(user_identifier)
-        
+            invited_player = await asyncio.to_thread(get_user_by_username, user_identifier)
+
         if not invited_player:
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=f"❌ Пользователь не найден.",
             )
             return
-        
+
         # Get inviter data
-        inviter = get_user(inviter_id)
+        inviter = await asyncio.to_thread(get_user, inviter_id)
         
         # Build invitation message
         username = invited_player.get("username") or ""
@@ -2366,7 +2366,7 @@ async def top_mmr_handler(request):
     """Public API: returns top MMR players as JSON (for the website widget)."""
     from database import get_dota_mmr_top
     try:
-        top_users = get_dota_mmr_top(50)
+        top_users = await asyncio.to_thread(get_dota_mmr_top, 50)
         data = [{"username": u.get("username", "Unknown"), "mmr": u.get("mmr", 0), "rank_tier": u.get("rank_tier", 0), "week_games": u.get("week_games", 0), "week_wins": u.get("week_wins", 0)} for u in top_users]
         resp = web.Response(text=json.dumps(data, ensure_ascii=False), content_type="application/json")
         resp.headers['Access-Control-Allow-Origin'] = '*'
@@ -2430,7 +2430,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not target_user:
             user_obj = update.effective_user
             username = user_obj.username or user_obj.first_name or f"Player{user_obj.id}"
-            target_user = get_user(user_obj.id, username)
+            target_user = await asyncio.to_thread(get_user, user_obj.id, username)
 
             try:
                 loading_msg = await context.bot.send_message(
@@ -2483,7 +2483,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 from dota_mmr import update_user_mmr
                 await asyncio.to_thread(update_user_mmr, target_user.get('telegram_id'))
                 # Refresh user data after update
-                target_user = get_user(target_user.get('telegram_id'))
+                target_user = await asyncio.to_thread(get_user, target_user.get('telegram_id'))
                 steam_id = target_user.get('steam_id')
                 week_games = target_user.get('week_games') or 0
                 week_wins = target_user.get('week_wins') or 0
@@ -2663,16 +2663,9 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug(f"Could not delete last bot message: {e}")
 
     try:
-        top_users = get_fissure_top(10)
-        user_rank = get_fissure_rank(update.effective_user.id)
-        # Ensure profile shows same fissure - refresh user cache from DB
-        db_user = user_cache.get(update.effective_user.id)
-        if db_user and top_users:
-            for t in top_users:
-                if t.get('telegram_id') == update.effective_user.id:
-                    db_user['fissure'] = t.get('fissure', db_user.get('fissure', 0))
-                    break
-        user = get_user(update.effective_user.id, update.effective_user.username)
+        top_users = await asyncio.to_thread(get_fissure_top, 10)
+        user_rank = await asyncio.to_thread(get_fissure_rank, update.effective_user.id)
+        user = await asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username)
         username = update.effective_user.username or update.effective_user.first_name
 
         if not top_users:
@@ -2856,20 +2849,20 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         from database import get_dota_mmr_top, get_dota_week_top_from_db
-        user = get_user(update.effective_user.id)
+        user = await asyncio.to_thread(get_user, update.effective_user.id)
 
         # Banner URL
         topmmr_banner_url = TOPMMR_BANNER_URL
 
         # Сначала пытаемся получить недельный топ
         logger.info("topmmr: before get_dota_week_top_from_db")
-        top_users = get_dota_week_top_from_db(10)
+        top_users = await asyncio.to_thread(get_dota_week_top_from_db, 10)
         logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from weekly DB")
 
         # Если недельный топ пустой, используем MMR топ
         if not top_users or len(top_users) == 0:
             logger.info("topmmr: weekly top empty, using MMR top")
-            top_users = get_dota_mmr_top(10)
+            top_users = await asyncio.to_thread(get_dota_mmr_top, 10)
             logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from MMR DB")
 
         # Find user's position
@@ -2881,7 +2874,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # If user not in top 10, get their actual rank
         if user_pos is None:
-            user_pos = get_dota_week_rank(update.effective_user.id)
+            user_pos = await asyncio.to_thread(get_dota_week_rank, update.effective_user.id)
 
         # Initialize user position variables
         user_is_in_top = False
@@ -3285,15 +3278,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                 logger.info("menu_handler: skipping message_count (not in digest chat)")
             else:
                 user_id = update.effective_user.id
-                db_user = get_user(user_id)  # get without auto-create
+                db_user = await asyncio.to_thread(get_user, user_id)
                 if not db_user:
-                    # User not found in DB, create them first
                     telegram_username = update.effective_user.username
                     first_name = update.effective_user.first_name
                     fallback_name = telegram_username or first_name or f"Player{user_id}"
                     db = Database()
                     db.add_user(user_id, fallback_name, None, None)
-                    db_user = get_user(user_id)  # Get the newly created user
+                    db_user = await asyncio.to_thread(get_user, user_id)
                     logger.info(f"Created new user {user_id} for message counting")
 
                 if db_user:
@@ -3538,7 +3530,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
                 # Убедимся, что пользователь существует в БД
                 try:
-                    db_user = get_user(user_id)  # без создания
+                    db_user = await asyncio.to_thread(get_user, user_id)
                     if db_user is None:
                         # Новый пользователь — создаём с лучшим доступным именем
                         fallback_name = telegram_username or user_obj.first_name or f"Player{user_id}"
