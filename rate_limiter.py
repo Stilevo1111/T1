@@ -53,34 +53,31 @@ class RateLimiter:
     async def acquire(self, tokens: int = 1) -> bool:
         """
         Acquire tokens from the bucket. Waits if necessary.
-        
+
         Args:
             tokens: Number of tokens to acquire
-            
+
         Returns:
             True if tokens were acquired
         """
-        async with self._lock:
-            now = time.time()
-            # Add tokens based on time passed
-            time_passed = now - self.last_update
-            self.tokens = min(
-                self.bucket_size,
-                self.tokens + time_passed * self.tokens_per_second
-            )
-            self.last_update = now
+        while True:
+            async with self._lock:
+                now = time.time()
+                time_passed = now - self.last_update
+                self.tokens = min(
+                    self.bucket_size,
+                    self.tokens + time_passed * self.tokens_per_second
+                )
+                self.last_update = now
 
-            if self.tokens >= tokens:
-                self.tokens -= tokens
-                return True
-            else:
-                # Not enough tokens, calculate wait time
-                needed = tokens - self.tokens
-                wait_time = needed / max(self.tokens_per_second, 0.1)
-                logger.debug(f"Rate limiter: waiting {wait_time:.2f}s for {tokens} tokens")
-                await asyncio.sleep(wait_time)
-                # Retry after waiting
-                return await self.acquire(tokens)
+                if self.tokens >= tokens:
+                    self.tokens -= tokens
+                    return True
+
+            needed = tokens - self.tokens
+            wait_time = needed / max(self.tokens_per_second, 0.1)
+            logger.debug(f"Rate limiter: waiting {wait_time:.2f}s for {tokens} tokens")
+            await asyncio.sleep(wait_time)
 
     def try_acquire(self, tokens: int = 1) -> bool:
         """
