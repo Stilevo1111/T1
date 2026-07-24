@@ -144,6 +144,7 @@ async def generate_obs_widget(
         session = None
 
     img = Image.new("RGBA", (WIDGET_WIDTH, WIDGET_HEIGHT), BG_COLOR)
+    draw = ImageDraw.Draw(img)
 
     for i, match in enumerate(matches[:limit]):
         hero_id = match.get("hero_id")
