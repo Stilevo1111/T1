@@ -202,13 +202,13 @@ async def _do_give_gag(
     victim_name  = victim.get("username") or victim.get("first_name") or str(victim_id)
     admin_name   = admin.get("username") or admin.get("first_name") or str(admin_id)
     victim_username = victim.get("username")
-    if victim_username:
-        victim_link = f"<a href='https://t.me/{victim_username}'>{victim_name}</a>"
+    if victim_username and all(c.isalnum() or c == '_' for c in str(victim_username).strip().lstrip("@")):
+        victim_link = f"<a href='https://t.me/{str(victim_username).strip().lstrip(\"@\")}'>{victim_name}</a>"
     else:
         victim_link = f"<a href='tg://user?id={victim_id}'>{victim_name}</a>"
     admin_username = admin.get("username")
-    if admin_username:
-        admin_link = f"<a href='https://t.me/{admin_username}'>{admin_name}</a>"
+    if admin_username and all(c.isalnum() or c == '_' for c in str(admin_username).strip().lstrip("@")):
+        admin_link = f"<a href='https://t.me/{str(admin_username).strip().lstrip(\"@\")}'>{admin_name}</a>"
     else:
         admin_link = f"<a href='tg://user?id={admin_id}'>{admin_name}</a>"
     announcement = (
