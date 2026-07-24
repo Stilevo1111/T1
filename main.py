@@ -2398,11 +2398,15 @@ async def obs_last5_handler(request):
             steam_id = await get_steam_id_from_telegram(int(telegram_id))
 
         if not steam_id:
+            logger.warning("obs_last5_handler: no steam_id/telegram_id provided, trying default...")
             steam_id = await get_default_steam_id()
+            if steam_id:
+                logger.info("obs_last5_handler: using default steam_id=%s", steam_id)
 
         if not steam_id:
+            logger.error("obs_last5_handler: no steam_id available and no default configured")
             return web.Response(
-                text="Missing steam_id or telegram_id. Set ?steam_id=..., ?telegram_id=..., or OBS_WIDGET_STEAM_ADMIN in .env",
+                text="Missing steam_id or telegram_id. Set ?steam_id=..., ?telegram_id=..., or OBS_WIDGET_STEAM_ID in .env",
                 status=400,
             )
 

@@ -250,14 +250,22 @@ async def get_default_steam_id() -> int | None:
         from config import settings
         obs_steam_id = getattr(settings, 'OBS_WIDGET_STEAM_ID', None)
         if obs_steam_id:
+            logger.info("obs_widget: using OBS_WIDGET_STEAM_ID=%s", obs_steam_id)
             return int(obs_steam_id)
 
         admin_chat_id = getattr(settings, 'ADMIN_CHAT_ID', None)
         if admin_chat_id:
-            return await get_steam_id_from_telegram(int(admin_chat_id))
+            logger.info("obs_widget: ADMIN_CHAT_ID=%s, resolving steam_id...", admin_chat_id)
+            steam_id = await get_steam_id_from_telegram(int(admin_chat_id))
+            if steam_id:
+                logger.info("obs_widget: resolved steam_id=%s from ADMIN_CHAT_ID", steam_id)
+            else:
+                logger.warning("obs_widget: ADMIN_CHAT_ID=%s has no linked steam_id", admin_chat_id)
+            return steam_id
 
+        logger.warning("obs_widget: no OBS_WIDGET_STEAM_ID and no ADMIN_CHAT_ID configured")
         return None
     except Exception as e:
-        logger.debug("obs_widget: failed to get default steam_id: %s", e)
+        logger.error("obs_widget: failed to get default steam_id: %s", e)
         return None
 
