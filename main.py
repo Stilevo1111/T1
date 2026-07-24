@@ -2389,13 +2389,16 @@ async def top_mmr_handler(request):
 @rate_limit(tokens=1)
 async def obs_last5_handler(request):
     """Public API: returns last 5 matches as transparent PNG for OBS/website."""
-    from obs_widget import generate_obs_widget, get_steam_id_from_telegram
+    from obs_widget import generate_obs_widget, get_steam_id_from_telegram, get_default_steam_id
     try:
         steam_id = request.query.get("steam_id")
         telegram_id = request.query.get("telegram_id")
 
         if not steam_id and telegram_id:
             steam_id = await get_steam_id_from_telegram(int(telegram_id))
+
+        if not steam_id:
+            steam_id = await get_default_steam_id()
 
         if not steam_id:
             return web.Response(

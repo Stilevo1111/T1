@@ -243,3 +243,16 @@ async def get_steam_id_from_telegram(telegram_id: int) -> int | None:
         logger.debug("obs_widget: failed to resolve steam_id for %s: %s", telegram_id, e)
         return None
 
+
+async def get_default_steam_id() -> int | None:
+    """Get steam_id for default/admin account from config."""
+    try:
+        from config import settings
+        admin_chat_id = getattr(settings, 'ADMIN_CHAT_ID', None)
+        if not admin_chat_id:
+            return None
+        return await get_steam_id_from_telegram(int(admin_chat_id))
+    except Exception as e:
+        logger.debug("obs_widget: failed to get default steam_id: %s", e)
+        return None
+
