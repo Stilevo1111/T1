@@ -10,7 +10,6 @@ Behavior:
     - Draws 5 cards in a row, each with colored border:
         green = win
         red  = loss
-    - Below cards: overall WR%
     - Returns PNG with transparent background, suitable for OBS
 """
 
@@ -39,7 +38,6 @@ CARD_SPACING = 10
 BORDER_WIDTH = 3
 PADDING_X = 14
 PADDING_Y = 14
-TEXT_HEIGHT = 30
 
 WIDGET_WIDTH = (
     PADDING_X * 2
@@ -49,12 +47,10 @@ WIDGET_WIDTH = (
 WIDGET_HEIGHT = (
     PADDING_Y * 2
     + CARD_SIZE
-    + TEXT_HEIGHT
 )
 
 WIN_COLOR = (34, 197, 94, 255)      # solid green
 LOSS_COLOR = (239, 68, 68, 255)     # solid red
-TEXT_COLOR = (255, 255, 255, 255)   # white
 BG_COLOR = (0, 0, 0, 0)             # fully transparent for OBS
 
 # ============================================================
@@ -130,21 +126,6 @@ async def _fetch_hero_icon(hero_info: dict | None, session: aiohttp.ClientSessio
         return None
 
 
-def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Best-effort font load, fallback to default."""
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "C:/Windows/Fonts/arialbd.ttf",
-        "C:/Windows/Fonts/Arial-Bold.ttf",
-    ]
-    for path in candidates:
-        try:
-            return ImageFont.truetype(path, size)
-        except Exception:
-            continue
-    return ImageFont.load_default()
-
-
 # ============================================================
 # MAIN
 # ============================================================
@@ -200,15 +181,6 @@ async def generate_obs_widget(
         if icon:
             icon_resized = icon.resize((CARD_SIZE, CARD_SIZE), Image.Resampling.LANCZOS)
             img.paste(icon_resized, (x, y), icon_resized)
-
-    wr = int((wins / limit) * 100) if limit else 0
-    wr_text = f"WR {wr}%"
-    font = _load_font(18)
-    bbox = draw.textbbox((0, 0), wr_text, font=font)
-    text_w = bbox[2] - bbox[0]
-    text_x = max(PADDING_X, (WIDGET_WIDTH - text_w) // 2)
-    text_y = PADDING_Y + CARD_SIZE + 6
-    draw.text((text_x, text_y), wr_text, font=font, fill=TEXT_COLOR)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
