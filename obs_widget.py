@@ -245,13 +245,18 @@ async def get_steam_id_from_telegram(telegram_id: int) -> int | None:
 
 
 async def get_default_steam_id() -> int | None:
-    """Get steam_id for default/admin account from config."""
+    """Get steam_id for default OBS widget from config."""
     try:
         from config import settings
+        obs_steam_id = getattr(settings, 'OBS_WIDGET_STEAM_ID', None)
+        if obs_steam_id:
+            return int(obs_steam_id)
+
         admin_chat_id = getattr(settings, 'ADMIN_CHAT_ID', None)
-        if not admin_chat_id:
-            return None
-        return await get_steam_id_from_telegram(int(admin_chat_id))
+        if admin_chat_id:
+            return await get_steam_id_from_telegram(int(admin_chat_id))
+
+        return None
     except Exception as e:
         logger.debug("obs_widget: failed to get default steam_id: %s", e)
         return None

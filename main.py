@@ -2402,7 +2402,7 @@ async def obs_last5_handler(request):
 
         if not steam_id:
             return web.Response(
-                text="Missing steam_id or telegram_id",
+                text="Missing steam_id or telegram_id. Set ?steam_id=..., ?telegram_id=..., or OBS_WIDGET_STEAM_ADMIN in .env",
                 status=400,
             )
 
