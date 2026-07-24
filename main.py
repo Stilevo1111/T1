@@ -2365,10 +2365,16 @@ async def recent_rolls_handler(request):
 
 
 async def top_mmr_handler(request):
-    """Public API: returns top MMR players as JSON (for the website widget)."""
-    from database import get_dota_mmr_top
+    """Public API: returns top MMR players as JSON (for the website widget).
+    
+    Сначала пытаемся получить недельный топ (как команда /topmmr в боте),
+    если пуст — возвращаем топ по общему MMR.
+    """
+    from database import get_dota_mmr_top, get_dota_week_top_from_db
     try:
-        top_users = await asyncio.to_thread(get_dota_mmr_top, 50)
+        top_users = await asyncio.to_thread(get_dota_week_top_from_db, 50)
+        if not top_users or len(top_users) == 0:
+            top_users = await asyncio.to_thread(get_dota_mmr_top, 50)
         data = [{"username": u.get("username", "Unknown"), "mmr": u.get("mmr", 0), "rank_tier": u.get("rank_tier", 0), "week_games": u.get("week_games", 0), "week_wins": u.get("week_wins", 0)} for u in top_users]
         resp = web.Response(text=json.dumps(data, ensure_ascii=False), content_type="application/json")
         resp.headers['Access-Control-Allow-Origin'] = '*'
