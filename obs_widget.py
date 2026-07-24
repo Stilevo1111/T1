@@ -181,7 +181,8 @@ async def generate_obs_widget(
             icon = await _fetch_hero_icon(hero_info, session)
 
         if icon:
-            icon_resized = icon.resize((CARD_SIZE, CARD_SIZE), Image.Resampling.LANCZOS)
+            icon_rgba = icon.convert("RGBA")
+            icon_resized = icon_rgba.resize((CARD_SIZE, CARD_SIZE), Image.Resampling.LANCZOS)
             img.paste(icon_resized, (x, y), icon_resized)
 
     buf = io.BytesIO()
