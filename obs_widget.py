@@ -33,25 +33,15 @@ logger = logging.getLogger(__name__)
 # CONFIG
 # ============================================================
 
-CARD_SIZE = 72
-CARD_SPACING = 10
-BORDER_WIDTH = 3
-PADDING_X = 14
-PADDING_Y = 14
+CARD_SIZE = 64
+CARD_SPACING = 6
 
-WIDGET_WIDTH = (
-    PADDING_X * 2
-    + 5 * CARD_SIZE
-    + 4 * CARD_SPACING
-)
-WIDGET_HEIGHT = (
-    PADDING_Y * 2
-    + CARD_SIZE
-)
+WIDGET_WIDTH = 5 * CARD_SIZE + 4 * CARD_SPACING
+WIDGET_HEIGHT = CARD_SIZE
 
-WIN_COLOR = (34, 197, 94, 255)      # solid green
-LOSS_COLOR = (239, 68, 68, 255)     # solid red
-BG_COLOR = (0, 0, 0, 0)             # fully transparent for OBS
+WIN_COLOR = (34, 197, 94, 255)
+LOSS_COLOR = (239, 68, 68, 255)
+BG_COLOR = (0, 0, 0, 0)
 
 # ============================================================
 # CACHES
@@ -154,25 +144,21 @@ async def generate_obs_widget(
         session = None
 
     img = Image.new("RGBA", (WIDGET_WIDTH, WIDGET_HEIGHT), BG_COLOR)
-    draw = ImageDraw.Draw(img)
 
-    wins = 0
     for i, match in enumerate(matches[:limit]):
         hero_id = match.get("hero_id")
         hero_info = heroes_data.get(hero_id)
         player_slot = match.get("player_slot", 0)
         radiant_win = bool(match.get("radiant_win", False))
         is_win = (player_slot < 128) == radiant_win
-        if is_win:
-            wins += 1
 
-        x = PADDING_X + i * (CARD_SIZE + CARD_SPACING)
-        y = PADDING_Y
+        x = i * (CARD_SIZE + CARD_SPACING)
+        y = 0
 
         border = WIN_COLOR if is_win else LOSS_COLOR
         draw.rounded_rectangle(
             [x, y, x + CARD_SIZE - 1, y + CARD_SIZE - 1],
-            radius=8,
+            radius=10,
             fill=border,
         )
 
