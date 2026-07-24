@@ -66,8 +66,22 @@ def _cache_key(steam_id: int, limit: int) -> str:
     return f"obs_widget_{steam_id}_{limit}"
 
 
+def _remove_white_background(img: Image.Image) -> Image.Image:
+    """Remove white/light background from hero icon, making it transparent."""
+    img = img.convert("RGBA")
+    datas = img.getdata()
+    new_data = []
+    for r, g, b, a in datas:
+        if r > 200 and g > 200 and b > 200:
+            new_data.append((255, 255, 255, 0))
+        else:
+            new_data.append((r, g, b, a))
+    img.putdata(new_data)
+    return img
+
+
 async def _fetch_hero_icon(hero_info: dict | None, session: aiohttp.ClientSession) -> Image.Image | None:
-    """Download hero icon with disk cache. Returns RGBA Image or None."""
+    """Download hero icon with disk cache. Returns RGBA Image with transparent background."""
     if not hero_info:
         return None
 
@@ -88,6 +102,7 @@ async def _fetch_hero_icon(hero_info: dict | None, session: aiohttp.ClientSessio
     if cache_path.exists() and not cache_path.is_dir():
         try:
             img = Image.open(cache_path).convert("RGBA")
+            img = _remove_white_background(img)
             _icon_cache[cache_key] = (img, now)
             return img
         except Exception:
@@ -102,6 +117,7 @@ async def _fetch_hero_icon(hero_info: dict | None, session: aiohttp.ClientSessio
             data = await resp.read()
 
         img = Image.open(io.BytesIO(data)).convert("RGBA")
+        img = _remove_white_background(img)
 
         try:
             with open(cache_path, "wb") as f:
