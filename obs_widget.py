@@ -27,12 +27,6 @@ from PIL import Image, ImageDraw, ImageFont
 from dota_mmr import get_heroes_data, get_recent_matches_async
 from database import get_user
 
-logger = logging.getLogger(__name__)
-
-# ============================================================
-# CONFIG
-# ============================================================
-
 CARD_SIZE = 64
 CARD_SPACING = 6
 
@@ -41,7 +35,33 @@ WIDGET_HEIGHT = CARD_SIZE
 
 WIN_COLOR = (34, 197, 94, 255)
 LOSS_COLOR = (239, 68, 68, 255)
+UNKNOWN_COLOR = (120, 120, 120, 255)
 BG_COLOR = (0, 0, 0, 0)
+WIDGET_BORDER_RADIUS = 10
+ICON_MARGIN = 4
+FALLBACK_FONT_RATIO = 0.55
+
+THEME_COLORS = {
+    "default": {
+        "win": (34, 197, 94, 255),
+        "loss": (239, 68, 68, 255),
+        "unknown": (120, 120, 120, 255),
+    },
+    "minimal": {
+        "win": (34, 197, 94, 255),
+        "loss": (239, 68, 68, 255),
+        "unknown": (0, 0, 0, 0),
+    },
+    "ranked": {
+        "win": (34, 197, 94, 255),
+        "loss": (239, 68, 68, 255),
+        "unknown": (60, 60, 60, 255),
+    },
+}
+DEFAULT_THEME = "default"
+_CARD_BASE_FONT_SIZE = 20
+
+logger = logging.getLogger(__name__)
 
 # ============================================================
 # CACHES
@@ -67,7 +87,6 @@ def _cache_key(steam_id: int, limit: int) -> str:
 
 
 def _remove_white_background(img: Image.Image) -> Image.Image:
-    """Remove white/light background from hero icon, making it transparent."""
     img = img.convert("RGBA")
     datas = img.getdata()
     new_data = []
@@ -78,6 +97,20 @@ def _remove_white_background(img: Image.Image) -> Image.Image:
             new_data.append((r, g, b, a))
     img.putdata(new_data)
     return img
+
+
+def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "C:/Windows/Fonts/arialbd.ttf",
+        "C:/Windows/Fonts/Arial-Bold.ttf",
+    ]
+    for path in candidates:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
 
 
 async def _fetch_hero_icon(hero_info: dict | None, session: aiohttp.ClientSession) -> Image.Image | None:
@@ -142,37 +175,45 @@ async def generate_obs_widget(
     limit: int = 5,
 ) -> bytes | None:
     """Generate transparent PNG widget for last `limit` matches."""
-    cache_key = _cache_key(steam_id, limit)
-    cached = _widget_cache.get(cache_key)
-    if cached and (time.time() - cached[1]) < _WIDGET_CACHE_TTL:
-        return cached[0]
-
     matches = await get_recent_matches_async(steam_id, limit=limit)
     if not matches:
         matches = []
 
     heroes_data = get_heroes_data() or {}
 
+    session = None
     try:
         from database import get_aiohttp_session
         session = await get_aiohttp_session()
     except Exception:
-        session = None
+        pass
 
     img = Image.new("RGBA", (WIDGET_WIDTH, WIDGET_HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
-    for i, match in enumerate(matches[:limit]):
-        hero_id = match.get("hero_id")
-        hero_info = heroes_data.get(hero_id)
-        player_slot = match.get("player_slot", 0)
-        radiant_win = bool(match.get("radiant_win", False))
-        is_win = (player_slot < 128) == radiant_win
+    for i in range(limit):
+        if i < len(matches):
+            match = matches[i]
+            hero_id = match.get("hero_id")
+            hero_info = heroes_data.get(hero_id)
+            player_slot = match.get("player_slot", 0)
+            radiant_win = bool(match.get("radiant_win", False))
+            is_win = (player_slot < 128) == radiant_win
+        else:
+            hero_id = None
+            hero_info = None
+            is_win = None
 
         x = i * (CARD_SIZE + CARD_SPACING)
         y = 0
 
-        border = WIN_COLOR if is_win else LOSS_COLOR
+        if is_win is True:
+            border = WIN_COLOR
+        elif is_win is False:
+            border = LOSS_COLOR
+        else:
+            border = UNKNOWN_COLOR
+
         draw.rounded_rectangle(
             [x, y, x + CARD_SIZE - 1, y + CARD_SIZE - 1],
             radius=10,
@@ -180,19 +221,30 @@ async def generate_obs_widget(
         )
 
         icon = None
-        if session:
+        if hero_info:
             icon = await _fetch_hero_icon(hero_info, session)
 
         if icon:
             icon_rgba = icon.convert("RGBA")
-            icon_resized = icon_rgba.resize((CARD_SIZE, CARD_SIZE), Image.Resampling.LANCZOS)
-            img.paste(icon_resized, (x, y), icon_resized)
+            icon_resized = icon_rgba.resize((CARD_SIZE - 8, CARD_SIZE - 8), Image.Resampling.LANCZOS)
+            img.paste(icon_resized, (x + 4, y + 4), icon_resized)
+        else:
+            label = "?"
+            if hero_info:
+                label = (hero_info.get("name") or "?")[:1].upper()
+            font = _load_font(int(CARD_SIZE * 0.55))
+            bbox = draw.textbbox((0, 0), label, font=font)
+            text_w = bbox[2] - bbox[0]
+            text_h = bbox[3] - bbox[1]
+            text_x = x + (CARD_SIZE - text_w) / 2
+            text_y = y + (CARD_SIZE - text_h) / 2 - int(CARD_SIZE * 0.05)
+            draw.text((text_x, text_y), label, font=font, fill=(255, 255, 255, 255))
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     data = buf.getvalue()
 
-    _widget_cache[cache_key] = (data, time.time())
+    _widget_cache[_cache_key(steam_id, limit)] = (data, time.time())
     return data
 
 
