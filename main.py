@@ -881,10 +881,10 @@ async def announce_weekly_mmr_winner(bot):
             logger.warning(f"Не удалось установить тег победителю: {e}")
 
     if telegram_id:
-        user = get_user(telegram_id)
+        user = await asyncio.to_thread(get_user, telegram_id)
         if user:
             current_mvp_count = user.get('weekly_mvp_count', 0)
-            update_user_fields_batch(telegram_id, {'weekly_mvp_count': current_mvp_count + 1})
+            await asyncio.to_thread(update_user_fields_batch, telegram_id, {'weekly_mvp_count': current_mvp_count + 1})
 
     set_config('current_mvp_telegram_id', str(telegram_id) if telegram_id else "")
     set_config('current_mvp_tag', mvp_tag)
@@ -1103,7 +1103,7 @@ async def update_all_mmr_job(context):
                 success_count += 1
                 logger.info(f"MMR updated for {telegram_id}: {result.get('mmr')} MMR")
                 if result.get('rank_up'):
-                    fresh_user = get_user(telegram_id) or {'telegram_id': telegram_id}
+                    fresh_user = await asyncio.to_thread(get_user, telegram_id) or {'telegram_id': telegram_id}
                     rank_up_users.append((fresh_user, result['rank_up']))
                 # Collect data for batch save
                 if result.get('mmr') is not None:
@@ -1200,6 +1200,8 @@ async def update_all_mmr_job(context):
 
 
 
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         logger.error(f"Ошибка в update_all_mmr_job: {e}")
 
@@ -1586,7 +1588,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif current_username is None and first_name and first_name != "Friend":
                 updates['username'] = first_name
             if updates:
-                update_user_fields_batch(user_id, updates)
+                await asyncio.to_thread(update_user_fields_batch, user_id, updates)
                 logger.info(f"Updated user {user_id} fields: {updates}")
             user = db_user
 
@@ -2010,7 +2012,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Ensure user account exists before rolling
             from database import get_user
-            get_user(user_obj.id, user_obj.username)
+            await asyncio.to_thread(get_user, user_obj.id, user_obj.username)
 
             class _FakeChat:
                 id = chat_id
@@ -3302,7 +3304,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                     elif current_username is None and update.effective_user.first_name:
                         updates['username'] = update.effective_user.first_name
                     # Сохраняем в БД сразу чтобы данные не терялись при деплое
-                    update_user_fields_batch(user_id, updates, save_to_db=True)
+                    await asyncio.to_thread(update_user_fields_batch, user_id, updates, save_to_db=True)
                     logger.info(f"Cached message_count for {user_id}: {new_count}")
         except Exception as e:
             logger.error(f"Error updating message_count: {e}")
@@ -3541,11 +3543,11 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                         # Существующий пользователь — обновляем username если изменился (только если есть telegram_username)
                         current_username = db_user.get('username')
                         if telegram_username and telegram_username != current_username:
-                            update_user_fields_batch(user_id, {'username': telegram_username})
+                            await asyncio.to_thread(update_user_fields_batch, user_id, {'username': telegram_username})
                             logger.info(f"Updated username for {user_id} to '{telegram_username}'")
                         # Если username нет в Telegram, но в БД тоже NULL, и есть first_name — устанавливаем first_name
                         elif current_username is None and user_obj.first_name:
-                            update_user_fields_batch(user_id, {'username': user_obj.first_name})
+                            await asyncio.to_thread(update_user_fields_batch, user_id, {'username': user_obj.first_name})
                             logger.info(f"Set fallback username for {user_id} to '{user_obj.first_name}'")
                 except Exception as e:
                     logger.debug(f"Could not ensure user exists for {user_id}: {e}")

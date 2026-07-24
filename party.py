@@ -202,7 +202,7 @@ async def party_command(update, context):
     try:
         user_obj = update.effective_user
         from database import get_user
-        requester = get_user(user_obj.id, user_obj.username or user_obj.first_name or f"Player{user_obj.id}")
+        requester = await asyncio.to_thread(get_user, user_obj.id, user_obj.username or user_obj.first_name or f"Player{user_obj.id}")
         if not requester:
             requester = {
                 "telegram_id": user_obj.id,

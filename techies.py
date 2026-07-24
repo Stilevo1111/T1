@@ -133,7 +133,7 @@ async def _apply_techies_explosion(
     from database import get_user, update_user_field
 
     user_id = session["user_id"]
-    user = get_user(user_id)
+    user = await asyncio.to_thread(get_user, user_id)
     if not user:
         return
 
@@ -141,7 +141,7 @@ async def _apply_techies_explosion(
     mines = session.get("mines", generate_mines())
     total_damage = sum(mines)
     new_fissure = max(0.1, current_fissure - total_damage)
-    update_user_field(user_id, "fissure", new_fissure)
+    await asyncio.to_thread(update_user_field, user_id, "fissure", new_fissure)
 
     username = user.get("username") or str(user_id)
     if record_roll:
@@ -248,7 +248,7 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
     from database import get_user
 
     user_id = update.effective_user.id
-    user = get_user(user_id)
+    user = await asyncio.to_thread(get_user, user_id)
     if not user:
         await update.message.reply_text("❌ Пользователь не найден")
         return
@@ -313,7 +313,7 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         start_time = session.get("start_time", 0)
 
     elapsed = time.time() - start_time
-    user = get_user(user_id)
+    user = await asyncio.to_thread(get_user, user_id)
     if not user:
         await query.edit_message_text("❌ Ошибка: пользователь не найден")
         return
@@ -326,7 +326,7 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         mines = generate_mines()
         total_damage = sum(mines)
         new_fissure = max(0.1, current_fissure - total_damage)
-        update_user_field(user_id, "fissure", new_fissure)
+        await asyncio.to_thread(update_user_field, user_id, "fissure", new_fissure)
         if record_recent_fissure_roll:
             record_recent_fissure_roll(
                 user_id, username or str(user_id), -total_damage, new_fissure, cascade=0, event_type="techies"

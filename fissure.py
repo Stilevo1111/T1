@@ -133,7 +133,7 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
     """
     affected, total_cm = zeus_strike(percent=0.025, exclude_telegram_id=user_obj.id)
 
-    user = get_user(user_obj.id, user_obj.username)
+    user = await asyncio.to_thread(get_user, user_obj.id, user_obj.username)
     new_fissure = user.get("fissure", 0)
 
     zeus_text = random.choice(ZEUS_TEXTS)
@@ -218,7 +218,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         user_cache.remove(user_obj.id)
-        user = get_user(user_obj.id, username)
+        user = await asyncio.to_thread(get_user, user_obj.id, username)
         _safe_user = {k: v for k, v in user.items() if k not in ("analytics_cache", "steam_id", "steam_nickname", "username", "first_name", "last_name")}
         logger.info(f"user data: {_safe_user}")
 

@@ -171,7 +171,7 @@ async def _do_give_gag(
 
     # ── 1. Проверка баланса (не списываем, если мутим себя) ─────────────────────
     if not is_self_mute:
-        current = get_current_fissure(admin_id)
+        current = await asyncio.to_thread(get_current_fissure, admin_id)
         if current < _MUTE_COST_CM:
             await context.bot.send_message(
                 chat_id,
@@ -185,7 +185,7 @@ async def _do_give_gag(
             return False
 
         # ── 2. Списываем фиссуру (только если не мутим себя) ────────────────────
-        add_fissure(admin_id, -_MUTE_COST_CM)
+        await asyncio.to_thread(add_fissure, admin_id, -_MUTE_COST_CM)
 
     # ── 4. Удаляем команду /mute из чата ────────────────────────────────────
     try:
@@ -286,7 +286,7 @@ async def _gag_timeout_job(
     if chat_type in ("group", "supergroup"):
         try:
             from database import get_user
-            victim = get_user(victim_id)
+            victim = await asyncio.to_thread(get_user, victim_id)
             name = (
                 (victim.get("username") if victim else None)
                 or (victim.get("first_name") if victim else None)
