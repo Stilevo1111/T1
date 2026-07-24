@@ -2387,6 +2387,36 @@ async def top_mmr_handler(request):
 
 
 @rate_limit(tokens=1)
+async def obs_last5_handler(request):
+    """Public API: returns last 5 matches as transparent PNG for OBS/website."""
+    from obs_widget import generate_obs_widget, get_steam_id_from_telegram
+    try:
+        steam_id = request.query.get("steam_id")
+        telegram_id = request.query.get("telegram_id")
+
+        if not steam_id and telegram_id:
+            steam_id = await get_steam_id_from_telegram(int(telegram_id))
+
+        if not steam_id:
+            return web.Response(
+                text="Missing steam_id or telegram_id",
+                status=400,
+            )
+
+        data = await generate_obs_widget(int(steam_id), limit=5)
+        if not data:
+            return web.Response(
+                text="No matches or widget generation failed",
+                status=204,
+            )
+
+        return web.Response(body=data, content_type="image/png")
+    except Exception as e:
+        logger.error(f"obs_last5_handler error: {e}")
+        return web.Response(text=str(e), status=500)
+
+
+@rate_limit(tokens=1)
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     """Show stats — свой или чужой профиль: /profile или /profile @username"""
@@ -3959,6 +3989,7 @@ async def main():
             web_app.router.add_get('/api/recent-rolls', recent_rolls_handler)
             web_app.router.add_get('/api/top-mmr', top_mmr_handler)
             web_app.router.add_get('/api/steam-debug', steam_debug)
+            web_app.router.add_get('/api/obs-last5', obs_last5_handler)
             runner = web.AppRunner(web_app)
             await runner.setup()
             port = int(os.getenv('PORT', 10000))
@@ -4029,6 +4060,7 @@ async def main():
             web_app.router.add_get('/api/recent-rolls', recent_rolls_handler)
             web_app.router.add_get('/api/top-mmr', top_mmr_handler)
             web_app.router.add_get('/api/steam-debug', steam_debug)
+            web_app.router.add_get('/api/obs-last5', obs_last5_handler)
 
             async def reset_circuit(request):
                 try:
