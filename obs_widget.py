@@ -37,27 +37,25 @@ logger = logging.getLogger(__name__)
 CARD_SIZE = 72
 CARD_SPACING = 10
 BORDER_WIDTH = 3
-PADDING_X = 12
-PADDING_Y = 12
-TEXT_HEIGHT = 28
+PADDING_X = 14
+PADDING_Y = 14
+TEXT_HEIGHT = 30
 
 WIDGET_WIDTH = (
     PADDING_X * 2
     + 5 * CARD_SIZE
     + 4 * CARD_SPACING
-    + 2 * BORDER_WIDTH
 )
 WIDGET_HEIGHT = (
     PADDING_Y * 2
     + CARD_SIZE
-    + 2 * BORDER_WIDTH
     + TEXT_HEIGHT
 )
 
-WIN_COLOR = (34, 197, 94, 220)      # green with alpha
-LOSS_COLOR = (239, 68, 68, 220)     # red with alpha
+WIN_COLOR = (34, 197, 94, 255)      # solid green
+LOSS_COLOR = (239, 68, 68, 255)     # solid red
 TEXT_COLOR = (255, 255, 255, 255)   # white
-PLACEHOLDER_COLOR = (60, 60, 60, 255)
+BG_COLOR = (0, 0, 0, 0)             # fully transparent for OBS
 
 # ============================================================
 # CACHES
@@ -174,7 +172,7 @@ async def generate_obs_widget(
     except Exception:
         session = None
 
-    img = Image.new("RGBA", (WIDGET_WIDTH, WIDGET_HEIGHT), (0, 0, 0, 0))
+    img = Image.new("RGBA", (WIDGET_WIDTH, WIDGET_HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
     wins = 0
@@ -185,17 +183,13 @@ async def generate_obs_widget(
         if is_win:
             wins += 1
 
-        x = PADDING_X + BORDER_WIDTH + i * (CARD_SIZE + CARD_SPACING)
-        y = PADDING_Y + BORDER_WIDTH
+        x = PADDING_X + i * (CARD_SIZE + CARD_SPACING)
+        y = PADDING_Y
 
         border = WIN_COLOR if is_win else LOSS_COLOR
-        draw.rectangle(
-            [
-                x - BORDER_WIDTH,
-                y - BORDER_WIDTH,
-                x + CARD_SIZE + BORDER_WIDTH,
-                y + CARD_SIZE + BORDER_WIDTH,
-            ],
+        draw.rounded_rectangle(
+            [x, y, x + CARD_SIZE - 1, y + CARD_SIZE - 1],
+            radius=8,
             fill=border,
         )
 
@@ -206,11 +200,6 @@ async def generate_obs_widget(
         if icon:
             icon_resized = icon.resize((CARD_SIZE, CARD_SIZE), Image.Resampling.LANCZOS)
             img.paste(icon_resized, (x, y), icon_resized)
-        else:
-            draw.rectangle(
-                [x, y, x + CARD_SIZE, y + CARD_SIZE],
-                fill=PLACEHOLDER_COLOR,
-            )
 
     wr = int((wins / limit) * 100) if limit else 0
     wr_text = f"WR {wr}%"
@@ -218,7 +207,7 @@ async def generate_obs_widget(
     bbox = draw.textbbox((0, 0), wr_text, font=font)
     text_w = bbox[2] - bbox[0]
     text_x = max(PADDING_X, (WIDGET_WIDTH - text_w) // 2)
-    text_y = PADDING_Y + CARD_SIZE + 2 * BORDER_WIDTH + 4
+    text_y = PADDING_Y + CARD_SIZE + 6
     draw.text((text_x, text_y), wr_text, font=font, fill=TEXT_COLOR)
 
     buf = io.BytesIO()
