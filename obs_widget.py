@@ -160,7 +160,9 @@ async def generate_obs_widget(
     for i, match in enumerate(matches[:limit]):
         hero_id = match.get("hero_id")
         hero_info = heroes_data.get(hero_id)
-        is_win = bool(match.get("win", False))
+        player_slot = match.get("player_slot", 0)
+        radiant_win = bool(match.get("radiant_win", False))
+        is_win = (player_slot < 128) == radiant_win
         if is_win:
             wins += 1
 
