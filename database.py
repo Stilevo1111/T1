@@ -142,7 +142,9 @@ class UserCache:
             data = self._cache.get(telegram_id)
             if data is None:
                 return None
-            return dict(data)
+            if isinstance(data, dict):
+                return dict(data)
+            return data
 
     def set(self, telegram_id, data, skip_dirty=False):
         """Установить данные пользователя в кеш"""
