@@ -143,9 +143,13 @@ async def _fetch_hero_icon(hero_info: dict | None, session: aiohttp.ClientSessio
 
     try:
         async with session.get(
-            icon_url, timeout=aiohttp.ClientTimeout(total=6)
+            icon_url, timeout=aiohttp.ClientTimeout(total=6), headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"}
         ) as resp:
             if resp.status != 200:
+                return None
+            content_type = resp.headers.get("Content-Type", "")
+            if not content_type.startswith("image/"):
+                logger.debug("Unexpected Content-Type for obs icon %s: %s", icon_url, content_type)
                 return None
             data = await resp.read()
 

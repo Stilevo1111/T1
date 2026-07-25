@@ -367,14 +367,15 @@ async def _check_rate_limit_async():
         wait_time = API_RATE_WINDOW - (now - _async_rate_limit["window_start"])
         if wait_time > 0:
             await asyncio.sleep(wait_time)
-            # Don't reset window here - let it continue naturally after sleep
+            _async_rate_limit["window_start"] = now
+            _async_rate_limit["requests_count"] = 0
 
     time_since_last = now - _async_rate_limit["last_request"]
     if time_since_last < API_MIN_INTERVAL:
         await asyncio.sleep(API_MIN_INTERVAL - time_since_last)
 
     _async_rate_limit["requests_count"] += 1
-    _async_rate_limit["last_request"] = now
+    _async_rate_limit["last_request"] = time.time()
 
 
 async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15, max_retries: int = 3) -> dict:
@@ -382,19 +383,20 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping async request, API unavailable")
         return None
-    
+
     if is_opendota_rate_limited():
         remaining = get_opendota_rate_limit_time_remaining()
         logger.warning(f"OpenDota still rate limited, waiting {remaining}s...")
         await asyncio.sleep(remaining + 1)
-    
+
     await _check_rate_limit_async()
 
-    for attempt in range(max_retries):
+    for attempt in range(max_retries + 1):
+        current_timeout = timeout if attempt == 0 else timeout + 5
         try:
             from database import get_aiohttp_session
             session = await get_aiohttp_session()
-            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=current_timeout)) as resp:
                 if resp.status == 200:
                     _circuit_breaker_record_success()
                     return await resp.json()
@@ -406,7 +408,7 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
                     await asyncio.sleep(wait_time)
                     continue
                 elif resp.status >= 500:
-                    logger.warning(f"Server error {resp.status} for {url[:60]}, attempt {attempt + 1}/{max_retries}")
+                    logger.warning(f"Server error {resp.status} for {url[:60]}, attempt {attempt + 1}/{max_retries + 1}")
                     _circuit_breaker_record_failure()
                     await asyncio.sleep(1 + attempt)
                     continue
@@ -415,21 +417,21 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
                     _circuit_breaker_record_failure()
                     return None
         except TimeoutError:
-            logger.warning(f"API request timeout for {url[:80]}, attempt {attempt + 1}/{max_retries}")
+            logger.warning(f"API request timeout ({current_timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
             _circuit_breaker_record_failure()
-            if attempt < max_retries - 1:
+            if attempt < max_retries:
                 await asyncio.sleep(1 + attempt)
                 continue
             return None
         except Exception as e:
             logger.error(f"Async API request error: {e}", exc_info=True)
             _circuit_breaker_record_failure()
-            if attempt < max_retries - 1:
+            if attempt < max_retries:
                 await asyncio.sleep(1 + attempt)
                 continue
             return None
 
-    logger.error(f"Async API request failed after {max_retries} retries: {url[:80]}")
+    logger.error(f"Async API request failed after {max_retries + 1} retries: {url[:80]}")
     return None
 
 
@@ -470,7 +472,7 @@ def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None
 
     try:
         url = f"{HERO_ICON_BASE}/{cdn_name}.png"
-        resp = requests.get(url, timeout=timeout)
+        resp = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"})
         if resp.status_code == 200:
             data = resp.content
             try:
@@ -498,7 +500,7 @@ def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | 
             pass
     try:
         url = f"{HERO_IMAGE_BASE}/{cdn_name}.png"
-        resp = requests.get(url, timeout=3)
+        resp = requests.get(url, timeout=3, headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"})
         if resp.status_code == 200:
             data = resp.content
             try:
@@ -530,8 +532,12 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
     try:
         from database import get_aiohttp_session
         session = await get_aiohttp_session()
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=5), headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"}) as resp:
             if resp.status != 200:
+                return None
+            content_type = resp.headers.get("Content-Type", "")
+            if not content_type.startswith("image/"):
+                logger.warning("Unexpected Content-Type for hero portrait %s: %s", url, content_type)
                 return None
             data = await resp.read()
 
@@ -540,7 +546,11 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
         except Exception:
             logger.exception("Failed to save hero portrait to cache")
 
-        return Image.open(io.BytesIO(data)).convert("RGBA")
+        try:
+            return Image.open(io.BytesIO(data)).convert("RGBA")
+        except Exception as e:
+            logger.error("Failed to decode hero portrait %s: %s", url, e)
+            return None
 
     except Exception:
         logger.exception("Failed to download hero portrait")

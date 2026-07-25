@@ -145,7 +145,7 @@ async def fetch_hero_icon(session, icon_path):
         if hero_name:
             icon_url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
         else:
-            icon_url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{icon_path}.png"
+            return None
     else:
         # Clean the path - remove trailing ? or query params that might cause issues
         icon_path = icon_path.split("?")[0].rstrip("/")
@@ -198,10 +198,16 @@ async def fetch_hero_icon(session, icon_path):
 
         async with session.get(
             icon_url,
-            timeout=aiohttp.ClientTimeout(total=5)
+            timeout=aiohttp.ClientTimeout(total=5),
+            headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"}
         ) as resp:
 
             resp.raise_for_status()
+
+            content_type = resp.headers.get("Content-Type", "")
+            if not content_type.startswith("image/"):
+                logger.warning("Unexpected Content-Type for hero icon %s: %s", icon_url, content_type)
+                return None
 
             content = await resp.read()
 
@@ -212,9 +218,13 @@ async def fetch_hero_icon(session, icon_path):
                 except Exception:
                     logger.exception("Failed to write cached icon")
 
-            return Image.open(
-                io.BytesIO(content)
-            ).convert("RGBA")
+            try:
+                return Image.open(
+                    io.BytesIO(content)
+                ).convert("RGBA")
+            except Exception as e:
+                logger.error("Failed to decode hero icon %s: %s", icon_url, e)
+                return None
 
     except Exception as e:
 
