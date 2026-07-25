@@ -492,6 +492,7 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @rate_limit(tokens=1)
 async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Еженедельная аналитика игрока"""
+    await asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username)
     loading_msg = None
     chat_id = update.message.chat_id
 
@@ -1531,6 +1532,7 @@ async def resolve_avatar_url_for_card(
 
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show bot stats and resource usage."""
+    await asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username)
     try:
         from analytics_dashboard import generate_dashboard_text
         text = generate_dashboard_text()
@@ -2835,6 +2837,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def refreshmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Принудительное обновление MMR топа"""
+    await asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username)
     logger.info(f"User {update.effective_user.id} called refreshmmr")
     
     try:
@@ -2850,6 +2853,7 @@ async def refreshmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(f"❌ Ошибка обновления: {e}", chat_id=update.effective_chat.id)
 
 async def testtechies(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username)
     from techies import handle_techies_event
     user = update.effective_user
     user_data = {
@@ -3245,6 +3249,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Информация с кнопкой перехода на патч заметки"""
+    await asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username)
     logger.info(f"Пользователь {update.effective_user.id} вызвал info")
 
     chat_id = update.effective_chat.id
