@@ -36,7 +36,7 @@ WIDGET_HEIGHT = CARD_SIZE
 WIN_COLOR = (34, 197, 94, 255)
 LOSS_COLOR = (239, 68, 68, 255)
 UNKNOWN_COLOR = (120, 120, 120, 255)
-BG_COLOR = (0, 0, 0, 0)
+BG_COLOR = (0, 0, 0, 255)
 WIDGET_BORDER_RADIUS = 10
 ICON_MARGIN = 4
 FALLBACK_FONT_RATIO = 0.55
@@ -100,45 +100,21 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def _build_icon_mask(icon: Image.Image):
-    """Create paste mask from icon alpha/brightness without modifying the source image."""
-    rgba = icon.convert("RGBA")
-    w, h = rgba.size
-    if w < 4 or h < 4:
-        return rgba.split()[-1]
-
-    corners = [
-        rgba.getpixel((0, 0)),
-        rgba.getpixel((w - 1, 0)),
-        rgba.getpixel((0, h - 1)),
-        rgba.getpixel((w - 1, h - 1)),
-    ]
-    avg_r = sum(p[0] for p in corners) / 4.0
-    avg_g = sum(p[1] for p in corners) / 4.0
-    avg_b = sum(p[2] for p in corners) / 4.0
-    max_dist = 0
-    for p in corners:
-        dist = ((p[0] - avg_r) ** 2 + (p[1] - avg_g) ** 2 + (p[2] - avg_b) ** 2) ** 0.5
-        if dist > max_dist:
-            max_dist = dist
-
-    alpha = rgba.split()[-1]
-    if max_dist > 35:
-        return alpha
-
-    threshold = max(18, max_dist * 1.8)
-    mask = Image.new("L", (w, h), 0)
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = rgba.getpixel((x, y))
-            dist = ((r - avg_r) ** 2 + (g - avg_g) ** 2 + (b - avg_b) ** 2) ** 0.5
-            new_a = 0 if dist < threshold else a
-            mask.putpixel((x, y), new_a)
-    return mask
+def _remove_white_background(img: Image.Image) -> Image.Image:
+    img = img.convert("RGBA")
+    datas = img.getdata()
+    new_data = []
+    for r, g, b, a in datas:
+        if r > 230 and g > 230 and b > 230:
+            new_data.append((r, g, b, 0))
+        else:
+            new_data.append((r, g, b, a))
+    img.putdata(new_data)
+    return img
 
 
 async def _fetch_hero_icon(hero_info: dict | None, session: aiohttp.ClientSession) -> Image.Image | None:
-    """Download hero icon with disk cache. Returns raw RGBA Image without modifications."""
+    """Download hero icon with disk cache. Returns RGBA Image."""
     if not hero_info:
         return None
 
@@ -177,6 +153,8 @@ async def _fetch_hero_icon(hero_info: dict | None, session: aiohttp.ClientSessio
             data = await resp.read()
 
         img = Image.open(io.BytesIO(data)).convert("RGBA")
+        if img.split()[-1].getextrema()[0] == 255:
+            img = _remove_white_background(img)
 
         try:
             with open(cache_path, "wb") as f:
@@ -253,8 +231,7 @@ async def generate_obs_widget(
         if icon:
             icon_rgba = icon.convert("RGBA")
             icon_resized = icon_rgba.resize((CARD_SIZE - 8, CARD_SIZE - 8), Image.Resampling.LANCZOS)
-            mask = _build_icon_mask(icon_resized)
-            img.paste(icon_resized, (x + 4, y + 4), mask)
+            img.paste(icon_resized, (x + 4, y + 4), icon_resized.split()[-1])
         else:
             label = "?"
             if hero_info:
