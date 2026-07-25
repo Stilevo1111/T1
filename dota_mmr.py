@@ -1018,14 +1018,14 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
         
-        # Keep trying until we get matches (up to 60s to handle rate limits)
+        # Keep trying until we get matches (up to 25s to handle rate limits)
         start_time = time.time()
-        max_wait = 60
+        max_wait = 25
         matches = None
         while matches is None and (time.time() - start_time) < max_wait:
             matches = _api_get(url, {"limit": limit, "sort": "-start_time"}, max_retries=2)
             if matches is None:
-                time.sleep(10)
+                time.sleep(5)
         
         matches = matches or []
         
@@ -1055,12 +1055,12 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
         
         start_time = time.time()
-        max_wait = 60
+        max_wait = 25
         matches = None
         while matches is None and (time.time() - start_time) < max_wait:
             matches = await _api_get_async(url, {"limit": limit, "sort": "-start_time", "radiant_win": 1})
             if matches is None:
-                await asyncio.sleep(10)
+                await asyncio.sleep(5)
         
         matches = matches or []
         
@@ -1335,7 +1335,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         # Keep trying API until we get data (with delays to avoid rate limit spam)
         stats = None
         start_time = time.time()
-        max_wait = 120  # Maximum wait time in seconds
+        max_wait = 30  # Maximum wait time in seconds
         while not stats and (time.time() - start_time) < max_wait:
             # Если аккаунт точно не существует (404) — не spin-им retry-цикл, выходим сразу.
             players_url = f"{OPENDOTA_API_URL}/players/{steam64_to_account_id(user['steam_id'])}"
@@ -1345,7 +1345,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             stats = get_player_stats(user["steam_id"], use_cache=False)
             if stats:
                 break
-            wait_time = 10
+            wait_time = 5
             logger.info(f"topmmr: waiting for API, sleeping {wait_time}s...")
             time.sleep(wait_time)
         logger.info(f"topmmr: get_player_stats returned: steam32={user.get('steam_id')}, success={stats is not None}")
