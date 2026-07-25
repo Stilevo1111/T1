@@ -4137,7 +4137,7 @@ async def main():
             # Force sync to ensure port is ready
             await asyncio.sleep(2)
 
-        async def keep_alive_ping():
+            async def keep_alive_ping():
                 ping_url = webhook_url.rsplit('/webhook', 1)[0] + '/health'
                 while True:
                     try:
