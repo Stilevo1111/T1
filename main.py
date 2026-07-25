@@ -4116,6 +4116,16 @@ async def main():
                     return web.Response(text=f"Error: {e}", status=500)
             web_app.router.add_post('/api/reset-circuit', reset_circuit)
 
+            async def refresh_webhook(request):
+                try:
+                    await app.bot.delete_webhook(drop_pending_updates=True)
+                    await app.bot.set_webhook(url=webhook_url, drop_pending_updates=False)
+                    return web.Response(text=f"Webhook refreshed: {webhook_url}", status=200)
+                except Exception as e:
+                    logger.error(f"Refresh webhook error: {e}")
+                    return web.Response(text=f"Error: {e}", status=500)
+            web_app.router.add_post('/api/refresh-webhook', refresh_webhook)
+
             runner = web.AppRunner(web_app, keepalive_timeout=120, client_max_size=10*1024*1024)
             await runner.setup()
             port = int(os.getenv('PORT', 10000))
@@ -4131,30 +4141,32 @@ async def main():
                 ping_url = webhook_url.rsplit('/webhook', 1)[0] + '/health'
                 while True:
                     try:
-                        await asyncio.sleep(1500)  # Ping every 25 minutes to prevent Render sleep
+                        await asyncio.sleep(800)  # Ping every ~13 min to stay under Render's 15 min idle timeout
                         from database import get_aiohttp_session
                         from analytics_dashboard import record_neon_hours
-                        # Record Neon DB usage (approximate - every 25 min = 0.42h)
-                        record_neon_hours(0.42)
+                        record_neon_hours(0.56)
                         session = await get_aiohttp_session()
-                        # Ping health endpoint
                         await session.get(ping_url, timeout=aiohttp.ClientTimeout(total=30))
                         logger.info("Keep-alive ping sent")
-                        # Also ping root to keep web server awake
                         root_url = webhook_url.rsplit('/webhook', 1)[0] + '/'
                         await session.get(root_url, timeout=aiohttp.ClientTimeout(total=10))
                     except Exception as e:
                         logger.error(f"Keep-alive ping error: {e}")
 
-            # Webhook recovery task - re-register webhook if lost after cold start
-        async def webhook_recovery_task():
-            """Re-register webhook periodically to recover from Render cold starts"""
+            async def webhook_recovery_task():
+            """Re-register webhook to recover from Render cold starts and URL mismatches"""
             while True:
                 try:
-                    await asyncio.sleep(900)  # Проверяем раз в 15 минут (раньше было 5 мин — слишком шумно)
+                    await asyncio.sleep(900)
                     webhook_info = await app.bot.get_webhook_info()
+                    needs_renewal = False
                     if not webhook_info.url:
-                        logger.warning("Webhook lost, re-registering...")
+                        logger.warning("Webhook URL is empty, re-registering...")
+                        needs_renewal = True
+                    elif webhook_info.url != webhook_url:
+                        logger.warning(f"Webhook URL mismatch: expected {webhook_url}, got {webhook_info.url}, re-registering...")
+                        needs_renewal = True
+                    if needs_renewal:
                         await app.bot.set_webhook(url=webhook_url, drop_pending_updates=False)
                         logger.info("Webhook re-registered successfully")
                 except Exception as e:
