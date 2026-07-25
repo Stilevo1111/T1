@@ -1084,19 +1084,23 @@ async def update_all_mmr_job(context):
             """Update MMR for a single user with semaphore limiting"""
             async with mmr_semaphore:
                 try:
-                    # Run the blocking update_user_mmr in thread
                     result = await asyncio.to_thread(
                         update_user_mmr, user['telegram_id'], update_top_cache=False
                     )
                     if result and result.get('success'):
                         return user['telegram_id'], result
                     return user['telegram_id'], None
+                except asyncio.CancelledError:
+                    raise
                 except Exception as e:
                     logger.error(f"Ошибка обновления MMR для {user['telegram_id']}: {e}")
                     return user['telegram_id'], None
 
-        # Run all updates in parallel with semaphore limiting concurrency
-        results = await asyncio.gather(*[update_single_user_mmr_async(user) for user in users])
+        try:
+            results = await asyncio.gather(*[update_single_user_mmr_async(user) for user in users])
+        except asyncio.CancelledError:
+            logger.warning("update_all_mmr_job cancelled, saving partial progress...")
+            results = []
 
         for telegram_id, result in results:
             if result:
@@ -1105,7 +1109,6 @@ async def update_all_mmr_job(context):
                 if result.get('rank_up'):
                     fresh_user = await asyncio.to_thread(get_user, telegram_id) or {'telegram_id': telegram_id}
                     rank_up_users.append((fresh_user, result['rank_up']))
-                # Collect data for batch save
                 if result.get('mmr') is not None:
                     all_updated_users.append({
                         'telegram_id': telegram_id,
@@ -1120,7 +1123,6 @@ async def update_all_mmr_job(context):
                         'mmr_last_updated': result.get('mmr_last_updated')
                     })
 
-        # Batch save all updated MMR data at once
         if all_updated_users:
             await asyncio.to_thread(batch_save_mmr, all_updated_users)
 
