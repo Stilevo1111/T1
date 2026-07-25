@@ -1542,10 +1542,14 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command - show profile card"""
     loading_msg = None
+    chat_id = update.effective_chat.id if update.effective_chat else None
     try:
-        # Skip if rate limited
         if is_rate_limited():
             logger.warning("Skipping /start due to rate limit")
+            try:
+                await update.message.reply_text("Пожалуйста, подождите несколько секунд и попробуйте снова.")
+            except Exception:
+                pass
             return
 
         # Spam protection for /start command
