@@ -4154,23 +4154,23 @@ async def main():
                         logger.error(f"Keep-alive ping error: {e}")
 
             async def webhook_recovery_task():
-            """Re-register webhook to recover from Render cold starts and URL mismatches"""
-            while True:
-                try:
-                    await asyncio.sleep(900)
-                    webhook_info = await app.bot.get_webhook_info()
-                    needs_renewal = False
-                    if not webhook_info.url:
-                        logger.warning("Webhook URL is empty, re-registering...")
-                        needs_renewal = True
-                    elif webhook_info.url != webhook_url:
-                        logger.warning(f"Webhook URL mismatch: expected {webhook_url}, got {webhook_info.url}, re-registering...")
-                        needs_renewal = True
-                    if needs_renewal:
-                        await app.bot.set_webhook(url=webhook_url, drop_pending_updates=False)
-                        logger.info("Webhook re-registered successfully")
-                except Exception as e:
-                    logger.error(f"Webhook recovery check error: {e}")
+                """Re-register webhook to recover from Render cold starts and URL mismatches"""
+                while True:
+                    try:
+                        await asyncio.sleep(900)
+                        webhook_info = await app.bot.get_webhook_info()
+                        needs_renewal = False
+                        if not webhook_info.url:
+                            logger.warning("Webhook URL is empty, re-registering...")
+                            needs_renewal = True
+                        elif webhook_info.url != webhook_url:
+                            logger.warning(f"Webhook URL mismatch: expected {webhook_url}, got {webhook_info.url}, re-registering...")
+                            needs_renewal = True
+                        if needs_renewal:
+                            await app.bot.set_webhook(url=webhook_url, drop_pending_updates=False)
+                            logger.info("Webhook re-registered successfully")
+                    except Exception as e:
+                        logger.error(f"Webhook recovery check error: {e}")
 
         asyncio.create_task(keep_alive_ping())
         asyncio.create_task(webhook_recovery_task())
