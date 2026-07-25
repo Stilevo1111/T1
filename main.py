@@ -3926,6 +3926,30 @@ async def main():
                 except Exception as e:
                     logger.error(f"Startup weekly champion announcement error: {e}")
 
+        # Если бот стартовал после 9:00 MSK — догоняем утренний дайджест, если он не был отправлен сегодня
+        from datetime import datetime as dt
+        from datetime import timedelta, timezone
+        MSK = timezone(timedelta(hours=3))
+        now_msk = dt.now(MSK)
+        today_label = now_msk.strftime("%Y-%m-%d")
+        try:
+            from database import get_config as _get_morning_cfg
+            from digest import morning_digest_job
+
+            class _MorningCtx:
+                def __init__(self, bot):
+                    self.application = _MorningApp(bot)
+
+            class _MorningApp:
+                def __init__(self, bot):
+                    self.bot = bot
+
+            if _get_morning_cfg('morning_digest_last_date') != today_label and now_msk.hour >= 9:
+                logger.info("Startup: catching up missed morning digest")
+                await morning_digest_job(_MorningCtx(app.bot))
+        except Exception as e:
+            logger.error(f"Startup morning digest catch-up error: {e}")
+
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("about", about))
         app.add_handler(CallbackQueryHandler(button_callback))

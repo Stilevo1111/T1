@@ -1088,14 +1088,24 @@ async def morning_digest_job(context):
     )
     from main import is_rate_limited
     from hero_meta import clear_hero_meta_cache
+    from datetime import timedelta
 
     try:
+        if is_rate_limited():
         if is_rate_limited():
             logger.warning("morning_digest_job: skipped - bot is rate limited")
             return
 
         if not await claim_or_check_digest_leader():
             logger.info("morning_digest_job: skipped - not leader")
+            return
+
+        from datetime import datetime as dt
+        from datetime import timezone as tz
+        MSK = tz(timedelta(hours=3))
+        today_label = dt.now(MSK).strftime("%Y-%m-%d")
+        if get_config('morning_digest_last_date') == today_label:
+            logger.info("morning_digest_job: already sent today")
             return
 
         digest_chat_id = get_config('digest_chat_id')
@@ -1124,6 +1134,8 @@ async def morning_digest_job(context):
 
         # Принудительно создаём новый дайджест
         await alternate_digest_job(context)
+        set_config('morning_digest_last_date', today_label)
+        logger.info(f"morning_digest_job: marked as sent for {today_label}")
 
     except Exception as e:
         logger.error(f"Ошибка в morning_digest_job: {e}", exc_info=True)
