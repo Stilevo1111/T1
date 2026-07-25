@@ -3938,7 +3938,7 @@ async def main():
         today_label = now_msk.strftime("%Y-%m-%d")
         try:
             from database import get_config as _get_morning_cfg
-            from digest import morning_digest_job
+            from digest import morning_digest_job as _morning_digest_job
 
             class _MorningCtx:
                 def __init__(self, bot):
@@ -3950,7 +3950,7 @@ async def main():
 
             if _get_morning_cfg('morning_digest_last_date') != today_label and now_msk.hour >= 9:
                 logger.info("Startup: catching up missed morning digest")
-                await morning_digest_job(_MorningCtx(app.bot))
+                await _morning_digest_job(_MorningCtx(app.bot))
         except Exception as e:
             logger.error(f"Startup morning digest catch-up error: {e}")
 
