@@ -4061,6 +4061,8 @@ async def main():
             else:
                 logger.warning("All webhook attempts failed, continuing anyway...")
 
+            logger.info("Bot is fully online and ready")
+
             from aiohttp import web
 
             async def handle_webhook(request):

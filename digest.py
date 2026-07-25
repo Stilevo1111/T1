@@ -1092,7 +1092,6 @@ async def morning_digest_job(context):
 
     try:
         if is_rate_limited():
-        if is_rate_limited():
             logger.warning("morning_digest_job: skipped - bot is rate limited")
             return
 
