@@ -2054,7 +2054,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not update greeting buttons: {e}")
             return
 
-        except Exception as e:
+    except Exception as e:
         logger.error(f"Error in button_callback: {e}", exc_info=True)
         await callback_query.answer(text="Ошибка при обработке кнопки", show_alert=True)
 
