@@ -881,12 +881,6 @@ async def announce_weekly_mmr_winner(bot):
         except Exception as e:
             logger.warning(f"Не удалось установить тег победителю: {e}")
 
-    if telegram_id:
-        user = await asyncio.to_thread(get_user, telegram_id)
-        if user:
-            current_mvp_count = user.get('weekly_mvp_count', 0)
-            await asyncio.to_thread(update_user_fields_batch, telegram_id, {'weekly_mvp_count': current_mvp_count + 1})
-
     set_config('current_mvp_telegram_id', str(telegram_id) if telegram_id else "")
     set_config('current_mvp_tag', mvp_tag)
 
@@ -2606,20 +2600,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%"
 
-            # Добавляем количество медалей за топ-3 недели
-            weekly_mvp = target_user.get('weekly_mvp_count', 0)
-            weekly_top2 = target_user.get('weekly_top2_count', 0)
-            weekly_top3 = target_user.get('weekly_top3_count', 0)
-            medals = []
-            if weekly_mvp:
-                medals.append(f"🥇{weekly_mvp}")
-            if weekly_top2:
-                medals.append(f"🥈{weekly_top2}")
-            if weekly_top3:
-                medals.append(f"🥉{weekly_top3}")
-            if medals:
-                text += " " + " ".join(medals)
-
 # Добавляем героев только если они есть
             if top_heroes:
                 text += "\n\n🌟 Любимые герои за 10 матчей:"
@@ -3016,9 +2996,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     username=winner_name,
                     steam_nickname=winner_name,
                     rank_tier=winner_rank_tier,
-                    weekly_mvp=winner.get('weekly_mvp_count') or 0,
-                    weekly_top2=winner.get('weekly_top2_count') or 0,
-                    weekly_top3=winner.get('weekly_top3_count') or 0,
                     week_wins=winner_week_wins,
                     week_losses=winner_week_losses
                 )

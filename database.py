@@ -691,9 +691,6 @@ _PG_INDEXES = (
 
 # Лёгкие миграции — выполняются даже при fast init (ADD IF NOT EXISTS)
 _PG_ENSURE_COLUMNS = (
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_mvp_count INTEGER DEFAULT 0",
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_top2_count INTEGER DEFAULT 0",
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_top3_count INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr_last_updated REAL",
     "UPDATE users SET in_chat = TRUE WHERE in_chat IS NULL OR in_chat = FALSE",
@@ -1189,12 +1186,6 @@ wins INTEGER DEFAULT 0,
                 cursor.execute("ALTER TABLE users ADD COLUMN week_current_streak INTEGER DEFAULT 0")
             if 'in_chat' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN in_chat INTEGER DEFAULT 1")
-            if 'weekly_mvp_count' not in columns:
-                cursor.execute("ALTER TABLE users ADD COLUMN weekly_mvp_count INTEGER DEFAULT 0")
-            if 'weekly_top2_count' not in columns:
-                cursor.execute("ALTER TABLE users ADD COLUMN weekly_top2_count INTEGER DEFAULT 0")
-            if 'weekly_top3_count' not in columns:
-                cursor.execute("ALTER TABLE users ADD COLUMN weekly_top3_count INTEGER DEFAULT 0")
             if 'last_greeting_date' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN last_greeting_date DATE")
             if 'message_count' not in columns:
@@ -1452,9 +1443,6 @@ class Database:
                         "last_dota_wins": int(user["last_dota_wins"]) if user["last_dota_wins"] is not None else 0,
                         "week_start_date": user["week_start_date"],
                         "message_count": int(user["message_count"]) if user["message_count"] is not None else 0,
-                        "weekly_mvp_count": int(user["weekly_mvp_count"]) if user["weekly_mvp_count"] is not None else 0,
-                        "weekly_top2_count": int(user["weekly_top2_count"]) if user["weekly_top2_count"] is not None else 0,
-                        "weekly_top3_count": int(user["weekly_top3_count"]) if user["weekly_top3_count"] is not None else 0,
                     }
                     if username is not None and username != result.get('username'):
                         self.execute_query("UPDATE users SET username = %s WHERE telegram_id = %s", (username, telegram_id))
@@ -1506,9 +1494,6 @@ class Database:
                             "current_win_streak": int(u["current_win_streak"]) if u["current_win_streak"] is not None else 0,
                             "current_lose_streak": int(u["current_lose_streak"]) if u["current_lose_streak"] is not None else 0,
                             "best_lose_streak": int(u["best_lose_streak"]) if u["best_lose_streak"] is not None else 0,
-                            "weekly_mvp_count": int(u["weekly_mvp_count"]) if u["weekly_mvp_count"] is not None else 0,
-                            "weekly_top2_count": int(u["weekly_top2_count"]) if u["weekly_top2_count"] is not None else 0,
-                            "weekly_top3_count": int(u["weekly_top3_count"]) if u["weekly_top3_count"] is not None else 0,
                         }
                         if username is not None and username != result.get('username'):
                             cursor.execute("UPDATE users SET username = ? WHERE telegram_id = ?", (username, telegram_id))
@@ -2101,9 +2086,6 @@ def get_user(telegram_id, username=None):
         cached_user.setdefault('current_streak', 0)
         cached_user.setdefault('current_win_streak', 0)
         cached_user.setdefault('current_lose_streak', 0)
-        cached_user.setdefault('weekly_mvp_count', 0)
-        cached_user.setdefault('weekly_top2_count', 0)
-        cached_user.setdefault('weekly_top3_count', 0)
         cached_user.setdefault('analytics_cache', None)
         cached_user.setdefault('analytics_updated_at', None)
         return cached_user
@@ -2114,9 +2096,6 @@ def get_user(telegram_id, username=None):
     
     if user:
         logger.info(f"get_user: DB hit for {telegram_id}, fissure={user.get('fissure')}, total_rolls={user.get('total_rolls')}")
-        user.setdefault('weekly_mvp_count', 0)
-        user.setdefault('weekly_top2_count', 0)
-        user.setdefault('weekly_top3_count', 0)
         user.setdefault('analytics_cache', None)
         user.setdefault('analytics_updated_at', None)
         user.setdefault('total_rolls', 0)
@@ -2512,7 +2491,6 @@ def update_user_field(telegram_id, field, value):
         immediate_fields = {
             'fissure', 'last_fissure', 'steam_id', 'steam_nickname', 'mmr', 'rank_tier', 'wins', 'losses',
             'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'week_start_date',
-            'weekly_mvp_count', 'weekly_top2_count', 'weekly_top3_count',
         }
         if field in immediate_fields:
             _save_user_to_db_immediately(telegram_id, user)
@@ -2570,13 +2548,13 @@ _ALLOWED_USER_FIELDS = frozenset([
     'steam_id', 'steam_nickname', 'avatar', 'mmr', 'rank_tier',
     'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'dota_total_games',
     'dota_wins', 'last_dota_games', 'last_dota_wins', 'wins', 'losses', 'week_start_date',
-    'mmr_last_updated', 'message_count', 'weekly_mvp_count', 'weekly_top2_count', 'weekly_top3_count'
+    'mmr_last_updated', 'message_count'
 ])
 _NUMERIC_USER_FIELDS = frozenset([
     'fissure', 'last_fissure', 'total_rolls', 'total_growth', 'current_streak', 'best_streak',
     'mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'week_current_streak',
     'dota_total_games', 'dota_wins', 'last_dota_games', 'last_dota_wins', 'wins', 'losses',
-    'message_count', 'weekly_mvp_count', 'weekly_top2_count', 'weekly_top3_count'
+    'message_count'
 ])
 
 
@@ -3524,8 +3502,7 @@ def _get_all_users_query(load_all=False, allow_non_steam=False):
                    total_growth, total_rolls, best_streak, current_streak,
                    steam_id, steam_nickname, mmr, rank_tier, dota_total_games, dota_wins,
                    week_games, week_wins, week_best_streak, week_current_streak, last_dota_games, last_dota_wins,
-                   message_count, weekly_mvp_count, weekly_top2_count, weekly_top3_count,
-                   week_start_date, week_updated_at, analytics_cache, analytics_updated_at,
+                   message_count, week_start_date, week_updated_at, analytics_cache, analytics_updated_at,
                    current_win_streak, current_lose_streak, best_lose_streak, weekly_rolls, weekly_growth,
                    last_activity, in_chat, digest_fissure, weekly_digest_position,
                    mmr_last_updated, created_at, daily_best_growth
@@ -3565,9 +3542,6 @@ def _get_all_users_query(load_all=False, allow_non_steam=False):
             "last_dota_games": int(u["last_dota_games"]) if u["last_dota_games"] is not None else 0,
             "last_dota_wins": int(u["last_dota_wins"]) if u["last_dota_wins"] is not None else 0,
             "message_count": int(u["message_count"]) if u.get("message_count") is not None else 0,
-            "weekly_mvp_count": int(u["weekly_mvp_count"]) if u.get("weekly_mvp_count") is not None else 0,
-            "weekly_top2_count": int(u["weekly_top2_count"]) if u.get("weekly_top2_count") is not None else 0,
-            "weekly_top3_count": int(u["weekly_top3_count"]) if u.get("weekly_top3_count") is not None else 0,
             "week_start_date": u.get("week_start_date"),
             "week_updated_at": u.get("week_updated_at"),
             "analytics_cache": u.get("analytics_cache"),

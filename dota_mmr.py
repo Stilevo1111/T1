@@ -1368,9 +1368,6 @@ def unlink_steam(telegram_id: int) -> dict:
             "losses": 0,
             "week_games": 0,
             "week_wins": 0,
-            "weekly_mvp_count": 0,
-            "weekly_top2_count": 0,
-            "weekly_top3_count": 0,
         })
         
         logger.info(f"Steam account {steam_id} unlinked from user {telegram_id}")
@@ -1426,9 +1423,6 @@ def admin_unlink_steam(steam_id: int) -> dict:
             "losses": 0,
             "week_games": 0,
             "week_wins": 0,
-            "weekly_mvp_count": 0,
-            "weekly_top2_count": 0,
-            "weekly_top3_count": 0,
         })
         
         logger.info(f"Admin: Steam account {steam_id} unlinked from user {telegram_id}")
