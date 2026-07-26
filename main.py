@@ -3286,6 +3286,49 @@ async def unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     add_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
     schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
 
+
+async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Административная команда: раз-prивязать Steam-аккаунт по его ID."""
+    from config import settings
+    
+    ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
+    user_id = update.effective_user.id
+    
+    if not ADMIN_CHAT_ID or user_id != ADMIN_CHAT_ID:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❌ Только администратор может использовать эту команду",
+            reply_markup=main_menu()
+        )
+        return
+    
+    args = context.args
+    if not args or len(args) < 1:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Использование: /admin_unlink <steam_id>\nПример: /admin_unlink 76561198012345678",
+            reply_markup=main_menu()
+        )
+        return
+    
+    try:
+        steam_id = int(args[0])
+    except ValueError:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❌ Неверный Steam ID",
+            reply_markup=main_menu()
+        )
+        return
+    
+    result = await asyncio.to_thread(admin_unlink_steam, steam_id)
+    
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=result.get('message'),
+        reply_markup=main_menu()
+    )
+
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Информация с кнопкой перехода на патч заметки"""
     await asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username)
@@ -4013,6 +4056,7 @@ async def main():
         app.add_handler(CommandHandler("refreshmmr", refreshmmr))
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler("unlink", unlink))
+        app.add_handler(CommandHandler("admin_unlink", admin_unlink))
         app.add_handler(CommandHandler(("digestnow", "dotadigestnow", "setdigestchat"), digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
         app.add_handler(CommandHandler("testgreeting", test_greeting))

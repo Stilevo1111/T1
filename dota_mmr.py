@@ -1383,6 +1383,59 @@ def unlink_steam(telegram_id: int) -> dict:
         return {"success": False, "message": f"❌ Ошибка при отвязке Steam-аккаунта: {e}"}
 
 
+def admin_unlink_steam(steam_id: int) -> dict:
+    """Административная функция: раз-prивязать Steam-аккаунт по его ID.
+    
+    Используется когда пользователь потерял доступ к старому Telegram-аккаунту,
+    который был привязан к Steam.
+    
+    Args:
+        steam_id: Steam ID64 для раз-prивязки
+        
+    Returns:
+        dict с полями success, message, telegram_id (если найден)
+    """
+    try:
+        from database import get_user_by_steam_id, update_user_fields_batch, user_cache
+        
+        user = get_user_by_steam_id(steam_id)
+        
+        if not user:
+            return {"success": False, "message": f"❌ Steam-аккаунт {steam_id} не найден в базе"}
+        
+        telegram_id = user.get('telegram_id')
+        
+        # Очищаем кэш пользователя
+        user_cache.invalidate_user_top_caches(telegram_id)
+        user_cache.remove(telegram_id)
+        
+        # Обнуляем поля, связанные со Steam
+        update_user_fields_batch(telegram_id, {
+            "steam_id": None,
+            "steam_nickname": None,
+            "avatar": None,
+            "mmr": 0,
+            "rank_tier": 0,
+            "wins": 0,
+            "losses": 0,
+            "week_games": 0,
+            "week_wins": 0,
+            "weekly_mvp_count": 0,
+            "weekly_top2_count": 0,
+            "weekly_top3_count": 0,
+        })
+        
+        logger.info(f"Admin: Steam account {steam_id} unlinked from user {telegram_id}")
+        return {
+            "success": True,
+            "message": f"✅ Steam-аккаунт {steam_id} успешно отвязан от Telegram-аккаунта {telegram_id}",
+            "telegram_id": telegram_id
+        }
+    except Exception as e:
+        logger.error(f"admin_unlink_steam error: {e}", exc_info=True)
+        return {"success": False, "message": f"❌ Ошибка при отвязке Steam-аккаунта: {e}"}
+
+
 # ========================
 # 🔄 UPDATE MMR
 # ========================
