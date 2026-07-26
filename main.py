@@ -2756,7 +2756,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not get Telegram avatar for top user: {e}")
 
-        winner_name = winner.get('username') or winner.get('first_name') or str(winner.get('telegram_id', 'Игрок'))
+        winner_name = (winner.get('steam_nickname') or winner.get('username') or winner.get('first_name') or str(winner.get('telegram_id', 'Игрок'))).strip()
         winner_fissure = winner.get('fissure', 0)
         winner_rank_tier = winner.get('rank_tier', 0)
 
