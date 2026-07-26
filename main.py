@@ -2943,11 +2943,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user:
             user_week_games = user.get('week_games') or 0
             user_week_wins = user.get('week_wins') or 0
-            raw_user_name = user.get('steam_nickname') or user.get('username') or user.get('first_name')
-            if raw_user_name and raw_user_name not in ("Unknown", "Неизвестный игрок"):
-                user_username = raw_user_name
-            else:
-                user_username = user.get('username') or user.get('first_name') or str(user.get('telegram_id', 'Игрок'))
             user_week_losses = user_week_games - user_week_wins
 
             # Check if user is already in the top list
@@ -3081,15 +3076,16 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not process digest chat: {e}")
 
             # Add the current user's position (always show it at the bottom)
+            # Use winner_name for consistency with the banner
             if user and user_week_games > 0:
                 user_wr = round((user_week_wins / user_week_games) * 100) if user_week_games > 0 else 0
-                user_rank_str = rank_to_string(user.get('rank_tier', 0))
-                user_display = clickable_name(user_username, user.get('telegram_id'), user.get('steam_id'))
+                user_rank_str = rank_to_string(winner_rank_tier)
+                user_display = clickable_name(winner_name, winner_telegram_id, winner.get('steam_id'))
                 top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}</b> - {user_rank_str}\n"
-                top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
+                top_text += f" └ {winner_week_wins}W • {winner_week_losses}L • WR {winner_wr}%"
             elif user and user_week_games == 0:
-                user_rank_str = rank_to_string(user.get('rank_tier', 0))
-                user_display = clickable_name(user_username, user.get('telegram_id'), user.get('steam_id'))
+                user_rank_str = rank_to_string(winner_rank_tier)
+                user_display = clickable_name(winner_name, winner_telegram_id, winner.get('steam_id'))
                 user_pos_emoji = get_emoji_num(user_pos) if user_pos else "0️⃣"
                 top_text += f"\n{user_pos_emoji} <b>{user_display}</b> - {user_rank_str}\n"
                 top_text += "└ Нет игр за неделю"
