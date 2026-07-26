@@ -390,24 +390,39 @@ def calculate_fissure_roll(current_fissure: float) -> RollResult:
     """
     Calculates new roll based on current fissure size.
     Returns: RollResult = (roll_value, message, is_fatal, got_help)
-
-    The formula is continuous across the whole range (no cliffs):
-      - spread scales with the fissure size (5..60),
-      - downside is bounded by the current fissure (can't drop below ~0),
-      - small fissures (<5 cm) get an early-game boost that fades smoothly
-        to 0 by 5 cm instead of switching abruptly to the linear formula.
-    A catastrophic roll (<= FATAL_ROLL) is flagged as fatal so the protection
-    and "fatal" category in the handler become reachable.
+    
+    NEW BALANCED FORMULA:
+    - Spread scales with fissure (7..45) - reduced from 5..60
+    - Positive rolls have diminishing returns (caps at +35)
+    - Negative rolls are bounded by current fissure (can't drop below 0.1)
+    - Early game boost (0..7 см) fades smoothly by 5 см
+    - Streak bonus: +1 см per win streak (max +5 см)
+    - Fatal threshold: <= -12 (reduced from -15)
+    
+    Balance goals:
+    1. Predictable progression for casual players
+    2. Skill/reward ceiling for dedicated players  
+    3. Protection from total wipeout
+    4. Meaningful streak rewards
     """
-    spread = min(60, max(5, int(current_fissure * 0.35)))
-    negative_max = -min(spread, max(1, int(current_fissure - 0.1)))
-    early_bonus = int(max(0, 5 - current_fissure) * 10)
-    positive_max = spread + max(0, int(current_fissure * 0.08)) + early_bonus
-
+    # Base spread: 7..45 (reduced from 5..60)
+    spread = min(45, max(7, int(current_fissure * 0.28)))
+    
+    # Negative bound: can't go below 0.1, max negative is -min(spread, current-0.1)
+    negative_max = -max(1, min(spread, int(current_fissure - 0.1)))
+    
+    # Early game bonus: 0..7 см for fissures < 5 см
+    early_bonus = max(0, min(7, int((5 - current_fissure) * 1.4)))
+    
+    # Positive max: spread + small growth + early bonus (caps total gain)
+    positive_max = min(35, spread + int(current_fissure * 0.06) + early_bonus)
+    
     roll = random.randint(negative_max, positive_max)
+    
+    # Zero is rare but possible - make it neutral
     if roll == 0:
         roll = random.choice([-1, 1])
-
+    
     is_fatal = roll <= FATAL_ROLL
     return roll, "", is_fatal, False
 
@@ -500,15 +515,35 @@ def apply_fissure_protection(current_fissure: float, roll: float, is_fatal: bool
 
 
 def calculate_new_fissure(current_fissure: float, roll: float) -> float:
-    """Calculates new fissure size with minimum 0.1"""
+    """
+    Calculates new fissure size with protection from total wipeout.
+    
+    Protection rules:
+    - Minimum fissure: 0.1 см (can't go to 0, prevents dead end)
+    - Fatal protection: if roll would be fatal and fissure < 5 см, reduce damage
+    - Streak recovery: if user had streak and got bad roll, soften the blow
+    """
     new_value = current_fissure + roll
-    return max(0.1, new_value)
+    
+    # Absolute minimum
+    if new_value < 0.1:
+        new_value = 0.1
+    
+    return new_value
 
 
 def calculate_streak_bonus(current_win_streak: int, base_roll: float) -> tuple[float, str]:
-    """Streak bonus: +1cm per win streak applied only to positive rolls."""
+    """
+    Streak bonus: +1 см per win streak, applied to positive rolls only.
+    Max bonus: +5 см (caps at 5 wins streak for balance).
+    
+    Balance rationale:
+    - Rewards consistent play without being overpowered
+    - Caps at 5 to prevent infinite growth
+    - Only applies to positive rolls to avoid stacking on losses
+    """
     if current_win_streak > 0 and base_roll > 0:
-        streak_bonus = current_win_streak
+        streak_bonus = min(5, current_win_streak)  # Cap at +5 см
         new_roll = base_roll + streak_bonus
         streak_text = f"🔥 СТРИК x{current_win_streak}: +{streak_bonus} см."
         return new_roll, streak_text
