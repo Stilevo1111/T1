@@ -33,9 +33,7 @@ def format_time(seconds: float) -> str:
         parts.append(f"{hours}ч")
     if minutes > 0:
         parts.append(f"{minutes}м")
-    if secs > 0 or not parts:
-        parts.append(f"{secs}с")
-    return " ".join(parts)
+    return " ".join(parts) if parts else f"{secs}с"
 
 def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_fissure: float, cascade: int = 1, event_type: str = "roll"):
     """Append one fissure roll event to the in-memory ring buffer (no DB write).

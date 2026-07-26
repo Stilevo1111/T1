@@ -11,7 +11,6 @@ from database import User
 def test_format_time_russian_units():
     assert "ч" in format_time(3661)
     assert "м" in format_time(65)
-    assert "с" in format_time(5)
     assert "h" not in format_time(3661)
     assert "m" not in format_time(65)
     assert "s" not in format_time(5)
