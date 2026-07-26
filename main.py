@@ -3276,6 +3276,7 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     username = args[0].lstrip('@')  # Убираем @ если он есть
     
+    from dota_mmr import get_user_by_telegram_username
     result = await asyncio.to_thread(get_user_by_telegram_username, username)
     
     if not result:
