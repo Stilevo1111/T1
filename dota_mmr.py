@@ -9,7 +9,6 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import aiohttp
-import requests
 from PIL import Image
 
 from database import get_user, update_user_fields_batch
@@ -277,8 +276,8 @@ def _clear_cache():
     _cache = {}
 
 
-def _api_get(url: str, params: dict = None, max_retries: int = 2, timeout: int = 8) -> dict:
-    """Универсальная функция для API-запросов с обработкой ошибок и повторными попытками"""
+async def _api_get_async(url: str, params: dict = None, max_retries: int = 2, timeout: int = 8) -> dict:
+    """Асинхронная версия API-запросов с обработкой ошибок и повторными попытками"""
     
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping request, API unavailable")
@@ -287,64 +286,62 @@ def _api_get(url: str, params: dict = None, max_retries: int = 2, timeout: int =
     if is_opendota_rate_limited():
         remaining = get_opendota_rate_limit_time_remaining()
         logger.warning(f"OpenDota still rate limited, waiting {remaining}s...")
-        time.sleep(remaining + 1)
+        await asyncio.sleep(remaining + 1)
     
     try:
-        _check_rate_limit()
+        await _check_rate_limit_async()
     except RateLimitWaitError as e:
         logger.warning(f"Rate limited, waiting {e.wait_seconds:.1f}s...")
-        time.sleep(e.wait_seconds)
+        await asyncio.sleep(e.wait_seconds)
         _api_rate_limit["window_start"] = time.time()
         _api_rate_limit["requests_count"] = 0
 
     for attempt in range(max_retries + 1):
         current_timeout = timeout if attempt == 0 else timeout + 5
         try:
-            r = requests.get(url, params=params or {}, timeout=current_timeout)
-            if r.status_code == 200:
-                _circuit_breaker_record_success()
-                # Record OpenDota token usage
-                try:
-                    from analytics_dashboard import record_opendota_tokens
-                    record_opendota_tokens(1)
-                except Exception:
-                    pass
-                return r.json()
-            elif r.status_code == 429:
-                wait_time = 5 * (attempt + 1)
-                logger.warning(f"Rate limited by OpenDota API, waiting {wait_time}s...")
-                set_opendota_rate_limited(60)
-                _circuit_breaker_record_failure()
-                time.sleep(wait_time)
-                if attempt < max_retries:
-                    continue
-                return None
-            elif r.status_code >= 500:
-                _circuit_breaker_record_failure()
-                if attempt < max_retries:
-                    logger.warning(f"Server error {r.status_code}, retrying in {attempt + 1}s...")
-                    time.sleep(attempt + 1)
-                    continue
-                return None
-            elif r.status_code >= 400:
-                if r.status_code == 403:
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=current_timeout)) as r:
+                if r.status == 200:
+                    _circuit_breaker_record_success()
+                    try:
+                        from analytics_dashboard import record_opendota_tokens
+                        record_opendota_tokens(1)
+                    except Exception:
+                        pass
+                    return await r.json()
+                elif r.status == 429:
+                    wait_time = 5 * (attempt + 1)
+                    logger.warning(f"Rate limited by OpenDota API, waiting {wait_time}s...")
+                    set_opendota_rate_limited(60)
                     _circuit_breaker_record_failure()
-                    logger.warning(f"OpenDota API returned 403 Forbidden - possible API key issue or ban")
-                elif r.status_code == 404:
-                    # Аккаунт/эндпоинт точно не существует — кешируем как "not found",
-                    # чтобы не дёргать API повторно и не spin-ить retry-цикл.
-                    _mark_not_found(url)
-                    logger.error(f"API error 404 for URL: {url}")
-                else:
-                    logger.error(f"API error {r.status_code} for URL: {url}")
-                return None
-            return None
-        except requests.exceptions.ReadTimeout as e:
+                    await asyncio.sleep(wait_time)
+                    if attempt < max_retries:
+                        continue
+                    return None
+                elif r.status >= 500:
+                    _circuit_breaker_record_failure()
+                    if attempt < max_retries:
+                        logger.warning(f"Server error {r.status}, retrying in {attempt + 1}s...")
+                        await asyncio.sleep(attempt + 1)
+                        continue
+                    return None
+                elif r.status >= 400:
+                    if r.status == 403:
+                        _circuit_breaker_record_failure()
+                        logger.warning(f"OpenDota API returned 403 Forbidden - possible API key issue or ban")
+                    elif r.status == 404:
+                        _mark_not_found(url)
+                        logger.error(f"API error 404 for URL: {url}")
+                    else:
+                        logger.error(f"API error {r.status} for URL: {url}")
+                    return None
+        except asyncio.TimeoutError:
             if attempt < max_retries:
                 logger.warning(f"API request timeout ({current_timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
                 continue
             else:
-                logger.error(f"API request timeout ({current_timeout}s) after {max_retries + 1} attempts: {e}")
+                logger.error(f"API request timeout ({current_timeout}s) after {max_retries + 1} attempts")
                 return None
         except Exception as e:
             logger.error(f"API request error: {e}", exc_info=True)
@@ -615,7 +612,7 @@ def _compose_heroes_strip_background(canvas_width: int, canvas_height: int):
         return _heroes_strip_gradient(canvas_width, canvas_height)
 
 
-def get_heroes_data() -> dict:
+async def get_heroes_data_async() -> dict:
     """Получить данные всех героев из OpenDota (с кешированием)"""
     cached = _get_cached("heroes_data")
     if cached:
@@ -623,7 +620,7 @@ def get_heroes_data() -> dict:
 
     try:
         url = f"{OPENDOTA_API_URL}/heroes"
-        data = _api_get(url)
+        data = await _api_get_async(url)
         if not data:
             return {}
 
@@ -645,8 +642,22 @@ def get_heroes_data() -> dict:
         logger.info(f"Loaded {len(heroes)} heroes from OpenDota")
         return heroes
     except Exception as e:
-        logger.error(f"get_heroes_data error: {e}", exc_info=True)
+        logger.error(f"get_heroes_data_async error: {e}", exc_info=True)
         return {}
+
+
+def get_heroes_data() -> dict:
+    """Синхронная обёртка для обратной совместимости"""
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    
+    if loop and loop.is_running():
+        return asyncio.run_coroutine_threadsafe(get_heroes_data_async(), loop).result(timeout=30)
+    else:
+        return asyncio.run(get_heroes_data_async())
 
 
 def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
@@ -969,11 +980,11 @@ def rank_to_string(rank_tier: int) -> str:
 # 🔍 SEARCH PLAYER
 # ========================
 
-def search_player(nickname: str) -> dict:
+async def search_player_async(nickname: str) -> dict:
     try:
         url = f"{OPENDOTA_API_URL}/search"
 
-        data = _api_get(url, {"q": nickname})
+        data = await _api_get_async(url, {"q": nickname})
         if not data:
             return None
 
@@ -984,7 +995,7 @@ def search_player(nickname: str) -> dict:
             return None
 
         steam_id = account_id_to_steam64(account_id)
-        stats = get_player_stats(steam_id)
+        stats = await get_player_stats_async(steam_id)
 
         if not stats:
             return None
@@ -998,8 +1009,22 @@ def search_player(nickname: str) -> dict:
         }
 
     except Exception:
-        logger.error("search error", exc_info=True)
+        logger.error("search_player_async error", exc_info=True)
         return None
+
+
+def search_player(nickname: str) -> dict:
+    """Синхронная обёртка для обратной совместимости"""
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    
+    if loop and loop.is_running():
+        return asyncio.run_coroutine_threadsafe(search_player_async(nickname), loop).result(timeout=30)
+    else:
+        return asyncio.run(search_player_async(nickname))
 
 
 # ========================
@@ -1007,36 +1032,17 @@ def search_player(nickname: str) -> dict:
 # ========================
 
 def get_recent_matches(steam_id: int, limit: int = 5) -> list:
-    """Получить последние матчи игрока"""
-    cache_key = (steam_id, limit)
-    if cache_key in _user_matches_cache:
-        cached_data, cached_time = _user_matches_cache[cache_key]
-        if time.time() - cached_time < USER_MATCHES_CACHE_TTL:
-            return cached_data
-    
+    """Синхронная обёртка для обратной совместимости"""
+    import asyncio
     try:
-        account_id = steam64_to_account_id(steam_id)
-        url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
-        
-        # Keep trying until we get matches (up to 25s to handle rate limits)
-        start_time = time.time()
-        max_wait = 25
-        matches = None
-        while matches is None and (time.time() - start_time) < max_wait:
-            matches = _api_get(url, {"limit": limit, "sort": "-start_time"}, max_retries=2)
-            if matches is None:
-                time.sleep(5)
-        
-        matches = matches or []
-        
-        # Don't cache empty results - might be due to rate limits
-        if matches:
-            _user_matches_cache[cache_key] = (matches, time.time())
-        
-        return matches
-    except Exception as e:
-        logger.error(f"get_recent_matches error: {e}", exc_info=True)
-        return []
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    
+    if loop and loop.is_running():
+        return asyncio.run_coroutine_threadsafe(get_recent_matches_async(steam_id, limit), loop).result(timeout=30)
+    else:
+        return asyncio.run(get_recent_matches_async(steam_id, limit))
 
 
 async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
@@ -1083,13 +1089,13 @@ def is_win(match: dict, steam_id: int) -> bool:
         return False
 
 
-def is_win_api(match_id: int, steam_id: int) -> bool:
+async def is_win_api_async(match_id: int, steam_id: int) -> bool:
     """Определить, выиграл ли игрок в матче по ID матча (через API)"""
     try:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/matches/{match_id}"
 
-        match_data = _api_get(url)
+        match_data = await _api_get_async(url)
         if not match_data:
             return False
 
@@ -1101,16 +1107,30 @@ def is_win_api(match_id: int, steam_id: int) -> bool:
 
         return False
     except Exception as e:
-        logger.error(f"is_win_api error: {e}", exc_info=True)
+        logger.error(f"is_win_api_async error: {e}", exc_info=True)
         return False
+
+
+def is_win_api(match_id: int, steam_id: int) -> bool:
+    """Синхронная обёртка для обратной совместимости"""
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    
+    if loop and loop.is_running():
+        return asyncio.run_coroutine_threadsafe(is_win_api_async(match_id, steam_id), loop).result(timeout=15)
+    else:
+        return asyncio.run(is_win_api_async(match_id, steam_id))
 
 
 # ========================
 # 📊 GET STATS
 # ========================
 
-def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) -> dict:
-    """Синхронно получить статистику игрока (последние матчи, герои, винрейт) из OpenDota с кэшем."""
+async def get_player_stats_async(steam_id: int, use_cache: bool = True, timeout: int = 8) -> dict:
+    """Асинхронно получить статистику игрока (последние матчи, герои, винрейт) из OpenDota с кэшем."""
     try:
         cache_key = f"player_{steam_id}"
         if use_cache:
@@ -1130,7 +1150,7 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
                     return cached
             return None
 
-        player_data = _api_get(players_url, timeout=timeout)
+        player_data = await _api_get_async(players_url, timeout=timeout)
         if not player_data or not isinstance(player_data, dict):
             logger.warning(f"Player data not found for account_id: {account_id}")
             logger.warning(f"API URL used: {OPENDOTA_API_URL}/players/{account_id}")
@@ -1144,7 +1164,7 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
         profile = player_data.get("profile") or {}
         rank_tier = player_data.get("rank_tier") or 0
 
-        wl_data = _api_get(f"{OPENDOTA_API_URL}/players/{account_id}/wl", timeout=timeout)
+        wl_data = await _api_get_async(f"{OPENDOTA_API_URL}/players/{account_id}/wl", timeout=timeout)
         if wl_data and isinstance(wl_data, dict):
             wins = wl_data.get("win", 0)
             losses = wl_data.get("lose", 0)
@@ -1196,6 +1216,20 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) ->
                 logger.info(f"Returning cached stats for {steam_id} due to exception: {e}")
                 return cached
         return None
+
+
+def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) -> dict:
+    """Синхронная обёртка для обратной совместимости"""
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    
+    if loop and loop.is_running():
+        return asyncio.run_coroutine_threadsafe(get_player_stats_async(steam_id, use_cache, timeout), loop).result(timeout=30)
+    else:
+        return asyncio.run(get_player_stats_async(steam_id, use_cache, timeout))
 
 
 # ========================
@@ -1302,6 +1336,51 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
     except Exception as e:
         logger.error(f"register error: {e}", exc_info=True)
         return {"success": False, "message": "❌ Ошибка"}
+
+
+def unlink_steam(telegram_id: int) -> dict:
+    """Раз-prивязать Steam-аккаунт от пользователя.
+    
+    Позволяет пользователю отвязать свой Steam-аккаунт, чтобы потом привязать другой.
+    Например, если пользователь потерял доступ к старому Telegram-аккаунту, который был привязан к Steam.
+    """
+    try:
+        from database import get_user, update_user_fields_batch, user_cache
+        user = get_user(telegram_id)
+        
+        if not user or not user.get('steam_id'):
+            return {"success": False, "message": "❌ Steam-аккаунт не был привязан к вашему аккаунту"}
+        
+        steam_id = user.get('steam_id')
+        
+        # Очищаем кэш пользователя
+        user_cache.invalidate_user_top_caches(telegram_id)
+        user_cache.remove(telegram_id)
+        
+        # Обнуляем поля, связанные со Steam
+        update_user_fields_batch(telegram_id, {
+            "steam_id": None,
+            "steam_nickname": None,
+            "avatar": None,
+            "mmr": 0,
+            "rank_tier": 0,
+            "wins": 0,
+            "losses": 0,
+            "week_games": 0,
+            "week_wins": 0,
+            "weekly_mvp_count": 0,
+            "weekly_top2_count": 0,
+            "weekly_top3_count": 0,
+        })
+        
+        logger.info(f"Steam account {steam_id} unlinked from user {telegram_id}")
+        return {
+            "success": True, 
+            "message": "✅ Steam-аккаунт успешно отвязан от вашего Telegram-аккаунта.\nТеперь вы можете привязать другой Steam-аккаунт."
+        }
+    except Exception as e:
+        logger.error(f"unlink_steam error: {e}", exc_info=True)
+        return {"success": False, "message": f"❌ Ошибка при отвязке Steam-аккаунта: {e}"}
 
 
 # ========================
