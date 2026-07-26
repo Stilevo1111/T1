@@ -3230,9 +3230,12 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Административная команда: раз-prивязать Steam-аккаунт по Telegram username."""
     from config import settings
+    from database import get_user_by_username
+    from bot_utils import _telegram_error_contains
     
     ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
     user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
     
     if not ADMIN_CHAT_ID or user_id != ADMIN_CHAT_ID:
         await context.bot.send_message(
@@ -3253,8 +3256,7 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     username = args[0].lstrip('@')  # Убираем @ если он есть
     
-    from dota_mmr import get_user_by_telegram_username, admin_unlink_steam
-    result = await asyncio.to_thread(get_user_by_telegram_username, username)
+    result = await asyncio.to_thread(get_user_by_username, username)
     
     if not result:
         await context.bot.send_message(
@@ -3263,6 +3265,27 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         return
+    
+    target_telegram_id = result.get('telegram_id')
+    
+    try:
+        member = await context.bot.get_chat_member(chat_id, target_telegram_id)
+        if member.status in ('left', 'kicked', 'banned'):
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"❌ Пользователь @{username} уже не состоит в этом чате",
+                reply_markup=main_menu()
+            )
+            return
+    except Exception as e:
+        if _telegram_error_contains(e, "user not found", "chat not found", "kicked", "left"):
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"❌ Пользователь @{username} уже не состоит в этом чате",
+                reply_markup=main_menu()
+            )
+            return
+        logger.warning(f"admin_unlink: Error checking chat membership: {e}")
     
     steam_id = result.get('steam_id')
     if not steam_id:
@@ -3273,11 +3296,12 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    result = await asyncio.to_thread(admin_unlink_steam, steam_id)
+    from dota_mmr import admin_unlink_steam
+    unlink_result = await asyncio.to_thread(admin_unlink_steam, steam_id)
     
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text=result.get('message'),
+        text=unlink_result.get('message'),
         reply_markup=main_menu()
     )
 
