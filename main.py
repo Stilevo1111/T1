@@ -1795,6 +1795,55 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = callback_query.message.chat_id if callback_query.message else None
     logger.info(f"button_callback: user={callback_query.from_user.id} chat={chat_id} data={data}")
 
+    # === ROLL FISSURE HANDLER (callback from menu/welcome) - FIRST PRIORITY ===
+    if data == "roll_fissure":
+        import time as _time
+        await callback_query.answer()
+        user_obj = callback_query.from_user
+        chat_id = callback_query.message.chat_id
+        chat_type = callback_query.message.chat.type if callback_query.message else 'private'
+        
+        logger.info(f"roll_fissure: user={user_obj.id} chat={chat_id} chat_type={chat_type}")
+        
+        # Get current time for fake message
+        _current_time = int(_time.time())
+        
+        # Ensure user account exists before rolling
+        from database import get_user
+        await asyncio.to_thread(get_user, user_obj.id, user_obj.username)
+
+        class _FakeChat:
+            id = chat_id
+            type = chat_type
+
+        class _FakeUser:
+            id = user_obj.id
+            is_bot = user_obj.is_bot
+            first_name = user_obj.first_name or ''
+            username = user_obj.username
+            last_name = getattr(user_obj, 'last_name', None)
+            language_code = getattr(user_obj, 'language_code', None)
+
+        class _FakeMsg:
+            message_id = 0
+            chat_id = chat_id
+            chat = _FakeChat()
+            from_user = _FakeUser()
+            date = _current_time
+            text = '/fissure'
+
+        fake_msg = _FakeMsg()
+        fake_msg.chat_id = chat_id
+
+        class _FakeUpdate:
+            update_id = update.update_id
+            message = fake_msg
+            effective_user = _FakeUser()
+            effective_chat = _FakeChat()
+
+        await fissure(_FakeUpdate(), context)
+        return
+
     # Handle analytics_show separately with loading indicator (as chat message)
     if data == "analytics_show":
         await callback_query.answer()
@@ -2005,56 +2054,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Could not update greeting buttons: {e}")
             return
 
-        # === ROLL FISSURE HANDLER (callback from welcome message) ===
-        if data == "roll_fissure":
-            import time as _time
-            await callback_query.answer()
-            user_obj = callback_query.from_user
-            chat_id = callback_query.message.chat_id
-            chat_type = callback_query.message.chat.type if callback_query.message else 'private'
-            
-            logger.info(f"roll_fissure: user={user_obj.id} chat={chat_id} chat_type={chat_type}")
-            
-            # Get current time for fake message
-            _current_time = int(_time.time())
-            
-            # Ensure user account exists before rolling
-            from database import get_user
-            await asyncio.to_thread(get_user, user_obj.id, user_obj.username)
-
-            class _FakeChat:
-                id = chat_id
-                type = chat_type
-
-            class _FakeUser:
-                id = user_obj.id
-                is_bot = user_obj.is_bot
-                first_name = user_obj.first_name or ''
-                username = user_obj.username
-                last_name = getattr(user_obj, 'last_name', None)
-                language_code = getattr(user_obj, 'language_code', None)
-
-            class _FakeMsg:
-                message_id = 0
-                chat_id = chat_id
-                chat = _FakeChat()
-                from_user = _FakeUser()
-                date = _current_time
-                text = '/fissure'
-
-            fake_msg = _FakeMsg()
-            fake_msg.chat_id = chat_id
-
-            class _FakeUpdate:
-                update_id = update.update_id
-                message = fake_msg
-                effective_user = _FakeUser()
-                effective_chat = _FakeChat()
-
-            await fissure(_FakeUpdate(), context)
-            return
-
-    except Exception as e:
+        except Exception as e:
         logger.error(f"Error in button_callback: {e}", exc_info=True)
         await callback_query.answer(text="Ошибка при обработке кнопки", show_alert=True)
 
@@ -3306,6 +3306,10 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow_when_rate_limited=False):
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
+    # Skip if this is a callback query (handled by button_callback)
+    if update.callback_query:
+        return
+    
     try:
         # Skip if rate limited (but allow override for error fallback)
         if not allow_when_rate_limited and is_rate_limited():
