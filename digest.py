@@ -23,8 +23,9 @@ async def _ensure_pinned(bot, chat_id, msg_id):
         try:
             await bot.unpin_chat_message(chat_id=int(chat_id), message_id=pinned_id)
         except Exception as e:
+            # Ошибка открепления может быть из-за того, что сообщение уже не закреплено
+            # или нет прав - продолжаем попытку закрепления нового дайджеста
             logger.debug(f"Не удалось открепить старый дайджест {pinned_id}: {e}")
-            return False
     if pinned_id == msg_id:
         return True
     try:

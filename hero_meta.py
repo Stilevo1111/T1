@@ -441,7 +441,7 @@ def _get_hero_stats_from_db(days=7):
 
 async def create_infographic(hero_stats):
     logger.info("Starting create_infographic")
-    if not os.path.exists(BACKGROUND_PATH):
+    if not BACKGROUND_PATH.exists():
         base = Image.new("RGBA", (1200, 800), (25, 25, 35, 255))
         bg_width, bg_height = 1200, 800
     else:
