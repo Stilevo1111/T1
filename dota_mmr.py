@@ -1383,6 +1383,12 @@ def unlink_steam(telegram_id: int) -> dict:
         return {"success": False, "message": f"❌ Ошибка при отвязке Steam-аккаунта: {e}"}
 
 
+def get_user_by_telegram_username(username: str) -> dict | None:
+    """Найти пользователя по Telegram username (без @)."""
+    from database import get_user_by_username
+    return get_user_by_username(username)
+
+
 def admin_unlink_steam(steam_id: int) -> dict:
     """Административная функция: раз-prивязать Steam-аккаунт по его ID.
     

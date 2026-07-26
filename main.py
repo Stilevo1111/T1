@@ -3250,45 +3250,8 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Small delay to ensure message is visible
     await asyncio.sleep(0.1)
 
-async def unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Раз-prивязать Steam-аккаунт от пользователя"""
-    logger.info(f"User {update.effective_user.id} called unlink")
-    
-    chat_id = update.effective_chat.id
-    user = await asyncio.to_thread(get_user, update.effective_user.id)
-    
-    if not user or not user.get('steam_id'):
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="❌ Steam-аккаунт не был привязан к вашему аккаунту",
-            reply_markup=main_menu()
-        )
-        return
-    
-    try:
-        from delete_last_bot_message import delete_last_bot_message
-    except ImportError:
-        from bot_utils import delete_last_bot_message as delete_last_bot_message
-    
-    try:
-        await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
-    except Exception as e:
-        logger.debug(f"Could not delete last bot message: {e}")
-    
-    result = await asyncio.to_thread(unlink_steam, update.effective_user.id)
-    
-    result_msg = await context.bot.send_message(
-        chat_id=chat_id,
-        text=result.get('message'),
-        reply_markup=main_menu()
-    )
-    set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-    add_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-    schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
-
-
 async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Административная команда: раз-prивязать Steam-аккаунт по его ID."""
+    """Административная команда: раз-prивязать Steam-аккаунт по Telegram username."""
     from config import settings
     
     ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
@@ -3306,17 +3269,28 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not args or len(args) < 1:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="Использование: /admin_unlink <steam_id>\nПример: /admin_unlink 76561198012345678",
+            text="Использование: /admin_unlink <telegram_username>\nПример: /admin_unlink Seredin999",
             reply_markup=main_menu()
         )
         return
     
-    try:
-        steam_id = int(args[0])
-    except ValueError:
+    username = args[0].lstrip('@')  # Убираем @ если он есть
+    
+    result = await asyncio.to_thread(get_user_by_telegram_username, username)
+    
+    if not result:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="❌ Неверный Steam ID",
+            text=f"❌ Пользователь @{username} не найден в базе",
+            reply_markup=main_menu()
+        )
+        return
+    
+    steam_id = result.get('steam_id')
+    if not steam_id:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"❌ У пользователя @{username} Steam-аккаунт не привязан",
             reply_markup=main_menu()
         )
         return
@@ -4055,7 +4029,6 @@ async def main():
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("refreshmmr", refreshmmr))
         app.add_handler(CommandHandler("link", link))
-        app.add_handler(CommandHandler("unlink", unlink))
         app.add_handler(CommandHandler("admin_unlink", admin_unlink))
         app.add_handler(CommandHandler(("digestnow", "dotadigestnow", "setdigestchat"), digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
