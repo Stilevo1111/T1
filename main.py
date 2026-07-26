@@ -1813,33 +1813,36 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await asyncio.to_thread(get_user, user_obj.id, user_obj.username)
 
         class _FakeChat:
-            id = chat_id
-            type = chat_type
+            def __init__(self):
+                self.id = chat_id
+                self.type = chat_type
 
         class _FakeUser:
-            id = user_obj.id
-            is_bot = user_obj.is_bot
-            first_name = user_obj.first_name or ''
-            username = user_obj.username
-            last_name = getattr(user_obj, 'last_name', None)
-            language_code = getattr(user_obj, 'language_code', None)
+            def __init__(self):
+                self.id = user_obj.id
+                self.is_bot = user_obj.is_bot
+                self.first_name = user_obj.first_name or ''
+                self.username = user_obj.username
+                self.last_name = getattr(user_obj, 'last_name', None)
+                self.language_code = getattr(user_obj, 'language_code', None)
 
         class _FakeMsg:
-            message_id = 0
-            chat_id = chat_id
-            chat = _FakeChat()
-            from_user = _FakeUser()
-            date = _current_time
-            text = '/fissure'
+            def __init__(self):
+                self.message_id = 0
+                self.chat_id = chat_id
+                self.chat = _FakeChat()
+                self.from_user = _FakeUser()
+                self.date = _current_time
+                self.text = '/fissure'
 
         fake_msg = _FakeMsg()
-        fake_msg.chat_id = chat_id
 
         class _FakeUpdate:
-            update_id = update.update_id
-            message = fake_msg
-            effective_user = _FakeUser()
-            effective_chat = _FakeChat()
+            def __init__(self):
+                self.update_id = update.update_id
+                self.message = fake_msg
+                self.effective_user = _FakeUser()
+                self.effective_chat = _FakeChat()
 
         await fissure(_FakeUpdate(), context)
         return
