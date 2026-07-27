@@ -391,30 +391,47 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
     for attempt in range(max_retries + 1):
         current_timeout = timeout if attempt == 0 else timeout + 5
         try:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=current_timeout)) as resp:
-                if resp.status == 200:
-                    _circuit_breaker_record_success()
-                    return await resp.json()
-                elif resp.status == 429:
-                    logger.warning("Rate limited by OpenDota API, waiting...")
-                    set_opendota_rate_limited(60)
-                    _circuit_breaker_record_failure()
-                    wait_time = 3 * (attempt + 1)
-                    await asyncio.sleep(wait_time)
-                    continue
-                elif resp.status >= 500:
-                    logger.warning(f"Server error {resp.status} for {url[:60]}, attempt {attempt + 1}/{max_retries + 1}")
-                    _circuit_breaker_record_failure()
-                    await asyncio.sleep(1 + attempt)
-                    continue
-                else:
-                    logger.error(f"API error {resp.status} for {url[:80]}")
-                    _circuit_breaker_record_failure()
-                    return None
+            import aiohttp
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=current_timeout, connect=5),
+                connector=aiohttp.TCPConnector(limit=5, limit_per_host=3)
+            ) as session:
+                async with session.get(url, params=params or {}) as resp:
+                    if resp.status == 200:
+                        _circuit_breaker_record_success()
+                        return await resp.json()
+                    elif resp.status == 429:
+                        logger.warning("Rate limited by OpenDota API, waiting...")
+                        set_opendota_rate_limited(60)
+                        _circuit_breaker_record_failure()
+                        wait_time = 3 * (attempt + 1)
+                        await asyncio.sleep(wait_time)
+                        continue
+                    elif resp.status >= 500:
+                        logger.warning(f"Server error {resp.status} for {url[:60]}, attempt {attempt + 1}/{max_retries + 1}")
+                        _circuit_breaker_record_failure()
+                        await asyncio.sleep(1 + attempt)
+                        continue
+                    else:
+                        logger.error(f"API error {resp.status} for {url[:80]}")
+                        _circuit_breaker_record_failure()
+                        return None
         except TimeoutError:
             logger.warning(f"API request timeout ({current_timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
+            _circuit_breaker_record_failure()
+            if attempt < max_retries:
+                await asyncio.sleep(1 + attempt)
+                continue
+            return None
+        except RuntimeError as e:
+            if "Event loop is closed" in str(e):
+                logger.warning(f"Event loop closed during API request, retrying... ({attempt + 1}/{max_retries + 1})")
+                _circuit_breaker_record_failure()
+                if attempt < max_retries:
+                    await asyncio.sleep(1 + attempt)
+                    continue
+                return None
+            logger.error(f"Async API request error: {e}", exc_info=True)
             _circuit_breaker_record_failure()
             if attempt < max_retries:
                 await asyncio.sleep(1 + attempt)

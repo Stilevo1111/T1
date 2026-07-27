@@ -345,15 +345,28 @@ user_state_manager = UserStateManager(user_cache, top_cache)
 _aiohttp_session = None
 
 async def get_aiohttp_session():
-    """Получить переиспользуемую aiohttp сессию для оптимизации соединений"""
+    """Получить переиспользуемую aiohttp сессию для оптимизации соединений.
+    Создаёт новую сессию, если предыдущая закрыта или event loop изменился.
+    """
     global _aiohttp_session
-    if _aiohttp_session is None or _aiohttp_session.closed:
-        import aiohttp
-        _aiohttp_session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=15, connect=5),
-            connector=aiohttp.TCPConnector(limit=5, limit_per_host=3)
-        )
-    return _aiohttp_session
+    try:
+        if _aiohttp_session is None or _aiohttp_session.closed:
+            import aiohttp
+            _aiohttp_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=15, connect=5),
+                connector=aiohttp.TCPConnector(limit=5, limit_per_host=3)
+            )
+        return _aiohttp_session
+    except RuntimeError as e:
+        if "Event loop is closed" in str(e):
+            logger.warning("Event loop closed, creating new aiohttp session")
+            import aiohttp
+            _aiohttp_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=15, connect=5),
+                connector=aiohttp.TCPConnector(limit=5, limit_per_host=3)
+            )
+            return _aiohttp_session
+        raise
 
 async def close_aiohttp_session():
     """Закрыть aiohttp сессию при выключении бота"""
