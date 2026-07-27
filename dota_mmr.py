@@ -1787,6 +1787,7 @@ def generate_start_card(
     try:
         import io
         import os
+        import requests
 
         from PIL import Image, ImageDraw, ImageFont
 
