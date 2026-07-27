@@ -17,8 +17,8 @@ __all__ = [
     "get_event_chances",
 ]
 
-MULTICAST_DEFAULT_CHANCE = 0.10
-ZEUS_DEFAULT_CHANCE = 0.10
+MULTICAST_DEFAULT_CHANCE = 0.025
+ZEUS_DEFAULT_CHANCE = 0.025
 TECHIES_DEFAULT_CHANCE = 0.05
 
 def get_event_chances():
