@@ -1741,6 +1741,9 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                 "mmr_last_updated": time.time()
             }, save_to_db=False, update_top_cache=update_top_cache)
 
+        if rank_up:
+            update_user_fields_batch(telegram_id, {"rank_tier": new_rank_tier, "mmr_last_updated": time.time()}, save_to_db=True, update_top_cache=update_top_cache)
+
         _wg = _ret.get('week_games') if isinstance(_ret, dict) else week_games
         _ww = _ret.get('week_wins') if isinstance(_ret, dict) else week_wins
         _wbs = _ret.get('week_best_streak') if isinstance(_ret, dict) else max_streak
