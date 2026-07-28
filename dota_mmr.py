@@ -353,8 +353,8 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
             _circuit_breaker_record_failure()
             return None
         except RuntimeError as e:
-            if "Event loop is closed" in str(e):
-                logger.warning(f"Event loop closed during API request, retrying... ({attempt + 1}/{max_retries + 1})")
+            if "Event loop is closed" in str(e) or "Timeout context manager" in str(e):
+                logger.warning(f"Async API error ({e}), retrying... ({attempt + 1}/{max_retries + 1})")
                 if attempt < max_retries:
                     await asyncio.sleep(1 + attempt)
                     continue
