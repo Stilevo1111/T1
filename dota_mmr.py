@@ -85,8 +85,8 @@ _circuit_breaker = {
     "state": "CLOSED",  # CLOSED, OPEN, HALF_OPEN
     "failure_count": 0,
     "last_failure_time": 0,
-    "failure_threshold": 5,  # Более терпимо к временным rate limit
-    "recovery_timeout": 120,  # 2 минуты до попытки восстановления
+    "failure_threshold": 10,  # Порог срабатывания (увеличен для стабильности)
+    "recovery_timeout": 30,  # 30 секунд до попытки восстановления (уменьшен)
 }
 
 def reset_circuit_breaker():
@@ -332,7 +332,6 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
                 elif resp.status == 429:
                     logger.warning("Rate limited by OpenDota API, waiting...")
                     set_opendota_rate_limited(60)
-                    _circuit_breaker_record_failure()
                     wait_time = 3 * (attempt + 1)
                     await asyncio.sleep(wait_time)
                     continue
@@ -343,35 +342,35 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
                     continue
                 else:
                     logger.error(f"API error {resp.status} for {url[:80]}")
-                    _circuit_breaker_record_failure()
+                    if resp.status == 404:
+                        _mark_not_found(url)
                     return None
         except asyncio.TimeoutError:
             logger.warning(f"API request timeout ({current_timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
-            _circuit_breaker_record_failure()
             if attempt < max_retries:
                 await asyncio.sleep(1 + attempt)
                 continue
+            _circuit_breaker_record_failure()
             return None
         except RuntimeError as e:
             if "Event loop is closed" in str(e):
                 logger.warning(f"Event loop closed during API request, retrying... ({attempt + 1}/{max_retries + 1})")
-                _circuit_breaker_record_failure()
                 if attempt < max_retries:
                     await asyncio.sleep(1 + attempt)
                     continue
                 return None
             logger.error(f"Async API request error: {e}", exc_info=True)
-            _circuit_breaker_record_failure()
             if attempt < max_retries:
                 await asyncio.sleep(1 + attempt)
                 continue
+            _circuit_breaker_record_failure()
             return None
         except Exception as e:
             logger.error(f"Async API request error: {e}", exc_info=True)
-            _circuit_breaker_record_failure()
             if attempt < max_retries:
                 await asyncio.sleep(1 + attempt)
                 continue
+            _circuit_breaker_record_failure()
             return None
 
     logger.error(f"Async API request failed after {max_retries + 1} retries: {url[:80]}")
@@ -1410,17 +1409,21 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         # Keep trying API until we get data (with delays to avoid rate limit spam)
         stats = None
         start_time = time.time()
-        max_wait = 30  # Maximum wait time in seconds
+        max_wait = 10  # Maximum wait time in seconds
         while not stats and (time.time() - start_time) < max_wait:
             # Если аккаунт точно не существует (404) — не spin-им retry-цикл, выходим сразу.
             players_url = f"{OPENDOTA_API_URL}/players/{steam64_to_account_id(user['steam_id'])}"
             if _is_not_found(players_url):
                 logger.info(f"topmmr: player {user['steam_id']} known not found, skipping retries")
                 break
+            # Если circuit breaker открыт — пропускаем ожидание
+            if not _circuit_breaker_can_execute():
+                logger.info(f"topmmr: circuit breaker open for {user['steam_id']}, skipping retry")
+                break
             stats = get_player_stats(user["steam_id"], use_cache=False)
             if stats:
                 break
-            wait_time = 5
+            wait_time = 2
             logger.info(f"topmmr: waiting for API, sleeping {wait_time}s...")
             time.sleep(wait_time)
         logger.info(f"topmmr: get_player_stats returned: steam32={user.get('steam_id')}, success={stats is not None}")
