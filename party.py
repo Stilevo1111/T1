@@ -37,6 +37,7 @@ import logging
 import os
 
 from bot_utils import clickable_name, make_clickable
+from rate_limiter import rate_limit
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 logger = logging.getLogger(__name__)
@@ -138,7 +139,7 @@ async def party_for_user(chat_id, chat_type, requester, context):
                 rank = f"{idx - 1}️⃣"
             telegram_id = p.get("telegram_id")
             steam_nick = p.get("steam_nickname") or p.get("username") or None
-            if steam_nick and steam_nick in ("None", "Unknown", "Неизвестный игрок") or len(steam_nick.strip()) <= 1:
+            if not steam_nick or steam_nick in ("None", "Unknown", "Неизвестный игрок") or len(steam_nick.strip()) <= 1:
                 steam_nick = p.get("username") or p.get("steam_nickname")
             steam_id = p.get("steam_id")
             rank_tier = p.get("rank_tier", 0) or 0
@@ -187,15 +188,21 @@ async def party_for_user(chat_id, chat_type, requester, context):
             logger.debug(f"Could not send error message: {send_error}")
 
 
+@rate_limit(tokens=1)
 async def party_command(update, context):
     logger.info(f"User {update.effective_user.id} called party")
 
-    chat_id = update.message.chat_id
-    chat_type = update.message.chat.type
+    msg = update.message or (update.callback_query.message if update.callback_query else None)
+    if not msg:
+        logger.error("party_command: no message or callback_query.message available")
+        return
+
+    chat_id = msg.chat_id
+    chat_type = msg.chat.type
 
     if chat_type in ("group", "supergroup", "channel"):
         try:
-            await update.message.delete()
+            await msg.delete()
         except Exception as e:
             logger.debug(f"Could not delete user message: {e}")
 
