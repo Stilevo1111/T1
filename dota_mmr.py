@@ -276,81 +276,8 @@ def _clear_cache():
     _cache = {}
 
 
-async def _api_get_async(url: str, params: dict = None, max_retries: int = 2, timeout: int = 8) -> dict:
-    """Асинхронная версия API-запросов с обработкой ошибок и повторными попытками"""
-    
-    if not _circuit_breaker_can_execute():
-        logger.warning("Circuit breaker: skipping request, API unavailable")
-        return None
-    
-    if is_opendota_rate_limited():
-        remaining = get_opendota_rate_limit_time_remaining()
-        logger.warning(f"OpenDota still rate limited, waiting {remaining}s...")
-        await asyncio.sleep(remaining + 1)
-    
-    try:
-        await _check_rate_limit_async()
-    except RateLimitWaitError as e:
-        logger.warning(f"Rate limited, waiting {e.wait_seconds:.1f}s...")
-        await asyncio.sleep(e.wait_seconds)
-        _api_rate_limit["window_start"] = time.time()
-        _api_rate_limit["requests_count"] = 0
-
-    for attempt in range(max_retries + 1):
-        current_timeout = timeout if attempt == 0 else timeout + 5
-        try:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=current_timeout)) as r:
-                if r.status == 200:
-                    _circuit_breaker_record_success()
-                    try:
-                        from analytics_dashboard import record_opendota_tokens
-                        record_opendota_tokens(1)
-                    except Exception:
-                        pass
-                    return await r.json()
-                elif r.status == 429:
-                    wait_time = 5 * (attempt + 1)
-                    logger.warning(f"Rate limited by OpenDota API, waiting {wait_time}s...")
-                    set_opendota_rate_limited(60)
-                    _circuit_breaker_record_failure()
-                    await asyncio.sleep(wait_time)
-                    if attempt < max_retries:
-                        continue
-                    return None
-                elif r.status >= 500:
-                    _circuit_breaker_record_failure()
-                    if attempt < max_retries:
-                        logger.warning(f"Server error {r.status}, retrying in {attempt + 1}s...")
-                        await asyncio.sleep(attempt + 1)
-                        continue
-                    return None
-                elif r.status >= 400:
-                    if r.status == 403:
-                        _circuit_breaker_record_failure()
-                        logger.warning(f"OpenDota API returned 403 Forbidden - possible API key issue or ban")
-                    elif r.status == 404:
-                        _mark_not_found(url)
-                        logger.error(f"API error 404 for URL: {url}")
-                    else:
-                        logger.error(f"API error {r.status} for URL: {url}")
-                    return None
-        except asyncio.TimeoutError:
-            if attempt < max_retries:
-                logger.warning(f"API request timeout ({current_timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
-                continue
-            else:
-                logger.error(f"API request timeout ({current_timeout}s) after {max_retries + 1} attempts")
-                return None
-        except Exception as e:
-            logger.error(f"API request error: {e}", exc_info=True)
-            return None
-
-    return None
-
-
 _async_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
+
 
 async def _check_rate_limit_async():
     """Async версия rate limiting"""
@@ -377,6 +304,78 @@ async def _check_rate_limit_async():
 
 async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15, max_retries: int = 3) -> dict:
     """Асинхронная функция для API-запросов с переиспользованием сессии, retry и rate limiting"""
+    if not _circuit_breaker_can_execute():
+        logger.warning("Circuit breaker: skipping async request, API unavailable")
+        return None
+
+    if is_opendota_rate_limited():
+        remaining = get_opendota_rate_limit_time_remaining()
+        logger.warning(f"OpenDota still rate limited, waiting {remaining}s...")
+        await asyncio.sleep(remaining + 1)
+
+    await _check_rate_limit_async()
+
+    for attempt in range(max_retries + 1):
+        current_timeout = timeout if attempt == 0 else timeout + 5
+        try:
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=current_timeout)) as resp:
+                if resp.status == 200:
+                    _circuit_breaker_record_success()
+                    try:
+                        from analytics_dashboard import record_opendota_tokens
+                        record_opendota_tokens(1)
+                    except Exception:
+                        pass
+                    return await resp.json()
+                elif resp.status == 429:
+                    logger.warning("Rate limited by OpenDota API, waiting...")
+                    set_opendota_rate_limited(60)
+                    _circuit_breaker_record_failure()
+                    wait_time = 3 * (attempt + 1)
+                    await asyncio.sleep(wait_time)
+                    continue
+                elif resp.status >= 500:
+                    logger.warning(f"Server error {resp.status} for {url[:60]}, attempt {attempt + 1}/{max_retries + 1}")
+                    _circuit_breaker_record_failure()
+                    await asyncio.sleep(1 + attempt)
+                    continue
+                else:
+                    logger.error(f"API error {resp.status} for {url[:80]}")
+                    _circuit_breaker_record_failure()
+                    return None
+        except asyncio.TimeoutError:
+            logger.warning(f"API request timeout ({current_timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
+            _circuit_breaker_record_failure()
+            if attempt < max_retries:
+                await asyncio.sleep(1 + attempt)
+                continue
+            return None
+        except RuntimeError as e:
+            if "Event loop is closed" in str(e):
+                logger.warning(f"Event loop closed during API request, retrying... ({attempt + 1}/{max_retries + 1})")
+                _circuit_breaker_record_failure()
+                if attempt < max_retries:
+                    await asyncio.sleep(1 + attempt)
+                    continue
+                return None
+            logger.error(f"Async API request error: {e}", exc_info=True)
+            _circuit_breaker_record_failure()
+            if attempt < max_retries:
+                await asyncio.sleep(1 + attempt)
+                continue
+            return None
+        except Exception as e:
+            logger.error(f"Async API request error: {e}", exc_info=True)
+            _circuit_breaker_record_failure()
+            if attempt < max_retries:
+                await asyncio.sleep(1 + attempt)
+                continue
+            return None
+
+    logger.error(f"Async API request failed after {max_retries + 1} retries: {url[:80]}")
+    return None
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping async request, API unavailable")
         return None
@@ -1193,21 +1192,18 @@ async def get_player_stats_async(steam_id: int, use_cache: bool = True, timeout:
             total_games = 0
 
         solo_mmr = player_data.get("solo_competitive_mmr")
-        competitive_rank = player_data.get("competitive_rank")
         mmr_estimate = player_data.get("mmr_estimate") or {}
         computed_mmr = player_data.get("computed_mmr")
-        if solo_mmr:
+        if solo_mmr and solo_mmr > 0:
             mmr = solo_mmr
-        elif computed_mmr:
+        elif computed_mmr and computed_mmr > 0:
             mmr = int(round(computed_mmr))
-        elif competitive_rank:
-            mmr = competitive_rank
         elif mmr_estimate.get("estimate"):
             mmr = mmr_estimate.get("estimate", 0)
+        elif rank_tier:
+            mmr = rank_to_mmr(rank_tier)
         else:
-            mmr = None
-            if rank_tier:
-                mmr = rank_to_mmr(rank_tier)
+            mmr = 0
 
         winrate = safe_winrate(wins, total_games)
 
