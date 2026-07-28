@@ -135,120 +135,119 @@ async def fetch_hero_icon(session, icon_path):
         close_session = True
 
     try:
-
         # ==========================================
         # BUILD URL
         # ==========================================
 
         icon_url = None
 
-    # Handle numeric IDs (convert to hero name lookup)
-    if icon_path and icon_path.isdigit():
-        from dota_mmr import get_hero_list
-        heroes = await get_hero_list()
-        hero_name = None
-        for h in heroes:
-            if h.get("id") == int(icon_path):
-                hero_name = h.get("name", "").replace("npc_dota_hero_", "")
-                break
-        if hero_name:
-            icon_url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
-        else:
-            return None
-    else:
-        # Clean the path - remove trailing ? or query params that might cause issues
-        icon_path = icon_path.split("?")[0].rstrip("/")
-
-        # Convert old format /apps/dota2/images/dota/heroes/{name}_sb.png to new format
-        # New format: /apps/dota2/images/dota_react/heroes/{name}.png
-        if "/apps/dota2/images/dota/heroes/" in icon_path:
-            match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', icon_path)
-            if match:
-                hero_name = match.group(1)
+        # Handle numeric IDs (convert to hero name lookup)
+        if icon_path and icon_path.isdigit():
+            from dota_mmr import get_hero_list
+            heroes = await get_hero_list()
+            hero_name = None
+            for h in heroes:
+                if h.get("id") == int(icon_path):
+                    hero_name = h.get("name", "").replace("npc_dota_hero_", "")
+                    break
+            if hero_name:
                 icon_url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
             else:
-                icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
-        elif icon_path.startswith('/'):
-            icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
-
-        elif not icon_path.startswith('http'):
-            icon_url = f"https://cdn.cloudflare.steamstatic.com/{icon_path}"
-
+                return None
         else:
-            icon_url = icon_path
+            # Clean the path - remove trailing ? or query params that might cause issues
+            icon_path = icon_path.split("?")[0].rstrip("/")
 
-    # ==========================================
-    # CACHE FILE NAME
-    # ==========================================
+            # Convert old format /apps/dota2/images/dota/heroes/{name}_sb.png to new format
+            # New format: /apps/dota2/images/dota_react/heroes/{name}.png
+            if "/apps/dota2/images/dota/heroes/" in icon_path:
+                match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', icon_path)
+                if match:
+                    hero_name = match.group(1)
+                    icon_url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
+                else:
+                    icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
+            elif icon_path.startswith('/'):
+                icon_url = f"https://cdn.cloudflare.steamstatic.com{icon_path}"
 
-    filename = os.path.basename(
-        urlparse(icon_url).path
-    )
+            elif not icon_path.startswith('http'):
+                icon_url = f"https://cdn.cloudflare.steamstatic.com/{icon_path}"
 
-    cache_path = ICON_CACHE_DIR / filename
+            else:
+                icon_url = icon_path
 
-    # ==========================================
-    # LOAD FROM CACHE
-    # ==========================================
+        # ==========================================
+        # CACHE FILE NAME
+        # ==========================================
 
-    if cache_path.exists() and not cache_path.is_dir():
+        filename = os.path.basename(
+            urlparse(icon_url).path
+        )
+
+        cache_path = ICON_CACHE_DIR / filename
+
+        # ==========================================
+        # LOAD FROM CACHE
+        # ==========================================
+
+        if cache_path.exists() and not cache_path.is_dir():
+
+            try:
+                return Image.open(cache_path).convert("RGBA")
+
+            except Exception:
+                logger.exception("Failed open cached icon")
+
+        # ==========================================
+        # DOWNLOAD
+        # ==========================================
 
         try:
-            return Image.open(cache_path).convert("RGBA")
 
-        except Exception:
-            logger.exception("Failed open cached icon")
+            async with session.get(
+                icon_url,
+                timeout=aiohttp.ClientTimeout(total=5),
+                headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"}
+            ) as resp:
 
-    # ==========================================
-    # DOWNLOAD
-    # ==========================================
+                resp.raise_for_status()
 
-    try:
+                content_type = resp.headers.get("Content-Type", "")
+                if not content_type.startswith("image/"):
+                    logger.warning("Unexpected Content-Type for hero icon %s: %s", icon_url, content_type)
+                    return None
 
-        async with session.get(
-            icon_url,
-            timeout=aiohttp.ClientTimeout(total=5),
-            headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"}
-        ) as resp:
+                content = await resp.read()
 
-            resp.raise_for_status()
+                if filename and not cache_path.is_dir():
+                    try:
+                        with open(cache_path, "wb") as f:
+                            f.write(content)
+                    except Exception:
+                        logger.exception("Failed to write cached icon")
 
-            content_type = resp.headers.get("Content-Type", "")
-            if not content_type.startswith("image/"):
-                logger.warning("Unexpected Content-Type for hero icon %s: %s", icon_url, content_type)
-                return None
-
-            content = await resp.read()
-
-            if filename and not cache_path.is_dir():
                 try:
-                    with open(cache_path, "wb") as f:
-                        f.write(content)
+                    return Image.open(
+                        io.BytesIO(content)
+                    ).convert("RGBA")
+                except Exception as e:
+                    logger.error("Failed to decode hero icon %s: %s", icon_url, e)
+                    return None
+
+        except Exception as e:
+
+            logger.error("Failed to load icon from CDN: %s", e)
+
+            filename = os.path.basename(urlparse(icon_url).path)
+            hero_name = filename.replace("_sb.png", "").replace(".png", "")
+            local_path = Path("assets/heroes_webp") / f"{hero_name}.webp"
+            if local_path.exists():
+                try:
+                    return Image.open(local_path).convert("RGBA")
                 except Exception:
-                    logger.exception("Failed to write cached icon")
+                    pass
 
-            try:
-                return Image.open(
-                    io.BytesIO(content)
-                ).convert("RGBA")
-            except Exception as e:
-                logger.error("Failed to decode hero icon %s: %s", icon_url, e)
-                return None
-
-    except Exception as e:
-
-        logger.error("Failed to load icon from CDN: %s", e)
-
-        filename = os.path.basename(urlparse(icon_url).path)
-        hero_name = filename.replace("_sb.png", "").replace(".png", "")
-        local_path = Path("assets/heroes_webp") / f"{hero_name}.webp"
-        if local_path.exists():
-            try:
-                return Image.open(local_path).convert("RGBA")
-            except Exception:
-                pass
-
-        return None
+            return None
 
     finally:
         if close_session:
