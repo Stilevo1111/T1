@@ -1432,11 +1432,11 @@ from party import party_command, party_for_user
 
 
 async def fetch_hero_icon(url, session=None, size=96):
-    """Скачать и уменьшить иконку героя через aiohttp"""
+    if not url:
+        return None
     close_session = False
     if session is None:
-        from database import get_aiohttp_session
-        session = await get_aiohttp_session()
+        session = aiohttp.ClientSession()
         close_session = True
     try:
         async with session.get(url) as resp:
@@ -4205,14 +4205,13 @@ async def main():
                 while True:
                     try:
                         await asyncio.sleep(800)  # Ping every ~13 min to stay under Render's 15 min idle timeout
-                        from database import get_aiohttp_session
                         from analytics_dashboard import record_neon_hours
                         record_neon_hours(0.56)
-                        session = await get_aiohttp_session()
-                        await session.get(ping_url, timeout=aiohttp.ClientTimeout(total=30))
+                        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+                            await session.get(ping_url)
+                            root_url = webhook_url.rsplit('/webhook', 1)[0] + '/'
+                            await session.get(root_url, timeout=aiohttp.ClientTimeout(total=10))
                         logger.info("Keep-alive ping sent")
-                        root_url = webhook_url.rsplit('/webhook', 1)[0] + '/'
-                        await session.get(root_url, timeout=aiohttp.ClientTimeout(total=10))
                     except Exception as e:
                         logger.error(f"Keep-alive ping error: {e}")
 

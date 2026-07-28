@@ -126,12 +126,21 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3, border_co
 
 
 async def fetch_hero_icon(session, icon_path):
+    if not icon_path:
+        return None
 
-    # ==========================================
-    # BUILD URL
-    # ==========================================
+    close_session = False
+    if session is None:
+        session = aiohttp.ClientSession()
+        close_session = True
 
-    icon_url = None
+    try:
+
+        # ==========================================
+        # BUILD URL
+        # ==========================================
+
+        icon_url = None
 
     # Handle numeric IDs (convert to hero name lookup)
     if icon_path and icon_path.isdigit():
@@ -240,6 +249,10 @@ async def fetch_hero_icon(session, icon_path):
                 pass
 
         return None
+
+    finally:
+        if close_session:
+            await session.close()
 
 
 async def _enrich_hero_icons(hero_stats):
@@ -489,9 +502,7 @@ async def create_infographic(hero_stats):
             if h['id'] not in seen_ids:
                 seen_ids.add(h['id'])
                 all_heroes.append(h)
-    from database import get_aiohttp_session
-    session = await get_aiohttp_session()
-    tasks = [fetch_hero_icon(session, h['img']) for h in all_heroes]
+    tasks = [fetch_hero_icon(None, h['img']) for h in all_heroes]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     icons = {}
     for hero, result in zip(all_heroes, results):

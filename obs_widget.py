@@ -185,64 +185,58 @@ async def generate_obs_widget(
 
     heroes_data = get_heroes_data() or {}
 
-    session = None
-    try:
-        from database import get_aiohttp_session
-        session = await get_aiohttp_session()
-    except Exception:
-        pass
-
     img = Image.new("RGBA", (WIDGET_WIDTH, WIDGET_HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
-    for i in range(limit):
-        if i < len(matches):
-            match = matches[i]
-            hero_id = match.get("hero_id")
-            hero_info = heroes_data.get(hero_id)
-            player_slot = match.get("player_slot", 0)
-            radiant_win = bool(match.get("radiant_win", False))
-            is_win = (player_slot < 128) == radiant_win
-        else:
-            hero_id = None
-            hero_info = None
-            is_win = None
+async with aiohttp.ClientSession() as session:
+        for i in range(limit):
+            if i < len(matches):
+                match = matches[i]
+                hero_id = match.get("hero_id")
+                hero_info = heroes_data.get(hero_id)
+                player_slot = match.get("player_slot", 0)
+                radiant_win = bool(match.get("radiant_win", False))
+                is_win = (player_slot < 128) == radiant_win
+            else:
+                hero_id = None
+                hero_info = None
+                is_win = None
 
-        x = i * (CARD_SIZE + CARD_SPACING)
-        y = 0
+            x = i * (CARD_SIZE + CARD_SPACING)
+            y = 0
 
-        if is_win is True:
-            border = WIN_COLOR
-        elif is_win is False:
-            border = LOSS_COLOR
-        else:
-            border = UNKNOWN_COLOR
+            if is_win is True:
+                border = WIN_COLOR
+            elif is_win is False:
+                border = LOSS_COLOR
+            else:
+                border = UNKNOWN_COLOR
 
-        draw.rounded_rectangle(
-            [x, y, x + CARD_SIZE - 1, y + CARD_SIZE - 1],
-            radius=10,
-            fill=border,
-        )
+            draw.rounded_rectangle(
+                [x, y, x + CARD_SIZE - 1, y + CARD_SIZE - 1],
+                radius=10,
+                fill=border,
+            )
 
-        icon = None
-        if hero_info:
-            icon = await _fetch_hero_icon(hero_info, session)
-
-        if icon:
-            icon_rgba = icon.convert("RGBA")
-            icon_resized = icon_rgba.resize((CARD_SIZE - 8, CARD_SIZE - 8), Image.Resampling.LANCZOS)
-            img.paste(icon_resized, (x + 4, y + 4), icon_resized.split()[-1])
-        else:
-            label = "?"
+            icon = None
             if hero_info:
-                label = (hero_info.get("name") or "?")[:1].upper()
-            font = _load_font(int(CARD_SIZE * 0.55))
-            bbox = draw.textbbox((0, 0), label, font=font)
-            text_w = bbox[2] - bbox[0]
-            text_h = bbox[3] - bbox[1]
-            text_x = x + (CARD_SIZE - text_w) / 2
-            text_y = y + (CARD_SIZE - text_h) / 2 - int(CARD_SIZE * 0.05)
-            draw.text((text_x, text_y), label, font=font, fill=(255, 255, 255, 255))
+                icon = await _fetch_hero_icon(hero_info, session)
+
+            if icon:
+                icon_rgba = icon.convert("RGBA")
+                icon_resized = icon_rgba.resize((CARD_SIZE - 8, CARD_SIZE - 8), Image.Resampling.LANCZOS)
+                img.paste(icon_resized, (x + 4, y + 4), icon_resized.split()[-1])
+            else:
+                label = "?"
+                if hero_info:
+                    label = (hero_info.get("name") or "?")[:1].upper()
+                font = _load_font(int(CARD_SIZE * 0.55))
+                bbox = draw.textbbox((0, 0), label, font=font)
+                text_w = bbox[2] - bbox[0]
+                text_h = bbox[3] - bbox[1]
+                text_x = x + (CARD_SIZE - text_w) / 2
+                text_y = y + (CARD_SIZE - text_h) / 2 - int(CARD_SIZE * 0.05)
+                draw.text((text_x, text_y), label, font=font, fill=(255, 255, 255, 255))
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")

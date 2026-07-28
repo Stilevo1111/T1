@@ -32,15 +32,16 @@ async def get_hero_list():
     if _heroes_cache is not None and time.time() - _heroes_cache_time < _HEROES_CACHE_TTL:
         return _heroes_cache
     try:
-        from database import get_aiohttp_session
-        session = await get_aiohttp_session()
-        async with session.get("https://api.opendota.com/api/heroes", timeout=aiohttp.ClientTimeout(total=10)) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                if data:
-                    _heroes_cache = data
-                    _heroes_cache_time = time.time()
-                    return data
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+            async with session.get("https://api.opendota.com/api/heroes") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data:
+                        _heroes_cache = data
+                        _heroes_cache_time = time.time()
+                        return data
+    except Exception as e:
+        logger.warning(f"Failed to fetch heroes: {e}")
     except Exception as e:
         logger.warning(f"Failed to fetch heroes: {e}")
     return []
@@ -303,7 +304,7 @@ async def _check_rate_limit_async():
 
 
 async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15, max_retries: int = 3) -> dict:
-    """Асинхронная функция для API-запросов с переиспользованием сессии, retry и rate limiting"""
+    """Асинхронная функция для API-запросов с собственной сессией, retry и rate limiting"""
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping async request, API unavailable")
         return None
@@ -315,36 +316,38 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
 
     await _check_rate_limit_async()
 
+    if params is None:
+        params = {}
+
     for attempt in range(max_retries + 1):
         current_timeout = timeout if attempt == 0 else timeout + 5
         try:
-            from database import get_aiohttp_session
-            session = await get_aiohttp_session()
-            async with session.get(url, params=params or {}, timeout=aiohttp.ClientTimeout(total=current_timeout)) as resp:
-                if resp.status == 200:
-                    _circuit_breaker_record_success()
-                    try:
-                        from analytics_dashboard import record_opendota_tokens
-                        record_opendota_tokens(1)
-                    except Exception:
-                        pass
-                    return await resp.json()
-                elif resp.status == 429:
-                    logger.warning("Rate limited by OpenDota API, waiting...")
-                    set_opendota_rate_limited(60)
-                    wait_time = 3 * (attempt + 1)
-                    await asyncio.sleep(wait_time)
-                    continue
-                elif resp.status >= 500:
-                    logger.warning(f"Server error {resp.status} for {url[:60]}, attempt {attempt + 1}/{max_retries + 1}")
-                    _circuit_breaker_record_failure()
-                    await asyncio.sleep(1 + attempt)
-                    continue
-                else:
-                    logger.error(f"API error {resp.status} for {url[:80]}")
-                    if resp.status == 404:
-                        _mark_not_found(url)
-                    return None
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=current_timeout)) as session:
+                async with session.get(url, params=params) as resp:
+                    if resp.status == 200:
+                        _circuit_breaker_record_success()
+                        try:
+                            from analytics_dashboard import record_opendota_tokens
+                            record_opendota_tokens(1)
+                        except Exception:
+                            pass
+                        return await resp.json()
+                    elif resp.status == 429:
+                        logger.warning("Rate limited by OpenDota API, waiting...")
+                        set_opendota_rate_limited(60)
+                        wait_time = 3 * (attempt + 1)
+                        await asyncio.sleep(wait_time)
+                        continue
+                    elif resp.status >= 500:
+                        logger.warning(f"Server error {resp.status} for {url[:60]}, attempt {attempt + 1}/{max_retries + 1}")
+                        _circuit_breaker_record_failure()
+                        await asyncio.sleep(1 + attempt)
+                        continue
+                    else:
+                        logger.error(f"API error {resp.status} for {url[:80]}")
+                        if resp.status == 404:
+                            _mark_not_found(url)
+                        return None
         except asyncio.TimeoutError:
             logger.warning(f"API request timeout ({current_timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
             if attempt < max_retries:
@@ -472,16 +475,15 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
 
     url = f"{HERO_IMAGE_BASE}/{cdn_name}.png"
     try:
-        from database import get_aiohttp_session
-        session = await get_aiohttp_session()
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=5), headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"}) as resp:
-            if resp.status != 200:
-                return None
-            content_type = resp.headers.get("Content-Type", "")
-            if not content_type.startswith("image/"):
-                logger.warning("Unexpected Content-Type for hero portrait %s: %s", url, content_type)
-                return None
-            data = await resp.read()
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+            async with session.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"}) as resp:
+                if resp.status != 200:
+                    return None
+                content_type = resp.headers.get("Content-Type", "")
+                if not content_type.startswith("image/"):
+                    logger.warning("Unexpected Content-Type for hero portrait %s: %s", url, content_type)
+                    return None
+                data = await resp.read()
 
         try:
             cache_file.write_bytes(data)

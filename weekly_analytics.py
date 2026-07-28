@@ -1552,9 +1552,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     if _CHART_BG_CACHE is None:
         try:
-            from database import get_aiohttp_session
             import io
-            session = await get_aiohttp_session()
             # Try local first, then remote
             local_bg = get_banner_path("chart_bg_fallback")
             background_url_png = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
@@ -1564,9 +1562,10 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
             # Try png if local failed
             if content is None:
                 try:
-                    async with session.get(background_url_png, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                        if resp.status == 200:
-                            content = await resp.read()
+                    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+                        async with session.get(background_url_png) as resp:
+                            if resp.status == 200:
+                                content = await resp.read()
                 except Exception:
                     pass
             if content is not None:
