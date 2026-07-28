@@ -32,6 +32,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import logging
 import os
@@ -167,7 +168,6 @@ async def party_for_user(chat_id, chat_type, requester, context):
             result_msg = await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
             # Schedule auto-delete after 30 seconds
             try:
-                import asyncio
                 async def delete_after_delay():
                     await asyncio.sleep(30)
                     try:
