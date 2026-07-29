@@ -111,16 +111,16 @@ async def party_for_user(chat_id, chat_type, requester, context):
         candidates = get_all_users_with_steam() or []
         candidates = [c for c in candidates if c.get("steam_id") and c.get("telegram_id") != requester.get("telegram_id")]
 
-        req_mmr = float(requester.get("mmr") or 0) if isinstance(requester.get("mmr"), (int, float, str)) else 0
-        logger.info(f"party: requester telegram_id={requester.get('telegram_id')} mmr={req_mmr} candidates={len(candidates)}")
+        req_rank = requester.get("rank_tier") or 0
+        logger.info(f"party: requester telegram_id={requester.get('telegram_id')} rank_tier={req_rank} candidates={len(candidates)}")
         for c in candidates[:10]:
-            logger.info(f"party: candidate telegram_id={c.get('telegram_id')} mmr={c.get('mmr')} steam_id={c.get('steam_id')} week_games={c.get('week_games')}")
+            logger.info(f"party: candidate telegram_id={c.get('telegram_id')} rank_tier={c.get('rank_tier')} steam_id={c.get('steam_id')} week_games={c.get('week_games')}")
 
-        # Players above (sorted by MMR difference ascending, take up to 4)
-        above = sorted([c for c in candidates if (c.get("mmr") or 0) > req_mmr], key=lambda c: float(c.get("mmr") or 0) - req_mmr)[:4]
+        # Players above (sorted by rank_tier difference ascending, take up to 4)
+        above = sorted([c for c in candidates if (c.get("rank_tier") or 0) > req_rank], key=lambda c: (c.get("rank_tier") or 0) - req_rank)[:4]
         
-        # Players below (sorted by MMR difference ascending, take up to 4)
-        below = sorted([c for c in candidates if (c.get("mmr") or 0) < req_mmr], key=lambda c: req_mmr - float(c.get("mmr") or 0))[:4]
+        # Players below (sorted by rank_tier difference ascending, take up to 4)
+        below = sorted([c for c in candidates if (c.get("rank_tier") or 0) < req_rank], key=lambda c: req_rank - (c.get("rank_tier") or 0))[:4]
 
         players = above + [requester] + below
 
@@ -144,15 +144,14 @@ async def party_for_user(chat_id, chat_type, requester, context):
                 steam_nick = p.get("username") or p.get("steam_nickname")
             steam_id = p.get("steam_id")
             rank_tier = p.get("rank_tier", 0) or 0
-            mmr = p.get("mmr") or 0
             has_games = (p.get("week_games") or 0) > 0
             from dota_mmr import rank_to_string
             player_rank = rank_to_string(rank_tier)
             name = f"<b>{html.escape(steam_nick or '—')}</b>"
             if has_games:
-                second = f"└ {mmr} • WR {get_week_wr(p)}%"
+                second = f"└ {player_rank} • WR {get_week_wr(p)}%"
             else:
-                second = f"└ {mmr} • Нет игр за неделю"
+                second = f"└ {player_rank} • Нет игр за неделю"
             lines.append(f"{rank}{name} - {player_rank}")
             lines.append(second)
 

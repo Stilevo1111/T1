@@ -2544,24 +2544,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         steam_id = target_user.get('steam_id')
         
-        # Check if we need to update MMR (if week_games is 0 and user has steam_id)
-        need_update = False
-        if steam_id and (not target_user.get('week_games') or target_user.get('week_games') == 0):
-            last_updated = target_user.get('mmr_last_updated')
-            if not last_updated or (time.time() - last_updated) > 3600:  # Update if never updated or older than 1 hour
-                need_update = True
-        
-        if need_update:
-            try:
-                from dota_mmr import update_user_mmr
-                await asyncio.to_thread(update_user_mmr, target_user.get('telegram_id'))
-                # Refresh user data after update
-                target_user = await asyncio.to_thread(get_user, target_user.get('telegram_id'))
-                steam_id = target_user.get('steam_id')
-                week_games = target_user.get('week_games') or 0
-                week_wins = target_user.get('week_wins') or 0
-            except Exception as e:
-                logger.debug(f"Could not update MMR for profile: {e}")
+        # MMR update removed - rank_tier is now primary metric
+        # Users can refresh manually via /refreshmmr command
         
         if steam_id:
             text = (
