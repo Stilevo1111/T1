@@ -1996,7 +1996,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Get invited player stats
         invited_rank_tier = invited_player.get("rank_tier", 0) or 0
-        invited_mmr = invited_player.get("mmr", 0) or 0
         
         # Get inviter stats for the invitation
         inviter_username = inviter.get("username") or "" if inviter else ""
@@ -2005,11 +2004,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not inviter_username:
             inviter_username = f"tg{inviter_id}" if inviter_id else "пользователь"
         
-        inviter_mmr = 0
         inviter_week_games = 0
         inviter_week_wins = 0
         if inviter:
-            inviter_mmr = inviter.get("mmr", 0) or 0
             inviter_week_games = inviter.get("week_games", 0) or 0
             inviter_week_wins = inviter.get("week_wins", 0) or 0
         inviter_winrate = round((inviter_week_wins / inviter_week_games * 100)) if inviter_week_games > 0 else 0
@@ -2022,7 +2019,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         invitation_text = (
             f"👤 @{username},  Готов к игре?\n\n"
             f"👤 @{inviter_username},  приглашает тебя в пати!\n"
-            f"└  MMR: {inviter_mmr} • WR: {inviter_winrate}% за неделю."
+            f"└  {inviter_rank_name} • WR: {inviter_winrate}% за неделю."
         )
         
         await context.bot.send_message(chat_id=chat_id, text=invitation_text, parse_mode="HTML")
