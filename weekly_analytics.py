@@ -408,6 +408,13 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
     if cached is not None:
         return cached
 
+    # Try local disk cache first (faster than API)
+    from dota_mmr import get_hero_icon_cached
+    icon = await asyncio.to_thread(get_hero_icon_cached, hero_id)
+    if icon is not None:
+        image_cache.set(str(hero_id), icon)
+        return icon
+
     heroes = await _load_heroes()
 
     hero_name = heroes.get(hero_id)
