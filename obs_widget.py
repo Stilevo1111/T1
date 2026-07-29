@@ -188,7 +188,7 @@ async def generate_obs_widget(
     img = Image.new("RGBA", (WIDGET_WIDTH, WIDGET_HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
-async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession() as session:
         for i in range(limit):
             if i < len(matches):
                 match = matches[i]
