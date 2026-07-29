@@ -1121,12 +1121,25 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
             invalid_stats = not stats or stats.get("nickname") == "Unknown"
             if invalid_stats:
                 try:
-                    from database import get_user_by_steam_id
+                    from database import get_user_by_steam_id, get_user, update_user_fields_batch, user_cache
                     existing_user = get_user_by_steam_id(steam_id)
                     if existing_user and existing_user.get('telegram_id') == telegram_id:
                         return {"success": True, "message": "✅ Аккаунт уже привязан к вам"}
                     if existing_user:
-                        return {"success": False, "message": "❌ Этот Steam аккаунт уже привязан к другому пользователю"}
+                        existing_tid = existing_user.get('telegram_id')
+                        existing_username = existing_user.get('username') or existing_user.get('steam_nickname') or 'другой игрок'
+                        
+                        # Автоматически переносим Steam аккаунт на нового пользователя
+                        logger.info(f"Transferring Steam {steam_id} from user {existing_tid} to {telegram_id}")
+                        update_user_fields_batch(existing_tid, {"steam_id": None, "steam_nickname": None, "avatar": None}, update_top_cache=False)
+                        with user_cache._lock:
+                            if steam_id in user_cache._steam_index:
+                                del user_cache._steam_index[steam_id]
+                        
+                        return {
+                            "success": True,
+                            "message": f"⚠️ Steam аккаунт был привязан к {existing_username}\nАвтоматически перенесён на ваш аккаунт.\nСтарые данные утрачены."
+                        }
                 except Exception:
                     pass
 
@@ -1150,11 +1163,31 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
             stats = data
 
         # Проверяем, не привязан ли уже этот steam_id к другому аккаунту
-        from database import get_user_by_steam_id
+        from database import get_user_by_steam_id, get_user, update_user_fields_batch, user_cache
         existing_user = get_user_by_steam_id(steam_id)
         if existing_user and existing_user.get('telegram_id') != telegram_id:
+            existing_tid = existing_user.get('telegram_id')
             existing_username = existing_user.get('username') or existing_user.get('steam_nickname') or 'другой игрок'
-            return {"success": False, "message": f"❌ Этот Steam аккаунт уже привязан к {existing_username}"}
+            
+            # Автоматически переносим Steam аккаунт на нового пользователя
+            logger.info(f"Transferring Steam {steam_id} from user {existing_tid} to {telegram_id}")
+            
+            # Удаляем steam_id у старого пользователя (раз-prивязываем)
+            update_user_fields_batch(existing_tid, {
+                "steam_id": None,
+                "steam_nickname": None,
+                "avatar": None,
+            }, update_top_cache=False)
+            
+            # Обновляем reverse index в кеше
+            with user_cache._lock:
+                if steam_id in user_cache._steam_index:
+                    del user_cache._steam_index[steam_id]
+            
+            return {
+                "success": True,
+                "message": f"⚠️ Steam аккаунт был привязан к {existing_username}\nАвтоматически перенесён на ваш аккаунт.\nСтарые данные утрачены."
+            }
 
         # сохраняем все поля одним запросом
         update_user_fields_batch(telegram_id, {
