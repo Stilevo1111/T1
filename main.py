@@ -4038,7 +4038,7 @@ async def main():
         app.add_handler(CommandHandler("topmmr", topmmr))
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler("admin_unlink", admin_unlink))
-        app.add_handler(CommandHandler(("digestnow", "dotadigestnow", "setdigestchat"), digest_handler))
+        app.add_handler(CommandHandler("setdigestchat", digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
         app.add_handler(CommandHandler("analyze", analyze_command))
         app.add_handler(CommandHandler(("party", "party"), party_command))
