@@ -2648,8 +2648,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     logger.error(f"Could not generate heroes image: {e}", exc_info=True)
             else:
-                logger.info(f"top_heroes empty for steam_id={steam_id}, using heroes_strip fallback")
-                profile_banner_url = get_banner_path("heroes_strip")
+                logger.info(f"top_heroes empty for steam_id={steam_id}, using profile fallback")
+                profile_banner_url = get_banner_path("profile")
         else:
             profile_banner_url = get_banner_path("profile")
 
