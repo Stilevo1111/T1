@@ -2603,7 +2603,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         matches = []
                         top_heroes = []
                     except Exception as e:
-                        logger.debug(f"Could not get matches/heroes: {e}")
+                        logger.warning(f"Could not get matches/heroes: {e}")
                         matches = []
                         top_heroes = []
 
