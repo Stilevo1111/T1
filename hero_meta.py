@@ -17,20 +17,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 from hero_positions import hero_positions
 from constants import get_banner_path
+from cache_service import explorer_circuit_breaker
 
-# Circuit breaker for OpenDota explorer API
-_explorer_circuit_breaker = {
-    "state": "CLOSED",
-    "failure_count": 0,
-    "last_failure_time": 0,
-    "failure_threshold": 3,
-    "recovery_timeout": 300,  # 5 minutes
-}
+logger = logging.getLogger(__name__)
 
 # Rate limit cache
 _explorer_cache = {"data": None, "timestamp": 0, "fallback_used": False}
-
-logger = logging.getLogger(__name__)
 
 BACKGROUND_PATH = get_banner_path("heroes_strip")
 

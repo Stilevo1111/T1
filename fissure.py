@@ -488,7 +488,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Multicast indicator (only when an actual multiplier happened)
         if cascade_count > 1:
             m_display = f"+{multiplied_roll}" if multiplied_roll > 0 else str(multiplied_roll)
-            parts.append(f"⚡ МУЛЬТИКАСТ×{cascade_count} {m_display} см!")
+            parts.append(f"МУЛЬТИКАСТ×{cascade_count} {m_display} см!")
 
         # Join parts with single blank line between them
         text = "\n\n".join(parts)

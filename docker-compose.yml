@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: fissure-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./cache:/app/cache
+      - ./hero_cache:/app/hero_cache
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - fissure-network
+
+  db:
+    image: postgres:15-alpine
+    container_name: fissure-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fissure
+      POSTGRES_USER: fissure_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fissure-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: fissure-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - fissure-network
+
+networks:
+  fissure-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

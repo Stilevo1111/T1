@@ -70,6 +70,10 @@ structlog.configure(
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
+        structlog.processors.CallsiteParameterAdder(
+            structlog.processors.CallsiteParameter.FILE_PATH |
+            structlog.processors.CallsiteParameter.LINENO
+        ),
         structlog.dev.ConsoleRenderer()
     ],
     context_class=dict,
@@ -79,6 +83,29 @@ structlog.configure(
 )
 
 logger = structlog.get_logger(__name__)
+
+# Correlation ID support
+import uuid
+import threading
+_correlation_id = threading.local()
+
+def get_correlation_id() -> str:
+    """Get current correlation ID, generate new one if not set."""
+    if not hasattr(_correlation_id, 'value') or _correlation_id.value is None:
+        _correlation_id.value = str(uuid.uuid4())
+    return _correlation_id.value
+
+def set_correlation_id(cid: str = None) -> str:
+    """Set correlation ID for current context."""
+    if cid is None:
+        cid = str(uuid.uuid4())
+    _correlation_id.value = cid
+    return cid
+
+def clear_correlation_id():
+    """Clear correlation ID for current context."""
+    if hasattr(_correlation_id, 'value'):
+        _correlation_id.value = None
 
 # Bot token
 TOKEN = os.getenv("BOT_TOKEN")

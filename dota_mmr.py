@@ -5,6 +5,7 @@ import logging
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -13,38 +14,47 @@ from PIL import Image
 
 from database import get_user, update_user_fields_batch
 from constants import get_banner_path
+from cache_service import api_cache, negative_cache, image_cache, hero_cache, opendota_rate_limiter, opendota_circuit_breaker
 
-# Hero list cache
-_heroes_cache = None
-_heroes_cache_time = 0
+logger = logging.getLogger(__name__)
+
+# Thread pool for running async code from sync contexts (avoids event loop conflicts)
+_async_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="async_sync_bridge")
+
+def _run_async(coro):
+    """Run async coroutine from sync context safely.
+    
+    Uses a dedicated thread pool with its own event loop to avoid
+    "Event loop is closed" and "RuntimeError: asyncio.run() cannot be called from a running event loop" errors.
+    """
+    def run_in_new_loop():
+        return asyncio.run(coro)
+    
+    future = _async_executor.submit(run_in_new_loop)
+    return future.result(timeout=30)
+
+# Hero list cache (uses unified cache)
 _HEROES_CACHE_TTL = 86400  # 24 hours
-
-# Heroes image cache
-_heroes_image_cache = {}
-_heroes_image_cache_ttl = 86400  # 24 hours
-
-# Rank icons cache
-_rank_icons_cache = {}
 
 async def get_hero_list():
     """Get list of heroes from OpenDota API with caching."""
-    global _heroes_cache, _heroes_cache_time
-    if _heroes_cache is not None and time.time() - _heroes_cache_time < _HEROES_CACHE_TTL:
-        return _heroes_cache
+    cached = hero_cache.get("hero_list")
+    if cached is not None:
+        return cached
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
             async with session.get("https://api.opendota.com/api/heroes") as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     if data:
-                        _heroes_cache = data
-                        _heroes_cache_time = time.time()
+                        hero_cache.set("hero_list", data, ttl=_HEROES_CACHE_TTL)
                         return data
     except Exception as e:
         logger.warning(f"Failed to fetch heroes: {e}")
-    except Exception as e:
-        logger.warning(f"Failed to fetch heroes: {e}")
     return []
+
+OPENDOTA_API_URL = "https://api.opendota.com/api"
+STEAM_OFFSET = 76561197960265728
 
 # Cached background for start card to avoid repeated downloads
 _START_CARD_BACKGROUND_RESIZED = None
@@ -67,38 +77,38 @@ def _get_start_card_background():
         logger.error(f"Failed to load start card background: {e}")
     return None
 
-logger = logging.getLogger(__name__)
-
-OPENDOTA_API_URL = "https://api.opendota.com/api"
-STEAM_OFFSET = 76561197960265728
-
-# Rate limiting для OpenDota API
-_api_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
-API_RATE_LIMIT = 15  # максимум запросов в минуту (OpenDota允许30/мин, держим запас)
-API_RATE_WINDOW = 60  # окно в секундах
-API_MIN_INTERVAL = 5  # минимум 5 секунд между запросами
-
-# Глобальное состояние rate limit для сообщений об ошибках
-_opendota_rate_limited_until = 0  # Unix timestamp, пока API недоступен
-
-# Circuit Breaker для защиты от длительной недоступности
-_circuit_breaker = {
-    "state": "CLOSED",  # CLOSED, OPEN, HALF_OPEN
-    "failure_count": 0,
-    "last_failure_time": 0,
-    "failure_threshold": 10,  # Порог срабатывания (увеличен для стабильности)
-    "recovery_timeout": 30,  # 30 секунд до попытки восстановления (уменьшен)
-}
-
 def reset_circuit_breaker():
     """Принудительно сбросить circuit breaker (для отладки/восстановления)"""
-    _circuit_breaker["state"] = "CLOSED"
-    _circuit_breaker["failure_count"] = 0
-    _circuit_breaker["last_failure_time"] = 0
+    opendota_circuit_breaker.reset()
     logger.info("Circuit breaker manually reset to CLOSED")
 
+# Rate limiter helper functions using unified rate limiter
+def is_opendota_rate_limited():
+    """Проверить, находится ли OpenDota API в состоянии rate limit"""
+    if not opendota_rate_limiter.try_acquire(1):
+        return True
+    return False
 
-# Background retry task
+
+def get_opendota_rate_limit_time_remaining():
+    """Получить оставшееся время до восстановления API в секундах"""
+    global _opendota_rate_limited_until
+    remaining = _opendota_rate_limited_until - time.time()
+    return max(0, int(remaining))
+
+
+def get_opendota_rate_limit_message():
+    """Получить сообщение об ошибке"""
+    return "⚠️ OpenDota API временно недоступен. Вернётся, когда кто-то купит варды 👁️"
+
+
+def set_opendota_rate_limited(wait_seconds=60):
+    """Установить время до которого OpenDota API недоступен"""
+    opendota_rate_limiter._tokens = 0
+    opendota_rate_limiter._last_update = time.monotonic() - wait_seconds
+
+
+# Background retry task for circuit breaker recovery
 _retry_task = None
 
 def start_background_retry(max_retries=3, retry_interval=30):
@@ -108,11 +118,9 @@ def start_background_retry(max_retries=3, retry_interval=30):
     def retry_loop():
         while True:
             time.sleep(retry_interval)
-            if _circuit_breaker["state"] == "OPEN":
-                now = time.time()
-                if now - _circuit_breaker.get("last_failure_time", 0) > _circuit_breaker["recovery_timeout"]:
-                    logger.info("Background retry: attempting circuit breaker recovery")
-                    _circuit_breaker["state"] = "HALF_OPEN"
+            if opendota_circuit_breaker.state == "OPEN":
+                logger.info("Background retry: attempting circuit breaker recovery")
+                # The circuit breaker will automatically transition to HALF_OPEN
     
     if _retry_task is None:
         _retry_task = threading.Thread(target=retry_loop, daemon=True)
@@ -121,54 +129,18 @@ def start_background_retry(max_retries=3, retry_interval=30):
 
 def _circuit_breaker_can_execute() -> bool:
     """Проверить можно ли выполнять запрос (Circuit Breaker pattern)"""
-    cb = _circuit_breaker
-    now = time.time()
-
-    if cb["state"] == "CLOSED":
-        return True
-
-    if cb["state"] == "OPEN":
-        # Проверяем таймаут восстановления
-        if now - cb["last_failure_time"] > cb["recovery_timeout"]:
-            cb["state"] = "HALF_OPEN"
-            logger.info("Circuit breaker: HALF_OPEN - attempting recovery")
-            return True
-        logger.warning(f"Circuit breaker OPEN, waiting {cb['recovery_timeout'] - (now - cb['last_failure_time']):.0f}s")
-        return False
-
-    if cb["state"] == "HALF_OPEN":
-        return True
-    
-    # Unknown state, treat as closed for safety
-    return False
+    return opendota_circuit_breaker.can_execute()
 
 def _circuit_breaker_record_success():
     """Записать успешный запрос"""
-    cb = _circuit_breaker
-    if cb["state"] == "HALF_OPEN":
-        cb["state"] = "CLOSED"
-        logger.info("Circuit breaker: CLOSED - recovery successful")
-    cb["failure_count"] = 0
+    opendota_circuit_breaker.record_success()
 
 def _circuit_breaker_record_failure():
     """Записать неудачный запрос"""
-    cb = _circuit_breaker
-    cb["failure_count"] += 1
-
-    if cb["state"] == "CLOSED":
-        if cb["failure_count"] >= cb["failure_threshold"]:
-            cb["state"] = "OPEN"
-            cb["last_failure_time"] = time.time()
-            logger.warning(f"Circuit breaker: OPEN - too many failures ({cb['failure_count']})")
-    elif cb["state"] == "HALF_OPEN":
-        # Failure in half-open state -> immediately open again
-        cb["state"] = "OPEN"
-        cb["last_failure_time"] = time.time()
-        logger.warning("Circuit breaker: OPEN - failure in half-open state")
-    # If already OPEN, do nothing - keep the original open time for timeout calculation
+    opendota_circuit_breaker.record_failure()
 
 # Простой кеш для запросов (5 минут)
-_cache = {}
+_CACHE = {}
 CACHE_TTL = 300  # 5 минут
 CACHE_MAX_SIZE = 100  # максимальное количество записей в кеше
 
@@ -180,20 +152,17 @@ _NEG_TTL = 3600  # 1 час
 
 def _mark_not_found(url: str):
     """Запомнить, что эндпоинт вернул 404 (аккаунт не существует / профиль скрыт)."""
-    _NEG_CACHE[url] = time.time() + _NEG_TTL
+    negative_cache.set(url)
 
 
 def _is_not_found(url: str) -> bool:
-    exp = _NEG_CACHE.get(url)
-    if exp and exp > time.time():
-        return True
-    if exp is not None:
-        del _NEG_CACHE[url]
-    return False
+    """Проверить, был ли уже кеширован 404 ответ."""
+    return negative_cache.get(url)
 
 
 def _clear_not_found(url: str):
-    _NEG_CACHE.pop(url, None)
+    """Удалить запись о 404 из кеша."""
+    negative_cache.delete(url)
 
 # Кеш матчей пользователей (30 минут - экономим API)
 _user_matches_cache = {}
@@ -250,57 +219,30 @@ class RateLimitWaitError(Exception):
 
 
 def _get_cached(key):
-    """Получить значение из кеша с ограничением размера"""
-    if key in _cache:
-        value, timestamp = _cache[key]
-        if time.time() - timestamp < CACHE_TTL:
-            return value
-        del _cache[key]
-    return None
+    """Получить значение из кеша с ограничением размера (using unified cache)"""
+    value = api_cache.get(key)
+    if value is None:
+        return None
+    if len(api_cache._cache) > CACHE_MAX_SIZE:
+        api_cache._evict_lru()
+    return value
 
 
 def _set_cached(key, value):
-    """Сохранить значение в кеш с ограничением размера"""
-    # Очистка старых записей если кеш переполнен
-    if len(_cache) >= CACHE_MAX_SIZE:
-        # Удаляем 20% самых старых записей
-        sorted_cache = sorted(_cache.items(), key=lambda x: x[1][1])
-        for key_to_remove in sorted_cache[:CACHE_MAX_SIZE // 5]:
-            del _cache[key_to_remove[0]]
-
-    _cache[key] = (value, time.time())
+    """Сохранить значение в кеш с ограничением размера (using unified cache)"""
+    api_cache.set(key, value, ttl=CACHE_TTL)
 
 
 def _clear_cache():
     """Очистить весь кеш (для освобождения памяти)"""
-    global _cache
-    _cache = {}
-
-
-_async_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
+    api_cache.clear()
 
 
 async def _check_rate_limit_async():
-    """Async версия rate limiting"""
-    now = time.time()
-
-    if now - _async_rate_limit["window_start"] >= API_RATE_WINDOW:
-        _async_rate_limit["window_start"] = now
-        _async_rate_limit["requests_count"] = 0
-
-    if _async_rate_limit["requests_count"] >= API_RATE_LIMIT:
-        wait_time = API_RATE_WINDOW - (now - _async_rate_limit["window_start"])
-        if wait_time > 0:
-            await asyncio.sleep(wait_time)
-            _async_rate_limit["window_start"] = now
-            _async_rate_limit["requests_count"] = 0
-
-    time_since_last = now - _async_rate_limit["last_request"]
-    if time_since_last < API_MIN_INTERVAL:
-        await asyncio.sleep(API_MIN_INTERVAL - time_since_last)
-
-    _async_rate_limit["requests_count"] += 1
-    _async_rate_limit["last_request"] = time.time()
+    """Async версия rate limiting - using unified rate limiter."""
+    if not opendota_rate_limiter.try_acquire(1):
+        wait = opendota_rate_limiter.wait_time(1)
+        await asyncio.sleep(wait)
 
 
 async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15, max_retries: int = 3) -> dict:
@@ -595,16 +537,7 @@ async def get_heroes_data_async() -> dict:
 
 def get_heroes_data() -> dict:
     """Синхронная обёртка для обратной совместимости"""
-    import asyncio
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-    
-    if loop and loop.is_running():
-        return asyncio.run_coroutine_threadsafe(get_heroes_data_async(), loop).result(timeout=30)
-    else:
-        return asyncio.run(get_heroes_data_async())
+    return _run_async(get_heroes_data_async())
 
 
 def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
@@ -962,16 +895,7 @@ async def search_player_async(nickname: str) -> dict:
 
 def search_player(nickname: str) -> dict:
     """Синхронная обёртка для обратной совместимости"""
-    import asyncio
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-    
-    if loop and loop.is_running():
-        return asyncio.run_coroutine_threadsafe(search_player_async(nickname), loop).result(timeout=30)
-    else:
-        return asyncio.run(search_player_async(nickname))
+    return _run_async(search_player_async(nickname))
 
 
 # ========================
@@ -980,16 +904,7 @@ def search_player(nickname: str) -> dict:
 
 def get_recent_matches(steam_id: int, limit: int = 5) -> list:
     """Синхронная обёртка для обратной совместимости"""
-    import asyncio
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-    
-    if loop and loop.is_running():
-        return asyncio.run_coroutine_threadsafe(get_recent_matches_async(steam_id, limit), loop).result(timeout=30)
-    else:
-        return asyncio.run(get_recent_matches_async(steam_id, limit))
+    return _run_async(get_recent_matches_async(steam_id, limit))
 
 
 async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
@@ -1060,16 +975,7 @@ async def is_win_api_async(match_id: int, steam_id: int) -> bool:
 
 def is_win_api(match_id: int, steam_id: int) -> bool:
     """Синхронная обёртка для обратной совместимости"""
-    import asyncio
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-    
-    if loop and loop.is_running():
-        return asyncio.run_coroutine_threadsafe(is_win_api_async(match_id, steam_id), loop).result(timeout=15)
-    else:
-        return asyncio.run(is_win_api_async(match_id, steam_id))
+    return _run_async(is_win_api_async(match_id, steam_id))
 
 
 # ========================
@@ -1163,17 +1069,8 @@ async def get_player_stats_async(steam_id: int, use_cache: bool = True, timeout:
 
 
 def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) -> dict:
-    """Синхронная обёртка для обратной совместимости"""
-    import asyncio
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-    
-    if loop and loop.is_running():
-        return asyncio.run_coroutine_threadsafe(get_player_stats_async(steam_id, use_cache, timeout), loop).result(timeout=30)
-    else:
-        return asyncio.run(get_player_stats_async(steam_id, use_cache, timeout))
+    """Синхурная обёртка для обратной совместимости"""
+    return _run_async(get_player_stats_async(steam_id, use_cache, timeout))
 
 
 # ========================

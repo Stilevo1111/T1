@@ -42,6 +42,7 @@ from database import Database, get_user
 from dota_mmr import OPENDOTA_API_URL, _api_get_async, steam64_to_account_id
 from hero_names import get_display_name
 from hero_positions import hero_positions
+from cache_service import image_cache
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +57,8 @@ __all__ = [
     "detect_role_from_history",
 ]
 
-# Cache for background image and hero icons
+# Cache for background image
 _CHART_BG_CACHE = None
-_HERO_ICON_CACHE = {}
-_HERO_ICON_CACHE_MAX = 150  # ~120 Dota heroes + buffer
 
 # =========================================================
 # MARKDOWN ESCAPE
@@ -404,10 +403,10 @@ def _normalize_hero_file_name(internal_name: str) -> str:
 
 
 async def _get_hero_icon(hero_id: int) -> Image.Image | None:
-    global _HERO_ICON_CACHE
-
-    if hero_id in _HERO_ICON_CACHE:
-        return _HERO_ICON_CACHE[hero_id]
+    # Check unified cache first
+    cached = image_cache.get(str(hero_id))
+    if cached is not None:
+        return cached
 
     heroes = await _load_heroes()
 
@@ -440,11 +439,7 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
                 pass
         
         if icon:
-            if len(_HERO_ICON_CACHE) >= _HERO_ICON_CACHE_MAX:
-                keys_to_remove = list(_HERO_ICON_CACHE.keys())[:_HERO_ICON_CACHE_MAX // 4]
-                for k in keys_to_remove:
-                    _HERO_ICON_CACHE.pop(k, None)
-            _HERO_ICON_CACHE[hero_id] = icon
+            image_cache.set(str(hero_id), icon)
             return icon
 
     try:

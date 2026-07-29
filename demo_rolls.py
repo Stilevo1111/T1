@@ -39,8 +39,7 @@ def demo_message_structure():
     
     # Mock the parts that would be in a real message
     def format_message_part(username, roll_value, is_negative=False, cascade=False, 
-                          streak_text="", weekend_bonus="", multicast_text=""):
-        mers=""):
+                          streak_text="", weekend_bonus="", multicast_text="", cascade_count=1):
         """Format a message similar to what fissure.py does now."""
         parts = []
         
@@ -68,9 +67,9 @@ def demo_message_structure():
         # Roll value display (NEW STANDARD FORMAT)
         roll_display = f"+{roll_value}" if roll_value > 0 else str(roll_value)
         if cascade_count > 1:
-            parts.append(f"⚡ МУЛЬТЬКАСТ×{cascade_count}  {roll_display} см")
+            parts.append(f"МУЛЬТЬКАСТ×{cascade_count}  {roll_display} см")
         else:
-            parts.append(f"⚡ {roll_display} см")
+            parts.append(f"{roll_display} см")
             
         # Fissure change (always at end)
         # Simulate some change

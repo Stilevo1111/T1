@@ -700,6 +700,10 @@ _PG_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_users_username ON users(LOWER(username))",
     "CREATE INDEX IF NOT EXISTS idx_users_week_active ON users(steam_id, week_games DESC) WHERE steam_id IS NOT NULL AND week_games > 0",
     "CREATE INDEX IF NOT EXISTS idx_users_daily_best_growth ON users(daily_best_growth DESC)",
+    # Critical composite indexes for top queries
+    "CREATE INDEX IF NOT EXISTS idx_users_mmr_steam ON users(mmr DESC) WHERE steam_id IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS idx_users_fissure_inchat ON users(fissure DESC) WHERE in_chat",
+    "CREATE INDEX IF NOT EXISTS idx_users_last_activity ON users(last_activity) WHERE in_chat",
 )
 
 # Лёгкие миграции — выполняются даже при fast init (ADD IF NOT EXISTS)
@@ -1213,8 +1217,13 @@ wins INTEGER DEFAULT 0,
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_week_games ON users(week_games DESC)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_current_position ON users(current_position)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_rank_tier ON users(rank_tier DESC)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_in_chat ON users(in_chat)")  # Index for filtering active users
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_in_chat ON users(in_chat)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_daily_best_growth ON users(daily_best_growth DESC)")
+            # Critical composite indexes for top queries
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_mmr_steam ON users(mmr DESC) WHERE steam_id IS NOT NULL")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure_inchat ON users(fissure DESC) WHERE in_chat")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_week_active ON users(steam_id, week_games DESC) WHERE steam_id IS NOT NULL AND week_games > 0")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_last_activity ON users(last_activity) WHERE in_chat")
 
         _save_schema_version(cursor, is_pg)
         conn.commit()
