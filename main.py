@@ -70,10 +70,6 @@ structlog.configure(
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
-        structlog.processors.CallsiteParameterAdder(
-            structlog.processors.CallsiteParameter.FILE_PATH |
-            structlog.processors.CallsiteParameter.LINENO
-        ),
         structlog.dev.ConsoleRenderer()
     ],
     context_class=dict,
