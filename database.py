@@ -3178,6 +3178,7 @@ def get_dota_week_top(limit=10, force_refresh=False):
                     'telegram_id': telegram_id,
                     'username': user.get('username'),
                     'steam_nickname': user.get('steam_nickname'),
+                    'steam_id': user.get('steam_id'),
                     'mmr': user.get('mmr', 0),
                     'week_games': week_games,
                     'week_wins': week_wins,
