@@ -300,7 +300,7 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
 
     parts = []
 
-    # Dota digest
+# Dota digest
     mmr_top = _digest_state_container.get_dota_data()
     if mmr_top:
         valid_players = [p for p in mmr_top if p.get('week_games', 0) >= 1]
@@ -313,10 +313,18 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
             bottom_by_net = min(
                 valid_players,
                 key=lambda p: (p.get('week_wins', 0) - (p.get('week_games', 0) - p.get('week_wins', 0)), -p.get('week_games', 0))
-)
+            )
 
-            top_name = clickable_name(top_by_net.get('username') or top_by_net.get('steam_nickname') or top_by_net.get('first_name'), top_by_net.get('telegram_id'), top_by_net.get('steam_id'))
-            bottom_name = clickable_name(bottom_by_net.get('username') or bottom_by_net.get('steam_nickname') or bottom_by_net.get('first_name'), bottom_by_net.get('telegram_id'), bottom_by_net.get('steam_id'))
+            # Ensure telegram_id is a valid positive integer for clickable link
+            top_tid = top_by_net.get('telegram_id')
+            if top_tid is None or (isinstance(top_tid, int) and top_tid <= 0):
+                top_tid = None
+            top_name = clickable_name(top_by_net.get('username') or top_by_net.get('steam_nickname') or top_by_net.get('first_name'), top_tid, top_by_net.get('steam_id'))
+            
+            bot_tid = bottom_by_net.get('telegram_id')
+            if bot_tid is None or (isinstance(bot_tid, int) and bot_tid <= 0):
+                bot_tid = None
+            bottom_name = clickable_name(bottom_by_net.get('username') or bottom_by_net.get('steam_nickname') or bottom_by_net.get('first_name'), bot_tid, bottom_by_net.get('steam_id'))
 
             top_games = top_by_net.get('week_games', 0)
             top_wins = top_by_net.get('week_wins', 0)
