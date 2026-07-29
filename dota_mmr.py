@@ -62,6 +62,10 @@ _opendota_rate_limited_until = 0
 # Rank icons cache (fallback if image_cache fails)
 _rank_icons_cache = {}
 
+# Heroes image cache for profile stats
+_heroes_image_cache = {}
+_heroes_image_cache_ttl = 3600  # 1 hour
+
 # Cached background for start card to avoid repeated downloads
 _START_CARD_BACKGROUND_RESIZED = None
 _START_CARD_BACKGROUND_CACHED = False
