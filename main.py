@@ -333,7 +333,7 @@ async def flush_users_cache_job(context):
     """Периодический сброс dirty-пользователей из кеша в БД"""
     try:
         from database import flush_users_cache
-        flushed = flush_users_cache()
+        flushed = await flush_users_cache()
         if flushed:
             logger.info(f"flush_users_cache_job: сохранено {flushed} пользователей")
     except Exception as e:

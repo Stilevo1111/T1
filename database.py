@@ -376,7 +376,7 @@ async def close_aiohttp_session():
         _aiohttp_session = None
 
 
-def flush_users_cache():
+async def flush_users_cache(max_retries: int = 3):
     """Сброс всех изменённых пользователей в БД с использованием batch операций"""
     dirty_users = user_cache.get_all_dirty()
     if not dirty_users:
@@ -387,86 +387,88 @@ def flush_users_cache():
 
     db_type = get_db_type()
     flushed = 0
+    
+    for attempt in range(max_retries):
+        conn = None
+        cursor = None
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
 
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
+            batch_data = []
+            for telegram_id in dirty_users:
+                if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
+                    logger.warning(f"flush_users_cache: skipping user with invalid telegram_id={telegram_id}")
+                    continue
 
-        # Подготавливаем данные для batch обновления
-        batch_data = []
-        for telegram_id in dirty_users:
-            # Skip if telegram_id looks like SteamID64 (protection against corrupted cache)
-            if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
-                logger.warning(f"flush_users_cache: skipping user with invalid telegram_id={telegram_id}")
-                continue
+                user_data = user_cache.get(telegram_id)
+                if user_data:
+                    batch_data.append((
+                        user_data.get('username'), user_data.get('fissure', 0),
+                        user_data.get('last_fissure', 0), user_data.get('total_growth', 0),
+                        user_data.get('total_rolls', 0), user_data.get('current_streak', 0),
+                        user_data.get('best_streak', 0), user_data.get('weekly_rolls', 0),
+                        user_data.get('weekly_growth', 0), user_data.get('steam_id'),
+                        user_data.get('steam_nickname'), user_data.get('mmr', 0),
+                        user_data.get('rank_tier', 0), user_data.get('dota_total_games', 0),
+                        user_data.get('dota_wins', 0), user_data.get('last_dota_games', 0),
+                        user_data.get('last_dota_wins', 0), user_data.get('week_games', 0),
+                        user_data.get('week_wins', 0), user_data.get('week_best_streak', 0),
+                        user_data.get('week_start_date'), telegram_id
+                    ))
 
-            user_data = user_cache.get(telegram_id)
-            if user_data:
-                batch_data.append((
-                    user_data.get('username'), user_data.get('fissure', 0),
-                    user_data.get('last_fissure', 0), user_data.get('total_growth', 0),
-                    user_data.get('total_rolls', 0), user_data.get('current_streak', 0),
-                    user_data.get('best_streak', 0), user_data.get('weekly_rolls', 0),
-                    user_data.get('weekly_growth', 0), user_data.get('steam_id'),
-                    user_data.get('steam_nickname'), user_data.get('mmr', 0),
-                    user_data.get('rank_tier', 0), user_data.get('dota_total_games', 0),
-                    user_data.get('dota_wins', 0), user_data.get('last_dota_games', 0),
-                    user_data.get('last_dota_wins', 0), user_data.get('week_games', 0),
-                    user_data.get('week_wins', 0), user_data.get('week_best_streak', 0),
-                    user_data.get('week_start_date'), telegram_id
-                ))
+            if batch_data:
+                if db_type == "postgresql":
+                    query = """
+                        UPDATE users SET 
+                            username = %s, fissure = %s, last_fissure = %s,
+                            total_growth = %s, total_rolls = %s, current_streak = %s,
+                            best_streak = %s, weekly_rolls = %s, weekly_growth = %s,
+                            steam_id = %s, steam_nickname = %s, mmr = %s, rank_tier = %s,
+                            dota_total_games = %s, dota_wins = %s, last_dota_games = %s,
+                            last_dota_wins = %s, week_games = %s, week_wins = %s,
+                            week_best_streak = %s, week_start_date = %s, last_activity = CURRENT_TIMESTAMP
+                        WHERE telegram_id = %s
+                    """
+                    psycopg2.extras.execute_batch(cursor, query, batch_data, page_size=100)
+                else:
+                    query = """
+                        UPDATE users SET 
+                            username = ?, fissure = ?, last_fissure = ?,
+                            total_growth = ?, total_rolls = ?, current_streak = ?,
+                            best_streak = ?, weekly_rolls = ?, weekly_growth = ?,
+                            steam_id = ?, steam_nickname = ?, mmr = ?, rank_tier = ?,
+                            dota_total_games = ?, dota_wins = ?, last_dota_games = ?,
+                            last_dota_wins = ?, week_games = ?, week_wins = ?,
+                            week_best_streak = ?, week_start_date = ?, last_activity = CURRENT_TIMESTAMP
+                        WHERE telegram_id = ?
+                    """
+                    cursor.executemany(query, batch_data)
 
-        # Batch обновление через executemany для экономии CU
-        if batch_data:
-            if db_type == "postgresql":
-                query = """
-                    UPDATE users SET 
-                        username = %s, fissure = %s, last_fissure = %s,
-                        total_growth = %s, total_rolls = %s, current_streak = %s,
-                        best_streak = %s, weekly_rolls = %s, weekly_growth = %s,
-                        steam_id = %s, steam_nickname = %s, mmr = %s, rank_tier = %s,
-                        dota_total_games = %s, dota_wins = %s, last_dota_games = %s,
-                        last_dota_wins = %s, week_games = %s, week_wins = %s,
-                        week_best_streak = %s, week_start_date = %s, last_activity = CURRENT_TIMESTAMP
-                    WHERE telegram_id = %s
-                """
-                psycopg2.extras.execute_batch(cursor, query, batch_data, page_size=100)
-            else:
-                query = """
-                    UPDATE users SET 
-                        username = ?, fissure = ?, last_fissure = ?,
-                        total_growth = ?, total_rolls = ?, current_streak = ?,
-                        best_streak = ?, weekly_rolls = ?, weekly_growth = ?,
-                        steam_id = ?, steam_nickname = ?, mmr = ?, rank_tier = ?,
-                        dota_total_games = ?, dota_wins = ?, last_dota_games = ?,
-                        last_dota_wins = ?, week_games = ?, week_wins = ?,
-                        week_best_streak = ?, week_start_date = ?, last_activity = CURRENT_TIMESTAMP
-                    WHERE telegram_id = ?
-                """
-                cursor.executemany(query, batch_data)
+                flushed = len(batch_data)
+                for i in range(flushed):
+                    telegram_id = batch_data[i][-1]
+                    user_cache.clear_dirty(telegram_id)
+                
+                top_cache.invalidate_top_cache()
 
-            # Очищаем dirty флаги только для успешно обновленных пользователей
-            flushed = len(batch_data)
-            for i in range(flushed):
-                telegram_id = batch_data[i][-1]  # telegram_id is last element
-                user_cache.clear_dirty(telegram_id)
-            
-            # Invalidate top cache after DB flush - ensures consistency across /top, /profile, /rank
-            top_cache.invalidate_top_cache()
+            conn.commit()
+            break
 
-        conn.commit()
-
-    except Exception as e:
-        logger.error(f"flush_users_cache: batch error: {e}")
-        if conn:
-            conn.rollback()
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            release_connection(conn)
+        except Exception as e:
+            logger.error(f"flush_users_cache: batch error (attempt {attempt + 1}/{max_retries}): {e}")
+            if conn:
+                conn.rollback()
+            if attempt == max_retries - 1:
+                logger.error(f"flush_users_cache: failed after {max_retries} attempts")
+                raise
+            import asyncio
+            await asyncio.sleep(2 ** attempt)
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                release_connection(conn)
 
     logger.info(f"flush_users_cache: flushed {flushed} users")
     return flushed
