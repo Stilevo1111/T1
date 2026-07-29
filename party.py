@@ -149,7 +149,7 @@ async def party_for_user(chat_id, chat_type, requester, context):
             player_rank = rank_to_string(rank_tier)
             name = f"<b>{html.escape(steam_nick or '—')}</b>"
             if has_games:
-                second = f"└ WR {get_week_wr(p)}%"
+                second = f"└ WR {get_week_wr(p)}% за неделю"
             else:
                 second = f"└ Нет игр за неделю"
             lines.append(f"{rank}{name} - {player_rank}")
