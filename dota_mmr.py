@@ -56,6 +56,12 @@ async def get_hero_list():
 OPENDOTA_API_URL = "https://api.opendota.com/api"
 STEAM_OFFSET = 76561197960265728
 
+# Глобальное состояние rate limit для сообщений об ошибках (fallback)
+_opendota_rate_limited_until = 0
+
+# Rank icons cache (fallback if image_cache fails)
+_rank_icons_cache = {}
+
 # Cached background for start card to avoid repeated downloads
 _START_CARD_BACKGROUND_RESIZED = None
 _START_CARD_BACKGROUND_CACHED = False
