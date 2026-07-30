@@ -2413,11 +2413,18 @@ async def top_mmr_handler(request):
 
 @rate_limit(tokens=1)
 async def obs_last5_handler(request):
-    """Public API: returns last 5 matches as transparent PNG for OBS/website."""
+    """Public API: returns last 5 matches as transparent PNG for OBS/website.
+    
+    Query params:
+        steam_id: Steam ID64
+        telegram_id: Telegram user ID (resolved to steam_id)
+        force: "true" to bypass cache and regenerate
+    """
     from obs_widget import generate_obs_widget, get_steam_id_from_telegram, get_default_steam_id
     try:
         steam_id = request.query.get("steam_id")
         telegram_id = request.query.get("telegram_id")
+        force = request.query.get("force", "false").lower() == "true"
 
         if not steam_id and telegram_id:
             steam_id = await get_steam_id_from_telegram(int(telegram_id))
@@ -2435,7 +2442,7 @@ async def obs_last5_handler(request):
                 status=400,
             )
 
-        data = await generate_obs_widget(int(steam_id), limit=5)
+        data = await generate_obs_widget(int(steam_id), limit=5, force=force)
         if not data:
             return web.Response(
                 text="No matches or widget generation failed",

@@ -3,9 +3,11 @@ OBS widget: transparent PNG with last 5 Dota 2 matches for website/OBS overlay.
 
 Endpoint:
     /api/obs-last5?steam_id=... or /api/obs-last5?telegram_id=...
+    /api/obs-last5?force=true  - принудительное обновление
 
 Behavior:
     - Fetches last 5 matches from OpenDota
+    - Checks for new matches and auto-updates if found
     - Downloads hero icons (with local cache)
     - Draws 5 cards in a row, each with colored border:
         green = win
@@ -67,8 +69,9 @@ logger = logging.getLogger(__name__)
 # CACHES
 # ============================================================
 
-_widget_cache: dict[str, tuple[bytes, float]] = {}
-_WIDGET_CACHE_TTL = 180  # 3 minutes
+_widget_cache: dict[str, tuple[bytes, float, str]] = {}  # key -> (data, timestamp, last_match_id)
+_WIDGET_CACHE_TTL = 300  # 5 minutes
+_WIDGET_CHECK_NEW_MATCHES = True  # Auto-update when new match detected
 
 _icon_cache: dict[str, Image.Image] = {}
 _ICON_CACHE_TTL = 3600  # 1 hour
@@ -177,13 +180,41 @@ async def _fetch_hero_icon(hero_info: dict | None, session: aiohttp.ClientSessio
 async def generate_obs_widget(
     steam_id: int,
     limit: int = 5,
+    force: bool = False,
 ) -> bytes | None:
-    """Generate transparent PNG widget for last `limit` matches."""
+    """Generate transparent PNG widget for last `limit` matches.
+    
+    Args:
+        steam_id: Steam ID64
+        limit: Number of matches to show
+        force: If True, skip cache and regenerate
+    """
+    cache_key = _cache_key(steam_id, limit)
+    now = time.time()
+    
+    # Check cache (unless forced)
+    if not force:
+        cached = _widget_cache.get(cache_key)
+        if cached and (now - cached[1]) < _WIDGET_CHECK_NEW_MATCHES * _WIDGET_CACHE_TTL:
+            # Check if new matches appeared
+            if _WIDGET_CHECK_NEW_MATCHES and cached[2]:
+                try:
+                    matches = await get_recent_matches_async(steam_id, limit=limit)
+                    if matches and matches[0].get("match_id") != cached[2]:
+                        logger.info(f"obs_widget: new match detected for {steam_id}, auto-updating")
+                    else:
+                        return cached[0]
+                except Exception:
+                    return cached[0]
+            else:
+                return cached[0]
+    
     matches = await get_recent_matches_async(steam_id, limit=limit)
     if not matches:
         matches = []
 
     heroes_data = get_heroes_data() or {}
+    last_match_id = matches[0].get("match_id") if matches else ""
 
     img = Image.new("RGBA", (WIDGET_WIDTH, WIDGET_HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(img)
@@ -242,7 +273,7 @@ async def generate_obs_widget(
     img.save(buf, format="PNG")
     data = buf.getvalue()
 
-    _widget_cache[_cache_key(steam_id, limit)] = (data, time.time())
+    _widget_cache[cache_key] = (data, now, last_match_id)
     return data
 
 
