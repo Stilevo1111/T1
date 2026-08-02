@@ -8,12 +8,13 @@ from __future__ import annotations
 
 __all__ = [
     "HERO_NAME_TO_CDN",
+    "CDN_TO_LOCAL_NAME",
     "DISPLAY_NAME_MAP",
     "get_cdn_hero_name",
+    "get_local_hero_name",
     "get_display_name",
 ]
 
-# Mapping from OpenDota internal hero name to Steam CDN filename
 HERO_NAME_TO_CDN: dict[str, str] = {
     "anti_mage": "antimage",
     "necrophos": "necrolyte",
@@ -108,7 +109,12 @@ HERO_NAME_TO_CDN: dict[str, str] = {
     "weaver": "weaver",
 }
 
-# Mapping from internal OpenDota hero name (without npc_dota_hero_ prefix) to display name
+CDN_TO_LOCAL_NAME: dict[str, str] = {
+    cdn_name: local_name
+    for local_name, cdn_name in HERO_NAME_TO_CDN.items()
+    if cdn_name != local_name
+}
+
 DISPLAY_NAME_MAP: dict[str, str] = {
     "necrophos": "Necrophos",
     "queenofpain": "Queen of Pain",
@@ -133,14 +139,22 @@ def get_cdn_hero_name(short_name: str) -> str:
     return HERO_NAME_TO_CDN.get(short_name, short_name)
 
 
+def get_local_hero_name(cdn_name: str) -> str:
+    """Convert Steam CDN hero name to local asset file name.
+    
+    Steam renames some hero icons (e.g., 'doom_bringer' instead of 'doom'),
+    but CDN URLs may use the short name. This maps CDN names back to
+    the actual local asset names.
+    """
+    return CDN_TO_LOCAL_NAME.get(cdn_name, cdn_name)
+
+
 def get_display_name(internal_name: str) -> str:
     """Convert internal OpenDota hero name (with or without npc_dota_hero_ prefix) to display name."""
-    # Strip prefix if present
     if internal_name.startswith("npc_dota_hero_"):
         internal_name = internal_name[len("npc_dota_hero_"):]
 
     if internal_name in DISPLAY_NAME_MAP:
         return DISPLAY_NAME_MAP[internal_name]
 
-    # Default: convert snake_case to Title Case
     return " ".join(word.capitalize() for word in internal_name.split("_"))

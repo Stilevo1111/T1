@@ -236,13 +236,14 @@ async def fetch_hero_icon(session, icon_path):
             filename = os.path.basename(urlparse(icon_url).path)
             hero_name = filename.replace("_sb.png", "").replace(".png", "").replace(".webp", "")
 
-            # Try local asset first
+            # Try local asset first with CDN name
             local_path = Path("assets/heroes_webp") / f"{hero_name}.webp"
             if not local_path.exists():
-                # Try with CDN-mapped name
-                from hero_names import get_cdn_hero_name
-                cdn_name = get_cdn_hero_name(hero_name)
-                local_path = Path("assets/heroes_webp") / f"{cdn_name}.webp"
+                # Try with reverse CDN mapping (e.g., "doom" -> "doom_bringer")
+                from hero_names import get_local_hero_name
+                local_name = get_local_hero_name(hero_name)
+                if local_name != hero_name:
+                    local_path = Path("assets/heroes_webp") / f"{local_name}.webp"
 
             if local_path.exists():
                 try:
