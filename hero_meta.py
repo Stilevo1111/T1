@@ -136,11 +136,13 @@ async def fetch_hero_icon(session, icon_path):
         # Handle numeric IDs (convert to hero name lookup)
         if icon_path and icon_path.isdigit():
             from dota_mmr import get_hero_list
+            from hero_names import get_cdn_hero_name
             heroes = await get_hero_list()
             hero_name = None
             for h in heroes:
                 if h.get("id") == int(icon_path):
-                    hero_name = h.get("name", "").replace("npc_dota_hero_", "")
+                    internal_name = h.get("name", "").replace("npc_dota_hero_", "")
+                    hero_name = get_cdn_hero_name(internal_name)
                     break
             if hero_name:
                 icon_url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hero_name}.png"
@@ -198,7 +200,7 @@ async def fetch_hero_icon(session, icon_path):
 
             async with session.get(
                 icon_url,
-                timeout=aiohttp.ClientTimeout(total=5),
+                timeout=aiohttp.ClientTimeout(total=8),
                 headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"}
             ) as resp:
 
@@ -230,14 +232,36 @@ async def fetch_hero_icon(session, icon_path):
 
             logger.error("Failed to load icon from CDN: %s", e)
 
+            # Fallback to local assets
             filename = os.path.basename(urlparse(icon_url).path)
-            hero_name = filename.replace("_sb.png", "").replace(".png", "")
+            hero_name = filename.replace("_sb.png", "").replace(".png", "").replace(".webp", "")
+
+            # Try local asset first
             local_path = Path("assets/heroes_webp") / f"{hero_name}.webp"
+            if not local_path.exists():
+                # Try with CDN-mapped name
+                from hero_names import get_cdn_hero_name
+                cdn_name = get_cdn_hero_name(hero_name)
+                local_path = Path("assets/heroes_webp") / f"{cdn_name}.webp"
+
             if local_path.exists():
                 try:
                     return Image.open(local_path).convert("RGBA")
                 except Exception:
                     pass
+
+            # Try alternative local paths
+            alt_paths = [
+                Path("assets/heroes_webp") / f"{hero_name}.png",
+                Path("assets/heroes/") / f"{hero_name}.png",
+                Path("assets/") / f"{hero_name}.png",
+            ]
+            for alt_path in alt_paths:
+                if alt_path.exists():
+                    try:
+                        return Image.open(alt_path).convert("RGBA")
+                    except Exception:
+                        continue
 
             return None
 
