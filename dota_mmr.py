@@ -650,6 +650,47 @@ async def get_top_heroes_async(steam_id: int, last_n: int = 10, top_k: int = 3) 
         return []
 
 
+def _draw_placeholder_hero(img: Image.Image, x: int, y: int, icon_size: int) -> None:
+    """Draw a placeholder hero icon when the actual image fails to load."""
+    draw = ImageDraw.Draw(img)
+    
+    # Dark background
+    draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(45, 45, 55))
+    
+    # Border
+    draw.rectangle([x - 2, y - 2, x + icon_size, y + icon_size], outline=(80, 80, 100), width=1)
+    
+    # Question mark or generic icon
+    center_x = x + icon_size // 2
+    center_y = y + icon_size // 2
+    radius = icon_size // 3
+    
+    # Draw a simple silhouette (generic hero shape)
+    try:
+        from PIL import ImageFont
+        font_size = int(icon_size * 0.6)
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+        except Exception:
+            font = ImageFont.load_default()
+        
+        # Draw "?" symbol
+        text = "?"
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        text_x = center_x - text_width // 2
+        text_y = center_y - text_height // 2
+        
+        # Use yellow/orange color for visibility
+        draw.text((text_x, text_y - 10), text, fill=(255, 215, 0), font=font)
+    except Exception:
+        pass
+    
+    # Draw bottom slash
+    draw.line([center_x - 10, center_y + 10, center_x + 10, center_y + 25], fill=(100, 100, 120), width=2)
+
+
 def generate_heroes_image(top_heroes: list) -> bytes | None:
     """Сгенерировать картинку с иконками топ-героев: иконки как раньше, но фиксированная сетка 10 позиций."""
     global _heroes_image_cache
@@ -732,9 +773,9 @@ def generate_heroes_image(top_heroes: list) -> bytes | None:
                     img.paste(icon, (x, y), icon)
                 except Exception as e:
                     logger.debug(f"Could not load hero icon: {e}")
-                    draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
+                    _draw_placeholder_hero(img, x, y, icon_size)
             else:
-                draw.rectangle([x, y, x + icon_size, y + icon_size], fill=(55, 45, 70))
+                _draw_placeholder_hero(img, x, y, icon_size)
 
             draw.rectangle([x - 2, y - 2, x + icon_size, y + icon_size], outline=(215, 175, 85), width=2)
             x += icon_size + gap
