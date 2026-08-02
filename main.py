@@ -3077,13 +3077,13 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_rank_str = rank_to_string(user.get('rank_tier', 0))
                 user_display = clickable_name(user_username, user.get('telegram_id'), user.get('steam_id'))
                 top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}</b> - {user_rank_str}\n"
-                top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
-elif user and user_week_games == 0:
-                 user_rank_str = rank_to_string(user.get('rank_tier', 0))
-                 user_display = clickable_name(user_username, user.get('telegram_id'), user.get('steam_id'))
-                 user_pos_emoji = get_emoji_num(user_pos) if user_pos else "0️⃣"
-                 top_text += f"\n{user_pos_emoji} <b>{user_display}</b> - {user_rank_str}\n"
-                 top_text += "└ Нет игр за неделю"
+top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
+            elif user and user_week_games == 0:
+                user_rank_str = rank_to_string(user.get('rank_tier', 0))
+                user_display = clickable_name(user_username, user.get('telegram_id'), user.get('steam_id'))
+                user_pos_emoji = get_emoji_num(user_pos) if user_pos else "0️⃣"
+                top_text += f"\n{user_pos_emoji} <b>{user_display}</b> - {user_rank_str}\n"
+                top_text += "└ Нет игр за неделю"
 
             top_text += f"\n\n<b><a href=\"https://seredin999.onrender.com/top-mmr\">🏆 Топ рангов на сайте</a></b>"
 
