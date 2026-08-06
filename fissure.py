@@ -485,6 +485,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if weekend_bonus:
             parts.append(weekend_bonus)
 
+        # Multicast text (the hero quote from MULTICAST_TEXTS)
+        if multicast_text:
+            parts.append(multicast_text)
+
         # Multicast indicator (only when an actual multiplier happened)
         if cascade_count > 1:
             m_display = f"+{multiplied_roll}" if multiplied_roll > 0 else str(multiplied_roll)
