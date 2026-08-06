@@ -518,7 +518,6 @@ def get_roll_text(roll_value: float) -> str:
                 "💔 БОЛЬНО! {val} см.",
                 "🔻 СПУСК! {val} см.",
             ]
-            ]
     else:
         templates = ["💤 НЕТ ИЗМЕНЕНИЙ!", "⚖️ СТАТУС КВО!"]
 
