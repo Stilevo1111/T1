@@ -192,27 +192,22 @@ async def generate_obs_widget(
     cache_key = _cache_key(steam_id, limit)
     now = time.time()
     
-    # Check cache (unless forced)
     if not force:
         cached = _widget_cache.get(cache_key)
-        if cached and (now - cached[1]) < _WIDGET_CHECK_NEW_MATCHES * _WIDGET_CACHE_TTL:
-            # Check if new matches appeared
-            if _WIDGET_CHECK_NEW_MATCHES and cached[2]:
+        if cached and (now - cached[1]) < _WIDGET_CACHE_TTL:
+            if cached[2]:
                 try:
                     matches = await get_recent_matches_async(steam_id, limit=limit)
                     if matches and matches[0].get("match_id") != cached[2]:
                         logger.info(f"obs_widget: new match detected for {steam_id}, auto-updating")
-                    else:
-                        return cached[0]
+                        return await generate_obs_widget(steam_id, limit, force=True)
                 except Exception:
-                    return cached[0]
-            else:
-                return cached[0]
+                    pass
+            return cached[0]
     
     matches = await get_recent_matches_async(steam_id, limit=limit)
     if not matches:
         matches = []
-
     heroes_data = get_heroes_data() or {}
     last_match_id = matches[0].get("match_id") if matches else ""
 
