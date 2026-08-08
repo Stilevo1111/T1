@@ -1414,22 +1414,6 @@ async def dota_digest_job(context):
         logger.error(f"Ошибка в dota_digest_job: {e}", exc_info=True)
 
 
-async def obs_widget_autoupdate_job(context):
-    """Автообновление OBS виджета: форсированная регенерация PNG для дефолтного steam_id."""
-    try:
-        from obs_widget import generate_obs_widget, get_default_steam_id
-        steam_id = await get_default_steam_id()
-        if not steam_id:
-            logger.debug("obs_widget_autoupdate_job: no default steam_id configured, skipping")
-            return
-        
-        # Force regenerate widget for last 5 matches
-        await generate_obs_widget(steam_id, limit=5, force=True)
-        logger.info(f"obs_widget_autoupdate_job: widget updated for steam_id={steam_id}")
-    except Exception as e:
-        logger.error(f"obs_widget_autoupdate_job error: {e}", exc_info=True)
-
-
 # alternate_digest_job живёт в digest.py (с лидерской выборкой).
 from bot_utils import (
     ManualContext,
@@ -3926,13 +3910,6 @@ async def main():
             _cleanup_start_cooldown,
             interval=datetime.timedelta(hours=1),
             first=datetime.datetime.now() + datetime.timedelta(minutes=30),
-        )
-
-        # ✅ OBS Widget автообновление: каждую минуту форсированная регенерация PNG
-        job_queue.run_repeating(
-            obs_widget_autoupdate_job,
-            interval=datetime.timedelta(minutes=1),
-            first=datetime.datetime.now() + datetime.timedelta(seconds=30),
         )
 
 # morning_digest_job удалён
