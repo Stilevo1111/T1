@@ -630,7 +630,7 @@ async def create_infographic(hero_stats):
 
     best_players = {}
     try:
-        best_players = get_best_players_per_hero(limit_per_hero=1, days=7)
+        best_players = get_best_players_per_hero(limit_per_hero=1, days=14)
     except Exception as e:
         logger.warning(f"Failed to load best players for hero meta avatars: {e}")
 
@@ -663,6 +663,15 @@ async def create_infographic(hero_stats):
             avatars[hero['id']] = None
         else:
             avatars[hero['id']] = result
+
+    # Fallback: для героев без аватарки создаём серый placeholder-кружок
+    placeholder_avatar = Image.new("RGBA", (40, 40), (60, 60, 70, 255))
+    ph_mask = Image.new("L", (40, 40), 0)
+    ImageDraw.Draw(ph_mask).ellipse([0, 0, 39, 39], fill=255)
+    placeholder_avatar.putalpha(ph_mask)
+    for hero in all_heroes:
+        if hero['id'] not in avatars or avatars[hero['id']] is None:
+            avatars[hero['id']] = placeholder_avatar
 
     return await asyncio.to_thread(
         _compose_infographic, base, draw, grid, icons, font_lg, margin_x, margin_y,
