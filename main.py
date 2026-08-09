@@ -2012,7 +2012,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         inviter_winrate = round((inviter_week_wins / inviter_week_games * 100)) if inviter_week_games > 0 else 0
         
         # Use rank_to_string from dota_mmr for real ranks
-    from dota_mmr import mmr_to_rank_tier, rank_to_string
+        from dota_mmr import mmr_to_rank_tier, rank_to_string
         invited_rank_name = rank_to_string(invited_rank_tier)
         inviter_rank_name = rank_to_string(inviter.get("rank_tier", 0) or 0 if inviter else 0)
         
