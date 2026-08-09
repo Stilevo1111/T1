@@ -2012,7 +2012,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         inviter_winrate = round((inviter_week_wins / inviter_week_games * 100)) if inviter_week_games > 0 else 0
         
         # Use rank_to_string from dota_mmr for real ranks
-        from dota_mmr import rank_to_string
+    from dota_mmr import mmr_to_rank_tier, rank_to_string
         invited_rank_name = rank_to_string(invited_rank_tier)
         inviter_rank_name = rank_to_string(inviter.get("rank_tier", 0) or 0 if inviter else 0)
         
@@ -3051,6 +3051,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 player_id = player.get('telegram_id')
                 steam_id = player.get('steam_id')
                 display_name = clickable_name(username, player_id, steam_id)
+                
+                rank_tier = player.get('rank_tier', 0)
+                if rank_tier == 0 and week_games > 0:
+                    mmr_val = player.get('mmr', 0)
+                    if mmr_val and mmr_val > 0:
+                        rank_tier = mmr_to_rank_tier(mmr_val)
+                
+                rank_str = rank_to_string(rank_tier)
                 lines.append(f"{medal} <b>{display_name}</b> - {rank_str}")
                 if week_games > 0:
                     wr = round((week_wins / week_games) * 100) if week_games > 0 else 0
@@ -3074,7 +3082,12 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Add the current user's position (always show it at the bottom)
             if user and user_week_games > 0:
                 user_wr = round((user_week_wins / user_week_games) * 100) if user_week_games > 0 else 0
-                user_rank_str = rank_to_string(user.get('rank_tier', 0))
+                user_rank_tier = user.get('rank_tier', 0)
+                if user_rank_tier == 0 and user_week_games > 0:
+                    user_mmr = user.get('mmr', 0)
+                    if user_mmr and user_mmr > 0:
+                        user_rank_tier = mmr_to_rank_tier(user_mmr)
+                user_rank_str = rank_to_string(user_rank_tier)
                 user_display = clickable_name(user_username, user.get('telegram_id'), user.get('steam_id'))
                 top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}</b> - {user_rank_str}\n"
                 top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
