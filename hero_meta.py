@@ -318,11 +318,12 @@ def get_best_players_per_hero(limit_per_hero=1, days=7):
                     SUM(CASE WHEN (ppm.player_slot < 128 AND ppm.radiant_win = 1) OR (ppm.player_slot >= 128 AND ppm.radiant_win = 0) THEN 1 ELSE 0 END) as wins,
                     u.mmr,
                     u.steam_nickname,
-                    u.avatar
+                    u.avatar,
+                    u.telegram_id
                 FROM public_player_matches ppm
                 LEFT JOIN users u ON ppm.steam_id = u.steam_id
                 WHERE ppm.start_time > %s
-                GROUP BY ppm.hero_id, ppm.steam_id, u.mmr, u.steam_nickname, u.avatar
+                GROUP BY ppm.hero_id, ppm.steam_id, u.mmr, u.steam_nickname, u.avatar, u.telegram_id
                 ORDER BY ppm.hero_id, wins DESC, games DESC
             """
             cursor.execute(query, (week_ago,))
@@ -335,11 +336,12 @@ def get_best_players_per_hero(limit_per_hero=1, days=7):
                     SUM(CASE WHEN (ppm.player_slot < 128 AND ppm.radiant_win = 1) OR (ppm.player_slot >= 128 AND ppm.radiant_win = 0) THEN 1 ELSE 0 END) as wins,
                     u.mmr,
                     u.steam_nickname,
-                    u.avatar
+                    u.avatar,
+                    u.telegram_id
                 FROM public_player_matches ppm
                 LEFT JOIN users u ON ppm.steam_id = u.steam_id
                 WHERE ppm.start_time > ?
-                GROUP BY ppm.hero_id, ppm.steam_id, u.mmr, u.steam_nickname, u.avatar
+                GROUP BY ppm.hero_id, ppm.steam_id, u.mmr, u.steam_nickname, u.avatar, u.telegram_id
                 ORDER BY ppm.hero_id, wins DESC, games DESC
             """
             cursor.execute(query, (week_ago,))
@@ -361,6 +363,7 @@ def get_best_players_per_hero(limit_per_hero=1, days=7):
                     'mmr': row[4] or 0,
                     'nickname': row[5] or f"Player {row[1]}",
                     'avatar': row[6],
+                    'telegram_id': row[7],
                     'winrate': (row[3] / row[2] * 100) if row[2] > 0 else 0
                 })
 
@@ -442,6 +445,48 @@ async def _fetch_telegram_avatar(bot_token, avatar_field):
                         return Image.open(io.BytesIO(data)).convert("RGBA")
     except Exception as e:
         logger.debug(f"_fetch_telegram_avatar failed: {e}")
+        return None
+
+
+async def _fetch_telegram_profile_photo(bot_token, user_id):
+    """Fallback: download Telegram profile photo by user_id."""
+    if not user_id:
+        return None
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"https://api.telegram.org/bot{bot_token}/getUserProfilePhotos",
+                params={"user_id": int(user_id), "limit": 1},
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                result = await resp.json()
+                if not result.get("ok") or not result.get("result", {}).get("photos"):
+                    return None
+                photo = result["result"]["photos"][0][-1]
+                file_id = photo["file_id"]
+                async with session.get(
+                    f"https://api.telegram.org/bot{bot_token}/getFile",
+                    params={"file_id": file_id},
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp2:
+                    if resp2.status != 200:
+                        return None
+                    file_result = await resp2.json()
+                    if not file_result.get("ok"):
+                        return None
+                    file_path = file_result["result"]["file_path"]
+                    async with session.get(
+                        f"https://api.telegram.org/file/bot{bot_token}/{file_path}",
+                        timeout=aiohttp.ClientTimeout(total=10)
+                    ) as resp3:
+                        if resp3.status != 200:
+                            return None
+                        data = await resp3.read()
+                        return Image.open(io.BytesIO(data)).convert("RGBA")
+    except Exception as e:
+        logger.debug(f"_fetch_telegram_profile_photo failed for user {user_id}: {e}")
         return None
 
 
@@ -677,15 +722,29 @@ async def create_infographic(hero_stats):
             return avatar_cache[hero_id]
         player = best_players.get(hero_id, [{}])[0]
         avatar_url = player.get('avatar')
+        telegram_id = player.get('telegram_id')
         img = None
+        
+        # 1. Try Steam/direct avatar URL
         if avatar_url:
             img = await fetch_hero_icon(None, avatar_url)
-        if not img:
+        
+        # 2. Fallback to Telegram avatar via file_id or direct URL
+        if not img and avatar_url:
             try:
                 from config import BOT_TOKEN
                 img = await _fetch_telegram_avatar(BOT_TOKEN, avatar_url)
             except Exception as e:
                 logger.debug(f"Telegram avatar fallback failed for hero {hero_id}: {e}")
+        
+        # 3. Fallback to Telegram profile photo by telegram_id
+        if not img and telegram_id:
+            try:
+                from config import BOT_TOKEN
+                img = await _fetch_telegram_profile_photo(BOT_TOKEN, telegram_id)
+            except Exception as e:
+                logger.debug(f"Telegram profile photo fallback failed for hero {hero_id}: {e}")
+        
         avatar_cache[hero_id] = img
         return img
 
