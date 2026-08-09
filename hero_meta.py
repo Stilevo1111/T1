@@ -299,6 +299,105 @@ async def _enrich_with_hero_data(hero_stats):
     return hero_stats
 
 
+def get_best_players_per_hero(limit_per_hero=1, days=7):
+    """Get best players per hero from public_player_matches joined with users."""
+    conn = None
+    try:
+        from database import get_connection, release_connection, get_db_type
+        conn = get_connection()
+        cursor = conn.cursor()
+        scheme = get_db_type()
+        week_ago = int(time.time()) - (days * 24 * 3600)
+
+        if "postgres" in scheme:
+            query = """
+                SELECT 
+                    ppm.hero_id,
+                    ppm.steam_id,
+                    COUNT(*) as games,
+                    SUM(CASE WHEN (ppm.player_slot < 128 AND ppm.radiant_win = 1) OR (ppm.player_slot >= 128 AND ppm.radiant_win = 0) THEN 1 ELSE 0 END) as wins,
+                    u.mmr,
+                    u.steam_nickname,
+                    u.avatar
+                FROM public_player_matches ppm
+                LEFT JOIN users u ON ppm.steam_id = u.steam_id
+                WHERE ppm.start_time > %s
+                GROUP BY ppm.hero_id, ppm.steam_id, u.mmr, u.steam_nickname, u.avatar
+                ORDER BY ppm.hero_id, wins DESC, games DESC
+            """
+            cursor.execute(query, (week_ago,))
+        else:
+            query = """
+                SELECT 
+                    ppm.hero_id,
+                    ppm.steam_id,
+                    COUNT(*) as games,
+                    SUM(CASE WHEN (ppm.player_slot < 128 AND ppm.radiant_win = 1) OR (ppm.player_slot >= 128 AND ppm.radiant_win = 0) THEN 1 ELSE 0 END) as wins,
+                    u.mmr,
+                    u.steam_nickname,
+                    u.avatar
+                FROM public_player_matches ppm
+                LEFT JOIN users u ON ppm.steam_id = u.steam_id
+                WHERE ppm.start_time > ?
+                GROUP BY ppm.hero_id, ppm.steam_id, u.mmr, u.steam_nickname, u.avatar
+                ORDER BY ppm.hero_id, wins DESC, games DESC
+            """
+            cursor.execute(query, (week_ago,))
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        best_players = {}
+        for row in rows:
+            hero_id = row[0]
+            if hero_id not in best_players:
+                best_players[hero_id] = []
+            if len(best_players[hero_id]) < limit_per_hero:
+                best_players[hero_id].append({
+                    'hero_id': hero_id,
+                    'steam_id': row[1],
+                    'games': row[2],
+                    'wins': row[3],
+                    'mmr': row[4] or 0,
+                    'nickname': row[5] or f"Player {row[1]}",
+                    'avatar': row[6],
+                    'winrate': (row[3] / row[2] * 100) if row[2] > 0 else 0
+                })
+
+        return best_players
+    except Exception as e:
+        logger.error(f"get_best_players_per_hero error: {e}")
+        return {}
+    finally:
+        if conn:
+            release_connection(conn)
+
+
+def _draw_avatar_circle(icon_image, avatar_img, size=40, border=3):
+    """Draw circular avatar with white border onto hero icon at top-right corner."""
+    if avatar_img is None:
+        return icon_image
+
+    total = size + border * 2
+    icon_w, icon_h = icon_image.size
+    x = icon_w - total - 8
+    y = 8
+
+    circular = avatar_img.resize((size, size), Image.Resampling.LANCZOS)
+
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).ellipse([0, 0, size - 1, size - 1], fill=255)
+    circular.putalpha(mask)
+
+    border_layer = Image.new("RGBA", (total, total), (0, 0, 0, 0))
+    ImageDraw.Draw(border_layer).ellipse([0, 0, total - 1, total - 1], fill=(255, 255, 255, 255))
+    border_layer.paste(circular, (border, border), circular)
+
+    result = icon_image.copy()
+    result.paste(border_layer, (x, y), border_layer)
+    return result
+
+
 def _build_grid(hero_stats):
     MIN_MATCHES = 1  # Need at least 1 game
     hero_best_position = {}
@@ -518,6 +617,25 @@ async def create_infographic(hero_stats):
             if h['id'] not in seen_ids:
                 seen_ids.add(h['id'])
                 all_heroes.append(h)
+
+    best_players = {}
+    try:
+        best_players = get_best_players_per_hero(limit_per_hero=1, days=7)
+    except Exception as e:
+        logger.warning(f"Failed to load best players for hero meta avatars: {e}")
+
+    avatar_cache = {}
+    async def fetch_avatar_for_hero(hero_id):
+        if hero_id in avatar_cache:
+            return avatar_cache[hero_id]
+        player = best_players.get(hero_id, [{}])[0]
+        avatar_url = player.get('avatar')
+        img = None
+        if avatar_url:
+            img = await fetch_hero_icon(None, avatar_url)
+        avatar_cache[hero_id] = img
+        return img
+
     tasks = [fetch_hero_icon(None, h['img']) for h in all_heroes]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     icons = {}
@@ -526,7 +644,20 @@ async def create_infographic(hero_stats):
             icons[hero['id']] = None
         else:
             icons[hero['id']] = result
-    return await asyncio.to_thread(_compose_infographic, base, draw, grid, icons, font_lg, margin_x, margin_y, gap_between_cols, col_width, row_height, icon_height)
+
+    avatar_tasks = [fetch_avatar_for_hero(h['id']) for h in all_heroes]
+    avatar_results = await asyncio.gather(*avatar_tasks, return_exceptions=True)
+    avatars = {}
+    for hero, result in zip(all_heroes, avatar_results):
+        if isinstance(result, Exception):
+            avatars[hero['id']] = None
+        else:
+            avatars[hero['id']] = result
+
+    return await asyncio.to_thread(
+        _compose_infographic, base, draw, grid, icons, font_lg, margin_x, margin_y,
+        gap_between_cols, col_width, row_height, icon_height, avatars
+    )
 
 
 """
@@ -596,8 +727,10 @@ async def get_dota_data(days=7, force_refresh=False):
     logger.warning("No hero meta data available - using fallback banner")
     return None
 def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, gap_between_cols,
-                         col_width, row_height, icon_height):
+                         col_width, row_height, icon_height, avatars=None):
     """Heavy PIL composition — runs in a thread pool to avoid blocking the event loop."""
+    if avatars is None:
+        avatars = {}
     for col_idx in range(5):
         pos = col_idx + 1
         heroes = grid[pos]
@@ -645,6 +778,10 @@ def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, g
             pw = nw + 4
             icon_x = x + (col_width - pw) // 2 + 15
             icon_y = y + 5
+
+            avatar_img = avatars.get(hero['id'])
+            if avatar_img is not None:
+                icon_proc = _draw_avatar_circle(icon_proc, avatar_img, size=40, border=3)
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
 
