@@ -630,7 +630,7 @@ async def create_infographic(hero_stats):
 
     best_players = {}
     try:
-        best_players = get_best_players_per_hero(limit_per_hero=1, days=14)
+        best_players = get_best_players_per_hero(limit_per_hero=1, days=7)
     except Exception as e:
         logger.warning(f"Failed to load best players for hero meta avatars: {e}")
 
