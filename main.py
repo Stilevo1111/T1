@@ -2400,7 +2400,7 @@ async def top_mmr_handler(request):
         top_users = await asyncio.to_thread(get_dota_week_top_from_db, 50)
         if not top_users or len(top_users) == 0:
             top_users = await asyncio.to_thread(get_dota_mmr_top, 50)
-        data = [{"username": u.get("username", "Unknown"), "mmr": u.get("mmr", 0), "rank_tier": u.get("rank_tier", 0), "week_games": u.get("week_games", 0), "week_wins": u.get("week_wins", 0)} for u in top_users]
+        data = [{"username": (u.get("username", "Unknown")[:12] if len(u.get("username", "Unknown")) > 12 else u.get("username", "Unknown")), "mmr": u.get("mmr", 0), "rank_tier": u.get("rank_tier", 0), "week_games": u.get("week_games", 0), "week_wins": u.get("week_wins", 0)} for u in top_users]
         resp = web.Response(text=json.dumps(data, ensure_ascii=False), content_type="application/json")
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
@@ -3032,7 +3032,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 raw_uname = player.get('steam_nickname') or player.get('username') or player.get('first_name')
                 if not raw_uname or raw_uname in ("None", "Unknown", "Неизвестный игрок") or len(raw_uname.strip()) <= 1:
                     raw_uname = player.get('username') or player.get('first_name') or str(player.get('telegram_id', 'Игрок'))
-                username = raw_uname
+                username = raw_uname[:12] if len(raw_uname) > 12 else raw_uname
                 rank_tier = player.get('rank_tier', 0)
                 week_games = player.get('week_games') or 0
                 week_wins = player.get('week_wins') or 0
