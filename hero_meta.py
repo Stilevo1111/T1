@@ -383,14 +383,24 @@ def _draw_avatar_circle(icon_image, avatar_img, size=40, border=3):
     x = icon_w - total - 8
     y = 8
 
-    circular = avatar_img.resize((size, size), Image.Resampling.LANCZOS)
+    scale = 4
+    big = size * scale
+    circular = avatar_img.resize((big, big), Image.Resampling.LANCZOS)
 
-    mask = Image.new("L", (size, size), 0)
-    ImageDraw.Draw(mask).ellipse([0, 0, size - 1, size - 1], fill=255)
+    mask = Image.new("L", (big, big), 0)
+    ImageDraw.Draw(mask).ellipse([0, 0, big - 1, big - 1], fill=255)
+    mask = mask.resize((size, size), Image.Resampling.LANCZOS)
+    circular = circular.resize((size, size), Image.Resampling.LANCZOS)
     circular.putalpha(mask)
 
     border_layer = Image.new("RGBA", (total, total), (0, 0, 0, 0))
-    ImageDraw.Draw(border_layer).ellipse([0, 0, total - 1, total - 1], fill=(255, 255, 255, 255))
+    big_total = total * scale
+    border_mask = Image.new("L", (big_total, big_total), 0)
+    ImageDraw.Draw(border_mask).ellipse([0, 0, big_total - 1, big_total - 1], fill=255)
+    border_mask = border_mask.resize((total, total), Image.Resampling.LANCZOS)
+    white = Image.new("RGBA", (total, total), (255, 255, 255, 255))
+    white.putalpha(border_mask)
+    border_layer.paste(white, (0, 0), white)
     border_layer.paste(circular, (border, border), circular)
 
     result = icon_image.copy()
