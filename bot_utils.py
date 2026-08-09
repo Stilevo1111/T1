@@ -190,23 +190,37 @@ def update_last_message_id(user_id, msg_id):
     logger.debug(f"update_last_message_id is deprecated; user_id={user_id}, msg_id={msg_id}")
 
 
-def _build_analytics_keyboard(page_idx, total_pages, generated):
+def _build_analytics_keyboard(page_idx, total_pages, generated, page_titles=None):
     """Build inline keyboard for analytics pagination"""
     buttons = []
+    
+    # Navigation buttons with page info
     if page_idx > 0:
-        buttons.append(InlineKeyboardButton("◀ Назад", callback_data=f"analytics_page_{page_idx-1}"))
-    if total_pages > 0:
-        buttons.append(InlineKeyboardButton(f"{page_idx+1}/{total_pages}", callback_data="analytics_page_current"))
+        prev_label = f"◀ {page_titles[page_idx-1]}" if page_titles and page_idx > 0 else "◀ Назад"
+        buttons.append(InlineKeyboardButton(prev_label, callback_data=f"analytics_page_{page_idx-1}"))
+    
+    # Page indicator
+    page_label = f"📄 {page_idx+1}/{total_pages}"
+    if page_titles and page_idx < len(page_titles):
+        page_label = f"📄 {page_titles[page_idx]}"
+    buttons.append(InlineKeyboardButton(page_label, callback_data="analytics_page_current"))
+    
     if page_idx < total_pages - 1:
-        buttons.append(InlineKeyboardButton("Вперёд ▶", callback_data=f"analytics_page_{page_idx+1}"))
+        next_label = f"{page_titles[page_idx+1]} ▶" if page_titles and page_idx + 1 < len(page_titles) else "Вперёд ▶"
+        buttons.append(InlineKeyboardButton(next_label, callback_data=f"analytics_page_{page_idx+1}"))
+    
+    # Add back to chart button
+    buttons.append(InlineKeyboardButton("📈 График", callback_data="analytics_back_to_chart"))
+    
     return InlineKeyboardMarkup([buttons])
 
 
 def _build_stats_button_keyboard():
     """Build inline keyboard for stats page"""
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("📊 Статистика", callback_data="analytics_show")
-    ]])
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 Статистика", callback_data="analytics_show")],
+        [InlineKeyboardButton("🆚 Сравнение с Pro", callback_data="analytics_pro_compare")]
+    ])
 
 
 class ManualContext:

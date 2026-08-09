@@ -1894,6 +1894,43 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error in button_callback: {e}", exc_info=True)
         return
 
+    # Handle back to chart button
+    if data == "analytics_back_to_chart":
+        await callback_query.answer()
+        try:
+            chart_msg_id = context.user_data.get('analytics_chart_msg_id')
+            if chart_msg_id:
+                try:
+                    await context.bot.edit_message_caption(
+                        chat_id=chat_id,
+                        message_id=chart_msg_id,
+                        caption="🧠 Импакт в последних 10 играх.",
+                        reply_markup=_build_stats_button_keyboard()
+                    )
+                except Exception:
+                    pass
+            # Delete table message if exists
+            table_msg_id = context.user_data.get('analytics_table_msg_id')
+            if table_msg_id:
+                try:
+                    await context.bot.delete_message(chat_id, table_msg_id)
+                except Exception:
+                    pass
+                context.user_data['analytics_table_msg_id'] = None
+        except Exception as e:
+            logger.error(f"Error in analytics_back_to_chart: {e}", exc_info=True)
+        return
+
+    # Handle pro compare button from chart
+    if data == "analytics_pro_compare":
+        await callback_query.answer()
+        loading_msg = await context.bot.send_message(chat_id=chat_id, text="<b>🪝Хукаю сравнение с Pro...</b>", parse_mode="HTML")
+        try:
+            await _show_analytics_page(callback_query, 0, context, loading_msg=loading_msg)
+        except Exception as e:
+            logger.error(f"Error in analytics_pro_compare: {e}", exc_info=True)
+        return
+
     # Link button handler (callback from menu)
     if data == "link":
         await callback_query.answer()
@@ -2201,7 +2238,8 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
     page = pages[page_idx]
     text = page["text"]
     total_pages = len(pages)
-    keyboard = _build_analytics_keyboard(page_idx, total_pages, generated)
+    page_titles = [p.get("title", f"Стр. {i+1}") for i, p in enumerate(pages) if p]
+    keyboard = _build_analytics_keyboard(page_idx, total_pages, generated, page_titles)
 
     try:
         # Check if there's an existing table message to edit (for pagination between pages)
