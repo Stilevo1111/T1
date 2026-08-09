@@ -2422,10 +2422,24 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def recent_rolls_handler(request):
     """Public API: returns last 50 fissure rolls as JSON (for the website widget)."""
-    data = list(recent_fissure_rolls)[-50:]  # Limit to 50
-    resp = web.Response(text=json.dumps(data, ensure_ascii=False), content_type="application/json")
+    try:
+        data = list(recent_fissure_rolls)[-50:]
+        resp = web.Response(text=json.dumps(data, ensure_ascii=False), content_type="application/json")
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        resp.headers['Cache-Control'] = 'public, max-age=30, stale-while-revalidate=30'
+        return resp
+    except Exception as e:
+        logger.error(f"recent_rolls_handler error: {e}")
+        return web.Response(text=json.dumps({"error": str(e)}), status=500)
+
+
+async def api_options_handler(request):
+    """Handle CORS preflight OPTIONS requests for API routes."""
+    resp = web.Response(status=204)
     resp.headers['Access-Control-Allow-Origin'] = '*'
-    resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
     resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     return resp
 
@@ -2446,13 +2460,13 @@ async def top_mmr_handler(request):
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
         resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        resp.headers['Cache-Control'] = 'public, max-age=30, stale-while-revalidate=30'
         return resp
     except Exception as e:
         logger.error(f"top_mmr_handler error: {e}")
         return web.Response(text=json.dumps({"error": str(e)}), status=500)
 
 
-@rate_limit(tokens=1)
 async def obs_last5_handler(request):
     """Public API: returns last 5 matches as transparent PNG for OBS/website.
     
@@ -2490,7 +2504,9 @@ async def obs_last5_handler(request):
                 status=204,
             )
 
-        return web.Response(body=data, content_type="image/png")
+        resp = web.Response(body=data, content_type="image/png")
+        resp.headers['Cache-Control'] = 'public, max-age=30, stale-while-revalidate=30'
+        return resp
     except Exception as e:
         logger.error(f"obs_last5_handler error: {e}")
         return web.Response(text=str(e), status=500)
@@ -4161,6 +4177,7 @@ async def main():
             web_app.router.add_get('/api/top-mmr', top_mmr_handler)
             web_app.router.add_get('/api/steam-debug', steam_debug)
             web_app.router.add_get('/api/obs-last5', obs_last5_handler)
+            web_app.router.add_route('OPTIONS', '/api/{path:.*}', api_options_handler)
             runner = web.AppRunner(web_app)
             await runner.setup()
             port = int(os.getenv('PORT', 10000))
@@ -4234,6 +4251,7 @@ async def main():
             web_app.router.add_get('/api/top-mmr', top_mmr_handler)
             web_app.router.add_get('/api/steam-debug', steam_debug)
             web_app.router.add_get('/api/obs-last5', obs_last5_handler)
+            web_app.router.add_route('OPTIONS', '/api/{path:.*}', api_options_handler)
 
             async def reset_circuit(request):
                 try:
