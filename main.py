@@ -1887,6 +1887,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Handle analytics_page_N - no loading indicator (pages already generated or will show error)
     if data and data.startswith("analytics_page_"):
         await callback_query.answer()
+        # Ignore page indicator button clicks
+        if data == "analytics_page_current":
+            return
         try:
             page_idx = int(data.split("_")[-1])
             await _show_analytics_page(callback_query, page_idx, context)
