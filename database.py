@@ -2437,7 +2437,8 @@ def cleanup_old_matches():
         logger.error(f"cleanup_old_matches error: {e}")
         return 0
     finally:
-        release_connection(conn)
+        if conn:
+            release_connection(conn)
 
 
 def get_fissure_top(limit=10):
