@@ -408,6 +408,43 @@ def _draw_avatar_circle(icon_image, avatar_img, size=40, border=3):
     return result
 
 
+async def _fetch_telegram_avatar(bot_token, avatar_field):
+    """Fallback: download Telegram avatar by file_id or direct URL."""
+    if not avatar_field:
+        return None
+    try:
+        async with aiohttp.ClientSession() as session:
+            if avatar_field.startswith('http'):
+                async with session.get(avatar_field, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status != 200:
+                        return None
+                    data = await resp.read()
+                    return Image.open(io.BytesIO(data)).convert("RGBA")
+            else:
+                async with session.get(
+                    f"https://api.telegram.org/bot{bot_token}/getFile",
+                    params={"file_id": avatar_field},
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status != 200:
+                        return None
+                    result = await resp.json()
+                    if not result.get("ok"):
+                        return None
+                    file_path = result["result"]["file_path"]
+                    async with session.get(
+                        f"https://api.telegram.org/file/bot{bot_token}/{file_path}",
+                        timeout=aiohttp.ClientTimeout(total=10)
+                    ) as resp:
+                        if resp.status != 200:
+                            return None
+                        data = await resp.read()
+                        return Image.open(io.BytesIO(data)).convert("RGBA")
+    except Exception as e:
+        logger.debug(f"_fetch_telegram_avatar failed: {e}")
+        return None
+
+
 def _build_grid(hero_stats):
     MIN_MATCHES = 1  # Need at least 1 game
     hero_best_position = {}
@@ -643,6 +680,12 @@ async def create_infographic(hero_stats):
         img = None
         if avatar_url:
             img = await fetch_hero_icon(None, avatar_url)
+        if not img:
+            try:
+                from config import BOT_TOKEN
+                img = await _fetch_telegram_avatar(BOT_TOKEN, avatar_url)
+            except Exception as e:
+                logger.debug(f"Telegram avatar fallback failed for hero {hero_id}: {e}")
         avatar_cache[hero_id] = img
         return img
 
