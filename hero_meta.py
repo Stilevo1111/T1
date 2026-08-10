@@ -769,13 +769,21 @@ async def create_infographic(hero_stats):
         else:
             avatars[hero['id']] = result
 
-    # Fallback: для героев без аватарки создаём серый placeholder-кружок
-    # Но сначала пробуем Steam default avatar, если есть steam_id в best_players
-    steam_default_avatar = None
+    def _get_steam_default_avatar():
+    """Синхронно создаём placeholder-аватар с цветом Steam blue."""
     try:
-        steam_default_avatar = await fetch_hero_icon(None, STEAM_DEFAULT_AVATAR)
+        img = Image.new("RGBA", (40, 40), (130, 130, 130, 255))  # Steam gray
+        mask = Image.new("L", (40, 40), 0)
+        ImageDraw.Draw(mask).ellipse([0, 0, 39, 39], fill=255)
+        img.putalpha(mask)
+        return img
     except Exception as e:
-        logger.debug(f"Could not fetch Steam default avatar: {e}")
+        logger.debug(f"Could not create Steam default avatar: {e}")
+        return None
+
+    
+    # Fallback: для героев без аватарки используем Steam default avatar
+    steam_default_avatar = await asyncio.to_thread(_get_steam_default_avatar)
     
     placeholder_avatar = Image.new("RGBA", (40, 40), (60, 60, 70, 255))
     ph_mask = Image.new("L", (40, 40), 0)
