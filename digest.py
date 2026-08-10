@@ -891,17 +891,15 @@ async def alternate_digest_job(context):
             
             if need_hero_meta:
                 try:
-                    from hero_meta import get_hero_meta_image, clear_hero_meta_cache
+                    from hero_meta import get_hero_meta_banner, clear_hero_meta_cache
                     if should_create_new:
                         clear_hero_meta_cache()
-                    hero_meta_banner = await asyncio.wait_for(get_hero_meta_image(), timeout=90.0)
+                    hero_meta_banner = await asyncio.wait_for(get_hero_meta_banner(), timeout=90.0)
                     if hero_meta_banner:
                         set_config('last_hero_meta_update', int(now))
                         _digest_state_container.set_last_hero_meta_refresh(now)
                         logger.info("Hero meta banner generated for digest")
-                        # Сохраняем оригинальный ID до попытки редактирования
                         original_msg_id = last_message_id
-                        # Если баннер готов и сообщение существует - обновляем фото в существующем сообщении
                         if last_message_id:
                             try:
                                 from io import BytesIO
