@@ -19,10 +19,34 @@ from hero_positions import hero_positions
 from constants import get_banner_path
 from cache_service import explorer_circuit_breaker
 
+from dota_mmr import get_player_stats_async
+
 logger = logging.getLogger(__name__)
 
 # Rate limit cache
 _explorer_cache = {"data": None, "timestamp": 0, "fallback_used": False}
+
+
+async def fetch_avatar_by_steam_id(steam_id: int) -> Image.Image | None:
+    """Fetch player avatar directly from OpenDota API by Steam ID.
+    
+    Used as fallback when player is not linked to a user account.
+    """
+    if not steam_id:
+        return None
+    try:
+        stats = await get_player_stats_async(steam_id, use_cache=True, timeout=5)
+        if stats:
+            avatar_url = stats.get("avatar") or stats.get("avatarfull")
+            if avatar_url:
+                img = await fetch_hero_icon(None, avatar_url)
+                if img:
+                    return img
+        return None
+    except Exception as e:
+        logger.debug(f"Failed to fetch avatar by steam_id {steam_id}: {e}")
+        return None
+
 
 BACKGROUND_PATH = get_banner_path("heroes_strip")
 
@@ -748,6 +772,12 @@ async def create_infographic(hero_stats):
             except Exception as e:
                 logger.debug(f"Telegram profile photo fallback failed for hero {hero_id}: {e}")
         
+        # 4. Fallback: fetch avatar directly from OpenDota by steam_id (if no user record)
+        if not img:
+            steam_id = player.get('steam_id')
+            if steam_id:
+                img = await fetch_avatar_by_steam_id(steam_id)
+        
         avatar_cache[hero_id] = img
         return img
 
@@ -811,6 +841,44 @@ _HERO_META_CACHE_TTL = 12 * 3600  # 12 hours
 HERO_META_CONFIG_KEY = 'hero_meta_data'
 HERO_META_CONFIG_TTL = 7 * 24 * 3600  # 7 days
 HERO_META_BANNER_KEY = 'hero_meta_banner'  # Cached PNG bytes
+HERO_META_REDIS_KEY = 'hero_meta_banner_v2'  # Redis cache key for banner image bytes
+
+
+async def get_hero_meta_banner():
+    """Get hero meta banner from Redis cache or generate new one.
+    
+    Returns:
+        bytes: PNG image bytes
+    """
+    import base64
+    
+    # Try Redis cache first
+    try:
+        from cache import cache
+        cached = await cache.get(HERO_META_REDIS_KEY)
+        if cached:
+            logger.info("Hero meta banner loaded from Redis cache")
+            return base64.b64decode(cached) if isinstance(cached, str) else cached
+    except Exception as e:
+        logger.debug(f"Redis cache read failed: {e}")
+    
+    # Generate or load from DB cache
+    try:
+        banner = await get_hero_meta_image()
+        if banner:
+            # Save to Redis
+            try:
+                encoded = base64.b64encode(banner).decode()
+                await cache.set(HERO_META_REDIS_KEY, encoded, ttl=_HERO_META_CACHE_TTL)
+                logger.info(f"Hero meta banner saved to Redis cache (TTL={_HERO_META_CACHE_TTL}s)")
+            except Exception as e:
+                logger.debug(f"Redis cache write failed: {e}")
+            return banner
+    except Exception as e:
+        logger.warning(f"Hero meta banner generation failed: {e}")
+    
+    # Fallback to default banner
+    return get_static_fallback_banner()
 
 
 def clear_hero_meta_cache():
@@ -822,6 +890,16 @@ def clear_hero_meta_cache():
         set_config(HERO_META_BANNER_KEY, "")
     except Exception as e:
         logger.debug(f"Failed to clear hero meta DB cache: {e}")
+    
+    # Also clear Redis cache
+    try:
+        import asyncio
+        from cache import cache
+        if hasattr(cache, 'async_delete'):
+            # Schedule async delete
+            asyncio.create_task(cache.delete(HERO_META_REDIS_KEY))
+    except Exception as e:
+        logger.debug(f"Failed to clear Redis cache: {e}")
 
 
 async def get_dota_data(days=7, force_refresh=False):
@@ -947,35 +1025,40 @@ def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, g
 
 
 async def get_hero_meta_image():
-    """Generate hero meta infographic. Falls back to cached banner if no data."""
+    """Generate hero meta infographic. Uses Redis cache for 12h."""
+    import base64
+    
+    # Try Redis cache first
     try:
-        # Get fresh data first
+        from cache import cache
+        cached = await cache.get(HERO_META_REDIS_KEY)
+        if cached:
+            logger.info("Hero meta banner loaded from Redis cache")
+            if isinstance(cached, str):
+                return base64.b64decode(cached)
+            return cached
+    except Exception as e:
+        logger.debug(f"Redis cache read failed: {e}")
+    
+    try:
+        # Get fresh data
         data = await get_dota_data()
         if not data:
             logger.error("No data from OpenDota")
-            # Try cached banner as fallback
-            try:
-                from database import get_config
-                cached_banner = get_config(HERO_META_BANNER_KEY)
-                if cached_banner:
-                    import base64
-                    logger.info("Using cached hero meta banner from DB (no fresh data)")
-                    return base64.b64decode(cached_banner)
-            except Exception as e:
-                logger.debug(f"Failed to read cached banner: {e}")
             return get_static_fallback_banner()
         
-        # Data available, generate new banner
+        # Generate new banner
         banner = await create_infographic(data)
         if banner:
-            # Save banner to DB for next time
+            # Save to Redis
             try:
-                from database import set_config
-                import base64
-                set_config(HERO_META_BANNER_KEY, base64.b64encode(banner).decode())
+                encoded = base64.b64encode(banner).decode()
+                await cache.set(HERO_META_REDIS_KEY, encoded, ttl=_HERO_META_CACHE_TTL)
+                logger.info(f"Hero meta banner cached in Redis for {_HERO_META_CACHE_TTL}s")
             except Exception as e:
-                logger.warning(f"Failed to cache hero meta banner: {e}")
+                logger.debug(f"Could not save to Redis: {e}")
             return banner
+        
         logger.warning("create_infographic returned None, using fallback")
         return get_static_fallback_banner()
     except Exception as e:
