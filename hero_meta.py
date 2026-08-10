@@ -659,6 +659,9 @@ def _get_hero_stats_from_db(days=7):
     return hero_stats
 
 
+STEAM_DEFAULT_AVATAR = "https://avatars.steamstatic.com/def8d426ec47c0c120bf6ea2506f0502ddf25e2e_full.jpg"
+
+
 async def create_infographic(hero_stats):
     logger.info("Starting create_infographic")
     if not BACKGROUND_PATH.exists():
@@ -767,13 +770,24 @@ async def create_infographic(hero_stats):
             avatars[hero['id']] = result
 
     # Fallback: для героев без аватарки создаём серый placeholder-кружок
+    # Но сначала пробуем Steam default avatar, если есть steam_id в best_players
+    steam_default_avatar = None
+    try:
+        steam_default_avatar = await fetch_hero_icon(None, STEAM_DEFAULT_AVATAR)
+    except Exception as e:
+        logger.debug(f"Could not fetch Steam default avatar: {e}")
+    
     placeholder_avatar = Image.new("RGBA", (40, 40), (60, 60, 70, 255))
     ph_mask = Image.new("L", (40, 40), 0)
     ImageDraw.Draw(ph_mask).ellipse([0, 0, 39, 39], fill=255)
     placeholder_avatar.putalpha(ph_mask)
+    
     for hero in all_heroes:
         if hero['id'] not in avatars or avatars[hero['id']] is None:
-            avatars[hero['id']] = placeholder_avatar
+            if steam_default_avatar:
+                avatars[hero['id']] = steam_default_avatar
+            else:
+                avatars[hero['id']] = placeholder_avatar
 
     return await asyncio.to_thread(
         _compose_infographic, base, draw, grid, icons, font_lg, margin_x, margin_y,
