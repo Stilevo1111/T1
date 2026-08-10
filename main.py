@@ -2455,7 +2455,12 @@ async def top_mmr_handler(request):
         top_users = await asyncio.to_thread(get_dota_week_top_from_db, 50)
         if not top_users or len(top_users) == 0:
             top_users = await asyncio.to_thread(get_dota_mmr_top, 50)
-        data = [{"username": (u.get("username", "Unknown")[:12] if len(u.get("username", "Unknown")) > 12 else u.get("username", "Unknown")), "mmr": u.get("mmr", 0), "rank_tier": u.get("rank_tier", 0), "week_games": u.get("week_games", 0), "week_wins": u.get("week_wins", 0)} for u in top_users]
+
+        def _safe_username(u):
+            name = u.get("username") or "Unknown"
+            return name[:12] if len(name) > 12 else name
+
+        data = [{"username": _safe_username(u), "mmr": u.get("mmr", 0), "rank_tier": u.get("rank_tier", 0), "week_games": u.get("week_games", 0), "week_wins": u.get("week_wins", 0)} for u in top_users]
         resp = web.Response(text=json.dumps(data, ensure_ascii=False), content_type="application/json")
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
