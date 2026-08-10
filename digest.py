@@ -696,7 +696,7 @@ async def alternate_digest_job(context):
 
         # === ОТПРАВКА ДАЙДЖЕСТА ===
         # Пропускаем редактирование если текст не изменился
-        if _digest_state_container.get_last_text() == text:
+        if existing_msg_id and _digest_state_container.get_last_text() == text:
             logger.debug("Текст дайджеста не изменился, пропускаем редактирование")
             return
 
