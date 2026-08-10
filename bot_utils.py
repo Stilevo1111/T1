@@ -11,13 +11,36 @@ from collections import deque
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
-from database import get_user, user_cache
+from database import get_user, user_cache, get_config, set_config
 from rate_limiter import rate_limit
 from utils import _telegram_error_contains
 
 logger = logging.getLogger(__name__)
 
-recent_fissure_rolls = deque(maxlen=50)
+RECENT_ROLLS_KEY = 'recent_fissure_rolls'
+
+def _load_recent_rolls():
+    try:
+        data = get_config(RECENT_ROLLS_KEY)
+        if data:
+            import json
+            rolls = json.loads(data)
+            return deque(rolls, maxlen=50)
+    except Exception as e:
+        logger.debug(f"Could not load recent rolls from DB: {e}")
+    return deque(maxlen=50)
+
+def _save_recent_rolls(rolls):
+    try:
+        import json
+        set_config(RECENT_ROLLS_KEY, json.dumps(list(rolls)))
+    except Exception as e:
+        logger.debug(f"Could not save recent rolls to DB: {e}")
+
+
+recent_fissure_rolls = _load_recent_rolls()
+_recent_rolls_lock = asyncio.Lock() if hasattr(asyncio, 'Lock') else None
+
 
 def format_time(seconds: float) -> str:
     """Format seconds into human-readable time string (e.g., '5м 30с', '1ч 23м')."""
@@ -36,10 +59,8 @@ def format_time(seconds: float) -> str:
     return " ".join(parts) if parts else f"{secs}с"
 
 def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_fissure: float, cascade: int = 1, event_type: str = "roll"):
-    """Append one fissure roll event to the in-memory ring buffer (no DB write).
+    """Append one fissure roll event to the ring buffer and save to DB."""
     
-    event_type: 'roll', 'multicast', 'zeus', 'techies'
-    """
     recent_fissure_rolls.append({
         "ts": time.time(),
         "user_id": user_id,
@@ -49,6 +70,16 @@ def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_f
         "cascade": cascade,
         "event_type": event_type
     })
+    
+    _save_recent_rolls(recent_fissure_rolls)
+
+
+def get_recent_rolls(limit: int = 50):
+    """Get recent fissure rolls from in-memory cache or DB."""
+    global recent_fissure_rolls
+    if len(recent_fissure_rolls) == 0:
+        recent_fissure_rolls = _load_recent_rolls()
+    return list(recent_fissure_rolls)[-limit:]
 
 _bot_can_delete_ttl = 3600
 _BOT_CAN_DELETE_CACHE_MAX = 200

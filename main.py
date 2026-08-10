@@ -1437,10 +1437,6 @@ from constants import (
 )
 from digest import alternate_digest_job, morning_digest_job
 
-# Импорт из bot_utils и fissure
-from bot_utils import (
-    recent_fissure_rolls,
-)
 from fissure import (
     fissure,
 )
@@ -2423,7 +2419,8 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def recent_rolls_handler(request):
     """Public API: returns last 50 fissure rolls as JSON (for the website widget)."""
     try:
-        data = list(recent_fissure_rolls)[-50:]
+        from bot_utils import get_recent_rolls
+        data = get_recent_rolls(50)
         resp = web.Response(text=json.dumps(data, ensure_ascii=False), content_type="application/json")
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
@@ -3890,6 +3887,18 @@ async def main():
             release_connection(conn)
         except Exception as e:
             logger.error(f"Database connection failed: {e}")
+
+        try:
+            from bot_utils import recent_fissure_rolls
+            if len(recent_fissure_rolls) == 0:
+                from database import load_recent_rolls
+                rolls = load_recent_rolls()
+                from collections import deque
+                recent_fissure_rolls.clear()
+                recent_fissure_rolls.extend(rolls)
+                logger.info(f"Loaded {len(rolls)} recent rolls from DB on startup")
+        except Exception as e:
+            logger.warning(f"Could not load recent rolls from DB: {e}")
         
         try:
             all_users = get_all_users()

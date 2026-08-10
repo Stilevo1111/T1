@@ -3696,3 +3696,23 @@ def get_all_users_with_steam():
     finally:
         if conn is not None:
             release_connection(conn)
+
+
+RECENT_ROLLS_CACHE_KEY = 'recent_fissure_rolls'
+
+
+def save_recent_rolls(rolls):
+    try:
+        set_config(RECENT_ROLLS_CACHE_KEY, json.dumps(rolls))
+    except Exception as e:
+        logger.error(f"Error saving recent rolls: {e}")
+
+
+def load_recent_rolls():
+    try:
+        data = get_config(RECENT_ROLLS_CACHE_KEY)
+        if data:
+            return json.loads(data)
+    except Exception as e:
+        logger.error(f"Error loading recent rolls: {e}")
+    return []
