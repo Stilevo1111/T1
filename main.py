@@ -3297,7 +3297,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "Или ссылку на dotabuff →\n"
     "<code>/link https://ru.dotabuff.com/players/347614699</code>\n\n"
     "⚠️ в игре:\n"
-    "Настройки → расширенные → сообщество → общедоступная история матчей (вкл)")
+    "Настройки → сообщество → настройки → общедоступная история матчей → включить")
 
     result_msg = await context.bot.send_photo(
         chat_id=update.effective_chat.id,
