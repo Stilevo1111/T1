@@ -1119,11 +1119,23 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
             logger.info(f"Player stats result: {stats is not None}")
 
             invalid_stats = not stats or stats.get("nickname") == "Unknown"
-            if invalid_stats:
+            private_profile = False
+            if stats and not invalid_stats:
+                total_games = stats.get("total_games") or 0
+                mmr = stats.get("mmr") or 0
+                if total_games == 0 and mmr == 0:
+                    private_profile = True
+
+            if invalid_stats or private_profile:
                 try:
                     from database import get_user_by_steam_id, get_user, update_user_fields_batch, user_cache
                     existing_user = get_user_by_steam_id(steam_id)
                     if existing_user and existing_user.get('telegram_id') == telegram_id:
+                        if private_profile:
+                            return {
+                                "success": True,
+                                "message": "✅ Аккаунт уже привязан к вам\n\n🔒 Ваш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику, откройте профиль Dota 2:\n\n1. Откройте Steam → Профиль\n2. Нажмите «Изменить профиль»\n3. В разделе «Мой личный статус» выберите «Открытый»\n4. Сохраните изменения"
+                            }
                         return {"success": True, "message": "✅ Аккаунт уже привязан к вам"}
                     if existing_user:
                         existing_tid = existing_user.get('telegram_id')
@@ -1136,6 +1148,11 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                             if steam_id in user_cache._steam_index:
                                 del user_cache._steam_index[steam_id]
                         
+                        if private_profile:
+                            return {
+                                "success": True,
+                                "message": f"⚠️ Steam аккаунт был привязан к {existing_username}\nАвтоматически перенесён на ваш аккаунт.\n🔒 Ваш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику, откройте профиль Dota 2:\n\n1. Откройте Steam → Профиль\n2. Нажмите «Изменить профиль»\n3. В разделе «Мой личный статус» выберите «Открытый»\n4. Сохраните изменения"
+                            }
                         return {
                             "success": True,
                             "message": f"⚠️ Steam аккаунт был привязан к {existing_username}\nАвтоматически перенесён на ваш аккаунт.\nСтарые данные утрачены."
@@ -1143,6 +1160,19 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                 except Exception:
                     pass
 
+                if private_profile:
+                    update_user_fields_batch(telegram_id, {
+                        "steam_id": steam_id,
+                        "mmr": 0,
+                        "rank_tier": 0,
+                        "wins": 0,
+                        "losses": 0,
+                        "week_start_date": datetime.now(UTC).date().isoformat()
+                    })
+                    return {
+                        "success": True,
+                        "message": "✅ Аккаунт привязан!\n\n🔒 Ваш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику, откройте профиль Dota 2:\n\n1. Откройте Steam → Профиль\n2. Нажмите «Изменить профиль»\n3. В разделе «Мой личный статус» выберите «Открытый»\n4. Сохраните изменения"
+                    }
                 update_user_fields_batch(telegram_id, {
                     "steam_id": steam_id,
                     "mmr": 0,
