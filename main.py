@@ -43,6 +43,7 @@ from database import (
     get_fissure_top,
     get_user,
     get_user_by_username,
+    increment_weekly_mmr_award,
     init_db,
     migrate_db,
     release_connection,
@@ -59,6 +60,7 @@ from database import (
 from dota_mmr import _get_start_card_background, update_user_mmr
 from mute import register_handlers as register_mute_handlers
 from rate_limiter import is_rate_limited, rate_limit, set_rate_limited
+from tags import TAG_DISPLAY, TAG_TYPES, add_user_tag, format_user_tags, get_user_tags, remove_user_tag, get_telegram_title
 
 structlog.configure(
     processors=[
@@ -368,6 +370,45 @@ async def decrease_inactive_job(context):
 
 
 
+
+
+
+async def update_fissure_master_job(context):
+    """Автоматическое обновление тега fissure_master для текущего топ-1 по фиссуре"""
+    try:
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            return
+
+        top_users = get_fissure_top(1)
+        if not top_users:
+            return
+
+        current_winner = top_users[0]
+        current_winner_tg_id = current_winner.get('telegram_id')
+        if not current_winner_tg_id:
+            return
+
+        stored_winner_tg_id = get_config('current_fissure_master_telegram_id')
+        if str(current_winner_tg_id) == str(stored_winner_tg_id):
+            return
+
+        if stored_winner_tg_id:
+            try:
+                await remove_user_tag(int(stored_winner_tg_id), "fissure_master", bot=context.bot, chat_id=int(digest_chat_id))
+                logger.info(f"update_fissure_master_job: убран тег fissure_master у {stored_winner_tg_id}")
+            except Exception as e:
+                logger.warning(f"update_fissure_master_job: не удалось убрать тег у {stored_winner_tg_id}: {e}")
+
+        try:
+            await add_user_tag(current_winner_tg_id, "fissure_master", bot=context.bot, chat_id=int(digest_chat_id))
+            set_config('current_fissure_master_telegram_id', str(current_winner_tg_id))
+            winner_name = current_winner.get('steam_nickname') or current_winner.get('username') or str(current_winner_tg_id)
+            logger.info(f"update_fissure_master_job: fissure_master автоматически присвоен {winner_name} ({current_winner_tg_id})")
+        except Exception as e:
+            logger.error(f"update_fissure_master_job: не удалось выдать тег {current_winner_tg_id}: {e}")
+    except Exception as e:
+        logger.error(f"Ошибка в update_fissure_master_job: {e}")
 
 
 @rate_limit(tokens=1)
@@ -881,11 +922,7 @@ async def announce_weekly_mmr_winner(bot):
     prev_winner_tag = get_config('current_mvp_tag')
     if prev_winner_tg_id and prev_winner_tag and digest_chat_id:
         try:
-            await bot.set_chat_administrator_custom_title(
-                chat_id=digest_chat_id,
-                user_id=prev_winner_tg_id,
-                custom_title=""
-            )
+            await remove_user_tag(int(prev_winner_tg_id), "weekly_mvp", bot=bot, chat_id=digest_chat_id)
             logger.info(f"Забран тег у прошлого победителя {prev_winner_tg_id}")
         except Exception as e:
             logger.warning(f"Не удалось забрать тег у прошлого победителя: {e}")
@@ -894,11 +931,7 @@ async def announce_weekly_mmr_winner(bot):
     tag_set = False
     if telegram_id and digest_chat_id:
         try:
-            await bot.set_chat_administrator_custom_title(
-                chat_id=digest_chat_id,
-                user_id=telegram_id,
-                custom_title=mvp_tag
-            )
+            await add_user_tag(telegram_id, "weekly_mvp", bot=bot, chat_id=digest_chat_id)
             tag_set = True
             logger.info(f"Установлен тег {mvp_tag} для победителя {telegram_id}")
         except Exception as e:
@@ -922,17 +955,66 @@ async def announce_weekly_mmr_winner(bot):
 
     name_display = make_clickable(username, telegram_id)
 
-    tag_info = ""
-    if tag_set:
-        tag_info = f"\n👤 Ему присвоен титул \"{mvp_tag}\" и добавлена медалька в профиль!"
+    weekly_mvp_count = 0
+    weekly_top2_count = 0
+    weekly_top3_count = 0
+    if telegram_id:
+        weekly_mvp_count = await asyncio.to_thread(increment_weekly_mmr_award, telegram_id, 1)
+    if len(active_users) > 1:
+        top2_user = active_users[1]
+        top2_tg_id = top2_user.get('telegram_id')
+        if top2_tg_id:
+            weekly_top2_count = await asyncio.to_thread(increment_weekly_mmr_award, top2_tg_id, 2)
+            if digest_chat_id:
+                try:
+                    await add_user_tag(top2_tg_id, "weekly_top2", bot=bot, chat_id=digest_chat_id)
+                except Exception as e:
+                    logger.warning(f"Не удалось выдать тег Топ-2 для {top2_tg_id}: {e}")
+    if len(active_users) > 2:
+        top3_user = active_users[2]
+        top3_tg_id = top3_user.get('telegram_id')
+        if top3_tg_id:
+            weekly_top3_count = await asyncio.to_thread(increment_weekly_mmr_award, top3_tg_id, 3)
+            if digest_chat_id:
+                try:
+                    await add_user_tag(top3_tg_id, "weekly_top3", bot=bot, chat_id=digest_chat_id)
+                except Exception as e:
+                    logger.warning(f"Не удалось выдать тег Топ-3 для {top3_tg_id}: {e}")
+
+    week_heroes = []
+    winner_steam_id = winner.get('steam_id')
+    if winner_steam_id:
+        try:
+            from dota_mmr import get_week_top_heroes_async
+            week_heroes = await get_week_top_heroes_async(winner_steam_id, top_k=5)
+        except Exception as e:
+            logger.warning(f"Could not fetch week heroes for champion: {e}")
+
+    net_wins = week_wins - week_losses
+    net_sign = "+" if net_wins >= 0 else ""
 
     text = (
-        f"Поздравляем чемпиона недели🏆\n"
-        f"🥇 {name_display} • 🗡️ {rank_str}\n\n"
-        f"📈 Результат за неделю:\n"
-        f" └ {week_wins}W • {week_losses}L • WR {winrate}%\n\n"
-        f"🏆Этот игрок показал лучший результат в топе MMR за неделю!{tag_info}"
+        f"<b>🏆 ЧЕМПИОН НЕДЕЛИ MMR 🏆</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🥇 <b>{name_display}</b>\n"
+        f"🗡️ <i>{rank_str}</i>\n\n"
+        f"<b>📈 Статистика недели</b>\n"
+        f"▫️ Побед: <code>{week_wins}</code> • Поражений: <code>{week_losses}</code> • WR <b>{winrate}%</b>\n"
+        f"▫️ Игр: <code>{week_games}</code> • Чистый баланс <b>{net_sign}{net_wins}</b>\n\n"
+        f"🔥 <i>Лучший результат в топе MMR этой недели!</i>"
     )
+
+    if tag_set or weekly_mvp_count > 0 or weekly_top2_count > 0 or weekly_top3_count > 0:
+        text += f"\n\n✨ <b>Награды</b>\n"
+        if tag_set:
+            text += f"👑 Титул «{mvp_tag}» в чате\n"
+        if weekly_mvp_count > 0:
+            mvp_line = f" ×{weekly_mvp_count}" if weekly_mvp_count > 1 else ""
+            text += f"🏅 Медаль MVP недели{mvp_line} — в профиле\n"
+        if weekly_top2_count > 0:
+            text += f"🥈 Медаль Топ-2 MMR ×{weekly_top2_count} — в профиле\n"
+        if weekly_top3_count > 0:
+            text += f"🥉 Медаль Топ-3 MMR ×{weekly_top3_count} — в профиле"
 
     from dota_mmr import generate_start_card
 
@@ -953,11 +1035,13 @@ async def announce_weekly_mmr_winner(bot):
             username=username,
             steam_nickname=username,
             rank_tier=rank_tier,
-            weekly_mvp=0,
-            weekly_top2=0,
-            weekly_top3=0,
+            weekly_mvp=weekly_mvp_count,
+            weekly_top2=weekly_top2_count,
+            weekly_top3=weekly_top3_count,
             week_wins=week_wins,
-            week_losses=week_losses
+            week_losses=week_losses,
+            top_heroes=week_heroes or None,
+            is_champion=True,
         )
 
         if card_data:
@@ -1197,9 +1281,9 @@ async def update_all_mmr_job(context):
                         username=username,
                         steam_nickname=username,
                         rank_tier=rank_tier,
-                        weekly_mvp=0,
-                        weekly_top2=0,
-                        weekly_top3=0,
+                        weekly_mvp=user.get('weekly_mvp') or 0,
+                        weekly_top2=user.get('weekly_top2') or 0,
+                        weekly_top3=user.get('weekly_top3') or 0,
                         week_wins=user.get('week_wins', 0),
                         week_losses=(user.get('week_games', 0) or 0) - (user.get('week_wins', 0) or 0)
                     )
@@ -1697,7 +1781,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         logger.warning(f"Could not get Steam avatar: {e}")
                         avatar_url = await get_user_avatar_url(context.bot, user_id)
 
-            weekly_mvp, weekly_top2, weekly_top3 = 0, 0, 0
+            weekly_mvp = user.get('weekly_mvp') or 0
+            weekly_top2 = user.get('weekly_top2') or 0
+            weekly_top3 = user.get('weekly_top3') or 0
 
             # Run blocking card generation in thread pool to avoid blocking event loop
             card_data = await asyncio.to_thread(
@@ -1749,29 +1835,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 username=plain_username,
                 steam_nickname=None,
                 rank_tier=0,
-                weekly_mvp=0,
-                weekly_top2=0,
-                weekly_top3=0,
+                weekly_mvp=user.get('weekly_mvp') or 0,
+                weekly_top2=user.get('weekly_top2') or 0,
+                weekly_top3=user.get('weekly_top3') or 0,
                 week_wins=None,
                 week_losses=None
             )
 
-            if card_data:
-                name_display = make_clickable(plain_username, user_id)
-                text = f"👤 {name_display}"
-                msg = await context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=card_data,
-                    caption=text,
-                    parse_mode="HTML",
-                    reply_markup=main_menu()
-                )
-                set_last_bot_message(chat_id, user_id, msg.message_id)
-                update_last_message_id(user_id, msg.message_id)
-                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
-            else:
-                await menu_handler(update, context)
-            if loading_msg:
+        if card_data:
+            name_display = make_clickable(plain_username, user_id)
+            text = f"👤 {name_display}"
+            msg = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=card_data,
+                caption=text,
+                parse_mode="HTML",
+                reply_markup=main_menu()
+            )
+            set_last_bot_message(chat_id, user_id, msg.message_id)
+            update_last_message_id(user_id, msg.message_id)
+            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
+        else:
+            await menu_handler(update, context)
+        if loading_msg:
                 try:
                     await context.bot.delete_message(chat_id, loading_msg.message_id)
                 except Exception:
@@ -2621,6 +2707,22 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         text += f"\n\n🍆 Фиссура: {target_user.get('fissure', 0):.1f} см\n🎲 Броски: {target_user.get('total_rolls', 0)} 🍀Стрик: {target_user.get('current_streak', 0)}/{target_user.get('best_streak', 0)}"
 
+        tags_text = format_user_tags(target_user.get('telegram_id'))
+        if tags_text:
+            text += f"\n\n🏷️ <b>Теги</b>\n{tags_text}"
+
+        mvp_count = target_user.get('weekly_mvp') or 0
+        top2_count = target_user.get('weekly_top2') or 0
+        top3_count = target_user.get('weekly_top3') or 0
+        if mvp_count or top2_count or top3_count:
+            text += "\n\n✨ <b>Награды недели</b>"
+            if mvp_count:
+                text += f"\n🏆 MVP недели ×<b>{mvp_count}</b>"
+            if top2_count:
+                text += f"\n🥈 Топ-2 MMR ×<b>{top2_count}</b>"
+            if top3_count:
+                text += f"\n🥉 Топ-3 MMR ×<b>{top3_count}</b>"
+
         # Dota stats (без стрика)
         week_games = 0
         week_wins = 0
@@ -2792,6 +2894,9 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         winner = top_users[0]
         winner_avatar = winner.get('avatar')
         winner_telegram_id = winner.get('telegram_id')
+
+        if winner_telegram_id and chat_id:
+            await add_user_tag(winner_telegram_id, 'fissure_master', bot=context.bot, chat_id=chat_id)
 
         # Ensure we have a valid avatar URL
         if not winner_avatar or not str(winner_avatar).strip():
@@ -3393,6 +3498,163 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
+
+async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from config import settings
+    ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
+    user_id = update.effective_user.id
+
+    if not ADMIN_CHAT_ID or user_id != ADMIN_CHAT_ID:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❌ Только администратор может использовать эту команду",
+            reply_markup=main_menu()
+        )
+        return
+
+    args = context.args
+    if not args or len(args) < 2:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Использование: /tag <@username|telegram_id> <тип>\n"
+                 "Типы: weekly_mvp, weekly_top2, weekly_top3, fissure_master, admin_custom\n"
+                 "Пример: /tag @user weekly_mvp",
+            reply_markup=main_menu()
+        )
+        return
+
+    target = args[0].lstrip('@')
+    tag_type = args[1]
+
+    if tag_type not in TAG_TYPES:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"❌ Неизвестный тип тега: {tag_type}\n"
+                 f"Доступные: {', '.join(TAG_TYPES.keys())}",
+            reply_markup=main_menu()
+        )
+        return
+
+    target_user = None
+    if target.isdigit():
+        target_user = get_user(int(target))
+    else:
+        target_user = get_user_by_username(target)
+
+    if not target_user:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"❌ Пользователь {target} не найден",
+            reply_markup=main_menu()
+        )
+        return
+
+    target_id = target_user.get('telegram_id')
+    chat_id = update.effective_chat.id
+    ok = await add_user_tag(target_id, tag_type, bot=context.bot, chat_id=chat_id)
+    label = TAG_DISPLAY.get(tag_type, TAG_TYPES.get(tag_type, tag_type))
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"✅ Тег «{label}» выдан пользователю {target}",
+        reply_markup=main_menu()
+    )
+
+
+async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from config import settings
+    ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
+    user_id = update.effective_user.id
+
+    if not ADMIN_CHAT_ID or user_id != ADMIN_CHAT_ID:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❌ Только администратор может использовать эту команду",
+            reply_markup=main_menu()
+        )
+        return
+
+    args = context.args
+    if not args or len(args) < 2:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Использование: /untag <@username|telegram_id> <тип>\n"
+                 "Типы: weekly_mvp, weekly_top2, weekly_top3, fissure_master, admin_custom\n"
+                 "Пример: /untag @user weekly_mvp",
+            reply_markup=main_menu()
+        )
+        return
+
+    target = args[0].lstrip('@')
+    tag_type = args[1]
+
+    if tag_type not in TAG_TYPES:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"❌ Неизвестный тип тега: {tag_type}\n"
+                 f"Доступные: {', '.join(TAG_TYPES.keys())}",
+            reply_markup=main_menu()
+        )
+        return
+
+    target_user = None
+    if target.isdigit():
+        target_user = get_user(int(target))
+    else:
+        target_user = get_user_by_username(target)
+
+    if not target_user:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"❌ Пользователь {target} не найден",
+            reply_markup=main_menu()
+        )
+        return
+
+    target_id = target_user.get('telegram_id')
+    chat_id = update.effective_chat.id
+    ok = await remove_user_tag(target_id, tag_type, bot=context.bot, chat_id=chat_id)
+    label = TAG_DISPLAY.get(tag_type, TAG_TYPES.get(tag_type, tag_type))
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"✅ Тег «{label}» снят с пользователя {target}",
+        reply_markup=main_menu()
+    )
+
+
+async def tags_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target = None
+    if context.args and len(context.args) >= 1:
+        raw = context.args[0].lstrip('@')
+        if raw.isdigit():
+            target = get_user(int(raw))
+        else:
+            target = get_user_by_username(raw)
+
+    if not target:
+        target = get_user(update.effective_user.id)
+
+    if not target:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❌ Пользователь не найден",
+            reply_markup=main_menu()
+        )
+        return
+
+    name = target.get('steam_nickname') or target.get('username') or target.get('first_name') or str(target.get('telegram_id'))
+    tags_text = format_user_tags(target.get('telegram_id'))
+    if tags_text:
+        text = f"🏷️ Теги {name}:\n{tags_text}"
+    else:
+        text = f"🏷️ У {name} нет тегов"
+
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=text,
+        reply_markup=main_menu()
+    )
+
+
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Информация с кнопкой перехода на патч заметки"""
     await asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username)
@@ -3969,6 +4231,13 @@ async def main():
             days=(0, 1, 2, 3, 4, 5, 6)
         )
 
+        # Автоматическое обновление тега fissure_master для топ-1 по фиссуре
+        job_queue.run_repeating(
+            update_fissure_master_job,
+            interval=datetime.timedelta(hours=2),
+            first=datetime.timedelta(minutes=10)
+        )
+
         job_queue.run_daily(
             cleanup_left_users_job,
             time=datetime.time(hour=4, minute=0),  # 07:00 MSK
@@ -4129,8 +4398,12 @@ async def main():
         app.add_handler(CommandHandler("info", info))
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
+        app.add_handler(CommandHandler("refreshmmr", refreshmmr))
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler("admin_unlink", admin_unlink))
+        app.add_handler(CommandHandler("tag", admin_tag))
+        app.add_handler(CommandHandler("untag", admin_untag))
+        app.add_handler(CommandHandler("tags", tags_list))
         app.add_handler(CommandHandler("setdigestchat", digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
         app.add_handler(CommandHandler("analyze", analyze_command))

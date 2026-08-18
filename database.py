@@ -39,6 +39,7 @@ class User:
     current_lose_streak: int = 0
     best_lose_streak: int = 0
     message_count: int = 0
+    user_tags: str | None = None
 
     @classmethod
     def from_row(cls, row: tuple | dict, db_type: str = "sqlite") -> User:
@@ -58,6 +59,7 @@ class User:
                 current_lose_streak=row.get("current_lose_streak", 0),
                 best_lose_streak=row.get("best_lose_streak", 0),
                 message_count=row.get("message_count", 0),
+                user_tags=row.get("user_tags"),
             )
         return cls(
             telegram_id=row[0],
@@ -74,6 +76,7 @@ class User:
             current_lose_streak=row[42] if len(row) > 42 else 0,
             best_lose_streak=row[43] if len(row) > 43 else 0,
             message_count=row[39] if len(row) > 39 else 0,
+            user_tags=row[45] if len(row) > 45 else None,
         )
 
 
@@ -712,6 +715,10 @@ _PG_INDEXES = (
 _PG_ENSURE_COLUMNS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS week_updated_at TIMESTAMP",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS mmr_last_updated REAL",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_mvp INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_top2 INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_top3 INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS user_tags TEXT DEFAULT '[]'",
     "UPDATE users SET in_chat = TRUE WHERE in_chat IS NULL OR in_chat = FALSE",
 )
 
@@ -1211,6 +1218,14 @@ wins INTEGER DEFAULT 0,
                 cursor.execute("ALTER TABLE users ADD COLUMN message_count INTEGER DEFAULT 0")
             if 'first_name' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
+            if 'weekly_mvp' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN weekly_mvp INTEGER DEFAULT 0")
+            if 'weekly_top2' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN weekly_top2 INTEGER DEFAULT 0")
+            if 'weekly_top3' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN weekly_top3 INTEGER DEFAULT 0")
+            if 'user_tags' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN user_tags TEXT DEFAULT '[]'")
 
             # Создаём индексы для часто используемых полей (улучшение производительности)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)")
@@ -1467,6 +1482,10 @@ class Database:
                         "last_dota_wins": int(user["last_dota_wins"]) if user["last_dota_wins"] is not None else 0,
                         "week_start_date": user["week_start_date"],
                         "message_count": int(user["message_count"]) if user["message_count"] is not None else 0,
+                        "weekly_mvp": int(user["weekly_mvp"]) if user.get("weekly_mvp") is not None else 0,
+                        "weekly_top2": int(user["weekly_top2"]) if user.get("weekly_top2") is not None else 0,
+                        "weekly_top3": int(user["weekly_top3"]) if user.get("weekly_top3") is not None else 0,
+                        "user_tags": user.get("user_tags") or "[]",
                     }
                     if username is not None and username != result.get('username'):
                         self.execute_query("UPDATE users SET username = %s WHERE telegram_id = %s", (username, telegram_id))
@@ -1518,6 +1537,10 @@ class Database:
                             "current_win_streak": int(u["current_win_streak"]) if u["current_win_streak"] is not None else 0,
                             "current_lose_streak": int(u["current_lose_streak"]) if u["current_lose_streak"] is not None else 0,
                             "best_lose_streak": int(u["best_lose_streak"]) if u["best_lose_streak"] is not None else 0,
+                            "weekly_mvp": int(u["weekly_mvp"]) if u.get("weekly_mvp") is not None else 0,
+                            "weekly_top2": int(u["weekly_top2"]) if u.get("weekly_top2") is not None else 0,
+                            "weekly_top3": int(u["weekly_top3"]) if u.get("weekly_top3") is not None else 0,
+                            "user_tags": u.get("user_tags") or "[]",
                         }
                         if username is not None and username != result.get('username'):
                             cursor.execute("UPDATE users SET username = ? WHERE telegram_id = ?", (username, telegram_id))
@@ -2112,6 +2135,10 @@ def get_user(telegram_id, username=None):
         cached_user.setdefault('current_lose_streak', 0)
         cached_user.setdefault('analytics_cache', None)
         cached_user.setdefault('analytics_updated_at', None)
+        cached_user.setdefault('weekly_mvp', 0)
+        cached_user.setdefault('weekly_top2', 0)
+        cached_user.setdefault('weekly_top3', 0)
+        cached_user.setdefault('user_tags', [])
         return cached_user
 
     # Нет в кэше или данные невалидны - читаем из БД
@@ -2127,6 +2154,10 @@ def get_user(telegram_id, username=None):
         user.setdefault('current_streak', 0)
         user.setdefault('current_win_streak', 0)
         user.setdefault('current_lose_streak', 0)
+        user.setdefault('weekly_mvp', 0)
+        user.setdefault('weekly_top2', 0)
+        user.setdefault('weekly_top3', 0)
+        user.setdefault('user_tags', [])
         user_cache.set(telegram_id, user, skip_dirty=True)
         return user
 
@@ -2516,6 +2547,7 @@ def update_user_field(telegram_id, field, value):
         immediate_fields = {
             'fissure', 'last_fissure', 'steam_id', 'steam_nickname', 'mmr', 'rank_tier', 'wins', 'losses',
             'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'week_start_date',
+            'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags',
         }
         if field in immediate_fields:
             _save_user_to_db_immediately(telegram_id, user)
@@ -2523,6 +2555,55 @@ def update_user_field(telegram_id, field, value):
         user_state_manager.apply_user_update(telegram_id, {field: value}, save_to_db=False)
         return True
     return False
+
+
+def increment_weekly_mmr_award(telegram_id: int, place: int = 1) -> int:
+    """Увеличить счётчик награды за место в недельном топе MMR (1=MVP, 2=топ-2, 3=топ-3)."""
+    if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
+        logger.warning(f"increment_weekly_mmr_award: invalid telegram_id={telegram_id}")
+        return 0
+
+    field_map = {1: 'weekly_mvp', 2: 'weekly_top2', 3: 'weekly_top3'}
+    field = field_map.get(place)
+    if not field:
+        return 0
+
+    new_count = 0
+    try:
+        db = Database()
+        scheme = get_db_type()
+        if "postgres" in scheme:
+            row = db.execute_query(
+                f"UPDATE users SET {field} = COALESCE({field}, 0) + 1 WHERE telegram_id = %s RETURNING {field}",
+                (telegram_id,),
+                fetch="one",
+            )
+            if row:
+                new_count = int(row[field] if isinstance(row, dict) else row[0])
+        else:
+            db.execute_query(
+                f"UPDATE users SET {field} = COALESCE({field}, 0) + 1 WHERE telegram_id = ?",
+                (telegram_id,),
+            )
+            row = db.execute_query(
+                f"SELECT {field} FROM users WHERE telegram_id = ?",
+                (telegram_id,),
+                fetch="one",
+            )
+            if row:
+                new_count = int(row[field] if isinstance(row, dict) else row[0])
+    except Exception as e:
+        logger.error(f"increment_weekly_mmr_award error for {telegram_id}: {e}")
+        return 0
+
+    user = get_user(telegram_id)
+    if user:
+        user[field] = new_count
+        user_cache.set(telegram_id, user)
+        user_cache.mark_dirty(telegram_id)
+
+    logger.info(f"increment_weekly_mmr_award: user {telegram_id} {field} -> {new_count}")
+    return new_count
 
 
 def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = True, update_top_cache: bool = True):
@@ -2573,13 +2654,13 @@ _ALLOWED_USER_FIELDS = frozenset([
     'steam_id', 'steam_nickname', 'avatar', 'mmr', 'rank_tier',
     'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'dota_total_games',
     'dota_wins', 'last_dota_games', 'last_dota_wins', 'wins', 'losses', 'week_start_date',
-    'mmr_last_updated', 'message_count'
+    'mmr_last_updated', 'message_count', 'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags',
 ])
 _NUMERIC_USER_FIELDS = frozenset([
     'fissure', 'last_fissure', 'total_rolls', 'total_growth', 'current_streak', 'best_streak',
     'mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'week_current_streak',
     'dota_total_games', 'dota_wins', 'last_dota_games', 'last_dota_wins', 'wins', 'losses',
-    'message_count'
+    'message_count', 'weekly_mvp', 'weekly_top2', 'weekly_top3',
 ])
 
 
@@ -3531,8 +3612,9 @@ def _get_all_users_query(load_all=False, allow_non_steam=False):
                    message_count, week_start_date, week_updated_at, analytics_cache, analytics_updated_at,
                    current_win_streak, current_lose_streak, best_lose_streak, weekly_rolls, weekly_growth,
                    last_activity, in_chat, digest_fissure, weekly_digest_position,
-                   mmr_last_updated, created_at, daily_best_growth
-            FROM users{where}
+                   mmr_last_updated, created_at, daily_best_growth,
+                   weekly_mvp, weekly_top2, weekly_top3, user_tags
+             FROM users{where}
         """
         if "postgres" in scheme:
             cursor.execute(sql)
@@ -3585,6 +3667,10 @@ def _get_all_users_query(load_all=False, allow_non_steam=False):
             "mmr_last_updated": float(u["mmr_last_updated"]) if u.get("mmr_last_updated") is not None else 0.0,
             "created_at": u.get("created_at"),
             "daily_best_growth": float(u["daily_best_growth"]) if u.get("daily_best_growth") is not None else 0.0,
+            "weekly_mvp": int(u["weekly_mvp"]) if u.get("weekly_mvp") is not None else 0,
+            "weekly_top2": int(u["weekly_top2"]) if u.get("weekly_top2") is not None else 0,
+            "weekly_top3": int(u["weekly_top3"]) if u.get("weekly_top3") is not None else 0,
+            "user_tags": u.get("user_tags") or "[]",
         } for u in (dict(zip(columns, row)) for row in users)]
     except Exception as e:
         logger.error(f"Error _get_all_users_query: {e}")

@@ -1,0 +1,169 @@
+import json
+import logging
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+TAG_TYPES = {
+    "weekly_mvp": "MVP недели",
+    "weekly_top2": "Топ-2 MMR",
+    "weekly_top3": "Топ-3 MMR",
+    "fissure_master": "Мастер фиссур",
+    "admin_custom": "Админ",
+}
+
+TAG_DISPLAY = {
+    "weekly_mvp": "🏆 MVP недели",
+    "weekly_top2": "🥈 Топ-2 MMR",
+    "weekly_top3": "🥉 Топ-3 MMR",
+    "fissure_master": "🍆 Мастер фиссур",
+    "admin_custom": "👑 Админ",
+}
+
+TAG_PRIORITY = {
+    "weekly_mvp": 100,
+    "weekly_top2": 90,
+    "weekly_top3": 80,
+    "fissure_master": 70,
+    "admin_custom": 50,
+}
+
+
+def get_user_tags(telegram_id: int) -> list:
+    from database import get_user
+    user = get_user(telegram_id)
+    if not user:
+        return []
+    raw = user.get("user_tags")
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [t for t in raw if t in TAG_TYPES]
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list):
+            return [t for t in data if t in TAG_TYPES]
+    except Exception:
+        pass
+    return []
+
+
+def _save_user_tags(telegram_id: int, tags: list) -> None:
+    from database import update_user_field
+    payload = json.dumps(tags, ensure_ascii=False)
+    update_user_field(telegram_id, "user_tags", payload)
+
+
+async def _get_chat_member_status(bot, chat_id: int, user_id: int) -> Optional[str]:
+    try:
+        member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+        return member.status
+    except Exception as e:
+        logger.debug(f"tag_manager: get_chat_member failed for {user_id}: {e}")
+        return None
+
+
+async def _set_member_tag(bot, chat_id: int, user_id: int, tag: str) -> bool:
+    try:
+        return await bot.do_api_request(
+            endpoint="setChatMemberTag",
+            api_kwargs={"chat_id": chat_id, "user_id": user_id, "tag": tag},
+            return_type=bool,
+        )
+    except Exception as e:
+        logger.warning(f"tag_manager: setChatMemberTag failed for {user_id}: {e}")
+        return False
+
+
+async def _set_admin_custom_title(bot, chat_id: int, user_id: int, title: str) -> bool:
+    try:
+        return await bot.set_chat_administrator_custom_title(
+            chat_id=chat_id,
+            user_id=user_id,
+            custom_title=title,
+        )
+    except Exception as e:
+        logger.warning(f"tag_manager: set_chat_administrator_custom_title failed for {user_id}: {e}")
+        return False
+
+
+async def _apply_best_tag(bot, telegram_id: int, chat_id: int) -> None:
+    best = get_best_tag(telegram_id)
+    title = TAG_TYPES.get(best, "") if best else ""
+
+    status = await _get_chat_member_status(bot, chat_id, telegram_id)
+    if status == "member" or status == "restricted":
+        await _set_member_tag(bot, chat_id, telegram_id, title)
+    elif status in ("administrator", "creator"):
+        await _set_admin_custom_title(bot, chat_id, telegram_id, title)
+    else:
+        logger.debug(f"tag_manager: user {telegram_id} status={status}, skipping tag apply")
+
+
+async def add_user_tag(telegram_id: int, tag_type: str, bot=None, chat_id: Optional[int] = None) -> bool:
+    if tag_type not in TAG_TYPES:
+        return False
+    current = get_user_tags(telegram_id)
+    if tag_type in current:
+        if bot and chat_id:
+            await _apply_best_tag(bot, telegram_id, chat_id)
+        return True
+    current.append(tag_type)
+    _save_user_tags(telegram_id, current)
+    logger.info(f"tag_manager: added tag {tag_type} to user {telegram_id}")
+    if bot and chat_id:
+        await _apply_best_tag(bot, telegram_id, chat_id)
+    return True
+
+
+async def remove_user_tag(telegram_id: int, tag_type: str, bot=None, chat_id: Optional[int] = None) -> bool:
+    current = get_user_tags(telegram_id)
+    if tag_type not in current:
+        return False
+    current = [t for t in current if t != tag_type]
+    _save_user_tags(telegram_id, current)
+    logger.info(f"tag_manager: removed tag {tag_type} from user {telegram_id}")
+    if bot and chat_id:
+        await _apply_best_tag(bot, telegram_id, chat_id)
+    return True
+
+
+def get_best_tag(telegram_id: int) -> Optional[str]:
+    tags = get_user_tags(telegram_id)
+    if not tags:
+        return None
+    best = None
+    best_priority = -1
+    for tag in tags:
+        priority = TAG_PRIORITY.get(tag, 0)
+        if priority > best_priority:
+            best_priority = priority
+            best = tag
+    return best
+
+
+async def refresh_user_tag(bot, telegram_id: int, chat_id: int) -> None:
+    await _apply_best_tag(bot, telegram_id, chat_id)
+
+
+async def revoke_all_tags(bot, telegram_id: int, chat_id: int) -> None:
+    _save_user_tags(telegram_id, [])
+    await _apply_best_tag(bot, telegram_id, chat_id)
+
+
+def format_user_tags(telegram_id: int) -> str:
+    tags = get_user_tags(telegram_id)
+    if not tags:
+        return ""
+    lines = []
+    for tag in tags:
+        label = TAG_DISPLAY.get(tag, TAG_TYPES.get(tag, tag))
+        lines.append(f"• {label}")
+    return "\n".join(lines)
+
+
+async def get_telegram_title(bot, telegram_id: int, chat_id: int) -> str:
+    best = get_best_tag(telegram_id)
+    title = TAG_TYPES.get(best, "") if best else ""
+    await _apply_best_tag(bot, telegram_id, chat_id)
+    return title

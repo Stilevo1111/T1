@@ -650,6 +650,166 @@ async def get_top_heroes_async(steam_id: int, last_n: int = 10, top_k: int = 3) 
         return []
 
 
+def _get_week_start_utc():
+    """Понедельник 00:00 MSK — начало игровой недели (UTC)."""
+    from datetime import datetime, timedelta, timezone
+    MSK = timezone(timedelta(hours=3))
+    UTC = timezone.utc
+    today_msk = datetime.now(MSK)
+    monday_msk = today_msk - timedelta(days=today_msk.weekday())
+    week_start_msk = monday_msk.replace(hour=0, minute=0, second=0, microsecond=0)
+    return week_start_msk.astimezone(UTC)
+
+
+def get_week_top_heroes(steam_id: int, top_k: int = 5, match_limit: int = 50) -> list:
+    """Топ героев игрока за текущую неделю (по числу игр)."""
+    from collections import Counter
+    from datetime import datetime, timezone
+
+    try:
+        week_start_utc = _get_week_start_utc()
+        matches = get_recent_matches(steam_id, limit=match_limit)
+        if not matches:
+            return []
+
+        heroes_data = get_heroes_data()
+        if not heroes_data:
+            return []
+
+        hero_counts = Counter()
+        for match in matches:
+            match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=timezone.utc)
+            if match_date >= week_start_utc:
+                hero_id = match.get("hero_id")
+                if hero_id:
+                    hero_counts[hero_id] += 1
+
+        result = []
+        for hero_id, count in hero_counts.most_common(top_k):
+            hero_info = heroes_data.get(hero_id)
+            if hero_info:
+                result.append({
+                    "id": hero_id,
+                    "name": hero_info["name"],
+                    "short_name": hero_info.get("short_name", ""),
+                    "image_url": hero_info["image_url"],
+                    "icon_url": hero_info["icon_url"],
+                    "picks": count,
+                })
+        return result
+    except Exception as e:
+        logger.error(f"get_week_top_heroes error: {e}", exc_info=True)
+        return []
+
+
+async def get_week_top_heroes_async(steam_id: int, top_k: int = 5, match_limit: int = 50) -> list:
+    """Асинхронно получить топ героев игрока за текущую неделю."""
+    from collections import Counter
+    from datetime import datetime, timezone
+
+    try:
+        week_start_utc = _get_week_start_utc()
+        matches = await get_recent_matches_async(steam_id, limit=match_limit)
+        if not matches:
+            return []
+
+        heroes_data = await asyncio.to_thread(get_heroes_data)
+        if not heroes_data:
+            return []
+
+        hero_counts = Counter()
+        for match in matches:
+            match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=timezone.utc)
+            if match_date >= week_start_utc:
+                hero_id = match.get("hero_id")
+                if hero_id:
+                    hero_counts[hero_id] += 1
+
+        result = []
+        for hero_id, count in hero_counts.most_common(top_k):
+            hero_info = heroes_data.get(hero_id)
+            if hero_info:
+                result.append({
+                    "id": hero_id,
+                    "name": hero_info["name"],
+                    "short_name": hero_info.get("short_name", ""),
+                    "image_url": hero_info["image_url"],
+                    "icon_url": hero_info["icon_url"],
+                    "picks": count,
+                })
+        return result
+    except Exception as e:
+        logger.error(f"get_week_top_heroes_async error: {e}", exc_info=True)
+        return []
+
+
+def _draw_hero_squares_on_card(img, draw, top_heroes: list, base_height: int, width: int):
+    """Добавить полоску с квадратиками героев внизу карточки."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    if not top_heroes:
+        return img, draw
+
+    strip_h = 110
+    new_height = base_height + strip_h
+    extended = Image.new("RGB", (width, new_height), (18, 22, 34))
+    extended.paste(img, (0, 0))
+    img = extended
+    draw = ImageDraw.Draw(img)
+
+    draw.rectangle([0, base_height, width, new_height], fill=(22, 28, 42))
+    draw.line([(0, base_height), (width, base_height)], fill=(215, 175, 85), width=2)
+
+    heroes = sorted(top_heroes, key=lambda h: h.get("picks", 0), reverse=True)[:5]
+    n = len(heroes)
+    icon_size = 72
+    gap = 14
+    total_w = n * icon_size + max(0, n - 1) * gap
+    start_x = max(16, (width - total_w) // 2)
+    y = base_height + 10
+
+    try:
+        font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
+    except Exception:
+        font_small = ImageFont.load_default()
+
+    for hero in heroes:
+        hero_short = hero.get("short_name", "")
+        icon_data = None
+        if hero_short:
+            icon_data = get_hero_portrait_cached(hero_short) or get_hero_icon_cached(hero_short)
+
+        if icon_data:
+            try:
+                icon = Image.open(io.BytesIO(icon_data)).convert("RGBA")
+                w, h = icon.size
+                side = min(w, h)
+                left = (w - side) // 2
+                top = (h - side) // 2
+                icon = icon.crop((left, top, left + side, top + side))
+                icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
+                img.paste(icon, (start_x, y), icon)
+            except Exception:
+                draw.rectangle([start_x, y, start_x + icon_size, y + icon_size], fill=(55, 45, 70))
+        else:
+            draw.rectangle([start_x, y, start_x + icon_size, y + icon_size], fill=(55, 45, 70))
+
+        draw.rectangle(
+            [start_x - 2, y - 2, start_x + icon_size + 1, y + icon_size + 1],
+            outline=(215, 175, 85),
+            width=2,
+        )
+
+        hero_name = hero.get("name", "")
+        if hero_name:
+            name_y = y + icon_size + 6
+            draw.text((start_x, name_y), hero_name, fill=(200, 210, 230), font=font_small)
+
+        start_x += icon_size + gap
+
+    return img, draw
+
+
 def generate_heroes_image(top_heroes: list) -> bytes | None:
     """Сгенерировать картинку с иконками топ-героев: иконки как раньше, но фиксированная сетка 10 позиций."""
     global _heroes_image_cache
@@ -1684,10 +1844,16 @@ def generate_start_card(
     weekly_top2: int = 0,
     weekly_top3: int = 0,
     week_wins: int = 0,
-    week_losses: int = 0
+    week_losses: int = 0,
+    top_heroes: list = None,
+    is_champion: bool = False,
 ) -> bytes | None:
-    logger.info(f"generate_start_card INPUT: username={username} steam_nickname={steam_nickname} rank_tier={rank_tier} week_wins={week_wins} week_losses={week_losses}")
-    """Сгенерировать карточку для /start существующего пользователя"""
+    """Сгенерировать карточку для /start или чемпиона недели."""
+    logger.info(
+        f"generate_start_card INPUT: username={username} steam_nickname={steam_nickname} "
+        f"rank_tier={rank_tier} week_wins={week_wins} week_losses={week_losses} "
+        f"weekly_mvp={weekly_mvp} heroes={len(top_heroes or [])} champion={is_champion}"
+    )
     try:
         import io
         import os
@@ -1714,6 +1880,26 @@ def generate_start_card(
             logger.error(f"Failed to load background image: {e}")
             img = Image.new("RGB", (width, height), (15, 20, 35))
         draw = ImageDraw.Draw(img)
+
+        if is_champion:
+            banner_h = 44
+            draw.rectangle([0, 0, width, banner_h], fill=(175, 130, 35))
+            draw.line([(0, banner_h), (width, banner_h)], fill=(235, 195, 95), width=2)
+            try:
+                font_banner = ImageFont.truetype(
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28
+                )
+            except Exception:
+                font_banner = ImageFont.load_default()
+            banner_text = "ЧЕМПИОН НЕДЕЛИ MMR"
+            bbox = draw.textbbox((0, 0), banner_text, font=font_banner)
+            text_w = bbox[2] - bbox[0]
+            draw.text(
+                ((width - text_w) // 2, 8),
+                banner_text,
+                fill=(255, 248, 220),
+                font=font_banner,
+            )
 
         avatar_x_offset = -100  # Shift avatar 100px left
         avatar_size = int(140 * scale)  # Avatar size
@@ -1848,10 +2034,30 @@ def generate_start_card(
         else:
             draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
 
+        awards_y = msg_num_y + int(44 * scale)
+        award_parts = []
+        if weekly_mvp > 0:
+            award_parts.append(f"MVP x{weekly_mvp}")
+        if weekly_top2 > 0:
+            award_parts.append(f"Top-2 x{weekly_top2}")
+        if weekly_top3 > 0:
+            award_parts.append(f"Top-3 x{weekly_top3}")
+        if award_parts:
+            awards_text = "  |  ".join(award_parts)
+            if "trophy" in icons:
+                img.paste(icons["trophy"], (info_x + username_x_offset, awards_y - 4), icons["trophy"])
+                text_x = info_x + username_x_offset + icon_size + int(8 * scale)
+            else:
+                text_x = info_x + username_x_offset
+            draw.text((text_x, awards_y), awards_text, fill=(255, 215, 120), font=font_small)
+
         if rank_tier > 0 and rank_icon:
             rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
             rank_y = avatar_y + avatar_size - rank_icon_size // 2
             img.paste(rank_icon, (rank_x, rank_y), rank_icon)
+
+        if top_heroes:
+            img, draw = _draw_hero_squares_on_card(img, draw, top_heroes, height, width)
 
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=90)
