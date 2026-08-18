@@ -1285,7 +1285,8 @@ async def update_all_mmr_job(context):
                         weekly_top2=user.get('weekly_top2') or 0,
                         weekly_top3=user.get('weekly_top3') or 0,
                         week_wins=user.get('week_wins', 0),
-                        week_losses=(user.get('week_games', 0) or 0) - (user.get('week_wins', 0) or 0)
+                        week_losses=(user.get('week_games', 0) or 0) - (user.get('week_wins', 0) or 0),
+                        top_heroes=await asyncio.to_thread(get_week_top_heroes, user.get('steam_id'), top_k=5, match_limit=20) if user.get('steam_id') else None
                     )
 
                     if card_data:
@@ -2895,8 +2896,8 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         winner_avatar = winner.get('avatar')
         winner_telegram_id = winner.get('telegram_id')
 
-        if winner_telegram_id and chat_id:
-            await add_user_tag(winner_telegram_id, 'fissure_master', bot=context.bot, chat_id=chat_id)
+        # Автоматически обновляем тег fissure_master при изменении топ-1
+        await update_fissure_master_job(context)
 
         # Ensure we have a valid avatar URL
         if not winner_avatar or not str(winner_avatar).strip():
