@@ -755,10 +755,8 @@ def _draw_hero_squares_on_card(img, draw, top_heroes: list, base_height: int, wi
     icon_size = 72
     gap = 12
     total_w = n * icon_size + max(0, n - 1) * gap
-    start_x = max(10, (width - total_w) // 2) + 125
+    start_x = max(10, (width - total_w) // 2) + 135
     y = base_height - icon_size - 16
-
-    corner_radius = 14
 
     for hero in heroes:
         hero_short = hero.get("short_name", "")
@@ -775,19 +773,14 @@ def _draw_hero_squares_on_card(img, draw, top_heroes: list, base_height: int, wi
                 top = (h - side) // 2
                 icon = icon.crop((left, top, left + side, top + side))
                 icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
-
-                mask = Image.new("L", (icon_size, icon_size), 0)
-                mask_draw = ImageDraw.Draw(mask)
-                mask_draw.rounded_rectangle([0, 0, icon_size - 1, icon_size - 1], radius=corner_radius, fill=255)
-                img.paste(icon, (start_x, y), mask)
+                img.paste(icon, (start_x, y), icon)
             except Exception:
-                draw.rounded_rectangle([start_x, y, start_x + icon_size, y + icon_size], radius=corner_radius, fill=(55, 45, 70))
+                draw.rectangle([start_x, y, start_x + icon_size, y + icon_size], fill=(55, 45, 70))
         else:
-            draw.rounded_rectangle([start_x, y, start_x + icon_size, y + icon_size], radius=corner_radius, fill=(55, 45, 70))
+            draw.rectangle([start_x, y, start_x + icon_size, y + icon_size], fill=(55, 45, 70))
 
-        draw.rounded_rectangle(
+        draw.rectangle(
             [start_x - 1, y - 1, start_x + icon_size + 1, y + icon_size + 1],
-            radius=corner_radius + 1,
             outline=(215, 175, 85),
             width=2,
         )
