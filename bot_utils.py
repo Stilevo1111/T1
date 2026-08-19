@@ -197,7 +197,8 @@ def schedule_delete(bot, chat_id, msg_id, delay, job_queue=None):
             try:
                 return bot.delete_message(chat_id=chat_id, message_id=msg_id)
             except Exception as e:
-                logger.debug(f"Could not delete scheduled message: {e}")
+                if "Message to delete not found" not in str(e):
+                    logger.debug(f"Could not delete scheduled message: {e}")
         job_queue.run_once(_safe_delete, delay)
     else:
         async def _delete():
@@ -205,7 +206,8 @@ def schedule_delete(bot, chat_id, msg_id, delay, job_queue=None):
             try:
                 await bot.delete_message(chat_id=chat_id, message_id=msg_id)
             except Exception as e:
-                logger.debug(f"Could not delete scheduled message: {e}")
+                if "Message to delete not found" not in str(e):
+                    logger.debug(f"Could not delete scheduled message: {e}")
         asyncio.create_task(_delete())
 
 
