@@ -210,7 +210,7 @@ async def refresh_fissure_master_tag(bot, chat_id: int, notify: bool = True) -> 
     old_name = ""
     old_fissure = 0
     if old_winner:
-        old_name = old_winner.get('steam_nickname') or old_winner.get('username') or str(stored_winner_tg_id)
+        old_name = old_winner.get('username') or old_winner.get('steam_nickname') or str(stored_winner_tg_id)
         old_fissure = old_winner.get('fissure', 0)
 
     if stored_winner_tg_id:
@@ -223,7 +223,7 @@ async def refresh_fissure_master_tag(bot, chat_id: int, notify: bool = True) -> 
     try:
         await add_user_tag(current_winner_tg_id, "fissure_master", bot=bot, chat_id=chat_id)
         set_config('current_fissure_master_telegram_id', str(current_winner_tg_id))
-        winner_name = current_winner.get('steam_nickname') or current_winner.get('username') or str(current_winner_tg_id)
+        winner_name = current_winner.get('username') or current_winner.get('steam_nickname') or str(current_winner_tg_id)
         logger.info(f"tag_manager: refresh_fissure_master_tag: fissure_master -> {winner_name} ({current_winner_tg_id})")
 
         if notify:

@@ -5,7 +5,7 @@ import logging
 import os
 import time
 
-from bot_utils import _telegram_error_contains
+from utils import _telegram_error_contains
 
 logger = logging.getLogger(__name__)
 

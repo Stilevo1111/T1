@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import json
 import logging
 import os
@@ -11,12 +10,11 @@ import urllib.parse as urlparse
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any
 
 import psycopg2
 import psycopg2.extras
-
 
 from utils import _telegram_error_contains
 
@@ -62,16 +60,16 @@ class User:
                 user_tags=row.get("user_tags"),
             )
         return cls(
-            telegram_id=row[0],
-            username=row[1],
-            steam_id=row[2],
-            steam_nickname=row[3],
-            fissure=float(row[4]) if len(row) > 4 else 0,
-            mmr=row[5] if len(row) > 5 else 0,
-            rank_tier=row[6] if len(row) > 6 else 0,
+            telegram_id=row[1] if len(row) > 1 else 0,
+            username=row[2] if len(row) > 2 else None,
+            steam_id=row[19] if len(row) > 19 else None,
+            steam_nickname=row[20] if len(row) > 20 else None,
+            fissure=float(row[3]) if len(row) > 3 else 0,
+            mmr=row[21] if len(row) > 21 else 0,
+            rank_tier=row[30] if len(row) > 30 else 0,
             total_rolls=row[7] if len(row) > 7 else 0,
-            current_streak=row[8] if len(row) > 8 else 0,
-            best_streak=row[9] if len(row) > 9 else 0,
+            current_streak=row[9] if len(row) > 9 else 0,
+            best_streak=row[10] if len(row) > 10 else 0,
             current_win_streak=row[41] if len(row) > 41 else 0,
             current_lose_streak=row[42] if len(row) > 42 else 0,
             best_lose_streak=row[43] if len(row) > 43 else 0,
@@ -158,7 +156,7 @@ class UserCache:
                     self._evict_lru()
                 self._cache[telegram_id] = data
             return
-        
+
         # Prevent SteamID64 from being used as telegram_id key
         if isinstance(telegram_id, int) and telegram_id > 76561190000000000:
             logger.warning(f"UserCache.set: rejecting SteamID64 as telegram_id key={telegram_id}")
@@ -177,7 +175,7 @@ class UserCache:
                     if tid == telegram_id:
                         del self._steam_index[sid]
                         break
-    
+
     def set_without_dirty(self, telegram_id, data):
         """Установить данные без установки dirty-флага (для загрузки из БД)"""
         self.set(telegram_id, data, skip_dirty=True)
@@ -408,7 +406,7 @@ async def flush_users_cache(max_retries: int = 3):
 
     db_type = get_db_type()
     flushed = 0
-    
+
     for attempt in range(max_retries):
         conn = None
         cursor = None
@@ -470,7 +468,7 @@ async def flush_users_cache(max_retries: int = 3):
                 for i in range(flushed):
                     telegram_id = batch_data[i][-1]
                     user_cache.clear_dirty(telegram_id)
-                
+
                 top_cache.invalidate_top_cache()
 
             conn.commit()
@@ -527,7 +525,7 @@ def update_dota_week_top_cache():
 
         week_games = user.get('week_games') or 0
         week_wins = user.get('week_wins') or 0
-        winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
+        winrate = round(week_wins / week_games * 100) if week_games > 0 else 0
 
         top_users.append({
             'telegram_id': telegram_id,
@@ -625,8 +623,9 @@ def get_pg_connection():
         with _pg_pool_lock:
             if _pg_pool is None:
                 try:
-                    from psycopg2 import pool
                     import urllib.parse as urlparse
+
+                    from psycopg2 import pool
                     parsed = urlparse.urlparse(DATABASE_URL)
                     dsn = _pg_dsn()
                     _pg_pool = pool.ThreadedConnectionPool(
@@ -660,8 +659,9 @@ def get_pg_connection():
         logger.warning(f"Pool connection error, recreating: {e}")
         _reset_persistent_pg_conn(str(e))
     try:
-        from psycopg2 import pool
         import urllib.parse as urlparse
+
+        from psycopg2 import pool
         parsed = urlparse.urlparse(DATABASE_URL)
         dsn = _pg_dsn()
         _pg_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=15, dsn=dsn)
@@ -692,12 +692,10 @@ def release_pg_connection(conn):
         try:
             _pg_pool.putconn(conn)
         except Exception:
-            # Конн взят из старого/закрытого пула или чужого пула после ресета —
-            # просто закрываем, чтобы не терять данные и не спамить ошибками.
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as close_err:
+                logger.debug(f"Failed to close PG connection after pool error: {close_err}")
 
 
 def close_pg_pool():
@@ -1348,15 +1346,15 @@ class Database:
                         logger.error(f"execute_query retry error: {e2}")
                         try:
                             conn.rollback()
-                        except Exception:
-                            pass
+                        except Exception as rb_err:
+                            logger.debug(f"rollback failed: {rb_err}")
                         raise
                 else:
                     logger.error(f"execute_query error: {e} (type={type(e).__name__}, args={getattr(e, 'args', 'N/A')})")
                     try:
                         conn.rollback()
-                    except Exception:
-                        pass
+                    except Exception as rb_err:
+                        logger.debug(f"rollback failed: {rb_err}")
                     raise
             finally:
                 release_connection(conn)
@@ -1401,15 +1399,15 @@ class Database:
                         logger.error(f"execute_query retry error: {e2}")
                         try:
                             conn.rollback()
-                        except Exception:
-                            pass
+                        except Exception as rb_err:
+                            logger.debug(f"rollback failed: {rb_err}")
                         raise
                 else:
                     logger.error(f"execute_query error: {e} (type={type(e).__name__}, args={getattr(e, 'args', 'N/A')})")
                     try:
                         conn.rollback()
-                    except Exception:
-                        pass
+                    except Exception as rb_err:
+                        logger.debug(f"rollback failed: {rb_err}")
                     raise
             finally:
                 release_connection(conn)
@@ -1419,7 +1417,7 @@ class Database:
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
         db_type = get_db_type()
-        
+
         try:
             if "postgres" in scheme:
                 existing = self.execute_query("SELECT telegram_id FROM users WHERE telegram_id = %s", (telegram_id,), fetch="one")
@@ -1444,7 +1442,7 @@ class Database:
             error_msg = str(e) if str(e) else "unknown error"
             error_type = type(e).__name__
             error_args = getattr(e, 'args', None)
-            
+
             if _telegram_error_contains(e, "duplicate key") and "users_pkey" in error_msg.lower():
                 try:
                     existing = self.execute_query("SELECT id FROM users WHERE telegram_id = %s", (telegram_id,), fetch="one")
@@ -1453,7 +1451,7 @@ class Database:
                         return existing["id"]
                 except Exception:
                     pass
-            
+
             logger.error(f"Error adding user: {error_msg} (type={error_type}, db_type={db_type}, telegram_id={telegram_id}, username={username})")
             return None
 
@@ -1478,7 +1476,7 @@ class Database:
 
         safe_username = (username or first_name or "").strip() if (username or first_name) else None
         safe_first_name = (first_name or "").strip() if first_name else None
-        
+
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
 
@@ -2020,13 +2018,13 @@ class Database:
                 cur_f = u.get("fissure", 0.0)
                 delta = cur_f - prev_f
                 daily_best = u.get("daily_best_growth", 0.0) or 0.0
-                
+
                 # Show growth if either delta or daily_best is positive
                 growth_cm = max(delta, daily_best) if delta > 0 or daily_best > 0 else 0.0
-                
+
                 if growth_cm > 0 and growth_cm > top_growth_cm:
                     top_growth_cm = growth_cm
-                    nick = u.get("steam_nickname") or u.get("username") or u.get("first_name")
+                    nick = u.get("username") or u.get("steam_nickname") or u.get("first_name")
                     if not nick or nick in ("None", "Unknown", "Неизвестный игрок") or len(nick.strip()) <= 1:
                         nick = u.get("username") or u.get("first_name")
                     top_growth_user = nick if nick else None
@@ -2038,7 +2036,7 @@ class Database:
                 # also track drop (fissure decrease) - only if delta is negative (fissure decreased)
                 if delta < top_drop_cm:
                     top_drop_cm = delta
-                    nick = u.get("steam_nickname") or u.get("username") or u.get("first_name")
+                    nick = u.get("username") or u.get("steam_nickname") or u.get("first_name")
                     if not nick or nick in ("None", "Unknown", "Неизвестный игрок") or len(nick.strip()) <= 1:
                         nick = u.get("username") or u.get("first_name")
                     top_drop_user = nick if nick else None
@@ -2051,7 +2049,7 @@ class Database:
                     top_streak = u["current_win_streak"]
                     top_streak_id = telegram_id
                     top_streak_steam_id = u.get("steam_id")
-                    nick = u.get("steam_nickname") or u.get("username") or u.get("first_name")
+                    nick = u.get("username") or u.get("steam_nickname") or u.get("first_name")
                     if not nick or nick in ("None", "Unknown", "Неизвестный игрок") or len(nick.strip()) <= 1:
                         nick = u.get("username") or u.get("first_name")
                     top_streak_user = nick if nick else None
@@ -2318,7 +2316,7 @@ def get_user(telegram_id, username=None):
     # Нет в кэше или данные невалидны - читаем из БД
     db = Database()
     user = db.get_user(tid, username)
-    
+
     if user:
         logger.info(f"get_user: DB hit for {tid}, fissure={user.get('fissure')}, total_rolls={user.get('total_rolls')}")
         user.setdefault('analytics_cache', None)
@@ -2580,7 +2578,7 @@ def cleanup_left_users():
         conn = get_connection()
         cursor = conn.cursor()
         scheme = get_db_type()
-        
+
         # Disable users who left more than 7 days ago, but NEVER disable users with Steam
         if "postgres" in scheme:
             cursor.execute("""
@@ -3425,7 +3423,7 @@ def get_dota_week_top(limit=10, force_refresh=False):
                     continue
 
                 week_wins = user.get('week_wins', 0)
-                winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
+                winrate = round(week_wins / week_games * 100) if week_games > 0 else 0
 
                 rank_tier = user.get('rank_tier')
                 if rank_tier is None or rank_tier == 0:
@@ -3807,7 +3805,7 @@ def _get_all_users_query(load_all=False, allow_non_steam=False):
             columns = [desc[0] for desc in cursor.description]
         cursor.close()
         logger.info(f"_get_all_users_query: fetched {len(users)} users")
-        
+
         return [{
             "telegram_id": u["telegram_id"],
             "username": u["username"],
@@ -3874,7 +3872,7 @@ def get_all_users():
 def reset_weekly_stats():
     """Сброс недельной статистики для всех пользователей (вызывается по понедельникам)"""
     from datetime import datetime as dt
-    from datetime import timedelta, timezone
+    from datetime import timedelta
     MSK = timezone(timedelta(hours=3))
     monday_msk = dt.now(MSK) - timedelta(days=dt.now(MSK).weekday())
     current_week_start = monday_msk.strftime("%Y-%m-%d")

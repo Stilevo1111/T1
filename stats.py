@@ -4,7 +4,16 @@ Handles multicast/zeus chances and persistent counters.
 Extracted from main.py without changing behavior.
 """
 
-import logging
+
+from constants import (
+    BOT_CAN_DELETE_TTL,
+    JOB_COOLDOWN,
+    MULTICAST_DEFAULT_CHANCE,
+    TECHIES_DEFAULT_CHANCE,
+    USER_PROCESSING_TTL,
+    WEEKLY_JOB_COOLDOWN,
+    ZEUS_DEFAULT_CHANCE,
+)
 
 __all__ = [
     "MULTICAST_DEFAULT_CHANCE",
@@ -17,9 +26,6 @@ __all__ = [
     "get_event_chances",
 ]
 
-MULTICAST_DEFAULT_CHANCE = 0.03
-ZEUS_DEFAULT_CHANCE = 0.03
-TECHIES_DEFAULT_CHANCE = 0.03
 
 def get_event_chances():
     return MULTICAST_DEFAULT_CHANCE, ZEUS_DEFAULT_CHANCE, TECHIES_DEFAULT_CHANCE

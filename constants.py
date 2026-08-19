@@ -94,6 +94,9 @@ WELCOME_PHRASES = [
     "Сладкий! Queen of Pain услышала твой голос👑",
 ]
 
+# Keep-alive ping cost (estimated Render free-tier hours per ping)
+KEEPALIVE_PING_NEON_HOURS = 0.56
+
 # Local banner helper
 COOLDOWN_BANNERS = ["cooldown", "cooldown_2"]
 

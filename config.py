@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     PARTY_MAX_ABOVE: int = 4
     PARTY_MAX_BELOW: int = 3
 
+    # Observability
+    PROMETHEUS_ENABLED: bool = False
+
     @property
     def is_postgresql(self) -> bool:
         return "postgres" in self.DATABASE_URL or "postgresql" in self.DATABASE_URL

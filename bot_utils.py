@@ -9,11 +9,9 @@ import logging
 import time
 from collections import deque
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
-from database import get_user, user_cache, get_config, set_config
-from rate_limiter import rate_limit
-from utils import _telegram_error_contains
+from database import get_config, set_config
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +48,7 @@ def format_time(seconds: float) -> str:
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
     secs = seconds % 60
-    
+
     parts = []
     if hours > 0:
         parts.append(f"{hours}ч")
@@ -60,7 +58,7 @@ def format_time(seconds: float) -> str:
 
 def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_fissure: float, cascade: int = 1, event_type: str = "roll"):
     """Append one fissure roll event to the ring buffer and save to DB."""
-    
+
     recent_fissure_rolls.append({
         "ts": time.time(),
         "user_id": user_id,
@@ -70,7 +68,7 @@ def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_f
         "cascade": cascade,
         "event_type": event_type
     })
-    
+
     _save_recent_rolls(recent_fissure_rolls)
 
 
@@ -103,7 +101,8 @@ async def bot_can_delete(bot, chat_id):
         can_delete = getattr(member, 'can_delete_messages', False) or member.status in ('administrator', 'creator')
         _bot_can_delete_cache[chat_id] = (can_delete, time.time())
         return can_delete
-    except Exception:
+    except Exception as e:
+        logger.debug(f"bot_can_delete check failed for chat {chat_id}: {e}")
         _bot_can_delete_cache[chat_id] = (False, time.time())
         return False
 
@@ -174,7 +173,6 @@ def main_menu():
 async def delete_last_bot_message(bot, chat_id, user_id):
     """Delete last bot message for user in chat"""
     try:
-        import json
         from database import get_config, set_config
         key = f"last_bot_msg_{chat_id}_{user_id}"
         msg_id = get_config(key)
@@ -224,25 +222,22 @@ def update_last_message_id(user_id, msg_id):
 def _build_analytics_keyboard(page_idx, total_pages, generated, page_titles=None):
     """Build inline keyboard for analytics pagination"""
     buttons = []
-    
+
     # Navigation buttons with page info
     if page_idx > 0:
         prev_label = f"◀ {page_titles[page_idx-1]}" if page_titles and page_idx > 0 else "◀ Назад"
         buttons.append(InlineKeyboardButton(prev_label, callback_data=f"analytics_page_{page_idx-1}"))
-    
+
     # Page indicator
     page_label = f"📄 {page_idx+1}/{total_pages}"
     if page_titles and page_idx < len(page_titles):
         page_label = f"📄 {page_titles[page_idx]}"
     buttons.append(InlineKeyboardButton(page_label, callback_data="analytics_page_current"))
-    
+
     if page_idx < total_pages - 1:
         next_label = f"{page_titles[page_idx+1]} ▶" if page_titles and page_idx + 1 < len(page_titles) else "Вперёд ▶"
         buttons.append(InlineKeyboardButton(next_label, callback_data=f"analytics_page_{page_idx+1}"))
-    
-    # Add back to chart button
-    buttons.append(InlineKeyboardButton("📈 График", callback_data="analytics_back_to_chart"))
-    
+
     return InlineKeyboardMarkup([buttons])
 
 

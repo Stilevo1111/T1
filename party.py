@@ -139,7 +139,7 @@ async def party_for_user(chat_id, chat_type, requester, context):
                 # idx 6,7,8,9 → display as 5,6,7,8 with emoji
                 rank = f"{idx - 1}️⃣"
             telegram_id = p.get("telegram_id")
-            steam_nick = p.get("steam_nickname") or p.get("username") or None
+            steam_nick = p.get("username") or p.get("steam_nickname") or None
             if not steam_nick or steam_nick in ("None", "Unknown", "Неизвестный игрок") or len(steam_nick.strip()) <= 1:
                 steam_nick = p.get("username") or p.get("steam_nickname")
             steam_id = p.get("steam_id")

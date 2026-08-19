@@ -12,9 +12,15 @@ from pathlib import Path
 import aiohttp
 from PIL import Image
 
-from database import get_user, update_user_fields_batch
+from cache_service import (
+    api_cache,
+    hero_cache,
+    negative_cache,
+    opendota_circuit_breaker,
+    opendota_rate_limiter,
+)
 from constants import get_banner_path
-from cache_service import api_cache, negative_cache, image_cache, hero_cache, opendota_rate_limiter, opendota_circuit_breaker
+from database import get_aiohttp_session, get_user, update_user_fields_batch
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +39,7 @@ def _run_async(coro, timeout: int = 60):
     """
     def run_in_new_loop():
         return asyncio.run(coro)
-    
+
     future = _async_executor.submit(run_in_new_loop)
     return future.result(timeout=timeout)
 
@@ -105,14 +111,14 @@ _retry_task = None
 def start_background_retry(max_retries=3, retry_interval=30):
     """Start background task for circuit breaker recovery."""
     global _retry_task
-    
+
     def retry_loop():
         while True:
             time.sleep(retry_interval)
             if opendota_circuit_breaker.state == "OPEN":
                 logger.info("Background retry: attempting circuit breaker recovery")
                 # The circuit breaker will automatically transition to HALF_OPEN
-    
+
     if _retry_task is None:
         _retry_task = threading.Thread(target=retry_loop, daemon=True)
         _retry_task.start()
@@ -244,7 +250,7 @@ async def _check_rate_limit_async():
 
 
 async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15, max_retries: int = 3) -> dict:
-    """Асинхронная функция для API-запросов с собственной сессией, retry и rate limiting"""
+    """Асинхронная функция для API-запросов с переиспользуемой сессией, retry и rate limiting"""
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping async request, API unavailable")
         return None
@@ -259,36 +265,19 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
     if params is None:
         params = {}
 
+    session = await get_aiohttp_session() if use_session else None
+
     for attempt in range(max_retries + 1):
         current_timeout = timeout if attempt == 0 else timeout + 5
         try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=current_timeout)) as session:
-                async with session.get(url, params=params, headers={"User-Agent": "FissureBot/1.0 (Dota2 Telegram Bot)"}) as resp:
-                    if resp.status == 200:
-                        _circuit_breaker_record_success()
-                        try:
-                            from analytics_dashboard import record_opendota_tokens
-                            record_opendota_tokens(1)
-                        except Exception:
-                            pass
-                        return await resp.json()
-                    elif resp.status == 429:
-                        logger.warning("Rate limited by OpenDota API, waiting...")
-                        set_opendota_rate_limited(60)
-                        wait_time = 3 * (attempt + 1)
-                        await asyncio.sleep(wait_time)
-                        continue
-                    elif resp.status >= 500:
-                        logger.warning(f"Server error {resp.status} for {url[:60]}, attempt {attempt + 1}/{max_retries + 1}")
-                        _circuit_breaker_record_failure()
-                        await asyncio.sleep(1 + attempt)
-                        continue
-                    else:
-                        logger.error(f"API error {resp.status} for {url[:80]}")
-                        if resp.status == 404:
-                            _mark_not_found(url)
-                        return None
-        except asyncio.TimeoutError:
+            if session:
+                async with session.get(url, params=params, headers={"User-Agent": "FissureBot/1.0 (Dota2 Telegram Bot)"}, timeout=aiohttp.ClientTimeout(total=current_timeout)) as resp:
+                    return await _handle_api_response(resp, url, attempt, max_retries)
+            else:
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=current_timeout)) as sess:
+                    async with sess.get(url, params=params, headers={"User-Agent": "FissureBot/1.0 (Dota2 Telegram Bot)"}) as resp:
+                        return await _handle_api_response(resp, url, attempt, max_retries)
+        except TimeoutError:
             logger.warning(f"API request timeout ({current_timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
             if attempt < max_retries:
                 await asyncio.sleep(1 + attempt)
@@ -320,6 +309,34 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
     return None
 
 
+async def _handle_api_response(resp, url: str, attempt: int, max_retries: int):
+    """Handle API response and return parsed JSON or None."""
+    if resp.status == 200:
+        _circuit_breaker_record_success()
+        try:
+            from analytics_dashboard import record_opendota_tokens
+            record_opendota_tokens(1)
+        except Exception:
+            pass
+        return await resp.json()
+    elif resp.status == 429:
+        logger.warning("Rate limited by OpenDota API, waiting...")
+        set_opendota_rate_limited(60)
+        wait_time = 3 * (attempt + 1)
+        await asyncio.sleep(wait_time)
+        return None
+    elif resp.status >= 500:
+        logger.warning(f"Server error {resp.status} for {url[:60]}, attempt {attempt + 1}/{max_retries + 1}")
+        _circuit_breaker_record_failure()
+        await asyncio.sleep(1 + attempt)
+        return None
+    else:
+        logger.error(f"API error {resp.status} for {url[:80]}")
+        if resp.status == 404:
+            _mark_not_found(url)
+        return None
+
+
 # ========================
 # 🎮 MATCHES
 # ========================
@@ -336,7 +353,7 @@ HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_
 HEROES_STRIP_BG_URL = get_banner_path("heroes_profil")
 HEROES_STRIP_BG_CACHE = "heroes_profil.webp"
 
-from hero_names import HERO_NAME_TO_CDN, get_cdn_hero_name
+from hero_names import get_cdn_hero_name
 
 
 def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None:
@@ -646,7 +663,7 @@ def _get_week_start_utc():
     """Понедельник 00:00 MSK — начало игровой недели (UTC)."""
     from datetime import datetime, timedelta, timezone
     MSK = timezone(timedelta(hours=3))
-    UTC = timezone.utc
+    UTC = UTC
     today_msk = datetime.now(MSK)
     monday_msk = today_msk - timedelta(days=today_msk.weekday())
     week_start_msk = monday_msk.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -656,7 +673,7 @@ def _get_week_start_utc():
 def get_week_top_heroes(steam_id: int, top_k: int = 5, match_limit: int = 50) -> list:
     """Топ героев игрока за текущую неделю (по числу игр)."""
     from collections import Counter
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     try:
         week_start_utc = _get_week_start_utc()
@@ -670,7 +687,7 @@ def get_week_top_heroes(steam_id: int, top_k: int = 5, match_limit: int = 50) ->
 
         hero_counts = Counter()
         for match in matches:
-            match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=timezone.utc)
+            match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=UTC)
             if match_date >= week_start_utc:
                 hero_id = match.get("hero_id")
                 if hero_id:
@@ -697,7 +714,7 @@ def get_week_top_heroes(steam_id: int, top_k: int = 5, match_limit: int = 50) ->
 async def get_week_top_heroes_async(steam_id: int, top_k: int = 5, match_limit: int = 50) -> list:
     """Асинхронно получить топ героев игрока за текущую неделю."""
     from collections import Counter
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     try:
         week_start_utc = _get_week_start_utc()
@@ -711,7 +728,7 @@ async def get_week_top_heroes_async(steam_id: int, top_k: int = 5, match_limit: 
 
         hero_counts = Counter()
         for match in matches:
-            match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=timezone.utc)
+            match_date = datetime.fromtimestamp(match.get("start_time", 0), tz=UTC)
             if match_date >= week_start_utc:
                 hero_id = match.get("hero_id")
                 if hero_id:
@@ -737,7 +754,7 @@ async def get_week_top_heroes_async(steam_id: int, top_k: int = 5, match_limit: 
 
 def _draw_hero_squares_on_card(img, draw, top_heroes: list, base_height: int, width: int):
     """Добавить квадратики героев внизу карточки без расширения изображения."""
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image
 
     if not top_heroes:
         return img, draw
@@ -921,7 +938,7 @@ def parse_steam_identifier(identifier: str) -> int:
 
 
 def safe_winrate(wins: int, games: int) -> float:
-    return round((wins / games * 100)) if games > 0 else 0
+    return round(wins / games * 100) if games > 0 else 0
 
 
 # ========================
@@ -1061,13 +1078,13 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
     """Асинхронно получить последние матчи игрока"""
     if steam_id is None:
         return []
-    
+
     cache_key = (steam_id, limit)
     if cache_key in _user_matches_cache:
         cached_data, cached_time = _user_matches_cache[cache_key]
         if time.time() - cached_time < USER_MATCHES_CACHE_TTL:
             return cached_data
-    
+
     try:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
@@ -1249,7 +1266,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         logger.info(f"Registering Steam for user {telegram_id} with identifier: {identifier}")
 
         # Создаем пользователя если не существует
-        from database import get_user, _save_user_to_db_immediately, user_cache
+        from database import _save_user_to_db_immediately, get_user, user_cache
         user = get_user(telegram_id)
         if not user:
             logger.info(f"User not found in register_steam, creating new user: {telegram_id}")
@@ -1286,7 +1303,12 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
 
             if invalid_stats or private_profile:
                 try:
-                    from database import get_user_by_steam_id, get_user, update_user_fields_batch, user_cache
+                    from database import (
+                        get_user,
+                        get_user_by_steam_id,
+                        update_user_fields_batch,
+                        user_cache,
+                    )
                     existing_user = get_user_by_steam_id(steam_id)
                     if existing_user and existing_user.get('telegram_id') == telegram_id:
                         if private_profile:
@@ -1298,14 +1320,14 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                     if existing_user:
                         existing_tid = existing_user.get('telegram_id')
                         existing_username = existing_user.get('username') or existing_user.get('steam_nickname') or 'другой игрок'
-                        
+
                         # Автоматически переносим Steam аккаунт на нового пользователя
                         logger.info(f"Transferring Steam {steam_id} from user {existing_tid} to {telegram_id}")
                         update_user_fields_batch(existing_tid, {"steam_id": None, "steam_nickname": None, "avatar": None}, update_top_cache=False)
                         with user_cache._lock:
                             if steam_id in user_cache._steam_index:
                                 del user_cache._steam_index[steam_id]
-                        
+
                         if private_profile:
                             return {
                                 "success": True,
@@ -1374,27 +1396,27 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                 }
 
         # Проверяем, не привязан ли уже этот steam_id к другому аккаунту
-        from database import get_user_by_steam_id, get_user, update_user_fields_batch, user_cache
+        from database import get_user, get_user_by_steam_id, update_user_fields_batch, user_cache
         existing_user = get_user_by_steam_id(steam_id)
         if existing_user and existing_user.get('telegram_id') != telegram_id:
             existing_tid = existing_user.get('telegram_id')
             existing_username = existing_user.get('username') or existing_user.get('steam_nickname') or 'другой игрок'
-            
+
             # Автоматически переносим Steam аккаунт на нового пользователя
             logger.info(f"Transferring Steam {steam_id} from user {existing_tid} to {telegram_id}")
-            
+
             # Удаляем steam_id у старого пользователя (раз-prивязываем)
             update_user_fields_batch(existing_tid, {
                 "steam_id": None,
                 "steam_nickname": None,
                 "avatar": None,
             }, update_top_cache=False)
-            
+
             # Обновляем reverse index в кеше
             with user_cache._lock:
                 if steam_id in user_cache._steam_index:
                     del user_cache._steam_index[steam_id]
-            
+
             return {
                 "success": True,
                 "message": f"⚠️ Steam аккаунт был привязан к {existing_username}\nАвтоматически перенесён на ваш аккаунт.\nСтарые данные утрачены."
@@ -1442,16 +1464,16 @@ def unlink_steam(telegram_id: int) -> dict:
     try:
         from database import get_user, update_user_fields_batch, user_cache
         user = get_user(telegram_id)
-        
+
         if not user or not user.get('steam_id'):
             return {"success": False, "message": "❌ Steam-аккаунт не был привязан к вашему аккаунту"}
-        
+
         steam_id = user.get('steam_id')
-        
+
         # Очищаем кэш пользователя
         user_cache.invalidate_user_top_caches(telegram_id)
         user_cache.remove(telegram_id)
-        
+
         # Обнуляем поля, связанные со Steam
         update_user_fields_batch(telegram_id, {
             "steam_id": None,
@@ -1464,10 +1486,10 @@ def unlink_steam(telegram_id: int) -> dict:
             "week_games": 0,
             "week_wins": 0,
         })
-        
+
         logger.info(f"Steam account {steam_id} unlinked from user {telegram_id}")
         return {
-            "success": True, 
+            "success": True,
             "message": "✅ Steam-аккаунт успешно отвязан от вашего Telegram-аккаунта.\nТеперь вы можете привязать другой Steam-аккаунт."
         }
     except Exception as e:
@@ -1495,18 +1517,18 @@ def admin_unlink_steam(steam_id: int) -> dict:
     """
     try:
         from database import get_user_by_steam_id, update_user_fields_batch, user_cache
-        
+
         user = get_user_by_steam_id(steam_id)
-        
+
         if not user:
             return {"success": False, "message": f"❌ Steam-аккаунт {steam_id} не найден в базе"}
-        
+
         telegram_id = user.get('telegram_id')
-        
+
         # Очищаем кэш пользователя
         user_cache.invalidate_user_top_caches(telegram_id)
         user_cache.remove(telegram_id)
-        
+
         # Обнуляем поля, связанные со Steam
         update_user_fields_batch(telegram_id, {
             "steam_id": None,
@@ -1519,7 +1541,7 @@ def admin_unlink_steam(steam_id: int) -> dict:
             "week_games": 0,
             "week_wins": 0,
         })
-        
+
         logger.info(f"Admin: Steam account {steam_id} unlinked from user {telegram_id}")
         return {
             "success": True,
@@ -1561,7 +1583,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         if recently_updated:
             logger.info(f"topmmr: recently updated (<4h) for user {telegram_id}, using DB stats (saving 2 API calls)")
             stats = {
-                "nickname": user.get("steam_nickname") or user.get("username") or "Unknown",
+                "nickname": user.get("username") or user.get("steam_nickname") or "Unknown",
                 "avatar": user.get("avatar"),
                 "mmr": user.get("mmr", 0),
                 "rank_tier": user.get("rank_tier", 0),
@@ -1579,7 +1601,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             else:
                 stats = get_player_stats(user["steam_id"], use_cache=False)
                 logger.info(f"topmmr: get_player_stats returned: steam32={user.get('steam_id')}, success={stats is not None}")
-         
+
         if not stats:
             logger.warning(f"topmmr: API failed for user {telegram_id}, using cached data")
             cached = _get_cached(f"player_{user['steam_id']}")
@@ -1607,7 +1629,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         week_start_utc = week_start_msk.astimezone(UTC)
         logger.info(f"topmmr: week start (MSK) = {week_start_msk} (Monday)")
         logger.info(f"topmmr: week start (UTC) = {week_start_utc} (Monday)")
-        
+
         # Логируем все полученные матчи
         if matches:
             logger.info(f"topmmr: total matches received from API: {len(matches)}")
@@ -1648,7 +1670,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         # Определяем победу используя radiant_win (приоритет) или player_slot
                         player_slot = match.get("player_slot")
                         radiant_win = match.get("radiant_win", False)
-                        
+
                         # Игрок находится в Radiant, если player_slot < 128
                         player_is_radiant = player_slot < 128 if player_slot is not None else True
 
@@ -1674,7 +1696,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
             logger.info(f"topmmr: Saving {len(matches)} matches to public_player_matches for hero meta (steam_id={user.get('steam_id')})")
             conn = None
             try:
-                from database import get_connection, release_pg_connection, DATABASE_URL, urlparse
+                from database import DATABASE_URL, get_connection, release_pg_connection, urlparse
                 conn = get_connection()
                 url = urlparse.urlparse(DATABASE_URL)
                 scheme = url.scheme
@@ -1756,9 +1778,9 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                     clear_hero_meta_cache()
                 except Exception as e:
                     logger.debug(f"Failed to invalidate hero meta cache: {e}")
-        
+
         logger.info(f"Week stats from matches for {telegram_id}: week_games={week_games}, week_wins={week_wins}, week_streak={max_streak}")
-        
+
         # If no matches in week, check if we have any recent matches at all (debug)
         if week_games == 0 and matches:
             latest_match_time = matches[0].get("start_time", 0) if matches else 0
@@ -1768,7 +1790,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         # Проверяем смену недели - если неделя изменилась, сбрасываем статистику
         user_week_start = user.get('week_start_date')
         current_week_start = week_start_msk.strftime("%Y-%m-%d")
-        
+
         # Normalize user_week_start to string for comparison
         if user_week_start:
             if hasattr(user_week_start, 'strftime'):
@@ -1777,7 +1799,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                 user_week_start_str = str(user_week_start)
         else:
             user_week_start_str = None
-        
+
         if user_week_start_str and user_week_start_str != current_week_start:
             logger.info(f"Week changed for {telegram_id}: {user_week_start_str} -> {current_week_start}, resetting week stats")
             week_games = 0
@@ -1795,7 +1817,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         _ret = None
         if matches:
             logger.info(f"Saved week stats to DB: {week_games} games, {week_wins} wins, week_streak={max_streak}, week_start={week_start_utc}")
-            
+
             _ret = update_user_fields_batch(telegram_id, {
                 "week_games": week_games,
                 "week_wins": week_wins,
@@ -1877,8 +1899,8 @@ def generate_start_card(
     try:
         import io
         import os
-        import requests
 
+        import requests
         from PIL import Image, ImageDraw, ImageFont
 
         # Компактный размер - увеличенный для Retina
@@ -2020,10 +2042,10 @@ def generate_start_card(
 
         username_y = info_y
         username_x_offset = 0
-        if steam_nickname:
-            draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(255, 255, 255), font=font_title)
-        elif username:
+        if username:
             draw.text((info_x + username_x_offset, username_y), f"@{username}", fill=(255, 255, 255), font=font_title)
+        elif steam_nickname:
+            draw.text((info_x + username_x_offset, username_y), f"{steam_nickname}", fill=(255, 255, 255), font=font_title)
 
         msg_label_y = username_y + int(50 * scale)
         if week_wins is not None and week_losses is not None:
@@ -2033,7 +2055,7 @@ def generate_start_card(
 
         msg_num_y = msg_label_y + int(28 * scale)
         if week_wins is not None and week_losses is not None:
-            wr = round((week_wins / (week_wins + week_losses) * 100)) if (week_wins + week_losses) > 0 else 0
+            wr = round(week_wins / (week_wins + week_losses) * 100) if (week_wins + week_losses) > 0 else 0
             draw.text((info_x + username_x_offset, msg_num_y), f"{week_wins}W/{week_losses}L/{wr}%", fill=(255, 255, 255), font=font_title)
             logger.info(f"generate_start_card: drew week stats {week_wins}W/{week_losses}L/{wr}% for {username or steam_nickname}")
         else:

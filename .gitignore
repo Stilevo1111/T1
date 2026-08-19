@@ -7,6 +7,11 @@ __pycache__/
 .env
 .env.*
 
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
 # Temporary files
 *.tmp
 *.temp
@@ -21,7 +26,8 @@ digest_header*.png
 final*.png
 test_helper.png
 
-# Temp scripts
+# Cache directories
+cache/
 
 # Temp scripts
 add_column.sql

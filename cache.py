@@ -58,7 +58,8 @@ class RedisCache:
         try:
             await self.client.delete(key)
             return True
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Redis delete failed for {key}: {e}")
             return False
 
 

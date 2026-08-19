@@ -35,6 +35,7 @@ from database import (
     cleanup_left_users,
     decrease_inactive_fissure,
     delete_user,
+    get_aiohttp_session,
     get_config,
     get_digest_stats,
     get_dota_week_rank,
@@ -54,13 +55,18 @@ from database import (
     update_last_message_id,
     update_user_fields_batch,
     user_cache,
-    user_state_manager,
 )
-
 from dota_mmr import _get_start_card_background, update_user_mmr
 from mute import register_handlers as register_mute_handlers
 from rate_limiter import is_rate_limited, rate_limit, set_rate_limited
-from tags import TAG_DISPLAY, TAG_TYPES, add_user_tag, ensure_fissure_master_tag, format_user_tags, get_user_tags, refresh_fissure_master_tag, remove_user_tag, get_telegram_title
+from tags import (
+    TAG_DISPLAY,
+    TAG_TYPES,
+    add_user_tag,
+    format_user_tags,
+    refresh_fissure_master_tag,
+    remove_user_tag,
+)
 
 structlog.configure(
     processors=[
@@ -83,8 +89,9 @@ structlog.configure(
 logger = structlog.get_logger(__name__)
 
 # Correlation ID support
-import uuid
 import threading
+import uuid
+
 _correlation_id = threading.local()
 
 def get_correlation_id() -> str:
@@ -143,7 +150,15 @@ EVENING_GREETINGS = [
 
 # Prometheus metrics (optional, for monitoring)
 try:
-    from prometheus_client import Counter, Histogram, Gauge, start_http_server
+    from prometheus_client import Counter, Gauge, Histogram, start_http_server
+    PROMETHEUS_AVAILABLE = True
+except ImportError:
+    PROMETHEUS_AVAILABLE = False
+
+from config import settings
+
+if settings.PROMETHEUS_ENABLED and PROMETHEUS_AVAILABLE:
+    from prometheus_client import Counter, Gauge, Histogram, start_http_server
     PROMETHEUS_ENABLED = True
     REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
     REQUEST_LATENCY = Histogram('http_request_latency_seconds', 'HTTP request latency', ['endpoint'])
@@ -155,9 +170,8 @@ try:
         logger.info("Prometheus metrics server started on port 8000")
     except OSError as e:
         logger.warning(f"Could not start Prometheus server: {e}")
-except ImportError:
+else:
     PROMETHEUS_ENABLED = False
-    # Provide no-op stubs
     REQUEST_COUNT = lambda *args, **kwargs: None
     REQUEST_LATENCY = lambda *args, **kwargs: None
     UPDATE_FISSURE_COUNT = lambda *args, **kwargs: None
@@ -172,6 +186,8 @@ _START_COOLDOWN_TTL = 3600  # 1 hour
 
 
 from utils import _telegram_error_contains
+
+
 async def health_check(request):
     """Health check endpoint for Render - verifies DB connectivity"""
     try:
@@ -547,8 +563,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if old_chart_msg_id:
             try:
                 await context.bot.delete_message(chat_id, old_chart_msg_id)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not delete old analytics chart: {e}")
             context.user_data['analytics_chart_msg_id'] = None
 
         # Send loading message and start animation
@@ -582,8 +598,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     message_id=loading_msg.message_id,
                                     text=chart_data.get("message", "⚠️ OpenDota API недоступен")
                                 )
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.debug(f"Could not edit loading message: {e}")
                             schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.job_queue)
                         return
 
@@ -626,58 +642,68 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if old_table_msg_id:
                         try:
                             await context.bot.delete_message(chat_id, old_table_msg_id)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"Could not delete old analytics table: {e}")
                         context.user_data['analytics_table_msg_id'] = None
 
-                    if chart_image and len(chart_image) > 0:
-                        photo_buf = io.BytesIO(chart_image)
-                        photo_buf.name = "weekly_analytics.png"
-
-                        reply_markup = _build_stats_button_keyboard()
-
-                        try:
-                            await context.bot.edit_message_media(
-                                chat_id=chat_id,
-                                message_id=loading_msg.message_id,
-                                media=InputMediaPhoto(media=photo_buf, caption="🧠 Импакт в последних 10 играх."),
-                                reply_markup=reply_markup
-                            )
-                            context.user_data['analytics_chart_msg_id'] = loading_msg.message_id
-                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 30, context.job_queue)
-                        except Exception:
-                            photo_buf.seek(0)
-                            msg_id = loading_msg.message_id if loading_msg else None
-                            loading_msg = None
-                            if msg_id:
-                                try:
-                                    await context.bot.delete_message(chat_id, msg_id)
-                                except Exception:
-                                    pass
+                    pages = context.user_data['analytics_pages']
+                    generated = context.user_data['analytics_generated']
+                    page_titles = [p.get("title", f"Стр. {i+1}") for i, p in enumerate(pages) if p]
+                    
+                    first_page_idx = sorted(generated)[0] if generated else 0
+                    first_page = pages[first_page_idx] if pages and first_page_idx < len(pages) else None
+                    
+                    if first_page:
+                        text = first_page["text"]
+                        total_pages = len(pages)
+                        keyboard = _build_analytics_keyboard(first_page_idx, total_pages, generated, page_titles)
+                        
+                        msg_id = loading_msg.message_id if loading_msg else None
+                        loading_msg = None
+                        if msg_id:
+                            try:
+                                await context.bot.edit_message_text(
+                                    chat_id=chat_id,
+                                    message_id=msg_id,
+                                    text=text,
+                                    reply_markup=keyboard,
+                                    parse_mode="HTML"
+                                )
+                                context.user_data['analytics_table_msg_id'] = msg_id
+                                job_queue = context.job_queue
+                                if job_queue:
+                                    schedule_delete(context.bot, chat_id, msg_id, 60, job_queue)
+                            except Exception as e:
+                                logger.debug(f"Could not show analytics table: {e}")
+                                msg_id = None
+                        
+                        if not msg_id:
                             try:
                                 await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
                             except Exception:
                                 pass
-                            result_msg = await context.bot.send_photo(
+                            new_msg = await context.bot.send_message(
                                 chat_id=chat_id,
-                                photo=photo_buf,
-                                caption="🧠 Импакт в последних 10 играх.",
-                                reply_markup=reply_markup,
+                                text=text,
+                                reply_markup=keyboard,
                                 parse_mode="HTML"
                             )
-                            context.user_data['analytics_chart_msg_id'] = result_msg.message_id
-                            set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
-                            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
-                            update_last_message_id(update.effective_user.id, result_msg.message_id)
+                            context.user_data['analytics_table_msg_id'] = new_msg.message_id
+                            job_queue = context.job_queue
+                            if job_queue:
+                                schedule_delete(context.bot, chat_id, new_msg.message_id, 60, job_queue)
                     else:
-                        error_text = "⚠️ Не удалось сгенерировать график аналитики. Попробуйте позже."
+                        error_text = "⚠️ Не удалось сгенерировать таблицы аналитики. Попробуйте позже."
                         try:
-                            await context.bot.edit_message_text(
-                                chat_id=chat_id,
-                                message_id=loading_msg.message_id,
-                                text=error_text
-                            )
-                            schedule_delete(context.bot, chat_id, loading_msg.message_id, 10, context.job_queue)
+                            msg_id = loading_msg.message_id if loading_msg else None
+                            loading_msg = None
+                            if msg_id:
+                                await context.bot.edit_message_text(
+                                    chat_id=chat_id,
+                                    message_id=msg_id,
+                                    text=error_text
+                                )
+                                schedule_delete(context.bot, chat_id, msg_id, 10, context.job_queue)
                         except Exception:
                             pass
 
@@ -695,9 +721,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
 
                 schedule_delete(context.bot, chat_id, err_msg_id, 10, context.job_queue)
-
-# Import required classes
-        from telegram import InputMediaPhoto
 
         # Track background task for this user to cancel on subsequent requests
         user_id_for_tracking = update.effective_user.id
@@ -872,11 +895,11 @@ async def announce_weekly_mmr_winner(bot):
         return False
 
     winner = active_users[0]
-    username = winner.get('steam_nickname') or winner.get('username') or 'Игрок'
+    username = (winner.get('username') or winner.get('steam_nickname') or 'Игрок')
     week_wins = winner.get('week_wins') or 0
     week_games = winner.get('week_games') or 0
     week_losses = week_games - week_wins
-    winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
+    winrate = round(week_wins / week_games * 100) if week_games > 0 else 0
     rank_tier = winner.get('rank_tier', 0)
     telegram_id = winner.get('telegram_id')
 
@@ -967,7 +990,7 @@ async def announce_weekly_mmr_winner(bot):
     )
 
     if tag_set or weekly_mvp_count > 0 or weekly_top2_count > 0 or weekly_top3_count > 0:
-        text += f"\n\n✨ <b>Награды</b>\n"
+        text += "\n\n✨ <b>Награды</b>\n"
         if tag_set:
             text += f"👑 Титул «{mvp_tag}» в чате\n"
         if weekly_mvp_count > 0:
@@ -1127,7 +1150,7 @@ async def update_all_mmr_job(context):
             return
 
         logger.info("Запуск ежечасного обновления MMR")
-        from database import batch_save_mmr, get_all_users_with_steam, cleanup_old_matches
+        from database import batch_save_mmr, cleanup_old_matches, get_all_users_with_steam
 
         # Fetch users in thread to avoid blocking event loop on DB query
         users = await asyncio.to_thread(get_all_users_with_steam)
@@ -1191,7 +1214,7 @@ async def update_all_mmr_job(context):
             await asyncio.to_thread(batch_save_mmr, all_updated_users)
 
         # Update top cache once after all updates
-        from database import update_dota_week_top_cache, get_dota_week_top_from_db
+        from database import get_dota_week_top_from_db, update_dota_week_top_cache
         await asyncio.to_thread(update_dota_week_top_cache)
         # Clear top cache to force refresh on next read
         get_dota_week_top_from_db._cache = (None, 0)
@@ -1225,7 +1248,7 @@ async def update_all_mmr_job(context):
 
             async def notify_rank_up(user, rank_info):
                 try:
-                    username = user.get('steam_nickname') or user.get('username') or 'Игрок'
+                    username = user.get('username') or user.get('steam_nickname') or 'Игрок'
                     telegram_id = user.get('telegram_id')
                     message_count = user.get('message_count', 0)
                     rank_tier = user.get('rank_tier', 0)
@@ -1371,7 +1394,7 @@ async def dota_digest_job(context):
         top_games = top_by_net.get('week_games', 0)
         top_wins = top_by_net.get('week_wins', 0)
         top_losses = top_games - top_wins
-        top_winrate = round((top_wins / top_games * 100)) if top_games > 0 else 0
+        top_winrate = round(top_wins / top_games * 100) if top_games > 0 else 0
 
         bottom_player = bottom_by_net.get('steam_nickname', 'None')
         bottom_id = bottom_by_net.get('telegram_id')
@@ -1379,7 +1402,7 @@ async def dota_digest_job(context):
         bottom_games = bottom_by_net.get('week_games', 0)
         bottom_wins = bottom_by_net.get('week_wins', 0)
         bottom_losses = bottom_games - bottom_wins
-        bottom_winrate = round((bottom_wins / bottom_games * 100)) if bottom_games > 0 else 0
+        bottom_winrate = round(bottom_wins / bottom_games * 100) if bottom_games > 0 else 0
 
         if top_streak_player:
             streak_player = top_streak_player.get('steam_nickname', 'None')
@@ -1465,7 +1488,6 @@ async def dota_digest_job(context):
 from bot_utils import (
     ManualContext,
     _build_analytics_keyboard,
-    _build_stats_button_keyboard,
     add_bot_message,
     clickable_name,
     delete_last_bot_message,
@@ -1478,16 +1500,16 @@ from bot_utils import (
 from constants import (
     COOLDOWN,
     JOB_COOLDOWN,
+    KEEPALIVE_PING_NEON_HOURS,
     TOPMMR_BANNER_URL,
     WELCOME_PHRASES,
     get_banner_path,
 )
 from digest import alternate_digest_job, morning_digest_job
-
 from fissure import (
     fissure,
 )
-from party import party_command, party_for_user
+from party import party_command
 
 # All roll data (ROLL_MEMES, CATEGORY_PHRASES), welcome phrases,
 # multicast/zeus defaults, weekend multipliers and digest headers
@@ -1547,15 +1569,13 @@ async def get_user_avatar_url(bot, user_id: int) -> str | None:
             photo = photos.photos[0][-1]
             file = await bot.get_file(photo.file_id)
             if file.file_path:
-                # file.file_path is already a full URL in python-telegram-bot v20+
                 if file.file_path.startswith('http'):
                     return file.file_path
-                # Otherwise construct URL from base_file_url and path
                 return f"{bot.base_file_url}/{file.file_path}"
         logger.debug(f"No profile photos for user {user_id}")
     except Exception as e:
         logger.warning(f"Could not get user avatar: {e}")
-    return DEFAULT_AVATAR_URL
+    return None
 
 
 async def resolve_avatar_url_for_card(
@@ -1565,7 +1585,11 @@ async def resolve_avatar_url_for_card(
     db_avatar: str | None = None,
     fetch_steam: bool = True,
 ) -> str:
-    """Steam → БД → Telegram → дефолтная картинка."""
+    """Telegram → БД → Steam → дефолтная картинка."""
+    if telegram_id and bot:
+        tg_url = await get_user_avatar_url(bot, telegram_id)
+        if tg_url:
+            return tg_url
     if db_avatar:
         return db_avatar
     if fetch_steam and steam_id:
@@ -1575,18 +1599,6 @@ async def resolve_avatar_url_for_card(
                 return fresh["avatar"]
         except Exception as e:
             logger.warning(f"resolve_avatar_url_for_card steam {steam_id}: {e}")
-    cached = None
-    if telegram_id:
-        cached = user_cache.get(telegram_id)
-        if cached and cached.get("avatar"):
-            return cached["avatar"]
-        db_user = await asyncio.to_thread(get_user, telegram_id)
-        if db_user and db_user.get("avatar"):
-            return db_user["avatar"]
-    if telegram_id and bot:
-        tg_url = await get_user_avatar_url(bot, telegram_id)
-        if tg_url:
-            return tg_url
     return DEFAULT_AVATAR_URL
 
 
@@ -1719,30 +1731,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if steam_id and steam_nickname:
             from dota_mmr import generate_start_card, get_player_stats, is_opendota_rate_limited
 
-            # Get avatar - prefer cached, fallback to Telegram
-            avatar_url = user.get("avatar")
+            avatar_url = await get_user_avatar_url(context.bot, user_id)
             if not avatar_url:
-                # If OpenDota API is rate limited, use Telegram avatar directly
-                if is_opendota_rate_limited():
-                    logger.info(f"OpenDota API rate limited, using Telegram avatar for user {user_id}")
-                    avatar_url = await get_user_avatar_url(context.bot, user_id)
-                else:
-                    try:
-                        # Add timeout to prevent long waits
-                        stats = await asyncio.wait_for(
-                            asyncio.to_thread(get_player_stats, steam_id, True, 8),
-                            timeout=12.0
-                        )
-                        if stats and stats.get("avatar"):
-                            avatar_url = stats["avatar"]
-                        else:
-                            avatar_url = await get_user_avatar_url(context.bot, user_id)
-                    except TimeoutError:
-                        logger.warning(f"OpenDota API timeout for user {user_id}, using Telegram avatar")
-                        avatar_url = await get_user_avatar_url(context.bot, user_id)
-                    except Exception as e:
-                        logger.warning(f"Could not get Steam avatar: {e}")
-                        avatar_url = await get_user_avatar_url(context.bot, user_id)
+                avatar_url = user.get("avatar")
+            if not avatar_url:
+                try:
+                    stats = await asyncio.wait_for(
+                        asyncio.to_thread(get_player_stats, steam_id, True, 8),
+                        timeout=12.0
+                    )
+                    if stats and stats.get("avatar"):
+                        avatar_url = stats["avatar"]
+                except Exception:
+                    pass
 
             weekly_mvp = user.get('weekly_mvp') or 0
             weekly_top2 = user.get('weekly_top2') or 0
@@ -1789,6 +1790,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from dota_mmr import generate_start_card
 
             avatar_url = await get_user_avatar_url(context.bot, user_id)
+            if not avatar_url:
+                avatar_url = DEFAULT_AVATAR_URL
 
             # Run blocking card generation in thread pool to avoid blocking event loop
             card_data = await asyncio.to_thread(
@@ -1864,12 +1867,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_obj = callback_query.from_user
         chat_id = callback_query.message.chat_id
         chat_type = callback_query.message.chat.type if callback_query.message else 'private'
-        
+
         logger.info(f"roll_fissure: user={user_obj.id} chat={chat_id} chat_type={chat_type}")
-        
+
         # Get current time for fake message
         _current_time = int(_time.time())
-        
+
         # Ensure user account exists before rolling
         from database import get_user
         await asyncio.to_thread(get_user, user_obj.id, user_obj.username)
@@ -1942,33 +1945,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error in button_callback: {e}", exc_info=True)
         return
 
-    # Handle back to chart button
-    if data == "analytics_back_to_chart":
-        await callback_query.answer()
-        try:
-            chart_msg_id = context.user_data.get('analytics_chart_msg_id')
-            if chart_msg_id:
-                try:
-                    await context.bot.edit_message_caption(
-                        chat_id=chat_id,
-                        message_id=chart_msg_id,
-                        caption="🧠 Импакт в последних 10 играх.",
-                        reply_markup=_build_stats_button_keyboard()
-                    )
-                except Exception:
-                    pass
-            # Delete table message if exists
-            table_msg_id = context.user_data.get('analytics_table_msg_id')
-            if table_msg_id:
-                try:
-                    await context.bot.delete_message(chat_id, table_msg_id)
-                except Exception:
-                    pass
-                context.user_data['analytics_table_msg_id'] = None
-        except Exception as e:
-            logger.error(f"Error in analytics_back_to_chart: {e}", exc_info=True)
-        return
-
     # Handle pro compare button from chart
     if data == "analytics_pro_compare":
         await callback_query.answer()
@@ -1985,13 +1961,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = callback_query.message.chat_id if callback_query.message else None
         if not chat_id:
             chat_id = update.effective_chat.id
-        
+
         from bot_utils import delete_last_bot_message
         try:
             await delete_last_bot_message(context.bot, chat_id, callback_query.from_user.id)
         except Exception as e:
             logger.debug(f"Could not delete last bot message: {e}")
-        
+
         link_banner_url = get_banner_path("link")
         link_text = ("🦞 <b>Привязать Аккаунт Dota 2</b>\n\n"
             "Добавить в друзья → Ваш ID → копировать →\n"
@@ -2001,7 +1977,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚠️ в игре:\n"
             "Настройки → расширенные → сообщество → общедоступная история матчей (вкл)")
 
-        from bot_utils import set_last_bot_message, add_bot_message, schedule_delete, update_last_message_id
+        from bot_utils import (
+            add_bot_message,
+            schedule_delete,
+            set_last_bot_message,
+            update_last_message_id,
+        )
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
             photo=link_banner_url,
@@ -2024,10 +2005,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Party buttons - send @username with party invitation (with anti-spam protection)
     if data and data.startswith("party_user:"):
         import time
-        
+
         inviter_id = callback_query.from_user.id
         now = time.time()
-        
+
         # Check cooldown - simple time-based check
         last_invite_time = _party_invite_tracking.get(inviter_id, 0)
         # Ensure last_invite_time is a number (handle old data)
@@ -2036,25 +2017,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if now - last_invite_time < PARTY_INVITE_COOLDOWN:
             await callback_query.answer()
             return
-        
+
         # Check hourly limit
         hour_ago = now - 3600
         invite_count = _party_invite_tracking.get(f"{inviter_id}_count", 0)
         if now - last_invite_time < 3600 and invite_count >= PARTY_INVITE_MAX_PER_HOUR:
             await callback_query.answer()
             return
-        
+
         # Update tracking
         _party_invite_tracking[inviter_id] = now
         _party_invite_tracking[f"{inviter_id}_count"] = invite_count + 1
-        
+
         await callback_query.answer()
         user_identifier = data.split(":", 1)[1]
         chat_id = callback_query.message.chat_id
-        
+
         # Import get_user for this handler
         from database import get_user
-        
+
         # Get the invited player
         invited_player = None
         if user_identifier.isdigit():
@@ -2065,48 +2046,47 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not invited_player:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"❌ Пользователь не найден.",
+                text="❌ Пользователь не найден.",
             )
             return
 
         # Get inviter data
         inviter = await asyncio.to_thread(get_user, inviter_id)
-        
+
         # Build invitation message
         username = invited_player.get("username") or ""
         if username and username.startswith("@"):
             username = username[1:]
         if not username:
             username = f"tg{invited_player.get('telegram_id')}" if invited_player.get("telegram_id") else "пользователь"
-        
+
         # Get invited player stats
         invited_rank_tier = invited_player.get("rank_tier", 0) or 0
-        
+
         # Get inviter stats for the invitation
         inviter_username = inviter.get("username") or "" if inviter else ""
         if inviter_username and inviter_username.startswith("@"):
             inviter_username = inviter_username[1:]
         if not inviter_username:
             inviter_username = f"tg{inviter_id}" if inviter_id else "пользователь"
-        
+
         inviter_week_games = 0
         inviter_week_wins = 0
         if inviter:
             inviter_week_games = inviter.get("week_games", 0) or 0
             inviter_week_wins = inviter.get("week_wins", 0) or 0
-        inviter_winrate = round((inviter_week_wins / inviter_week_games * 100)) if inviter_week_games > 0 else 0
-        
+        inviter_winrate = round(inviter_week_wins / inviter_week_games * 100) if inviter_week_games > 0 else 0
+
         # Use rank_to_string from dota_mmr for real ranks
         from dota_mmr import mmr_to_rank_tier, rank_to_string
-        invited_rank_name = rank_to_string(invited_rank_tier)
         inviter_rank_name = rank_to_string(inviter.get("rank_tier", 0) or 0 if inviter else 0)
-        
+
         invitation_text = (
             f"👤 @{username},  Готов к игре?\n\n"
             f"👤 @{inviter_username},  приглашает тебя в пати!\n"
             f"└  {inviter_rank_name} • WR: {inviter_winrate}% за неделю."
         )
-        
+
         await context.bot.send_message(chat_id=chat_id, text=invitation_text, parse_mode="HTML")
         return
 
@@ -2119,16 +2099,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if data and data.startswith("greeting_"):
             emoji = "👍" if "good" in data else "❤️"
             reaction_type = "good" if "good" in data else "bad"
-            
+
             from datetime import datetime as dt
+
             from database import get_config, set_config
             date_str = dt.now(timezone(timedelta(hours=3))).strftime("%Y-%m-%d")
             key = f"greeting_{date_str}_{reaction_type}"
-            
+
             # Increment counter
             current = int(get_config(key) or 0)
             set_config(key, current + 1)
-            
+
             # Add reaction to message
             try:
                 await context.bot.set_message_reaction(
@@ -2138,13 +2119,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             except Exception:
                 pass
-            
+
             # Update button text with new count
             try:
                 good_count = int(get_config(f"greeting_{date_str}_good") or 0)
                 bad_count = int(get_config(f"greeting_{date_str}_bad") or 0)
                 keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"❤️ {good_count}", callback_data="greeting_good"), 
+                    [InlineKeyboardButton(f"❤️ {good_count}", callback_data="greeting_good"),
                      InlineKeyboardButton(f"💔 {bad_count}", callback_data="greeting_bad")]
                 ])
                 await context.bot.edit_message_reply_markup(
@@ -2406,7 +2387,7 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             set_config("digest_chat_id", str(chat_id))
 
         if command == "digestnow":
-            from digest import set_digest_type, _digest_state_container
+            from digest import _digest_state_container, set_digest_type
             set_digest_type("0")
             set_config("alternate_digest_type", "0")
             set_config("alternate_digest_message_id", None)
@@ -2422,7 +2403,7 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
 
         elif command == "dotadigestnow":
-            from digest import set_digest_type, _digest_state_container
+            from digest import _digest_state_container, set_digest_type
             set_digest_type("1")
             set_config("alternate_digest_type", "1")
             set_config("alternate_digest_message_id", None)
@@ -2526,7 +2507,7 @@ async def obs_last5_handler(request):
         telegram_id: Telegram user ID (resolved to steam_id)
         force: "true" to bypass cache and regenerate
     """
-    from obs_widget import generate_obs_widget, get_steam_id_from_telegram, get_default_steam_id
+    from obs_widget import generate_obs_widget, get_default_steam_id, get_steam_id_from_telegram
     try:
         steam_id = request.query.get("steam_id")
         telegram_id = request.query.get("telegram_id")
@@ -2655,10 +2636,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         display_username = make_clickable(target_name, target_id)
 
         steam_id = target_user.get('steam_id')
-        
+
         # MMR update removed - rank_tier is now primary metric
         # Users can refresh manually via /refreshmmr command
-        
+
         if steam_id:
             text = (
                 f"👑 {display_username} "
@@ -2693,31 +2674,26 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             week_games = target_user.get('week_games') or 0
             week_wins = target_user.get('week_wins') or 0
             week_losses = week_games - week_wins
-            winrate = round((week_wins / week_games * 100)) if week_games > 0 else 0
+            winrate = round(week_wins / week_games * 100) if week_games > 0 else 0
             logger.info(f"stats: profile week stats uid={target_user.get('telegram_id')} steam={target_user.get('steam_id')} week_games={week_games} week_wins={week_wins} week_losses={week_losses} winrate={winrate}")
 
             try:
-                from dota_mmr import get_recent_matches_async, get_top_heroes_async
+                from dota_mmr import get_recent_matches_async
                 steam_id = target_user.get('steam_id')
 
                 if steam_id:
                     try:
-                        matches, top_heroes = await asyncio.wait_for(
-                            asyncio.gather(
-                                get_recent_matches_async(steam_id, limit=20),
-                                get_top_heroes_async(steam_id, last_n=20, top_k=5)
-                            ),
+                        matches = await asyncio.wait_for(
+                            get_recent_matches_async(steam_id, limit=20),
                             timeout=20.0
                         )
-                        logger.info(f"Steam {steam_id}: got {len(matches)} matches, {len(top_heroes) if top_heroes else 0} heroes")
+                        logger.info(f"Steam {steam_id}: got {len(matches)} matches")
                     except TimeoutError:
-                        logger.warning(f"Timeout getting matches/heroes for steam_id={steam_id}, using cache/default")
+                        logger.warning(f"Timeout getting matches for steam_id={steam_id}, using cache/default")
                         matches = []
-                        top_heroes = []
                     except Exception as e:
-                        logger.warning(f"Could not get matches/heroes: {e}")
+                        logger.warning(f"Could not get matches: {e}")
                         matches = []
-                        top_heroes = []
 
                     matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)
                     week_match_count = min(len(matches), week_games)
@@ -2735,35 +2711,23 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%"
 
-# Добавляем героев только если они есть
-            if top_heroes:
-                text += "\n\n🌟 Любимые герои за 10 матчей:"
-            else:
-                text += "\n\n💡 /profile ＠ник — чужой профиль"
-
-        # Banner URL — со Steam: генерация с героями, без Steam: статичный profile.webp
+        # Banner URL — analytics chart for Steam users, static profile otherwise
+        profile_banner_url = get_banner_path("profile")
         if target_user.get('steam_id'):
-            profile_banner_url = get_banner_path("heroes_profil")
-
-            if top_heroes:
-                try:
-                    from dota_mmr import generate_heroes_image
-                    img_bytes = await asyncio.wait_for(
-                        asyncio.to_thread(generate_heroes_image, top_heroes),
-                        timeout=10.0
-                    )
-                    if img_bytes:
-                        profile_banner_url = io.BytesIO(img_bytes)
-                        logger.info(f"Successfully generated heroes image, size: {len(img_bytes)} bytes")
-                except TimeoutError:
-                    logger.warning("Timeout generating heroes image, using default banner")
-                except Exception as e:
-                    logger.error(f"Could not generate heroes image: {e}", exc_info=True)
-            else:
-                logger.info(f"top_heroes empty for steam_id={steam_id}, using profile fallback")
-                profile_banner_url = get_banner_path("profile")
-        else:
-            profile_banner_url = get_banner_path("profile")
+            try:
+                from weekly_analytics import generate_chart_only
+                chart_data = await asyncio.wait_for(
+                    generate_chart_only(target_user.get('telegram_id')),
+                    timeout=15.0
+                )
+                if chart_data and chart_data.get("image"):
+                    profile_banner_url = io.BytesIO(chart_data["image"])
+                    profile_banner_url.name = "profile_analytics.png"
+                    logger.info(f"Using analytics chart for profile uid={target_user.get('telegram_id')}")
+                else:
+                    logger.info(f"No analytics chart for profile uid={target_user.get('telegram_id')}, using default banner")
+            except Exception as e:
+                logger.debug(f"Could not generate profile analytics chart: {e}")
 
         result_msg = await context.bot.send_photo(
             chat_id=update.effective_chat.id,
@@ -2855,29 +2819,30 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Generate top banner with winner info
         winner = top_users[0]
-        winner_avatar = winner.get('avatar')
+        # Try Telegram avatar first, then Steam
+        winner_avatar = None
         winner_telegram_id = winner.get('telegram_id')
 
         # Автоматически обновляем тег fissure_master при изменении топ-1
         await refresh_fissure_master_tag(context.bot, chat_id)
 
-        # Ensure we have a valid avatar URL
-        if not winner_avatar or not str(winner_avatar).strip():
-            winner_avatar = None
-        elif not str(winner_avatar).startswith('http'):
-            winner_avatar = None
-
-        # Fallback to Telegram avatar if Steam avatar not available
-        if not winner_avatar and winner_telegram_id:
+        if winner_telegram_id:
             try:
                 tg_avatar = await get_user_avatar_url(context.bot, winner_telegram_id)
                 if tg_avatar:
                     winner_avatar = tg_avatar
-                    logger.info(f"top: using Telegram fallback avatar for user {winner_telegram_id}")
+                    logger.info(f"top: using Telegram avatar for user {winner_telegram_id}")
             except Exception as e:
                 logger.debug(f"Could not get Telegram avatar for top user: {e}")
 
-        winner_name = (winner.get('steam_nickname') or winner.get('username') or winner.get('first_name') or str(winner.get('telegram_id', 'Игрок'))).strip()
+        if not winner_avatar:
+            winner_avatar = winner.get('avatar')
+            if not winner_avatar or not str(winner_avatar).strip():
+                winner_avatar = None
+            elif not str(winner_avatar).startswith('http'):
+                winner_avatar = None
+
+            winner_name = (winner.get('username') or winner.get('steam_nickname') or winner.get('first_name') or str(winner.get('telegram_id', 'Игрок'))).strip()
         winner_fissure = winner.get('fissure', 0)
         winner_rank_tier = winner.get('rank_tier', 0)
 
@@ -2917,7 +2882,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ''.join(emoji_digits[d] for d in str(n))
 
         for i, user_top in enumerate(top_users, 1):
-            raw_name = (user_top.get('steam_nickname') or user_top.get('username') or user_top.get('first_name') or str(user_top.get('telegram_id', 'Игрок'))).strip()
+            raw_name = (user_top.get('username') or user_top.get('steam_nickname') or user_top.get('first_name') or str(user_top.get('telegram_id', 'Игрок'))).strip()
             name = raw_name[:12] if len(raw_name) > 12 else raw_name
             telegram_id = user_top.get('telegram_id')
             steam_id = user_top.get('steam_id')
@@ -2963,14 +2928,13 @@ async def refreshmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Принудительное обновление MMR топа"""
     await asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username)
     logger.info(f"User {update.effective_user.id} called refreshmmr")
-    
+
     try:
         from database import update_dota_week_top_cache
-        from dota_mmr import update_user_mmr
-        
+
         await update_all_mmr_job(context)
         update_dota_week_top_cache()
-        
+
         await context.bot.send_message("✅ Топ MMR обновлён принудительно", chat_id=update.effective_chat.id)
     except Exception as e:
         logger.error(f"refreshmmr error: {e}")
@@ -3011,7 +2975,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Топ игроков по MMR за неделю"""
     logger.info(f"User {update.effective_user.id} called topmmr")
 
-    from dota_mmr import rank_to_string
+    from dota_mmr import mmr_to_rank_tier, rank_to_string
 
     user_obj = update.effective_user
     username = user_obj.username or user_obj.first_name
@@ -3064,7 +3028,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user:
             user_week_games = user.get('week_games') or 0
             user_week_wins = user.get('week_wins') or 0
-            raw_user_name = user.get('steam_nickname') or user.get('username') or user.get('first_name')
+            raw_user_name = user.get('username') or user.get('steam_nickname') or user.get('first_name')
             if raw_user_name and raw_user_name not in ("Unknown", "Неизвестный игрок") and len(str(raw_user_name).strip()) > 1:
                 user_username = raw_user_name
             else:
@@ -3096,40 +3060,40 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         else:
             # Generate MMR top banner with winner info
-            winner = top_users[0]
-            winner_avatar = winner.get('avatar')
+            # Try Telegram avatar first, then Steam
+            winner_avatar = None
             winner_telegram_id = winner.get('telegram_id')
-
-            # Fallback to Telegram avatar if Steam avatar not available
-            if not winner_avatar or not str(winner_avatar).strip():
-                winner_avatar = None
-            elif not str(winner_avatar).startswith('http'):
-                winner_avatar = None
-
-            if not winner_avatar and winner_telegram_id:
+            if winner_telegram_id:
                 try:
                     tg_avatar = await get_user_avatar_url(context.bot, winner_telegram_id)
                     if tg_avatar:
                         winner_avatar = tg_avatar
-                        logger.info(f"topmmr: using Telegram fallback avatar for user {winner_telegram_id}")
+                        logger.info(f"topmmr: using Telegram avatar for user {winner_telegram_id}")
                 except Exception as e:
                     logger.debug(f"Could not get Telegram avatar for topmmr user: {e}")
+
+            if not winner_avatar:
+                winner_avatar = winner.get('avatar')
+                if not winner_avatar or not str(winner_avatar).strip():
+                    winner_avatar = None
+                elif not str(winner_avatar).startswith('http'):
+                    winner_avatar = None
 
             # If still no avatar, use DEFAULT_AVATAR_URL
             if not winner_avatar:
                 winner_avatar = DEFAULT_AVATAR_URL
                 logger.info(f"topmmr: using DEFAULT_AVATAR_URL for user {winner_telegram_id}")
 
-            raw_winner_name = winner.get('steam_nickname') or winner.get('username') or winner.get('first_name')
+            raw_winner_name = winner.get('username') or winner.get('steam_nickname') or winner.get('first_name')
             winner_name = raw_winner_name or str(winner.get('telegram_id', 'Игрок'))
             winner_rank_tier = winner.get('rank_tier', 0)
             winner_week_games = winner.get('week_games') or 0
             winner_week_wins = winner.get('week_wins') or 0
             winner_week_losses = winner_week_games - winner_week_wins
-            winner_wr = round((winner_week_wins / winner_week_games * 100)) if winner_week_games > 0 else 0
+            winner_wr = round(winner_week_wins / winner_week_games * 100) if winner_week_games > 0 else 0
 
             try:
-                from dota_mmr import generate_start_card, get_week_top_heroes
+                from dota_mmr import generate_start_card
                 banner_bytes = await asyncio.to_thread(
                     generate_start_card,
                     avatar_url=winner_avatar,
@@ -3156,7 +3120,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return ''.join(emoji_digits[d] for d in str(n))
 
             for i, player in enumerate(top_users, 1):
-                raw_uname = player.get('steam_nickname') or player.get('username') or player.get('first_name')
+                raw_uname = player.get('username') or player.get('steam_nickname') or player.get('first_name')
                 if not raw_uname or raw_uname in ("None", "Unknown", "Неизвестный игрок") or len(raw_uname.strip()) <= 1:
                     raw_uname = player.get('username') or player.get('first_name') or str(player.get('telegram_id', 'Игрок'))
                 username = raw_uname[:12] if len(raw_uname) > 12 else raw_uname
@@ -3178,13 +3142,13 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 player_id = player.get('telegram_id')
                 steam_id = player.get('steam_id')
                 display_name = clickable_name(username, player_id, steam_id)
-                
+
                 rank_tier = player.get('rank_tier', 0)
                 if rank_tier == 0 and week_games > 0:
                     mmr_val = player.get('mmr', 0)
                     if mmr_val and mmr_val > 0:
                         rank_tier = mmr_to_rank_tier(mmr_val)
-                
+
                 rank_str = rank_to_string(rank_tier)
                 lines.append(f"{medal} <b>{display_name}</b> - {rank_str}")
                 if week_games > 0:
@@ -3225,7 +3189,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 top_text += f"\n{user_pos_emoji} <b>{user_display}</b> - {user_rank_str}\n"
                 top_text += "└ Нет игр за неделю"
 
-            top_text += f"\n\n<b><a href=\"https://seredin999.onrender.com/top-mmr\">🏆 Топ рангов на сайте</a></b>"
+            top_text += "\n\n<b><a href=\"https://seredin999.onrender.com/top-mmr\">🏆 Топ рангов на сайте</a></b>"
 
             # Delete previous bot message before sending new one
             try:
@@ -3327,7 +3291,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.info(f"Scheduled MMR update for user {update.effective_user.id} after link")
                 except Exception as e:
                     logger.debug(f"Could not schedule MMR update after link: {e}")
-                
+
                 try:
                     from weekly_analytics import generate_weekly_analytics
                     asyncio.create_task(generate_weekly_analytics(update.effective_user.id))
@@ -3385,14 +3349,14 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Административная команда: раз-prивязать Steam-аккаунт по Telegram username."""
+    from bot_utils import _telegram_error_contains
     from config import settings
     from database import get_user_by_username
-    from bot_utils import _telegram_error_contains
-    
+
     ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
-    
+
     if not ADMIN_CHAT_ID or user_id != ADMIN_CHAT_ID:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -3400,7 +3364,7 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         return
-    
+
     args = context.args
     if not args or len(args) < 1:
         await context.bot.send_message(
@@ -3409,11 +3373,11 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         return
-    
+
     username = args[0].lstrip('@')  # Убираем @ если он есть
-    
+
     result = await asyncio.to_thread(get_user_by_username, username)
-    
+
     if not result:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -3421,9 +3385,9 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         return
-    
+
     target_telegram_id = result.get('telegram_id')
-    
+
     try:
         member = await context.bot.get_chat_member(chat_id, target_telegram_id)
         if member.status in ('left', 'kicked', 'banned'):
@@ -3442,7 +3406,7 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         logger.warning(f"admin_unlink: Error checking chat membership: {e}")
-    
+
     steam_id = result.get('steam_id')
     if not steam_id:
         await context.bot.send_message(
@@ -3451,10 +3415,10 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
         return
-    
+
     from dota_mmr import admin_unlink_steam
     unlink_result = await asyncio.to_thread(admin_unlink_steam, steam_id)
-    
+
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=unlink_result.get('message'),
@@ -3604,7 +3568,7 @@ async def tags_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    name = target.get('steam_nickname') or target.get('username') or target.get('first_name') or str(target.get('telegram_id'))
+    name = target.get('username') or target.get('steam_nickname') or target.get('first_name') or str(target.get('telegram_id'))
     tags_text = format_user_tags(target.get('telegram_id'))
     if tags_text:
         text = f"🏷️ Теги {name}:\n{tags_text}"
@@ -3680,7 +3644,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
     # Skip if this is a callback query (handled by button_callback)
     if update.callback_query:
         return
-    
+
     try:
         # Skip if rate limited (but allow override for error fallback)
         if not allow_when_rate_limited and is_rate_limited():
@@ -3747,7 +3711,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             return
 
         text = update.message.text.strip()
-        
+
         menu_buttons = {
             "🎲 Ролл Фиссуры": "🎲 Ролл Фиссуры",
             "👤 Профиль": "👤 Профиль",
@@ -3856,17 +3820,17 @@ async def steam_debug(request):
         auth_header = request.headers.get("X-Admin-Chat-Id")
         if not auth_header or str(auth_header) != str(admin_chat_id):
             return web.Response(text="Forbidden", status=403)
-        
+
         from database import get_all_users_with_steam, get_db_type
         db_type = get_db_type()
-        
+
         # Get count of users with steam_id
         conn = None
         try:
             from database import get_connection, release_connection
             conn = get_connection()
             cursor = conn.cursor()
-            
+
             if "postgres" in db_type:
                 cursor.execute("SELECT COUNT(*) FROM users WHERE steam_id IS NOT NULL")
                 steam_count = cursor.fetchone()[0] if cursor.description else 0
@@ -3877,13 +3841,13 @@ async def steam_debug(request):
                 steam_count = cursor.fetchone()[0]
                 cursor.execute("SELECT COUNT(*) FROM users")
                 total_count = cursor.fetchone()[0]
-            
+
             cursor.close()
-            
+
             # Get some sample users
             users = await asyncio.to_thread(get_all_users_with_steam)
             sample = [{"telegram_id": u.get("telegram_id"), "steam_id": u.get("steam_id")} for u in users[:5]]
-            
+
             result = {
                 "db_type": db_type,
                 "total_users": total_count,
@@ -3966,7 +3930,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                         # Новый пользователь — создаём с лучшим доступным именем
                         fallback_name = telegram_username or user_obj.first_name or f"Player{user_id}"
                         db = Database()
-                        db.register_user(user_id, fallback_name, first_name, source="start")
+                        db.register_user(user_id, fallback_name, user_obj.first_name, source="start")
                         logger.info(f"Created new user {user_id} with name '{fallback_name}'")
                     else:
                         # Существующий пользователь — обновляем username если изменился (только если есть telegram_username)
@@ -4057,8 +4021,13 @@ async def main():
         init_db()
         migrate_db()
 
-        from database import get_all_users, user_cache, restore_dota_week_top_cache, get_db_type, get_connection
-        
+        from database import (
+            get_all_users,
+            get_connection,
+            get_db_type,
+            user_cache,
+        )
+
         # Fix any NULL fissure values in database
         try:
             db_type = get_db_type()
@@ -4077,7 +4046,7 @@ async def main():
         except Exception as e:
             logger.error(f"Failed to fix NULL fissure values: {e}")
 
-        # Clean up stale placeholder nicknames (e.g. "Неизвестный игрок", "Unknown") 
+        # Clean up stale placeholder nicknames (e.g. "Неизвестный игрок", "Unknown")
         # that were saved when Steam stats couldn't be fetched during linking.
         # These placeholders override Telegram usernames in display, so clear them
         # to restore correct names. Real Steam nicknames will be re-fetched by
@@ -4098,7 +4067,7 @@ async def main():
             release_connection(conn)
         except Exception as e:
             logger.error(f"Failed to clean placeholder nicknames: {e}")
-        
+
         # Test DB connection
         try:
             db_type = get_db_type()
@@ -4118,13 +4087,12 @@ async def main():
             if len(recent_fissure_rolls) == 0:
                 from database import load_recent_rolls
                 rolls = load_recent_rolls()
-                from collections import deque
                 recent_fissure_rolls.clear()
                 recent_fissure_rolls.extend(rolls)
                 logger.info(f"Loaded {len(rolls)} recent rolls from DB on startup")
         except Exception as e:
             logger.warning(f"Could not load recent rolls from DB: {e}")
-        
+
         try:
             all_users = get_all_users()
             logger.info(f"get_all_users returned {len(all_users)} users")
@@ -4144,7 +4112,7 @@ async def main():
         from database import update_dota_week_top_cache
         await asyncio.to_thread(update_dota_week_top_cache)
         logger.info("Dota week top cache initialized from DB on startup")
-        
+
         # Start background retry for circuit breaker
         try:
             from dota_mmr import start_background_retry
@@ -4333,7 +4301,7 @@ async def main():
         MSK = timezone(timedelta(hours=3))
         now_msk = dt.now(MSK)
         if now_msk.weekday() == 6 and now_msk.hour >= 21:  # Воскресенье после 21:00 MSK
-            from database import get_config as _get_cfg, set_config as _set_cfg
+            from database import get_config as _get_cfg
             monday_msk = now_msk - timedelta(days=now_msk.weekday())
             current_week_start = monday_msk.strftime("%Y-%m-%d")
             last_announced = _get_cfg('mmr_week_top_announced')
@@ -4553,13 +4521,15 @@ async def main():
                 ping_url = webhook_url.rsplit('/webhook', 1)[0] + '/health'
                 while True:
                     try:
-                        await asyncio.sleep(800)  # Ping every ~13 min to stay under Render's 15 min idle timeout
+                        await asyncio.sleep(800)
+                        session = await get_aiohttp_session()
                         from analytics_dashboard import record_neon_hours
-                        record_neon_hours(0.56)
-                        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
-                            await session.get(ping_url)
-                            root_url = webhook_url.rsplit('/webhook', 1)[0] + '/'
-                            await session.get(root_url, timeout=aiohttp.ClientTimeout(total=10))
+                        record_neon_hours(KEEPALIVE_PING_NEON_HOURS)
+                        async with session.get(ping_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                            await resp.text()
+                        root_url = webhook_url.rsplit('/webhook', 1)[0] + '/'
+                        async with session.get(root_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                            await resp.text()
                         logger.info("Keep-alive ping sent")
                     except Exception as e:
                         logger.error(f"Keep-alive ping error: {e}")
@@ -4612,7 +4582,7 @@ async def main():
         raise
     finally:
         try:
-            from database import close_aiohttp_session, flush_users_cache, close_pg_pool
+            from database import close_aiohttp_session, close_pg_pool, flush_users_cache
             flushed = flush_users_cache()
             logger.info(f"Shutdown: flushed {flushed} users to DB")
             # Close aiohttp session to prevent "Unclosed connection" error

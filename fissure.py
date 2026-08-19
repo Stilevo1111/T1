@@ -9,7 +9,6 @@ import logging
 import random
 import time
 import traceback
-from collections import deque
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -24,28 +23,27 @@ from bot_utils import (
     main_menu,
     make_clickable,
     record_recent_fissure_roll,
-    recent_fissure_rolls,
     schedule_delete,
     set_last_bot_message,
 )
-from constants import get_banner_path, get_random_cooldown_banner_path
 from constants import (
     COOLDOWN,
     WEEKEND_BONUS_MULTIPLIERS,
     ZEUS_TEXTS,
+    get_banner_path,
+    get_random_cooldown_banner_path,
 )
-from database import get_user, update_fissure, update_last_message_id, zeus_strike, user_cache
+from database import get_user, update_fissure, update_last_message_id, user_cache, zeus_strike
 from digest import invalidate_digest_cache
 from rate_limiter import is_rate_limited
 from rolls import (
+    MULTICAST_TEXTS,
     apply_fissure_protection,
     calculate_fissure_roll,
     calculate_new_fissure,
     calculate_streak_bonus,
-    get_roll_text,
     get_hero_quote,
-    ROLL_TEXTS,
-    MULTICAST_TEXTS,
+    get_roll_text,
 )
 from stats import get_event_chances
 from techies import handle_techies_event
@@ -596,7 +594,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="HTML"
             )
             schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
-        except Exception:
-            pass
+        except Exception as send_err:
+            logger.debug(f"fissure: could not send error message: {send_err}")
     finally:
         _user_fissure_processing.pop(user_obj.id, None)
