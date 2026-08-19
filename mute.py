@@ -15,6 +15,7 @@
 """
 
 import asyncio
+import html
 import logging
 import random
 import time
@@ -199,8 +200,8 @@ async def _do_give_gag(
 
     # ── 6. Анонс в чат (отдельным сообщением, не реплай) ───────────────────
     gag_emoji    = _pick_gag_emoji(victim_id)
-    victim_name  = victim.get("username") or victim.get("first_name") or str(victim_id)
-    admin_name   = admin.get("username") or admin.get("first_name") or str(admin_id)
+    victim_name  = html.escape(victim.get("username") or victim.get("first_name") or str(victim_id))
+    admin_name   = html.escape(admin.get("username") or admin.get("first_name") or str(admin_id))
     victim_username = victim.get("username")
     victim_clean = str(victim_username).strip().lstrip("@") if victim_username else ""
     if victim_clean and all(c.isalnum() or c == '_' for c in victim_clean):

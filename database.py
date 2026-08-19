@@ -1394,7 +1394,7 @@ class Database:
             finally:
                 release_connection(conn)
 
-    def add_user(self, telegram_id, username=None, first_name=None, last_name=None):
+    def add_user(self, telegram_id, username=None, first_name=None):
         """Legacy: добавление пользователя. Используйте register_user() для новых мест."""
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
@@ -1450,7 +1450,7 @@ class Database:
             return tid
         return None
 
-    def register_user(self, telegram_id, username=None, first_name=None, last_name=None, source="unknown"):
+    def register_user(self, telegram_id, username=None, first_name=None, source="unknown"):
         tid = self._normalize_telegram_id(telegram_id)
         if not tid:
             logger.warning(f"register_user: invalid telegram_id={telegram_id} from {source}")
@@ -1461,7 +1461,6 @@ class Database:
         
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
-        db_type = get_db_type()
 
         try:
             if "postgres" in scheme:
@@ -1499,35 +1498,46 @@ class Database:
         scheme = url.scheme
         db_type = get_db_type()
         repaired = 0
+        skipped = 0
 
         try:
             if "postgres" in scheme:
                 candidates = self.execute_query("""
-                    SELECT id, telegram_id, username, first_name
+                    SELECT id, telegram_id, username, first_name, steam_id, fissure, message_count
                     FROM users
                     WHERE telegram_id IS NULL
                        OR telegram_id = 0
                        OR CAST(telegram_id AS TEXT) NOT SIMILAR TO '[1-9][0-9]*'
                 """, fetch="all")
                 for row in candidates:
-                    uid, bad_tid, username, first_name = row["id"], row["telegram_id"], row.get("username"), row.get("first_name")
-                    logger.warning(f"repair_missing_telegram_ids: skipping row id={uid}, bad telegram_id={bad_tid}, username={username}")
+                    uid, bad_tid, username, first_name, steam_id, fissure, message_count = row["id"], row["telegram_id"], row.get("username"), row.get("first_name"), row.get("steam_id"), float(row["fissure"] or 0), int(row["message_count"] or 0)
+                    if steam_id or fissure > 0.1 or message_count > 0:
+                        logger.warning(f"repair_missing_telegram_ids: skip active row id={uid}, bad telegram_id={bad_tid}, username={username}")
+                        skipped += 1
+                        continue
+                    self.execute_query("DELETE FROM users WHERE id = %s", (uid,))
+                    logger.warning(f"repair_missing_telegram_ids: deleted dead row id={uid}, username={username}")
                     repaired += 1
                 return repaired
 
             conn = get_connection()
             cursor = conn.cursor()
             try:
-                cursor.execute("PRAGMA table_info(users)")
-                cols = [r[1] for r in cursor.fetchall()]
-                has_first = "first_name" in cols
-
-                cursor.execute("SELECT id, telegram_id, username FROM users WHERE telegram_id IS NULL OR telegram_id = 0 OR CAST(telegram_id AS TEXT) NOT LIKE '1%' AND CAST(telegram_id AS TEXT) NOT LIKE '2%' AND CAST(telegram_id AS TEXT) NOT LIKE '3%' AND CAST(telegram_id AS TEXT) NOT LIKE '4%' AND CAST(telegram_id AS TEXT) NOT LIKE '5%' AND CAST(telegram_id AS TEXT) NOT LIKE '6%' AND CAST(telegram_id AS TEXT) NOT LIKE '7%' AND CAST(telegram_id AS TEXT) NOT LIKE '8%' AND CAST(telegram_id AS TEXT) NOT LIKE '9%'")
+                cursor.execute("SELECT id, telegram_id, username, steam_id, fissure, message_count FROM users WHERE telegram_id IS NULL OR telegram_id = 0 OR CAST(telegram_id AS TEXT) NOT LIKE '1%' AND CAST(telegram_id AS TEXT) NOT LIKE '2%' AND CAST(telegram_id AS TEXT) NOT LIKE '3%' AND CAST(telegram_id AS TEXT) NOT LIKE '4%' AND CAST(telegram_id AS TEXT) NOT LIKE '5%' AND CAST(telegram_id AS TEXT) NOT LIKE '6%' AND CAST(telegram_id AS TEXT) NOT LIKE '7%' AND CAST(telegram_id AS TEXT) NOT LIKE '8%' AND CAST(telegram_id AS TEXT) NOT LIKE '9%'")
                 rows = cursor.fetchall()
                 for row in rows:
-                    rid, bad_tid, username = row
-                    logger.warning(f"repair_missing_telegram_ids: sqlite row id={rid} bad telegram_id={bad_tid} username={username}")
+                    rid, bad_tid, username, steam_id, fissure, message_count = row
+                    steam_id = steam_id if len(row) > 3 else None
+                    fissure = float(fissure or 0) if len(row) > 4 else 0.0
+                    message_count = int(message_count or 0) if len(row) > 5 else 0
+                    if steam_id or fissure > 0.1 or message_count > 0:
+                        logger.warning(f"repair_missing_telegram_ids: skip active sqlite row id={rid}, bad telegram_id={bad_tid}, username={username}")
+                        skipped += 1
+                        continue
+                    cursor.execute("DELETE FROM users WHERE id = ?", (rid,))
+                    logger.warning(f"repair_missing_telegram_ids: deleted dead sqlite row id={rid}, username={username}")
                     repaired += 1
+                conn.commit()
                 return repaired
             finally:
                 cursor.close()
@@ -2221,7 +2231,12 @@ class Database:
 # Функции для совместимости со старым кодом
 def get_user(telegram_id, username=None):
     """Получить пользователя - сначала из кеша (с валидацией), потом из БД"""
-    cached_user = user_cache.get(telegram_id)
+    tid = Database._normalize_telegram_id(telegram_id)
+    if not tid:
+        logger.warning(f"get_user: invalid telegram_id={telegram_id}")
+        return None
+
+    cached_user = user_cache.get(tid)
     if cached_user and cached_user.get('fissure') is not None and isinstance(cached_user.get('fissure'), (int, float)):
         cached_user.setdefault('total_rolls', 0)
         cached_user.setdefault('best_streak', 0)
@@ -2238,10 +2253,10 @@ def get_user(telegram_id, username=None):
 
     # Нет в кэше или данные невалидны - читаем из БД
     db = Database()
-    user = db.get_user(telegram_id, username)
+    user = db.get_user(tid, username)
     
     if user:
-        logger.info(f"get_user: DB hit for {telegram_id}, fissure={user.get('fissure')}, total_rolls={user.get('total_rolls')}")
+        logger.info(f"get_user: DB hit for {tid}, fissure={user.get('fissure')}, total_rolls={user.get('total_rolls')}")
         user.setdefault('analytics_cache', None)
         user.setdefault('analytics_updated_at', None)
         user.setdefault('total_rolls', 0)
@@ -2253,19 +2268,19 @@ def get_user(telegram_id, username=None):
         user.setdefault('weekly_top2', 0)
         user.setdefault('weekly_top3', 0)
         user.setdefault('user_tags', [])
-        user_cache.set(telegram_id, user, skip_dirty=True)
+        user_cache.set(tid, user, skip_dirty=True)
         return user
 
     # Пользователь не найден - создаём нового
-    logger.info(f"get_user: user {telegram_id} NOT found, creating new")
-    db.register_user(telegram_id, username or f"Player{telegram_id}", None, None, source="get_user_fallback")
-    user = db.get_user(telegram_id)
+    logger.info(f"get_user: user {tid} NOT found, creating new")
+    db.register_user(tid, username or f"Player{tid}", None, source="get_user_fallback")
+    user = db.get_user(tid)
     if user:
         user.setdefault('fissure', 0.1)
-        user_cache.set(telegram_id, user, skip_dirty=True)
+        user_cache.set(tid, user, skip_dirty=True)
         return user
 
-    logger.warning(f"get_user: failed to create user {telegram_id}")
+    logger.warning(f"get_user: failed to create user {tid}")
     return None
 
 
@@ -3273,6 +3288,10 @@ def get_dota_week_top(limit=10, force_refresh=False):
             return cached_top[:limit]
 
     with get_dota_week_top._lock:
+        if get_dota_week_top._calculating[0] and not force_refresh:
+            cached_top = user_cache.get('dota_week_top')
+            if cached_top:
+                return cached_top[:limit]
         get_dota_week_top._calculating[0] = True
         try:
             cached_top = user_cache.get('dota_week_top')
@@ -3398,16 +3417,19 @@ def get_dota_week_top_from_db(limit=10, force_refresh=False):
     cache_key = f'_dota_week_top_db_{limit}'
     if not hasattr(get_dota_week_top_from_db, '_cache') or not isinstance(get_dota_week_top_from_db._cache, dict):
         get_dota_week_top_from_db._cache = {}
+    if not hasattr(get_dota_week_top_from_db, '_lock'):
+        get_dota_week_top_from_db._lock = threading.Lock()
 
-    cached_data, cached_time = get_dota_week_top_from_db._cache.get(cache_key, (None, 0))
-    if cached_data and (time.time() - cached_time) < _TTL and not force_refresh:
-        logger.info(f"get_dota_week_top_from_db: returning cached top ({len(cached_data)} users)")
-        return cached_data[:limit]
+    with get_dota_week_top_from_db._lock:
+        cached_data, cached_time = get_dota_week_top_from_db._cache.get(cache_key, (None, 0))
+        if cached_data and (time.time() - cached_time) < _TTL and not force_refresh:
+            logger.info(f"get_dota_week_top_from_db: returning cached top ({len(cached_data)} users)")
+            return cached_data[:limit]
 
-    result = _get_dota_week_top_query(limit)
+        result = _get_dota_week_top_query(limit)
 
-    get_dota_week_top_from_db._cache[cache_key] = (result, time.time())
-    return result
+        get_dota_week_top_from_db._cache[cache_key] = (result, time.time())
+        return result
 
 
 def _get_dota_week_top_query(limit):
@@ -3902,12 +3924,11 @@ def load_recent_rolls():
 def invalidate_stale_top_caches():
     try:
         keys_to_delete = []
-        for key in ['mmr_top_cache_10', 'mmr_top_cache_50', 'dota_week_top_cache', 'dota_week_top']:
+        for key in ['dota_week_top_cache', 'dota_week_top']:
             if get_config(key):
                 keys_to_delete.append(key)
         for key in keys_to_delete:
             try:
-                from database import set_config
                 set_config(key, None)
                 logger.info(f"invalidated stale cache: {key}")
             except Exception as e:

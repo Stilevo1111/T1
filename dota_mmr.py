@@ -26,6 +26,10 @@ def _run_async(coro, timeout: int = 60):
     
     Uses a dedicated thread pool with its own event loop to avoid
     "Event loop is closed" and "RuntimeError: asyncio.run() cannot be called from a running event loop" errors.
+    
+    Note: on timeout, the background thread continues running asyncio.run() to completion.
+    Under sustained load this can strand threads. If that becomes an issue, refactor the
+    caller to be async end-to-end instead of using this sync bridge.
     """
     def run_in_new_loop():
         return asyncio.run(coro)
@@ -1250,7 +1254,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         if not user:
             logger.info(f"User not found in register_steam, creating new user: {telegram_id}")
             from database import Database
-            Database().register_user(telegram_id, None, None, None, source="register_steam")
+            Database().register_user(telegram_id, None, None, source="register_steam")
             user = get_user(telegram_id)
             if user:
                 user_cache.set(telegram_id, user)
