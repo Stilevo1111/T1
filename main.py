@@ -60,7 +60,7 @@ from database import (
 from dota_mmr import _get_start_card_background, update_user_mmr
 from mute import register_handlers as register_mute_handlers
 from rate_limiter import is_rate_limited, rate_limit, set_rate_limited
-from tags import TAG_DISPLAY, TAG_TYPES, add_user_tag, format_user_tags, get_user_tags, remove_user_tag, get_telegram_title
+from tags import TAG_DISPLAY, TAG_TYPES, add_user_tag, ensure_fissure_master_tag, format_user_tags, get_user_tags, remove_user_tag, get_telegram_title
 
 structlog.configure(
     processors=[
@@ -2897,7 +2897,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         winner_telegram_id = winner.get('telegram_id')
 
         # Автоматически обновляем тег fissure_master при изменении топ-1
-        await update_fissure_master_job(context)
+        await ensure_fissure_master_tag(winner_telegram_id, chat_id, context.bot)
 
         # Ensure we have a valid avatar URL
         if not winner_avatar or not str(winner_avatar).strip():
@@ -4230,12 +4230,6 @@ async def main():
             decrease_inactive_job,
             time=datetime.time(hour=0, minute=0),
             days=(0, 1, 2, 3, 4, 5, 6)
-        )
-
-        job_queue.run_repeating(
-            update_fissure_master_job,
-            interval=datetime.timedelta(minutes=15),
-            first=datetime.timedelta(minutes=5)
         )
 
         job_queue.run_daily(

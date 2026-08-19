@@ -167,3 +167,12 @@ async def get_telegram_title(bot, telegram_id: int, chat_id: int) -> str:
     title = TAG_TYPES.get(best, "") if best else ""
     await _apply_best_tag(bot, telegram_id, chat_id)
     return title
+
+
+async def ensure_fissure_master_tag(telegram_id: int, chat_id: int, bot) -> None:
+    from database import get_fissure_top
+    top_users = get_fissure_top(1)
+    if top_users and top_users[0].get('telegram_id') == telegram_id:
+        await add_user_tag(telegram_id, 'fissure_master', bot=bot, chat_id=chat_id)
+    else:
+        await remove_user_tag(telegram_id, 'fissure_master', bot=bot, chat_id=chat_id)
