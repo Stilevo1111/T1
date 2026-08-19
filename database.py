@@ -1493,51 +1493,72 @@ class Database:
             logger.error(f"register_user error: {e} (telegram_id={tid}, source={source})", exc_info=True)
             return None
 
-    def repair_missing_telegram_ids(self):
+    def repair_missing_telegram_ids(self, dry_run: bool = False):
+        """Удалить или залогировать пользователей с невалидным telegram_id.
+        
+        Безопасные правила:
+        - Удаляем только если telegram_id NULL/0/невалидный
+        - И steam_id отсутствует
+        - И fissure == 0.1 (дефолт, никогда не менялся)
+        - И message_count == 0 (никогда не писал)
+        
+        dry_run=True: только логирует, не удаляет.
+        """
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
         db_type = get_db_type()
         repaired = 0
         skipped = 0
+        dry_run_label = "[DRY RUN] " if dry_run else ""
 
         try:
             if "postgres" in scheme:
                 candidates = self.execute_query("""
-                    SELECT id, telegram_id, username, first_name, steam_id, fissure, message_count
+                    SELECT id, telegram_id, username, first_name, steam_id, fissure, message_count, last_activity
                     FROM users
                     WHERE telegram_id IS NULL
                        OR telegram_id = 0
                        OR CAST(telegram_id AS TEXT) NOT SIMILAR TO '[1-9][0-9]*'
                 """, fetch="all")
                 for row in candidates:
-                    uid, bad_tid, username, first_name, steam_id, fissure, message_count = row["id"], row["telegram_id"], row.get("username"), row.get("first_name"), row.get("steam_id"), float(row["fissure"] or 0), int(row["message_count"] or 0)
+                    uid, bad_tid, username, first_name, steam_id, fissure, message_count, last_activity = row["id"], row["telegram_id"], row.get("username"), row.get("first_name"), row.get("steam_id"), float(row["fissure"] or 0), int(row["message_count"] or 0), row.get("last_activity")
                     if steam_id or fissure > 0.1 or message_count > 0:
-                        logger.warning(f"repair_missing_telegram_ids: skip active row id={uid}, bad telegram_id={bad_tid}, username={username}")
+                        logger.warning(f"repair_missing_telegram_ids: {dry_run_label}skip active row id={uid}, bad telegram_id={bad_tid}, username={username}, steam={bool(steam_id)}, fissure={fissure}, messages={message_count}")
                         skipped += 1
                         continue
-                    self.execute_query("DELETE FROM users WHERE id = %s", (uid,))
-                    logger.warning(f"repair_missing_telegram_ids: deleted dead row id={uid}, username={username}")
+                    if dry_run:
+                        logger.warning(f"repair_missing_telegram_ids: {dry_run_label}would delete dead row id={uid}, username={username}, last_activity={last_activity}")
+                    else:
+                        self.execute_query("DELETE FROM users WHERE id = %s", (uid,))
+                        logger.warning(f"repair_missing_telegram_ids: {dry_run_label}deleted dead row id={uid}, username={username}, last_activity={last_activity}")
                     repaired += 1
+                logger.warning(f"repair_missing_telegram_ids: {dry_run_label}done. repaired={repaired}, skipped={skipped}")
                 return repaired
 
             conn = get_connection()
             cursor = conn.cursor()
             try:
-                cursor.execute("SELECT id, telegram_id, username, steam_id, fissure, message_count FROM users WHERE telegram_id IS NULL OR telegram_id = 0 OR CAST(telegram_id AS TEXT) NOT LIKE '1%' AND CAST(telegram_id AS TEXT) NOT LIKE '2%' AND CAST(telegram_id AS TEXT) NOT LIKE '3%' AND CAST(telegram_id AS TEXT) NOT LIKE '4%' AND CAST(telegram_id AS TEXT) NOT LIKE '5%' AND CAST(telegram_id AS TEXT) NOT LIKE '6%' AND CAST(telegram_id AS TEXT) NOT LIKE '7%' AND CAST(telegram_id AS TEXT) NOT LIKE '8%' AND CAST(telegram_id AS TEXT) NOT LIKE '9%'")
+                cursor.execute("SELECT id, telegram_id, username, steam_id, fissure, message_count, last_activity FROM users WHERE telegram_id IS NULL OR telegram_id = 0 OR CAST(telegram_id AS TEXT) NOT LIKE '1%' AND CAST(telegram_id AS TEXT) NOT LIKE '2%' AND CAST(telegram_id AS TEXT) NOT LIKE '3%' AND CAST(telegram_id AS TEXT) NOT LIKE '4%' AND CAST(telegram_id AS TEXT) NOT LIKE '5%' AND CAST(telegram_id AS TEXT) NOT LIKE '6%' AND CAST(telegram_id AS TEXT) NOT LIKE '7%' AND CAST(telegram_id AS TEXT) NOT LIKE '8%' AND CAST(telegram_id AS TEXT) NOT LIKE '9%'")
                 rows = cursor.fetchall()
                 for row in rows:
-                    rid, bad_tid, username, steam_id, fissure, message_count = row
+                    rid, bad_tid, username, steam_id, fissure, message_count, last_activity = row
                     steam_id = steam_id if len(row) > 3 else None
                     fissure = float(fissure or 0) if len(row) > 4 else 0.0
                     message_count = int(message_count or 0) if len(row) > 5 else 0
+                    last_activity = row[6] if len(row) > 6 else None
                     if steam_id or fissure > 0.1 or message_count > 0:
-                        logger.warning(f"repair_missing_telegram_ids: skip active sqlite row id={rid}, bad telegram_id={bad_tid}, username={username}")
+                        logger.warning(f"repair_missing_telegram_ids: {dry_run_label}skip active sqlite row id={rid}, bad telegram_id={bad_tid}, username={username}, steam={bool(steam_id)}, fissure={fissure}, messages={message_count}")
                         skipped += 1
                         continue
-                    cursor.execute("DELETE FROM users WHERE id = ?", (rid,))
-                    logger.warning(f"repair_missing_telegram_ids: deleted dead sqlite row id={rid}, username={username}")
+                    if dry_run:
+                        logger.warning(f"repair_missing_telegram_ids: {dry_run_label}would delete dead sqlite row id={rid}, username={username}, last_activity={last_activity}")
+                    else:
+                        cursor.execute("DELETE FROM users WHERE id = ?", (rid,))
+                        logger.warning(f"repair_missing_telegram_ids: {dry_run_label}deleted dead sqlite row id={rid}, username={username}, last_activity={last_activity}")
                     repaired += 1
-                conn.commit()
+                if not dry_run:
+                    conn.commit()
+                logger.warning(f"repair_missing_telegram_ids: {dry_run_label}done. repaired={repaired}, skipped={skipped}")
                 return repaired
             finally:
                 cursor.close()
