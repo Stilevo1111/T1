@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 import functools
 import io
 import logging
@@ -24,6 +25,10 @@ from database import get_aiohttp_session, get_user, update_user_fields_batch
 
 logger = logging.getLogger(__name__)
 
+_USE_LOCAL_AIOHTTP_SESSION: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "use_local_aiohttp_session", default=False
+)
+
 # Thread pool for running async code from sync contexts (avoids event loop conflicts)
 _async_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="async_sync_bridge")
 
@@ -33,12 +38,19 @@ def _run_async(coro, timeout: int = 60):
     Uses a dedicated thread pool with its own event loop to avoid
     "Event loop is closed" and "RuntimeError: asyncio.run() cannot be called from a running event loop" errors.
     
+    Automatically isolates aiohttp sessions so global session from main loop
+    is not reused across event loops.
+    
     Note: on timeout, the background thread continues running asyncio.run() to completion.
     Under sustained load this can strand threads. If that becomes an issue, refactor the
     caller to be async end-to-end instead of using this sync bridge.
     """
     def run_in_new_loop():
-        return asyncio.run(coro)
+        token = _USE_LOCAL_AIOHTTP_SESSION.set(True)
+        try:
+            return asyncio.run(coro)
+        finally:
+            _USE_LOCAL_AIOHTTP_SESSION.reset(token)
 
     future = _async_executor.submit(run_in_new_loop)
     return future.result(timeout=timeout)
@@ -265,7 +277,15 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
     if params is None:
         params = {}
 
-    session = await get_aiohttp_session() if use_session else None
+    if params is None:
+        params = {}
+
+    if _USE_LOCAL_AIOHTTP_SESSION.get():
+        session = None
+    elif use_session:
+        session = await get_aiohttp_session()
+    else:
+        session = None
 
     for attempt in range(max_retries + 1):
         current_timeout = timeout if attempt == 0 else timeout + 5
@@ -285,9 +305,7 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
             _circuit_breaker_record_failure()
             return None
         except RuntimeError as e:
-            if "Event loop is closed" in str(e) or "Timeout context manager" in str(e):
-                if session and attempt == 0:
-                    session = None
+            if "Event loop is closed" in str(e):
                 logger.warning(f"Async API error ({e}), retrying... ({attempt + 1}/{max_retries + 1})")
                 if attempt < max_retries:
                     await asyncio.sleep(1 + attempt)
@@ -319,8 +337,8 @@ async def _handle_api_response(resp, url: str, attempt: int, max_retries: int):
         try:
             from analytics_dashboard import record_opendota_tokens
             record_opendota_tokens(1)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to record OpenDota tokens: {e}")
         return await resp.json()
     elif resp.status == 429:
         logger.warning("Rate limited by OpenDota API, waiting...")
@@ -1263,85 +1281,168 @@ def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 5) ->
 # 🔗 REGISTER
 # ========================
 
+def _ensure_user_exists(telegram_id: int) -> dict | None:
+    from database import Database, _save_user_to_db_immediately, get_user, user_cache
+
+    user = get_user(telegram_id)
+    if user:
+        return user
+
+    Database().register_user(telegram_id, None, None, source="register_steam")
+    user = get_user(telegram_id)
+    if user:
+        user_cache.set(telegram_id, user)
+        _save_user_to_db_immediately(telegram_id, user)
+    return user
+
+
+def _fetch_player_stats(steam_id: int) -> dict | None:
+    account_id = steam64_to_account_id(steam_id)
+    _clear_not_found(f"{OPENDOTA_API_URL}/players/{account_id}")
+    stats = get_player_stats(steam_id)
+    if not stats:
+        return None
+
+    total_games = stats.get("total_games") or 0
+    mmr = stats.get("mmr") or 0
+    if total_games == 0 and mmr == 0:
+        return None
+
+    return stats
+
+
+def _classify_stats(stats: dict) -> tuple[bool, bool]:
+    is_private = (stats.get("total_games") or 0) == 0 and (stats.get("mmr") or 0) == 0
+    is_invalid = stats.get("nickname") == "Unknown"
+    return is_invalid, is_private
+
+
+def _transfer_existing_binding(telegram_id: int, steam_id: int, existing_user: dict) -> str:
+    existing_tid = existing_user.get("telegram_id")
+    existing_username = (
+        existing_user.get("username") or existing_user.get("steam_nickname") or "другой игрок"
+    )
+
+    logger.info(f"Transferring Steam {steam_id} from user {existing_tid} to {telegram_id}")
+
+    from database import user_cache
+
+    update_user_fields_batch(
+        existing_tid,
+        {"steam_id": None, "steam_nickname": None, "avatar": None},
+        update_top_cache=False,
+    )
+    with user_cache._lock:
+        if steam_id in user_cache._steam_index:
+            del user_cache._steam_index[steam_id]
+
+    return existing_username
+
+
+def _apply_private_profile_binding(telegram_id: int, steam_id: int, stats: dict) -> dict:
+    update_user_fields_batch(telegram_id, {
+        "steam_id": steam_id,
+        "steam_nickname": stats.get("nickname"),
+        "avatar": stats.get("avatar"),
+        "mmr": 0,
+        "rank_tier": 0,
+        "wins": 0,
+        "losses": 0,
+        "week_start_date": datetime.now(UTC).date().isoformat(),
+    })
+    return {
+        "success": True,
+        "message": "✅ Аккаунт привязан! Ваш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику:\n⚠️ В игре: \nнастройки → сообщество → настройки → общедоступная история матчей → включить",
+    }
+
+
+def _apply_normal_binding(telegram_id: int, steam_id: int, stats: dict) -> dict:
+    update_user_fields_batch(telegram_id, {
+        "steam_id": steam_id,
+        "steam_nickname": stats["nickname"],
+        "avatar": stats.get("avatar"),
+        "mmr": stats.get("mmr", 0),
+        "rank_tier": stats.get("rank_tier", 0),
+        "wins": stats.get("wins", 0),
+        "losses": stats.get("losses", 0),
+        "week_start_date": datetime.now(UTC).date().isoformat(),
+    })
+    update_user_mmr(telegram_id)
+
+    rank_tier = stats.get("rank_tier", 0)
+    rank_str = rank_to_string(rank_tier)
+    wins = stats.get("wins", 0)
+    losses = stats.get("losses", 0)
+    total = wins + losses
+    winrate = round(stats.get("winrate", 0))
+
+    return {
+        "success": True,
+        "message": f"✅ {stats['nickname']} | {rank_str}\n📊 {total} игр | ✅ {wins} | ❌ {losses} | {winrate}%",
+    }
+
+
+def _handle_existing_binding(
+    telegram_id: int,
+    steam_id: int,
+    existing_user: dict,
+    private_profile: bool,
+) -> dict | None:
+    from database import get_user_by_steam_id, update_user_fields_batch, user_cache
+
+    existing_user = get_user_by_steam_id(steam_id)
+    if not existing_user or existing_user.get("telegram_id") != telegram_id:
+        return None
+
+    existing_username = _transfer_existing_binding(telegram_id, steam_id, existing_user)
+
+    if private_profile:
+        return {
+            "success": True,
+            "message": (
+                f"⚠️ Steam аккаунт был привязан к {existing_username}\n"
+                "Автоматически перенесён на ваш аккаунт.\n\n"
+                "Ваш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику:\n"
+                "⚠️ В игре: \nнастройки → сообщество → настройки → общедоступная история матчей → включить"
+            ),
+        }
+
+    return {
+        "success": True,
+        "message": (
+            f"⚠️ Steam аккаунт был привязан к {existing_username}\n"
+            "Автоматически перенесён на ваш аккаунт.\n"
+            "Старые данные утрачены."
+        ),
+    }
+
+
 def register_steam(telegram_id: int, identifier: str) -> dict:
     """Привязать Steam-аккаунт к пользователю: парсит identifier, сохраняет steam_id/nickname, делает первый апдейт MMR."""
     try:
         logger.info(f"Registering Steam for user {telegram_id} with identifier: {identifier}")
 
-        # Создаем пользователя если не существует
-        from database import _save_user_to_db_immediately, get_user, user_cache
-        user = get_user(telegram_id)
-        if not user:
-            logger.info(f"User not found in register_steam, creating new user: {telegram_id}")
-            from database import Database
-            Database().register_user(telegram_id, None, None, source="register_steam")
-            user = get_user(telegram_id)
-            if user:
-                user_cache.set(telegram_id, user)
-                _save_user_to_db_immediately(telegram_id, user)
+        _ensure_user_exists(telegram_id)
 
         steam_id = parse_steam_identifier(identifier)
         logger.info(f"Parsed steam_id: {steam_id}")
 
         if steam_id:
-            # если получилось получить steam_id → stats по ID
-            logger.info(f"Getting player stats for steam_id: {steam_id}")
-            account_id = steam64_to_account_id(steam_id)
-            logger.info(f"Using account_id: {account_id} for API call")
-            # Сбрасываем negative cache на случай, если аккаунт ранее не находился
-            _clear_not_found(f"{OPENDOTA_API_URL}/players/{account_id}")
-
-            stats = get_player_stats(steam_id)
+            stats = _fetch_player_stats(steam_id)
             logger.info(f"Player stats result: {stats is not None}")
 
-            invalid_stats = not stats
-            private_profile = False
-            if stats:
-                total_games = stats.get("total_games") or 0
-                mmr = stats.get("mmr") or 0
-                if total_games == 0 and mmr == 0:
-                    private_profile = True
-                elif stats.get("nickname") == "Unknown":
-                    invalid_stats = True
+            if not stats:
+                private_profile = True
+                invalid_stats = True
+            else:
+                invalid_stats, private_profile = _classify_stats(stats)
 
             if invalid_stats or private_profile:
-                try:
-                    from database import (
-                        get_user,
-                        get_user_by_steam_id,
-                        update_user_fields_batch,
-                        user_cache,
-                    )
-                    existing_user = get_user_by_steam_id(steam_id)
-                    if existing_user and existing_user.get('telegram_id') == telegram_id:
-                        if private_profile:
-                            return {
-                                "success": True,
-                                "message": "✅ Аккаунт уже привязан к вам\n\nВаш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику:\n⚠️ В игре: \nнастройки → сообщество → настройки → общедоступная история матчей → включить"
-                            }
-                        return {"success": True, "message": "✅ Аккаунт уже привязан к вам"}
-                    if existing_user:
-                        existing_tid = existing_user.get('telegram_id')
-                        existing_username = existing_user.get('username') or existing_user.get('steam_nickname') or 'другой игрок'
-
-                        # Автоматически переносим Steam аккаунт на нового пользователя
-                        logger.info(f"Transferring Steam {steam_id} from user {existing_tid} to {telegram_id}")
-                        update_user_fields_batch(existing_tid, {"steam_id": None, "steam_nickname": None, "avatar": None}, update_top_cache=False)
-                        with user_cache._lock:
-                            if steam_id in user_cache._steam_index:
-                                del user_cache._steam_index[steam_id]
-
-                        if private_profile:
-                            return {
-                                "success": True,
-                                "message": f"⚠️ Steam аккаунт был привязан к {existing_username}\nАвтоматически перенесён на ваш аккаунт.\n\nВаш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику:\n⚠️ В игре: \nнастройки → сообщество → настройки → общедоступная история матчей → включить"
-                            }
-                        return {
-                            "success": True,
-                            "message": f"⚠️ Steam аккаунт был привязан к {existing_username}\nАвтоматически перенесён на ваш аккаунт.\nСтарые данные утрачены."
-                        }
-                except Exception:
-                    pass
+                existing_result = _handle_existing_binding(
+                    telegram_id, steam_id, {}, private_profile
+                )
+                if existing_result:
+                    return existing_result
 
                 if private_profile:
                     update_user_fields_batch(telegram_id, {
@@ -1350,108 +1451,56 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                         "rank_tier": 0,
                         "wins": 0,
                         "losses": 0,
-                        "week_start_date": datetime.now(UTC).date().isoformat()
+                        "week_start_date": datetime.now(UTC).date().isoformat(),
                     })
                     return {
                         "success": True,
-                        "message": "✅ Аккаунт привязан! Ваш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику:\n⚠️ В игре: \nнастройки → сообщество → настройки → общедоступная история матчей → включить"
+                        "message": "✅ Аккаунт привязан! Ваш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику:\n⚠️ В игре: \nнастройки → сообщество → настройки → общедоступная история матчей → включить",
                     }
-                update_user_fields_batch(telegram_id, {
-                    "steam_id": steam_id,
-                    "mmr": 0,
-                    "rank_tier": 0,
-                    "wins": 0,
-                    "losses": 0,
-                    "week_start_date": datetime.now(UTC).date().isoformat()
-                })
-                return {"success": True, "message": "✅ Аккаунт привязан! Статистика OpenDota временно недоступна для этого игрока. Попробуйте позже."}
-        else:
-            # иначе ищем по никнейму через OpenDota
-            logger.info(f"Searching player by nickname: {identifier}")
-            data = search_player(identifier)
-            logger.info(f"Search result: {data is not None}")
-            if not data:
-                return {"success": False, "message": "❌ Игрок с таким ником не найден\n\n💡 Попробуйте:\n• Использовать Steam ID вместо ника\n• Проверить правильность написания\n• Убедиться, что игрок играет в Dota 2"}
-            steam_id = data["steam_id"]
-            stats = data
-
-            private_profile_search = False
-            if stats:
-                total_games = stats.get("total_games") or 0
-                mmr = stats.get("mmr") or 0
-                if total_games == 0 and mmr == 0:
-                    private_profile_search = True
-
-            if private_profile_search:
-                update_user_fields_batch(telegram_id, {
-                    "steam_id": steam_id,
-                    "steam_nickname": stats.get("nickname"),
-                    "avatar": stats.get("avatar"),
-                    "mmr": 0,
-                    "rank_tier": 0,
-                    "wins": 0,
-                    "losses": 0,
-                    "week_start_date": datetime.now(UTC).date().isoformat()
-                })
                 return {
                     "success": True,
-                    "message": "✅ Аккаунт привязан! Ваш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику:\n⚠️ В игре: \nнастройки → сообщество → настройки → общедоступная история матчей → включить"
+                    "message": "✅ Аккаунт привязан! Статистика OpenDota временно недоступна для этого игрока. Попробуйте позже.",
                 }
 
-        # Проверяем, не привязан ли уже этот steam_id к другому аккаунту
-        from database import get_user, get_user_by_steam_id, update_user_fields_batch, user_cache
-        existing_user = get_user_by_steam_id(steam_id)
-        if existing_user and existing_user.get('telegram_id') != telegram_id:
-            existing_tid = existing_user.get('telegram_id')
-            existing_username = existing_user.get('username') or existing_user.get('steam_nickname') or 'другой игрок'
+            # Проверяем, не привязан ли уже этот steam_id к другому аккаунту
+            existing_user = get_user_by_steam_id(steam_id)
+            if existing_user and existing_user.get("telegram_id") != telegram_id:
+                existing_username = _transfer_existing_binding(telegram_id, steam_id, existing_user)
+                return {
+                    "success": True,
+                    "message": (
+                        f"⚠️ Steam аккаунт был привязан к {existing_username}\n"
+                        "Автоматически перенесён на ваш аккаунт.\n"
+                        "Старые данные утрачены."
+                    ),
+                }
 
-            # Автоматически переносим Steam аккаунт на нового пользователя
-            logger.info(f"Transferring Steam {steam_id} from user {existing_tid} to {telegram_id}")
+            return _apply_normal_binding(telegram_id, steam_id, stats)
 
-            # Удаляем steam_id у старого пользователя (раз-prивязываем)
-            update_user_fields_batch(existing_tid, {
-                "steam_id": None,
-                "steam_nickname": None,
-                "avatar": None,
-            }, update_top_cache=False)
-
-            # Обновляем reverse index в кеше
-            with user_cache._lock:
-                if steam_id in user_cache._steam_index:
-                    del user_cache._steam_index[steam_id]
-
+        # иначе ищем по никнейму через OpenDota
+        logger.info(f"Searching player by nickname: {identifier}")
+        data = search_player(identifier)
+        logger.info(f"Search result: {data is not None}")
+        if not data:
             return {
-                "success": True,
-                "message": f"⚠️ Steam аккаунт был привязан к {existing_username}\nАвтоматически перенесён на ваш аккаунт.\nСтарые данные утрачены."
+                "success": False,
+                "message": "❌ Игрок с таким ником не найден\n\n💡 Попробуйте:\n• Использовать Steam ID вместо ника\n• Проверить правильность написания\n• Убедиться, что игрок играет в Dota 2",
             }
 
-        # сохраняем все поля одним запросом
-        update_user_fields_batch(telegram_id, {
-            "steam_id": steam_id,
-            "steam_nickname": stats["nickname"],
-            "avatar": stats.get("avatar"),
-            "mmr": stats["mmr"],
-            "rank_tier": stats.get("rank_tier", 0),
-            "wins": stats.get("wins", 0),
-            "losses": stats.get("losses", 0),
-            "week_start_date": datetime.now(UTC).date().isoformat()
-        })
+        steam_id = data["steam_id"]
+        stats = data
+        private_profile_search = False
 
-        # Обновляем недельную статистику сразу после привязки
-        update_user_mmr(telegram_id)
+        if stats:
+            total_games = stats.get("total_games") or 0
+            mmr = stats.get("mmr") or 0
+            if total_games == 0 and mmr == 0:
+                private_profile_search = True
 
-        # Формируем строку ранга
-        rank_tier = stats.get("rank_tier", 0)
-        rank_str = rank_to_string(rank_tier)
-        wins = stats.get("wins", 0)
-        losses = stats.get("losses", 0)
-        total = wins + losses
-        winrate = round(stats.get("winrate", 0))
+        if private_profile_search:
+            return _apply_private_profile_binding(telegram_id, steam_id, stats)
 
-        return {
-            "success": True,
-            "message": f"✅ {stats['nickname']} | {rank_str}\n📊 {total} игр | ✅ {wins} | ❌ {losses} | {winrate}%"
-        }
+        return _apply_normal_binding(telegram_id, steam_id, stats)
 
     except Exception as e:
         logger.error(f"register error: {e}", exc_info=True)

@@ -532,7 +532,7 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @rate_limit(tokens=1)
-async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Еженедельная аналитика игрока"""
     await asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username)
     loading_msg = None
@@ -829,7 +829,7 @@ async def weekly_mmr_reset_job(context):
     except Exception as e:
         logger.error(f"weekly_mmr_reset_job: ошибка при сбросе статистики: {e}")
 
-async def announce_weekly_mmr_winner(bot):
+async def announce_weekly_mmr_winner(bot) -> None:
     """Отправляет поздравление победителю недельного топа MMR в воскресенье."""
     from datetime import datetime as dt
     MSK = timezone(timedelta(hours=3))
@@ -1143,7 +1143,7 @@ async def claim_or_check_weekly_leader():
     return is_leader
 
 
-async def update_all_mmr_job(context):
+async def update_all_mmr_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Ежечасовое обновление MMR всех пользователей с привязанным Steam (только в кеш)"""
     try:
         if not await claim_or_check_mmr_leader():
@@ -1329,7 +1329,7 @@ async def refresh_digest_message(bot):
 
 
 @rate_limit(tokens=1)
-async def dota_digest_job(context):
+async def dota_digest_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Dota дайджест - лучший/худший винрейт и стрик побед за неделю"""
     try:
         last_run = get_config('dota_digest_last_run')
@@ -1615,7 +1615,6 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command - show profile card"""
-    loading_msg = None
     chat_id = update.effective_chat.id if update.effective_chat else None
     try:
         if is_rate_limited():
@@ -1626,11 +1625,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             return
 
-        # Spam protection for /start command
         user_id = update.effective_user.id
         current_time = time.time()
 
-        # Periodic cleanup of stale entries (every ~100 calls)
         if len(_USER_START_COOLDOWN) > 100:
             await _cleanup_start_cooldown()
 
@@ -1642,215 +1639,194 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
         _USER_START_COOLDOWN[user_id] = current_time
 
-        user_id = update.effective_user.id
-        telegram_username = update.effective_user.username
-        first_name = update.effective_user.first_name or "Friend"
-        plain_username = telegram_username or first_name
-
-        # Получаем пользователя без авто-создания (wrapped in thread to avoid blocking event loop)
-        db_user = await asyncio.to_thread(get_user, user_id)
-        is_new_user = False
-
-        if db_user is None:
-            # Создаём нового пользователя с лучшим доступным именем
-            fallback_name = telegram_username or first_name or f"Player{user_id}"
-            db = Database()
-            db.register_user(user_id, fallback_name, first_name, source="start")
-            logger.info(f"Created new user {user_id} with name '{fallback_name}'")
-            is_new_user = True
-            user = await asyncio.to_thread(get_user, user_id)
-        else:
-            # Существующий пользователь — обновляем username если нужно
-            updates = {}
-            current_username = db_user.get('username')
-            if telegram_username and telegram_username != current_username:
-                updates['username'] = telegram_username
-            elif current_username is None and first_name and first_name != "Friend":
-                updates['username'] = first_name
-            if updates:
-                await asyncio.to_thread(update_user_fields_batch, user_id, updates)
-                logger.info(f"Updated user {user_id} fields: {updates}")
-            user = db_user
-
-        if is_new_user:
-            # Для нового пользователя отправляем приветственный баннер и возвращаемся
-            chat_id = update.effective_chat.id
-            banner_url = get_banner_path("cooldown")
-            text = "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
-            msg = await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=banner_url,
-                caption=text,
-                reply_markup=main_menu()
-            )
-            set_last_bot_message(chat_id, user_id, msg.message_id)
-            update_last_message_id(user_id, msg.message_id)
-            return
-
+        user = await _ensure_user_for_start(update, user_id)
         if not user:
-            logger.error(f"Failed to get/user {user_id}")
             return
 
-        steam_id = user.get("steam_id")
-        steam_nickname = user.get("steam_nickname")
-        rank_tier = user.get("rank_tier", 0)
-        message_count = user.get("message_count", 0)
-        logger.info(f"start: user {user_id} message_count from DB/cache = {message_count}")
+        if user.get("is_new"):
+            await _send_welcome_start(update, user_id, context)
+            return
 
-        chat_id = update.effective_chat.id
-        user_msg_id = update.message.message_id if update.message else None
-
-        # Delete user message
-        if user_msg_id and isinstance(user_msg_id, int) and user_msg_id > 0:
-            try:
-                await context.bot.delete_message(chat_id, user_msg_id)
-            except Exception as e:
-                if _telegram_error_contains(e, "not found", "bad request"):
-                    logger.debug(f"User message {user_msg_id} already deleted: {e}")
-                else:
-                    logger.debug(f"Could not delete user message {user_msg_id}: {e}")
-
-# Delete last bot message
-        try:
-            await delete_last_bot_message(context.bot, chat_id, user_id)
-        except Exception as e:
-            logger.debug(f"Could not delete last bot message in start: {e}")
-
-# Send loading message
-        try:
-            loading_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text="<b>🪝Хукаю...</b>",
-                parse_mode="HTML"
-            )
-            logger.info(f"Created loading message in start: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
-        except Exception as e:
-            logger.debug(f"Could not send loading message in start: {e}")
-            loading_msg = None
-
-        if steam_id and steam_nickname:
-            from dota_mmr import generate_start_card, get_player_stats, is_opendota_rate_limited
-
-            avatar_url = await get_user_avatar_url(context.bot, user_id)
-            if not avatar_url:
-                avatar_url = user.get("avatar")
-            if not avatar_url:
-                try:
-                    stats = await asyncio.wait_for(
-                        asyncio.to_thread(get_player_stats, steam_id, True, 8),
-                        timeout=12.0
-                    )
-                    if stats and stats.get("avatar"):
-                        avatar_url = stats["avatar"]
-                except Exception:
-                    pass
-
-            weekly_mvp = user.get('weekly_mvp') or 0
-            weekly_top2 = user.get('weekly_top2') or 0
-            weekly_top3 = user.get('weekly_top3') or 0
-
-            # Run blocking card generation in thread pool to avoid blocking event loop
-            card_data = await asyncio.to_thread(
-                generate_start_card,
-                avatar_url=avatar_url,
-                message_count=message_count,
-                username=plain_username,
-                steam_nickname=steam_nickname,
-                rank_tier=rank_tier,
-                weekly_mvp=weekly_mvp,
-                weekly_top2=weekly_top2,
-                weekly_top3=weekly_top3,
-                week_wins=None,
-                week_losses=None
-            )
-
-            if card_data:
-                name_display = make_clickable(plain_username, user_id)
-                text = f"👤 {name_display}"
-                msg = await context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=card_data,
-                    caption=text,
-                    parse_mode="HTML",
-                    reply_markup=main_menu()
-                )
-                set_last_bot_message(chat_id, user_id, msg.message_id)
-                update_last_message_id(user_id, msg.message_id)
-                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
-                if loading_msg:
-                    try:
-                        await context.bot.delete_message(chat_id, loading_msg.message_id)
-                    except Exception:
-                        pass
-                return
-            else:
-                await menu_handler(update, context)
-        else:
-            # No Steam - show card with Telegram avatar, no message count
-            from dota_mmr import generate_start_card
-
-            avatar_url = await get_user_avatar_url(context.bot, user_id)
-            if not avatar_url:
-                avatar_url = DEFAULT_AVATAR_URL
-
-            # Run blocking card generation in thread pool to avoid blocking event loop
-            card_data = await asyncio.to_thread(
-                generate_start_card,
-                avatar_url=avatar_url,
-                message_count=message_count,
-                username=plain_username,
-                steam_nickname=None,
-                rank_tier=0,
-                weekly_mvp=user.get('weekly_mvp') or 0,
-                weekly_top2=user.get('weekly_top2') or 0,
-                weekly_top3=user.get('weekly_top3') or 0,
-                week_wins=None,
-                week_losses=None
-            )
-
-        if card_data:
-            name_display = make_clickable(plain_username, user_id)
-            text = f"👤 {name_display}"
-            msg = await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=card_data,
-                caption=text,
-                parse_mode="HTML",
-                reply_markup=main_menu()
-            )
-            set_last_bot_message(chat_id, user_id, msg.message_id)
-            update_last_message_id(user_id, msg.message_id)
-            schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
-        else:
-            await menu_handler(update, context)
-        if loading_msg:
-                try:
-                    await context.bot.delete_message(chat_id, loading_msg.message_id)
-                except Exception:
-                    pass
+        await _send_profile_card(update, user_id, context)
 
     except Exception as e:
         error_str = str(e).lower()
         if _telegram_error_contains(e, "flood control", "429", "too many requests"):
             retry_after = 60
-            import re
             match = re.search(r'retry in (\d+) seconds', error_str)
             if match:
                 retry_after = int(match.group(1)) + 5
             set_rate_limited(retry_after)
-        logger.error(f"start command error: {e}")
-        if loading_msg:
-            try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-            except Exception:
-                pass
+        logger.error(f"start command error: {e}", exc_info=True)
         await menu_handler(update, context, allow_when_rate_limited=True)
-    finally:
-        pass
+
+
+async def _ensure_user_for_start(update: Update, user_id: int) -> dict | None:
+    telegram_username = update.effective_user.username
+    first_name = update.effective_user.first_name or "Friend"
+    plain_username = telegram_username or first_name
+
+    db_user = await asyncio.to_thread(get_user, user_id)
+    if db_user is None:
+        fallback_name = telegram_username or first_name or f"Player{user_id}"
+        db = Database()
+        db.register_user(user_id, fallback_name, first_name, source="start")
+        logger.info(f"Created new user {user_id} with name '{fallback_name}'")
+        user = await asyncio.to_thread(get_user, user_id)
+        if user:
+            user["is_new"] = True
+        return user
+
+    updates = {}
+    current_username = db_user.get("username")
+    if telegram_username and telegram_username != current_username:
+        updates["username"] = telegram_username
+    elif current_username is None and first_name and first_name != "Friend":
+        updates["username"] = first_name
+    if updates:
+        await asyncio.to_thread(update_user_fields_batch, user_id, updates)
+        logger.info(f"Updated user {user_id} fields: {updates}")
+
+    user = dict(db_user)
+    user["is_new"] = False
+    return user
+
+
+async def _send_welcome_start(update: Update, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    banner_url = get_banner_path("cooldown")
+    text = "👉 Ты в игре — крути фиссуру, чекай топы, подключай Dota и докажи, что ты тут не случайно."
+    msg = await context.bot.send_photo(
+        chat_id=chat_id,
+        photo=banner_url,
+        caption=text,
+        reply_markup=main_menu()
+    )
+    set_last_bot_message(chat_id, user_id, msg.message_id)
+    update_last_message_id(user_id, msg.message_id)
+
+
+async def _send_profile_card(update: Update, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = await asyncio.to_thread(get_user, user_id)
+    if not user:
+        logger.error(f"Failed to get user {user_id}")
+        return
+
+    chat_id = update.effective_chat.id
+    user_msg_id = update.message.message_id if update.message else None
+
+    if user_msg_id and isinstance(user_msg_id, int) and user_msg_id > 0:
+        try:
+            await context.bot.delete_message(chat_id, user_msg_id)
+        except Exception as e:
+            if _telegram_error_contains(e, "not found", "bad request"):
+                logger.debug(f"User message {user_msg_id} already deleted: {e}")
+            else:
+                logger.debug(f"Could not delete user message {user_msg_id}: {e}")
+
+    try:
+        await delete_last_bot_message(context.bot, chat_id, user_id)
+    except Exception as e:
+        logger.debug(f"Could not delete last bot message in start: {e}")
+
+    loading_msg = None
+    try:
+        loading_msg = await context.bot.send_message(
+            chat_id=chat_id,
+            text="<b>🪝Хукаю...</b>",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.debug(f"Could not send loading message in start: {e}")
+
+    steam_id = user.get("steam_id")
+    steam_nickname = user.get("steam_nickname")
+    plain_username = update.effective_user.username or update.effective_user.first_name or "Friend"
+    rank_tier = user.get("rank_tier", 0)
+    message_count = user.get("message_count", 0)
+
+    card_data = None
+    if steam_id and steam_nickname:
+        avatar_url = await _resolve_start_avatar(user, context.bot, user_id)
+        weekly_mvp = user.get("weekly_mvp") or 0
+        weekly_top2 = user.get("weekly_top2") or 0
+        weekly_top3 = user.get("weekly_top3") or 0
+
+        card_data = await asyncio.to_thread(
+            generate_start_card,
+            avatar_url=avatar_url,
+            message_count=message_count,
+            username=plain_username,
+            steam_nickname=steam_nickname,
+            rank_tier=rank_tier,
+            weekly_mvp=weekly_mvp,
+            weekly_top2=weekly_top2,
+            weekly_top3=weekly_top3,
+            week_wins=None,
+            week_losses=None,
+        )
+    else:
+        avatar_url = await get_user_avatar_url(context.bot, user_id)
+        if not avatar_url:
+            avatar_url = DEFAULT_AVATAR_URL
+
+        card_data = await asyncio.to_thread(
+            generate_start_card,
+            avatar_url=avatar_url,
+            message_count=message_count,
+            username=plain_username,
+            steam_nickname=None,
+            rank_tier=0,
+            weekly_mvp=user.get("weekly_mvp") or 0,
+            weekly_top2=user.get("weekly_top2") or 0,
+            weekly_top3=user.get("weekly_top3") or 0,
+            week_wins=None,
+            week_losses=None,
+        )
+
+    if card_data:
+        name_display = make_clickable(plain_username, user_id)
+        text = f"👤 {name_display}"
+        msg = await context.bot.send_photo(
+            chat_id=chat_id,
+            photo=card_data,
+            caption=text,
+            parse_mode="HTML",
+            reply_markup=main_menu()
+        )
+        set_last_bot_message(chat_id, user_id, msg.message_id)
+        update_last_message_id(user_id, msg.message_id)
+        schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
+    else:
+        await menu_handler(update, context)
+
+    if loading_msg:
+        try:
+            await context.bot.delete_message(chat_id, loading_msg.message_id)
+        except Exception:
+            pass
+
+
+async def _resolve_start_avatar(user: dict, bot, user_id: int) -> str:
+    steam_id = user.get("steam_id")
+    avatar_url = await get_user_avatar_url(bot, user_id)
+    if not avatar_url:
+        avatar_url = user.get("avatar")
+    if not avatar_url:
+        try:
+            stats = await asyncio.wait_for(
+                asyncio.to_thread(get_player_stats, steam_id, True, 8),
+                timeout=12.0
+            )
+            if stats and stats.get("avatar"):
+                avatar_url = stats["avatar"]
+        except Exception:
+            pass
+    return avatar_url or DEFAULT_AVATAR_URL
 
 
 @rate_limit(tokens=1)
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle button callbacks with pagination support for analytics."""
     callback_query = update.callback_query
     if not callback_query:
@@ -2142,7 +2118,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await callback_query.answer(text="Ошибка при обработке кнопки", show_alert=True)
 
 
-async def _show_analytics_page(callback_query, page_idx: int, context: ContextTypes.DEFAULT_TYPE, loading_msg=None):
+async def _show_analytics_page(callback_query, page_idx: int, context: ContextTypes.DEFAULT_TYPE, loading_msg=None) -> None:
     """Send a new message with analytics table when button is pressed.
     
     Pages are generated lazily — only when the user actually navigates to them.
@@ -2546,7 +2522,6 @@ async def obs_last5_handler(request):
 
 @rate_limit(tokens=1)
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     """Show stats — свой или чужой профиль: /profile или /profile @username"""
     logger.info(f"User {update.effective_user.id} called stats")
 
@@ -2555,7 +2530,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     loading_msg = None
 
-    # Delete user message only in groups/channels if bot has permissions
     if chat_type in ['group', 'supergroup', 'channel']:
         if await bot_can_delete(context.bot, chat_id):
             user_msg_id = update.message.message_id
@@ -2564,170 +2538,51 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.debug(f"Could not delete user message: {e}")
 
-    # Delete last bot message immediately
     try:
         await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
     except Exception as e:
         logger.debug(f"Could not delete last bot message: {e}")
 
     try:
-        # Определяем: свой профиль или чужой
-        target_user = None
-        viewing_other = False
+        target_user, viewing_other = await _resolve_profile_target(update, context)
+        if target_user is None:
+            return
+
+        user_id = target_user.get("telegram_id") or update.effective_user.id
+        try:
+            loading_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text="<b>🪝Хукаю...</b>",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.debug(f"Could not send loading message: {e}")
 
         last_10_balls = ""
-        top_heroes = []
-        matches = []
-
-        if context.args and context.args[0]:
-            # /profile @username, /profile username или /profile <steam ник (в т.ч. с пробелами)
-            target_username = " ".join(context.args).lstrip("@")
-            if target_username:
-                target_user = await asyncio.to_thread(get_user_by_username, target_username)
-                if not target_user:
-                    msg = await context.bot.send_message(
-                        chat_id=chat_id,
-                        text=f"❌ Игрок @{target_username} не найден"
-                    )
-                    schedule_delete(context.bot, chat_id, msg.message_id, 15, context.job_queue)
-                    return
-                viewing_other = True
-
-        if not target_user:
-            user_obj = update.effective_user
-            username = user_obj.username or user_obj.first_name or f"Player{user_obj.id}"
-            target_user = await asyncio.to_thread(get_user, user_obj.id, username)
-
-            try:
-                loading_msg = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text="<b>🪝Хукаю...</b>",
-                    parse_mode="HTML"
-                )
-                logger.info(f"Created loading message: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
-            except Exception as e:
-                logger.debug(f"Could not send loading message: {e}")
-                loading_msg = None
-
-        last_fissure_time = target_user.get("last_fissure")
-        if last_fissure_time is not None:
-            now = time.time()
-            time_since_last = now - last_fissure_time
-            remaining_cooldown = max(0, COOLDOWN - time_since_last)
-        else:
-            remaining_cooldown = 0
-
-        if remaining_cooldown > 0:
-            pass
-        else:
-            pass
-
-        # Форматируем username как кликабельную ссылку
-        if viewing_other:
-            target_id = target_user.get('telegram_id', 0)
-            _uname = target_user.get('username')
-            if not _uname or _uname == "Unknown":
-                _uname = target_user.get('steam_nickname')
-            target_name = _uname or 'Unknown'
-        else:
-            user_obj = update.effective_user
-            target_id = user_obj.id
-            target_name = user_obj.username or user_obj.first_name
-        display_username = make_clickable(target_name, target_id)
-
-        steam_id = target_user.get('steam_id')
-
-        # MMR update removed - rank_tier is now primary metric
-        # Users can refresh manually via /refreshmmr command
-
-        if steam_id:
-            text = (
-                f"👑 {display_username} "
-                f"🔗 <a href=\"https://steamcommunity.com/profiles/{steam_id}\">Steam</a> "
-                f"🔗 <a href=\"https://www.dotabuff.com/players/{steam_id}\">DotaBuff</a>"
-            )
-        else:
-            text = f"👑 {display_username}"
-
-        text += f"\n\n🍆 Фиссура: {target_user.get('fissure', 0):.1f} см\n🎲 Броски: {target_user.get('total_rolls', 0)} 🍀Стрик: {target_user.get('current_streak', 0)}/{target_user.get('best_streak', 0)}"
-
-        tags_text = format_user_tags(target_user.get('telegram_id'))
-        if tags_text:
-            text += f"\n\n🏷️ <b>Теги</b>\n{tags_text}"
-
-        mvp_count = target_user.get('weekly_mvp') or 0
-        top2_count = target_user.get('weekly_top2') or 0
-        top3_count = target_user.get('weekly_top3') or 0
-        if mvp_count or top2_count or top3_count:
-            text += "\n\n✨ <b>Награды недели</b>"
-            if mvp_count:
-                text += f"\n🏆 MVP недели ×<b>{mvp_count}</b>"
-            if top2_count:
-                text += f"\n🥈 Топ-2 MMR ×<b>{top2_count}</b>"
-            if top3_count:
-                text += f"\n🥉 Топ-3 MMR ×<b>{top3_count}</b>"
-
-        # Dota stats (без стрика)
         week_games = 0
         week_wins = 0
+        week_losses = 0
+        winrate = 0
+
         if target_user.get('steam_id'):
             week_games = target_user.get('week_games') or 0
             week_wins = target_user.get('week_wins') or 0
             week_losses = week_games - week_wins
             winrate = round(week_wins / week_games * 100) if week_games > 0 else 0
-            logger.info(f"stats: profile week stats uid={target_user.get('telegram_id')} steam={target_user.get('steam_id')} week_games={week_games} week_wins={week_wins} week_losses={week_losses} winrate={winrate}")
+            last_10_balls = await _fetch_last_10_balls(target_user.get('steam_id'), week_games)
 
-            try:
-                from dota_mmr import get_recent_matches_async
-                steam_id = target_user.get('steam_id')
+        text = _build_profile_text(
+            target_user,
+            update.effective_user,
+            viewing_other,
+            last_10_balls,
+            week_games,
+            week_wins,
+            week_losses,
+            winrate,
+        )
 
-                if steam_id:
-                    try:
-                        matches = await asyncio.wait_for(
-                            get_recent_matches_async(steam_id, limit=20),
-                            timeout=20.0
-                        )
-                        logger.info(f"Steam {steam_id}: got {len(matches)} matches")
-                    except TimeoutError:
-                        logger.warning(f"Timeout getting matches for steam_id={steam_id}, using cache/default")
-                        matches = []
-                    except Exception as e:
-                        logger.warning(f"Could not get matches: {e}")
-                        matches = []
-
-                    matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)
-                    week_match_count = min(len(matches), week_games)
-                    matches = matches[:week_match_count]
-                    for match in matches:
-                        player_slot = match.get('player_slot')
-                        radiant_win = match.get('radiant_win', False)
-                        player_was_radiant = player_slot < 128 if player_slot is not None else True
-                        is_win = (radiant_win and player_was_radiant) or (not radiant_win and not player_was_radiant)
-                        last_10_balls += "🟢" if is_win else "🔴"
-                    if last_10_balls:
-                        last_10_balls = last_10_balls.replace("🟢", "🟢\u200d").replace("🔴", "🔴\u200d")
-            except Exception as e:
-                logger.debug(f"Could not get last matches: {e}")
-
-            text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%"
-
-        # Banner URL — analytics chart for Steam users, static profile otherwise
-        profile_banner_url = get_banner_path("profile")
-        if target_user.get('steam_id'):
-            try:
-                from weekly_analytics import generate_chart_only
-                chart_data = await asyncio.wait_for(
-                    generate_chart_only(target_user.get('telegram_id')),
-                    timeout=15.0
-                )
-                if chart_data and chart_data.get("image"):
-                    profile_banner_url = io.BytesIO(chart_data["image"])
-                    profile_banner_url.name = "profile_analytics.png"
-                    logger.info(f"Using analytics chart for profile uid={target_user.get('telegram_id')}")
-                else:
-                    logger.info(f"No analytics chart for profile uid={target_user.get('telegram_id')}, using default banner")
-            except Exception as e:
-                logger.debug(f"Could not generate profile analytics chart: {e}")
+        profile_banner_url = await _resolve_profile_banner(target_user)
 
         result_msg = await context.bot.send_photo(
             chat_id=update.effective_chat.id,
@@ -2744,12 +2599,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
 
-        set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
+        set_last_bot_message(chat_id, user_id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
-        update_last_message_id(update.effective_user.id, result_msg.message_id)
+        update_last_message_id(user_id, result_msg.message_id)
 
     except TimeoutError as e:
-        logger.error(f"Timeout in stats: {e}")
+        logger.error(f"Timeout in stats: {e}", exc_info=True)
         try:
             result_msg = await context.bot.send_message(
                 chat_id=chat_id,
@@ -2778,8 +2633,142 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
 
+async def _resolve_profile_target(update: Update, context: ContextTypes.DEFAULT_TYPE) -> tuple[dict | None, bool]:
+    chat_id = update.effective_chat.id
+    target_user = None
+    viewing_other = False
+
+    if context.args and context.args[0]:
+        target_username = " ".join(context.args).lstrip("@")
+        if target_username:
+            target_user = await asyncio.to_thread(get_user_by_username, target_username)
+            if not target_user:
+                msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"❌ Игрок @{target_username} не найден"
+                )
+                schedule_delete(context.bot, chat_id, msg.message_id, 15, context.job_queue)
+                return None, False
+            viewing_other = True
+
+    if not target_user:
+        user_obj = update.effective_user
+        username = user_obj.username or user_obj.first_name or f"Player{user_obj.id}"
+        target_user = await asyncio.to_thread(get_user, user_obj.id, username)
+
+    return target_user, viewing_other
+
+
+async def _fetch_last_10_balls(steam_id: int, week_games: int) -> str:
+    from dota_mmr import get_recent_matches_async
+
+    last_10_balls = ""
+    try:
+        matches = await asyncio.wait_for(
+            get_recent_matches_async(steam_id, limit=20),
+            timeout=20.0
+        )
+        logger.info(f"Steam {steam_id}: got {len(matches)} matches")
+
+        matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)
+        week_match_count = min(len(matches), week_games)
+        matches = matches[:week_match_count]
+        for match in matches:
+            player_slot = match.get('player_slot')
+            radiant_win = match.get('radiant_win', False)
+            player_was_radiant = player_slot < 128 if player_slot is not None else True
+            is_win = (radiant_win and player_was_radiant) or (not radiant_win and not player_was_radiant)
+            last_10_balls += "🟢" if is_win else "🔴"
+        if last_10_balls:
+            last_10_balls = last_10_balls.replace("🟢", "🟢\u200d").replace("🔴", "🔴\u200d")
+    except TimeoutError:
+        logger.warning(f"Timeout getting matches for steam_id={steam_id}, using cache/default")
+    except Exception as e:
+        logger.debug(f"Could not get last matches: {e}")
+
+    return last_10_balls
+
+
+def _build_profile_text(
+    target_user: dict,
+    effective_user,
+    viewing_other: bool,
+    last_10_balls: str,
+    week_games: int,
+    week_wins: int,
+    week_losses: int,
+    winrate: int,
+) -> str:
+    if viewing_other:
+        target_id = target_user.get('telegram_id', 0)
+        _uname = target_user.get('username')
+        if not _uname or _uname == "Unknown":
+            _uname = target_user.get('steam_nickname')
+        target_name = _uname or 'Unknown'
+    else:
+        target_id = effective_user.id
+        target_name = effective_user.username or effective_user.first_name
+    display_username = make_clickable(target_name, target_id)
+
+    steam_id = target_user.get('steam_id')
+
+    if steam_id:
+        text = (
+            f"👑 {display_username} "
+            f"🔗 <a href=\"https://steamcommunity.com/profiles/{steam_id}\">Steam</a> "
+            f"🔗 <a href=\"https://www.dotabuff.com/players/{steam_id}\">DotaBuff</a>"
+        )
+    else:
+        text = f"👑 {display_username}"
+
+    text += f"\n\n🍆 Фиссура: {target_user.get('fissure', 0):.1f} см\n🎲 Броски: {target_user.get('total_rolls', 0)} 🍀Стрик: {target_user.get('current_streak', 0)}/{target_user.get('best_streak', 0)}"
+
+    tags_text = format_user_tags(target_user.get('telegram_id'))
+    if tags_text:
+        text += f"\n\n🏷️ <b>Теги</b>\n{tags_text}"
+
+    mvp_count = target_user.get('weekly_mvp') or 0
+    top2_count = target_user.get('weekly_top2') or 0
+    top3_count = target_user.get('weekly_top3') or 0
+    if mvp_count or top2_count or top3_count:
+        text += "\n\n✨ <b>Награды недели</b>"
+        if mvp_count:
+            text += f"\n🏆 MVP недели ×<b>{mvp_count}</b>"
+        if top2_count:
+            text += f"\n🥈 Топ-2 MMR ×<b>{top2_count}</b>"
+        if top3_count:
+            text += f"\n🥉 Топ-3 MMR ×<b>{top3_count}</b>"
+
+    if steam_id:
+        text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%"
+        if last_10_balls:
+            text += f"\n{last_10_balls}"
+
+    return text
+
+
+async def _resolve_profile_banner(target_user: dict) -> str | io.BytesIO:
+    profile_banner_url = get_banner_path("profile")
+    if target_user.get('steam_id'):
+        try:
+            from weekly_analytics import generate_chart_only
+            chart_data = await asyncio.wait_for(
+                generate_chart_only(target_user.get('telegram_id')),
+                timeout=15.0
+            )
+            if chart_data and chart_data.get("image"):
+                profile_banner_url = io.BytesIO(chart_data["image"])
+                profile_banner_url.name = "profile_analytics.png"
+                logger.info(f"Using analytics chart for profile uid={target_user.get('telegram_id')}")
+            else:
+                logger.info(f"No analytics chart for profile uid={target_user.get('telegram_id')}, using default banner")
+        except Exception as e:
+            logger.debug(f"Could not generate profile analytics chart: {e}")
+    return profile_banner_url
+
+
 @rate_limit(tokens=1)
-async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show top users"""
     logger.info(f"User {update.effective_user.id} called top")
 
@@ -2971,7 +2960,7 @@ async def testtechies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @rate_limit(tokens=1)
-async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Топ игроков по MMR за неделю"""
     logger.info(f"User {update.effective_user.id} called topmmr")
 
@@ -3234,7 +3223,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @rate_limit(tokens=1)
-async def link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Привязка Steam аккаунта по нику или Steam ID"""
     logger.info(f"User {update.effective_user.id} called link")
 
@@ -3639,7 +3628,7 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Небольшая задержка для обеспечения видимости сообщения
     await asyncio.sleep(0.1)
 
-async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow_when_rate_limited=False):
+async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow_when_rate_limited: bool = False) -> None:
     """Menu button handler - sends new content, deletes user message and old bot message immediately"""
     # Skip if this is a callback query (handled by button_callback)
     if update.callback_query:
@@ -3876,7 +3865,7 @@ def setup_health_check(bot):
     health_check_handler = check
 
 
-async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Welcome new chat member"""
     try:
         chat_update = update.chat_member or update.my_chat_member
