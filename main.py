@@ -285,7 +285,7 @@ async def cleanup_left_users_job(context):
 
 async def verify_chat_membership_job(context):
     """Лёгкая постепенная проверка — без нагрузки на БД и Telegram.
-    Раз в ~12 часов проверяем только небольшую порцию (35) самых "холодных" пользователей.
+    Раз в 6 часов проверяем порцию (100) самых "холодных" пользователей.
     """
     try:
         from database import get_connection, get_db_type, release_connection, set_user_in_chat
@@ -294,7 +294,7 @@ async def verify_chat_membership_job(context):
         if not digest_chat_id:
             return
 
-        # Берём очень маленькую порцию — старых по last_activity
+        # Берём небольшую порцию — старых по last_activity
         conn = get_connection()
         cursor = conn.cursor()
         db_type = get_db_type()
@@ -303,14 +303,14 @@ async def verify_chat_membership_job(context):
                 SELECT telegram_id FROM users
                 WHERE in_chat = TRUE
                 ORDER BY last_activity ASC NULLS FIRST
-                LIMIT 35
+                LIMIT 100
             """)
         else:
             cursor.execute("""
                 SELECT telegram_id FROM users
                 WHERE in_chat = 1
                 ORDER BY last_activity ASC
-                LIMIT 35
+                LIMIT 100
             """)
         candidates = [row[0] for row in cursor.fetchall()]
         cursor.close()
@@ -4167,10 +4167,10 @@ async def main():
         )
 
         # Лёгкая проверка членства в чате (без нагрузки)
-        # Раз в 12 часов проверяем только 35 самых "старых" пользователей
+        # Раз в 6 часов проверяем порцию (100) самых "старых" пользователей
         job_queue.run_repeating(
             verify_chat_membership_job,
-            interval=datetime.timedelta(hours=12),
+            interval=datetime.timedelta(hours=6),
             first=datetime.timedelta(hours=2),   # первый запуск через 2 часа после старта
         )
 

@@ -2532,6 +2532,13 @@ def set_user_in_chat(telegram_id: int, in_chat: bool):
         # Сбрасываем кеш топов
         top_cache.invalidate_top_cache()
         user_cache.delete('dota_digest_stats')  # Invalidate dota digest cache
+        # Invalidate week top DB cache
+        try:
+            from main import get_dota_week_top_from_db
+            if hasattr(get_dota_week_top_from_db, '_cache'):
+                get_dota_week_top_from_db._cache = {}
+        except Exception:
+            pass
         logger.info(f"set_user_in_chat: telegram_id={telegram_id}, in_chat={in_chat}")
     except Exception as e:
         logger.error(f"set_user_in_chat error: {e}")
@@ -2562,6 +2569,13 @@ def delete_user(telegram_id: int):
         # Clean steam index entry for this user
         with user_cache._lock:
             user_cache._steam_index = {sid: tid for sid, tid in list(user_cache._steam_index.items()) if tid != telegram_id}
+        # Invalidate week top DB cache
+        try:
+            from main import get_dota_week_top_from_db
+            if hasattr(get_dota_week_top_from_db, '_cache'):
+                get_dota_week_top_from_db._cache = {}
+        except Exception:
+            pass
         logger.info(f"delete_user: telegram_id={telegram_id}")
         return True
     except Exception as e:
@@ -2579,7 +2593,7 @@ def cleanup_left_users():
         cursor = conn.cursor()
         scheme = get_db_type()
 
-        # Disable users who left more than 7 days ago, but NEVER disable users with Steam
+        # Disable users who left more than 7 days ago, regardless of Steam status
         if "postgres" in scheme:
             cursor.execute("""
                 UPDATE users 
@@ -2587,7 +2601,6 @@ def cleanup_left_users():
                     fissure = 0.1, 
                     last_fissure = 0
                 WHERE in_chat = TRUE 
-                AND steam_id IS NULL
                 AND last_activity < CURRENT_TIMESTAMP - INTERVAL '7 days'
             """)
         else:
@@ -2597,7 +2610,6 @@ def cleanup_left_users():
                     fissure = 0.1, 
                     last_fissure = 0
                 WHERE (in_chat = 1 OR in_chat IS NULL)
-                AND steam_id IS NULL
                 AND last_activity < datetime('now', '-7 days')
             """)
         disabled = cursor.rowcount
@@ -2609,7 +2621,14 @@ def cleanup_left_users():
             user_cache.delete('digest_stats')
             user_cache.delete('dota_week_top')
             user_cache.delete('weekly_digest_stats')
-        logger.info(f"cleanup_left_users: disabled {disabled} inactive users (no Steam, no activity 7 days)")
+            # Invalidate week top DB cache
+            try:
+                from main import get_dota_week_top_from_db
+                if hasattr(get_dota_week_top_from_db, '_cache'):
+                    get_dota_week_top_from_db._cache = {}
+            except Exception:
+                pass
+        logger.info(f"cleanup_left_users: disabled {disabled} inactive users (no activity 7 days)")
         return disabled
     except Exception as e:
         logger.error(f"cleanup_left_users error: {e}")
