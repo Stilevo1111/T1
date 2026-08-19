@@ -1712,6 +1712,8 @@ async def _send_profile_card(update: Update, user_id: int, context: ContextTypes
         logger.error(f"Failed to get user {user_id}")
         return
 
+    from dota_mmr import generate_start_card
+
     chat_id = update.effective_chat.id
     user_msg_id = update.message.message_id if update.message else None
 
@@ -1808,16 +1810,15 @@ async def _send_profile_card(update: Update, user_id: int, context: ContextTypes
 
 
 async def _resolve_start_avatar(user: dict, bot, user_id: int) -> str:
+    from dota_mmr import get_player_stats
+
     steam_id = user.get("steam_id")
     avatar_url = await get_user_avatar_url(bot, user_id)
     if not avatar_url:
         avatar_url = user.get("avatar")
     if not avatar_url:
         try:
-            stats = await asyncio.wait_for(
-                asyncio.to_thread(get_player_stats, steam_id, True, 8),
-                timeout=12.0
-            )
+            stats = await asyncio.to_thread(get_player_stats, steam_id, True, 8)
             if stats and stats.get("avatar"):
                 avatar_url = stats["avatar"]
         except Exception:
