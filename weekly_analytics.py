@@ -1432,12 +1432,11 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         zorder=3
     )
 
-    x = np.arange(1, len(raw_impacts) + 1)
-
     if len(raw_impacts) >= 3:
+        x = np.arange(1, len(raw_impacts) + 1)
         trend_x = np.linspace(1, len(raw_impacts), 100)
         trend_coef = np.polyfit(x, raw_impacts, 1)
-        trend_y = trend_coef[0] * trend_x + trend_coef[1]
+        trend_y = np.clip(trend_coef[0] * trend_x + trend_coef[1], 0, 2)
 
         ax.plot(
             trend_x,
@@ -1476,10 +1475,10 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         ax.scatter(
             xi,
             yi,
-            s=350,
+            s=200,
             color=border,
             edgecolors="#ffffff",
-            linewidths=5,
+            linewidths=4,
             zorder=6,
             joinstyle='round'
         )
@@ -1487,7 +1486,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         ax.scatter(
             xi,
             yi,
-            s=2800,
+            s=1500,
             color=glow,
             alpha=0.18,
             zorder=5
@@ -1512,12 +1511,12 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
         imagebox = OffsetImage(
             hero_img,
-            zoom=0.82
+            zoom=0.65
         )
 
         ab = AnnotationBbox(
             imagebox,
-            (idx + 1, imp),
+            (idx + 1, max(imp - 0.12, 0.08)),
             frameon=True,
             bboxprops=dict(
                 edgecolor=border,
@@ -1534,8 +1533,8 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
         ax.scatter(
             idx + 1,
-            imp,
-            s=2200,
+            max(imp - 0.12, 0.08),
+            s=1500,
             color=glow,
             alpha=0.18,
             zorder=8
