@@ -372,11 +372,9 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         drop_steam_id = stats.get("top_drop_steam_id")
         streak_steam_id = stats.get("top_streak_steam_id")
 
-        # Show clickable link if we have either telegram_id OR steam_id
-        # Use username for t.me link format if available
-        growth_display = clickable_name(growth_username or growth_player, growth_id, growth_steam_id) if growth_id or growth_steam_id else html.escape(growth_username or growth_player or "—")
-        drop_display = clickable_name(drop_username or drop_player, drop_id, drop_steam_id) if drop_id or drop_steam_id else html.escape(drop_username or drop_player or "—")
-        streak_display = clickable_name(streak_username or streak_player, streak_id, streak_steam_id) if streak_id or streak_steam_id else html.escape(streak_username or streak_player or "—")
+        growth_display = clickable_name(growth_username or growth_player, growth_id, growth_steam_id)
+        drop_display = clickable_name(drop_username or drop_player, drop_id, drop_steam_id)
+        streak_display = clickable_name(streak_username or streak_player, streak_id, streak_steam_id)
 
         parts.append(f"🔺{growth_display} +{growth_pos} см\n" if growth_pos > 0 else "🔺—\n")
         parts.append(f"🔻{drop_display} -{abs(drop_cm):.0f} см\n" if drop_cm < 0 else "🔻—\n")

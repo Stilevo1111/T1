@@ -1395,30 +1395,26 @@ class Database:
                 release_connection(conn)
 
     def add_user(self, telegram_id, username=None, first_name=None, last_name=None):
-        """Добавить нового пользователя или обновить существующим"""
+        """Legacy: добавление пользователя. Используйте register_user() для новых мест."""
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
         db_type = get_db_type()
         
         try:
             if "postgres" in scheme:
-                # First check if user exists
                 existing = self.execute_query("SELECT telegram_id FROM users WHERE telegram_id = %s", (telegram_id,), fetch="one")
                 if existing:
-                    # Update existing user
                     self.execute_query(
                         "UPDATE users SET username = %s, first_name = %s, in_chat = TRUE, last_activity = CURRENT_TIMESTAMP WHERE telegram_id = %s",
                         (username, first_name, telegram_id)
                     )
                 else:
-                    # Insert new user
                     self.execute_query(
                         "INSERT INTO users (telegram_id, username, first_name, fissure, created_at, in_chat) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, TRUE)",
                         (telegram_id, username, first_name, 0.1)
                     )
                 return telegram_id
             else:
-                # SQLite - INSERT with ON CONFLICT DO UPDATE works fine
                 self.execute_query(
                     "INSERT INTO users (telegram_id, username, first_name, fissure, created_at, in_chat) VALUES (?, ?, ?, ?, datetime('now'), 1) ON CONFLICT(telegram_id) DO UPDATE SET username = COALESCE(username, excluded.username), first_name = COALESCE(first_name, excluded.first_name), in_chat = 1",
                     (telegram_id, username, first_name, 0.1)
@@ -1440,6 +1436,105 @@ class Database:
             
             logger.error(f"Error adding user: {error_msg} (type={error_type}, db_type={db_type}, telegram_id={telegram_id}, username={username})")
             return None
+
+    @staticmethod
+    def _normalize_telegram_id(tid):
+        if tid is None:
+            return None
+        if isinstance(tid, str):
+            try:
+                tid = int(tid)
+            except Exception:
+                return None
+        if isinstance(tid, int) and tid > 0:
+            return tid
+        return None
+
+    def register_user(self, telegram_id, username=None, first_name=None, last_name=None, source="unknown"):
+        tid = self._normalize_telegram_id(telegram_id)
+        if not tid:
+            logger.warning(f"register_user: invalid telegram_id={telegram_id} from {source}")
+            return None
+
+        safe_username = (username or first_name or "").strip() if (username or first_name) else None
+        safe_first_name = (first_name or "").strip() if first_name else None
+        
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        db_type = get_db_type()
+
+        try:
+            if "postgres" in scheme:
+                existing = self.execute_query("SELECT telegram_id, username, first_name FROM users WHERE telegram_id = %s", (tid,), fetch="one")
+                if existing:
+                    updates = []
+                    params = []
+                    if safe_username and existing.get("username") != safe_username:
+                        updates.append("username = %s")
+                        params.append(safe_username)
+                    if safe_first_name and existing.get("first_name") != safe_first_name:
+                        updates.append("first_name = %s")
+                        params.append(safe_first_name)
+                    if updates:
+                        params.append(tid)
+                        self.execute_query(f"UPDATE users SET {', '.join(updates)}, last_activity = CURRENT_TIMESTAMP WHERE telegram_id = %s", tuple(params))
+                else:
+                    self.execute_query(
+                        "INSERT INTO users (telegram_id, username, first_name, fissure, created_at, in_chat, last_activity) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, TRUE, CURRENT_TIMESTAMP)",
+                        (tid, safe_username, safe_first_name, 0.1)
+                    )
+                return tid
+            else:
+                self.execute_query(
+                    "INSERT INTO users (telegram_id, username, first_name, fissure, created_at, in_chat, last_activity) VALUES (?, ?, ?, ?, datetime('now'), 1, datetime('now')) ON CONFLICT(telegram_id) DO UPDATE SET username = COALESCE(?, excluded.username), first_name = COALESCE(?, excluded.first_name), last_activity = datetime('now')",
+                    (tid, safe_username, safe_first_name, 0.1, safe_username, safe_first_name)
+                )
+                return tid
+        except Exception as e:
+            logger.error(f"register_user error: {e} (telegram_id={tid}, source={source})", exc_info=True)
+            return None
+
+    def repair_missing_telegram_ids(self):
+        url = urlparse.urlparse(DATABASE_URL)
+        scheme = url.scheme
+        db_type = get_db_type()
+        repaired = 0
+
+        try:
+            if "postgres" in scheme:
+                candidates = self.execute_query("""
+                    SELECT id, telegram_id, username, first_name
+                    FROM users
+                    WHERE telegram_id IS NULL
+                       OR telegram_id = 0
+                       OR CAST(telegram_id AS TEXT) NOT SIMILAR TO '[1-9][0-9]*'
+                """, fetch="all")
+                for row in candidates:
+                    uid, bad_tid, username, first_name = row["id"], row["telegram_id"], row.get("username"), row.get("first_name")
+                    logger.warning(f"repair_missing_telegram_ids: skipping row id={uid}, bad telegram_id={bad_tid}, username={username}")
+                    repaired += 1
+                return repaired
+
+            conn = get_connection()
+            cursor = conn.cursor()
+            try:
+                cursor.execute("PRAGMA table_info(users)")
+                cols = [r[1] for r in cursor.fetchall()]
+                has_first = "first_name" in cols
+
+                cursor.execute("SELECT id, telegram_id, username FROM users WHERE telegram_id IS NULL OR telegram_id = 0 OR CAST(telegram_id AS TEXT) NOT LIKE '1%' AND CAST(telegram_id AS TEXT) NOT LIKE '2%' AND CAST(telegram_id AS TEXT) NOT LIKE '3%' AND CAST(telegram_id AS TEXT) NOT LIKE '4%' AND CAST(telegram_id AS TEXT) NOT LIKE '5%' AND CAST(telegram_id AS TEXT) NOT LIKE '6%' AND CAST(telegram_id AS TEXT) NOT LIKE '7%' AND CAST(telegram_id AS TEXT) NOT LIKE '8%' AND CAST(telegram_id AS TEXT) NOT LIKE '9%'")
+                rows = cursor.fetchall()
+                for row in rows:
+                    rid, bad_tid, username = row
+                    logger.warning(f"repair_missing_telegram_ids: sqlite row id={rid} bad telegram_id={bad_tid} username={username}")
+                    repaired += 1
+                return repaired
+            finally:
+                cursor.close()
+                release_connection(conn)
+        except Exception as e:
+            logger.error(f"repair_missing_telegram_ids error: {e}")
+            return repaired
 
     def get_user(self, telegram_id, username=None):
         """Получение пользователя"""
@@ -2163,7 +2258,7 @@ def get_user(telegram_id, username=None):
 
     # Пользователь не найден - создаём нового
     logger.info(f"get_user: user {telegram_id} NOT found, creating new")
-    db.add_user(telegram_id, username or f"Player{telegram_id}", None, None)
+    db.register_user(telegram_id, username or f"Player{telegram_id}", None, None, source="get_user_fallback")
     user = db.get_user(telegram_id)
     if user:
         user.setdefault('fissure', 0.1)
@@ -3802,3 +3897,42 @@ def load_recent_rolls():
     except Exception as e:
         logger.error(f"Error loading recent rolls: {e}")
     return []
+
+
+def invalidate_stale_top_caches():
+    try:
+        keys_to_delete = []
+        for key in ['mmr_top_cache_10', 'mmr_top_cache_50', 'dota_week_top_cache', 'dota_week_top']:
+            if get_config(key):
+                keys_to_delete.append(key)
+        for key in keys_to_delete:
+            try:
+                from database import set_config
+                set_config(key, None)
+                logger.info(f"invalidated stale cache: {key}")
+            except Exception as e:
+                logger.warning(f"failed to invalidate cache {key}: {e}")
+        try:
+            user_cache.delete_key('dota_week_top')
+            user_cache.delete_key('dota_week_top_ts')
+            user_cache.delete_key('digest_stats')
+            user_cache.delete_key('dota_digest_stats')
+            top_cache.invalidate_top_cache()
+            logger.info("invalidated in-memory top/digest caches")
+        except Exception as e:
+            logger.warning(f"failed to invalidate memory cache: {e}")
+    except Exception as e:
+        logger.error(f"invalidate_stale_top_caches error: {e}")
+
+
+def validate_user_registry():
+    try:
+        db = Database()
+        bad = db.repair_missing_telegram_ids()
+        if bad:
+            logger.warning(f"validate_user_registry: found {bad} users with invalid telegram_id")
+        invalidate_stale_top_caches()
+        return bad
+    except Exception as e:
+        logger.error(f"validate_user_registry error: {e}")
+        return -1

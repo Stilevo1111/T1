@@ -1643,7 +1643,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Создаём нового пользователя с лучшим доступным именем
             fallback_name = telegram_username or first_name or f"Player{user_id}"
             db = Database()
-            db.add_user(user_id, fallback_name, None, None)
+            db.register_user(user_id, fallback_name, first_name, None, source="start")
             logger.info(f"Created new user {user_id} with name '{fallback_name}'")
             is_new_user = True
             user = await asyncio.to_thread(get_user, user_id)
@@ -3715,7 +3715,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                     first_name = update.effective_user.first_name
                     fallback_name = telegram_username or first_name or f"Player{user_id}"
                     db = Database()
-                    db.add_user(user_id, fallback_name, None, None)
+                    db.register_user(user_id, fallback_name, first_name, None, source="start")
                     db_user = await asyncio.to_thread(get_user, user_id)
                     logger.info(f"Created new user {user_id} for message counting")
 
@@ -3966,7 +3966,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                         # Новый пользователь — создаём с лучшим доступным именем
                         fallback_name = telegram_username or user_obj.first_name or f"Player{user_id}"
                         db = Database()
-                        db.add_user(user_id, fallback_name, None, None)
+                        db.register_user(user_id, fallback_name, first_name, None, source="start")
                         logger.info(f"Created new user {user_id} with name '{fallback_name}'")
                     else:
                         # Существующий пользователь — обновляем username если изменился (только если есть telegram_username)
@@ -4219,6 +4219,21 @@ async def main():
             flush_users_cache_job,
             interval=datetime.timedelta(hours=2),
             first=datetime.timedelta(minutes=15),
+        )
+
+        async def validate_user_registry_job(context):
+            try:
+                from database import validate_user_registry
+                bad = await asyncio.to_thread(validate_user_registry)
+                if bad:
+                    logger.warning(f"validate_user_registry_job: found {bad} invalid users")
+            except Exception as e:
+                logger.error(f"validate_user_registry_job: {e}")
+
+        job_queue.run_repeating(
+            validate_user_registry_job,
+            interval=datetime.timedelta(hours=12),
+            first=datetime.timedelta(hours=1),
         )
 
         # Periodic cleanup of stale _USER_START_COOLDOWN entries (prevents memory leak)

@@ -1250,7 +1250,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
         if not user:
             logger.info(f"User not found in register_steam, creating new user: {telegram_id}")
             from database import Database
-            Database().add_user(telegram_id, "", "", "")
+            Database().register_user(telegram_id, None, None, None, source="register_steam")
             user = get_user(telegram_id)
             if user:
                 user_cache.set(telegram_id, user)
