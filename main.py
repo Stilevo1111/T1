@@ -3129,7 +3129,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             winner_wr = round((winner_week_wins / winner_week_games * 100)) if winner_week_games > 0 else 0
 
             try:
-                from dota_mmr import generate_start_card
+            from dota_mmr import generate_start_card, get_week_top_heroes
                 banner_bytes = await asyncio.to_thread(
                     generate_start_card,
                     avatar_url=winner_avatar,

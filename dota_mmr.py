@@ -1054,7 +1054,11 @@ def search_player(nickname: str) -> dict:
 
 def get_recent_matches(steam_id: int, limit: int = 5) -> list:
     """Синхронная обёртка для обратной совместимости"""
-    return _run_async(get_recent_matches_async(steam_id, limit))
+    try:
+        return _run_async(get_recent_matches_async(steam_id, limit))
+    except TimeoutError:
+        logger.warning(f"get_recent_matches timeout for steam_id={steam_id}, returning empty list")
+        return []
 
 
 async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
