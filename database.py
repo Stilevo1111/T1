@@ -223,6 +223,24 @@ class UserCache:
             self._cache.pop(key, None)
             self._dirty.pop(key, None)
 
+    def update_username_lookup(self, old_username, new_username, telegram_id):
+        """Update username_lookup cache when a user's username changes.
+        
+        Removes stale old_username mapping and adds new_username -> telegram_id.
+        This prevents stale cache entries when users change their Telegram username.
+        """
+        with self._lock:
+            lookup = self._cache.get('username_lookup')
+            if not lookup:
+                return
+            old_norm = old_username.lstrip("@").lower() if old_username else None
+            new_norm = new_username.lstrip("@").lower() if new_username else None
+            if old_norm and old_norm in lookup:
+                del lookup[old_norm]
+            if new_norm:
+                lookup[new_norm] = telegram_id
+            self._cache['username_lookup'] = dict(lookup)
+
     def clear(self):
         """Очистить весь кеш"""
         with self._lock:
@@ -1282,6 +1300,8 @@ _config_cache_time = {}
 _CONFIG_CACHE_TTL = 600  # 10 минут - конфиги меняются редко
 
 class Database:
+    USER_PRIMARY_KEY = "telegram_id"
+    USERNAME_IS_DISPLAY_ONLY = True
     def execute_query(self, query, params=None, fetch="none"):
         """Выполнить SQL запрос с параметрами"""
         url = urlparse.urlparse(DATABASE_URL)
@@ -1465,6 +1485,7 @@ class Database:
         try:
             if "postgres" in scheme:
                 existing = self.execute_query("SELECT telegram_id, username, first_name FROM users WHERE telegram_id = %s", (tid,), fetch="one")
+                old_username = existing.get("username") if existing else None
                 if existing:
                     updates = []
                     params = []
@@ -1477,6 +1498,8 @@ class Database:
                     if updates:
                         params.append(tid)
                         self.execute_query(f"UPDATE users SET {', '.join(updates)}, last_activity = CURRENT_TIMESTAMP WHERE telegram_id = %s", tuple(params))
+                        if safe_username != old_username:
+                            user_cache.update_username_lookup(old_username, safe_username, tid)
                 else:
                     self.execute_query(
                         "INSERT INTO users (telegram_id, username, first_name, fissure, created_at, in_chat, last_activity) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, TRUE, CURRENT_TIMESTAMP)",
@@ -1484,10 +1507,26 @@ class Database:
                     )
                 return tid
             else:
+                old_username = None
+                try:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT username FROM users WHERE telegram_id = ?", (tid,))
+                    row = cursor.fetchone()
+                    if row:
+                        old_username = row[0] if not isinstance(row, dict) else row.get('username')
+                    cursor.close()
+                except Exception:
+                    pass
+                finally:
+                    if conn:
+                        release_connection(conn)
                 self.execute_query(
                     "INSERT INTO users (telegram_id, username, first_name, fissure, created_at, in_chat, last_activity) VALUES (?, ?, ?, ?, datetime('now'), 1, datetime('now')) ON CONFLICT(telegram_id) DO UPDATE SET username = COALESCE(?, excluded.username), first_name = COALESCE(?, excluded.first_name), last_activity = datetime('now')",
                     (tid, safe_username, safe_first_name, 0.1, safe_username, safe_first_name)
                 )
+                if safe_username != old_username:
+                    user_cache.update_username_lookup(old_username, safe_username, tid)
                 return tid
         except Exception as e:
             logger.error(f"register_user error: {e} (telegram_id={tid}, source={source})", exc_info=True)
@@ -1614,9 +1653,11 @@ class Database:
                         "user_tags": user.get("user_tags") or "[]",
                     }
                     if username is not None and username != result.get('username'):
+                        old_username = result.get('username')
                         self.execute_query("UPDATE users SET username = %s WHERE telegram_id = %s", (username, telegram_id))
                         result['username'] = username
                         user_cache.set(telegram_id, result)
+                        user_cache.update_username_lookup(old_username, username, telegram_id)
                         logger.info(f"get_user: updated username for {telegram_id} to '{username}'")
                     return result
                 else:
@@ -1669,10 +1710,12 @@ class Database:
                             "user_tags": u.get("user_tags") or "[]",
                         }
                         if username is not None and username != result.get('username'):
+                            old_username = result.get('username')
                             cursor.execute("UPDATE users SET username = ? WHERE telegram_id = ?", (username, telegram_id))
                             conn.commit()
                             result['username'] = username
                             user_cache.set(telegram_id, result)
+                            user_cache.update_username_lookup(old_username, username, telegram_id)
                             logger.info(f"get_user: updated username for {telegram_id} to '{username}'")
                         cursor.close()
                         return result
