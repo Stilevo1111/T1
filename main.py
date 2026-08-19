@@ -4232,12 +4232,6 @@ async def main():
             days=(0, 1, 2, 3, 4, 5, 6)
         )
 
-        # Автоматическое обновление тега fissure_master для топ-1 по фиссуре
-        job_queue.run_repeating(
-            update_fissure_master_job,
-            interval=datetime.timedelta(hours=2),
-            first=datetime.timedelta(minutes=10)
-        )
 
         job_queue.run_daily(
             cleanup_left_users_job,
