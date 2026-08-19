@@ -1365,7 +1365,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
     reversed_history = list(reversed(history))[:10]
 
     raw_impacts = [
-        round(g["imp"], 2)
+        min(round(g["imp"], 2), 2.0)
         for g in reversed_history
     ]
 
@@ -1373,6 +1373,13 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
     if not raw_impacts:
         return None
+
+    while len(raw_impacts) < 10:
+        raw_impacts.append(0.4)
+
+    raw_impacts = raw_impacts[:10]
+
+    x = np.arange(1, 11)
 
     avg = float(np.mean(raw_impacts))
 
