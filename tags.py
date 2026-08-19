@@ -182,7 +182,7 @@ async def ensure_fissure_master_tag(telegram_id: int, chat_id: int, bot) -> None
 
 async def refresh_fissure_master_tag(bot, chat_id: int) -> None:
     """Independent tag refresh: compare current top-1 with stored winner and swap tag if needed."""
-    from database import get_fissure_top, get_config, set_config
+    from database import get_fissure_top, get_config, set_config, get_user
     try:
         digest_chat_id = get_config('digest_chat_id')
         if not digest_chat_id:
@@ -206,6 +206,13 @@ async def refresh_fissure_master_tag(bot, chat_id: int) -> None:
         logger.debug(f"tag_manager: refresh_fissure_master_tag: top-1 unchanged ({current_winner_tg_id})")
         return
 
+    old_winner = get_user(int(stored_winner_tg_id)) if stored_winner_tg_id else None
+    old_name = ""
+    old_fissure = 0
+    if old_winner:
+        old_name = old_winner.get('steam_nickname') or old_winner.get('username') or str(stored_winner_tg_id)
+        old_fissure = old_winner.get('fissure', 0)
+
     if stored_winner_tg_id:
         try:
             await remove_user_tag(int(stored_winner_tg_id), "fissure_master", bot=bot, chat_id=chat_id)
@@ -218,5 +225,25 @@ async def refresh_fissure_master_tag(bot, chat_id: int) -> None:
         set_config('current_fissure_master_telegram_id', str(current_winner_tg_id))
         winner_name = current_winner.get('steam_nickname') or current_winner.get('username') or str(current_winner_tg_id)
         logger.info(f"tag_manager: refresh_fissure_master_tag: fissure_master -> {winner_name} ({current_winner_tg_id})")
+
+        new_fissure = current_winner.get('fissure', 0)
+        if old_name:
+            text = (
+                f"👑 <b>Новый Мастер фиссур!</b>\n\n"
+                f"Топ сменился:\n"
+                f"🥇 <b>{winner_name}</b> — <code>{new_fissure:.1f}</code> см\n"
+                f"👤 <b>{old_name}</b> — <code>{old_fissure:.1f}</code> см"
+            )
+        else:
+            text = (
+                f"👑 <b>Новый Мастер фиссур!</b>\n\n"
+                f"🥇 <b>{winner_name}</b> — <code>{new_fissure:.1f}</code> см"
+            )
+
+        try:
+            await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+            logger.info(f"tag_manager: refresh_fissure_master_tag: notification sent to chat {chat_id}")
+        except Exception as e:
+            logger.warning(f"tag_manager: refresh_fissure_master_tag: failed to send notification: {e}")
     except Exception as e:
         logger.error(f"tag_manager: refresh_fissure_master_tag: failed to set tag for {current_winner_tg_id}: {e}")
