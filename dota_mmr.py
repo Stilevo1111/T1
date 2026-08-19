@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Thread pool for running async code from sync contexts (avoids event loop conflicts)
 _async_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="async_sync_bridge")
 
-def _run_async(coro):
+def _run_async(coro, timeout: int = 90):
     """Run async coroutine from sync context safely.
     
     Uses a dedicated thread pool with its own event loop to avoid
@@ -31,7 +31,7 @@ def _run_async(coro):
         return asyncio.run(coro)
     
     future = _async_executor.submit(run_in_new_loop)
-    return future.result(timeout=30)
+    return future.result(timeout=timeout)
 
 # Hero list cache (uses unified cache)
 _HEROES_CACHE_TTL = 86400  # 24 hours
@@ -1218,7 +1218,11 @@ async def get_player_stats_async(steam_id: int, use_cache: bool = True, timeout:
 
 def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) -> dict:
     """Синхурная обёртка для обратной совместимости"""
-    return _run_async(get_player_stats_async(steam_id, use_cache, timeout))
+    try:
+        return _run_async(get_player_stats_async(steam_id, use_cache, timeout))
+    except TimeoutError:
+        logger.warning(f"get_player_stats timeout for steam_id={steam_id}")
+        return None
 
 
 # ========================
@@ -1543,7 +1547,7 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         # Keep trying API until we get data (with delays to avoid rate limit spam)
         stats = None
         start_time = time.time()
-        max_wait = 10  # Maximum wait time in seconds
+        max_wait = 60  # Maximum wait time in seconds
 
         if recently_updated:
             logger.info(f"topmmr: recently updated (<4h) for user {telegram_id}, using DB stats (saving 2 API calls)")
