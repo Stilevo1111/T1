@@ -1374,8 +1374,6 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
     if not raw_impacts:
         return None
 
-    x = np.arange(1, len(raw_impacts) + 1)
-
     avg = float(np.mean(raw_impacts))
 
     if avg >= 1.05:
@@ -1396,15 +1394,18 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
     ax.imshow(
         bg,
-        extent=[0, 11, 0, 2],
+        extent=[0, 1200, 0, 800],
         aspect='auto',
         interpolation='bilinear',
         alpha=1.0,
         zorder=0
     )
 
+    ax.set_xlim(0, 1200)
+    ax.set_ylim(800, 0)
+
     ax.axhline(
-        1.0,
+        400,
         linestyle=(0, (6, 6)),
         color="#ffffff",
         linewidth=3.0,
@@ -1413,8 +1414,8 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
     )
 
     ax.text(
-        len(raw_impacts) + 0.15,
-        1.0,
+        1100,
+        400,
         "PRO BENCHMARK",
         fontsize=16,
         color="white",
@@ -1424,14 +1425,17 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         zorder=3
     )
 
+    x_pixel = np.linspace(100, 1100, num=len(raw_impacts))
+    y_pixel = np.array([400 - (imp * 400) for imp in raw_impacts])
+    trend_x_pixel = np.linspace(100, 1100, 100)
+
     if len(raw_impacts) >= 3:
-        trend_x = np.linspace(1, len(raw_impacts), 100)
-        trend_coef = np.polyfit(x, raw_impacts, 1)
-        trend_y = trend_coef[0] * trend_x + trend_coef[1]
+        trend_coef = np.polyfit(x_pixel, y_pixel, 1)
+        trend_y_pixel = trend_coef[0] * trend_x_pixel + trend_coef[1]
 
         ax.plot(
-            trend_x,
-            trend_y,
+            trend_x_pixel,
+            trend_y_pixel,
             color="#ffffff",
             linewidth=3,
             linestyle="--",
@@ -1440,8 +1444,8 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         )
 
     line = ax.plot(
-        x,
-        raw_impacts,
+        x_pixel,
+        y_pixel,
         color="#f4c430",
         linewidth=10,
         solid_capstyle='round',
@@ -1459,7 +1463,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         pe.Normal()
     ])
 
-    for idx, (xi, yi, win) in enumerate(zip(x, raw_impacts, wins)):
+    for idx, (xi, yi, win) in enumerate(zip(x_pixel, y_pixel, wins)):
         border = "#00ff66" if win else "#ff3b3b"
         glow = "#00ff66" if win else "#ff3b3b"
 
@@ -1507,7 +1511,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
         ab = AnnotationBbox(
             imagebox,
-            (idx + 1, imp),
+            (x_pixel[idx], y_pixel[idx]),
             frameon=True,
             bboxprops=dict(
                 edgecolor=border,
@@ -1523,8 +1527,8 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         ax.add_artist(ab)
 
         ax.scatter(
-            idx + 1,
-            imp,
+            x_pixel[idx],
+            y_pixel[idx],
             s=2200,
             color=glow,
             alpha=0.18,
@@ -1532,12 +1536,12 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         )
 
     y_max = max(2.0, max(raw_impacts) + 0.25)
-    ax.set_xlim(0, 11)
-    ax.set_ylim(0, y_max)
+    ax.set_xlim(0, 1200)
+    ax.set_ylim(800, 0)
 
-    ax.set_xticks(x)
+    ax.set_xticks(x_pixel)
     ax.set_xticklabels(
-        [str(i) for i in x],
+        [str(i) for i in range(1, len(raw_impacts) + 1)],
         fontsize=22,
         color="white",
         weight="bold"
@@ -1546,7 +1550,8 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
     y_ticks = [0, 0.5, 1.0, 1.5, 2.0]
     if y_max > 2.0:
         y_ticks = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
-    ax.set_yticks(y_ticks)
+    y_tick_pixels = [800 - (t * 400) for t in y_ticks]
+    ax.set_yticks(y_tick_pixels)
     ax.set_yticklabels(
         [f"{int(t)}" if t == int(t) else str(t) for t in y_ticks],
         fontsize=18,

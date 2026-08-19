@@ -2831,7 +2831,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             elif not str(winner_avatar).startswith('http'):
                 winner_avatar = None
 
-            winner_name = (winner.get('username') or winner.get('steam_nickname') or winner.get('first_name') or str(winner.get('telegram_id', 'Игрок'))).strip()
+        winner_name = (winner.get('username') or winner.get('steam_nickname') or winner.get('first_name') or str(winner.get('telegram_id', 'Игрок'))).strip()
         winner_fissure = winner.get('fissure', 0)
         winner_rank_tier = winner.get('rank_tier', 0)
 
