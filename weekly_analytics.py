@@ -213,11 +213,44 @@ IMP_WEIGHTS: dict[RoleName, Weights] = {
 # =========================================================
 
 def _calculate_utility(
+    role: str,
     stuns: float = 0,
     heals: float = 0,
     stacks: int = 0,
-    wards: int = 0
+    wards: int = 0,
+    observer_uses: int = 0,
+    sentry_uses: int = 0,
+    hero_damage: float = 0,
+    tower_damage: float = 0,
 ) -> float:
+
+    if role == "SUPPORT":
+        return round(
+            (stuns * 0.3) +
+            (heals / 1000) +
+            (stacks * 1.5) +
+            ((observer_uses + sentry_uses) * 0.5),
+            2
+        )
+
+    if role in ("CARRY", "MID"):
+        return round(
+            (stuns * 0.4) +
+            (hero_damage / 1000) +
+            (tower_damage / 500) +
+            (stacks * 0.8),
+            2
+        )
+
+    if role == "OFFLANE":
+        return round(
+            (stuns * 0.5) +
+            (hero_damage / 1000) +
+            (tower_damage / 500) +
+            (stacks * 1.2) +
+            (wards * 0.3),
+            2
+        )
 
     return round(
         (stuns * 0.3) +
@@ -236,7 +269,9 @@ def _calculate_imp(
     kda: float,
     utility: float,
     apm: float,
-    role: str
+    role: str,
+    win: bool = True,
+    duration: float = 600,
 ) -> float:
 
     if role not in PRO_DB:
@@ -257,7 +292,12 @@ def _calculate_imp(
         p_apm * weights["apm"]
     )
 
-    return round(imp, 2)
+    imp = round(imp, 2)
+
+    if not win:
+        imp *= 0.92
+
+    return imp
 
 # =========================================================
 # HERO DATA
@@ -1005,13 +1045,18 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
         # Estimate utility from stacks and denies (minimal data)
         stacks = m.get("creeps_stacked", 0)
         denies = m.get("denies", 0)
-        utility = stacks * 1.5 + denies * 0.5
+        utility = _calculate_utility(
+            role,
+            stacks=stacks,
+            wards=denies,
+        )
 
         # Estimate APM (typical values by role)
         apm = 250
 
-        imp = _calculate_imp(gpm, kda, utility, apm, role)
-        game_history.append({"imp": round(imp, 2), "hero_id": m.get("hero_id", 0)})
+        win = m.get("win", False)
+        imp = _calculate_imp(gpm, kda, utility, apm, role, win=win, duration=duration)
+        game_history.append({"imp": round(imp, 2), "hero_id": m.get("hero_id", 0), "win": win})
 
     chart = await _create_visual_chart(game_history)
     return {"image": chart, "history": game_history, "matches": matches, "role": role}
@@ -1101,7 +1146,6 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
 
     for m in matches:
 
-        # Use gold_per_min directly from match data (it's already computed by OpenDota)
         gpm = m.get("gold_per_min", 0)
         xpm = m.get("xp_per_min", 0)
         last_hits = m.get("last_hits", 0)
@@ -1109,12 +1153,13 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
         hero_damage = m.get("hero_damage", 0)
         tower_damage = m.get("tower_damage", 0)
         creeps_stacked = m.get("creeps_stacked", 0)
-        # Fallback: if GPM zero, estimate from last_hits
         duration = m.get("duration", 600)
+        win = m.get("win", False)
+
         if gpm == 0 and last_hits > 0:
             gpm = last_hits * 60 / max(duration / 60, 1) if duration > 0 else 300
         if xpm == 0:
-            xpm = gpm * 0.8  # typical ratio
+            xpm = gpm * 0.8
 
         kills = m.get("kills", 0)
         deaths = m.get("deaths", 0)
@@ -1123,29 +1168,35 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
         kda = (kills + assists) / max(deaths, 1)
 
         utility = _calculate_utility(
-            m.get("stuns", 0),
-            m.get("hero_healing", 0),
-            m.get("creeps_stacked", 0),
-            m.get("observer_uses", 0) +
-            m.get("sentry_uses", 0)
+            role,
+            stuns=m.get("stuns", 0),
+            heals=m.get("hero_healing", 0),
+            stacks=creeps_stacked,
+            wards=m.get("observer_uses", 0) + m.get("sentry_uses", 0),
+            observer_uses=m.get("observer_uses", 0),
+            sentry_uses=m.get("sentry_uses", 0),
+            hero_damage=hero_damage,
+            tower_damage=tower_damage,
         )
 
         apm = m.get("actions_per_min", 0)
-        # Fallback for APM - use typical value
         if apm == 0:
-            apm = 250  # default
+            apm = 250
 
         imp = _calculate_imp(
             gpm,
             kda,
             utility,
             apm,
-            role
+            role,
+            win=win,
+            duration=duration,
         )
 
         game_history.append({
             "imp": imp,
-            "hero_id": m.get("hero_id", 0)
+            "hero_id": m.get("hero_id", 0),
+            "win": win,
         })
 
         total_gpm += gpm
@@ -1318,53 +1369,21 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         for g in reversed_history
     ]
 
-    while len(raw_impacts) < 10:
-        raw_impacts.append(0.4)
+    wins = [g.get("win", True) for g in reversed_history]
 
-    raw_impacts = raw_impacts[:10]
+    if not raw_impacts:
+        return None
 
-    min_imp = min(raw_impacts)
-    max_imp = max(raw_impacts)
+    x = np.arange(1, len(raw_impacts) + 1)
 
-    impacts = []
+    avg = float(np.mean(raw_impacts))
 
-    for value in raw_impacts:
-        normalized = (
-            (value - min_imp)
-            / max(max_imp - min_imp, 0.01)
-        )
-
-        scaled = 0.25 + (normalized * 1.45)
-
-        impacts.append(round(scaled, 2))
-
-    x = np.arange(1, 11)
-
-    avg = np.mean(impacts)
-    avg_impact = avg
-
-    if avg_impact >= 1.0:
+    if avg >= 1.05:
         stroke_color = "#00cc55"
-    elif avg_impact >= 0.6:
+    elif avg >= 0.75:
         stroke_color = "#ccaa00"
     else:
         stroke_color = "#cc2f2f"
-
-    try:
-        from scipy.interpolate import interp1d
-    except ImportError:
-        interp1d = None
-
-    if interp1d and len(impacts) >= 4:
-        x_smooth = np.linspace(1, 10, 1000)
-        interp_func = interp1d(x, impacts, kind='cubic', fill_value='extrapolate')
-        y_smooth = interp_func(x_smooth)
-    elif len(impacts) >= 2:
-        x_smooth = np.linspace(1, 10, 1000)
-        y_smooth = np.interp(x_smooth, x, impacts)
-    else:
-        x_smooth = x
-        y_smooth = impacts
 
     fig = plt.figure(
         figsize=(WIDTH / DPI, HEIGHT / DPI),
@@ -1377,16 +1396,52 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
     ax.imshow(
         bg,
-        extent=[0, 11, 0, 2],
+        extent=[0, len(raw_impacts) + 1, 0, 2],
         aspect='auto',
         interpolation='bilinear',
         alpha=1.0,
         zorder=0
     )
 
+    ax.axhline(
+        1.0,
+        linestyle=(0, (6, 6)),
+        color="#ffffff",
+        linewidth=3.0,
+        alpha=0.35,
+        zorder=2
+    )
+
+    ax.text(
+        len(raw_impacts) + 0.15,
+        1.0,
+        "PRO BENCHMARK",
+        fontsize=16,
+        color="white",
+        alpha=0.7,
+        weight="bold",
+        va="center",
+        zorder=3
+    )
+
+    if len(raw_impacts) >= 3:
+        trend_x = np.linspace(1, len(raw_impacts), 100)
+        trend_coef = np.polyfit(x, raw_impacts, 1)
+        trend_y = trend_coef[0] * trend_x + trend_coef[1]
+
+        ax.plot(
+            trend_x,
+            trend_y,
+            color="#ffffff",
+            linewidth=3,
+            linestyle="--",
+            alpha=0.5,
+            zorder=4
+        )
+
     line = ax.plot(
-        x_smooth,
-        y_smooth,
+        x,
+        raw_impacts,
         color="#f4c430",
         linewidth=10,
         solid_capstyle='round',
@@ -1404,36 +1459,29 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         pe.Normal()
     ])
 
-    ax.scatter(
-        x,
-        impacts,
-        s=250,
-        color="#ffd54f",
-        edgecolors="#fff2a8",
-        linewidths=4,
-        zorder=6,
-        joinstyle='round'
-    )
+    for idx, (xi, yi, win) in enumerate(zip(x, raw_impacts, wins)):
+        border = "#00ff66" if win else "#ff3b3b"
+        glow = "#00ff66" if win else "#ff3b3b"
 
-    ax.axhline(
-        avg,
-        linestyle=(0, (5, 5)),
-        color="#e0e0e0",
-        linewidth=3.0,
-        alpha=0.80,
-        zorder=4
-    )
+        ax.scatter(
+            xi,
+            yi,
+            s=350,
+            color=border,
+            edgecolors="#ffffff",
+            linewidths=5,
+            zorder=6,
+            joinstyle='round'
+        )
 
-    ax.text(
-        9.7,
-        avg,
-        f"AVG {avg:.2f}",
-        fontsize=20,
-        color="white",
-        weight="bold",
-        va="center",
-        zorder=10
-    )
+        ax.scatter(
+            xi,
+            yi,
+            s=2800,
+            color=glow,
+            alpha=0.18,
+            zorder=5
+        )
 
     for idx, g in enumerate(reversed_history):
         hero_id = g["hero_id"]
@@ -1442,17 +1490,10 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         if not hero_img:
             continue
 
-        imp = impacts[idx]
-
-        if imp >= 1.0:
-            border = "#00ff66"
-            border_glow = "#00ff66"
-        elif imp >= 0.6:
-            border = "#ffd000"
-            border_glow = "#ffd000"
-        else:
-            border = "#ff3b3b"
-            border_glow = "#ff3b3b"
+        imp = raw_impacts[idx]
+        win = g.get("win", True)
+        border = "#00ff66" if win else "#ff3b3b"
+        glow = "#00ff66" if win else "#ff3b3b"
 
         hero_img = hero_img.resize(
             (82, 82),
@@ -1485,17 +1526,16 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
             idx + 1,
             imp,
             s=2200,
-            color=border_glow,
-            alpha=0.25,
+            color=glow,
+            alpha=0.18,
             zorder=8
         )
 
-    ax.set_xlim(0, 11)
-
-    ax.set_ylim(0, 2)
+    y_max = max(2.0, max(raw_impacts) + 0.25)
+    ax.set_xlim(0.3, len(raw_impacts) + 0.7)
+    ax.set_ylim(0, y_max)
 
     ax.set_xticks(x)
-
     ax.set_xticklabels(
         [str(i) for i in x],
         fontsize=22,
@@ -1503,16 +1543,12 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         weight="bold"
     )
 
-    ax.set_yticks([
-        0,
-        0.5,
-        1.0,
-        1.5,
-        2.0
-    ])
-
+    y_ticks = [0, 0.5, 1.0, 1.5, 2.0]
+    if y_max > 2.0:
+        y_ticks = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+    ax.set_yticks(y_ticks)
     ax.set_yticklabels(
-        ["0", "0.5", "1.0", "1.5", "2.0"],
+        [f"{int(t)}" if t == int(t) else str(t) for t in y_ticks],
         fontsize=18,
         color="white"
     )
