@@ -222,21 +222,19 @@ def update_last_message_id(user_id, msg_id):
 def _build_analytics_keyboard(page_idx, total_pages, generated, page_titles=None):
     """Build inline keyboard for analytics pagination"""
     buttons = []
+    page_titles = page_titles or [f"Стр. {i+1}" for i in range(total_pages)]
 
-    # Navigation buttons with page info
+    if total_pages <= 1:
+        return InlineKeyboardMarkup([[]])
+
     if page_idx > 0:
-        prev_label = f"◀ {page_titles[page_idx-1]}" if page_titles and page_idx > 0 else "◀ Назад"
-        buttons.append(InlineKeyboardButton(prev_label, callback_data=f"analytics_page_{page_idx-1}"))
+        buttons.append(InlineKeyboardButton("◀ Назад", callback_data=f"analytics_page_{page_idx-1}"))
 
-    # Page indicator
     page_label = f"📄 {page_idx+1}/{total_pages}"
-    if page_titles and page_idx < len(page_titles):
-        page_label = f"📄 {page_titles[page_idx]}"
     buttons.append(InlineKeyboardButton(page_label, callback_data="analytics_page_current"))
 
     if page_idx < total_pages - 1:
-        next_label = f"{page_titles[page_idx+1]} ▶" if page_titles and page_idx + 1 < len(page_titles) else "Вперёд ▶"
-        buttons.append(InlineKeyboardButton(next_label, callback_data=f"analytics_page_{page_idx+1}"))
+        buttons.append(InlineKeyboardButton("Вперёд ▶", callback_data=f"analytics_page_{page_idx+1}"))
 
     return InlineKeyboardMarkup([buttons])
 
