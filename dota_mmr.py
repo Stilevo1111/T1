@@ -1258,13 +1258,15 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
             stats = get_player_stats(steam_id)
             logger.info(f"Player stats result: {stats is not None}")
 
-            invalid_stats = not stats or stats.get("nickname") == "Unknown"
+            invalid_stats = not stats
             private_profile = False
-            if stats and not invalid_stats:
+            if stats:
                 total_games = stats.get("total_games") or 0
                 mmr = stats.get("mmr") or 0
                 if total_games == 0 and mmr == 0:
                     private_profile = True
+                elif stats.get("nickname") == "Unknown":
+                    invalid_stats = True
 
             if invalid_stats or private_profile:
                 try:
@@ -1331,6 +1333,29 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                 return {"success": False, "message": "❌ Игрок с таким ником не найден\n\n💡 Попробуйте:\n• Использовать Steam ID вместо ника\n• Проверить правильность написания\n• Убедиться, что игрок играет в Dota 2"}
             steam_id = data["steam_id"]
             stats = data
+
+            private_profile_search = False
+            if stats:
+                total_games = stats.get("total_games") or 0
+                mmr = stats.get("mmr") or 0
+                if total_games == 0 and mmr == 0:
+                    private_profile_search = True
+
+            if private_profile_search:
+                update_user_fields_batch(telegram_id, {
+                    "steam_id": steam_id,
+                    "steam_nickname": stats.get("nickname"),
+                    "avatar": stats.get("avatar"),
+                    "mmr": 0,
+                    "rank_tier": 0,
+                    "wins": 0,
+                    "losses": 0,
+                    "week_start_date": datetime.now(UTC).date().isoformat()
+                })
+                return {
+                    "success": True,
+                    "message": "✅ Аккаунт привязан! Ваш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику:\n⚠️ В игре: \nнастройки → сообщество → настройки → общедоступная история матчей → включить"
+                }
 
         # Проверяем, не привязан ли уже этот steam_id к другому аккаунту
         from database import get_user_by_steam_id, get_user, update_user_fields_batch, user_cache
