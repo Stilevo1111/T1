@@ -60,7 +60,7 @@ from database import (
 from dota_mmr import _get_start_card_background, update_user_mmr
 from mute import register_handlers as register_mute_handlers
 from rate_limiter import is_rate_limited, rate_limit, set_rate_limited
-from tags import TAG_DISPLAY, TAG_TYPES, add_user_tag, ensure_fissure_master_tag, format_user_tags, get_user_tags, remove_user_tag, get_telegram_title
+from tags import TAG_DISPLAY, TAG_TYPES, add_user_tag, ensure_fissure_master_tag, format_user_tags, get_user_tags, refresh_fissure_master_tag, remove_user_tag, get_telegram_title
 
 structlog.configure(
     processors=[
@@ -371,44 +371,6 @@ async def decrease_inactive_job(context):
 
 
 
-
-
-async def update_fissure_master_job(context):
-    """Автоматическое обновление тега fissure_master для текущего топ-1 по фиссуре"""
-    try:
-        digest_chat_id = get_config('digest_chat_id')
-        if not digest_chat_id:
-            return
-
-        top_users = get_fissure_top(1)
-        if not top_users:
-            return
-
-        current_winner = top_users[0]
-        current_winner_tg_id = current_winner.get('telegram_id')
-        if not current_winner_tg_id:
-            return
-
-        stored_winner_tg_id = get_config('current_fissure_master_telegram_id')
-        if str(current_winner_tg_id) == str(stored_winner_tg_id):
-            return
-
-        if stored_winner_tg_id:
-            try:
-                await remove_user_tag(int(stored_winner_tg_id), "fissure_master", bot=context.bot, chat_id=int(digest_chat_id))
-                logger.info(f"update_fissure_master_job: убран тег fissure_master у {stored_winner_tg_id}")
-            except Exception as e:
-                logger.warning(f"update_fissure_master_job: не удалось убрать тег у {stored_winner_tg_id}: {e}")
-
-        try:
-            await add_user_tag(current_winner_tg_id, "fissure_master", bot=context.bot, chat_id=int(digest_chat_id))
-            set_config('current_fissure_master_telegram_id', str(current_winner_tg_id))
-            winner_name = current_winner.get('steam_nickname') or current_winner.get('username') or str(current_winner_tg_id)
-            logger.info(f"update_fissure_master_job: fissure_master автоматически присвоен {winner_name} ({current_winner_tg_id})")
-        except Exception as e:
-            logger.error(f"update_fissure_master_job: не удалось выдать тег {current_winner_tg_id}: {e}")
-    except Exception as e:
-        logger.error(f"Ошибка в update_fissure_master_job: {e}")
 
 
 @rate_limit(tokens=1)
@@ -2897,7 +2859,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         winner_telegram_id = winner.get('telegram_id')
 
         # Автоматически обновляем тег fissure_master при изменении топ-1
-        await ensure_fissure_master_tag(winner_telegram_id, chat_id, context.bot)
+        await refresh_fissure_master_tag(context.bot, chat_id)
 
         # Ensure we have a valid avatar URL
         if not winner_avatar or not str(winner_avatar).strip():

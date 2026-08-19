@@ -572,10 +572,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Инвалидируем кеш дайджеста чтобы следующий job показал свежие данные
         invalidate_digest_cache()
 
-        # Мгновенно обновляем тег fissure_master, если пользователь стал топ-1
+        # Мгновенно обновляем тег fissure_master независимо от действий пользователя
         try:
-            from tags import ensure_fissure_master_tag
-            await ensure_fissure_master_tag(user_obj.id, chat_id, context.bot)
+            from tags import refresh_fissure_master_tag
+            await refresh_fissure_master_tag(context.bot, chat_id)
         except Exception as e:
             logger.debug(f"Could not refresh fissure_master tag: {e}")
 

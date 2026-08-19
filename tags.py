@@ -178,3 +178,45 @@ async def ensure_fissure_master_tag(telegram_id: int, chat_id: int, bot) -> None
     else:
         logger.debug(f"tag_manager: ensure_fissure_master_tag: user {telegram_id} is not top-1, removing tag")
         await remove_user_tag(telegram_id, 'fissure_master', bot=bot, chat_id=chat_id)
+
+
+async def refresh_fissure_master_tag(bot, chat_id: int) -> None:
+    """Independent tag refresh: compare current top-1 with stored winner and swap tag if needed."""
+    from database import get_fissure_top, get_config, set_config
+    try:
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            return
+        chat_id = int(digest_chat_id)
+    except Exception as e:
+        logger.debug(f"tag_manager: refresh_fissure_master_tag: invalid digest_chat_id: {e}")
+        return
+
+    top_users = get_fissure_top(1)
+    if not top_users:
+        return
+
+    current_winner = top_users[0]
+    current_winner_tg_id = current_winner.get('telegram_id')
+    if not current_winner_tg_id:
+        return
+
+    stored_winner_tg_id = get_config('current_fissure_master_telegram_id')
+    if str(current_winner_tg_id) == str(stored_winner_tg_id):
+        logger.debug(f"tag_manager: refresh_fissure_master_tag: top-1 unchanged ({current_winner_tg_id})")
+        return
+
+    if stored_winner_tg_id:
+        try:
+            await remove_user_tag(int(stored_winner_tg_id), "fissure_master", bot=bot, chat_id=chat_id)
+            logger.info(f"tag_manager: refresh_fissure_master_tag: removed tag from old top-1 {stored_winner_tg_id}")
+        except Exception as e:
+            logger.warning(f"tag_manager: refresh_fissure_master_tag: failed to remove tag from {stored_winner_tg_id}: {e}")
+
+    try:
+        await add_user_tag(current_winner_tg_id, "fissure_master", bot=bot, chat_id=chat_id)
+        set_config('current_fissure_master_telegram_id', str(current_winner_tg_id))
+        winner_name = current_winner.get('steam_nickname') or current_winner.get('username') or str(current_winner_tg_id)
+        logger.info(f"tag_manager: refresh_fissure_master_tag: fissure_master -> {winner_name} ({current_winner_tg_id})")
+    except Exception as e:
+        logger.error(f"tag_manager: refresh_fissure_master_tag: failed to set tag for {current_winner_tg_id}: {e}")
