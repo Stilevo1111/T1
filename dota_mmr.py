@@ -752,11 +752,11 @@ def _draw_hero_squares_on_card(img, draw, top_heroes: list, base_height: int, wi
 
     heroes = sorted(top_heroes, key=lambda h: h.get("picks", 0), reverse=True)[:5]
     n = len(heroes)
-    icon_size = 76
+    icon_size = 82
     gap = 12
     total_w = n * icon_size + max(0, n - 1) * gap
     start_x = max(10, (width - total_w) // 2) + 135
-    y = base_height - icon_size - 12
+    y = base_height - icon_size - 8
 
     for hero in heroes:
         hero_short = hero.get("short_name", "")
