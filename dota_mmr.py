@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Thread pool for running async code from sync contexts (avoids event loop conflicts)
 _async_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="async_sync_bridge")
 
-def _run_async(coro, timeout: int = 90):
+def _run_async(coro, timeout: int = 60):
     """Run async coroutine from sync context safely.
     
     Uses a dedicated thread pool with its own event loop to avoid
@@ -531,7 +531,11 @@ async def get_heroes_data_async() -> dict:
 
 def get_heroes_data() -> dict:
     """Синхронная обёртка для обратной совместимости"""
-    return _run_async(get_heroes_data_async())
+    try:
+        return _run_async(get_heroes_data_async())
+    except TimeoutError:
+        logger.warning("get_heroes_data timeout")
+        return {}
 
 
 def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
@@ -1029,7 +1033,11 @@ async def search_player_async(nickname: str) -> dict:
 
 def search_player(nickname: str) -> dict:
     """Синхронная обёртка для обратной совместимости"""
-    return _run_async(search_player_async(nickname))
+    try:
+        return _run_async(search_player_async(nickname))
+    except TimeoutError:
+        logger.warning(f"search_player timeout for {nickname}")
+        return None
 
 
 # ========================
@@ -1120,14 +1128,18 @@ async def is_win_api_async(match_id: int, steam_id: int) -> bool:
 
 def is_win_api(match_id: int, steam_id: int) -> bool:
     """Синхронная обёртка для обратной совместимости"""
-    return _run_async(is_win_api_async(match_id, steam_id))
+    try:
+        return _run_async(is_win_api_async(match_id, steam_id))
+    except TimeoutError:
+        logger.warning(f"is_win_api timeout for match_id={match_id}, steam_id={steam_id}")
+        return False
 
 
 # ========================
 # 📊 GET STATS
 # ========================
 
-async def get_player_stats_async(steam_id: int, use_cache: bool = True, timeout: int = 8) -> dict:
+async def get_player_stats_async(steam_id: int, use_cache: bool = True, timeout: int = 5, max_retries: int = 1) -> dict:
     """Асинхронно получить статистику игрока (последние матчи, герои, винрейт) из OpenDota с кэшем."""
     try:
         cache_key = f"player_{steam_id}"
@@ -1139,7 +1151,6 @@ async def get_player_stats_async(steam_id: int, use_cache: bool = True, timeout:
         account_id = steam64_to_account_id(steam_id)
         players_url = f"{OPENDOTA_API_URL}/players/{account_id}"
 
-        # Если аккаунт уже известен как несуществующий (404), пропускаем обращение к API.
         if _is_not_found(players_url):
             logger.debug(f"Player {account_id} known not found (negative cache), skipping API")
             if use_cache:
@@ -1148,10 +1159,9 @@ async def get_player_stats_async(steam_id: int, use_cache: bool = True, timeout:
                     return cached
             return None
 
-        # Fetch player data and win/loss in parallel to halve latency
         player_data, wl_data = await asyncio.gather(
-            _api_get_async(players_url, timeout=timeout),
-            _api_get_async(f"{OPENDOTA_API_URL}/players/{account_id}/wl", timeout=timeout),
+            _api_get_async(players_url, timeout=timeout, max_retries=max_retries),
+            _api_get_async(f"{OPENDOTA_API_URL}/players/{account_id}/wl", timeout=timeout, max_retries=max_retries),
         )
         if not player_data or not isinstance(player_data, dict):
             logger.warning(f"Player data not found for account_id: {account_id}")
@@ -1216,10 +1226,10 @@ async def get_player_stats_async(steam_id: int, use_cache: bool = True, timeout:
         return None
 
 
-def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 8) -> dict:
+def get_player_stats(steam_id: int, use_cache: bool = True, timeout: int = 5) -> dict:
     """Синхурная обёртка для обратной совместимости"""
     try:
-        return _run_async(get_player_stats_async(steam_id, use_cache, timeout))
+        return _run_async(get_player_stats_async(steam_id, use_cache, timeout), timeout=50)
     except TimeoutError:
         logger.warning(f"get_player_stats timeout for steam_id={steam_id}")
         return None
@@ -1544,11 +1554,6 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         last_updated = user.get('mmr_last_updated')
         recently_updated = last_updated and isinstance(last_updated, (int, float)) and time.time() - last_updated < 4 * 3600
 
-        # Keep trying API until we get data (with delays to avoid rate limit spam)
-        stats = None
-        start_time = time.time()
-        max_wait = 60  # Maximum wait time in seconds
-
         if recently_updated:
             logger.info(f"topmmr: recently updated (<4h) for user {telegram_id}, using DB stats (saving 2 API calls)")
             stats = {
@@ -1562,26 +1567,17 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                 "winrate": 0,
             }
         else:
-            while not stats and (time.time() - start_time) < max_wait:
-                # Если аккаунт точно не существует (404) — не spin-им retry-цикл, выходим сразу.
-                players_url = f"{OPENDOTA_API_URL}/players/{steam64_to_account_id(user['steam_id'])}"
-                if _is_not_found(players_url):
-                    logger.info(f"topmmr: player {user['steam_id']} known not found, skipping retries")
-                    break
-                # Если circuit breaker открыт — пропускаем ожидание
-                if not _circuit_breaker_can_execute():
-                    logger.info(f"topmmr: circuit breaker open for {user['steam_id']}, skipping retry")
-                    break
+            players_url = f"{OPENDOTA_API_URL}/players/{steam64_to_account_id(user['steam_id'])}"
+            if _is_not_found(players_url):
+                logger.info(f"topmmr: player {user['steam_id']} known not found, skipping")
+            elif not _circuit_breaker_can_execute():
+                logger.info(f"topmmr: circuit breaker open for {user['steam_id']}, skipping")
+            else:
                 stats = get_player_stats(user["steam_id"], use_cache=False)
-                if stats:
-                    break
-                wait_time = 2
-                logger.info(f"topmmr: waiting for API, sleeping {wait_time}s...")
-                time.sleep(wait_time)
-        logger.info(f"topmmr: get_player_stats returned: steam32={user.get('steam_id')}, success={stats is not None}")
-        
+                logger.info(f"topmmr: get_player_stats returned: steam32={user.get('steam_id')}, success={stats is not None}")
+         
         if not stats:
-            logger.warning(f"topmmr: API failed for user {telegram_id} after retries, using cached data")
+            logger.warning(f"topmmr: API failed for user {telegram_id}, using cached data")
             cached = _get_cached(f"player_{user['steam_id']}")
             if cached:
                 stats = cached
