@@ -4174,6 +4174,13 @@ async def main():
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).request(request).build()
         job_queue.set_application(app)
 
+        from tags import refresh_fissure_master_tag
+        try:
+            await refresh_fissure_master_tag(app.bot, 0)
+            logger.info("tag_manager: startup refresh_fissure_master_tag completed")
+        except Exception as e:
+            logger.debug(f"tag_manager: startup refresh_fissure_master_tag failed: {e}")
+
         # ✅ Утреннее приветствие 09:00 MSK
         job_queue.run_daily(
             morning_greeting_job,
