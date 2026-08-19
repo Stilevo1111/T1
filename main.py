@@ -3050,6 +3050,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         else:
             # Generate MMR top banner with winner info
             # Try Telegram avatar first, then Steam
+            winner = top_users[0]
             winner_avatar = None
             winner_telegram_id = winner.get('telegram_id')
             if winner_telegram_id:
