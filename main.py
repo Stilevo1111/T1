@@ -4176,7 +4176,7 @@ async def main():
 
         from tags import refresh_fissure_master_tag
         try:
-            await refresh_fissure_master_tag(app.bot, 0)
+            await refresh_fissure_master_tag(app.bot, 0, notify=False)
             logger.info("tag_manager: startup refresh_fissure_master_tag completed")
         except Exception as e:
             logger.debug(f"tag_manager: startup refresh_fissure_master_tag failed: {e}")
