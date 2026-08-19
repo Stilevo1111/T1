@@ -760,16 +760,16 @@ async def create_infographic(hero_stats):
             except Exception as e:
                 logger.debug(f"Telegram profile photo failed for hero {hero_id}: {e}")
         
-        # 2. Try Telegram avatar via file_id or direct URL
-        if not img and avatar_url:
+        # 2. Try Telegram avatar ONLY if it's a file_id, not an http URL
+        if not img and avatar_url and not avatar_url.startswith('http'):
             try:
                 from config import BOT_TOKEN
                 img = await _fetch_telegram_avatar(BOT_TOKEN, avatar_url)
             except Exception as e:
                 logger.debug(f"Telegram avatar fallback failed for hero {hero_id}: {e}")
         
-        # 3. Fallback to Steam/direct avatar URL
-        if not img and avatar_url:
+        # 3. Fallback to Steam/direct avatar URL (http URLs only)
+        if not img and avatar_url and avatar_url.startswith('http'):
             img = await fetch_hero_icon(None, avatar_url)
         
         # 4. Fallback: fetch avatar directly from OpenDota by steam_id
