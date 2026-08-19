@@ -1970,21 +1970,6 @@ def generate_start_card(
         # Иконки - открытые источники
         icon_size = int(32 * scale)
 
-        icon_urls = {
-            'msg': 'https://upload.wikimedia.org/wikipedia/commons/8/83/Telegram_icon_%282021%29.svg',
-            'trophy': 'https://upload.wikimedia.org/wikipedia/commons/a/a2/Trophy_icon.svg',
-        }
-
-        icons = {}
-        for name, url in icon_urls.items():
-            try:
-                resp = requests.get(url, timeout=4)
-                if resp.status_code == 200:
-                    ic = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    icons[name] = ic.resize((icon_size, icon_size), Image.LANCZOS)
-            except Exception:
-                pass
-
         rank_icon = None
         rank_icon_size = int(100 * scale)
         if rank_tier > 0:
@@ -2033,23 +2018,6 @@ def generate_start_card(
             logger.info(f"generate_start_card: drew week stats {week_wins}W/{week_losses}L/{wr}% for {username or steam_nickname}")
         else:
             draw.text((info_x + username_x_offset, msg_num_y), f"{message_count}", fill=(255, 255, 255), font=font_title)
-
-        awards_y = msg_num_y + int(44 * scale)
-        award_parts = []
-        if weekly_mvp > 0:
-            award_parts.append(f"MVP x{weekly_mvp}")
-        if weekly_top2 > 0:
-            award_parts.append(f"Top-2 x{weekly_top2}")
-        if weekly_top3 > 0:
-            award_parts.append(f"Top-3 x{weekly_top3}")
-        if award_parts:
-            awards_text = "  |  ".join(award_parts)
-            if "trophy" in icons:
-                img.paste(icons["trophy"], (info_x + username_x_offset, awards_y - 4), icons["trophy"])
-                text_x = info_x + username_x_offset + icon_size + int(8 * scale)
-            else:
-                text_x = info_x + username_x_offset
-            draw.text((text_x, awards_y), awards_text, fill=(255, 215, 120), font=font_small)
 
         if rank_tier > 0 and rank_icon:
             rank_x = avatar_x + avatar_size // 2 - rank_icon_size // 2
