@@ -1221,7 +1221,7 @@ async def update_all_mmr_job(context):
 
         # Отправляем уведомления о ранк-апах параллельно
         if digest_chat_id and rank_up_users:
-            from dota_mmr import generate_start_card
+            from dota_mmr import generate_start_card, get_week_top_heroes
 
             async def notify_rank_up(user, rank_info):
                 try:

@@ -363,7 +363,7 @@ opendota_rate_limiter = UnifiedRateLimiter(RateLimitConfig(requests_per_second=0
 telegram_rate_limiter = UnifiedRateLimiter(RateLimitConfig(requests_per_second=10.0, burst=20))
 
 # Global circuit breaker instances
-opendota_circuit_breaker = CircuitBreaker(CircuitBreakerConfig(failure_threshold=10, recovery_timeout=30))
+opendota_circuit_breaker = CircuitBreaker(CircuitBreakerConfig(failure_threshold=30, recovery_timeout=30))
 explorer_circuit_breaker = CircuitBreaker(CircuitBreakerConfig(failure_threshold=3, recovery_timeout=300))
 
 

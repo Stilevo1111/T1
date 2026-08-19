@@ -43,7 +43,7 @@ async def get_hero_list():
         return cached
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-            async with session.get("https://api.opendota.com/api/heroes") as resp:
+            async with session.get("https://api.opendota.com/api/heroes", headers={"User-Agent": "FissureBot/1.0 (Dota2 Telegram Bot)"}) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     if data:
@@ -92,30 +92,7 @@ def reset_circuit_breaker():
     opendota_circuit_breaker.reset()
     logger.info("Circuit breaker manually reset to CLOSED")
 
-# Rate limiter helper functions using unified rate limiter
-def is_opendota_rate_limited():
-    """Проверить, находится ли OpenDota API в состоянии rate limit"""
-    if not opendota_rate_limiter.try_acquire(1):
-        return True
-    return False
 
-
-def get_opendota_rate_limit_time_remaining():
-    """Получить оставшееся время до восстановления API в секундах"""
-    global _opendota_rate_limited_until
-    remaining = _opendota_rate_limited_until - time.time()
-    return max(0, int(remaining))
-
-
-def get_opendota_rate_limit_message():
-    """Получить сообщение об ошибке"""
-    return "⚠️ OpenDota API временно недоступен. Вернётся, когда кто-то купит варды 👁️"
-
-
-def set_opendota_rate_limited(wait_seconds=60):
-    """Установить время до которого OpenDota API недоступен"""
-    opendota_rate_limiter._tokens = 0
-    opendota_rate_limiter._last_update = time.monotonic() - wait_seconds
 
 
 # Background retry task for circuit breaker recovery
@@ -182,15 +159,20 @@ USER_MATCHES_CACHE_TTL = 1800  # 30 минут
 
 
 def is_opendota_rate_limited():
-    """Проверить, находится ли OpenDota API в состоянии rate limit"""
-    global _opendota_rate_limited_until
-    return time.time() < _opendota_rate_limited_until
+    """Проверить, находится ли OpenDota API в состоянии rate limit.
+    Учитывает как ручное ограничение (429), так и состояние UnifiedRateLimiter."""
+    if time.time() < _opendota_rate_limited_until:
+        return True
+    if opendota_rate_limiter.get_available() < 1:
+        return True
+    return False
 
 def get_opendota_rate_limit_time_remaining():
     """Получить оставшееся время до восстановления API в секундах"""
     global _opendota_rate_limited_until
-    remaining = _opendota_rate_limited_until - time.time()
-    return max(0, int(remaining))
+    ts_remaining = max(0, int(_opendota_rate_limited_until - time.time()))
+    rl_remaining = int(opendota_rate_limiter.wait_time(1))
+    return max(ts_remaining, rl_remaining)
 
 def get_opendota_rate_limit_message():
     """Получить сообщение об ошибке"""
@@ -200,6 +182,8 @@ def set_opendota_rate_limited(wait_seconds=60):
     """Установить время до которого OpenDota API недоступен"""
     global _opendota_rate_limited_until
     _opendota_rate_limited_until = time.time() + wait_seconds
+    opendota_rate_limiter._tokens = 0
+    opendota_rate_limiter._last_update = time.monotonic() - wait_seconds
 
 def _check_rate_limit():
     """Проверить и обновить rate limiting (sync версия)"""
@@ -275,7 +259,7 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
         current_timeout = timeout if attempt == 0 else timeout + 5
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=current_timeout)) as session:
-                async with session.get(url, params=params) as resp:
+                async with session.get(url, params=params, headers={"User-Agent": "FissureBot/1.0 (Dota2 Telegram Bot)"}) as resp:
                     if resp.status == 200:
                         _circuit_breaker_record_success()
                         try:
@@ -1075,7 +1059,12 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
     try:
         account_id = steam64_to_account_id(steam_id)
         url = f"{OPENDOTA_API_URL}/players/{account_id}/matches"
-        
+
+        # Use negative cache to avoid retrying on transient failures within 60s
+        if _is_not_found(url):
+            logger.debug(f"Recent matches: {steam_id} in negative cache, returning empty")
+            return []
+
         start_time = time.time()
         max_wait = 25
         matches = None
@@ -1083,13 +1072,15 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
             matches = await _api_get_async(url, {"limit": limit, "sort": "-start_time", "radiant_win": 1})
             if matches is None:
                 await asyncio.sleep(5)
-        
-        matches = matches or []
-        
-        # Don't cache empty results - might be due to rate limits
-        if matches:
-            _user_matches_cache[cache_key] = (matches, time.time())
-        
+
+        if matches is None:
+            # API never succeeded — mark as not-found so we don't retry for 60s
+            _mark_not_found(url)
+            return []
+
+        # Cache only non-None results (both empty list and actual matches)
+        _user_matches_cache[cache_key] = (matches, time.time())
+
         return matches
     except Exception as e:
         logger.error(f"get_recent_matches_async error: {e}", exc_info=True)
@@ -1157,7 +1148,11 @@ async def get_player_stats_async(steam_id: int, use_cache: bool = True, timeout:
                     return cached
             return None
 
-        player_data = await _api_get_async(players_url, timeout=timeout)
+        # Fetch player data and win/loss in parallel to halve latency
+        player_data, wl_data = await asyncio.gather(
+            _api_get_async(players_url, timeout=timeout),
+            _api_get_async(f"{OPENDOTA_API_URL}/players/{account_id}/wl", timeout=timeout),
+        )
         if not player_data or not isinstance(player_data, dict):
             logger.warning(f"Player data not found for account_id: {account_id}")
             logger.warning(f"API URL used: {OPENDOTA_API_URL}/players/{account_id}")
@@ -1171,7 +1166,6 @@ async def get_player_stats_async(steam_id: int, use_cache: bool = True, timeout:
         profile = player_data.get("profile") or {}
         rank_tier = player_data.get("rank_tier") or 0
 
-        wl_data = await _api_get_async(f"{OPENDOTA_API_URL}/players/{account_id}/wl", timeout=timeout)
         if wl_data and isinstance(wl_data, dict):
             wins = wl_data.get("win", 0)
             losses = wl_data.get("lose", 0)
@@ -1540,33 +1534,46 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
         matches = get_recent_matches(user["steam_id"], limit=50)
         logger.info(f"topmmr: Got {len(matches)} matches for hero meta from steam_id={user.get('steam_id')}")
 
-        # Simple per-process cache: skip heavy API call if we updated this user recently (helps on restart + repeated calls)
-        # But still process week stats from matches
+        # Skip heavy player stats API calls (2 requests) if MMR was refreshed recently.
+        # We still need matches for weekly stats, but player profile data rarely changes
+        # in 4 hours. Use DB values instead of 2 OpenDota API calls.
         last_updated = user.get('mmr_last_updated')
-        if last_updated and isinstance(last_updated, (int, float)):
-            if time.time() - last_updated < 4 * 3600:  # 4 hours (OpenDota API limit: 3000 tokens/day)
-                logger.info(f"topmmr: Cache hit for MMR - will use cached stats but still process week from matches")
+        recently_updated = last_updated and isinstance(last_updated, (int, float)) and time.time() - last_updated < 4 * 3600
 
         # Keep trying API until we get data (with delays to avoid rate limit spam)
         stats = None
         start_time = time.time()
         max_wait = 10  # Maximum wait time in seconds
-        while not stats and (time.time() - start_time) < max_wait:
-            # Если аккаунт точно не существует (404) — не spin-им retry-цикл, выходим сразу.
-            players_url = f"{OPENDOTA_API_URL}/players/{steam64_to_account_id(user['steam_id'])}"
-            if _is_not_found(players_url):
-                logger.info(f"topmmr: player {user['steam_id']} known not found, skipping retries")
-                break
-            # Если circuit breaker открыт — пропускаем ожидание
-            if not _circuit_breaker_can_execute():
-                logger.info(f"topmmr: circuit breaker open for {user['steam_id']}, skipping retry")
-                break
-            stats = get_player_stats(user["steam_id"], use_cache=False)
-            if stats:
-                break
-            wait_time = 2
-            logger.info(f"topmmr: waiting for API, sleeping {wait_time}s...")
-            time.sleep(wait_time)
+
+        if recently_updated:
+            logger.info(f"topmmr: recently updated (<4h) for user {telegram_id}, using DB stats (saving 2 API calls)")
+            stats = {
+                "nickname": user.get("steam_nickname") or user.get("username") or "Unknown",
+                "avatar": user.get("avatar"),
+                "mmr": user.get("mmr", 0),
+                "rank_tier": user.get("rank_tier", 0),
+                "total_games": 0,
+                "wins": 0,
+                "losses": 0,
+                "winrate": 0,
+            }
+        else:
+            while not stats and (time.time() - start_time) < max_wait:
+                # Если аккаунт точно не существует (404) — не spin-им retry-цикл, выходим сразу.
+                players_url = f"{OPENDOTA_API_URL}/players/{steam64_to_account_id(user['steam_id'])}"
+                if _is_not_found(players_url):
+                    logger.info(f"topmmr: player {user['steam_id']} known not found, skipping retries")
+                    break
+                # Если circuit breaker открыт — пропускаем ожидание
+                if not _circuit_breaker_can_execute():
+                    logger.info(f"topmmr: circuit breaker open for {user['steam_id']}, skipping retry")
+                    break
+                stats = get_player_stats(user["steam_id"], use_cache=False)
+                if stats:
+                    break
+                wait_time = 2
+                logger.info(f"topmmr: waiting for API, sleeping {wait_time}s...")
+                time.sleep(wait_time)
         logger.info(f"topmmr: get_player_stats returned: steam32={user.get('steam_id')}, success={stats is not None}")
         
         if not stats:
