@@ -750,19 +750,15 @@ def _draw_hero_squares_on_card(img, draw, top_heroes: list, base_height: int, wi
     if not top_heroes:
         return img, draw
 
-    strip_h = 96
     heroes = sorted(top_heroes, key=lambda h: h.get("picks", 0), reverse=True)[:5]
     n = len(heroes)
-    icon_size = 56
-    gap = 10
+    icon_size = 64
+    gap = 12
     total_w = n * icon_size + max(0, n - 1) * gap
     start_x = max(10, (width - total_w) // 2)
-    y = base_height - strip_h - 8
+    y = base_height - icon_size - 16
 
-    try:
-        font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
-    except Exception:
-        font_small = ImageFont.load_default()
+    corner_radius = 10
 
     for hero in heroes:
         hero_short = hero.get("short_name", "")
@@ -779,22 +775,22 @@ def _draw_hero_squares_on_card(img, draw, top_heroes: list, base_height: int, wi
                 top = (h - side) // 2
                 icon = icon.crop((left, top, left + side, top + side))
                 icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
-                img.paste(icon, (start_x, y), icon)
+
+                mask = Image.new("L", (icon_size, icon_size), 0)
+                mask_draw = ImageDraw.Draw(mask)
+                mask_draw.rounded_rectangle([0, 0, icon_size - 1, icon_size - 1], radius=corner_radius, fill=255)
+                img.paste(icon, (start_x, y), mask)
             except Exception:
-                draw.rectangle([start_x, y, start_x + icon_size, y + icon_size], fill=(55, 45, 70))
+                draw.rounded_rectangle([start_x, y, start_x + icon_size, y + icon_size], radius=corner_radius, fill=(55, 45, 70))
         else:
-            draw.rectangle([start_x, y, start_x + icon_size, y + icon_size], fill=(55, 45, 70))
+            draw.rounded_rectangle([start_x, y, start_x + icon_size, y + icon_size], radius=corner_radius, fill=(55, 45, 70))
 
-        draw.rectangle(
+        draw.rounded_rectangle(
             [start_x - 1, y - 1, start_x + icon_size + 1, y + icon_size + 1],
+            radius=corner_radius + 1,
             outline=(215, 175, 85),
-            width=1,
+            width=2,
         )
-
-        hero_name = hero.get("name", "")
-        if hero_name:
-            name_y = y + icon_size + 4
-            draw.text((start_x, name_y), hero_name, fill=(200, 210, 230), font=font_small)
 
         start_x += icon_size + gap
 
