@@ -1493,23 +1493,24 @@ class Database:
             logger.error(f"register_user error: {e} (telegram_id={tid}, source={source})", exc_info=True)
             return None
 
-    def repair_missing_telegram_ids(self, dry_run: bool = False):
-        """Удалить или залогировать пользователей с невалидным telegram_id.
+    def audit_invalid_telegram_ids(self):
+        """Аудит пользователей с невалидным telegram_id.
         
-        Безопасные правила:
-        - Удаляем только если telegram_id NULL/0/невалидный
-        - И steam_id отсутствует
-        - И fissure == 0.1 (дефолт, никогда не менялся)
-        - И message_count == 0 (никогда не писал)
+        Только читает и логирует проблемные записи. Ничего не удаляет и не изменяет.
         
-        dry_run=True: только логирует, не удаляет.
+        Правила:
+        - telegram_id NULL/0/невалидный
+        - steam_id отсутствует
+        - fissure == 0.1 (дефолт)
+        - message_count == 0
+        
+        Returns: (count_invalid, count_active_skipped)
         """
         url = urlparse.urlparse(DATABASE_URL)
         scheme = url.scheme
         db_type = get_db_type()
-        repaired = 0
-        skipped = 0
-        dry_run_label = "[DRY RUN] " if dry_run else ""
+        invalid_count = 0
+        active_skipped = 0
 
         try:
             if "postgres" in scheme:
@@ -1523,17 +1524,13 @@ class Database:
                 for row in candidates:
                     uid, bad_tid, username, first_name, steam_id, fissure, message_count, last_activity = row["id"], row["telegram_id"], row.get("username"), row.get("first_name"), row.get("steam_id"), float(row["fissure"] or 0), int(row["message_count"] or 0), row.get("last_activity")
                     if steam_id or fissure > 0.1 or message_count > 0:
-                        logger.warning(f"repair_missing_telegram_ids: {dry_run_label}skip active row id={uid}, bad telegram_id={bad_tid}, username={username}, steam={bool(steam_id)}, fissure={fissure}, messages={message_count}")
-                        skipped += 1
+                        logger.warning(f"audit_invalid_telegram_ids: skip active row id={uid}, bad telegram_id={bad_tid}, username={username}, steam={bool(steam_id)}, fissure={fissure}, messages={message_count}, last_activity={last_activity}")
+                        active_skipped += 1
                         continue
-                    if dry_run:
-                        logger.warning(f"repair_missing_telegram_ids: {dry_run_label}would delete dead row id={uid}, username={username}, last_activity={last_activity}")
-                    else:
-                        self.execute_query("DELETE FROM users WHERE id = %s", (uid,))
-                        logger.warning(f"repair_missing_telegram_ids: {dry_run_label}deleted dead row id={uid}, username={username}, last_activity={last_activity}")
-                    repaired += 1
-                logger.warning(f"repair_missing_telegram_ids: {dry_run_label}done. repaired={repaired}, skipped={skipped}")
-                return repaired
+                    logger.warning(f"audit_invalid_telegram_ids: invalid row id={uid}, bad telegram_id={bad_tid}, username={username}, steam={bool(steam_id)}, fissure={fissure}, messages={message_count}, last_activity={last_activity}")
+                    invalid_count += 1
+                logger.warning(f"audit_invalid_telegram_ids: done. invalid={invalid_count}, active_skipped={active_skipped}")
+                return invalid_count, active_skipped
 
             conn = get_connection()
             cursor = conn.cursor()
@@ -1547,25 +1544,28 @@ class Database:
                     message_count = int(message_count or 0) if len(row) > 5 else 0
                     last_activity = row[6] if len(row) > 6 else None
                     if steam_id or fissure > 0.1 or message_count > 0:
-                        logger.warning(f"repair_missing_telegram_ids: {dry_run_label}skip active sqlite row id={rid}, bad telegram_id={bad_tid}, username={username}, steam={bool(steam_id)}, fissure={fissure}, messages={message_count}")
-                        skipped += 1
+                        logger.warning(f"audit_invalid_telegram_ids: skip active sqlite row id={rid}, bad telegram_id={bad_tid}, username={username}, steam={bool(steam_id)}, fissure={fissure}, messages={message_count}, last_activity={last_activity}")
+                        active_skipped += 1
                         continue
-                    if dry_run:
-                        logger.warning(f"repair_missing_telegram_ids: {dry_run_label}would delete dead sqlite row id={rid}, username={username}, last_activity={last_activity}")
-                    else:
-                        cursor.execute("DELETE FROM users WHERE id = ?", (rid,))
-                        logger.warning(f"repair_missing_telegram_ids: {dry_run_label}deleted dead sqlite row id={rid}, username={username}, last_activity={last_activity}")
-                    repaired += 1
-                if not dry_run:
-                    conn.commit()
-                logger.warning(f"repair_missing_telegram_ids: {dry_run_label}done. repaired={repaired}, skipped={skipped}")
-                return repaired
+                    logger.warning(f"audit_invalid_telegram_ids: invalid sqlite row id={rid}, bad telegram_id={bad_tid}, username={username}, steam={bool(steam_id)}, fissure={fissure}, messages={message_count}, last_activity={last_activity}")
+                    invalid_count += 1
+                logger.warning(f"audit_invalid_telegram_ids: done. invalid={invalid_count}, active_skipped={active_skipped}")
+                return invalid_count, active_skipped
             finally:
                 cursor.close()
                 release_connection(conn)
         except Exception as e:
-            logger.error(f"repair_missing_telegram_ids error: {e}")
-            return repaired
+            logger.error(f"audit_invalid_telegram_ids error: {e}")
+            return 0, 0
+
+    def repair_missing_telegram_ids(self, dry_run: bool = False):
+        """Legacy: перенаправляет в audit_invalid_telegram_ids().
+        
+        Удаление пользователей отключено насовсем. Используйте audit_invalid_telegram_ids()
+        для безопасного аудита без изменений данных.
+        """
+        logger.warning("repair_missing_telegram_ids() is deprecated; use audit_invalid_telegram_ids() instead. No users will be deleted.")
+        return self.audit_invalid_telegram_ids()[0]
 
     def get_user(self, telegram_id, username=None):
         """Получение пользователя"""
@@ -3970,11 +3970,11 @@ def invalidate_stale_top_caches():
 def validate_user_registry():
     try:
         db = Database()
-        bad = db.repair_missing_telegram_ids()
-        if bad:
-            logger.warning(f"validate_user_registry: found {bad} users with invalid telegram_id")
+        invalid_count, active_skipped = db.audit_invalid_telegram_ids()
+        if invalid_count:
+            logger.warning(f"validate_user_registry: found {invalid_count} users with invalid telegram_id (skipped {active_skipped} active users)")
         invalidate_stale_top_caches()
-        return bad
+        return invalid_count
     except Exception as e:
         logger.error(f"validate_user_registry error: {e}")
         return -1

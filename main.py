@@ -4224,9 +4224,9 @@ async def main():
         async def validate_user_registry_job(context):
             try:
                 from database import validate_user_registry
-                bad = await asyncio.to_thread(validate_user_registry)
-                if bad:
-                    logger.warning(f"validate_user_registry_job: found {bad} invalid users")
+                invalid_count = await asyncio.to_thread(validate_user_registry)
+                if invalid_count:
+                    logger.warning(f"validate_user_registry_job: found {invalid_count} users with invalid telegram_id (read-only audit, no data modified)")
             except Exception as e:
                 logger.error(f"validate_user_registry_job: {e}")
 
