@@ -4232,6 +4232,11 @@ async def main():
             days=(0, 1, 2, 3, 4, 5, 6)
         )
 
+        job_queue.run_repeating(
+            update_fissure_master_job,
+            interval=datetime.timedelta(minutes=15),
+            first=datetime.timedelta(minutes=5)
+        )
 
         job_queue.run_daily(
             cleanup_left_users_job,
