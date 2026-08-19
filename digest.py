@@ -886,18 +886,23 @@ async def alternate_digest_job(context):
             # Генерируем геро-мета баннер (раз в 12 часов или при новом дайджесте)
             hero_meta_banner = None
             need_hero_meta = should_create_new or now - _digest_state_container.get_last_hero_meta_refresh() > 12 * 3600
+            original_msg_id = last_message_id
             
             if need_hero_meta:
                 try:
-                    from hero_meta import get_hero_meta_banner, clear_hero_meta_cache
+                    from hero_meta import get_hero_meta_banner, clear_hero_meta_cache, HERO_META_REDIS_KEY
                     if should_create_new:
                         clear_hero_meta_cache()
-                    hero_meta_banner = await asyncio.wait_for(get_hero_meta_banner(), timeout=90.0)
+                    try:
+                        from cache import cache
+                        await cache.delete(HERO_META_REDIS_KEY)
+                    except Exception:
+                        pass
+                    hero_meta_banner = await asyncio.wait_for(get_hero_meta_banner(context.application.bot), timeout=90.0)
                     if hero_meta_banner:
                         set_config('last_hero_meta_update', int(now))
                         _digest_state_container.set_last_hero_meta_refresh(now)
                         logger.info("Hero meta banner generated for digest")
-                        original_msg_id = last_message_id
                         if last_message_id:
                             try:
                                 from io import BytesIO
@@ -953,7 +958,6 @@ async def alternate_digest_job(context):
                     logger.warning(f"Could not generate hero meta banner: {e}")
                     hero_meta_banner = None
 
-            # Удаляем старое сообщение если есть
             if original_msg_id:
                 try:
                     msg_id_int = int(original_msg_id)

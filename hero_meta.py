@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import aiohttp
+import requests
 from PIL import Image, ImageDraw, ImageFont
 
 from hero_positions import hero_positions
@@ -686,7 +687,7 @@ def _get_hero_stats_from_db(days=7):
 STEAM_DEFAULT_AVATAR = "https://avatars.steamstatic.com/def8d426ec47c0c120bf6ea2506f0502ddf25e2e_full.jpg"
 
 
-async def create_infographic(hero_stats):
+async def create_infographic(hero_stats, bot=None):
     logger.info("Starting create_infographic")
     if not BACKGROUND_PATH.exists():
         base = Image.new("RGBA", (1200, 800), (25, 25, 35, 255))
@@ -752,15 +753,31 @@ async def create_infographic(hero_stats):
         telegram_id = player.get('telegram_id')
         img = None
         
-        # 1. Try Telegram profile photo first
-        if telegram_id:
+        # 1. Try Telegram profile photo first (via bot instance if available)
+        if telegram_id and bot:
+            try:
+                tg_avatar_url = await get_user_avatar_url(bot, telegram_id)
+                if tg_avatar_url:
+                    resp = requests.get(
+                        tg_avatar_url,
+                        timeout=10,
+                        headers={"User-Agent": "fissure-bot/1.0"},
+                    )
+                    if resp.status_code == 200 and resp.content:
+                        img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                        logger.debug(f"Telegram avatar via bot for hero {hero_id}")
+            except Exception as e:
+                logger.debug(f"Telegram avatar via bot failed for hero {hero_id}: {e}")
+        
+        # 2. If bot not available, try raw API calls
+        if not img and telegram_id:
             try:
                 from config import BOT_TOKEN
                 img = await _fetch_telegram_profile_photo(BOT_TOKEN, telegram_id)
             except Exception as e:
                 logger.debug(f"Telegram profile photo failed for hero {hero_id}: {e}")
         
-        # 2. Try Telegram avatar ONLY if it's a file_id, not an http URL
+        # 3. Try Telegram avatar file_id (not http URLs)
         if not img and avatar_url and not avatar_url.startswith('http'):
             try:
                 from config import BOT_TOKEN
@@ -768,11 +785,11 @@ async def create_infographic(hero_stats):
             except Exception as e:
                 logger.debug(f"Telegram avatar fallback failed for hero {hero_id}: {e}")
         
-        # 3. Fallback to Steam/direct avatar URL (http URLs only)
+        # 4. Fallback to Steam/direct avatar URL (http URLs only)
         if not img and avatar_url and avatar_url.startswith('http'):
             img = await fetch_hero_icon(None, avatar_url)
         
-        # 4. Fallback: fetch avatar directly from OpenDota by steam_id
+        # 5. Fallback: fetch avatar directly from OpenDota by steam_id
         if not img:
             steam_id = player.get('steam_id')
             if steam_id:
@@ -842,9 +859,11 @@ HERO_META_CONFIG_TTL = 7 * 24 * 3600  # 7 days
 HERO_META_BANNER_KEY = 'hero_meta_banner'  # Cached PNG bytes
 HERO_META_REDIS_KEY = 'hero_meta_banner_v2'  # Redis cache key for banner image bytes
 
-
-async def get_hero_meta_banner():
+async def get_hero_meta_banner(bot=None):
     """Get hero meta banner from Redis cache or generate new one.
+    
+    Args:
+        bot: Telegram bot instance for fetching user profile photos. If None, uses raw API calls.
     
     Returns:
         bytes: PNG image bytes
@@ -1023,8 +1042,12 @@ def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, g
     return buf.getvalue()
 
 
-async def get_hero_meta_image():
-    """Generate hero meta infographic. Uses Redis cache for 12h."""
+async def get_hero_meta_image(bot=None):
+    """Generate hero meta infographic. Uses Redis cache for 12h.
+    
+    Args:
+        bot: Telegram bot instance for fetching user profile photos.
+    """
     import base64
     
     # Try Redis cache first
@@ -1047,7 +1070,7 @@ async def get_hero_meta_image():
             return get_static_fallback_banner()
         
         # Generate new banner
-        banner = await create_infographic(data)
+        banner = await create_infographic(data, bot)
         if banner:
             # Save to Redis
             try:
