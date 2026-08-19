@@ -744,32 +744,23 @@ async def get_week_top_heroes_async(steam_id: int, top_k: int = 5, match_limit: 
 
 
 def _draw_hero_squares_on_card(img, draw, top_heroes: list, base_height: int, width: int):
-    """Добавить полоску с квадратиками героев внизу карточки."""
+    """Добавить квадратики героев внизу карточки без расширения изображения."""
     from PIL import Image, ImageDraw, ImageFont
 
     if not top_heroes:
         return img, draw
 
-    strip_h = 110
-    new_height = base_height + strip_h
-    extended = Image.new("RGB", (width, new_height), (18, 22, 34))
-    extended.paste(img, (0, 0))
-    img = extended
-    draw = ImageDraw.Draw(img)
-
-    draw.rectangle([0, base_height, width, new_height], fill=(22, 28, 42))
-    draw.line([(0, base_height), (width, base_height)], fill=(215, 175, 85), width=2)
-
+    strip_h = 96
     heroes = sorted(top_heroes, key=lambda h: h.get("picks", 0), reverse=True)[:5]
     n = len(heroes)
-    icon_size = 72
-    gap = 14
+    icon_size = 56
+    gap = 10
     total_w = n * icon_size + max(0, n - 1) * gap
-    start_x = max(16, (width - total_w) // 2)
-    y = base_height + 10
+    start_x = max(10, (width - total_w) // 2)
+    y = base_height - strip_h - 8
 
     try:
-        font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
+        font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
     except Exception:
         font_small = ImageFont.load_default()
 
@@ -795,14 +786,14 @@ def _draw_hero_squares_on_card(img, draw, top_heroes: list, base_height: int, wi
             draw.rectangle([start_x, y, start_x + icon_size, y + icon_size], fill=(55, 45, 70))
 
         draw.rectangle(
-            [start_x - 2, y - 2, start_x + icon_size + 1, y + icon_size + 1],
+            [start_x - 1, y - 1, start_x + icon_size + 1, y + icon_size + 1],
             outline=(215, 175, 85),
-            width=2,
+            width=1,
         )
 
         hero_name = hero.get("name", "")
         if hero_name:
-            name_y = y + icon_size + 6
+            name_y = y + icon_size + 4
             draw.text((start_x, name_y), hero_name, fill=(200, 210, 230), font=font_small)
 
         start_x += icon_size + gap
