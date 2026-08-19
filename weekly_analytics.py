@@ -1396,7 +1396,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
     ax.imshow(
         bg,
-        extent=[0, len(raw_impacts) + 1, 0, 2],
+        extent=[0, 11, 0, 2],
         aspect='auto',
         interpolation='bilinear',
         alpha=1.0,
@@ -1532,7 +1532,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         )
 
     y_max = max(2.0, max(raw_impacts) + 0.25)
-    ax.set_xlim(0.3, len(raw_impacts) + 0.7)
+    ax.set_xlim(0, 11)
     ax.set_ylim(0, y_max)
 
     ax.set_xticks(x)
