@@ -986,6 +986,8 @@ async def alternate_digest_job(context):
                             logger.info(f"Дайджест {msg.message_id} закреплён")
                         else:
                             logger.warning(f"Не удалось закрепить дайджест {msg.message_id} — проверьте права бота")
+                    except Exception as e:
+                        logger.debug(f"Не удалось закрепить дайджест: {e}")
 
                     # Удаляем системное сообщение о закрепе, если есть права
                     logger.info(f"Проверка прав на удаление системного сообщения для chat_id={digest_chat_id}")
@@ -1027,8 +1029,6 @@ async def alternate_digest_job(context):
                         logger.info("❌ Нет прав на удаление системного сообщения о закрепе")
                 except Exception as e:
                     logger.debug(f"Не удалось закрепить: {e}")
-            finally:
-                pass  # Creation flag no longer used (legacy from extraction)
 
     except Exception as e:
         logger.error(f"Ошибка в alternate_digest_job: {e}", exc_info=True)
