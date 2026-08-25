@@ -145,6 +145,8 @@ class UserCache:
                 return None
             if isinstance(data, dict):
                 return dict(data)
+            if isinstance(data, list):
+                return list(data)
             return data
 
     def set(self, telegram_id, data, skip_dirty=False):

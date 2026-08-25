@@ -466,8 +466,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             category = "same"
 
-        # Hero quote is based on the base roll (before streak/multicast)
-        extra_text = get_hero_quote(display_roll)
+        # Hero quote is only for normal rolls (not multicast)
+        if cascade_count > 1:
+            extra_text = ""
+        else:
+            extra_text = get_hero_quote(display_roll)
 
         # Build message parts in order
         parts = []

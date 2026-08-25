@@ -21,6 +21,7 @@ from constants import get_banner_path
 from cache_service import explorer_circuit_breaker
 
 from dota_mmr import get_player_stats_async
+from bot_utils import get_user_avatar_url
 
 logger = logging.getLogger(__name__)
 
@@ -758,13 +759,17 @@ async def create_infographic(hero_stats, bot=None):
             try:
                 tg_avatar_url = await get_user_avatar_url(bot, telegram_id)
                 if tg_avatar_url:
-                    resp = requests.get(
-                        tg_avatar_url,
-                        timeout=10,
-                        headers={"User-Agent": "fissure-bot/1.0"},
-                    )
-                    if resp.status_code == 200 and resp.content:
-                        img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                    def _download_avatar():
+                        resp = requests.get(
+                            tg_avatar_url,
+                            timeout=10,
+                            headers={"User-Agent": "fissure-bot/1.0"},
+                        )
+                        if resp.status_code == 200 and resp.content:
+                            return Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                        return None
+                    img = await asyncio.to_thread(_download_avatar)
+                    if img:
                         logger.debug(f"Telegram avatar via bot for hero {hero_id}")
             except Exception as e:
                 logger.debug(f"Telegram avatar via bot failed for hero {hero_id}: {e}")
@@ -882,7 +887,7 @@ async def get_hero_meta_banner(bot=None):
     
     # Generate or load from DB cache
     try:
-        banner = await get_hero_meta_image()
+        banner = await get_hero_meta_image(bot)
         if banner:
             # Save to Redis
             try:

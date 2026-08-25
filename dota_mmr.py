@@ -776,6 +776,7 @@ async def get_week_top_heroes_async(steam_id: int, top_k: int = 5, match_limit: 
 def _draw_hero_squares_on_card(img, draw, top_heroes: list, base_height: int, width: int):
     """Добавить квадратики героев внизу карточки без расширения изображения."""
     from PIL import Image
+    import io
 
     if not top_heroes:
         return img, draw

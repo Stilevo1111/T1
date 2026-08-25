@@ -249,6 +249,23 @@ def _build_stats_button_keyboard():
     ])
 
 
+async def get_user_avatar_url(bot, user_id: int) -> str | None:
+    """Полный URL аватарки Telegram (для загрузки в generate_start_card)."""
+    try:
+        photos = await bot.get_user_profile_photos(user_id, limit=1)
+        if photos and photos.photos:
+            photo = photos.photos[0][-1]
+            file = await bot.get_file(photo.file_id)
+            if file.file_path:
+                if file.file_path.startswith('http'):
+                    return file.file_path
+                return f"{bot.base_file_url}/{file.file_path}"
+        logger.debug(f"No profile photos for user {user_id}")
+    except Exception as e:
+        logger.warning(f"Could not get user avatar: {e}")
+    return None
+
+
 class ManualContext:
     """Minimal context-like object for manual job execution"""
     def __init__(self, application, bot):

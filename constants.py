@@ -22,17 +22,26 @@ __all__ = [
     # Default chances (legacy - some also in stats.py)
     "MULTICAST_DEFAULT_CHANCE",
     "ZEUS_DEFAULT_CHANCE",
+    "TECHIES_DEFAULT_CHANCE",
     # Digest headers/footers
     "MORNING_DIGEST_HEADER",
     "MORNING_DIGEST_FOOTER",
     "DOTA_DIGEST_HEADER",
     "DOTA_DIGEST_FOOTER",
+    # Digest intervals
+    "DIGEST_ANTI_SPAM_INTERVAL",
+    "DIGEST_DATA_REFRESH_INTERVAL",
+    "DIGEST_CACHE_TTL",
+    "DIGEST_ROTATION_INTERVAL",
+    "HERO_META_DIGEST_REFRESH_INTERVAL",
     # Assets
     "TOPMMR_BANNER_URL",
     # Zeus
     "ZEUS_TEXTS",
     # Welcome
     "WELCOME_PHRASES",
+    # Keep-alive
+    "KEEPALIVE_PING_NEON_HOURS",
 ]
 
 # Cooldown for fissure rolls (24 hours)
@@ -61,6 +70,13 @@ MORNING_DIGEST_HEADER = "🌅 ФИССУРА ДАЙДЖЕСТ"
 MORNING_DIGEST_FOOTER = "🔺 = рост позиций в топе\n🔻 = топ падение\n🔸 = текущий стрик побед"
 DOTA_DIGEST_HEADER = "🎮 DOTA ДАЙДЖЕСТ 📊"
 DOTA_DIGEST_FOOTER = "🔺 = лучший винрейт за неделю\n🔻 = худший винрейт за неделю\n🔸 = текущий стрик побед"
+
+# Digest intervals
+DIGEST_ANTI_SPAM_INTERVAL = 300  # 5 minutes between digest creations
+DIGEST_CACHE_TTL = 1200  # 20 minutes
+DIGEST_ROTATION_INTERVAL = 172800  # 48 hours
+HERO_META_DIGEST_REFRESH_INTERVAL = 12 * 3600  # 12 hours
+
 TOPMMR_BANNER_URL = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
 
 # Владыка небес texts (moved here for centralization)

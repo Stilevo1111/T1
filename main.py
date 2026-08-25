@@ -1491,11 +1491,15 @@ from bot_utils import (
     add_bot_message,
     clickable_name,
     delete_last_bot_message,
+    format_time,
+    get_user_avatar_url,
     main_menu,
     make_clickable,
     record_recent_fissure_roll,
+    recent_fissure_rolls,
     schedule_delete,
     set_last_bot_message,
+    update_last_message_id,
 )
 from constants import (
     COOLDOWN,
@@ -1560,22 +1564,6 @@ async def fetch_hero_icon(url, session=None, size=96):
 
 
 DEFAULT_AVATAR_URL = str(get_banner_path("default_avatar"))
-
-async def get_user_avatar_url(bot, user_id: int) -> str | None:
-    """Полный URL аватарки Telegram (для загрузки в generate_start_card)."""
-    try:
-        photos = await bot.get_user_profile_photos(user_id, limit=1)
-        if photos and photos.photos:
-            photo = photos.photos[0][-1]
-            file = await bot.get_file(photo.file_id)
-            if file.file_path:
-                if file.file_path.startswith('http'):
-                    return file.file_path
-                return f"{bot.base_file_url}/{file.file_path}"
-        logger.debug(f"No profile photos for user {user_id}")
-    except Exception as e:
-        logger.warning(f"Could not get user avatar: {e}")
-    return None
 
 
 async def resolve_avatar_url_for_card(

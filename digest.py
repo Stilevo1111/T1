@@ -6,6 +6,12 @@ import os
 import time
 
 from utils import _telegram_error_contains
+from constants import (
+    DIGEST_ANTI_SPAM_INTERVAL,
+    DIGEST_CACHE_TTL,
+    DIGEST_ROTATION_INTERVAL,
+    HERO_META_DIGEST_REFRESH_INTERVAL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,13 +67,13 @@ class _DigestState:
             "text": None,
             "type": None,
             "created_at": 0,
-            "cache_ttl": 1200,  # 20 минут
-            "rotation_interval": 172800,
+            "cache_ttl": DIGEST_CACHE_TTL,
+            "rotation_interval": DIGEST_ROTATION_INTERVAL,
             "data_hash": None,
             "last_data_check": 0,
         }
         self.last_data_refresh = 0
-        self.data_refresh_interval = 1200  # 20 минут между обновлениями данных
+        self.data_refresh_interval = DIGEST_DATA_REFRESH_INTERVAL
         self.lock = asyncio.Lock()
 
     # --- Convenience methods (internal use only) ---
@@ -876,7 +882,7 @@ async def alternate_digest_job(context):
             last_created_str = get_config('alternate_digest_last_created')
             last_created = float(last_created_str) if last_created_str and last_created_str.strip() else 0
             time_since_last = now - last_created
-            if time_since_last < 300:
+            if time_since_last < DIGEST_ANTI_SPAM_INTERVAL:
                 logger.info(f"Пропускаем создание - прошло всего {time_since_last:.0f} сек с последнего создания (last_message_id={last_message_id})")
                 return
 
@@ -885,10 +891,23 @@ async def alternate_digest_job(context):
 
             # Генерируем геро-мета баннер (раз в 12 часов или при новом дайджесте)
             hero_meta_banner = None
-            need_hero_meta = should_create_new or now - _digest_state_container.get_last_hero_meta_refresh() > 12 * 3600
-            original_msg_id = last_message_id
+            need_hero_meta = should_create_new or now - _digest_state_container.get_last_hero_meta_refresh() > HERO_META_DIGEST_REFRESH_INTERVAL
             
-            if need_hero_meta:
+            # Если нужно геро-мета и сообщение существует, удаляем его перед созданием нового с фото
+            if need_hero_meta and last_message_id:
+                logger.info(f"Генерируем геро-мета (need_hero_meta=True), удаляем старое сообщение {last_message_id} для создания с фото")
+                try:
+                    msg_id_int = int(last_message_id)
+                    if msg_id_int > 0:
+                        await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
+                        logger.info(f"Удалено старое сообщение {last_message_id}")
+                except Exception as e:
+                    logger.debug(f"Старое сообщение уже удалено: {e}")
+                set_config('alternate_digest_message_id', None)
+                last_message_id = None
+                should_create_new = True
+            
+            if should_create_new:
                 try:
                     from hero_meta import get_hero_meta_banner, clear_hero_meta_cache, HERO_META_REDIS_KEY
                     if should_create_new:
@@ -903,135 +922,70 @@ async def alternate_digest_job(context):
                         set_config('last_hero_meta_update', int(now))
                         _digest_state_container.set_last_hero_meta_refresh(now)
                         logger.info("Hero meta banner generated for digest")
-                        if last_message_id:
-                            try:
-                                from io import BytesIO
-                                from telegram import InputMediaPhoto
-                                photo_buf = BytesIO(hero_meta_banner)
-                                photo_buf.name = "hero_meta_banner.png"
-                                await bot.edit_message_media(
-                                    chat_id=int(digest_chat_id),
-                                    message_id=int(last_message_id),
-                                    media=InputMediaPhoto(media=photo_buf, caption=text, parse_mode="HTML")
-                                )
-                                logger.info(f"Обновлён баннер в существующем дайджесте {last_message_id}")
-                                _set_digest_is_photo(True)
-                                edited = True
-                                _digest_state_container.set_current_type(next_type)
-                                _digest_state_container.set_last_text(text)
-                                set_config('alternate_digest_last_text', text)
-                                if _digest_state_container.get_digest_data():
-                                    set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
-                                pinned_ok = await _ensure_pinned(bot, digest_chat_id, last_message_id)
-                                if not pinned_ok:
-                                    logger.warning(f"Не удалось закрепить дайджест {last_message_id} — проверьте права бота")
-                                return
-                            except Exception as e:
-                                logger.warning(f"Не удалось обновить медиа в существующем сообщении: {e}")
-                                try:
-                                    await bot.edit_message_caption(
-                                        chat_id=int(digest_chat_id),
-                                        message_id=int(last_message_id),
-                                        caption=text,
-                                        parse_mode="HTML"
-                                    )
-                                    logger.info(f"Обновлён caption в существующем дайджесте {last_message_id}")
-                                    _set_digest_is_photo(True)
-                                    edited = True
-                                    _digest_state_container.set_current_type(next_type)
-                                    _digest_state_container.set_last_text(text)
-                                    set_config('alternate_digest_last_text', text)
-                                    if _digest_state_container.get_digest_data():
-                                        set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
-                                    pinned_ok = await _ensure_pinned(bot, digest_chat_id, last_message_id)
-                                    if not pinned_ok:
-                                        logger.warning(f"Не удалось закрепить дайджест {last_message_id} — проверьте права бота")
-                                    return
-                                except Exception as e2:
-                                    logger.warning(f"Не удалось обновить caption, создаём новое: {e2}")
-                                    should_create_new = True
-                                    set_config('alternate_digest_message_id', None)
-                                    last_message_id = None
-                    else:
-                        logger.info("Hero meta banner skipped (no data)")
                 except Exception as e:
                     logger.warning(f"Could not generate hero meta banner: {e}")
                     hero_meta_banner = None
 
-            if original_msg_id:
+                # Создаём новое сообщение
                 try:
-                    msg_id_int = int(original_msg_id)
-                    if msg_id_int > 0:
-                        await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
-                        logger.info(f"Удалено старое сообщение {original_msg_id}")
-                except Exception as e:
-                    logger.debug(f"Старое сообщение уже удалено: {e}")
-                set_config('alternate_digest_message_id', None)
-
-# Создаём новое сообщение
-            try:
-                from io import BytesIO
-                if hero_meta_banner:
-                    photo_buf = BytesIO(hero_meta_banner)
-                    photo_buf.name = "hero_meta_banner.png"
-                    for attempt in range(3):
-                        try:
-                            msg = await bot.send_photo(
-                                chat_id=int(digest_chat_id),
-                                photo=photo_buf,
-                                caption=text,
-                                parse_mode="HTML"
-                            )
-                            logger.info(f"Создан новый дайджест с фото {msg.message_id}")
-                            _set_digest_is_photo(True)
-                            break
-                        except Exception as e:
-                            if attempt < 2 and ("TimedOut" in str(type(e).__name__) or "timeout" in str(e).lower()):
-                                logger.warning(f"send_photo timeout, retry {attempt + 1}/3")
-                                await asyncio.sleep(2)
-                                photo_buf.seek(0)
-                                continue
-                            raise
-                else:
-                    msg = await bot.send_message(
-                        chat_id=int(digest_chat_id),
-                        text=text,
-                        parse_mode="HTML",
-                        disable_web_page_preview=True
-                    )
-                    logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
-                    _set_digest_is_photo(False)
-
-                set_config('alternate_digest_message_id', str(msg.message_id))
-                set_config('alternate_digest_last_created', str(time.time()))
-                _digest_state_container.set_current_type(next_type)
-                _digest_state_container.set_last_text(text)
-                set_config('alternate_digest_last_text', text)
-                if _digest_state_container.get_digest_data():
-                    set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
-                logger.info(f"alternate_digest_job: saved new message_id = {msg.message_id}")
-
-                # Запускаем быстрый 15-секундный цикл (только в памяти)
-
-                # Закрепляем новое сообщение
-                try:
-                    # Открепляем только старое сообщение дайджеста (если оно отличается от нового)
-                    # ⚠️ БЫЛО: unpin_all_chat_messages — снимало ВСЕ закрепы в чате (правила, анонсы и т.д.)
-                    if last_message_id and str(last_message_id) != str(msg.message_id):
-                        try:
-                            await bot.unpin_chat_message(
-                                chat_id=int(digest_chat_id),
-                                message_id=int(last_message_id)
-                            )
-                            logger.info(f"Откреплено старое сообщение дайджеста {last_message_id}")
-                        except Exception as e:
-                            logger.debug(f"Не удалось открепить старый дайджест: {e}")
-
-                    pinned_ok = await _ensure_pinned(bot, digest_chat_id, msg.message_id)
-                    if pinned_ok:
-                        logger.info(f"Дайджест {msg.message_id} закреплён")
+                    from io import BytesIO
+                    if hero_meta_banner:
+                        photo_buf = BytesIO(hero_meta_banner)
+                        photo_buf.name = "hero_meta_banner.png"
+                        for attempt in range(3):
+                            try:
+                                msg = await bot.send_photo(
+                                    chat_id=int(digest_chat_id),
+                                    photo=photo_buf,
+                                    caption=text,
+                                    parse_mode="HTML"
+                                )
+                                logger.info(f"Создан новый дайджест с фото {msg.message_id}")
+                                _set_digest_is_photo(True)
+                                break
+                            except Exception as e:
+                                if attempt < 2 and ("TimedOut" in str(type(e).__name__) or "timeout" in str(e).lower()):
+                                    logger.warning(f"send_photo timeout, retry {attempt + 1}/3")
+                                    await asyncio.sleep(2)
+                                    photo_buf.seek(0)
+                                    continue
+                                raise
                     else:
-                        logger.warning(f"Не удалось закрепить дайджест {msg.message_id} — проверьте права бота")
+                        msg = await bot.send_message(
+                            chat_id=int(digest_chat_id),
+                            text=text,
+                            parse_mode="HTML",
+                            disable_web_page_preview=True
+                        )
+                        logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
+                        _set_digest_is_photo(False)
+
+                    set_config('alternate_digest_message_id', str(msg.message_id))
+                    set_config('alternate_digest_last_created', str(time.time()))
+                    _digest_state_container.set_current_type(next_type)
+                    _digest_state_container.set_last_text(text)
+                    set_config('alternate_digest_last_text', text)
+                    if _digest_state_container.get_digest_data():
+                        set_config('digest_fissure_data', json.dumps(_digest_state_container.get_digest_data()))
+                    logger.info(f"alternate_digest_job: saved new message_id = {msg.message_id}")
+
+                    # Закрепляем новое сообщение
+                    try:
+                        if last_message_id and str(last_message_id) != str(msg.message_id):
+                            try:
+                                await bot.unpin_chat_message(
+                                    chat_id=int(digest_chat_id),
+                                    message_id=int(last_message_id)
+                                )
+                                logger.info(f"Откреплено старое сообщение дайджеста {last_message_id}")
+                            except Exception as e:
+                                logger.debug(f"Не удалось открепить старый дайджест: {e}")
+
+                        pinned_ok = await _ensure_pinned(bot, digest_chat_id, msg.message_id)
+                        if pinned_ok:
+                            logger.info(f"Дайджест {msg.message_id} закреплён")
+                        else:
+                            logger.warning(f"Не удалось закрепить дайджест {msg.message_id} — проверьте права бота")
 
                     # Удаляем системное сообщение о закрепе, если есть права
                     logger.info(f"Проверка прав на удаление системного сообщения для chat_id={digest_chat_id}")
