@@ -74,6 +74,7 @@ DOTA_DIGEST_FOOTER = "🔺 = лучший винрейт за неделю\n🔻
 # Digest intervals
 DIGEST_ANTI_SPAM_INTERVAL = 300  # 5 minutes between digest creations
 DIGEST_CACHE_TTL = 1200  # 20 minutes
+DIGEST_DATA_REFRESH_INTERVAL = 3600  # 1 hour
 DIGEST_ROTATION_INTERVAL = 172800  # 48 hours
 HERO_META_DIGEST_REFRESH_INTERVAL = 12 * 3600  # 12 hours
 

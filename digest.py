@@ -9,6 +9,7 @@ from utils import _telegram_error_contains
 from constants import (
     DIGEST_ANTI_SPAM_INTERVAL,
     DIGEST_CACHE_TTL,
+    DIGEST_DATA_REFRESH_INTERVAL,
     DIGEST_ROTATION_INTERVAL,
     HERO_META_DIGEST_REFRESH_INTERVAL,
 )
@@ -173,14 +174,6 @@ _digest_state_lock = _digest_state_container.lock
 _last_data_refresh = _digest_state_container.last_data_refresh
 _data_refresh_interval = _digest_state_container.data_refresh_interval
 
-DIGEST_DATA_REFRESH_INTERVAL = 3600
-HERO_META_REFRESH_INTERVAL = 3600  # 1 hour (fallback, only used on new message)
-
-# =====================================================
-# Digest cache - invalidate to force refresh on next job run
-# Called from fissure.py after each roll to ensure fresh data
-# =====================================================
-
 def invalidate_digest_cache():
     """Сбрасывает кеш digest_stats чтобы следующий alternate_digest_job запросил свежие данные."""
     import database
@@ -188,12 +181,7 @@ def invalidate_digest_cache():
     _digest_state_container.set_digest_data(None)
     logger.info("Digest cache invalidated (will refresh on next job run)")
 
-
-# =====================================================
-# Instant digest refresh (right after a roll, debounced)
-# =====================================================
-
-INSTANT_REFRESH_DEBOUNCE = 10  # секунд между мгновенными апдейтами (coalesce burst-роллов)
+INSTANT_REFRESH_DEBOUNCE = 10
 
 
 def schedule_instant_digest_refresh(context):
