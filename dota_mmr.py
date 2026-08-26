@@ -386,7 +386,6 @@ def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None
         pass
 
     cdn_name = get_cdn_hero_name(hero_short_name)
-    local_name = get_local_hero_name(cdn_name)
     
     cache_file = HERO_CACHE_DIR / f"{cdn_name}.webp"
     if cache_file.exists():
@@ -395,12 +394,13 @@ def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None
         except Exception:
             pass
     
-    cache_file_local = HERO_CACHE_DIR / f"{local_name}.webp"
-    if cache_file_local.exists():
-        try:
-            return cache_file_local.read_bytes()
-        except Exception:
-            pass
+    if hero_short_name != cdn_name:
+        cache_file_local = HERO_CACHE_DIR / f"{hero_short_name}.webp"
+        if cache_file_local.exists():
+            try:
+                return cache_file_local.read_bytes()
+            except Exception:
+                pass
 
     try:
         url = f"{HERO_ICON_BASE}/{cdn_name}.png"
@@ -423,7 +423,6 @@ def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | 
     if not hero_short_name:
         return None
     cdn_name = get_cdn_hero_name(hero_short_name)
-    local_name = get_local_hero_name(cdn_name)
     cache_dir = HERO_CACHE_DIR
     cache_file = cache_dir / f"{cdn_name}.webp"
     if cache_file.exists():
@@ -432,12 +431,13 @@ def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | 
         except Exception:
             pass
     
-    cache_file_local = cache_dir / f"{local_name}.webp"
-    if cache_file_local.exists():
-        try:
-            return cache_file_local.read_bytes()
-        except Exception:
-            pass
+    if hero_short_name != cdn_name:
+        cache_file_local = cache_dir / f"{hero_short_name}.webp"
+        if cache_file_local.exists():
+            try:
+                return cache_file_local.read_bytes()
+            except Exception:
+                pass
     try:
         url = f"{HERO_IMAGE_BASE}/{cdn_name}.png"
         resp = requests.get(url, timeout=3, headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"})
@@ -460,7 +460,6 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
         return None
 
     cdn_name = get_cdn_hero_name(hero_short_name)
-    local_name = get_local_hero_name(cdn_name)
     cache_file = HERO_CACHE_DIR / f"{cdn_name}.webp"
 
     if cache_file.exists():
@@ -469,12 +468,13 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
         except Exception:
             logger.exception("Failed to load cached hero portrait")
     
-    cache_file_local = HERO_CACHE_DIR / f"{local_name}.webp"
-    if cache_file_local.exists():
-        try:
-            return Image.open(cache_file_local).convert("RGBA")
-        except Exception:
-            logger.exception("Failed to load cached hero portrait (local)")
+    if hero_short_name != cdn_name:
+        cache_file_local = HERO_CACHE_DIR / f"{hero_short_name}.webp"
+        if cache_file_local.exists():
+            try:
+                return Image.open(cache_file_local).convert("RGBA")
+            except Exception:
+                logger.exception("Failed to load cached hero portrait (local)")
 
     url = f"{HERO_IMAGE_BASE}/{cdn_name}.png"
     try:
