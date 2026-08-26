@@ -21,7 +21,7 @@ from cache_service import (
     opendota_rate_limiter,
 )
 from constants import get_banner_path
-from database import get_aiohttp_session, get_user, update_user_fields_batch
+from database import get_aiohttp_session, get_user, get_user_by_steam_id, update_user_fields_batch
 
 logger = logging.getLogger(__name__)
 
@@ -1389,7 +1389,7 @@ def _handle_existing_binding(
     existing_user: dict,
     private_profile: bool,
 ) -> dict | None:
-    from database import get_user_by_steam_id, update_user_fields_batch, user_cache
+    from database import user_cache
 
     existing_user = get_user_by_steam_id(steam_id)
     if not existing_user or existing_user.get("telegram_id") != telegram_id:
@@ -1569,7 +1569,7 @@ def admin_unlink_steam(steam_id: int) -> dict:
         dict с полями success, message, telegram_id (если найден)
     """
     try:
-        from database import get_user_by_steam_id, update_user_fields_batch, user_cache
+        from database import user_cache
 
         user = get_user_by_steam_id(steam_id)
 
