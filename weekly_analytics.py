@@ -60,6 +60,10 @@ __all__ = [
 # Cache for background image
 _CHART_BG_CACHE = None
 
+# Chart dimensions
+WIDTH = 1200
+HEIGHT = 800
+
 # =========================================================
 # MARKDOWN ESCAPE
 # =========================================================
@@ -1358,8 +1362,6 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
     except ImportError:
         return None
 
-    WIDTH = 1200
-    HEIGHT = 800
     DPI = 72
 
     reversed_history = list(reversed(history))[:10]
