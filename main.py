@@ -1195,7 +1195,8 @@ async def update_all_mmr_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                 logger.info(f"MMR updated for {telegram_id}: {result.get('mmr')} MMR")
                 if result.get('rank_up'):
                     fresh_user = await asyncio.to_thread(get_user, telegram_id) or {'telegram_id': telegram_id}
-                    rank_up_users.append((fresh_user, result['rank_up']))
+                    if fresh_user.get('in_chat', True):
+                        rank_up_users.append((fresh_user, result['rank_up']))
                 if result.get('mmr') is not None:
                     all_updated_users.append({
                         'telegram_id': telegram_id,
