@@ -1416,17 +1416,29 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
     ax.axhline(
         1.0,
         linestyle=(0, (6, 6)),
-        color="#ffffff",
-        linewidth=3.0,
-        alpha=0.35,
+        color="#ffff00",
+        linewidth=2.5,
+        alpha=0.8,
         zorder=2
+    )
+
+    ax.text(
+        len(raw_impacts) + 0.2,
+        1.0,
+        f"1.00",
+        fontsize=14,
+        color="#ffff00",
+        ha="left",
+        va="center",
+        fontweight="bold",
+        zorder=3
     )
 
     ax.text(
         len(raw_impacts) + 0.15,
         1.0,
         "PRO BENCHMARK",
-        fontsize=16,
+        fontsize=14,
         color="white",
         alpha=0.7,
         weight="bold",
@@ -1492,6 +1504,19 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
             color=glow,
             alpha=0.18,
             zorder=5
+        )
+
+        # Add IMPACT value label above each point
+        ax.text(
+            xi,
+            yi + 0.15,
+            f"{yi:.2f}",
+            fontsize=10,
+            color=border,
+            ha="center",
+            va="bottom",
+            fontweight="bold",
+            zorder=7
         )
 
     for idx, g in enumerate(reversed_history):
