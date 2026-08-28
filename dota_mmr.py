@@ -402,6 +402,24 @@ def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None
             except Exception:
                 pass
 
+    # Special fallback: doom_bringer has the same icon as doom
+    if hero_short_name == "doom" or cdn_name == "doom":
+        cache_file_doombringer = HERO_CACHE_DIR / "doom_bringer.webp"
+        if cache_file_doombringer.exists():
+            try:
+                return cache_file_doombringer.read_bytes()
+            except Exception:
+                pass
+
+    # Special fallback: magnataur has the same icon as magnus
+    if hero_short_name == "magnus" or cdn_name == "magnus":
+        cache_file_magnataur = HERO_CACHE_DIR / "magnataur.webp"
+        if cache_file_magnataur.exists():
+            try:
+                return cache_file_magnataur.read_bytes()
+            except Exception:
+                pass
+
     try:
         url = f"{HERO_ICON_BASE}/{cdn_name}.png"
         resp = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"})
@@ -430,12 +448,21 @@ def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | 
             return cache_file.read_bytes()
         except Exception:
             pass
-    
+
     if hero_short_name != cdn_name:
         cache_file_local = cache_dir / f"{hero_short_name}.webp"
         if cache_file_local.exists():
             try:
                 return cache_file_local.read_bytes()
+            except Exception:
+                pass
+
+    # Special fallback: doom_bringer has the same icon as doom
+    if hero_short_name == "doom" or cdn_name == "doom":
+        cache_file_doombringer = cache_dir / "doom_bringer.webp"
+        if cache_file_doombringer.exists():
+            try:
+                return cache_file_doombringer.read_bytes()
             except Exception:
                 pass
     try:
@@ -475,6 +502,24 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
                 return Image.open(cache_file_local).convert("RGBA")
             except Exception:
                 logger.exception("Failed to load cached hero portrait (local)")
+
+    # Special fallback: doom_bringer has the same icon as doom
+    if hero_short_name == "doom" or cdn_name == "doom":
+        cache_file_doombringer = HERO_CACHE_DIR / "doom_bringer.webp"
+        if cache_file_doombringer.exists():
+            try:
+                return Image.open(cache_file_doombringer).convert("RGBA")
+            except Exception:
+                logger.exception("Failed to load cached hero portrait (doom_bringer fallback)")
+
+    # Special fallback: magnataur has the same icon as magnus
+    if hero_short_name == "magnus" or cdn_name == "magnus":
+        cache_file_magnataur = HERO_CACHE_DIR / "magnataur.webp"
+        if cache_file_magnataur.exists():
+            try:
+                return Image.open(cache_file_magnataur).convert("RGBA")
+            except Exception:
+                logger.exception("Failed to load cached hero portrait (magnataur fallback)")
 
     url = f"{HERO_IMAGE_BASE}/{cdn_name}.png"
     try:
