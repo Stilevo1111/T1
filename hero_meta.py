@@ -1,4 +1,4 @@
-# hero_meta.py — heroStats API + role-based positions, layout = dc5d7a5 (a32f3e8)
+﻿# hero_meta.py — heroStats API + role-based positions, layout = dc5d7a5 (a32f3e8)
 
 import asyncio
 import io
@@ -140,57 +140,6 @@ def apply_fancy_style(img, size=(188, 100), radius=15, border_width=3, border_co
         outline=border_color, width=border_width
     )
     return output
-
-
-async def fetch_hero_portrait(session, icon_path):
-    if not icon_path:
-        return None
-
-    hero_name = None
-
-    # Handle numeric IDs (convert to hero name lookup)
-    if icon_path and icon_path.isdigit():
-        from dota_mmr import get_hero_list
-        from hero_names import get_cdn_hero_name
-        heroes = await get_hero_list()
-        for h in heroes:
-            if h.get("id") == int(icon_path):
-                internal_name = h.get("name", "").replace("npc_dota_hero_", "")
-                hero_name = get_cdn_hero_name(internal_name)
-                break
-        if not hero_name:
-            return None
-    else:
-        # Clean the path - remove trailing ? or query params that might cause issues
-        icon_path = icon_path.split("?")[0].rstrip("/")
-
-        # Convert old format /apps/dota2/images/dota/heroes/{name}_sb.png to new format
-        if "/apps/dota2/images/dota/heroes/" in icon_path:
-            match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', icon_path)
-            if match:
-                hero_name = match.group(1)
-        elif icon_path.startswith('/'):
-            filename = os.path.basename(icon_path)
-            hero_name = filename.replace("_sb.png", "").replace(".png", "").replace(".webp", "")
-        elif not icon_path.startswith('http'):
-            hero_name = icon_path.replace("_sb.png", "").replace(".png", "").replace(".webp", "")
-        else:
-            filename = os.path.basename(urlparse(icon_path).path)
-            hero_name = filename.replace("_sb.png", "").replace(".png", "").replace(".webp", "")
-
-    if not hero_name:
-        return None
-
-    # Try local portrait cache first (HERO_PORTRAIT_DIR from dota_mmr)
-    try:
-        from dota_mmr import get_cached_hero_portrait
-        img = await asyncio.to_thread(get_cached_hero_portrait, hero_name)
-        if img:
-            return img
-    except Exception:
-        pass
-
-    return None
 
 
 async def fetch_hero_icon(session, icon_path):
@@ -768,7 +717,7 @@ async def create_infographic(hero_stats, bot=None):
         avatar_cache[hero_id] = img
         return img
 
-    tasks = [fetch_hero_portrait(None, h['img']) for h in all_heroes]
+    tasks = [fetch_hero_icon(None, h['img']) for h in all_heroes]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     icons = {}
     for hero, result in zip(all_heroes, results):
