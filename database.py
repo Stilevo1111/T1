@@ -1107,6 +1107,17 @@ def init_db():
             _ensure_pg_columns(cursor)
             for index_sql in _PG_INDEXES:
                 cursor.execute(index_sql)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id SERIAL PRIMARY KEY,
+                    chat_id BIGINT NOT NULL,
+                    user_id BIGINT,
+                    message_text TEXT,
+                    is_bot BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_chat_id ON chat_messages(chat_id, created_at DESC)")
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -1259,6 +1270,17 @@ wins INTEGER DEFAULT 0,
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure_inchat ON users(fissure DESC) WHERE in_chat")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_week_active ON users(steam_id, week_games DESC) WHERE steam_id IS NOT NULL AND week_games > 0")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_last_activity ON users(last_activity) WHERE in_chat")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    chat_id INTEGER NOT NULL,
+                    user_id INTEGER,
+                    message_text TEXT,
+                    is_bot BOOLEAN DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_chat_id ON chat_messages(chat_id, created_at DESC)")
 
         _save_schema_version(cursor, is_pg)
         conn.commit()
@@ -2718,6 +2740,67 @@ def get_fissure_rank(telegram_id):
         top_cache.set(cache_key, result)
 
     return result
+
+
+def get_chat_messages_for_story(
+    chat_id: int,
+    period_days: int = 365,
+    limit: int = 10000,
+    exclude_user_id: int | None = None,
+) -> tuple[list[str], dict]:
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        db_type = get_db_type()
+
+        if db_type == "postgresql":
+            interval_sql = "NOW() - INTERVAL '%s days'"
+            total_query = "SELECT COUNT(*) FROM chat_messages WHERE chat_id = %s AND created_at >= " + interval_sql
+            bot_query = "SELECT COUNT(*) FROM chat_messages WHERE chat_id = %s AND created_at >= " + interval_sql + " AND is_bot = TRUE"
+            user_query = "SELECT message_text FROM chat_messages WHERE chat_id = %s AND created_at >= " + interval_sql + " AND is_bot = FALSE"
+            params = [chat_id, period_days]
+            if exclude_user_id is not None:
+                user_query += " AND user_id != %s"
+                params.append(exclude_user_id)
+            user_query += " ORDER BY created_at DESC LIMIT %s"
+            params.append(limit)
+        else:
+            interval_sql = "datetime('now', '-' || ? || ' days')"
+            total_query = "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND created_at >= " + interval_sql
+            bot_query = "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND created_at >= " + interval_sql + " AND is_bot = TRUE"
+            user_query = "SELECT message_text FROM chat_messages WHERE chat_id = ? AND created_at >= " + interval_sql + " AND is_bot = FALSE"
+            params = [chat_id, period_days]
+            if exclude_user_id is not None:
+                user_query += " AND user_id != ?"
+                params.append(exclude_user_id)
+            user_query += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+
+        cursor.execute(total_query, (chat_id, period_days))
+        total_messages = cursor.fetchone()[0]
+
+        cursor.execute(bot_query, (chat_id, period_days))
+        bot_messages = cursor.fetchone()[0]
+
+        cursor.execute(user_query, params)
+        rows = cursor.fetchall()
+        messages = [row[0] for row in rows if row[0]]
+
+        stats = {
+            "total_messages": total_messages,
+            "user_messages": len(messages),
+            "bot_messages": bot_messages,
+        }
+        logger.info(f"get_chat_messages_for_story chat_id={chat_id} loaded={len(messages)} total={total_messages} bot={bot_messages} limit={limit}")
+        return messages, stats
+    except Exception as e:
+        logger.error(f"get_chat_messages_for_story error: {e}")
+        return [], {"total_messages": 0, "user_messages": 0, "bot_messages": 0}
+    finally:
+        if conn:
+            release_connection(conn)
+
 
 def update_last_message_id(telegram_id, message_id):
     """Функция для совместимости - использует новый класс Database"""

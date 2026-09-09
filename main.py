@@ -67,6 +67,7 @@ from tags import (
     refresh_fissure_master_tag,
     remove_user_tag,
 )
+from chat_wordcloud.handler import story_command
 
 structlog.configure(
     processors=[
@@ -4334,6 +4335,7 @@ async def main():
         app.add_handler(CommandHandler("resetgame", reset_game))
         app.add_handler(CommandHandler("analyze", analyze_command))
         app.add_handler(CommandHandler(("party", "party"), party_command))
+        app.add_handler(CommandHandler("story", story_command))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
