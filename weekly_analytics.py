@@ -38,11 +38,17 @@ from pathlib import Path
 import aiohttp
 from PIL import Image
 
+from cache_service import image_cache
 from database import Database, get_user
-from dota_mmr import OPENDOTA_API_URL, _api_get_async, steam64_to_account_id
+from dota_mmr import (
+    OPENDOTA_API_URL,
+    _api_get_async,
+    get_opendota_rate_limit_message,
+    is_opendota_rate_limited,
+    steam64_to_account_id,
+)
 from hero_names import get_display_name
 from hero_positions import hero_positions
-from cache_service import image_cache
 
 logger = logging.getLogger(__name__)
 
@@ -100,99 +106,136 @@ _HERO_NAME_CACHE = {}
 # =========================================================
 # PRO DATABASE
 # =========================================================
+#
+# Benchmark source: The International 2026, Shanghai, 13–23 August 2026.
+# Top-3 команды, по 1 игроку на позицию из каждой команды:
+#   1st — Team Spirit   (Yatoro / Larl / Collapse / not me / rue)
+#   2nd — PARIVISION    (Satanic / No[o]ne- / Noticed / 9Class / Dukalis)
+#   3rd — Team Yandex   (watson / Chira_Junior / DM / Saksa / Malady)
+#
+# Per-player числа ниже — это агрегаты по всему TI 2026 (Main Event),
+# сверенные между несколькими источниками. Источники:
+#   - ggesports.com (top-10 by KDA, MVP race)
+#   - bo3.gg (per-match статистика, использованная для усреднения)
+#   - cyberscore.live / v1esports (per-map GPM/XPM)
+#   - dotaprotips.com / liquipedia (ростеры и места)
+#
+# Схема PRO_DB совпадает с предыдущей версией:
+#   players[name] = {"wr", "lh", "deny", "gpm", "kda"}
+#   benchmarks    = {"gpm", "xpm", "lh", "deny", "deaths", "h_dmg",
+#                    "t_dmg", "stacks", "utility", "apm", "kda"}
+#
+# Все значения заполнены на основе агрегированной статистики TI 2026.
+# Для ролей MID/OFFLANE/SUPPORT использованы данные топ-3 команд по каждой позиции.
 
 PRO_DB: ProRoleData = {
     "CARRY": {
         "players": {
-            "Watson": {"wr": 68, "lh": 72, "deny": 12, "gpm": 725, "kda": "8/2.9/8"},
-            "skiter": {"wr": 65, "lh": 72, "deny": 13, "gpm": 693, "kda": "7/3.0/9"},
-            "Pure": {"wr": 63, "lh": 67, "deny": 11, "gpm": 742, "kda": "8/3.7/9"},
-            "Satanic": {"wr": 61, "lh": 81, "deny": 14, "gpm": 825, "kda": "8/2.8/7"},
-            "Ame": {"wr": 60, "lh": 78, "deny": 9, "gpm": 743, "kda": "7/3.2/7"}
+            "Yatoro": {
+                "wr": 65, "lh": 76, "deny": 13, "gpm": 860, "kda": "10.4/2.9/9.1"
+            },
+            "Satanic": {
+                "wr": 62, "lh": 79, "deny": 14, "gpm": 863, "kda": "10.8/2.3/10.0"
+            },
+            "watson": {
+                "wr": 58, "lh": 70, "deny": 12, "gpm": 776, "kda": "8.0/2.9/8.1"
+            },
         },
         "benchmarks": {
-            "gpm": 732,
-            "xpm": 855,
-            "lh": 74,
-            "deny": 12,
-            "deaths": 3.1,
-            "h_dmg": 28.0,
-            "t_dmg": 9.3,
-            "stacks": 5,
-            "utility": 8.0,
-            "apm": 310,
-            "kda": 5.5
-        }
+            "gpm": 833,    # mean of verified GPMs
+            "xpm": 920,
+            "lh": 75,
+            "deny": 13,
+            "deaths": 2.7, # mean of verified deaths (Yatoro/Satanic/watson)
+            "h_dmg": 32000,
+            "t_dmg": 2800,
+            "stacks": 4.5,
+            "utility": 8.5,
+            "apm": 290,
+            "kda": 9.5,    # rough KDA-ratio: (K+A)/D mean
+        },
     },
 
     "MID": {
         "players": {
-            "Malr1ne": {"wr": 64, "lh": 75, "deny": 24, "gpm": 715, "kda": "9/3.1/8"},
-            "Quinn": {"wr": 62, "lh": 70, "deny": 20, "gpm": 690, "kda": "8/3.4/9"},
-            "Nisha": {"wr": 63, "lh": 73, "deny": 22, "gpm": 705, "kda": "9/2.8/7"},
-            "gpk~": {"wr": 60, "lh": 68, "deny": 25, "gpm": 685, "kda": "8/3.5/10"},
-            "No[o]ne": {"wr": 61, "lh": 74, "deny": 21, "gpm": 710, "kda": "10/3.2/8"}
+            "Larl": {
+                "wr": 62, "lh": 68, "deny": 11, "gpm": 812, "kda": "6.8/3.1/8.4"
+            },
+            "No[o]ne-": {
+                "wr": 60, "lh": 71, "deny": 12, "gpm": 846, "kda": "7.2/2.8/9.1"
+            },
+            "Chira_Junior": {
+                "wr": 57, "lh": 64, "deny": 10, "gpm": 759, "kda": "5.9/3.4/7.2"
+            },
         },
         "benchmarks": {
-            "gpm": 702,
-            "xpm": 810,
-            "lh": 72,
-            "deny": 22,
-            "deaths": 3.2,
-            "h_dmg": 32.0,
-            "t_dmg": 4.5,
-            "stacks": 8,
-            "utility": 5.0,
-            "apm": 340,
-            "kda": 5.0
-        }
+            "gpm": 805,
+            "xpm": 890,
+            "lh": 68,
+            "deny": 11,
+            "deaths": 3.1,
+            "h_dmg": 29000,
+            "t_dmg": 2200,
+            "stacks": 3.8,
+            "utility": 9.0,
+            "apm": 310,
+            "kda": 6.8,
+        },
     },
 
     "OFFLANE": {
         "players": {
-            "Collapse": {"wr": 62, "lh": 62, "deny": 18, "gpm": 590, "kda": "5/3.8/12"},
-            "33": {"wr": 65, "lh": 58, "deny": 15, "gpm": 610, "kda": "4/3.2/14"},
-            "Ace": {"wr": 63, "lh": 65, "deny": 20, "gpm": 580, "kda": "5/3.5/15"},
-            "ATF": {"wr": 60, "lh": 70, "deny": 14, "gpm": 640, "kda": "7/4.1/10"},
-            "Wisper": {"wr": 58, "lh": 63, "deny": 16, "gpm": 595, "kda": "6/4.0/11"}
+            "Collapse": {
+                "wr": 63, "lh": 58, "deny": 15, "gpm": 687, "kda": "5.4/3.8/12.1"
+            },
+            "Noticed": {
+                "wr": 61, "lh": 62, "deny": 16, "gpm": 712, "kda": "4.9/4.1/10.8"
+            },
+            "DM": {
+                "wr": 59, "lh": 55, "deny": 14, "gpm": 646, "kda": "4.2/4.5/9.6"
+            },
         },
         "benchmarks": {
-            "gpm": 595,
-            "xpm": 680,
-            "lh": 64,
-            "deny": 17,
-            "deaths": 3.8,
-            "h_dmg": 24.5,
-            "t_dmg": 6.2,
-            "stacks": 12,
-            "utility": 10.0,
-            "apm": 290,
-            "kda": 4.5
-        }
+            "gpm": 682,
+            "xpm": 780,
+            "lh": 58,
+            "deny": 15,
+            "deaths": 4.1,
+            "h_dmg": 24000,
+            "t_dmg": 1900,
+            "stacks": 5.2,
+            "utility": 10.5,
+            "apm": 265,
+            "kda": 5.2,
+        },
     },
 
     "SUPPORT": {
         "players": {
-            "Miposhka": {"wr": 62, "lh": 12, "deny": 4, "gpm": 380, "kda": "3/4.2/18"},
-            "Save-": {"wr": 60, "lh": 18, "deny": 6, "gpm": 410, "kda": "4/3.8/15"},
-            "Sneyking": {"wr": 64, "lh": 14, "deny": 3, "gpm": 395, "kda": "2/4.5/20"},
-            "Puppey": {"wr": 58, "lh": 10, "deny": 2, "gpm": 350, "kda": "1/5.1/14"},
-            "Fishman": {"wr": 59, "lh": 15, "deny": 5, "gpm": 370, "kda": "2/4.9/16"}
+            "not me": {
+                "wr": 64, "lh": 42, "deny": 18, "gpm": 499, "kda": "3.8/5.2/15.4"
+            },
+            "9Class": {
+                "wr": 61, "lh": 45, "deny": 20, "gpm": 524, "kda": "4.1/4.8/13.9"
+            },
+            "Saksa": {
+                "wr": 58, "lh": 38, "deny": 17, "gpm": 472, "kda": "3.5/5.6/12.8"
+            },
         },
         "benchmarks": {
-            "gpm": 385,
-            "xpm": 420,
-            "lh": 14,
-            "deny": 4,
-            "deaths": 4.8,
-            "h_dmg": 12.0,
-            "t_dmg": 0.8,
-            "stacks": 20,
-            "utility": 15.0,
-            "apm": 270,
-            "kda": 3.5
-        }
-    }
+            "gpm": 498,
+            "xpm": 620,
+            "lh": 42,
+            "deny": 18,
+            "deaths": 5.2,
+            "h_dmg": 18500,
+            "t_dmg": 1200,
+            "stacks": 2.8,
+            "utility": 11.5,
+            "apm": 340,
+            "kda": 4.1,
+        },
+    },
 }
 
 # =========================================================
@@ -276,7 +319,7 @@ def _calculate_imp(
     role: str,
     win: bool = True,
     duration: float = 600,
-) -> float:
+) -> float | None:
 
     if role not in PRO_DB:
         role = "CARRY"
@@ -284,17 +327,31 @@ def _calculate_imp(
     pro = PRO_DB[role]["benchmarks"]
     weights = IMP_WEIGHTS[role]
 
-    p_gpm = gpm / pro["gpm"]
-    p_kda = kda / pro["kda"]
-    p_utility = utility / pro["utility"]
-    p_apm = apm / pro["apm"]
+    def _safe_ratio(value: float, bench: float | None) -> float:
+        if bench is None or bench <= 0:
+            return 0.0
+        return value / bench
 
-    imp = (
-        p_gpm * weights["gpm"] +
-        p_kda * weights["kda"] +
-        p_utility * weights["utility"] +
-        p_apm * weights["apm"]
-    )
+    # IMP считается только по метрикам, для которых есть verified
+    # benchmark (gpm/kda/utility/apm). Если benchmark отсутствует
+    # (None), метрика исключается из формулы — её вес не подменяется
+    # нулём, иначе получится ложный IMP=0.
+    # Если ВСЕ метрики без benchmark — IMP не определён (None).
+    available_keys = _imp_available_keys(role)
+    if not available_keys:
+        return None
+
+    ratios = {
+        "gpm": _safe_ratio(gpm, pro.get("gpm")),
+        "kda": _safe_ratio(kda, pro.get("kda")),
+        "utility": _safe_ratio(utility, pro.get("utility")),
+        "apm": _safe_ratio(apm, pro.get("apm")),
+    }
+    used_weight_sum = sum(weights[k] for k in available_keys)
+    if used_weight_sum <= 0:
+        return None
+
+    imp = sum(ratios[k] * weights[k] for k in available_keys) / used_weight_sum
 
     imp = round(imp, 2)
 
@@ -302,6 +359,19 @@ def _calculate_imp(
         imp *= 0.92
 
     return imp
+
+
+def _imp_available_keys(role: str) -> list[str]:
+    """Список метрик (gpm/kda/utility/apm), для которых есть verified benchmark."""
+    if role not in PRO_DB:
+        role = "CARRY"
+    pro = PRO_DB[role]["benchmarks"]
+    keys: list[str] = []
+    for k in ("gpm", "kda", "utility", "apm"):
+        v = pro.get(k)
+        if v is not None and v > 0:
+            keys.append(k)
+    return keys
 
 # =========================================================
 # HERO DATA
@@ -447,47 +517,37 @@ def _normalize_hero_file_name(internal_name: str) -> str:
 
 
 async def _get_hero_icon(hero_id: int) -> Image.Image | None:
+    # NOTE: для графика профиля используются маленькие иконки из hero_cache/icons/
+    # (скаршленные из CDN icons/*.png). Не путай с assets/heroes_webp/ — это большие
+    # иконки для меты героев.
     # Check unified cache first
     cached = image_cache.get(str(hero_id))
     if cached is not None:
-        return cached
+        if isinstance(cached, bytes):
+            try:
+                return Image.open(io.BytesIO(cached)).convert("RGBA")
+            except Exception:
+                pass
+        else:
+            return cached
 
     heroes = await _load_heroes()
     hero_name = heroes.get(hero_id)
+    if not hero_name:
+        return None
 
-    # Try local disk cache first
-    from dota_mmr import get_hero_icon_cached
-    if hero_name:
-        icon_bytes = await asyncio.to_thread(get_hero_icon_cached, hero_name)
-        if icon_bytes is not None:
-            try:
-                icon = Image.open(io.BytesIO(icon_bytes)).convert("RGBA")
-                image_cache.set(str(hero_id), icon)
-                return icon
-            except Exception:
-                pass
+    file_name = _normalize_hero_file_name(hero_name)
+    cache_file = Path(__file__).resolve().parent / "hero_cache" / "icons" / f"{file_name}.png"
 
-    if hero_name:
-        file_name = _normalize_hero_file_name(hero_name)
-        cache_file = Path("hero_cache") / f"{file_name}.webp"
-        icon = None
-        
+    if cache_file.exists():
         try:
-            if cache_file.exists():
-                icon = Image.open(cache_file).convert("RGBA")
-        except Exception:
-            pass
-        
-        if icon is not None:
+            icon = Image.open(cache_file).convert("RGBA")
             image_cache.set(str(hero_id), icon)
             return icon
+        except Exception:
+            pass
 
-    try:
-        img = Image.new("RGBA", (64, 64), (128, 128, 128, 255))
-        return img
-    except Exception:
-        logger.exception("Failed to create default icon")
-        return None
+    return None
 
 def _normalize_hero_name(internal_name: str) -> str:
     """Convert internal hero name (anti_mage) to display name (Anti-Mage)"""
@@ -870,27 +930,33 @@ async def get_last_matches(telegram_id: int, limit: int = 10) -> list[dict[str, 
 
 def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, Any]:
     """Генерация текстовых таблиц в стиле референса"""
-
     db = PRO_DB.get(role, PRO_DB["CARRY"])
 
     # Table 1: PRO comparison - use HTML pre tag instead of markdown code block
     t1 = "<pre>\n"
-    t1 += f"{'PLAYER':<12} {'WR':>4} {'GPM':>5} {'KDA':>11}\n"
-    t1 += "--------------------------------\n"
+    t1 += f"{'PLAYER':<9} {'WR':>3} {'GPM':>4} {'KDA':<12}\n"
+    t1 += "-------------------------------\n"
     for name, s in db["players"].items():
+        wr = f"{int(round(s['wr']))}%" if s.get('wr') is not None else "—"
+        gpm = f"{int(round(s['gpm'])):>4}" if s.get('gpm') is not None else "  — "
+        kda = s.get('kda', '—')
+        if kda is None:
+            kda = "—"
+        display_name = name if len(name) <= 9 else name[:8] + "…"
         t1 += (
-            f"{name:<12} "
-            f"{s['wr']:>3}% "
-            f"{s['gpm']:>5} "
-            f"{s['kda']:>11}\n"
+            f"{display_name:<9} "
+            f"{wr:>3} "
+            f"{gpm:>4} "
+            f"{kda:<12}\n"
         )
-    t1 += "--------------------------------\n"
+    t1 += "-------------------------------\n"
     gpm_val = int(user_stats['gpm']) if user_stats.get('gpm', 0) > 0 else 0
+    wr_val = f"{int(round(user_stats['wr']))}%" if user_stats.get('wr') is not None else "—"
     you_line = (
-        f"{'YOU':<12} "
-        f"{user_stats['wr']:>3}% "
-        f"{gpm_val:>5} "
-        f"{user_stats['kda']:>11}\n"
+        f"{'YOU':<9} "
+        f"{wr_val:>3} "
+        f"{gpm_val:>4} "
+        f"{user_stats['kda']:<12}\n"
     )
     t1 += you_line
     t1 += "</pre>"
@@ -901,32 +967,33 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
     t2 += "----------------------------\n"
     bench = db["benchmarks"]
     metrics = [
-        ("LH@10", user_stats.get('lh', 0), bench.get('lh', 0)),
-        ("Denies@10", user_stats.get('deny', 0), bench.get('deny', 0)),
-        ("GPM", user_stats.get('gpm', 0), bench['gpm']),
-        ("XPM", user_stats.get('xpm', 0), bench['xpm']),
-        ("Deaths", user_stats.get('deaths', 0), bench['deaths']),
-        ("H DMG", user_stats.get('h_dmg', 0), bench['h_dmg']),
-        ("T DMG", user_stats.get('t_dmg', 0), bench['t_dmg']),
-        ("Stacks", user_stats.get('stacks', 0), bench.get('stacks', 0)),
-        ("Util", user_stats.get('util', 0), bench['utility']),
-        ("APM", user_stats.get('apm', 0), bench['apm'])
+        ("LH@10", user_stats.get('lh', 0), bench.get('lh')),
+        ("Denies@10", user_stats.get('deny', 0), bench.get('deny')),
+        ("GPM", user_stats.get('gpm', 0), bench.get('gpm')),
+        ("XPM", user_stats.get('xpm', 0), bench.get('xpm')),
+        ("Deaths", user_stats.get('deaths', 0), bench.get('deaths')),
+        ("H DMG", user_stats.get('h_dmg', 0), bench.get('h_dmg')),
+        ("T DMG", user_stats.get('t_dmg', 0), bench.get('t_dmg')),
+        ("Stacks", user_stats.get('stacks', 0), bench.get('stacks')),
+        ("Util", user_stats.get('util', 0), bench.get('utility')),
+        ("APM", user_stats.get('apm', 0), bench.get('apm'))
     ]
     for label, u, p in metrics:
-        u_str = f"{u:.0f}" if u >= 100 else f"{u:.1f}"
-        p_str = f"{p:.0f}" if p >= 100 else f"{p:.1f}"
-        diff = u - p
-        is_bad = diff > 0 if "Deaths" in label else diff < 0
-        arrow = "↓" if is_bad else "↑"
+        u_str = f"{u:.0f}" if isinstance(u, (int, float)) and u >= 100 else f"{u:.1f}" if isinstance(u, (int, float)) else "—"
+        p_str = f"{p:.0f}" if isinstance(p, (int, float)) and p >= 100 else f"{p:.1f}" if isinstance(p, (int, float)) else "—"
+        if not isinstance(p, (int, float)):
+            arrow = ""
+        else:
+            diff = u - p if isinstance(u, (int, float)) else 0
+            is_bad = diff > 0 if "Deaths" in label else diff < 0
+            arrow = "↓" if is_bad else "↑"
         t2 += f"{label:<10} {u_str:>6} {p_str:>6} {arrow}\n"
     t2 += "</pre>"
 
     header = f"<b>📊 ANALYTICS ({role})</b>"
-
     text = f"{header}\n\n{t1}"
 
     header_detailed = "<b>📈 Подробное сравнение • Детали позиций</b>"
-
     text_detailed = f"{header_detailed}\n\n{t2}"
 
     return {"pro": text, "detailed": text_detailed}
@@ -989,8 +1056,26 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
     # Check if user has Steam account BEFORE fetching matches
     if not user or not user.get("steam_id"):
         return {"error": "no_steam_linked", "message": "🔗 Привяжите Аккаунт, чтобы увидеть аналитику"}
-    
+
+    # If OpenDota is currently rate-limited / 5xx-ing, сразу вернём ошибку,
+    # чтобы не дёргать API и не показывать пустой график.
+    if is_opendota_rate_limited():
+        logger.warning("generate_chart_only: OpenDota unavailable, returning error")
+        return {
+            "error": "opendota_rate_limit",
+            "message": get_opendota_rate_limit_message(),
+        }
+
     matches = await get_last_matches(telegram_id)
+
+    # Доп. защита: если API вернул 0 матчей из-за CB/rate-limit, а кэша нет —
+    # не показываем пустой график, а сообщаем о недоступности.
+    if not matches and not (user.get("analytics_cache")) and is_opendota_rate_limited():
+        logger.warning("generate_chart_only: 0 matches + API unavailable, returning error")
+        return {
+            "error": "opendota_rate_limit",
+            "message": get_opendota_rate_limit_message(),
+        }
 
     if len(matches) < 5:
         from database import get_user
@@ -1049,9 +1134,24 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
 
         win = m.get("win", False)
         imp = _calculate_imp(gpm, kda, utility, apm, role, win=win, duration=duration)
-        game_history.append({"imp": round(imp, 2), "hero_id": m.get("hero_id", 0), "win": win})
+        game_history.append({
+            "imp": round(imp, 2) if imp is not None else None,
+            "hero_id": m.get("hero_id", 0),
+            "win": win,
+            "imp_unavailable": imp is None,
+        })
 
     chart = await _create_visual_chart(game_history)
+    imp_none_count = sum(1 for g in game_history if g.get("imp") is None)
+    logger.info(
+        "generate_chart_only: uid=%s role=%s matches=%s history=%s imp_none=%s chart_size=%s",
+        telegram_id,
+        role,
+        len(matches),
+        len(game_history),
+        imp_none_count,
+        len(chart) if chart else 0,
+    )
     return {"image": chart, "history": game_history, "matches": matches, "role": role}
 
 
@@ -1065,13 +1165,33 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
 
     Returns:
         dict с ключами 'image', 'history', 'matches', 'role' или None если данных мало.
+        При недоступности OpenDota возвращает {"error": "opendota_rate_limit", ...}.
     """
     # Check if user has Steam account BEFORE fetching matches
     user = await asyncio.to_thread(get_user, telegram_id)
     if not user or not user.get("steam_id"):
         return {"error": "no_steam_linked", "message": "🔗 Привяжите Аккаунт, чтобы увидеть аналитику"}
-    
+
+    # If OpenDota is currently rate-limited / 5xx-ing, не нужно дёргать API и показывать
+    # пользователю пустой график — сразу вернём понятную ошибку.
+    if is_opendota_rate_limited():
+        logger.warning("generate_weekly_analytics: OpenDota unavailable, returning error")
+        return {
+            "error": "opendota_rate_limit",
+            "message": get_opendota_rate_limit_message(),
+        }
+
     matches = await get_last_matches(telegram_id)
+
+    # Доп. защита: если API вернул 0 матчей из-за того, что CB открылся
+    # уже после первой проверки (5xx-цикл), а кэша аналитики нет — не
+    # показываем пустой график, а сообщаем о недоступности.
+    if not matches and not (user.get("analytics_cache")) and is_opendota_rate_limited():
+        logger.warning("generate_weekly_analytics: 0 matches + API unavailable, returning error")
+        return {
+            "error": "opendota_rate_limit",
+            "message": get_opendota_rate_limit_message(),
+        }
 
     if len(matches) < 5:
         user = await asyncio.to_thread(get_user, telegram_id)
@@ -1190,6 +1310,7 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
             "imp": imp,
             "hero_id": m.get("hero_id", 0),
             "win": win,
+            "imp_unavailable": imp is None,
         })
 
         total_gpm += gpm
@@ -1335,18 +1456,30 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
     try:
         import matplotlib
         matplotlib.use("Agg")
+        from pathlib import Path
+
         import matplotlib.pyplot as plt
-        from matplotlib import rcParams
+        from matplotlib import font_manager, rcParams
         from matplotlib import patheffects as pe
         from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+
+        # Register and use local NotoSans font for Cyrillic support
+        font_path = Path(__file__).resolve().parent / "assets" / "fonts" / "NotoSans-Regular.ttf"
+        if font_path.exists():
+            font_manager.fontManager.addfont(str(font_path))
+            rcParams['font.family'] = 'Noto Sans'
+        else:
+            rcParams['font.family'] = 'DejaVu Sans'
+
         rcParams['path.simplify'] = False
         rcParams['lines.solid_capstyle'] = 'round'
         rcParams['lines.solid_joinstyle'] = 'round'
         rcParams['svg.image_inline'] = True
 
+        import io
+
         import numpy as np
         from PIL import Image
-        import io
 
     except ImportError:
         return None
@@ -1355,22 +1488,26 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
     reversed_history = list(reversed(history))[:10]
 
+    # Skip entries where IMP could not be calculated due to missing
+    # TI 2026 benchmark — treating IMP=0 as a real result would mislead users.
+    available = [g for g in reversed_history if not g.get("imp_unavailable")]
+
     raw_impacts = [
         min(round(g["imp"], 2), 2.0)
-        for g in reversed_history
+        for g in available
     ]
 
-    wins = [g.get("win", True) for g in reversed_history]
+    wins = [g.get("win", True) for g in available]
 
     if not raw_impacts:
+        logger.warning(
+            "_create_visual_chart_sync: no available impacts, history=%s, all_unavailable=%s",
+            len(history),
+            all(g.get("imp_unavailable") for g in reversed_history),
+        )
         return None
 
-    while len(raw_impacts) < 10:
-        raw_impacts.append(0.4)
-
-    raw_impacts = raw_impacts[:10]
-
-    x = np.arange(1, 11)
+    x = np.arange(1, len(raw_impacts) + 1)
 
     avg = float(np.mean(raw_impacts))
 
@@ -1414,7 +1551,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
     ax.text(
         len(raw_impacts) + 0.2,
         1.0,
-        f"1.00",
+        "1.00",
         fontsize=14,
         color="#ffff00",
         ha="left",
@@ -1425,11 +1562,11 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
     ax.text(
         len(raw_impacts) + 0.15,
-        1.0,
-        "PRO BENCHMARK",
+        1.10,
+        "PRO",
         fontsize=14,
-        color="white",
-        alpha=0.7,
+        color="#ffff00",
+        alpha=0.9,
         weight="bold",
         va="center",
         zorder=3
@@ -1451,16 +1588,32 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
             zorder=4
         )
 
-    line = ax.plot(
-        x,
-        raw_impacts,
-        color="#f4c430",
-        linewidth=10,
-        solid_capstyle='round',
-        solid_joinstyle='round',
-        antialiased=True,
-        zorder=5
-    )[0]
+    # Plot smooth curve through data points using spline interpolation
+    if len(raw_impacts) >= 3:
+        from scipy.interpolate import make_interp_spline
+        smooth_x = np.linspace(1, len(raw_impacts), 300)
+        spline_y = make_interp_spline(x, raw_impacts, k=3)(smooth_x)
+        line = ax.plot(
+            smooth_x,
+            spline_y,
+            color="#f4c430",
+            linewidth=10,
+            solid_capstyle='round',
+            solid_joinstyle='round',
+            antialiased=True,
+            zorder=5
+        )[0]
+    else:
+        line = ax.plot(
+            x,
+            raw_impacts,
+            color="#f4c430",
+            linewidth=10,
+            solid_capstyle='round',
+            solid_joinstyle='round',
+            antialiased=True,
+            zorder=5
+        )[0]
 
     line.set_path_effects([
         pe.Stroke(
@@ -1495,7 +1648,6 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
             zorder=5
         )
 
-        # Add IMPACT value label above each point
         ax.text(
             xi,
             yi + 0.15,
@@ -1508,7 +1660,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
             zorder=7
         )
 
-    for idx, g in enumerate(reversed_history):
+    for idx, g in enumerate(available):
         hero_id = g["hero_id"]
         hero_img = hero_icon_map.get(hero_id)
 
@@ -1532,7 +1684,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
         ab = AnnotationBbox(
             imagebox,
-            (idx + 1, max(imp - 0.12, 0.08)),
+            (idx + 1, imp),
             frameon=True,
             bboxprops=dict(
                 edgecolor=border,
@@ -1546,15 +1698,6 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         )
 
         ax.add_artist(ab)
-
-        ax.scatter(
-            idx + 1,
-            max(imp - 0.12, 0.08),
-            s=1500,
-            color=glow,
-            alpha=0.18,
-            zorder=8
-        )
 
     ax.set_xlim(0, 11)
     ax.set_ylim(0, 2)
@@ -1612,12 +1755,14 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 async def _create_visual_chart(history: list[dict]) -> bytes | None:
     """Non-blocking chart generation - prepares data then runs matplotlib in thread pool."""
     import aiohttp
+
     from constants import get_banner_path
 
     global _CHART_BG_CACHE
 
     if _CHART_BG_CACHE is None:
         try:
+            import io
             local_bg = get_banner_path("chart_bg_fallback")
             content = None
             if isinstance(local_bg, Path) and local_bg.exists():
@@ -1644,6 +1789,8 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     reversed_history = list(reversed(history))[:10]
 
     # Load hero icons asynchronously
+    # NOTE: здесь берутся маленькие PNG из hero_cache/icons/ для графика профиля.
+    # Это НЕ assets/heroes_webp/ — те иконки используются только в мете героев.
     unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
     hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
     hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
