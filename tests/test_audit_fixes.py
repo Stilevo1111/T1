@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from bot_utils import clickable_name, format_time
 from database import User
 
@@ -41,3 +39,25 @@ def test_no_duplicate_link_handler():
     main_path = Path(__file__).resolve().parent.parent / "main.py"
     content = main_path.read_text(encoding="utf-8")
     assert content.count('if data == "link":') == 1
+
+
+def test_techies_result_uploads_selected_image_bytes():
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from telegram import InputFile
+
+    import techies
+
+    async def verify_image(image_path):
+        bot = AsyncMock()
+        bot.edit_message_media.return_value = AsyncMock()
+        await techies._send_techies_result(bot, 1, 1, "test", image_path)
+        media = bot.edit_message_media.await_args.kwargs["media"]
+        assert isinstance(media.media, InputFile)
+        assert media.media.filename == image_path.name
+        assert media.media.input_file_content == image_path.read_bytes()
+
+    asyncio.run(verify_image(techies.TECHIES_BASE_URL))
+    asyncio.run(verify_image(techies.TECHIES_SUCCESS_URL))
+    asyncio.run(verify_image(techies.TECHIES_EXPLOSION_URL))

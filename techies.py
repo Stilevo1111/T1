@@ -1,10 +1,10 @@
-﻿import random
-import time
-import asyncio
+﻿import asyncio
 import logging
+import random
+import time
 from pathlib import Path
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InputFile
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
 from bot_utils import make_clickable, record_recent_fissure_roll, schedule_delete
@@ -97,7 +97,12 @@ def _pop_session(chat_id: int, user_id: int) -> dict | None:
 async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str, image_path=None) -> None:
     if image_path is None:
         image_path = TECHIES_BASE_URL
-    media = InputMediaPhoto(media=InputFile(str(image_path)), caption=text, parse_mode="HTML")
+    media = InputMediaPhoto(
+        media=image_path.read_bytes(),
+        filename=image_path.name,
+        caption=text,
+        parse_mode="HTML",
+    )
     try:
         await bot.edit_message_media(
             chat_id=chat_id,
