@@ -452,16 +452,20 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
     if cached is not None:
         return cached
 
+    heroes = await _load_heroes()
+    hero_name = heroes.get(hero_id)
+
     # Try local disk cache first
     from dota_mmr import get_hero_icon_cached
-    icon = await asyncio.to_thread(get_hero_icon_cached, hero_id)
-    if icon is not None:
-        image_cache.set(str(hero_id), icon)
-        return icon
-
-    heroes = await _load_heroes()
-
-    hero_name = heroes.get(hero_id)
+    if hero_name:
+        icon_bytes = await asyncio.to_thread(get_hero_icon_cached, hero_name)
+        if icon_bytes is not None:
+            try:
+                icon = Image.open(io.BytesIO(icon_bytes)).convert("RGBA")
+                image_cache.set(str(hero_id), icon)
+                return icon
+            except Exception:
+                pass
 
     if hero_name:
         file_name = _normalize_hero_file_name(hero_name)
