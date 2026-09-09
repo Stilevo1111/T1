@@ -547,6 +547,16 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
         except Exception:
             pass
 
+    # Fallback: берем большие иконки из assets/heroes_webp и ресайзим до маленьких
+    fallback_path = Path(__file__).resolve().parent / "assets" / "heroes_webp" / f"{hero_name}.webp"
+    if fallback_path.exists():
+        try:
+            icon = Image.open(fallback_path).convert("RGBA").resize((64, 64), Image.LANCZOS)
+            image_cache.set(str(hero_id), icon)
+            return icon
+        except Exception:
+            pass
+
     return None
 
 def _normalize_hero_name(internal_name: str) -> str:
@@ -1624,42 +1634,6 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         pe.Normal()
     ])
 
-    for idx, (xi, yi, win) in enumerate(zip(x, raw_impacts, wins)):
-        border = "#00ff66" if win else "#ff3b3b"
-        glow = "#00ff66" if win else "#ff3b3b"
-
-        ax.scatter(
-            xi,
-            yi,
-            s=200,
-            color=border,
-            edgecolors="#ffffff",
-            linewidths=4,
-            zorder=6,
-            joinstyle='round'
-        )
-
-        ax.scatter(
-            xi,
-            yi,
-            s=1500,
-            color=glow,
-            alpha=0.18,
-            zorder=5
-        )
-
-        ax.text(
-            xi,
-            yi + 0.15,
-            f"{yi:.2f}",
-            fontsize=10,
-            color=border,
-            ha="center",
-            va="bottom",
-            fontweight="bold",
-            zorder=7
-        )
-
     for idx, g in enumerate(available):
         hero_id = g["hero_id"]
         hero_img = hero_icon_map.get(hero_id)
@@ -1670,7 +1644,6 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         imp = raw_impacts[idx]
         win = g.get("win", True)
         border = "#00ff66" if win else "#ff3b3b"
-        glow = "#00ff66" if win else "#ff3b3b"
 
         hero_img = hero_img.resize(
             (82, 82),
