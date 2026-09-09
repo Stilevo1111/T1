@@ -1,18 +1,25 @@
-import random
+﻿import random
 import time
 import asyncio
 import logging
+from pathlib import Path
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InputFile
 from telegram.ext import ContextTypes
 
-from bot_utils import make_clickable, record_recent_fissure_roll
-from constants import get_banner_path
+from bot_utils import make_clickable, record_recent_fissure_roll, schedule_delete
 
 logger = logging.getLogger(__name__)
-BANNER_URL = get_banner_path("techies")
-TECHIES_BANNER_URL = BANNER_URL
-TECHIES_TIMEOUT_SEC = 15
+TECHIES_BASE_URL = Path(__file__).resolve().parent / "assets" / "techies" / "base.jpg"
+TECHIES_SUCCESS_URL = Path(__file__).resolve().parent / "assets" / "techies" / "success.jpg"
+TECHIES_EXPLOSION_URL = Path(__file__).resolve().parent / "assets" / "techies" / "explosion.jpg"
+TECHIES_TIMEOUT_SEC = 20
+
+BUTTONS = [
+    ("🟢", "Зелёная", "green"),
+    ("🔴", "Красная", "red"),
+    ("🟡", "Жёлтая", "yellow"),
+]
 
 SUCCESS_PHRASES = [
     "Ха! Сегодня без взрывов. Скучно... но Фиссура цела.",
@@ -37,7 +44,7 @@ FAIL_PHRASES = [
     "Я только разогреваюсь! А ты уже без Фиссуры.",
 ]
 
-# session_key -> {chat_id, msg_id, user_id, correct_button, start_time, display_username, timeout_task}
+# session_key -> {chat_id, msg_id, user_id, explosive_button, start_time, display_username, timeout_task}
 _active_techies_sessions: dict[str, dict] = {}
 
 
@@ -50,20 +57,17 @@ def _session_key(chat_id: int, user_id: int) -> str:
     return f"{chat_id}_{user_id}"
 
 
-def _build_techies_keyboard(user_id: int, correct_button: str, start_time: float) -> InlineKeyboardMarkup:
+def _build_techies_keyboard(user_id: int, explosive_button: str, start_time: float) -> InlineKeyboardMarkup:
     ts = int(start_time * 1000)
-    return InlineKeyboardMarkup([
-        [
+    row = []
+    for emoji, label, value in BUTTONS:
+        row.append(
             InlineKeyboardButton(
-                "🧨 Левая",
-                callback_data=f"techies_left_{user_id}_{correct_button}_{ts}",
-            ),
-            InlineKeyboardButton(
-                "🧨 Правая",
-                callback_data=f"techies_right_{user_id}_{correct_button}_{ts}",
-            ),
-        ]
-    ])
+                f"{emoji} {label}",
+                callback_data=f"techies_{value}_{user_id}_{explosive_button}_{ts}",
+            )
+        )
+    return InlineKeyboardMarkup([row])
 
 
 def _build_mine_text(display_username: str) -> str:
@@ -72,8 +76,8 @@ def _build_mine_text(display_username: str) -> str:
         "🧨 МИНА ЗАЛОЖЕНА!\n"
         "😈 Скви, Сплин и Спун 🗣️ Угадай, пока не бабахнуло...\n"
         f"⏱️ {TECHIES_TIMEOUT_SEC} секунд до взрыва!\n\n"
-        "Одна кнопка сохранит Фиссуру,\n"
-        "другая — взорвёт её на кусочки.\n"
+        "Две кнопки обезвредят Фиссуру,\n"
+        "одна — взорвёт её на кусочки.\n"
         "Выбирай с умом, сапёр..."
     )
 
@@ -90,8 +94,10 @@ def _pop_session(chat_id: int, user_id: int) -> dict | None:
     return _active_techies_sessions.pop(_session_key(chat_id, user_id), None)
 
 
-async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str) -> None:
-    media = InputMediaPhoto(media=InputFile(str(TECHIES_BANNER_URL)), caption=text, parse_mode="HTML")
+async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str, image_path=None) -> None:
+    if image_path is None:
+        image_path = TECHIES_BASE_URL
+    media = InputMediaPhoto(media=InputFile(str(image_path)), caption=text, parse_mode="HTML")
     try:
         await bot.edit_message_media(
             chat_id=chat_id,
@@ -118,7 +124,7 @@ async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str) -> Non
     try:
         await bot.send_photo(
             chat_id=chat_id,
-            photo=str(TECHIES_BANNER_URL),
+            photo=str(image_path),
             caption=text,
             parse_mode="HTML",
         )
@@ -157,7 +163,8 @@ async def _apply_techies_explosion(
         text += f"💣 Мина {i} - {mine} см\n"
     text += f"\n📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
 
-    await _send_techies_result(bot, session["chat_id"], session["msg_id"], text)
+    await _send_techies_result(bot, session["chat_id"], session["msg_id"], text, image_path=TECHIES_EXPLOSION_URL)
+    schedule_delete(bot, session["chat_id"], session["msg_id"], 30, None)
 
 
 async def _techies_timeout_worker(bot, session_key: str, record_roll=None) -> None:
@@ -175,9 +182,9 @@ async def _techies_timeout_worker(bot, session_key: str, record_roll=None) -> No
 
 
 def _start_techies_session(
-    bot, chat_id: int, user_id: int, msg_id: int, correct_button: str, start_time: float, display_username: str, record_roll=None
+    bot, chat_id: int, user_id: int, msg_id: int, explosive_button: str, start_time: float, display_username: str, record_roll=None
 ) -> dict:
-    """Создать сессию мини-игры Техиес (выбрать правильную кнопку, запустить таймаут)."""
+    """Создать сессию мини-игры Техиес (выбрать взрывную кнопку, запустить таймаут)."""
     session_key = _session_key(chat_id, user_id)
     _cancel_timeout_task(_active_techies_sessions.get(session_key))
 
@@ -189,13 +196,13 @@ def _start_techies_session(
         "chat_id": chat_id,
         "msg_id": msg_id,
         "user_id": user_id,
-        "correct_button": correct_button,
+        "explosive_button": explosive_button,
         "start_time": start_time,
         "display_username": display_username,
         "timeout_task": task,
         "mines": generate_mines(),
     }
-    logger.info(f"techies session started: {session_key}, msg_id={msg_id}")
+    logger.info(f"techies session started: {session_key}, msg_id={msg_id}, explosive={explosive_button}")
 
 
 async def handle_techies_event(
@@ -214,16 +221,16 @@ async def handle_techies_event(
     record_recent_fissure_roll=None,
 ) -> None:
     """Обработать запуск мини-игры Техиес (inline-кнопка)."""
-    correct_button = random.choice(["left", "right"])
+    explosive_button = random.choice(["green", "red", "yellow"])
     start_time = time.time()
     current_fissure = user.get("fissure", 0) or 0
 
-    keyboard = _build_techies_keyboard(user_obj.id, correct_button, start_time)
+    keyboard = _build_techies_keyboard(user_obj.id, explosive_button, start_time)
     text = _build_mine_text(display_username)
 
     msg = await bot.send_photo(
         chat_id=chat_id,
-        photo=str(TECHIES_BANNER_URL),
+        photo=str(TECHIES_BASE_URL),
         caption=text,
         reply_markup=keyboard,
         parse_mode="HTML",
@@ -236,7 +243,7 @@ async def handle_techies_event(
         chat_id,
         user_obj.id,
         msg.message_id,
-        correct_button,
+        explosive_button,
         start_time,
         display_username,
         record_roll=record_recent_fissure_roll,
@@ -253,16 +260,16 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
         await update.message.reply_text("❌ Пользователь не найден")
         return
 
-    correct_button = random.choice(["left", "right"])
+    explosive_button = random.choice(["green", "red", "yellow"])
     start_time = time.time()
     username = user.get("username")
     display_username = make_clickable(username or update.effective_user.first_name or "Гость", user_id)
 
-    keyboard = _build_techies_keyboard(user_id, correct_button, start_time)
+    keyboard = _build_techies_keyboard(user_id, explosive_button, start_time)
     text = _build_mine_text(display_username)
 
     msg = await update.message.reply_photo(
-        photo=str(TECHIES_BANNER_URL),
+        photo=str(TECHIES_BASE_URL),
         caption=text,
         reply_markup=keyboard,
         parse_mode="HTML",
@@ -273,7 +280,7 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
         update.effective_chat.id,
         user_id,
         msg.message_id,
-        correct_button,
+        explosive_button,
         start_time,
         display_username,
         record_roll=record_recent_fissure_roll,
@@ -292,7 +299,7 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         await query.answer()
         return
 
-    _, button_pressed, initiator_id, correct_button, start_time_str = data[:5]
+    _, button_pressed, initiator_id, explosive_button, start_time_str = data[:5]
     initiator_id = int(initiator_id)
 
     if user_id != initiator_id:
@@ -322,7 +329,7 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
     username = query.from_user.username
     display_username = make_clickable(username or query.from_user.first_name or "Гость", user_id)
 
-    if elapsed > TECHIES_TIMEOUT_SEC or button_pressed != correct_button:
+    if elapsed > TECHIES_TIMEOUT_SEC or button_pressed == explosive_button:
         mines = generate_mines()
         total_damage = sum(mines)
         new_fissure = max(0.1, current_fissure - total_damage)
@@ -351,4 +358,6 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         if record_recent_fissure_roll:
             record_recent_fissure_roll(user_id, username or str(user_id), 0, current_fissure, cascade=0)
 
-    await _send_techies_result(context.bot, query.message.chat_id, query.message.message_id, text)
+    image_path = TECHIES_SUCCESS_URL if button_pressed != explosive_button else TECHIES_EXPLOSION_URL
+    await _send_techies_result(context.bot, query.message.chat_id, query.message.message_id, text, image_path=image_path)
+    schedule_delete(context.bot, query.message.chat_id, query.message.message_id, 30, None)
