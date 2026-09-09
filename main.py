@@ -1506,7 +1506,7 @@ from constants import (
     COOLDOWN,
     JOB_COOLDOWN,
     KEEPALIVE_PING_NEON_HOURS,
-    TOPMMR_BANNER_URL,
+    TOPMMR_BANNER_PATH,
     WELCOME_PHRASES,
     get_banner_path,
 )
@@ -2974,7 +2974,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user = await asyncio.to_thread(get_user, update.effective_user.id)
 
         # Banner URL
-        topmmr_banner_url = TOPMMR_BANNER_URL
+        topmmr_banner_url = TOPMMR_BANNER_PATH
 
         # Сначала пытаемся получить недельный топ
         logger.info("topmmr: before get_dota_week_top_from_db")

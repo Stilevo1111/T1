@@ -22,6 +22,7 @@ from cache_service import (
 )
 from constants import get_banner_path
 from database import get_aiohttp_session, get_user, get_user_by_steam_id, update_user_fields_batch
+from hero_names import get_cdn_hero_name
 
 logger = logging.getLogger(__name__)
 
@@ -366,25 +367,19 @@ async def _handle_api_response(resp, url: str, attempt: int, max_retries: int):
 # 🦸 HEROES
 # ========================
 
-HERO_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes"
+HERO_IMAGE_BASE = str(Path(__file__).parent / "assets" / "heroes_webp" / "portraits")
 
 HERO_CACHE_DIR = Path(__file__).parent / "assets" / "heroes_webp"
 HERO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-HERO_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons"
+HERO_PORTRAIT_DIR = HERO_CACHE_DIR / "portraits"
+HERO_PORTRAIT_DIR.mkdir(parents=True, exist_ok=True)
+HERO_ICON_BASE = str(HERO_CACHE_DIR)
 HEROES_STRIP_BG_URL = get_banner_path("heroes_profil")
 HEROES_STRIP_BG_CACHE = "heroes_profil.webp"
 
-from hero_names import get_cdn_hero_name
-
 
 def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None:
-    """Get hero icon with caching"""
-    try:
-        from image_cache import get_cached_hero_icon
-        return get_cached_hero_icon(hero_short_name)
-    except ImportError:
-        pass
-
+    """Get hero icon from local assets only."""
     cdn_name = get_cdn_hero_name(hero_short_name)
     
     cache_file = HERO_CACHE_DIR / f"{cdn_name}.webp"
@@ -420,28 +415,15 @@ def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None
             except Exception:
                 pass
 
-    try:
-        url = f"{HERO_ICON_BASE}/{cdn_name}.png"
-        resp = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"})
-        if resp.status_code == 200:
-            data = resp.content
-            try:
-                cache_file.parent.mkdir(exist_ok=True)
-                cache_file.write_bytes(data)
-            except Exception:
-                pass
-            return data
-    except Exception:
-        pass
     return None
 
 
 def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | None:
-    """Портрет героя (dota_react/heroes/*.png) — выше разрешение, чем icons/*.png."""
+    """Портрет героя (локальный) — выше разрешение, чем icons/*.png."""
     if not hero_short_name:
         return None
     cdn_name = get_cdn_hero_name(hero_short_name)
-    cache_dir = HERO_CACHE_DIR
+    cache_dir = HERO_PORTRAIT_DIR
     cache_file = cache_dir / f"{cdn_name}.webp"
     if cache_file.exists():
         try:
@@ -457,7 +439,7 @@ def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | 
             except Exception:
                 pass
 
-    # Special fallback: doom_bringer has the same icon as doom
+    # Special fallback: doom_bringer has the same portrait as doom
     if hero_short_name == "doom" or cdn_name == "doom":
         cache_file_doombringer = cache_dir / "doom_bringer.webp"
         if cache_file_doombringer.exists():
@@ -465,19 +447,16 @@ def get_hero_portrait_cached(hero_short_name: str, timeout: int = 5) -> bytes | 
                 return cache_file_doombringer.read_bytes()
             except Exception:
                 pass
-    try:
-        url = f"{HERO_IMAGE_BASE}/{cdn_name}.png"
-        resp = requests.get(url, timeout=3, headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"})
-        if resp.status_code == 200:
-            data = resp.content
+
+    # Special fallback: magnataur has the same portrait as magnus
+    if hero_short_name == "magnus" or cdn_name == "magnus":
+        cache_file_magnataur = cache_dir / "magnataur.webp"
+        if cache_file_magnataur.exists():
             try:
-                cache_dir.mkdir(parents=True, exist_ok=True)
-                cache_file.write_bytes(data)
+                return cache_file_magnataur.read_bytes()
             except Exception:
                 pass
-            return data
-    except Exception:
-        pass
+
     return None
 
 
@@ -487,7 +466,7 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
         return None
 
     cdn_name = get_cdn_hero_name(hero_short_name)
-    cache_file = HERO_CACHE_DIR / f"{cdn_name}.webp"
+    cache_file = HERO_PORTRAIT_DIR / f"{cdn_name}.webp"
 
     if cache_file.exists():
         try:
@@ -496,57 +475,32 @@ async def get_cached_hero_portrait(hero_short_name: str) -> Image.Image | None:
             logger.exception("Failed to load cached hero portrait")
     
     if hero_short_name != cdn_name:
-        cache_file_local = HERO_CACHE_DIR / f"{hero_short_name}.webp"
+        cache_file_local = HERO_PORTRAIT_DIR / f"{hero_short_name}.webp"
         if cache_file_local.exists():
             try:
                 return Image.open(cache_file_local).convert("RGBA")
             except Exception:
                 logger.exception("Failed to load cached hero portrait (local)")
 
-    # Special fallback: doom_bringer has the same icon as doom
+    # Special fallback: doom_bringer has the same portrait as doom
     if hero_short_name == "doom" or cdn_name == "doom":
-        cache_file_doombringer = HERO_CACHE_DIR / "doom_bringer.webp"
+        cache_file_doombringer = HERO_PORTRAIT_DIR / "doom_bringer.webp"
         if cache_file_doombringer.exists():
             try:
                 return Image.open(cache_file_doombringer).convert("RGBA")
             except Exception:
                 logger.exception("Failed to load cached hero portrait (doom_bringer fallback)")
 
-    # Special fallback: magnataur has the same icon as magnus
+    # Special fallback: magnataur has the same portrait as magnus
     if hero_short_name == "magnus" or cdn_name == "magnus":
-        cache_file_magnataur = HERO_CACHE_DIR / "magnataur.webp"
+        cache_file_magnataur = HERO_PORTRAIT_DIR / "magnataur.webp"
         if cache_file_magnataur.exists():
             try:
                 return Image.open(cache_file_magnataur).convert("RGBA")
             except Exception:
                 logger.exception("Failed to load cached hero portrait (magnataur fallback)")
 
-    url = f"{HERO_IMAGE_BASE}/{cdn_name}.png"
-    try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
-            async with session.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; FissureBot/1.0)"}) as resp:
-                if resp.status != 200:
-                    return None
-                content_type = resp.headers.get("Content-Type", "")
-                if not content_type.startswith("image/"):
-                    logger.warning("Unexpected Content-Type for hero portrait %s: %s", url, content_type)
-                    return None
-                data = await resp.read()
-
-        try:
-            cache_file.write_bytes(data)
-        except Exception:
-            logger.exception("Failed to save hero portrait to cache")
-
-        try:
-            return Image.open(io.BytesIO(data)).convert("RGBA")
-        except Exception as e:
-            logger.error("Failed to decode hero portrait %s: %s", url, e)
-            return None
-
-    except Exception:
-        logger.exception("Failed to download hero portrait")
-        return None
+    return None
 
 
 def _heroes_strip_gradient(canvas_width: int, canvas_height: int):
@@ -628,9 +582,9 @@ async def get_heroes_data_async() -> dict:
                 "id": hero_id,
                 "name": hero["localized_name"],
                 "short_name": short_name,
-                "image_url": f"{HERO_IMAGE_BASE}/{cdn_name}.png",
-                "icon_url": f"{HERO_ICON_BASE}/{cdn_name}.png",
-                "img": f"{HERO_IMAGE_BASE}/{cdn_name}.png",
+                "image_url": str(Path(HERO_IMAGE_BASE) / f"{cdn_name}.webp"),
+                "icon_url": str(Path(HERO_ICON_BASE) / f"{cdn_name}.webp"),
+                "img": str(Path(HERO_IMAGE_BASE) / f"{cdn_name}.webp"),
             }
 
         _set_cached("heroes_data", heroes)

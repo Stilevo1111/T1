@@ -35,7 +35,7 @@ __all__ = [
     "DIGEST_ROTATION_INTERVAL",
     "HERO_META_DIGEST_REFRESH_INTERVAL",
     # Assets
-    "TOPMMR_BANNER_URL",
+    "TOPMMR_BANNER_PATH",
     # Zeus
     "ZEUS_TEXTS",
     # Welcome
@@ -78,8 +78,6 @@ DIGEST_DATA_REFRESH_INTERVAL = 3600  # 1 hour
 DIGEST_ROTATION_INTERVAL = 172800  # 48 hours
 HERO_META_DIGEST_REFRESH_INTERVAL = 12 * 3600  # 12 hours
 
-TOPMMR_BANNER_URL = "https://i.ibb.co/CsbCfzTz/Tv-Sd2.jpg"
-
 # Владыка небес texts (moved here for centralization)
 ZEUS_TEXTS = [
     "🧙 Зевс, Владыка небес 🗣️ Ничто не укроется от моего гнева!",
@@ -120,6 +118,8 @@ COOLDOWN_BANNERS = ["cooldown", "cooldown_2"]
 def get_banner_path(banner_name: str) -> Path:
     """Get local banner path."""
     return BANNER_DIR / f"{banner_name}.webp"
+
+TOPMMR_BANNER_PATH = str(get_banner_path("topmmr"))
 
 def get_random_cooldown_banner_path() -> Path:
     """Get a random cooldown banner path."""

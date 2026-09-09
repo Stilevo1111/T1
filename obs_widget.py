@@ -117,7 +117,7 @@ def _remove_white_background(img: Image.Image) -> Image.Image:
 
 
 async def _fetch_hero_icon(hero_info: dict | None, session: aiohttp.ClientSession) -> Image.Image | None:
-    """Download hero icon with disk cache. Returns RGBA Image."""
+    """Load hero icon from local assets or cache. Returns RGBA Image."""
     if not hero_info:
         return None
 
@@ -131,6 +131,18 @@ async def _fetch_hero_icon(hero_info: dict | None, session: aiohttp.ClientSessio
     cached = _icon_cache.get(cache_key)
     if cached and (now - cached[1]) < _ICON_CACHE_TTL:
         return cached[0]
+
+    # Local path support
+    if not icon_url.startswith("http"):
+        icon_path = Path(icon_url)
+        if icon_path.exists():
+            try:
+                img = Image.open(icon_path).convert("RGBA")
+                _icon_cache[cache_key] = (img, now)
+                return img
+            except Exception:
+                logger.debug("Failed to open local obs icon: %s", icon_path)
+        return None
 
     filename = os.path.basename(icon_url.split("?")[0])
     cache_path = _ICON_CACHE_DIR / filename

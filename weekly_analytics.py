@@ -452,7 +452,7 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
     if cached is not None:
         return cached
 
-    # Try local disk cache first (faster than API)
+    # Try local disk cache first
     from dota_mmr import get_hero_icon_cached
     icon = await asyncio.to_thread(get_hero_icon_cached, hero_id)
     if icon is not None:
@@ -474,22 +474,7 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
         except Exception:
             pass
         
-        if icon is None:
-            try:
-                url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{file_name}.png"
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                        if resp.status == 200:
-                            icon = Image.open(io.BytesIO(await resp.read())).convert("RGBA")
-                            try:
-                                cache_file.parent.mkdir(parents=True, exist_ok=True)
-                                icon.save(cache_file, "WEBP", quality=85)
-                            except Exception:
-                                pass
-            except Exception:
-                pass
-        
-        if icon:
+        if icon is not None:
             image_cache.set(str(hero_id), icon)
             return icon
 
@@ -1629,22 +1614,10 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     if _CHART_BG_CACHE is None:
         try:
-            import io
-            # Try local first, then remote
             local_bg = get_banner_path("chart_bg_fallback")
-            background_url_png = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
             content = None
             if isinstance(local_bg, Path) and local_bg.exists():
                 content = local_bg.read_bytes()
-            # Try png if local failed
-            if content is None:
-                try:
-                    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-                        async with session.get(background_url_png) as resp:
-                            if resp.status == 200:
-                                content = await resp.read()
-                except Exception:
-                    pass
             if content is not None:
                 img = Image.open(io.BytesIO(content))
                 if img.mode == 'RGBA':
