@@ -68,6 +68,28 @@ class TestHeroAssets:
                 missing.append((hero_id, hero.get("name"), str(icon)))
         assert not missing, f"Missing hero icons: {missing[:5]}"
 
+    def test_hero_image_urls_are_portraits(self, heroes):
+        from PIL import Image
+
+        for hero_id, hero in heroes.items():
+            img = Path(hero.get("image_url", ""))
+            if not img.exists():
+                continue
+            with Image.open(img) as im:
+                assert im.mode in ("RGBA", "RGB")
+
+    def test_hero_icon_urls_are_icons(self, heroes):
+        from PIL import Image
+
+        for hero_id, hero in heroes.items():
+            icon = Path(hero.get("icon_url", ""))
+            if not icon.exists():
+                continue
+            with Image.open(icon) as im:
+                assert im.mode == "RGBA"
+                assert im.size[0] == 32
+                assert im.size[1] in (31, 32)
+
     def test_hero_paths_are_webp(self, heroes):
         for hero_id, hero in heroes.items():
             assert hero["image_url"].endswith(".webp")
