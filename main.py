@@ -2739,6 +2739,7 @@ def _build_profile_text(
 
 
 async def _resolve_profile_banner(target_user: dict) -> str | io.BytesIO:
+    logger.info(f"_resolve_profile_banner called uid={target_user.get('telegram_id')} steam_id={target_user.get('steam_id')}")
     profile_banner_url = get_banner_path("profile")
     if target_user.get('steam_id'):
         try:
@@ -2747,6 +2748,7 @@ async def _resolve_profile_banner(target_user: dict) -> str | io.BytesIO:
                 generate_chart_only(target_user.get('telegram_id')),
                 timeout=15.0
             )
+            logger.info(f"generate_chart_only result uid={target_user.get('telegram_id')} chart_data={chart_data is not None} image={chart_data.get('image') is not None if isinstance(chart_data, dict) else 'N/A'}")
             if chart_data and chart_data.get("image"):
                 profile_banner_url = io.BytesIO(chart_data["image"])
                 profile_banner_url.name = "profile_analytics.png"
@@ -2754,7 +2756,9 @@ async def _resolve_profile_banner(target_user: dict) -> str | io.BytesIO:
             else:
                 logger.info(f"No analytics chart for profile uid={target_user.get('telegram_id')}, using default banner")
         except Exception as e:
-            logger.debug(f"Could not generate profile analytics chart: {e}")
+            logger.warning(f"Could not generate profile analytics chart: {e}")
+    else:
+        logger.info(f"No steam_id for profile uid={target_user.get('telegram_id')}, using default banner")
     return profile_banner_url
 
 
@@ -4336,6 +4340,7 @@ async def main():
         app.add_handler(CommandHandler("analyze", analyze_command))
         app.add_handler(CommandHandler(("party", "party"), party_command))
         app.add_handler(CommandHandler("story", story_command))
+        app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^(?:/story@FissureD2_Bot|/story)(?:\s+|$)'), story_command))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 

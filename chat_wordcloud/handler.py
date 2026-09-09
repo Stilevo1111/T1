@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.info("story_command invoked")
     if not update.message or not update.effective_chat:
         return
 
