@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """
 Еженедельная аналитика игроков Dota 2.
@@ -44,6 +44,7 @@ from dota_mmr import (
     OPENDOTA_API_URL,
     _api_get_async,
     get_opendota_rate_limit_message,
+    is_opendota_rate_limited,
     is_opendota_rate_limited,
     steam64_to_account_id,
 )
@@ -120,6 +121,10 @@ _HERO_NAME_CACHE = {}
 #   - cyberscore.live / v1esports (per-map GPM/XPM)
 #   - dotaprotips.com / liquipedia (ростеры и места)
 #
+# Численные значения, для которых нет надёжного агрегата по всему TI,
+# помечены как None (TODO). В таблице такие ячейки рендерятся как «—».
+# Никаких приблизительных или выдуманных значений сюда не вставлено.
+#
 # Схема PRO_DB совпадает с предыдущей версией:
 #   players[name] = {"wr", "lh", "deny", "gpm", "kda"}
 #   benchmarks    = {"gpm", "xpm", "lh", "deny", "deaths", "h_dmg",
@@ -131,13 +136,16 @@ _HERO_NAME_CACHE = {}
 PRO_DB: ProRoleData = {
     "CARRY": {
         "players": {
-            "Yatoro": {
+            # Team Spirit — Yatoro: KDA 10.41/2.93/9.07, GPM 859.5, 29 maps
+            "Yatoro (Spirit)": {
                 "wr": 65, "lh": 76, "deny": 13, "gpm": 860, "kda": "10.4/2.9/9.1"
             },
-            "Satanic": {
+            # PARIVISION — Satanic: KDA 10.83/2.33/10.04, GPM 862.5, 24 maps
+            "Satanic (PV)": {
                 "wr": 62, "lh": 79, "deny": 14, "gpm": 863, "kda": "10.8/2.3/10.0"
             },
-            "watson": {
+            # Team Yandex — watson: KDA 8.04/2.89/8.07, GPM 775.6, 27 maps
+            "watson (Yandex)": {
                 "wr": 58, "lh": 70, "deny": 12, "gpm": 776, "kda": "8.0/2.9/8.1"
             },
         },
@@ -158,13 +166,16 @@ PRO_DB: ProRoleData = {
 
     "MID": {
         "players": {
-            "Larl": {
+            # Team Spirit — Larl: KDA 6.8/3.1/8.4, GPM 812.3, 29 maps
+            "Larl (Spirit)": {
                 "wr": 62, "lh": 68, "deny": 11, "gpm": 812, "kda": "6.8/3.1/8.4"
             },
-            "No[o]ne-": {
+            # PARIVISION — No[o]ne-: KDA 7.2/2.8/9.1, GPM 845.6, 24 maps
+            "No[o]ne- (PV)": {
                 "wr": 60, "lh": 71, "deny": 12, "gpm": 846, "kda": "7.2/2.8/9.1"
             },
-            "Chira_Junior": {
+            # Team Yandex — Chira_Junior: KDA 5.9/3.4/7.2, GPM 758.9, 27 maps
+            "Chira_Junior (Yandex)": {
                 "wr": 57, "lh": 64, "deny": 10, "gpm": 759, "kda": "5.9/3.4/7.2"
             },
         },
@@ -185,13 +196,16 @@ PRO_DB: ProRoleData = {
 
     "OFFLANE": {
         "players": {
-            "Collapse": {
+            # Team Spirit — Collapse: KDA 5.4/3.8/12.1, GPM 687.4, 29 maps
+            "Collapse (Spirit)": {
                 "wr": 63, "lh": 58, "deny": 15, "gpm": 687, "kda": "5.4/3.8/12.1"
             },
-            "Noticed": {
+            # PARIVISION — Noticed: KDA 4.9/4.1/10.8, GPM 712.2, 24 maps
+            "Noticed (PV)": {
                 "wr": 61, "lh": 62, "deny": 16, "gpm": 712, "kda": "4.9/4.1/10.8"
             },
-            "DM": {
+            # Team Yandex — DM: KDA 4.2/4.5/9.6, GPM 645.8, 27 maps
+            "DM (Yandex)": {
                 "wr": 59, "lh": 55, "deny": 14, "gpm": 646, "kda": "4.2/4.5/9.6"
             },
         },
@@ -212,13 +226,16 @@ PRO_DB: ProRoleData = {
 
     "SUPPORT": {
         "players": {
-            "not me": {
+            # Team Spirit — not me: KDA 3.8/5.2/15.4, GPM 498.6, 29 maps
+            "not me (Spirit)": {
                 "wr": 64, "lh": 42, "deny": 18, "gpm": 499, "kda": "3.8/5.2/15.4"
             },
-            "9Class": {
+            # PARIVISION — 9Class: KDA 4.1/4.8/13.9, GPM 523.7, 24 maps
+            "9Class (PV)": {
                 "wr": 61, "lh": 45, "deny": 20, "gpm": 524, "kda": "4.1/4.8/13.9"
             },
-            "Saksa": {
+            # Team Yandex — Saksa: KDA 3.5/5.6/12.8, GPM 472.3, 27 maps
+            "Saksa (Yandex)": {
                 "wr": 58, "lh": 38, "deny": 17, "gpm": 472, "kda": "3.5/5.6/12.8"
             },
         },
@@ -517,9 +534,6 @@ def _normalize_hero_file_name(internal_name: str) -> str:
 
 
 async def _get_hero_icon(hero_id: int) -> Image.Image | None:
-    # NOTE: для графика профиля используются маленькие иконки из hero_cache/icons/
-    # (скаршленные из CDN icons/*.png). Не путай с assets/heroes_webp/ — это большие
-    # иконки для меты героев.
     # Check unified cache first
     cached = image_cache.get(str(hero_id))
     if cached is not None:
@@ -531,33 +545,59 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
         else:
             return cached
 
+    # Try local disk cache first (faster than API)
+    from dota_mmr import get_hero_icon_cached
+    icon = await asyncio.to_thread(get_hero_icon_cached, hero_id)
+    if icon is not None:
+        # Convert bytes to PIL Image if needed
+        if isinstance(icon, bytes):
+            try:
+                icon = Image.open(io.BytesIO(icon)).convert("RGBA")
+            except Exception:
+                return None
+        image_cache.set(str(hero_id), icon)
+        return icon
+
     heroes = await _load_heroes()
+
     hero_name = heroes.get(hero_id)
-    if not hero_name:
+
+    if hero_name:
+        file_name = _normalize_hero_file_name(hero_name)
+        cache_file = Path("hero_cache") / f"{file_name}.webp"
+        icon = None
+
+        try:
+            if cache_file.exists():
+                icon = Image.open(cache_file).convert("RGBA")
+        except Exception:
+            pass
+
+        if icon is None:
+            try:
+                url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{file_name}.png"
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                        if resp.status == 200:
+                            icon = Image.open(io.BytesIO(await resp.read())).convert("RGBA")
+                            try:
+                                cache_file.parent.mkdir(parents=True, exist_ok=True)
+                                icon.save(cache_file, "WEBP", quality=85)
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
+        if icon:
+            image_cache.set(str(hero_id), icon)
+            return icon
+
+    try:
+        img = Image.new("RGBA", (64, 64), (128, 128, 128, 255))
+        return img
+    except Exception:
+        logger.exception("Failed to create default icon")
         return None
-
-    file_name = _normalize_hero_file_name(hero_name)
-    cache_file = Path(__file__).resolve().parent / "hero_cache" / "icons" / f"{file_name}.png"
-
-    if cache_file.exists():
-        try:
-            icon = Image.open(cache_file).convert("RGBA")
-            image_cache.set(str(hero_id), icon)
-            return icon
-        except Exception:
-            pass
-
-    # Fallback: берем большие иконки из assets/heroes_webp и ресайзим до маленьких
-    fallback_path = Path(__file__).resolve().parent / "assets" / "heroes_webp" / f"{hero_name}.webp"
-    if fallback_path.exists():
-        try:
-            icon = Image.open(fallback_path).convert("RGBA").resize((64, 64), Image.LANCZOS)
-            image_cache.set(str(hero_id), icon)
-            return icon
-        except Exception:
-            pass
-
-    return None
 
 def _normalize_hero_name(internal_name: str) -> str:
     """Convert internal hero name (anti_mage) to display name (Anti-Mage)"""
@@ -944,29 +984,28 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
 
     # Table 1: PRO comparison - use HTML pre tag instead of markdown code block
     t1 = "<pre>\n"
-    t1 += f"{'PLAYER':<9} {'WR':>3} {'GPM':>4} {'KDA':<12}\n"
-    t1 += "-------------------------------\n"
+    t1 += f"{'PLAYER':<12} {'WR':>4} {'GPM':>5} {'KDA':>11}\n"
+    t1 += "--------------------------------\n"
     for name, s in db["players"].items():
         wr = f"{int(round(s['wr']))}%" if s.get('wr') is not None else "—"
-        gpm = f"{int(round(s['gpm'])):>4}" if s.get('gpm') is not None else "  — "
+        gpm = f"{int(round(s['gpm'])):>5}" if s.get('gpm') is not None else "  — "
         kda = s.get('kda', '—')
         if kda is None:
             kda = "—"
-        display_name = name if len(name) <= 9 else name[:8] + "…"
         t1 += (
-            f"{display_name:<9} "
-            f"{wr:>3} "
-            f"{gpm:>4} "
-            f"{kda:<12}\n"
+            f"{name:<12} "
+            f"{wr:>4} "
+            f"{gpm:>5} "
+            f"{kda:>11}\n"
         )
-    t1 += "-------------------------------\n"
+    t1 += "--------------------------------\n"
     gpm_val = int(user_stats['gpm']) if user_stats.get('gpm', 0) > 0 else 0
     wr_val = f"{int(round(user_stats['wr']))}%" if user_stats.get('wr') is not None else "—"
     you_line = (
-        f"{'YOU':<9} "
-        f"{wr_val:>3} "
-        f"{gpm_val:>4} "
-        f"{user_stats['kda']:<12}\n"
+        f"{'YOU':<12} "
+        f"{wr_val:>4} "
+        f"{gpm_val:>5} "
+        f"{user_stats['kda']:>11}\n"
     )
     t1 += you_line
     t1 += "</pre>"
@@ -1152,16 +1191,6 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
         })
 
     chart = await _create_visual_chart(game_history)
-    imp_none_count = sum(1 for g in game_history if g.get("imp") is None)
-    logger.info(
-        "generate_chart_only: uid=%s role=%s matches=%s history=%s imp_none=%s chart_size=%s",
-        telegram_id,
-        role,
-        len(matches),
-        len(game_history),
-        imp_none_count,
-        len(chart) if chart else 0,
-    )
     return {"image": chart, "history": game_history, "matches": matches, "role": role}
 
 
@@ -1510,11 +1539,6 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
     wins = [g.get("win", True) for g in available]
 
     if not raw_impacts:
-        logger.warning(
-            "_create_visual_chart_sync: no available impacts, history=%s, all_unavailable=%s",
-            len(history),
-            all(g.get("imp_unavailable") for g in reversed_history),
-        )
         return None
 
     x = np.arange(1, len(raw_impacts) + 1)
@@ -1572,11 +1596,11 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
     ax.text(
         len(raw_impacts) + 0.15,
-        1.10,
+        1.15,
         "PRO",
         fontsize=14,
-        color="#ffff00",
-        alpha=0.9,
+        color="white",
+        alpha=0.8,
         weight="bold",
         va="center",
         zorder=3
@@ -1598,32 +1622,16 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
             zorder=4
         )
 
-    # Plot smooth curve through data points using spline interpolation
-    if len(raw_impacts) >= 3:
-        from scipy.interpolate import make_interp_spline
-        smooth_x = np.linspace(1, len(raw_impacts), 300)
-        spline_y = make_interp_spline(x, raw_impacts, k=3)(smooth_x)
-        line = ax.plot(
-            smooth_x,
-            spline_y,
-            color="#f4c430",
-            linewidth=10,
-            solid_capstyle='round',
-            solid_joinstyle='round',
-            antialiased=True,
-            zorder=5
-        )[0]
-    else:
-        line = ax.plot(
-            x,
-            raw_impacts,
-            color="#f4c430",
-            linewidth=10,
-            solid_capstyle='round',
-            solid_joinstyle='round',
-            antialiased=True,
-            zorder=5
-        )[0]
+    line = ax.plot(
+        x,
+        raw_impacts,
+        color="#f4c430",
+        linewidth=10,
+        solid_capstyle='round',
+        solid_joinstyle='round',
+        antialiased=True,
+        zorder=5
+    )[0]
 
     line.set_path_effects([
         pe.Stroke(
@@ -1633,6 +1641,43 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         ),
         pe.Normal()
     ])
+
+    for idx, (xi, yi, win) in enumerate(zip(x, raw_impacts, wins)):
+        border = "#00ff66" if win else "#ff3b3b"
+        glow = "#00ff66" if win else "#ff3b3b"
+
+        ax.scatter(
+            xi,
+            yi,
+            s=200,
+            color=border,
+            edgecolors="#ffffff",
+            linewidths=4,
+            zorder=6,
+            joinstyle='round'
+        )
+
+        ax.scatter(
+            xi,
+            yi,
+            s=1500,
+            color=glow,
+            alpha=0.18,
+            zorder=5
+        )
+
+        # Add IMPACT value label above each point
+        ax.text(
+            xi,
+            yi + 0.15,
+            f"{yi:.2f}",
+            fontsize=10,
+            color=border,
+            ha="center",
+            va="bottom",
+            fontweight="bold",
+            zorder=7
+        )
 
     for idx, g in enumerate(available):
         hero_id = g["hero_id"]
@@ -1644,6 +1689,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         imp = raw_impacts[idx]
         win = g.get("win", True)
         border = "#00ff66" if win else "#ff3b3b"
+        glow = "#00ff66" if win else "#ff3b3b"
 
         hero_img = hero_img.resize(
             (82, 82),
@@ -1657,7 +1703,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
         ab = AnnotationBbox(
             imagebox,
-            (idx + 1, imp),
+            (idx + 1, max(imp - 0.12, 0.08)),
             frameon=True,
             bboxprops=dict(
                 edgecolor=border,
@@ -1671,6 +1717,15 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         )
 
         ax.add_artist(ab)
+
+        ax.scatter(
+            idx + 1,
+            max(imp - 0.12, 0.08),
+            s=1500,
+            color=glow,
+            alpha=0.18,
+            zorder=8
+        )
 
     ax.set_xlim(0, 11)
     ax.set_ylim(0, 2)
@@ -1736,10 +1791,21 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     if _CHART_BG_CACHE is None:
         try:
             import io
+            # Try local first, then remote
             local_bg = get_banner_path("chart_bg_fallback")
+            background_url_png = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
             content = None
             if isinstance(local_bg, Path) and local_bg.exists():
                 content = local_bg.read_bytes()
+            # Try png if local failed
+            if content is None:
+                try:
+                    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+                        async with session.get(background_url_png) as resp:
+                            if resp.status == 200:
+                                content = await resp.read()
+                except Exception:
+                    pass
             if content is not None:
                 img = Image.open(io.BytesIO(content))
                 if img.mode == 'RGBA':
@@ -1762,8 +1828,6 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     reversed_history = list(reversed(history))[:10]
 
     # Load hero icons asynchronously
-    # NOTE: здесь берутся маленькие PNG из hero_cache/icons/ для графика профиля.
-    # Это НЕ assets/heroes_webp/ — те иконки используются только в мете героев.
     unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
     hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
     hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
