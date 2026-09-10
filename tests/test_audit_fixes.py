@@ -61,3 +61,38 @@ def test_techies_result_uploads_selected_image_bytes():
     asyncio.run(verify_image(techies.TECHIES_BASE_URL))
     asyncio.run(verify_image(techies.TECHIES_SUCCESS_URL))
     asyncio.run(verify_image(techies.TECHIES_EXPLOSION_URL))
+
+
+def test_clear_hero_meta_cache_invalidates_redis(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    import database
+    import hero_meta
+
+    deleted_keys = []
+
+    class FakeCache:
+        async def delete(self, key):
+            deleted_keys.append(key)
+            return True
+
+    def set_config(key, value):
+        pass
+
+    monkeypatch.setattr(database, "set_config", set_config)
+    monkeypatch.setitem(
+        sys.modules,
+        "cache",
+        SimpleNamespace(cache=FakeCache()),
+    )
+    monkeypatch.setattr(
+        hero_meta,
+        "_hero_meta_cache",
+        {"data": "old", "timestamp": 123},
+    )
+
+    hero_meta.clear_hero_meta_cache()
+
+    assert deleted_keys == [hero_meta.HERO_META_REDIS_KEY]
+    assert hero_meta._hero_meta_cache == {"data": None, "timestamp": 0}

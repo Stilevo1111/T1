@@ -897,14 +897,9 @@ async def alternate_digest_job(context):
             
             if should_create_new:
                 try:
-                    from hero_meta import get_hero_meta_banner, clear_hero_meta_cache, HERO_META_REDIS_KEY
+                    from hero_meta import clear_hero_meta_cache_async, get_hero_meta_banner
                     if should_create_new:
-                        clear_hero_meta_cache()
-                    try:
-                        from cache import cache
-                        await cache.delete(HERO_META_REDIS_KEY)
-                    except Exception:
-                        pass
+                        await clear_hero_meta_cache_async()
                     hero_meta_banner = await asyncio.wait_for(get_hero_meta_banner(context.application.bot), timeout=90.0)
                     if hero_meta_banner:
                         set_config('last_hero_meta_update', int(now))
@@ -1038,7 +1033,7 @@ async def morning_digest_job(context):
         user_cache,
     )
     from main import is_rate_limited
-    from hero_meta import clear_hero_meta_cache
+    from hero_meta import clear_hero_meta_cache_async
     from datetime import timedelta
 
     try:
@@ -1079,7 +1074,7 @@ async def morning_digest_job(context):
             _digest_state_container.set_last_hero_meta_refresh(0)
 
         # Сбрасываем кеш hero meta чтобы взять свежие данные
-        clear_hero_meta_cache()
+        await clear_hero_meta_cache_async()
         logger.info("morning_digest_job: hero meta cache cleared")
 
         # Принудительно создаём новый дайджест

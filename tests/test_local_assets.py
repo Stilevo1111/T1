@@ -168,6 +168,94 @@ class TestWeeklyAnalyticsHeroIcon:
         assert img.mode == "RGBA"
 
 
+
+class TestHeroMetaAvatarDownload:
+    @staticmethod
+    def _png_bytes():
+        from io import BytesIO
+
+        from PIL import Image
+
+        buffer = BytesIO()
+        Image.new("RGBA", (1, 1), (12, 34, 56, 255)).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    def test_download_image_async_uses_http_session(self, monkeypatch):
+        import asyncio
+
+        from hero_meta import _download_image_async
+
+        class FakeResponse:
+            status = 200
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, traceback):
+                return False
+
+            async def read(self):
+                return TestHeroMetaAvatarDownload._png_bytes()
+
+        class FakeSession:
+            def __init__(self):
+                self.url = None
+                self.timeout = None
+                self.headers = None
+
+            def get(self, url, timeout, headers):
+                self.url = url
+                self.timeout = timeout
+                self.headers = headers
+                return FakeResponse()
+
+        session = FakeSession()
+        image_url = "https://avatars.example/player.jpg"
+        img = asyncio.run(_download_image_async(image_url, session=session))
+
+        assert img is not None
+        assert img.mode == "RGBA"
+        assert session.url == image_url
+        assert session.timeout.total == 10
+        assert session.headers["User-Agent"] == "fissure-bot/1.0"
+
+    def test_download_image_async_rejects_non_http_url(self):
+        import asyncio
+
+        from hero_meta import _download_image_async
+
+        assert asyncio.run(_download_image_async("not-a-url")) is None
+
+    def test_fetch_avatar_by_steam_id_downloads_avatar(self, monkeypatch):
+        import asyncio
+
+        from PIL import Image
+
+        import hero_meta
+
+        avatar_url = "https://avatars.example/player.jpg"
+
+        async def fake_stats(steam_id, use_cache=True, timeout=5):
+            assert steam_id == 123
+            return {"avatar": avatar_url}
+
+        async def fake_download(url, session=None):
+            assert url == avatar_url
+            return Image.new("RGBA", (1, 1), (12, 34, 56, 255))
+
+        def fail_hero_icon(*args, **kwargs):
+            raise AssertionError("avatar URL must not be treated as a local hero icon")
+
+        monkeypatch.setattr(hero_meta, "get_player_stats_async", fake_stats)
+        monkeypatch.setattr(hero_meta, "_download_image_async", fake_download)
+        monkeypatch.setattr(hero_meta, "fetch_hero_icon", fail_hero_icon)
+
+        img = asyncio.run(hero_meta.fetch_avatar_by_steam_id(123))
+
+        assert img is not None
+        assert img.mode == "RGBA"
+
+
 class TestObsWidgetLocalPath:
     """obs_widget._fetch_hero_icon supports local file paths."""
 

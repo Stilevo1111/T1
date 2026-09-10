@@ -8,19 +8,16 @@ import math
 import os
 import re
 import time
-
 from pathlib import Path
 from urllib.parse import urlparse
 
 import aiohttp
-import requests
 from PIL import Image, ImageDraw, ImageFont
 
-from hero_positions import hero_positions
-from constants import get_banner_path
-
-from dota_mmr import get_player_stats_async
 from bot_utils import get_user_avatar_url
+from constants import get_banner_path
+from dota_mmr import get_player_stats_async
+from hero_positions import hero_positions
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +25,74 @@ logger = logging.getLogger(__name__)
 _explorer_cache = {"data": None, "timestamp": 0, "fallback_used": False}
 
 
-async def fetch_avatar_by_steam_id(steam_id: int) -> Image.Image | None:
+def _extract_hero_name(icon_path: str) -> str | None:
+    icon_path = str(icon_path).split("?")[0].rstrip("/")
+    normalized_path = icon_path.replace("\\", "/")
+
+    if "/apps/dota2/images/dota/heroes/" in normalized_path:
+        match = re.search(r"/heroes/([a-zA-Z0-9_]+)_sb\.png", normalized_path)
+        if match:
+            return match.group(1)
+
+    filename = os.path.basename(normalized_path)
+    if not filename:
+        return None
+
+    return (
+        filename.replace("_sb.png", "")
+        .replace(".png", "")
+        .replace(".webp", "")
+        .replace(".jpg", "")
+        .replace(".jpeg", "")
+    )
+
+
+async def _download_image_async(
+    image_url: str,
+    session: aiohttp.ClientSession | None = None,
+    timeout: int = 10,
+) -> Image.Image | None:
+    if not image_url:
+        return None
+
+    parsed_url = urlparse(image_url)
+    if parsed_url.scheme not in ("http", "https") or not parsed_url.netloc:
+        return None
+
+    close_session = False
+    if session is None:
+        session = aiohttp.ClientSession()
+        close_session = True
+
+    try:
+        async with session.get(
+            image_url,
+            timeout=aiohttp.ClientTimeout(total=timeout),
+            headers={"User-Agent": "fissure-bot/1.0"},
+        ) as resp:
+            if resp.status != 200:
+                logger.debug(f"Image download failed for {image_url}: HTTP {resp.status}")
+                return None
+            data = await resp.read()
+            if not data:
+                return None
+            with Image.open(io.BytesIO(data)) as image:
+                image.load()
+                return image.convert("RGBA")
+    except Exception as e:
+        logger.debug(f"Image download failed for {image_url}: {e}")
+        return None
+    finally:
+        if close_session:
+            await session.close()
+
+
+async def fetch_avatar_by_steam_id(
+    steam_id: int,
+    session: aiohttp.ClientSession | None = None,
+) -> Image.Image | None:
     """Fetch player avatar directly from OpenDota API by Steam ID.
-    
+
     Used as fallback when player is not linked to a user account.
     """
     if not steam_id:
@@ -40,7 +102,7 @@ async def fetch_avatar_by_steam_id(steam_id: int) -> Image.Image | None:
         if stats:
             avatar_url = stats.get("avatar") or stats.get("avatarfull")
             if avatar_url:
-                img = await fetch_hero_icon(None, avatar_url)
+                img = await _download_image_async(avatar_url, session=session)
                 if img:
                     return img
         return None
@@ -146,9 +208,10 @@ async def fetch_hero_portrait(session, icon_path):
     if not icon_path:
         return None
 
+    icon_path = str(icon_path)
     hero_name = None
 
-    if icon_path and icon_path.isdigit():
+    if icon_path.isdigit():
         from dota_mmr import get_hero_list
         from hero_names import get_cdn_hero_name
         heroes = await get_hero_list()
@@ -160,19 +223,7 @@ async def fetch_hero_portrait(session, icon_path):
         if not hero_name:
             return None
     else:
-        icon_path = icon_path.split("?")[0].rstrip("/")
-        if "/apps/dota2/images/dota/heroes/" in icon_path:
-            match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', icon_path)
-            if match:
-                hero_name = match.group(1)
-        elif icon_path.startswith('/'):
-            filename = os.path.basename(icon_path)
-            hero_name = filename.replace("_sb.png", "").replace(".png", "").replace(".webp", "")
-        elif not icon_path.startswith('http'):
-            hero_name = icon_path.replace("_sb.png", "").replace(".png", "").replace(".webp", "")
-        else:
-            filename = os.path.basename(urlparse(icon_path).path)
-            hero_name = filename.replace("_sb.png", "").replace(".png", "").replace(".webp", "")
+        hero_name = _extract_hero_name(icon_path)
 
     if not hero_name:
         return None
@@ -188,10 +239,10 @@ async def fetch_hero_icon(session, icon_path):
     if not icon_path:
         return None
 
+    icon_path = str(icon_path)
     hero_name = None
 
-    # Handle numeric IDs (convert to hero name lookup)
-    if icon_path and icon_path.isdigit():
+    if icon_path.isdigit():
         from dota_mmr import get_hero_list
         from hero_names import get_cdn_hero_name
         heroes = await get_hero_list()
@@ -203,27 +254,11 @@ async def fetch_hero_icon(session, icon_path):
         if not hero_name:
             return None
     else:
-        # Clean the path - remove trailing ? or query params that might cause issues
-        icon_path = icon_path.split("?")[0].rstrip("/")
-
-        # Convert old format /apps/dota2/images/dota/heroes/{name}_sb.png to new format
-        if "/apps/dota2/images/dota/heroes/" in icon_path:
-            match = re.search(r'/heroes/([a-zA-Z0-9_]+)_sb\.png', icon_path)
-            if match:
-                hero_name = match.group(1)
-        elif icon_path.startswith('/'):
-            filename = os.path.basename(icon_path)
-            hero_name = filename.replace("_sb.png", "").replace(".png", "").replace(".webp", "")
-        elif not icon_path.startswith('http'):
-            hero_name = icon_path.replace("_sb.png", "").replace(".png", "").replace(".webp", "")
-        else:
-            filename = os.path.basename(urlparse(icon_path).path)
-            hero_name = filename.replace("_sb.png", "").replace(".png", "").replace(".webp", "")
+        hero_name = _extract_hero_name(icon_path)
 
     if not hero_name:
         return None
 
-    # Try local asset first
     local_path = Path("assets/heroes_webp") / f"{hero_name}.webp"
     if not local_path.exists():
         from hero_names import get_local_hero_name
@@ -233,11 +268,12 @@ async def fetch_hero_icon(session, icon_path):
 
     if local_path.exists():
         try:
-            return Image.open(local_path).convert("RGBA")
+            with Image.open(local_path) as image:
+                image.load()
+                return image.convert("RGBA")
         except Exception:
             pass
 
-    # Try alternative local paths
     alt_paths = [
         Path("assets/heroes_webp") / f"{hero_name}.png",
         Path("assets/heroes/") / f"{hero_name}.png",
@@ -246,7 +282,9 @@ async def fetch_hero_icon(session, icon_path):
     for alt_path in alt_paths:
         if alt_path.exists():
             try:
-                return Image.open(alt_path).convert("RGBA")
+                with Image.open(alt_path) as image:
+                    image.load()
+                    return image.convert("RGBA")
             except Exception:
                 continue
 
@@ -404,7 +442,9 @@ async def _fetch_telegram_avatar(bot_token, avatar_field):
                     if resp.status != 200:
                         return None
                     data = await resp.read()
-                    return Image.open(io.BytesIO(data)).convert("RGBA")
+                    with Image.open(io.BytesIO(data)) as image:
+                        image.load()
+                        return image.convert("RGBA")
             else:
                 async with session.get(
                     f"https://api.telegram.org/bot{bot_token}/getFile",
@@ -702,29 +742,20 @@ async def create_infographic(hero_stats, bot=None):
         logger.warning(f"Failed to load best players for hero meta avatars: {e}")
 
     avatar_cache = {}
-    async def fetch_avatar_for_hero(hero_id):
+    async def fetch_avatar_for_hero(hero_id, session):
         if hero_id in avatar_cache:
             return avatar_cache[hero_id]
         player = best_players.get(hero_id, [{}])[0]
         avatar_url = player.get('avatar')
         telegram_id = player.get('telegram_id')
         img = None
-        
+
         # 1. Try Telegram profile photo first (via bot instance if available)
         if telegram_id and bot:
             try:
                 tg_avatar_url = await get_user_avatar_url(bot, telegram_id)
                 if tg_avatar_url:
-                    def _download_avatar():
-                        resp = requests.get(
-                            tg_avatar_url,
-                            timeout=10,
-                            headers={"User-Agent": "fissure-bot/1.0"},
-                        )
-                        if resp.status_code == 200 and resp.content:
-                            return Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                        return None
-                    img = await asyncio.to_thread(_download_avatar)
+                    img = await _download_image_async(tg_avatar_url, session=session)
                     if img:
                         logger.debug(f"Telegram avatar via bot for hero {hero_id}")
             except Exception as e:
@@ -747,14 +778,14 @@ async def create_infographic(hero_stats, bot=None):
                 logger.debug(f"Telegram avatar fallback failed for hero {hero_id}: {e}")
         
         # 4. Fallback to Steam/direct avatar URL (http URLs only)
-        if not img and avatar_url and avatar_url.startswith('http'):
-            img = await fetch_hero_icon(None, avatar_url)
+        if not img and avatar_url:
+            img = await _download_image_async(avatar_url, session=session)
         
         # 5. Fallback: fetch avatar directly from OpenDota by steam_id
         if not img:
             steam_id = player.get('steam_id')
             if steam_id:
-                img = await fetch_avatar_by_steam_id(steam_id)
+                img = await fetch_avatar_by_steam_id(steam_id, session=session)
         
         avatar_cache[hero_id] = img
         return img
@@ -768,8 +799,9 @@ async def create_infographic(hero_stats, bot=None):
         else:
             icons[hero['id']] = result
 
-    avatar_tasks = [fetch_avatar_for_hero(h['id']) for h in all_heroes]
-    avatar_results = await asyncio.gather(*avatar_tasks, return_exceptions=True)
+    async with aiohttp.ClientSession() as avatar_session:
+        avatar_tasks = [fetch_avatar_for_hero(h['id'], avatar_session) for h in all_heroes]
+        avatar_results = await asyncio.gather(*avatar_tasks, return_exceptions=True)
     avatars = {}
     for hero, result in zip(all_heroes, avatar_results):
         if isinstance(result, Exception):
@@ -860,7 +892,7 @@ async def get_hero_meta_banner(bot=None):
     return get_static_fallback_banner()
 
 
-def clear_hero_meta_cache():
+async def clear_hero_meta_cache_async():
     _hero_meta_cache["data"] = None
     _hero_meta_cache["timestamp"] = 0
     try:
@@ -869,16 +901,21 @@ def clear_hero_meta_cache():
         set_config(HERO_META_BANNER_KEY, "")
     except Exception as e:
         logger.debug(f"Failed to clear hero meta DB cache: {e}")
-    
-    # Also clear Redis cache
+
     try:
-        import asyncio
         from cache import cache
-        if hasattr(cache, 'async_delete'):
-            # Schedule async delete
-            asyncio.create_task(cache.delete(HERO_META_REDIS_KEY))
+        await cache.delete(HERO_META_REDIS_KEY)
     except Exception as e:
         logger.debug(f"Failed to clear Redis cache: {e}")
+
+
+def clear_hero_meta_cache():
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(clear_hero_meta_cache_async())
+    else:
+        asyncio.create_task(clear_hero_meta_cache_async())
 
 
 async def get_dota_data(days=7, force_refresh=False):
