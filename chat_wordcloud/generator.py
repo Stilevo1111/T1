@@ -35,7 +35,7 @@ WORDCLOUD_ANGLES = [0] * 9 + [90, -90]
 WORDCLOUD_GAP = 4
 
 # Maximum placement attempts per word
-MAX_PLACEMENT_ATTEMPTS = 8000
+MAX_PLACEMENT_ATTEMPTS = 3000
 
 
 def _resolve_font_path() -> str | None:
@@ -247,11 +247,23 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
     placed_word_set = set()
     placement_failures = []
 
+    # Font cache to avoid repeated truetype() calls
+    font_cache: dict[int, ImageFont.FreeTypeFont] = {}
+
+    def get_font(size: int) -> ImageFont.FreeTypeFont | None:
+        if size in font_cache:
+            return font_cache[size]
+        try:
+            font = ImageFont.truetype(font_path, size)
+            font_cache[size] = font
+            return font
+        except Exception:
+            return None
+
     def try_place(word, count, current_font_size):
         nonlocal placed_count
-        try:
-            current_font = ImageFont.truetype(font_path, current_font_size)
-        except Exception:
+        current_font = get_font(current_font_size)
+        if current_font is None:
             return False
 
         angle = rng.choice(WORDCLOUD_ANGLES)
@@ -322,25 +334,20 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
         )
         font_size = max(WORDCLOUD_MIN_FONT_SIZE, min(WORDCLOUD_MAX_FONT_SIZE, font_size))
 
-        try:
-            ImageFont.truetype(font_path, font_size)
-        except Exception as e:
-            logger.debug(f"Could not load font size {font_size}: {e}")
+        if get_font(font_size) is None:
             continue
 
         placed = False
-        min_font_tried = False
-        for size_reduction in range(100):
-            current_font_size = font_size - size_reduction
+        for size_reduction in range(10):
+            current_font_size = font_size - size_reduction * 2
             if current_font_size < WORDCLOUD_MIN_FONT_SIZE:
                 current_font_size = WORDCLOUD_MIN_FONT_SIZE
-                min_font_tried = True
 
             if try_place(word, count, current_font_size):
                 placed = True
                 break
 
-            if min_font_tried and current_font_size == WORDCLOUD_MIN_FONT_SIZE:
+            if current_font_size == WORDCLOUD_MIN_FONT_SIZE:
                 break
 
         if not placed:
@@ -356,9 +363,8 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
     small_words.sort(key=lambda x: x[1])
 
     for word, count in small_words:
-        try:
-            small_font = ImageFont.truetype(font_path, WORDCLOUD_MIN_FONT_SIZE)
-        except Exception:
+        small_font = get_font(WORDCLOUD_MIN_FONT_SIZE)
+        if small_font is None:
             continue
 
         color = _get_dota_color(rng)
@@ -505,12 +511,10 @@ def test_wordcloud_placement():
 
         # Try size reduction for each word (like generate_wordcloud_image)
         word_placed = False
-        min_font_tried = False
-        for size_reduction in range(100):
-            current_font_size = font_size - size_reduction
+        for size_reduction in range(10):
+            current_font_size = font_size - size_reduction * 2
             if current_font_size < WORDCLOUD_MIN_FONT_SIZE:
                 current_font_size = WORDCLOUD_MIN_FONT_SIZE
-                min_font_tried = True
 
             try:
                 font = ImageFont.truetype(font_path, current_font_size)
@@ -547,7 +551,7 @@ def test_wordcloud_placement():
                 word_placed = True
                 break
 
-            if min_font_tried and current_font_size == WORDCLOUD_MIN_FONT_SIZE:
+            if current_font_size == WORDCLOUD_MIN_FONT_SIZE:
                 break
 
         if not word_placed:
