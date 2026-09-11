@@ -2578,9 +2578,9 @@ def delete_user(telegram_id: int):
         scheme = get_db_type()
         cursor = conn.cursor()
         if "postgres" in scheme:
-            cursor.execute("UPDATE users SET in_chat = FALSE, last_fissure = 0 WHERE telegram_id = %s", (telegram_id,))
+            cursor.execute("UPDATE users SET in_chat = FALSE WHERE telegram_id = %s", (telegram_id,))
         else:
-            cursor.execute("UPDATE users SET in_chat = 0, last_fissure = 0 WHERE telegram_id = ?", (telegram_id,))
+            cursor.execute("UPDATE users SET in_chat = 0 WHERE telegram_id = ?", (telegram_id,))
         conn.commit()
         cursor.close()
         # Сбрасываем кеши

@@ -5,6 +5,7 @@ import io
 import json
 import os
 import random
+import re
 import signal
 import time
 import traceback
@@ -1944,12 +1945,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             "⚠️ в игре:\n"
             "Настройки → расширенные → сообщество → общедоступная история матчей (вкл)")
 
-        from bot_utils import (
-            add_bot_message,
-            schedule_delete,
-            set_last_bot_message,
-            update_last_message_id,
-        )
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
             photo=link_banner_url,
@@ -3861,8 +3856,70 @@ def setup_health_check(bot):
     health_check_handler = check
 
 
+async def _welcome_joined_member(chat_id: int, user_obj, context: ContextTypes.DEFAULT_TYPE) -> None:
+    name = user_obj.first_name or user_obj.username or "Friend"
+    user_id = user_obj.id
+    telegram_username = user_obj.username
+
+    logger.info(f"New member joined: {name} (id={user_id}) in chat {chat_id}")
+
+    try:
+        registered = await asyncio.to_thread(
+            Database().register_user,
+            user_id,
+            telegram_username or user_obj.first_name,
+            user_obj.first_name,
+            source="welcome",
+        )
+        if registered:
+            logger.info(f"Ensured user exists for {user_id}")
+        else:
+            logger.debug(f"Could not ensure user exists for {user_id}")
+    except Exception as e:
+        logger.debug(f"Could not ensure user exists for {user_id}: {e}")
+
+    try:
+        await asyncio.to_thread(set_user_in_chat, user_id, True)
+    except Exception as e:
+        logger.debug(f"Could not set in_chat=True for {user_id}: {e}")
+
+    phrase = random.choice(WELCOME_PHRASES)
+    keyboard = [
+        [InlineKeyboardButton("🎲 Ролл Фиссуры", callback_data="roll_fissure")],
+        [InlineKeyboardButton("🔑 Привязать Аккаунт", callback_data="link")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if user_obj.username:
+        utf16_bytes = name.encode('utf-16-le')
+        name_utf16_len = len(utf16_bytes) // 2
+        welcome_text = f"{name}, {phrase}"
+        entities = [MessageEntity(
+            type=MessageEntity.TEXT_MENTION,
+            offset=0,
+            length=name_utf16_len,
+            user=user_obj
+        )]
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=welcome_text,
+            entities=entities,
+            reply_markup=reply_markup
+        )
+    else:
+        welcome_text = f"{make_clickable(name, user_id)}, {phrase}"
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=welcome_text,
+            parse_mode="HTML",
+            reply_markup=reply_markup
+        )
+
+    logger.info(f"Welcome sent for {name}")
+
+
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Welcome new chat member"""
+    """Handle bot membership changes and members leaving the chat."""
     try:
         chat_update = update.chat_member or update.my_chat_member
         if chat_update is None:
@@ -3873,119 +3930,45 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
         old_member = chat_update.old_chat_member
         new_member = chat_update.new_chat_member
 
-        # Handle bot added to chat (my_chat_member)
-        if old_member and new_member:
-            bot_id = context.bot.id
-            if new_member.user.id == bot_id:
-                # Bot was added to chat
-                if old_member.status in ['left', 'kicked'] and new_member.status in ['member', 'administrator']:
-                    # Автоматически запоминаем чат для дайджеста, если он ещё не настроен
-                    try:
-                        if not get_config("digest_chat_id"):
-                            set_config("digest_chat_id", chat_id)
-                            logger.info(f"Автоматически установлен digest_chat_id = {chat_id}")
-                    except Exception as e:
-                        logger.debug(f"Не удалось автоматически установить digest_chat_id: {e}")
-                return
-
-        # Handle user added to chat (chat_member)
-        if new_member and new_member.user.id != context.bot.id:
-            new_status = new_member.status
-
-            # User joined the chat (was not a member, now is member)
-            # Handle both cases: with old_member (left/kicked) and first join (no old_member)
-            # Also handle 'creator' (group owner)
-            is_new_join = (new_status in ['member', 'administrator', 'creator'])
-
-            # Check if this is NOT a re-join (old_member doesn't exist or is not member)
-            is_not_rejoin = (old_member is None) or (old_member.status not in ['member', 'administrator', 'creator'])
-
-            if is_new_join and is_not_rejoin:
-                name = new_member.user.first_name or "Friend"
-                user_id = new_member.user.id
-                user_obj = new_member.user
-                telegram_username = user_obj.username  # может быть None
-
-                logger.info(f"New member joined: {name} (id={user_id}) in chat {chat_id}")
-
-                # Убедимся, что пользователь существует в БД
+        if old_member and new_member and new_member.user.id == context.bot.id:
+            if old_member.status in ['left', 'kicked'] and new_member.status in ['member', 'administrator']:
                 try:
-                    db_user = await asyncio.to_thread(get_user, user_id)
-                    if db_user is None:
-                        # Новый пользователь — создаём с лучшим доступным именем
-                        fallback_name = telegram_username or user_obj.first_name or f"Player{user_id}"
-                        db = Database()
-                        db.register_user(user_id, fallback_name, user_obj.first_name, source="start")
-                        logger.info(f"Created new user {user_id} with name '{fallback_name}'")
-                    else:
-                        # Существующий пользователь — обновляем username если изменился (только если есть telegram_username)
-                        current_username = db_user.get('username')
-                        if telegram_username and telegram_username != current_username:
-                            await asyncio.to_thread(update_user_fields_batch, user_id, {'username': telegram_username})
-                            logger.info(f"Updated username for {user_id} to '{telegram_username}'")
-                        # Если username нет в Telegram, но в БД тоже NULL, и есть first_name — устанавливаем first_name
-                        elif current_username is None and user_obj.first_name:
-                            await asyncio.to_thread(update_user_fields_batch, user_id, {'username': user_obj.first_name})
-                            logger.info(f"Set fallback username for {user_id} to '{user_obj.first_name}'")
+                    digest_chat_id = await asyncio.to_thread(get_config, "digest_chat_id")
+                    if not digest_chat_id:
+                        await asyncio.to_thread(set_config, "digest_chat_id", chat_id)
+                        logger.info(f"Автоматически установлен digest_chat_id = {chat_id}")
                 except Exception as e:
-                    logger.debug(f"Could not ensure user exists for {user_id}: {e}")
+                    logger.debug(f"Не удалось автоматически установить digest_chat_id: {e}")
+            return
 
-                # Отмечаем пользователя как участника чата
-                try:
-                    set_user_in_chat(user_id, True)
-                except Exception as e:
-                    logger.debug(f"Could not set in_chat=True for {user_id}: {e}")
-
-                phrase = random.choice(WELCOME_PHRASES)
-                keyboard = [
-                    [InlineKeyboardButton("🎲 Ролл Фиссуры", callback_data="roll_fissure")],
-                    [InlineKeyboardButton("🔑 Привязать Аккаунт", callback_data="link")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-
-                # Используем text_mention если есть username
-                if user_obj.username:
-                    # Telegram entities use UTF-16 code unit offsets/lengths.
-                    # Correct length prevents "ends in the middle of a utf-16 symbol" with emojis.
-                    utf16_bytes = name.encode('utf-16-le')
-                    name_utf16_len = len(utf16_bytes) // 2
-                    welcome_text = f"{name}, {phrase}"
-                    entities = [MessageEntity(
-                        type=MessageEntity.TEXT_MENTION,
-                        offset=0,
-                        length=name_utf16_len,
-                        user=user_obj
-                    )]
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text=welcome_text,
-                        entities=entities,
-                        reply_markup=reply_markup
-                    )
-                else:
-                    # Fallback для пользователей без username
-                    welcome_text = f"{make_clickable(name, user_id)}, {phrase}"
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text=welcome_text,
-                        parse_mode="HTML",
-                        reply_markup=reply_markup
-                    )
-
-                logger.info(f"Welcome sent for {name}")
-
-            # User left the chat (was member, now is left/kicked)
-            elif old_member and new_status in ['left', 'kicked']:
-                user_id = new_member.user.id
-                name = new_member.user.first_name or "Unknown"
-                try:
-                    delete_user(user_id)
-                    logger.info(f"User {name} ({user_id}) left chat, deleted from database")
-                except Exception as e:
-                    logger.debug(f"Could not delete user {user_id} on leave: {e}")
+        if (
+            old_member
+            and new_member
+            and new_member.user.id != context.bot.id
+            and new_member.status in ['left', 'kicked']
+        ):
+            user_id = new_member.user.id
+            name = new_member.user.first_name or "Unknown"
+            try:
+                await asyncio.to_thread(delete_user, user_id)
+                logger.info(f"User {name} ({user_id}) left chat, marked as inactive")
+            except Exception as e:
+                logger.debug(f"Could not mark user {user_id} as left chat: {e}")
 
     except Exception as e:
         logger.error(f"Error in welcome_new_member: {e}")
+
+
+@rate_limit(tokens=1)
+async def welcome_new_members_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Welcome users from Telegram's new_chat_members service message."""
+    message = update.effective_message
+    if not message or not message.new_chat_members:
+        return
+
+    for new_member in message.new_chat_members:
+        if new_member.id != context.bot.id:
+            await _welcome_joined_member(message.chat.id, new_member, context)
 
 
 async def main():
@@ -4341,7 +4324,8 @@ async def main():
         app.add_handler(CommandHandler(("party", "party"), party_command))
         app.add_handler(CommandHandler("story", story_command))
         app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^(?:/story@FissureD2_Bot|/story)(?:\s+|$)'), story_command))
-        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
+        app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.ANY_CHAT_MEMBER))
+        app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members_message))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
         # ── Модуль модерации /mute ──────────────────────────────────────────
