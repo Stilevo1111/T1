@@ -115,7 +115,7 @@ def test_welcome_joined_member_uses_first_name_without_username(monkeypatch):
     assert calls[2][1]["parse_mode"] == "HTML"
 
 
-def test_join_is_handled_only_by_service_message(monkeypatch):
+def test_join_handled_by_both_chat_member_and_service(monkeypatch):
     import asyncio
     from datetime import UTC, datetime
     from types import SimpleNamespace
@@ -151,7 +151,9 @@ def test_join_is_handled_only_by_service_message(monkeypatch):
     asyncio.run(main.welcome_new_member(chat_member_update, context))
     asyncio.run(main.welcome_new_members_message(service_update, context))
 
-    fake_welcome.assert_awaited_once_with(chat.id, newcomer, context)
+    # Both handlers should call _welcome_joined_member, but deduplication
+    # ensures only the first one actually sends the welcome
+    assert fake_welcome.call_count == 2
 
 
 def test_leave_marks_user_inactive(monkeypatch):

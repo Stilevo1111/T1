@@ -3856,7 +3856,21 @@ def setup_health_check(bot):
     health_check_handler = check
 
 
+# Deduplication cache for welcome messages (chat_id, user_id) -> timestamp
+_welcome_dedup_cache: dict[tuple[int, int], float] = {}
+WELCOME_DEDUP_WINDOW = 5.0  # seconds
+
 async def _welcome_joined_member(chat_id: int, user_obj, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Deduplication: skip if same user welcomed recently in same chat
+    import time
+    key = (chat_id, user_obj.id)
+    now = time.time()
+    last = _welcome_dedup_cache.get(key, 0)
+    if now - last < WELCOME_DEDUP_WINDOW:
+        logger.debug(f"Welcome dedup: skipping {user_obj.id} in {chat_id} (recent welcome)")
+        return
+    _welcome_dedup_cache[key] = now
+
     name = user_obj.first_name or user_obj.username or "Friend"
     user_id = user_obj.id
     telegram_username = user_obj.username
@@ -3939,6 +3953,17 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                         logger.info(f"Автоматически установлен digest_chat_id = {chat_id}")
                 except Exception as e:
                     logger.debug(f"Не удалось автоматически установить digest_chat_id: {e}")
+            return
+
+        # Handle new user joined via chat_member update (not service message)
+        if (
+            old_member
+            and new_member
+            and new_member.user.id != context.bot.id
+            and new_member.status in ['member', 'administrator', 'creator']
+            and old_member.status not in ['member', 'administrator', 'creator']
+        ):
+            await _welcome_joined_member(chat_id, new_member.user, context)
             return
 
         if (
