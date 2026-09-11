@@ -39,9 +39,10 @@ MAX_PLACEMENT_ATTEMPTS = 8000
 
 
 def _resolve_font_path() -> str | None:
+    env_font = os.environ.get("WORDCLOUD_FONT_PATH", "")
     candidates = [
+        Path(env_font) if env_font else None,
         WORDCLOUD_FONT_PATH,
-        Path(os.environ.get("WORDCLOUD_FONT_PATH", "")),
         Path("C:/Windows/Fonts/NotoSans-Regular.ttf"),
         Path("C:/Windows/Fonts/DejaVuSans.ttf"),
         Path("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
@@ -49,8 +50,14 @@ def _resolve_font_path() -> str | None:
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     ]
     for p in candidates:
-        if p and p.exists():
-            return str(p)
+        if p is not None and p.exists():
+            try:
+                ImageFont.truetype(str(p), WORDCLOUD_MIN_FONT_SIZE)
+                logger.info(f"WordCloud font resolved: {p}")
+                return str(p)
+            except Exception as e:
+                logger.warning(f"WordCloud font candidate {p} failed to load: {e}")
+    logger.error("WordCloud font resolution: no loadable font found")
     return None
 
 
@@ -227,6 +234,7 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
     debug_positions = []
     placed_count = 0
     placed_word_set = set()
+    placement_failures = []
 
     def try_place(word, count, current_font_size):
         nonlocal placed_count
@@ -310,17 +318,23 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
             continue
 
         placed = False
-        for size_reduction in range(10):
-            current_font_size = font_size - size_reduction * 5
+        min_font_tried = False
+        for size_reduction in range(100):
+            current_font_size = font_size - size_reduction
             if current_font_size < WORDCLOUD_MIN_FONT_SIZE:
-                break
+                current_font_size = WORDCLOUD_MIN_FONT_SIZE
+                min_font_tried = True
 
             if try_place(word, count, current_font_size):
                 placed = True
                 break
 
+            if min_font_tried and current_font_size == WORDCLOUD_MIN_FONT_SIZE:
+                break
+
         if not placed:
             logger.debug(f"Could not place word '{word}' after trying smaller sizes")
+            placement_failures.append(word)
 
     # Second pass: try to fill empty spaces with remaining small words
     small_words = [
@@ -379,6 +393,11 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
                 )
 
     logger.info(f"Successfully placed {placed_count}/{len(sorted_words[:WORDCLOUD_MAX_WORDS])} words")
+
+    if placed_count == 0:
+        logger.error(
+            f"WordCloud placed 0 words! Failures for first 20: {placement_failures[:20]}"
+        )
 
     # Verify no words are clipped or out of bounds
     issues = []
@@ -475,10 +494,12 @@ def test_wordcloud_placement():
 
         # Try size reduction for each word (like generate_wordcloud_image)
         word_placed = False
-        for size_reduction in range(10):
-            current_font_size = font_size - size_reduction * 5
+        min_font_tried = False
+        for size_reduction in range(100):
+            current_font_size = font_size - size_reduction
             if current_font_size < WORDCLOUD_MIN_FONT_SIZE:
-                break
+                current_font_size = WORDCLOUD_MIN_FONT_SIZE
+                min_font_tried = True
 
             try:
                 font = ImageFont.truetype(font_path, current_font_size)
@@ -513,6 +534,9 @@ def test_wordcloud_placement():
                 occupied_mask[y : y + rh, x : x + rw][collision_alpha] = True
                 print(f"Placed '{word}' at ({x}, {y}) size {rw}x{rh} angle {angle}")
                 word_placed = True
+                break
+
+            if min_font_tried and current_font_size == WORDCLOUD_MIN_FONT_SIZE:
                 break
 
         if not word_placed:
