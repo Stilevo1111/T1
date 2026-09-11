@@ -21,6 +21,7 @@ from chat_wordcloud.config import (
     WORDCLOUD_MIN_FONT_SIZE,
     WORDCLOUD_RANDOM_STATE,
     WORDCLOUD_SAFE_MARGIN,
+    WORDCLOUD_TOXIC_COLORS,
     WORDCLOUD_WIDTH,
     WORDCLOUD_WORD_PADDING,
 )
@@ -74,16 +75,21 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
 
 
 def _get_dota_color(rng):
-    """Get a random Dota-style color as a tuple for PIL.
-    65% light (white/gray), 35% muted red/burgundy.
+    """Get a random color for wordcloud words with toxic palette emphasis.
+    50% light (white/gray), 35% bright Dota colors, 15% toxic neon.
     """
     rgb_colors = [_hex_to_rgb(c) for c in WORDCLOUD_COLORS]
     lights = rgb_colors[:3]
-    reds = rgb_colors[3:]
-    if rng.random() < 0.65:
+    rest = rgb_colors[3:]
+    toxic_rgb = [_hex_to_rgb(c) for c in WORDCLOUD_TOXIC_COLORS]
+
+    r = rng.random()
+    if r < 0.50:
         return rng.choice(lights)
+    elif r < 0.85:
+        return rng.choice(rest)
     else:
-        return rng.choice(reds)
+        return rng.choice(toxic_rgb)
 
 
 def _get_word_bbox(word, font):

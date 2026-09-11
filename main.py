@@ -4613,6 +4613,10 @@ async def main():
             logger.info("Shutdown: aiohttp session closed")
             # Close PostgreSQL pool
             close_pg_pool()
+            # Shutdown wordcloud process pool
+            from chat_wordcloud.handler import _shutdown_wc_executor
+            _shutdown_wc_executor()
+            logger.info("Shutdown: wordcloud executor shut down")
         except Exception as flush_err:
             logger.error(f"Shutdown flush error: {flush_err}")
 

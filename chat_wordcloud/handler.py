@@ -1,6 +1,7 @@
 ﻿"""Telegram handler for /story command."""
 import asyncio
 import logging
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timedelta
 
 from telegram import Update
@@ -20,6 +21,25 @@ from chat_wordcloud.processor import log_top_words, process_messages
 from database import get_chat_messages_for_story
 
 logger = logging.getLogger(__name__)
+
+# Dedicated process pool for wordcloud generation.
+# Using a separate process avoids GIL contention so the bot's event
+# loop stays responsive during the CPU-heavy image generation.
+_wc_executor: ProcessPoolExecutor | None = None
+
+
+def _get_wc_executor() -> ProcessPoolExecutor:
+    global _wc_executor
+    if _wc_executor is None:
+        _wc_executor = ProcessPoolExecutor(max_workers=1)
+    return _wc_executor
+
+
+def _shutdown_wc_executor():
+    global _wc_executor
+    if _wc_executor is not None:
+        _wc_executor.shutdown(wait=False, cancel_futures=True)
+        _wc_executor = None
 
 
 async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -105,7 +125,9 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         try:
             png_bytes = await asyncio.wait_for(
-                asyncio.to_thread(generate_wordcloud_image, top_words),
+                asyncio.get_running_loop().run_in_executor(
+                    _get_wc_executor(), generate_wordcloud_image, top_words
+                ),
                 timeout=60,
             )
         except TimeoutError:
