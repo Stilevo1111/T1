@@ -979,70 +979,95 @@ async def get_last_matches(telegram_id: int, limit: int = 10) -> list[dict[str, 
 # =========================================================
 
 def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, Any]:
-    """Генерация текстовых таблиц в стиле референса"""
+    """Генерация текстовых таблиц — мобильная совместимая версия"""
     db = PRO_DB.get(role, PRO_DB["CARRY"])
 
-    # Table 1: PRO comparison - use HTML pre tag instead of markdown code block
-    t1 = "<pre>\n"
-    t1 += f"{'PLAYER':<12} {'WR':>4} {'GPM':>5} {'KDA':>11}\n"
-    t1 += "--------------------------------\n"
+    def _clean_name(name: str) -> str:
+        """Убрать название команды в скобках: 'Yatoro (Spirit)' -> 'Yatoro'"""
+        return name.split(" (")[0]
+
+    def _square(better: bool | None) -> str:
+        """Зелёный квадратик если лучше про, красный если хуже, пусто если нет данных"""
+        if better is None:
+            return ""
+        return "🟢" if better else "🔴"
+
+    # Table 1: PRO comparison — HTML table (mobile-friendly)
+    t1 = (
+        '<table style="width:100%;border-collapse:collapse;font-family:monospace;">'
+        '<tr style="background:#2a2f4a;">'
+        '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid #444;">Player</th>'
+        '<th style="padding:4px 6px;text-align:right;border-bottom:1px solid #444;">WR%</th>'
+        '<th style="padding:4px 6px;text-align:right;border-bottom:1px solid #444;">GPM</th>'
+        '<th style="padding:4px 6px;text-align:right;border-bottom:1px solid #444;">KDA</th>'
+        '</tr>'
+    )
     for name, s in db["players"].items():
+        clean_name = _clean_name(name)
         wr = f"{int(round(s['wr']))}%" if s.get('wr') is not None else "—"
-        gpm = f"{int(round(s['gpm'])):>5}" if s.get('gpm') is not None else "  — "
-        kda = s.get('kda', '—')
-        if kda is None:
-            kda = "—"
+        gpm = f"{int(round(s['gpm']))}" if s.get('gpm') is not None else "—"
+        kda = s.get('kda', '—') or "—"
         t1 += (
-            f"{name:<12} "
-            f"{wr:>4} "
-            f"{gpm:>5} "
-            f"{kda:>11}\n"
+            f'<tr><td style="padding:4px 6px;border-bottom:1px solid #333;">{clean_name}</td>'
+            f'<td style="padding:4px 6px;text-align:right;border-bottom:1px solid #333;">{wr}</td>'
+            f'<td style="padding:4px 6px;text-align:right;border-bottom:1px solid #333;">{gpm}</td>'
+            f'<td style="padding:4px 6px;text-align:right;border-bottom:1px solid #333;">{kda}</td></tr>'
         )
-    t1 += "--------------------------------\n"
     gpm_val = int(user_stats['gpm']) if user_stats.get('gpm', 0) > 0 else 0
     wr_val = f"{int(round(user_stats['wr']))}%" if user_stats.get('wr') is not None else "—"
-    you_line = (
-        f"{'YOU':<12} "
-        f"{wr_val:>4} "
-        f"{gpm_val:>5} "
-        f"{user_stats['kda']:>11}\n"
+    t1 += (
+        f'<tr style="background:#1a3a2a;font-weight:bold;">'
+        f'<td style="padding:4px 6px;">YOU</td>'
+        f'<td style="padding:4px 6px;text-align:right;">{wr_val}</td>'
+        f'<td style="padding:4px 6px;text-align:right;">{gpm_val}</td>'
+        f'<td style="padding:4px 6px;text-align:right;">{user_stats["kda"]}</td></tr>'
+        '</table>'
     )
-    t1 += you_line
-    t1 += "</pre>"
 
-    # Таблица 2: Детальное сравнение
-    t2 = "<pre>\n"
-    t2 += f"{'Metric':<10} {'You':>6} {'PRO':>6}\n"
-    t2 += "----------------------------\n"
+    # Table 2: Detailed comparison — HTML table with green/red squares
+    t2 = (
+        '<table style="width:100%;border-collapse:collapse;font-family:monospace;">'
+        '<tr style="background:#2a2f4a;">'
+        '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid #444;">Metric</th>'
+        '<th style="padding:4px 6px;text-align:right;border-bottom:1px solid #444;">You</th>'
+        '<th style="padding:4px 6px;text-align:right;border-bottom:1px solid #444;">PRO</th>'
+        '<th style="padding:4px 6px;text-align:center;border-bottom:1px solid #444;">±</th>'
+        '</tr>'
+    )
     bench = db["benchmarks"]
     metrics = [
-        ("LH@10", user_stats.get('lh', 0), bench.get('lh')),
-        ("Denies@10", user_stats.get('deny', 0), bench.get('deny')),
-        ("GPM", user_stats.get('gpm', 0), bench.get('gpm')),
-        ("XPM", user_stats.get('xpm', 0), bench.get('xpm')),
-        ("Deaths", user_stats.get('deaths', 0), bench.get('deaths')),
-        ("H DMG", user_stats.get('h_dmg', 0), bench.get('h_dmg')),
-        ("T DMG", user_stats.get('t_dmg', 0), bench.get('t_dmg')),
-        ("Stacks", user_stats.get('stacks', 0), bench.get('stacks')),
-        ("Util", user_stats.get('util', 0), bench.get('utility')),
-        ("APM", user_stats.get('apm', 0), bench.get('apm'))
+        ("LH@10", user_stats.get('lh', 0), bench.get('lh'), False),
+        ("Denies@10", user_stats.get('deny', 0), bench.get('deny'), False),
+        ("GPM", user_stats.get('gpm', 0), bench.get('gpm'), False),
+        ("XPM", user_stats.get('xpm', 0), bench.get('xpm'), False),
+        ("Deaths", user_stats.get('deaths', 0), bench.get('deaths'), True),
+        ("H DMG", user_stats.get('h_dmg', 0), bench.get('h_dmg'), False),
+        ("T DMG", user_stats.get('t_dmg', 0), bench.get('t_dmg'), False),
+        ("Stacks", user_stats.get('stacks', 0), bench.get('stacks'), False),
+        ("Util", user_stats.get('util', 0), bench.get('utility'), False),
+        ("APM", user_stats.get('apm', 0), bench.get('apm'), False),
     ]
-    for label, u, p in metrics:
+    for label, u, p, lower_is_better in metrics:
         u_str = f"{u:.0f}" if isinstance(u, (int, float)) and u >= 100 else f"{u:.1f}" if isinstance(u, (int, float)) else "—"
         p_str = f"{p:.0f}" if isinstance(p, (int, float)) and p >= 100 else f"{p:.1f}" if isinstance(p, (int, float)) else "—"
-        if not isinstance(p, (int, float)):
-            arrow = ""
+        if not isinstance(p, (int, float)) or not isinstance(u, (int, float)):
+            square = ""
         else:
-            diff = u - p if isinstance(u, (int, float)) else 0
-            is_bad = diff > 0 if "Deaths" in label else diff < 0
-            arrow = "↓" if is_bad else "↑"
-        t2 += f"{label:<10} {u_str:>6} {p_str:>6} {arrow}\n"
-    t2 += "</pre>"
+            diff = u - p
+            is_bad = diff > 0 if lower_is_better else diff < 0
+            square = _square(not is_bad)  # green if good, red if bad
+        t2 += (
+            f'<tr><td style="padding:4px 6px;border-bottom:1px solid #333;">{label}</td>'
+            f'<td style="padding:4px 6px;text-align:right;border-bottom:1px solid #333;">{u_str}</td>'
+            f'<td style="padding:4px 6px;text-align:right;border-bottom:1px solid #333;">{p_str}</td>'
+            f'<td style="padding:4px 6px;text-align:center;border-bottom:1px solid #333;">{square}</td></tr>'
+        )
+    t2 += '</table>'
 
     header = f"<b>📊 ANALYTICS ({role})</b>"
     text = f"{header}\n\n{t1}"
 
-    header_detailed = "<b>📈 Подробное сравнение • Детали позиций</b>"
+    header_detailed = "<b>📈 Подробное сравнение</b>"
     text_detailed = f"{header_detailed}\n\n{t2}"
 
     return {"pro": text, "detailed": text_detailed}
