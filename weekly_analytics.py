@@ -1092,6 +1092,8 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
 
     now = datetime.now(UTC)
     user = await asyncio.to_thread(get_user, telegram_id)
+    
+    # First check for fresh cache (< 1 hour)
     if user and user.get('analytics_cache') and user.get('analytics_updated_at'):
         updated_at = user['analytics_updated_at']
         if isinstance(updated_at, str):
@@ -1106,10 +1108,17 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
     if not user or not user.get("steam_id"):
         return {"error": "no_steam_linked", "message": "🔗 Привяжите Аккаунт, чтобы увидеть аналитику"}
 
-    # If OpenDota is currently rate-limited / 5xx-ing, сразу вернём ошибку,
-    # чтобы не дёргать API и не показывать пустой график.
+    # If OpenDota is currently rate-limited / 5xx-ing, try to use cached data first
+    # before returning an error. This allows profile charts to work from cache.
     if is_opendota_rate_limited():
-        logger.warning("generate_chart_only: OpenDota unavailable, returning error")
+        logger.warning("generate_chart_only: OpenDota rate limited, checking cache")
+        if user and user.get('analytics_cache'):
+            cached = json.loads(user['analytics_cache'])
+            if cached.get('history'):
+                logger.info(f"generate_chart_only: using cached data (rate limited fallback) for user {telegram_id}")
+                chart = await _create_visual_chart(cached.get("history", []))
+                return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY"), "api_fallback": True}
+        logger.warning("generate_chart_only: OpenDota unavailable, no cache, returning error")
         return {
             "error": "opendota_rate_limit",
             "message": get_opendota_rate_limit_message(),
@@ -1504,10 +1513,15 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
         # Register and use local NotoSans font for Cyrillic support
         font_path = Path(__file__).resolve().parent / "assets" / "fonts" / "NotoSans-Regular.ttf"
+        font_loaded = False
         if font_path.exists():
-            font_manager.fontManager.addfont(str(font_path))
-            rcParams['font.family'] = 'Noto Sans'
-        else:
+            try:
+                font_manager.fontManager.addfont(str(font_path))
+                rcParams['font.family'] = 'Noto Sans'
+                font_loaded = True
+            except Exception:
+                pass
+        if not font_loaded:
             rcParams['font.family'] = 'DejaVu Sans'
 
         rcParams['path.simplify'] = False
