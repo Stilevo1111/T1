@@ -121,7 +121,11 @@ def _render_rotated_word(word, font, color, angle):
     th = bbox[3] - bbox[1]
 
     if tw <= 0 or th <= 0:
-        return None, 0, 0
+        font_bbox = font.getbbox(word)
+        tw = font_bbox[2] - font_bbox[0]
+        th = font_bbox[3] - font_bbox[1]
+        if tw <= 0 or th <= 0:
+            return None, 0, 0
 
     pad = WORDCLOUD_GAP + WORDCLOUD_WORD_PADDING
     text_img = Image.new("RGBA", (tw + pad * 2, th + pad * 2), (0, 0, 0, 0))
