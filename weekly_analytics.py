@@ -979,7 +979,7 @@ async def get_last_matches(telegram_id: int, limit: int = 10) -> list[dict[str, 
 # =========================================================
 
 def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, Any]:
-    """Генерация текстовых таблиц — мобильная совместимая версия"""
+    """Генерация текстовых таблиц — мобильная совместимая версия (<pre> для Telegram)"""
     db = PRO_DB.get(role, PRO_DB["CARRY"])
 
     def _clean_name(name: str) -> str:
@@ -992,52 +992,30 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
             return ""
         return "🟢" if better else "🔴"
 
-    # Table 1: PRO comparison — HTML table (mobile-friendly)
-    t1 = (
-        '<table style="width:100%;border-collapse:collapse;font-family:monospace;">'
-        '<tr style="background:#2a2f4a;">'
-        '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid #444;">Player</th>'
-        '<th style="padding:4px 6px;text-align:right;border-bottom:1px solid #444;">WR%</th>'
-        '<th style="padding:4px 6px;text-align:right;border-bottom:1px solid #444;">GPM</th>'
-        '<th style="padding:4px 6px;text-align:right;border-bottom:1px solid #444;">KDA</th>'
-        '</tr>'
-    )
+    # Table 1: PRO comparison — <pre> with narrow columns for mobile
+    t1 = "<pre>"
+    t1 += f"{'Player':<10} {'WR':>4} {'GPM':>5} {'KDA':>11}\n"
+    t1 += "────────────────────────\n"
     for name, s in db["players"].items():
-        clean_name = _clean_name(name)
+        clean_name = _clean_name(name)[:10]  # truncate for mobile
         wr = f"{int(round(s['wr']))}%" if s.get('wr') is not None else "—"
         gpm = f"{int(round(s['gpm']))}" if s.get('gpm') is not None else "—"
         kda = s.get('kda', '—') or "—"
-        t1 += (
-            f'<tr><td style="padding:4px 6px;border-bottom:1px solid #333;">{clean_name}</td>'
-            f'<td style="padding:4px 6px;text-align:right;border-bottom:1px solid #333;">{wr}</td>'
-            f'<td style="padding:4px 6px;text-align:right;border-bottom:1px solid #333;">{gpm}</td>'
-            f'<td style="padding:4px 6px;text-align:right;border-bottom:1px solid #333;">{kda}</td></tr>'
-        )
+        t1 += f"{clean_name:<10} {wr:>4} {gpm:>5} {kda:>11}\n"
+    t1 += "────────────────────────\n"
     gpm_val = int(user_stats['gpm']) if user_stats.get('gpm', 0) > 0 else 0
     wr_val = f"{int(round(user_stats['wr']))}%" if user_stats.get('wr') is not None else "—"
-    t1 += (
-        f'<tr style="background:#1a3a2a;font-weight:bold;">'
-        f'<td style="padding:4px 6px;">YOU</td>'
-        f'<td style="padding:4px 6px;text-align:right;">{wr_val}</td>'
-        f'<td style="padding:4px 6px;text-align:right;">{gpm_val}</td>'
-        f'<td style="padding:4px 6px;text-align:right;">{user_stats["kda"]}</td></tr>'
-        '</table>'
-    )
+    t1 += f"{'YOU':<10} {wr_val:>4} {gpm_val:>5} {user_stats['kda']:>11}\n"
+    t1 += "</pre>"
 
-    # Table 2: Detailed comparison — HTML table with green/red squares
-    t2 = (
-        '<table style="width:100%;border-collapse:collapse;font-family:monospace;">'
-        '<tr style="background:#2a2f4a;">'
-        '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid #444;">Metric</th>'
-        '<th style="padding:4px 6px;text-align:right;border-bottom:1px solid #444;">You</th>'
-        '<th style="padding:4px 6px;text-align:right;border-bottom:1px solid #444;">PRO</th>'
-        '<th style="padding:4px 6px;text-align:center;border-bottom:1px solid #444;">±</th>'
-        '</tr>'
-    )
+    # Table 2: Detailed comparison — <pre> with squares
+    t2 = "<pre>"
+    t2 += f"{'Metric':<10} {'You':>7} {'PRO':>7} {'±':>2}\n"
+    t2 += "────────────────────────\n"
     bench = db["benchmarks"]
     metrics = [
         ("LH@10", user_stats.get('lh', 0), bench.get('lh'), False),
-        ("Denies@10", user_stats.get('deny', 0), bench.get('deny'), False),
+        ("Denies", user_stats.get('deny', 0), bench.get('deny'), False),
         ("GPM", user_stats.get('gpm', 0), bench.get('gpm'), False),
         ("XPM", user_stats.get('xpm', 0), bench.get('xpm'), False),
         ("Deaths", user_stats.get('deaths', 0), bench.get('deaths'), True),
@@ -1055,14 +1033,9 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
         else:
             diff = u - p
             is_bad = diff > 0 if lower_is_better else diff < 0
-            square = _square(not is_bad)  # green if good, red if bad
-        t2 += (
-            f'<tr><td style="padding:4px 6px;border-bottom:1px solid #333;">{label}</td>'
-            f'<td style="padding:4px 6px;text-align:right;border-bottom:1px solid #333;">{u_str}</td>'
-            f'<td style="padding:4px 6px;text-align:right;border-bottom:1px solid #333;">{p_str}</td>'
-            f'<td style="padding:4px 6px;text-align:center;border-bottom:1px solid #333;">{square}</td></tr>'
-        )
-    t2 += '</table>'
+            square = _square(not is_bad)
+        t2 += f"{label:<10} {u_str:>7} {p_str:>7} {square:>2}\n"
+    t2 += "</pre>"
 
     header = f"<b>📊 ANALYTICS ({role})</b>"
     text = f"{header}\n\n{t1}"

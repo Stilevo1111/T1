@@ -267,8 +267,8 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
             x, y = pos
             base_img.paste(rotated, (x, y), rotated)
 
-            # Update occupied mask with placed word's collision alpha (dilated)
-            occupied_mask[y : y + rh, x : x + rw][word_alpha] = True
+            # Update occupied mask with placed word's collision alpha (dilated) for consistent collision detection
+            occupied_mask[y : y + rh, x : x + rw][collision_alpha] = True
 
             placed_count += 1
             placed_word_set.add(word)
