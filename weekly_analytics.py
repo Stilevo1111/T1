@@ -992,25 +992,25 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
             return ""
         return "🟢" if better else "🔴"
 
-    # Table 1: PRO comparison — <pre> with narrow columns for mobile
+    # Table 1: PRO comparison — <pre> with tight columns for mobile
     t1 = "<pre>"
-    t1 += f"{'Player':<10} {'WR':>4} {'GPM':>5} {'KDA':>11}\n"
+    t1 += f"{'Player':<8} {'WR':>3} {'GPM':>4} {'KDA':>11}\n"
     t1 += "────────────────────────\n"
     for name, s in db["players"].items():
-        clean_name = _clean_name(name)[:10]  # truncate for mobile
+        clean_name = _clean_name(name)[:8]
         wr = f"{int(round(s['wr']))}%" if s.get('wr') is not None else "—"
         gpm = f"{int(round(s['gpm']))}" if s.get('gpm') is not None else "—"
         kda = s.get('kda', '—') or "—"
-        t1 += f"{clean_name:<10} {wr:>4} {gpm:>5} {kda:>11}\n"
+        t1 += f"{clean_name:<8} {wr:>3} {gpm:>4} {kda:>11}\n"
     t1 += "────────────────────────\n"
     gpm_val = int(user_stats['gpm']) if user_stats.get('gpm', 0) > 0 else 0
     wr_val = f"{int(round(user_stats['wr']))}%" if user_stats.get('wr') is not None else "—"
-    t1 += f"{'YOU':<10} {wr_val:>4} {gpm_val:>5} {user_stats['kda']:>11}\n"
+    t1 += f"{'YOU':<8} {wr_val:>3} {gpm_val:>4} {user_stats['kda']:>11}\n"
     t1 += "</pre>"
 
-    # Table 2: Detailed comparison — <pre> with squares
+    # Table 2: Detailed comparison — <pre> with squares, tight columns
     t2 = "<pre>"
-    t2 += f"{'Metric':<10} {'You':>7} {'PRO':>7} {'±':>2}\n"
+    t2 += f"{'Metric':<8} {'You':>5} {'PRO':>5} {'±':>1}\n"
     t2 += "────────────────────────\n"
     bench = db["benchmarks"]
     metrics = [
@@ -1034,7 +1034,7 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
             diff = u - p
             is_bad = diff > 0 if lower_is_better else diff < 0
             square = _square(not is_bad)
-        t2 += f"{label:<10} {u_str:>7} {p_str:>7} {square:>2}\n"
+        t2 += f"{label:<8} {u_str:>5} {p_str:>5} {square}\n"
     t2 += "</pre>"
 
     header = f"<b>📊 ANALYTICS ({role})</b>"
