@@ -22,6 +22,7 @@ hero_cache/
 background.jpg
 background_new.png
 debug_font_output.png
+debug_output/
 digest_header*.png
 final*.png
 test_helper.png
