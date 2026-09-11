@@ -52,9 +52,16 @@ def _resolve_font_path() -> str | None:
     for p in candidates:
         if p is not None and p.exists():
             try:
-                ImageFont.truetype(str(p), WORDCLOUD_MIN_FONT_SIZE)
-                logger.info(f"WordCloud font resolved: {p}")
-                return str(p)
+                test_font = ImageFont.truetype(str(p), WORDCLOUD_MIN_FONT_SIZE)
+                test_bbox = test_font.getbbox("фиссура")
+                if test_bbox[2] - test_bbox[0] > 0 and test_bbox[3] - test_bbox[1] > 0:
+                    logger.info(f"WordCloud font resolved: {p}")
+                    return str(p)
+                else:
+                    logger.warning(
+                        f"WordCloud font {p} loads but cannot render Cyrillic "
+                        f"(bbox={test_bbox})"
+                    )
             except Exception as e:
                 logger.warning(f"WordCloud font candidate {p} failed to load: {e}")
     logger.error("WordCloud font resolution: no loadable font found")
