@@ -103,7 +103,15 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         top_word = top_words[0][0]
         top_count = top_words[0][1]
 
-        png_bytes = await asyncio.to_thread(generate_wordcloud_image, top_words)
+        try:
+            png_bytes = await asyncio.wait_for(
+                asyncio.to_thread(generate_wordcloud_image, top_words),
+                timeout=60,
+            )
+        except TimeoutError:
+            logger.error("story image generation timed out after 60s")
+            await update.message.reply_text("Генерация истории чата занимает слишком много времени. Попробуйте позже.")
+            return
         logger.info("story image generated successfully")
 
         if messages_loaded is not None:
