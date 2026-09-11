@@ -4408,7 +4408,16 @@ async def main():
 
             for attempt in range(3):
                 try:
-                    await app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+                    await app.bot.set_webhook(
+                        url=webhook_url,
+                        drop_pending_updates=True,
+                        allowed_updates=[
+                            "message",
+                            "callback_query",
+                            "chat_member",
+                            "my_chat_member",
+                        ],
+                    )
                     logger.info(f"Webhook URL: {webhook_url}")
                     break
                 except telegram.error.RetryAfter as e:
@@ -4470,7 +4479,16 @@ async def main():
             async def refresh_webhook(request):
                 try:
                     await app.bot.delete_webhook(drop_pending_updates=True)
-                    await app.bot.set_webhook(url=webhook_url, drop_pending_updates=False)
+                    await app.bot.set_webhook(
+                        url=webhook_url,
+                        drop_pending_updates=False,
+                        allowed_updates=[
+                            "message",
+                            "callback_query",
+                            "chat_member",
+                            "my_chat_member",
+                        ],
+                    )
                     return web.Response(text=f"Webhook refreshed: {webhook_url}", status=200)
                 except Exception as e:
                     logger.error(f"Refresh webhook error: {e}")
@@ -4519,7 +4537,16 @@ async def main():
                             logger.warning(f"Webhook URL mismatch: expected {webhook_url}, got {webhook_info.url}, re-registering...")
                             needs_renewal = True
                         if needs_renewal:
-                            await app.bot.set_webhook(url=webhook_url, drop_pending_updates=False)
+                            await app.bot.set_webhook(
+                                url=webhook_url,
+                                drop_pending_updates=False,
+                                allowed_updates=[
+                                    "message",
+                                    "callback_query",
+                                    "chat_member",
+                                    "my_chat_member",
+                                ],
+                            )
                             logger.info("Webhook re-registered successfully")
                     except Exception as e:
                         logger.error(f"Webhook recovery check error: {e}")
