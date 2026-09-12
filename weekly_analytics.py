@@ -1093,6 +1093,11 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
         updated_at = user['analytics_updated_at']
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+        # Normalize both datetimes to UTC-aware before subtracting.
+        # PostgreSQL may return a naive datetime while datetime.now(UTC) is aware,
+        # which raises "can't subtract offset-naive and offset-aware datetimes".
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=UTC)
         if (now - updated_at).total_seconds() < 3600:
             cached = json.loads(user['analytics_cache'])
             # Run chart generation (async function) directly
