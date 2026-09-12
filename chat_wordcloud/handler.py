@@ -114,8 +114,14 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         top_word = top_words[0][0]
         top_count = top_words[0][1]
 
-        # Show a status message so the user knows the bot is working, not frozen
-        status_msg = await update.message.reply_text("🎨 Генерирую облако слов чата за месяц...")
+        # Show a status message so the user knows the bot is working, not frozen.
+        # Use send_message directly (not reply_text) — the user's /story message
+        # may already be deleted by the time we reach this line, and reply_text
+        # raises "Message to be replied not found".
+        status_msg = await context.bot.send_message(
+            chat_id=chat_id,
+            text="🎨 Генерирую облако слов чата за месяц..."
+        )
 
         try:
             png_bytes = await _generate_wordcloud_in_thread(
