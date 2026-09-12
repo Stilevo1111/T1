@@ -1731,9 +1731,10 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         )
 
         # Hero icon sits ON the spline line (zorder 9), with glow underneath (zorder 8)
+        # Center of the icon is placed exactly on the data point (imp), not below it.
         ab = AnnotationBbox(
             imagebox,
-            (idx + 1, max(imp - 0.12, 0.08)),
+            (idx + 1, imp),
             frameon=True,
             bboxprops=dict(
                 edgecolor=border,
@@ -1750,7 +1751,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
         ax.scatter(
             idx + 1,
-            max(imp - 0.12, 0.08),
+            imp,
             s=1500,
             color=glow,
             alpha=0.18,
