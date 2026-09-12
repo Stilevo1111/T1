@@ -1,5 +1,4 @@
 ﻿"""WordCloud text processing utilities."""
-import math
 import re
 import unicodedata
 from collections import Counter
@@ -127,13 +126,6 @@ def get_top_words(
     filtered = [(w, c) for w, c in counter.items() if c >= effective_min]
     filtered.sort(key=lambda x: x[1], reverse=True)
     return filtered[:max_words]
-
-
-def scale_frequencies(top_words: list[tuple[str, int]]) -> dict[str, float]:
-    scaled = {}
-    for word, count in top_words:
-        scaled[word] = math.sqrt(count)
-    return scaled
 
 
 def log_top_words(top_words: list[tuple[str, int]], label: str = "TOP 20 WORDS") -> None:

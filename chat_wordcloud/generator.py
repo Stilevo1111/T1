@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+from scipy.ndimage import binary_dilation
 
 from chat_wordcloud.config import (
     WORDCLOUD_BACKGROUND_COLOR,
@@ -20,12 +21,13 @@ from chat_wordcloud.config import (
     WORDCLOUD_MAX_WORDS,
     WORDCLOUD_MIN_FONT_SIZE,
     WORDCLOUD_RANDOM_STATE,
+    WORDCLOUD_RELATIVE_SCALING,
     WORDCLOUD_SAFE_MARGIN,
     WORDCLOUD_TOXIC_COLORS,
     WORDCLOUD_WIDTH,
     WORDCLOUD_WORD_PADDING,
+    WORDCLOUD_WORKER_NICE,
 )
-from chat_wordcloud.processor import scale_frequencies
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,38 @@ WORDCLOUD_GAP = 4
 
 # Maximum placement attempts per word
 MAX_PLACEMENT_ATTEMPTS = 3000
+
+
+def _calculate_font_size(freq: float, max_freq: float) -> int:
+    ratio = freq / max_freq if max_freq > 0 else 0
+    return int(
+        WORDCLOUD_MIN_FONT_SIZE
+        + (WORDCLOUD_MAX_FONT_SIZE - WORDCLOUD_MIN_FONT_SIZE)
+        * ratio ** WORDCLOUD_RELATIVE_SCALING
+    )
+
+
+def generate_wordcloud_image_process(top_words, output_path, connection):
+    if os.name == "posix":
+        try:
+            os.nice(WORDCLOUD_WORKER_NICE)
+        except (AttributeError, PermissionError, OSError):
+            pass
+
+    try:
+        result = generate_wordcloud_image(top_words)
+        Path(output_path).write_bytes(result)
+        connection.send(("ok", output_path))
+    except Exception as exc:
+        try:
+            connection.send(("error", f"{type(exc).__name__}: {exc}"))
+        except (BrokenPipeError, EOFError, OSError):
+            pass
+    finally:
+        try:
+            connection.close()
+        except OSError:
+            pass
 
 
 def _resolve_font_path() -> str | None:
@@ -109,8 +143,6 @@ def _dilate_alpha_mask(alpha: np.ndarray, padding: int) -> np.ndarray:
     if padding <= 0:
         return alpha
 
-    from scipy.ndimage import binary_dilation
-
     kernel = np.ones((2 * padding + 1, 2 * padding + 1), dtype=bool)
     return binary_dilation(alpha, structure=kernel)
 
@@ -120,18 +152,12 @@ def _render_rotated_word(word, font, color, angle):
     Returns (rotated_img, width, height) or (None, 0, 0) on failure.
     The returned width/height are the ACTUAL dimensions of the rotated image.
     """
-    tmp = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-    tmp_draw = ImageDraw.Draw(tmp)
-    bbox = tmp_draw.textbbox((0, 0), word, font=font)
+    bbox = font.getbbox(word)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
 
     if tw <= 0 or th <= 0:
-        font_bbox = font.getbbox(word)
-        tw = font_bbox[2] - font_bbox[0]
-        th = font_bbox[3] - font_bbox[1]
-        if tw <= 0 or th <= 0:
-            return None, 0, 0
+        return None, 0, 0
 
     pad = WORDCLOUD_GAP + WORDCLOUD_WORD_PADDING
     text_img = Image.new("RGBA", (tw + pad * 2, th + pad * 2), (0, 0, 0, 0))
@@ -225,8 +251,7 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
 
     logger.debug(f"Using font: {font_path}")
 
-    # Scale frequencies for font size (sqrt scaling)
-    frequencies = scale_frequencies(top_words)
+    frequencies = {word: float(count) for word, count in top_words}
     max_freq = max(frequencies.values()) if frequencies else 1
 
     # Sort by frequency - most important words first
@@ -286,6 +311,12 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
         # Dilate alpha mask by WORD_PADDING for collision detection.
         # This creates a buffer zone between words without adding visible padding.
         collision_alpha = _dilate_alpha_mask(word_alpha, WORDCLOUD_WORD_PADDING)
+        if collision_alpha.shape != (rh, rw):
+            logger.warning(
+                f"Skipping word '{word}': collision mask shape {collision_alpha.shape} "
+                f"does not match rendered size {(rh, rw)}"
+            )
+            return False
 
         # Use ACTUAL rotated dimensions for placement search
         pos = _find_spiral_position(
@@ -305,7 +336,8 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
             base_img.paste(rotated, (x, y), rotated)
 
             # Update occupied mask with placed word's collision alpha (dilated) for consistent collision detection
-            occupied_mask[y : y + rh, x : x + rw][collision_alpha] = True
+            occupied_region = occupied_mask[y : y + rh, x : x + rw]
+            occupied_region[collision_alpha] = True
 
             placed_count += 1
             placed_word_set.add(word)
@@ -328,17 +360,12 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
         return False
 
     # First pass: place words in frequency order
-    for idx, (word, count) in enumerate(sorted_words[: WORDCLOUD_MAX_WORDS]):
+    for word, count in sorted_words[: WORDCLOUD_MAX_WORDS]:
         if not word or len(word) < 2:
             continue
 
         freq = frequencies.get(word, 1)
-        font_size = int(
-            WORDCLOUD_MIN_FONT_SIZE
-            + (WORDCLOUD_MAX_FONT_SIZE - WORDCLOUD_MIN_FONT_SIZE)
-            * (freq / max_freq) ** 0.5
-        )
-        font_size = max(WORDCLOUD_MIN_FONT_SIZE, min(WORDCLOUD_MAX_FONT_SIZE, font_size))
+        font_size = _calculate_font_size(freq, max_freq)
 
         if get_font(font_size) is None:
             continue
@@ -398,7 +425,8 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
         if pos:
             x, y = pos
             base_img.paste(rotated, (x, y), rotated)
-            occupied_mask[y : y + rh, x : x + rw][collision_alpha] = True
+            occupied_region = occupied_mask[y : y + rh, x : x + rw]
+            occupied_region[collision_alpha] = True
             placed_count += 1
 
             if WORDCLOUD_DEBUG:
@@ -508,12 +536,7 @@ def test_wordcloud_placement():
 
     for word, count in sorted_words:
         freq = frequencies.get(word, 1)
-        font_size = int(
-            WORDCLOUD_MIN_FONT_SIZE
-            + (WORDCLOUD_MAX_FONT_SIZE - WORDCLOUD_MIN_FONT_SIZE)
-            * (freq / max_freq) ** 0.5
-        )
-        font_size = max(WORDCLOUD_MIN_FONT_SIZE, min(WORDCLOUD_MAX_FONT_SIZE, font_size))
+        font_size = _calculate_font_size(freq, max_freq)
 
         # Try size reduction for each word (like generate_wordcloud_image)
         word_placed = False
@@ -552,7 +575,8 @@ def test_wordcloud_placement():
             if pos:
                 x, y = pos
                 base_img.paste(rotated, (x, y), rotated)
-                occupied_mask[y : y + rh, x : x + rw][collision_alpha] = True
+                occupied_region = occupied_mask[y : y + rh, x : x + rw]
+                occupied_region[collision_alpha] = True
                 print(f"Placed '{word}' at ({x}, {y}) size {rw}x{rh} angle {angle}")
                 word_placed = True
                 break
