@@ -2352,7 +2352,19 @@ def get_user(telegram_id, username=None):
         cached_user.setdefault('weekly_top2', 0)
         cached_user.setdefault('weekly_top3', 0)
         cached_user.setdefault('user_tags', [])
-        return cached_user
+        # If the cached week_start_date differs from the current week,
+        # the cached week_games/week_wins are stale — force a DB re-read.
+        cached_week_start = cached_user.get('week_start_date')
+        from datetime import datetime as _dt, timedelta as _td
+        from datetime import timezone as _tz
+        _msk = _tz(_td(hours=3))
+        _monday = _dt.now(_msk) - _td(days=_dt.now(_msk).weekday())
+        _current_week_start = _monday.strftime("%Y-%m-%d")
+        if cached_week_start and str(cached_week_start) != _current_week_start:
+            logger.debug(f"get_user: cached week_start_date={cached_week_start} != current={_current_week_start}, re-reading from DB")
+            user_cache.remove(tid)
+        else:
+            return cached_user
 
     # Нет в кэше или данные невалидны - читаем из БД
     db = Database()
@@ -4023,6 +4035,13 @@ def reset_weekly_stats():
         conn.commit()
         cursor.close()
         logger.info(f"Сброшена недельная статистика для {affected} пользователей, week_start_date={current_week_start}")
+        # Invalidate user cache so get_user returns fresh week_games/week_wins.
+        # Without this, the profile shows stale week stats from the previous week.
+        try:
+            user_cache.clear()
+            top_cache.invalidate_top_cache()
+        except Exception as cache_err:
+            logger.debug(f"reset_weekly_stats: cache invalidation failed: {cache_err}")
         return affected
     except Exception as e:
         logger.error(f"Error reset_weekly_stats: {e}")
