@@ -262,7 +262,7 @@ async def _check_rate_limit_async():
         await asyncio.sleep(wait)
 
 
-async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15, max_retries: int = 3) -> dict:
+async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15, max_retries: int = 2) -> dict:
     """Асинхронная функция для API-запросов с переиспользуемой сессией, retry и rate limiting"""
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping async request, API unavailable")

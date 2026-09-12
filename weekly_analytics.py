@@ -71,6 +71,9 @@ _CHART_BG_CACHE = None
 WIDTH = 1200
 HEIGHT = 800
 
+# Overall timeout for the full analytics pipeline (matches + details + chart)
+ANALYTICS_TIMEOUT_SECONDS = 45
+
 # =========================================================
 # MARKDOWN ESCAPE
 # =========================================================
@@ -833,14 +836,8 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
 async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> list[dict[str, Any]]:
     """Дополнить матчи деталями (герои, импакт, длительность) через OpenDota."""
 
-
-    """
-    Загружает детальную информацию по каждому матчу (GPM, XPM, actions и т.д.) параллельно.
-    """
-
-    """Fetch full match details for matches that have minimal data."""
     account_id = steam64_to_account_id(steam_id)
-    semaphore = asyncio.Semaphore(5)  # Limit concurrent requests to OpenDota
+    semaphore = asyncio.Semaphore(3)  # Limit concurrent requests to OpenDota
 
     async def fetch_one(m):
         # If match already has all needed data, keep it
@@ -853,7 +850,7 @@ async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> l
         try:
             async with semaphore:
                 match_url = f"{OPENDOTA_API_URL}/matches/{match_id}"
-                match_data = await _api_get_async(match_url, timeout=20)
+                match_data = await _api_get_async(match_url, timeout=12, max_retries=1)
             player_stats = {}
             if match_data and "players" in match_data:
                 for p in match_data["players"]:
@@ -1213,6 +1210,13 @@ async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
         dict с ключами 'image', 'history', 'matches', 'role' или None если данных мало.
         При недоступности OpenDota возвращает {"error": "opendota_rate_limit", ...}.
     """
+    return await asyncio.wait_for(
+        _generate_weekly_analytics_impl(telegram_id),
+        timeout=ANALYTICS_TIMEOUT_SECONDS,
+    )
+
+
+async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | None:
     # Check if user has Steam account BEFORE fetching matches
     user = await asyncio.to_thread(get_user, telegram_id)
     if not user or not user.get("steam_id"):
