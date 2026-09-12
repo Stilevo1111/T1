@@ -19,6 +19,7 @@ from chat_wordcloud.config import (
 from chat_wordcloud.generator import generate_wordcloud_image
 from chat_wordcloud.processor import log_top_words, process_messages
 from database import get_chat_messages_for_story
+from rate_limiter import rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ async def _generate_wordcloud_in_thread(top_words, timeout: int) -> bytes:
     )
 
 
+@rate_limit(tokens=1)
 async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("story_command invoked")
     if not update.message or not update.effective_chat:
@@ -112,6 +114,9 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         top_word = top_words[0][0]
         top_count = top_words[0][1]
 
+        # Show a status message so the user knows the bot is working, not frozen
+        status_msg = await update.message.reply_text("🎨 Генерирую облако слов чата за месяц...")
+
         try:
             png_bytes = await _generate_wordcloud_in_thread(
                 top_words, WORDCLOUD_GENERATION_TIMEOUT
@@ -120,9 +125,14 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             logger.error(
                 f"story image generation timed out after {WORDCLOUD_GENERATION_TIMEOUT}s"
             )
-            await update.message.reply_text("Генерация истории чата занимает слишком много времени. Попробуйте позже.")
+            await status_msg.edit_text("Генерация облака слов занимает слишком много времени. Попробуйте позже.")
             return
         logger.info("story image generated successfully")
+
+        try:
+            await context.bot.delete_message(chat_id, status_msg.message_id)
+        except Exception:
+            pass
 
         if messages_loaded is not None:
             messages_text = f"Сообщений: {messages_loaded}"
@@ -133,7 +143,7 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         period_start = period_end - timedelta(days=WORDCLOUD_PERIOD_DAYS)
 
         caption = (
-            f"📖 История чата\n"
+            f"☁️ Облако слов чата за месяц\n"
             f"Период: {period_start.strftime('%d.%m.%Y')} — {period_end.strftime('%d.%m.%Y')}\n"
             f"{messages_text}\n"
             f"Уникальных слов: {unique_words}\n"
@@ -144,4 +154,4 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         schedule_delete(context.bot, chat_id, sent.message_id, 30, context.job_queue)
     except Exception as e:
         logger.error(f"story error: {e}", exc_info=True)
-        await update.message.reply_text("Ошибка генерации истории чата.")
+        await update.message.reply_text("Ошибка генерации облака слов чата.")
