@@ -2391,9 +2391,21 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Сброс игры"""
+    """Сброс игры — только для администратора (ADMIN_CHAT_ID)."""
     logger.info("reset_game called")
+    from config import settings
+
+    ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
+    user_id = update.effective_user.id
     chat = update.effective_chat
+
+    if not ADMIN_CHAT_ID or user_id != ADMIN_CHAT_ID:
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text="❌ Только администратор может сбрасывать игру",
+            reply_markup=main_menu()
+        )
+        return
 
     success = reset_all_fissure_data()
     if success:
