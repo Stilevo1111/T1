@@ -38,7 +38,10 @@ WORDCLOUD_ANGLES = [0] * 9 + [90, -90]
 WORDCLOUD_GAP = 4
 
 # Maximum placement attempts per word
-MAX_PLACEMENT_ATTEMPTS = 3000
+MAX_PLACEMENT_ATTEMPTS = 1500
+
+# Cache for binary_dilation kernels by padding size
+_DILATE_KERNEL_CACHE: dict = {}
 
 
 def _calculate_font_size(freq: float, max_freq: float) -> int:
@@ -48,29 +51,6 @@ def _calculate_font_size(freq: float, max_freq: float) -> int:
         + (WORDCLOUD_MAX_FONT_SIZE - WORDCLOUD_MIN_FONT_SIZE)
         * ratio ** WORDCLOUD_RELATIVE_SCALING
     )
-
-
-def generate_wordcloud_image_process(top_words, output_path, connection):
-    if os.name == "posix":
-        try:
-            os.nice(WORDCLOUD_WORKER_NICE)
-        except (AttributeError, PermissionError, OSError):
-            pass
-
-    try:
-        result = generate_wordcloud_image(top_words)
-        Path(output_path).write_bytes(result)
-        connection.send(("ok", output_path))
-    except Exception as exc:
-        try:
-            connection.send(("error", f"{type(exc).__name__}: {exc}"))
-        except (BrokenPipeError, EOFError, OSError):
-            pass
-    finally:
-        try:
-            connection.close()
-        except OSError:
-            pass
 
 
 def _resolve_font_path() -> str | None:
@@ -143,7 +123,10 @@ def _dilate_alpha_mask(alpha: np.ndarray, padding: int) -> np.ndarray:
     if padding <= 0:
         return alpha
 
-    kernel = np.ones((2 * padding + 1, 2 * padding + 1), dtype=bool)
+    kernel = _DILATE_KERNEL_CACHE.get(padding)
+    if kernel is None:
+        kernel = np.ones((2 * padding + 1, 2 * padding + 1), dtype=bool)
+        _DILATE_KERNEL_CACHE[padding] = kernel
     return binary_dilation(alpha, structure=kernel)
 
 
@@ -200,8 +183,8 @@ def _find_spiral_position(
     max_radius = math.sqrt(canvas_width**2 + canvas_height**2) / 2
     safe_margin = WORDCLOUD_SAFE_MARGIN
 
-    angle_step = 0.5
-    radius_step = 12
+    angle_step = 1.0
+    radius_step = 16
     current_radius = 0
     current_angle = rng.random() * 2 * math.pi
 
@@ -394,6 +377,7 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
         if w and len(w) >= 2 and w not in placed_word_set
     ]
     small_words.sort(key=lambda x: x[1])
+    small_words = small_words[:40]
 
     for word, count in small_words:
         small_font = get_font(WORDCLOUD_MIN_FONT_SIZE)
@@ -452,7 +436,7 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
 
     # Verify no words are clipped or out of bounds
     issues = []
-    if WORDCLOUD_DEBUG:
+    if WORDCLOUD_DEBUG and placed_count > 0:
         safe_margin = WORDCLOUD_SAFE_MARGIN
         for dp in debug_positions:
             x, y, w, h = dp["x"], dp["y"], dp["width"], dp["height"]

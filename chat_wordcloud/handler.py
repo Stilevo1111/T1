@@ -1,10 +1,7 @@
 ﻿"""Telegram handler for /story command."""
 import asyncio
 import logging
-import multiprocessing
-import tempfile
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -18,107 +15,20 @@ from chat_wordcloud.config import (
     WORDCLOUD_MESSAGE_LIMIT,
     WORDCLOUD_MIN_WORD_FREQUENCY,
     WORDCLOUD_PERIOD_DAYS,
-    WORDCLOUD_RESULT_TIMEOUT,
 )
-from chat_wordcloud.generator import generate_wordcloud_image_process
+from chat_wordcloud.generator import generate_wordcloud_image
 from chat_wordcloud.processor import log_top_words, process_messages
 from database import get_chat_messages_for_story
 
 logger = logging.getLogger(__name__)
 
-_WORDCLOUD_CONTEXT = multiprocessing.get_context("spawn")
-_WORDCLOUD_LOCK_ATTRIBUTE = "_fissure_wordcloud_lock"
 
-
-def _get_wordcloud_lock() -> asyncio.Lock:
-    loop = asyncio.get_running_loop()
-    lock = getattr(loop, _WORDCLOUD_LOCK_ATTRIBUTE, None)
-    if lock is None:
-        lock = asyncio.Lock()
-        setattr(loop, _WORDCLOUD_LOCK_ATTRIBUTE, lock)
-    return lock
-
-
-def _close_connection(connection) -> None:
-    try:
-        connection.close()
-    except (AttributeError, OSError, ValueError):
-        pass
-
-
-async def _stop_process(process) -> None:
-    if process is None:
-        return
-
-    try:
-        if process.is_alive():
-            process.terminate()
-            await asyncio.to_thread(process.join, 2)
-        if process.is_alive():
-            process.kill()
-            await asyncio.to_thread(process.join, 2)
-    except (AssertionError, OSError, ValueError):
-        pass
-
-
-async def _cleanup_process(process) -> None:
-    await _stop_process(process)
-    try:
-        process.close()
-    except (AssertionError, OSError, ValueError):
-        pass
-
-
-async def _generate_wordcloud_in_process(top_words, timeout: int) -> bytes:
-    parent_conn, child_conn = _WORDCLOUD_CONTEXT.Pipe(duplex=False)
-    process = None
-
-    try:
-        with tempfile.TemporaryDirectory(prefix="fissure-wordcloud-") as temp_dir:
-            output_path = Path(temp_dir) / "wordcloud.png"
-            async with _get_wordcloud_lock():
-                try:
-                    try:
-                        process = _WORDCLOUD_CONTEXT.Process(
-                            target=generate_wordcloud_image_process,
-                            args=(top_words, str(output_path), child_conn),
-                            daemon=True,
-                        )
-                        process.start()
-                    finally:
-                        _close_connection(child_conn)
-
-                    if process.pid is None:
-                        raise RuntimeError("wordcloud worker failed to start")
-
-                    await asyncio.to_thread(process.join, timeout)
-
-                    if process.is_alive():
-                        process.terminate()
-                        await asyncio.to_thread(process.join, 2)
-                        if process.is_alive():
-                            process.kill()
-                            await asyncio.to_thread(process.join, 2)
-                        raise TimeoutError(f"wordcloud generation timed out after {timeout}s")
-
-                    if process.exitcode != 0:
-                        raise RuntimeError(
-                            f"wordcloud worker exited unexpectedly (code={process.exitcode})"
-                        )
-                    if not await asyncio.to_thread(
-                        parent_conn.poll, WORDCLOUD_RESULT_TIMEOUT
-                    ):
-                        raise RuntimeError("wordcloud worker exited without a result")
-
-                    status, payload_path = await asyncio.to_thread(parent_conn.recv)
-                    if status != "ok":
-                        raise RuntimeError(payload_path)
-                    return await asyncio.to_thread(Path(payload_path).read_bytes)
-                finally:
-                    await _cleanup_process(process)
-    finally:
-        _close_connection(child_conn)
-        _close_connection(parent_conn)
+async def _generate_wordcloud_in_thread(top_words, timeout: int) -> bytes:
+    """Run wordcloud generation in a worker thread (no multiprocessing spawn overhead)."""
+    return await asyncio.wait_for(
+        asyncio.to_thread(generate_wordcloud_image, top_words),
+        timeout=timeout,
+    )
 
 
 async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -203,7 +113,7 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         top_count = top_words[0][1]
 
         try:
-            png_bytes = await _generate_wordcloud_in_process(
+            png_bytes = await _generate_wordcloud_in_thread(
                 top_words, WORDCLOUD_GENERATION_TIMEOUT
             )
         except TimeoutError:
@@ -232,9 +142,6 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         sent = await context.bot.send_photo(chat_id=chat_id, photo=png_bytes, caption=caption)
         schedule_delete(context.bot, chat_id, sent.message_id, 30, context.job_queue)
-    except FileNotFoundError as e:
-        logger.error(f"story missing asset: {e}")
-        await update.message.reply_text("Генерация истории чата временно недоступна.")
     except Exception as e:
         logger.error(f"story error: {e}", exc_info=True)
         await update.message.reply_text("Ошибка генерации истории чата.")
