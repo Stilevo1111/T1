@@ -1506,7 +1506,6 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
         import matplotlib.pyplot as plt
         from matplotlib import font_manager, rcParams
-        from matplotlib import patheffects as pe
         from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 
         # Register and use local NotoSans font for Cyrillic support
@@ -1634,61 +1633,45 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
             zorder=4
         )
 
-    line = ax.plot(
-        x,
-        raw_impacts,
-        color="#f4c430",
-        linewidth=10,
-        solid_capstyle='round',
-        solid_joinstyle='round',
-        antialiased=True,
-        zorder=5
-    )[0]
-
-    line.set_path_effects([
-        pe.Stroke(
-            linewidth=16,
-            foreground=stroke_color,
-            alpha=0.35
-        ),
-        pe.Normal()
-    ])
-
-    for idx, (xi, yi, win) in enumerate(zip(x, raw_impacts, wins)):
-        border = "#00ff66" if win else "#ff3b3b"
-        glow = "#00ff66" if win else "#ff3b3b"
-
-        ax.scatter(
-            xi,
-            yi,
-            s=200,
-            color=border,
-            edgecolors="#ffffff",
-            linewidths=4,
-            zorder=6,
-            joinstyle='round'
-        )
-
-        ax.scatter(
-            xi,
-            yi,
-            s=1500,
-            color=glow,
-            alpha=0.18,
+    # Smooth cubic spline through the data points
+    x = np.arange(1, len(raw_impacts) + 1)
+    if len(x) >= 4:
+        from scipy.interpolate import CubicSpline
+        try:
+            cs = CubicSpline(x, raw_impacts, bc_type="natural")
+            spline_x = np.linspace(1, len(raw_impacts), 400)
+            spline_y = np.clip(cs(spline_x), 0, 2)
+            ax.plot(
+                spline_x,
+                spline_y,
+                color="#f4c430",
+                linewidth=10,
+                solid_capstyle='round',
+                solid_joinstyle='round',
+                antialiased=True,
+                zorder=5
+            )
+        except Exception:
+            ax.plot(
+                x,
+                raw_impacts,
+                color="#f4c430",
+                linewidth=10,
+                solid_capstyle='round',
+                solid_joinstyle='round',
+                antialiased=True,
+                zorder=5
+            )
+    else:
+        ax.plot(
+            x,
+            raw_impacts,
+            color="#f4c430",
+            linewidth=10,
+            solid_capstyle='round',
+            solid_joinstyle='round',
+            antialiased=True,
             zorder=5
-        )
-
-        # Add IMPACT value label above each point
-        ax.text(
-            xi,
-            yi + 0.15,
-            f"{yi:.2f}",
-            fontsize=10,
-            color=border,
-            ha="center",
-            va="bottom",
-            fontweight="bold",
-            zorder=7
         )
 
     for idx, g in enumerate(available):
@@ -1725,7 +1708,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
                 alpha=1.0,
                 joinstyle="round"
             ),
-            zorder=10
+            zorder=9
         )
 
         ax.add_artist(ab)
@@ -1737,6 +1720,18 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
             color=glow,
             alpha=0.18,
             zorder=8
+        )
+
+        # Hero outline drawn ON TOP of the hero icon, not under it
+        ax.scatter(
+            idx + 1,
+            max(imp - 0.12, 0.08),
+            s=1200,
+            color="none",
+            edgecolors=border,
+            linewidths=8,
+            zorder=11,
+            joinstyle='round'
         )
 
     ax.set_xlim(0, 11)

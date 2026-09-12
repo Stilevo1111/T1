@@ -2544,7 +2544,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.debug(f"Could not send loading message: {e}")
 
-        last_10_balls = ""
         week_games = 0
         week_wins = 0
         week_losses = 0
@@ -2555,13 +2554,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             week_wins = target_user.get('week_wins') or 0
             week_losses = week_games - week_wins
             winrate = round(week_wins / week_games * 100) if week_games > 0 else 0
-            last_10_balls = await _fetch_last_10_balls(target_user.get('steam_id'), week_games)
 
         text = _build_profile_text(
             target_user,
             update.effective_user,
             viewing_other,
-            last_10_balls,
             week_games,
             week_wins,
             week_losses,
@@ -2646,40 +2643,14 @@ async def _resolve_profile_target(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def _fetch_last_10_balls(steam_id: int, week_games: int) -> str:
-    from dota_mmr import get_recent_matches_async
-
-    last_10_balls = ""
-    try:
-        matches = await asyncio.wait_for(
-            get_recent_matches_async(steam_id, limit=20),
-            timeout=20.0
-        )
-        logger.info(f"Steam {steam_id}: got {len(matches)} matches")
-
-        matches = sorted(matches, key=lambda x: x.get('start_time', 0), reverse=True)
-        week_match_count = min(len(matches), week_games)
-        matches = matches[:week_match_count]
-        for match in matches:
-            player_slot = match.get('player_slot')
-            radiant_win = match.get('radiant_win', False)
-            player_was_radiant = player_slot < 128 if player_slot is not None else True
-            is_win = (radiant_win and player_was_radiant) or (not radiant_win and not player_was_radiant)
-            last_10_balls += "🟢" if is_win else "🔴"
-        if last_10_balls:
-            last_10_balls = last_10_balls.replace("🟢", "🟢\u200d").replace("🔴", "🔴\u200d")
-    except TimeoutError:
-        logger.warning(f"Timeout getting matches for steam_id={steam_id}, using cache/default")
-    except Exception as e:
-        logger.debug(f"Could not get last matches: {e}")
-
-    return last_10_balls
+    """[DEPRECATED] Kept for backwards compatibility, no longer used in profile."""
+    return ""
 
 
 def _build_profile_text(
     target_user: dict,
     effective_user,
     viewing_other: bool,
-    last_10_balls: str,
     week_games: int,
     week_wins: int,
     week_losses: int,
@@ -2727,8 +2698,6 @@ def _build_profile_text(
 
     if steam_id:
         text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%"
-        if last_10_balls:
-            text += f"\n{last_10_balls}"
 
     return text
 
