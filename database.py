@@ -660,21 +660,38 @@ def get_pg_connection():
     except Exception as e:
         logger.warning(f"Pool connection error, recreating: {e}")
         _reset_persistent_pg_conn(str(e))
+    # Retry once after pool reset — recreate pool and get a fresh connection
     try:
-        import urllib.parse as urlparse
+        with _pg_pool_lock:
+            if _pg_pool is None:
+                try:
+                    import urllib.parse as urlparse
 
-        from psycopg2 import pool
-        parsed = urlparse.urlparse(DATABASE_URL)
-        dsn = _pg_dsn()
-        _pg_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=15, dsn=dsn)
-        conn = _pg_pool.getconn()
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        cursor.close()
-        return conn
+                    from psycopg2 import pool
+                    parsed = urlparse.urlparse(DATABASE_URL)
+                    dsn = _pg_dsn()
+                    _pg_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=15, dsn=dsn)
+                except Exception as e:
+                    logger.warning(f"Failed to recreate psycopg2 pool: {e}")
+                    _pg_pool = None
+        if _pg_pool is not None:
+            conn = _pg_pool.getconn()
+            if conn and not conn.closed:
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT 1")
+                    cursor.close()
+                    return conn
+                except Exception as e:
+                    logger.debug(f"Fresh connection broken, resetting pool: {e}")
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+                    _reset_persistent_pg_conn(str(e))
     except Exception as e:
-        logger.warning(f"Failed to get pg connection: {e}")
-        return get_connection()
+        logger.warning(f"Failed to get pg connection after pool reset: {e}")
+    return get_connection()
 
 def release_pg_connection(conn):
     """Release a PostgreSQL connection back to the pool"""
@@ -1827,7 +1844,7 @@ class Database:
             if get_db_type() == "postgresql":
                 query = """
                     SELECT COUNT(*) + 1 as rank FROM users 
-                    WHERE in_chat = TRUE 
+                    WHERE (in_chat = TRUE OR in_chat IS NULL)
                     AND COALESCE(fissure, 0) > COALESCE(
                         (SELECT fissure FROM users WHERE telegram_id = %s LIMIT 1), -1)
                 """
@@ -2534,6 +2551,13 @@ def update_fissure(telegram_id, fissure, last_fissure, growth=0, last_message_id
                 user_cache.set_without_dirty(telegram_id, db_user)
 
         logger.info(f"update_fissure: запись в БД выполнена для telegram_id={telegram_id}")
+        # Invalidate top cache so get_fissure_top / get_fissure_rank return fresh data.
+        # Without this, get_fissure_rank (no cache) sees the new value while
+        # get_fissure_top (cached) returns the old top-1 -> tag flickers.
+        try:
+            top_cache.invalidate_top_cache()
+        except Exception as cache_err:
+            logger.debug(f"update_fissure: top_cache invalidation failed: {cache_err}")
     except Exception as e:
         logger.error(f"Error updating fissure: {e}")
 
