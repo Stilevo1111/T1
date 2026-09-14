@@ -1204,7 +1204,43 @@ async def _generate_chart_only_impl(telegram_id: int) -> dict[str, Any] | None:
         })
 
     chart = await _create_visual_chart(game_history)
+    if chart:
+        _save_analytics_cache(telegram_id, game_history, matches, role)
     return {"image": chart, "history": game_history, "matches": matches, "role": role}
+
+
+def _save_analytics_cache(
+    telegram_id: int,
+    game_history: list,
+    matches: list,
+    role: str,
+    pro_text: str = "",
+    detailed_text: str = "",
+    user_stats: dict | None = None,
+) -> None:
+    """Сохраняет analytics_cache в БД для последующего использования без OpenDota.
+
+    Вызывается после успешной генерации чарта из свежих данных API.
+    При ошибке логирует, но не бросает — кэш опционален.
+    """
+    try:
+        cache_dict = {
+            "history": game_history,
+            "matches": matches,
+            "role": role,
+            "pro_text": pro_text,
+            "detailed_text": detailed_text,
+            "stats": user_stats,
+        }
+        cache_data = json.dumps(cache_dict)
+        db = Database()
+        db.execute_query(
+            "UPDATE users SET analytics_cache = %s, analytics_updated_at = %s WHERE telegram_id = %s",
+            (cache_data, datetime.now(UTC).isoformat(), telegram_id),
+        )
+        logger.info(f"Saved analytics cache for {telegram_id}")
+    except Exception as e:
+        logger.warning(f"Failed to save analytics cache for {telegram_id}: {e}")
 
 
 async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
@@ -1485,24 +1521,16 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
     }
 
     # Save to cache (without image)
-    try:
-        cache_dict = {
-            "history": game_history,
-            "matches": matches,
-            "pro_text": pro_text,
-            "detailed_text": detailed_text,
-            "role": role,
-            "stats": user_stats
-        }
-        cache_data = json.dumps(cache_dict)
-        db = Database()
-        db.execute_query(
-            "UPDATE users SET analytics_cache = %s, analytics_updated_at = %s WHERE telegram_id = %s",
-            (cache_data, datetime.now(UTC).isoformat(), telegram_id)
+    if chart_image:
+        _save_analytics_cache(
+            telegram_id,
+            game_history,
+            matches,
+            role,
+            pro_text=pro_text,
+            detailed_text=detailed_text,
+            user_stats=user_stats,
         )
-        logger.info(f"Saved analytics cache for {telegram_id}")
-    except Exception as e:
-        logger.warning(f"Failed to save analytics cache for {telegram_id}: {e}")
 
     return data
 
