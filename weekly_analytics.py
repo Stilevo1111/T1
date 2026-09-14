@@ -1772,8 +1772,16 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
             zorder=8
         )
 
-    ax.set_xlim(0, 11)
-    ax.set_ylim(0, 2)
+    # Keep the spline and hero icons inside the visible area.
+    # Without padding, the line (linewidth=10 + shadow 16px) and the 82px hero
+    # icons can be clipped by the axis bounds, especially when imp is near 0 or 2.
+    x_min, x_max = 1, len(raw_impacts)
+    y_min = max(0.0, min(raw_impacts) - 0.35)
+    y_max = min(2.0, max(raw_impacts) + 0.35)
+    if y_max - y_min < 0.5:
+        y_min, y_max = 0.0, 2.0
+    ax.set_xlim(x_min - 0.6, x_max + 0.6)
+    ax.set_ylim(y_min - 0.15, y_max + 0.15)
 
     ax.set_xticks(x)
     ax.set_xticklabels(
