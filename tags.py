@@ -63,6 +63,12 @@ async def _get_chat_member_status(bot, chat_id: int, user_id: int) -> Optional[s
         return None
 
 
+async def _is_admin(bot, chat_id: int, user_id: int) -> bool:
+    """True if the user is an administrator or creator of the chat."""
+    status = await _get_chat_member_status(bot, chat_id, user_id)
+    return status in ("administrator", "creator")
+
+
 async def _set_member_tag(bot, chat_id: int, user_id: int, tag: str) -> bool:
     try:
         return await bot.do_api_request(
@@ -181,7 +187,11 @@ async def ensure_fissure_master_tag(telegram_id: int, chat_id: int, bot) -> None
 
 
 async def refresh_fissure_master_tag(bot, chat_id: int, notify: bool = True) -> None:
-    """Independent tag refresh: compare current top-1 with stored winner and swap tag if needed."""
+    """Independent tag refresh: compare current top-1 with stored winner and swap tag if needed.
+
+    Administrators are skipped entirely — they keep their own admin tag and are
+    never granted or stripped of fissure_master, regardless of their fissure rank.
+    """
     from database import get_fissure_top, get_config, set_config, get_user
     try:
         digest_chat_id = get_config('digest_chat_id')
@@ -201,24 +211,31 @@ async def refresh_fissure_master_tag(bot, chat_id: int, notify: bool = True) -> 
     if not current_winner_tg_id:
         return
 
+    # Skip administrators — they keep their own tag and never get fissure_master.
+    if await _is_admin(bot, chat_id, int(current_winner_tg_id)):
+        logger.info(f"tag_manager: refresh_fissure_master_tag: top-1 {current_winner_tg_id} is admin, skipping")
+        return
+
     stored_winner_tg_id = get_config('current_fissure_master_telegram_id')
     if str(current_winner_tg_id) == str(stored_winner_tg_id):
         logger.debug(f"tag_manager: refresh_fissure_master_tag: top-1 unchanged ({current_winner_tg_id})")
         return
 
-    old_winner = get_user(int(stored_winner_tg_id)) if stored_winner_tg_id else None
+    # If the previous holder is an admin, don't try to strip the tag from them.
     old_name = ""
     old_fissure = 0
-    if old_winner:
-        old_name = old_winner.get('username') or old_winner.get('steam_nickname') or str(stored_winner_tg_id)
-        old_fissure = old_winner.get('fissure', 0)
-
-    if stored_winner_tg_id:
+    if stored_winner_tg_id and not await _is_admin(bot, chat_id, int(stored_winner_tg_id)):
         try:
             await remove_user_tag(int(stored_winner_tg_id), "fissure_master", bot=bot, chat_id=chat_id)
             logger.info(f"tag_manager: refresh_fissure_master_tag: removed tag from old top-1 {stored_winner_tg_id}")
         except Exception as e:
             logger.warning(f"tag_manager: refresh_fissure_master_tag: failed to remove tag from {stored_winner_tg_id}: {e}")
+        old_winner = get_user(int(stored_winner_tg_id)) if stored_winner_tg_id else None
+        if old_winner:
+            old_name = old_winner.get('username') or old_winner.get('steam_nickname') or str(stored_winner_tg_id)
+            old_fissure = old_winner.get('fissure', 0)
+    elif stored_winner_tg_id:
+        logger.info(f"tag_manager: refresh_fissure_master_tag: old top-1 {stored_winner_tg_id} is admin, leaving tag alone")
 
     try:
         await add_user_tag(current_winner_tg_id, "fissure_master", bot=bot, chat_id=chat_id)
