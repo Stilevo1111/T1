@@ -51,6 +51,11 @@ from techies import handle_techies_event
 # Fissure-specific in-memory state (moved from main.py for clean extraction)
 _user_fissure_processing: dict[int, float] = {}
 
+# Minimum seconds between consecutive /fissure calls from the same user.
+# Prevents double-click spam: two rolls within this window are treated as
+# the same action, and the second one is ignored.
+MIN_SPAM_INTERVAL = 3.0
+
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +105,16 @@ def build_fissure_cooldown_bar_and_text(now, last_fissure, COOLDOWN, format_time
 
 
 def should_skip_due_to_spam(user_id, now, processing_dict):
-    """Returns True if the user is already being processed (spam protection)."""
-    if processing_dict.get(user_id):
+    """Returns True if the user is already being processed (spam protection).
+
+    Uses a sliding window: if the last call for this user was less than
+    MIN_SPAM_INTERVAL seconds ago, skip. Otherwise allow and update the
+    timestamp. Unlike the previous implementation, the entry is never
+    removed — it just ages, so rapid double-clicks are blocked even when
+    the first handler has already finished.
+    """
+    last_call = processing_dict.get(user_id)
+    if last_call is not None and (now - last_call) < MIN_SPAM_INTERVAL:
         return True
     processing_dict[user_id] = now
     return False
@@ -599,5 +612,5 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
         except Exception as send_err:
             logger.debug(f"fissure: could not send error message: {send_err}")
-    finally:
-        _user_fissure_processing.pop(user_obj.id, None)
+    # No finally cleanup — should_skip_due_to_spam uses a sliding window
+    # (MIN_SPAM_INTERVAL) so the entry just ages naturally.
