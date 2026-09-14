@@ -1104,6 +1104,15 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
             chart = await _create_visual_chart(cached.get("history", []))
             return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY")}
 
+    # Fallback: if we have a stale cache and the API is slow, use it anyway
+    # so the profile chart still renders instead of failing.
+    if user and user.get('analytics_cache'):
+        cached = json.loads(user['analytics_cache'])
+        if cached.get('history'):
+            logger.info(f"generate_chart_only: using stale cache for user {telegram_id}")
+            chart = await _create_visual_chart(cached.get("history", []))
+            return {"image": chart, "history": cached.get("history", []), "matches": cached.get("matches", []), "role": cached.get("role", "CARRY"), "api_fallback": True}
+
     # Check if user has Steam account BEFORE fetching matches
     if not user or not user.get("steam_id"):
         return {"error": "no_steam_linked", "message": "🔗 Привяжите Аккаунт, чтобы увидеть аналитику"}

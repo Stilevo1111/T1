@@ -2731,8 +2731,10 @@ async def _resolve_profile_banner(target_user: dict) -> str | io.BytesIO:
                 logger.info(f"Using analytics chart for profile uid={target_user.get('telegram_id')}")
             else:
                 logger.info(f"No analytics chart for profile uid={target_user.get('telegram_id')}, using default banner")
+        except asyncio.TimeoutError:
+            logger.warning(f"Could not generate profile analytics chart: timeout (15s) for uid={target_user.get('telegram_id')}")
         except Exception as e:
-            logger.warning(f"Could not generate profile analytics chart: {e}")
+            logger.warning(f"Could not generate profile analytics chart: {type(e).__name__}: {e} for uid={target_user.get('telegram_id')}")
     else:
         logger.info(f"No steam_id for profile uid={target_user.get('telegram_id')}, using default banner")
     return profile_banner_url
