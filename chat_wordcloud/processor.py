@@ -1,4 +1,5 @@
 ﻿"""WordCloud text processing utilities."""
+import logging
 import re
 import unicodedata
 from collections import Counter
@@ -9,6 +10,8 @@ from chat_wordcloud.config import (
     WORDCLOUD_MAX_WORDS,
     WORDCLOUD_MIN_WORD_FREQUENCY,
 )
+
+logger = logging.getLogger(__name__)
 
 # Bot-specific words to exclude (separate from general stopwords)
 BOT_SYSTEM_WORDS = {
@@ -134,5 +137,4 @@ def log_top_words(top_words: list[tuple[str, int]], label: str = "TOP 20 WORDS")
     lines = [label]
     for i, (word, count) in enumerate(top_words[:20], start=1):
         lines.append(f"{i}. {word} — {count}")
-    logger = __import__("logging").getLogger(__name__)
     logger.info("\n".join(lines))

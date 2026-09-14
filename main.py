@@ -4331,7 +4331,6 @@ async def main():
         app.add_handler(CommandHandler("analyze", analyze_command))
         app.add_handler(CommandHandler(("party", "party"), party_command))
         app.add_handler(CommandHandler("story", story_command))
-        app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^(?:/story@FissureD2_Bot|/story)(?:\s+|$)'), story_command))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.ANY_CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members_message))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))

@@ -75,7 +75,10 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             )
 
             if not messages:
-                await update.message.reply_text("Недостаточно данных для создания истории чата.")
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="Недостаточно данных для создания истории чата.",
+                )
                 return
 
             counter = await asyncio.to_thread(process_messages, messages)
@@ -105,7 +108,10 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             log_top_words(top_words, f"TOP 20 WORDS chat_id={chat_id}")
 
             if not top_words:
-                await update.message.reply_text("Недостаточно данных для создания истории чата.")
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="Недостаточно данных для создания истории чата.",
+                )
                 return
 
             top_cache.set(cache_key, top_words, ttl=WORDCLOUD_CACHE_TTL)
@@ -160,4 +166,10 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         schedule_delete(context.bot, chat_id, sent.message_id, 30, context.job_queue)
     except Exception as e:
         logger.error(f"story error: {e}", exc_info=True)
-        await update.message.reply_text("Ошибка генерации облака слов чата.")
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="Ошибка генерации облака слов чата.",
+            )
+        except Exception:
+            pass

@@ -8,7 +8,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from PIL import Image
 
-from chat_wordcloud.config import WORDCLOUD_MIN_FONT_SIZE, WORDCLOUD_BACKGROUND_COLOR
+from chat_wordcloud.config import (
+    WORDCLOUD_BACKGROUND_COLOR,
+    WORDCLOUD_HEIGHT,
+    WORDCLOUD_MIN_FONT_SIZE,
+    WORDCLOUD_WIDTH,
+)
 from chat_wordcloud.generator import _resolve_font_path, _dilate_alpha_mask
 
 
@@ -40,7 +45,7 @@ def test_wordcloud_generates_nonblank_image():
     assert len(img_bytes) > 10000, f"Image too small ({len(img_bytes)} bytes), likely blank"
 
     img = Image.open(io.BytesIO(img_bytes))
-    assert img.size == (1024, 1024)
+    assert img.size == (WORDCLOUD_WIDTH, WORDCLOUD_HEIGHT)
 
 
 def test_wordcloud_handles_single_word():
