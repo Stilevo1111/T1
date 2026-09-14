@@ -1077,8 +1077,13 @@ async def generate_chart_only(telegram_id: int) -> dict[str, Any] | None:
     Генерирует только чарт аналитики (используется для кэшированных данных).
 
     Используется когда у пользователя уже есть сохранённый analytics_cache.
+    Обёрнут в общий таймаут (8s) в callers — если OpenDota тормозит, возвращается
+    дефолтный баннер вместо того, чтобы висеть.
     """
+    return await _generate_chart_only_impl(telegram_id)
 
+
+async def _generate_chart_only_impl(telegram_id: int) -> dict[str, Any] | None:
     """Generate only the chart and game history - no text pages."""
 
     from datetime import datetime
