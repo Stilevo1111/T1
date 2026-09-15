@@ -143,16 +143,16 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
     Logic and all messages are 100% preserved from the original.
     """
     # zeus_strike now returns (affected, total_cm_reduced, total_fissure_before)
-    affected, total_cm, total_fissure_before = zeus_strike(percent=0.01, exclude_telegram_id=user_obj.id)
+    affected, total_cm, total_fissure_before = zeus_strike(percent=0.025, exclude_telegram_id=user_obj.id)
 
     user = await asyncio.to_thread(get_user, user_obj.id, user_obj.username)
     new_fissure = user.get("fissure", 0)
 
     # Real percentage: how much of the total community fissure was actually taken
-    real_percent = (total_cm / total_fissure_before * 100) if total_fissure_before > 0 else 1.0
+    real_percent = (total_cm / total_fissure_before * 100) if total_fissure_before > 0 else 2.5
 
-    # Return the stolen fissure to the initiator (they were excluded from the strike)
-    initiator_gain = round(total_fissure_before * 0.01, 1) if total_fissure_before > 0 else 0.0
+    # Return ALL the stolen fissure to the initiator (they were excluded from the strike)
+    initiator_gain = round(total_cm, 1)
     if initiator_gain > 0:
         initiator_new = max(0.1, new_fissure + initiator_gain)
         await asyncio.to_thread(update_user_field, user_obj.id, "fissure", initiator_new)
