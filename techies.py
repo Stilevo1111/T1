@@ -94,7 +94,7 @@ def _pop_session(chat_id: int, user_id: int) -> dict | None:
     return _active_techies_sessions.pop(_session_key(chat_id, user_id), None)
 
 
-async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str, image_path=None) -> None:
+async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str, image_path=None, reply_markup=None) -> None:
     if image_path is None:
         image_path = TECHIES_BASE_URL
     media = InputMediaPhoto(
@@ -108,7 +108,7 @@ async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str, image_
             chat_id=chat_id,
             message_id=msg_id,
             media=media,
-            reply_markup=None,
+            reply_markup=reply_markup,
         )
         return
     except Exception as e:
@@ -119,7 +119,7 @@ async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str, image_
             chat_id=chat_id,
             message_id=msg_id,
             caption=text,
-            reply_markup=None,
+            reply_markup=reply_markup,
             parse_mode="HTML",
         )
         return
@@ -131,6 +131,7 @@ async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str, image_
             chat_id=chat_id,
             photo=str(image_path),
             caption=text,
+            reply_markup=reply_markup,
             parse_mode="HTML",
         )
     except Exception as e:
@@ -373,14 +374,5 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
             InlineKeyboardButton("🎲 Ещё один ролл!", callback_data=f"techies_again_{user_id}")
         ]])
 
-    await _send_techies_result(context.bot, query.message.chat_id, query.message.message_id, text, image_path=image_path)
-    if reply_markup:
-        try:
-            await context.bot.edit_message_reply_markup(
-                chat_id=query.message.chat_id,
-                message_id=query.message.message_id,
-                reply_markup=reply_markup,
-            )
-        except Exception as e:
-            logger.warning(f"techies: failed to add roll-again button: {e}")
+    await _send_techies_result(context.bot, query.message.chat_id, query.message.message_id, text, image_path=image_path, reply_markup=reply_markup)
     schedule_delete(context.bot, query.message.chat_id, query.message.message_id, 30, None)
