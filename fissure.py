@@ -33,7 +33,7 @@ from constants import (
     get_banner_path,
     get_random_cooldown_banner_path,
 )
-from database import get_user, update_fissure, update_last_message_id, user_cache, zeus_strike
+from database import get_user, update_fissure, update_last_message_id, update_user_field, user_cache, zeus_strike
 from digest import invalidate_digest_cache
 from rate_limiter import is_rate_limited
 from rolls import (
@@ -139,21 +139,34 @@ async def send_fissure_cooldown_response(bot, chat_id, user_id, text, banner_url
 
 async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now, ZEUS_TEXTS, main_menu, set_last_bot_message, schedule_delete, update_fissure, update_last_message_id, zeus_strike, record_recent_fissure_roll=None):
     """
-    Handles the Zeus strike event (no roll, -2.5% to all fissures).
+    Handles the Zeus strike event (no roll, dynamic % to all fissures).
     Logic and all messages are 100% preserved from the original.
     """
-    affected, total_cm = zeus_strike(percent=0.025, exclude_telegram_id=user_obj.id)
+    # zeus_strike now returns (affected, total_cm_reduced, total_fissure_before)
+    affected, total_cm, total_fissure_before = zeus_strike(percent=0.01, exclude_telegram_id=user_obj.id)
 
     user = await asyncio.to_thread(get_user, user_obj.id, user_obj.username)
     new_fissure = user.get("fissure", 0)
+
+    # Real percentage: how much of the total community fissure was actually taken
+    real_percent = (total_cm / total_fissure_before * 100) if total_fissure_before > 0 else 1.0
+
+    # Return the stolen fissure to the initiator (they were excluded from the strike)
+    initiator_gain = round(total_fissure_before * 0.01, 1) if total_fissure_before > 0 else 0.0
+    if initiator_gain > 0:
+        initiator_new = max(0.1, new_fissure + initiator_gain)
+        await asyncio.to_thread(update_user_field, user_obj.id, "fissure", initiator_new)
+        user = await asyncio.to_thread(get_user, user_obj.id, user_obj.username)
+        new_fissure = initiator_new
 
     zeus_text = random.choice(ZEUS_TEXTS)
 
     text = (
         f"🎲 {display_username}\n\n"
         f"{zeus_text}\n\n"
-        f"💀 Все Фиссуры −2.5%, {affected} жертв.\n"
-        f"📉 Суммарно отнято: {total_cm} см\n\n"
+        f"💀 Все Фиссуры −{real_percent:.2f}%, {affected} жертв.\n"
+        f"📉 Суммарно отнято: {total_cm} см\n"
+        f"🎁 Ты не пострадал, тебе вернули {initiator_gain:.1f} см!\n\n"
         f"📏 {new_fissure:.1f} см"
     )
 
@@ -166,11 +179,11 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
         reply_markup=main_menu()
     )
     if record_recent_fissure_roll:
-        record_recent_fissure_roll(user_obj.id, user_obj.username, 0, user.get("fissure", 0), cascade=0, event_type="zeus")
+        record_recent_fissure_roll(user_obj.id, user_obj.username, initiator_gain, new_fissure, cascade=0, event_type="zeus")
 
     set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
     schedule_delete(bot, chat_id, result_msg.message_id, 600, None)  # job_queue passed from caller if needed
-    update_fissure(user_obj.id, user.get("fissure", 0), now, 0, last_message_id=result_msg.message_id)
+    update_fissure(user_obj.id, new_fissure, now, 0, last_message_id=result_msg.message_id)
 
     await asyncio.sleep(0.1)
     return  # exit without roll

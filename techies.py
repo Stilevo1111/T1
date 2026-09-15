@@ -358,11 +358,29 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         text = (
             f"🎲 {display_username}\n\n"
             f"😇 ОБЕЗВРЕЖЕНО!\n💣 Скви, Сплин и Спун 🗣️ {phrase}\n\n"
-            f"📏 {current_fissure:.1f} см"
+            f"📏 {current_fissure:.1f} см\n\n"
+            "💡 Угадал — хочешь сделать ещё один ролл? Нажми:"
         )
         if record_recent_fissure_roll:
             record_recent_fissure_roll(user_id, username or str(user_id), 0, current_fissure, cascade=0)
 
     image_path = TECHIES_SUCCESS_URL if button_pressed != explosive_button else TECHIES_EXPLOSION_URL
+
+    # Add "roll again" button on success
+    reply_markup = None
+    if button_pressed != explosive_button:
+        reply_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🎲 Ещё один ролл!", callback_data=f"techies_again_{user_id}")
+        ]])
+
     await _send_techies_result(context.bot, query.message.chat_id, query.message.message_id, text, image_path=image_path)
+    if reply_markup:
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=query.message.chat_id,
+                message_id=query.message.message_id,
+                reply_markup=reply_markup,
+            )
+        except Exception as e:
+            logger.warning(f"techies: failed to add roll-again button: {e}")
     schedule_delete(context.bot, query.message.chat_id, query.message.message_id, 30, None)

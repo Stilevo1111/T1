@@ -3026,7 +3026,7 @@ def decrease_inactive_fissure(days_inactive=1, decrease_amount=1.0):
 def zeus_strike(percent=0.025, exclude_telegram_id=None):
     """Удар Зевса: уменьшить fissure ВСЕХ игроков на percent (батчевая версия).
     Исключает пользователя exclude_telegram_id из удара.
-    Возвращает (affected_count, total_cm_reduced).
+    Возвращает (affected_count, total_cm_reduced, total_fissure_before).
     """
     db = Database()
     scheme = get_db_type()
@@ -3079,6 +3079,7 @@ def zeus_strike(percent=0.025, exclude_telegram_id=None):
             old_fissures = [float(r[0]) for r in rows]
             db.execute_query(query, params_update)
 
+        total_fissure_before = sum(old_fissures)
         total_reduced = sum(
             max(0.0, f - max(0.1, f * (1 - percent)))
             for f in old_fissures
@@ -3088,11 +3089,11 @@ def zeus_strike(percent=0.025, exclude_telegram_id=None):
         user_cache.clear()
         top_cache.invalidate_top_cache()
 
-        return affected, round(total_reduced, 1)
+        return affected, round(total_reduced, 1), round(total_fissure_before, 1)
 
     except Exception as e:
         logger.error(f"zeus_strike error: {e}")
-        return 0, 0.0
+        return 0, 0.0, 0.0
 
 def reset_all_fissure_data():
     """Сбрасывает cm,rolls и cooldown для всех пользователей"""

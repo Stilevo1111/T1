@@ -1964,6 +1964,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await handle_techies_button(update, context, record_recent_fissure_roll)
         return
 
+    # Techies "roll again" button — user guessed the mine, offer another fissure roll
+    if data and data.startswith("techies_again_"):
+        await callback_query.answer("🎲 Запускаю ещё один ролл!")
+        await fissure(update, context)
+        return
+
     # Party buttons - send @username with party invitation (with anti-spam protection)
     if data and data.startswith("party_user:"):
         import time
