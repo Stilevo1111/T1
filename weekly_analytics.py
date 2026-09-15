@@ -1204,43 +1204,7 @@ async def _generate_chart_only_impl(telegram_id: int) -> dict[str, Any] | None:
         })
 
     chart = await _create_visual_chart(game_history)
-    if chart:
-        _save_analytics_cache(telegram_id, game_history, matches, role)
     return {"image": chart, "history": game_history, "matches": matches, "role": role}
-
-
-def _save_analytics_cache(
-    telegram_id: int,
-    game_history: list,
-    matches: list,
-    role: str,
-    pro_text: str = "",
-    detailed_text: str = "",
-    user_stats: dict | None = None,
-) -> None:
-    """Сохраняет analytics_cache в БД для последующего использования без OpenDota.
-
-    Вызывается после успешной генерации чарта из свежих данных API.
-    При ошибке логирует, но не бросает — кэш опционален.
-    """
-    try:
-        cache_dict = {
-            "history": game_history,
-            "matches": matches,
-            "role": role,
-            "pro_text": pro_text,
-            "detailed_text": detailed_text,
-            "stats": user_stats,
-        }
-        cache_data = json.dumps(cache_dict)
-        db = Database()
-        db.execute_query(
-            "UPDATE users SET analytics_cache = %s, analytics_updated_at = %s WHERE telegram_id = %s",
-            (cache_data, datetime.now(UTC).isoformat(), telegram_id),
-        )
-        logger.info(f"Saved analytics cache for {telegram_id}")
-    except Exception as e:
-        logger.warning(f"Failed to save analytics cache for {telegram_id}: {e}")
 
 
 async def generate_weekly_analytics(telegram_id: int) -> dict[str, Any] | None:
@@ -1521,16 +1485,24 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
     }
 
     # Save to cache (without image)
-    if chart_image:
-        _save_analytics_cache(
-            telegram_id,
-            game_history,
-            matches,
-            role,
-            pro_text=pro_text,
-            detailed_text=detailed_text,
-            user_stats=user_stats,
+    try:
+        cache_dict = {
+            "history": game_history,
+            "matches": matches,
+            "pro_text": pro_text,
+            "detailed_text": detailed_text,
+            "role": role,
+            "stats": user_stats
+        }
+        cache_data = json.dumps(cache_dict)
+        db = Database()
+        db.execute_query(
+            "UPDATE users SET analytics_cache = %s, analytics_updated_at = %s WHERE telegram_id = %s",
+            (cache_data, datetime.now(UTC).isoformat(), telegram_id)
         )
+        logger.info(f"Saved analytics cache for {telegram_id}")
+    except Exception as e:
+        logger.warning(f"Failed to save analytics cache for {telegram_id}: {e}")
 
     return data
 
@@ -1861,13 +1833,13 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     if _CHART_BG_CACHE is None:
         try:
+            import io
             # Try local first, then remote
             local_bg = get_banner_path("chart_bg_fallback")
             background_url_png = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
             content = None
             if isinstance(local_bg, Path) and local_bg.exists():
                 content = local_bg.read_bytes()
-                logger.info(f"_create_visual_chart: loaded chart background from {local_bg} ({len(content)} bytes)")
             # Try png if local failed
             if content is None:
                 try:
@@ -1875,19 +1847,15 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
                         async with session.get(background_url_png) as resp:
                             if resp.status == 200:
                                 content = await resp.read()
-                                logger.info(f"_create_visual_chart: loaded chart background from remote ({len(content)} bytes)")
-                except Exception as e:
-                    logger.warning(f"_create_visual_chart: remote background fetch failed: {e}")
+                except Exception:
+                    pass
             if content is not None:
                 img = Image.open(io.BytesIO(content))
                 if img.mode == 'RGBA':
                     img = img.convert('RGB')
-                _CHART_BG_CACHE = img.resize((WIDTH, HEIGHT), Image.LANCZOS)
-                logger.info(f"_create_visual_chart: chart background cached, size={_CHART_BG_CACHE.size}")
-            else:
-                logger.error("_create_visual_chart: no chart background available (local and remote both failed)")
+                _CHART_BG_CACHE = img.resize((1200, 800), Image.LANCZOS)
         except Exception as e:
-            logger.error(f"_create_visual_chart: failed to load chart background: {type(e).__name__}: {e}")
+            logger.warning("Could not load chart background: %s", e)
 
     if _CHART_BG_CACHE is None:
         _CHART_BG_CACHE = Image.new('RGB', (1200, 800), (15, 15, 25))
