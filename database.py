@@ -754,6 +754,7 @@ _PG_ENSURE_COLUMNS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_top2 INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_top3 INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS user_tags TEXT DEFAULT '[]'",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS free_rolls INTEGER DEFAULT 0",
     "UPDATE users SET in_chat = TRUE WHERE in_chat IS NULL OR in_chat = FALSE",
 )
 
@@ -2859,7 +2860,7 @@ def update_user_field(telegram_id, field, value):
         immediate_fields = {
             'fissure', 'last_fissure', 'steam_id', 'steam_nickname', 'mmr', 'rank_tier', 'wins', 'losses',
             'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'week_start_date',
-            'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags',
+            'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags', 'free_rolls',
         }
         if field in immediate_fields:
             _save_user_to_db_immediately(telegram_id, user)
@@ -2867,6 +2868,37 @@ def update_user_field(telegram_id, field, value):
         user_state_manager.apply_user_update(telegram_id, {field: value}, save_to_db=False)
         return True
     return False
+
+
+def add_free_roll(telegram_id: int, count: int = 1) -> int:
+    """Начислить free_rolls пользователю (например, за угаданную мину Techies)."""
+    user = get_user(telegram_id)
+    if not user:
+        return 0
+    current = int(user.get("free_rolls", 0) or 0)
+    new_count = current + count
+    update_user_field(telegram_id, "free_rolls", new_count)
+    return new_count
+
+
+def consume_free_roll(telegram_id: int) -> bool:
+    """Списать один free_roll. Возвращает True, если бросок был可用ен."""
+    user = get_user(telegram_id)
+    if not user:
+        return False
+    current = int(user.get("free_rolls", 0) or 0)
+    if current <= 0:
+        return False
+    update_user_field(telegram_id, "free_rolls", current - 1)
+    return True
+
+
+def get_free_rolls(telegram_id: int) -> int:
+    """Получить количество доступных free_rolls."""
+    user = get_user(telegram_id)
+    if not user:
+        return 0
+    return int(user.get("free_rolls", 0) or 0)
 
 
 def increment_weekly_mmr_award(telegram_id: int, place: int = 1) -> int:

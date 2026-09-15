@@ -365,6 +365,14 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         if record_recent_fissure_roll:
             record_recent_fissure_roll(user_id, username or str(user_id), 0, current_fissure, cascade=0)
 
+        # Начислить free_roll — бросок будет доступен даже после удаления сообщения
+        try:
+            from database import add_free_roll
+            new_count = add_free_roll(user_id, count=1)
+            logger.info(f"techies: awarded free_roll to {user_id}, total={new_count}")
+        except Exception as e:
+            logger.warning(f"techies: failed to award free_roll: {e}")
+
     image_path = TECHIES_SUCCESS_URL if button_pressed != explosive_button else TECHIES_EXPLOSION_URL
 
     # Add "roll again" button on success

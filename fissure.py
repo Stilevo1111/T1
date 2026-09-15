@@ -33,7 +33,7 @@ from constants import (
     get_banner_path,
     get_random_cooldown_banner_path,
 )
-from database import get_user, update_fissure, update_last_message_id, update_user_field, user_cache, zeus_strike
+from database import consume_free_roll, get_free_rolls, get_user, update_fissure, update_last_message_id, update_user_field, user_cache, zeus_strike
 from digest import invalidate_digest_cache
 from rate_limiter import is_rate_limited
 from rolls import (
@@ -246,10 +246,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _safe_user = {k: v for k, v in user.items() if k not in ("analytics_cache", "steam_id", "steam_nickname", "username", "first_name", "last_name")}
         logger.info(f"user data: {_safe_user}")
 
-        # Check cooldown
+        # Check cooldown (skip if free_rolls available — bonus from Techies)
+        free_rolls = get_free_rolls(user_obj.id)
         last_f = user.get("last_fissure") or 0
         cooldown_diff = now - last_f
-        if cooldown_diff < COOLDOWN:
+        if cooldown_diff < COOLDOWN and free_rolls <= 0:
             text = build_fissure_cooldown_bar_and_text(
                 now, last_f, COOLDOWN, format_time
             )
@@ -280,6 +281,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.error(f"fissure: cooldown text fallback also failed: {e2}")
             logger.info(f"fissure: cooldown response sent for user {user_obj.id}")
             return
+
+        # Consume one free_roll if available (bonus from Techies)
+        if free_rolls > 0:
+            consume_free_roll(user_obj.id)
+            logger.info(f"fissure: consumed free_roll for user {user_obj.id}, remaining={free_rolls - 1}")
 
         multicast_text = ""
         original_roll = None
