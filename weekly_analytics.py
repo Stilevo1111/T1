@@ -1861,13 +1861,13 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     if _CHART_BG_CACHE is None:
         try:
-            import io
             # Try local first, then remote
             local_bg = get_banner_path("chart_bg_fallback")
             background_url_png = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
             content = None
             if isinstance(local_bg, Path) and local_bg.exists():
                 content = local_bg.read_bytes()
+                logger.info(f"_create_visual_chart: loaded chart background from {local_bg} ({len(content)} bytes)")
             # Try png if local failed
             if content is None:
                 try:
@@ -1875,15 +1875,19 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
                         async with session.get(background_url_png) as resp:
                             if resp.status == 200:
                                 content = await resp.read()
-                except Exception:
-                    pass
+                                logger.info(f"_create_visual_chart: loaded chart background from remote ({len(content)} bytes)")
+                except Exception as e:
+                    logger.warning(f"_create_visual_chart: remote background fetch failed: {e}")
             if content is not None:
                 img = Image.open(io.BytesIO(content))
                 if img.mode == 'RGBA':
                     img = img.convert('RGB')
-                _CHART_BG_CACHE = img.resize((1200, 800), Image.LANCZOS)
+                _CHART_BG_CACHE = img.resize((WIDTH, HEIGHT), Image.LANCZOS)
+                logger.info(f"_create_visual_chart: chart background cached, size={_CHART_BG_CACHE.size}")
+            else:
+                logger.error("_create_visual_chart: no chart background available (local and remote both failed)")
         except Exception as e:
-            logger.warning("Could not load chart background: %s", e)
+            logger.error(f"_create_visual_chart: failed to load chart background: {type(e).__name__}: {e}")
 
     if _CHART_BG_CACHE is None:
         _CHART_BG_CACHE = Image.new('RGB', (1200, 800), (15, 15, 25))
