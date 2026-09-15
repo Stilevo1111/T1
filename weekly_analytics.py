@@ -892,13 +892,15 @@ async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> l
     return enriched
 
 
-async def get_last_matches(telegram_id: int, limit: int = 10, timeout: int = 15, max_retries: int = 2) -> list[dict[str, Any]]:
-    """Get the last N matches for a user (for chart/analytics).
+async def get_last_matches(telegram_id: int, limit: int = 10) -> list[dict[str, Any]]:
+    """Получить последние матчи пользователя (через Steam→OpenDota), limit по умолчанию 10."""
 
-    `timeout`/`max_retries` can be reduced for callers with a tight overall
-    budget (e.g. the profile chart has 8s) — otherwise a single 15s request
-    plus retries eats the whole budget and the chart never renders.
+
     """
+    Загружает последние матчи игрока через OpenDota API.
+    """
+
+    """Get the last N matches for a user (for chart/analytics)."""
 
     user = get_user(telegram_id)
 
@@ -917,8 +919,7 @@ async def get_last_matches(telegram_id: int, limit: int = 10, timeout: int = 15,
     matches = await _api_get_async(
         url,
         params={"limit": limit},
-        timeout=timeout,
-        max_retries=max_retries,
+        timeout=15
     )
 
     if not matches:
@@ -1137,7 +1138,16 @@ async def _generate_chart_only_impl(telegram_id: int) -> dict[str, Any] | None:
             "message": get_opendota_rate_limit_message(),
         }
 
-    matches = await get_last_matches(telegram_id, timeout=4, max_retries=1)
+    matches = await get_last_matches(telegram_id)
+
+    # Доп. защита: если API вернул 0 матчей из-за CB/rate-limit, а кэша нет —
+    # не показываем пустой график, а сообщаем о недоступности.
+    if not matches and not (user.get("analytics_cache")) and is_opendota_rate_limited():
+        logger.warning("generate_chart_only: 0 matches + API unavailable, returning error")
+        return {
+            "error": "opendota_rate_limit",
+            "message": get_opendota_rate_limit_message(),
+        }
 
     if len(matches) < 5:
         from database import get_user
@@ -1762,16 +1772,8 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
             zorder=8
         )
 
-    # Keep the spline and hero icons inside the visible area.
-    # Without padding, the line (linewidth=10 + shadow 16px) and the 82px hero
-    # icons can be clipped by the axis bounds, especially when imp is near 0 or 2.
-    x_min, x_max = 1, len(raw_impacts)
-    y_min = max(0.0, min(raw_impacts) - 0.35)
-    y_max = min(2.0, max(raw_impacts) + 0.35)
-    if y_max - y_min < 0.5:
-        y_min, y_max = 0.0, 2.0
-    ax.set_xlim(x_min - 0.6, x_max + 0.6)
-    ax.set_ylim(y_min - 0.15, y_max + 0.15)
+    ax.set_xlim(0, 11)
+    ax.set_ylim(0, 2)
 
     ax.set_xticks(x)
     ax.set_xticklabels(
@@ -1843,7 +1845,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
             # Try png if local failed
             if content is None:
                 try:
-                    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=4)) as session:
+                    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
                         async with session.get(background_url_png) as resp:
                             if resp.status == 200:
                                 content = await resp.read()
@@ -1870,13 +1872,9 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
 
     reversed_history = list(reversed(history))[:10]
 
-    # Load hero icons asynchronously — bounded so a slow CDN can't eat the
-    # remaining time budget of the caller (profile chart has 8s total).
+    # Load hero icons asynchronously
     unique_hero_ids = list({g["hero_id"] for g in reversed_history if g.get("hero_id")})
-    hero_icons = await asyncio.wait_for(
-        asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids]),
-        timeout=4.0,
-    )
+    hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
     hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
 
     # Run matplotlib in thread pool (non-blocking)
