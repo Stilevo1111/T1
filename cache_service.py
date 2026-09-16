@@ -351,15 +351,15 @@ class ImageCache:
 
 # Global cache instances
 user_cache = UserCache()
-api_cache = UnifiedCache(CacheConfig(ttl=300, max_size=100))
-top_cache = UnifiedCache(CacheConfig(ttl=1800, max_size=100))
-config_cache = UnifiedCache(CacheConfig(ttl=300, max_size=50))
-negative_cache = NegativeCache(ttl=3600)
+api_cache = UnifiedCache(CacheConfig(ttl=1800, max_size=200))
+top_cache = UnifiedCache(CacheConfig(ttl=3600, max_size=200))
+config_cache = UnifiedCache(CacheConfig(ttl=600, max_size=50))
+negative_cache = NegativeCache(ttl=7200)
 image_cache = ImageCache(max_size=150)
 hero_cache = UnifiedCache(CacheConfig(ttl=86400, max_size=200))
 
 # Global rate limiter instances
-opendota_rate_limiter = UnifiedRateLimiter(RateLimitConfig(requests_per_second=0.25, burst=5, window_seconds=60))
+opendota_rate_limiter = UnifiedRateLimiter(RateLimitConfig(requests_per_second=0.33, burst=10, window_seconds=60))
 telegram_rate_limiter = UnifiedRateLimiter(RateLimitConfig(requests_per_second=10.0, burst=20))
 
 # Global circuit breaker instances

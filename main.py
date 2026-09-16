@@ -2728,7 +2728,7 @@ async def _resolve_profile_banner(target_user: dict) -> str | io.BytesIO:
             from weekly_analytics import generate_chart_only
             chart_data = await asyncio.wait_for(
                 generate_chart_only(target_user.get('telegram_id')),
-                timeout=8.0
+                timeout=20.0
             )
             logger.info(f"generate_chart_only result uid={target_user.get('telegram_id')} chart_data={chart_data is not None} image={chart_data.get('image') is not None if isinstance(chart_data, dict) else 'N/A'}")
             if chart_data and chart_data.get("image"):
@@ -2738,7 +2738,7 @@ async def _resolve_profile_banner(target_user: dict) -> str | io.BytesIO:
             else:
                 logger.info(f"No analytics chart for profile uid={target_user.get('telegram_id')}, using default banner")
         except asyncio.TimeoutError:
-            logger.warning(f"Could not generate profile analytics chart: timeout (8s) for uid={target_user.get('telegram_id')}")
+            logger.warning(f"Could not generate profile analytics chart: timeout (20s) for uid={target_user.get('telegram_id')}")
         except Exception as e:
             logger.warning(f"Could not generate profile analytics chart: {type(e).__name__}: {e} for uid={target_user.get('telegram_id')}")
     else:
