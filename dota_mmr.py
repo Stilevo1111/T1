@@ -708,7 +708,7 @@ def _get_week_start_utc():
     """Понедельник 00:00 MSK — начало игровой недели (UTC)."""
     from datetime import datetime, timedelta, timezone
     MSK = timezone(timedelta(hours=3))
-    UTC = UTC
+    UTC = timezone.utc
     today_msk = datetime.now(MSK)
     monday_msk = today_msk - timedelta(days=today_msk.weekday())
     week_start_msk = monday_msk.replace(hour=0, minute=0, second=0, microsecond=0)
