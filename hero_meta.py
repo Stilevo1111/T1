@@ -62,6 +62,9 @@ fallback-цепочки, таймауты, ключи кэша или обраб
 -----------------------------
 * Сохраняйте порядок fallback-источников: потеря одного источника не должна
   ломать всю инфографику.
+* Токен бота берите только через ``_get_bot_token()``: в ``config`` он лежит в
+  ``settings.BOT_TOKEN``, поэтому ``from config import BOT_TOKEN`` падает с
+  ``ImportError`` и молча отключает raw Bot API источники аватарок.
 * Сохраняйте общий aiohttp-session для параллельной загрузки аватаров и
   закрывайте только созданную внутри функцию сессию.
 * Не убирайте таймауты внешних запросов и ``return_exceptions=True`` у
@@ -170,10 +173,15 @@ async def fetch_avatar_by_steam_id(
 ) -> Image.Image | None:
     """Fetch player avatar directly from OpenDota API by Steam ID.
 
-    Used as fallback when player is not linked to a user account.
+    Used as fallback when player is not linked to a user account. Успешные
+    загрузки кладутся в дисковый кэш, чтобы временные rate-limit'ы OpenDota
+    не приводили к потере аватарок в инфографике.
     """
     if not steam_id:
         return None
+    cached_avatar = await asyncio.to_thread(_load_cached_avatar, f"steam_{steam_id}")
+    if cached_avatar is not None:
+        return cached_avatar
     try:
         stats = await get_player_stats_async(steam_id, use_cache=True, timeout=5)
         if stats:
@@ -181,11 +189,59 @@ async def fetch_avatar_by_steam_id(
             if avatar_url:
                 img = await _download_image_async(avatar_url, session=session)
                 if img:
+                    await asyncio.to_thread(_save_cached_avatar, f"steam_{steam_id}", img)
                     return img
         return None
     except Exception as e:
         logger.debug(f"Failed to fetch avatar by steam_id {steam_id}: {e}")
         return None
+
+
+def _get_bot_token() -> str:
+    """Resolve Telegram bot token from ``config.settings`` or environment.
+
+    ``config`` exposes the token only as ``settings.BOT_TOKEN`` (pydantic
+    settings), so ``from config import BOT_TOKEN`` raises ``ImportError`` and
+    silently disables the raw Bot API avatar fallbacks.
+    """
+    try:
+        from config import settings
+        token = getattr(settings, "BOT_TOKEN", None)
+        if token:
+            return str(token)
+    except Exception as e:
+        logger.debug(f"Could not read BOT_TOKEN from config.settings: {e}")
+    return os.environ.get("BOT_TOKEN", "") or ""
+
+
+AVATAR_CACHE_DIR = Path("cache/meta_avatars")
+
+
+def _avatar_disk_cache_path(cache_key: str) -> Path:
+    return AVATAR_CACHE_DIR / f"{re.sub(r'[^0-9a-zA-Z_-]', '', str(cache_key))}.png"
+
+
+def _load_cached_avatar(cache_key: str) -> Image.Image | None:
+    """Read a previously downloaded avatar from the disk cache (if any)."""
+    try:
+        path = _avatar_disk_cache_path(cache_key)
+        if not path.exists():
+            return None
+        with Image.open(path) as image:
+            image.load()
+            return image.convert("RGBA")
+    except Exception as e:
+        logger.debug(f"Avatar disk cache read failed for {cache_key}: {e}")
+        return None
+
+
+def _save_cached_avatar(cache_key: str, image: Image.Image) -> None:
+    """Persist a downloaded avatar so OpenDota rate limits cannot lose it."""
+    try:
+        AVATAR_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        image.save(_avatar_disk_cache_path(cache_key), format="PNG")
+    except Exception as e:
+        logger.debug(f"Avatar disk cache write failed for {cache_key}: {e}")
 
 
 BACKGROUND_PATH = get_banner_path("heroes_strip")
@@ -818,7 +874,15 @@ async def create_infographic(hero_stats, bot=None):
     except Exception as e:
         logger.warning(f"Failed to load best players for hero meta avatars: {e}")
 
+    bot_token = _get_bot_token()
+    if not bot_token:
+        logger.warning(
+            "Hero meta avatars: BOT_TOKEN not resolved — raw Telegram API fallbacks are disabled"
+        )
+
     avatar_cache = {}
+    avatar_sources = {}
+
     async def fetch_avatar_for_hero(hero_id, session):
         if hero_id in avatar_cache:
             return avatar_cache[hero_id]
@@ -826,6 +890,7 @@ async def create_infographic(hero_stats, bot=None):
         avatar_url = player.get('avatar')
         telegram_id = player.get('telegram_id')
         img = None
+        source = None
 
         # 1. Try Telegram profile photo first (via bot instance if available)
         if telegram_id and bot:
@@ -834,37 +899,45 @@ async def create_infographic(hero_stats, bot=None):
                 if tg_avatar_url:
                     img = await _download_image_async(tg_avatar_url, session=session)
                     if img:
+                        source = "telegram_bot"
                         logger.debug(f"Telegram avatar via bot for hero {hero_id}")
             except Exception as e:
                 logger.debug(f"Telegram avatar via bot failed for hero {hero_id}: {e}")
         
         # 2. If bot not available, try raw API calls
-        if not img and telegram_id:
+        if not img and telegram_id and bot_token:
             try:
-                from config import BOT_TOKEN
-                img = await _fetch_telegram_profile_photo(BOT_TOKEN, telegram_id)
+                img = await _fetch_telegram_profile_photo(bot_token, telegram_id)
+                if img:
+                    source = "telegram_api"
             except Exception as e:
                 logger.debug(f"Telegram profile photo failed for hero {hero_id}: {e}")
         
         # 3. Try Telegram avatar file_id (not http URLs)
-        if not img and avatar_url and not avatar_url.startswith('http'):
+        if not img and avatar_url and not str(avatar_url).startswith('http') and bot_token:
             try:
-                from config import BOT_TOKEN
-                img = await _fetch_telegram_avatar(BOT_TOKEN, avatar_url)
+                img = await _fetch_telegram_avatar(bot_token, avatar_url)
+                if img:
+                    source = "telegram_file_id"
             except Exception as e:
                 logger.debug(f"Telegram avatar fallback failed for hero {hero_id}: {e}")
         
         # 4. Fallback to Steam/direct avatar URL (http URLs only)
         if not img and avatar_url:
             img = await _download_image_async(avatar_url, session=session)
+            if img:
+                source = "db_url"
         
         # 5. Fallback: fetch avatar directly from OpenDota by steam_id
         if not img:
             steam_id = player.get('steam_id')
             if steam_id:
                 img = await fetch_avatar_by_steam_id(steam_id, session=session)
+                if img:
+                    source = "opendota"
         
         avatar_cache[hero_id] = img
+        avatar_sources[hero_id] = source or "placeholder"
         return img
 
     tasks = [fetch_hero_portrait(None, h['img']) for h in all_heroes]
@@ -885,6 +958,18 @@ async def create_infographic(hero_stats, bot=None):
             avatars[hero['id']] = None
         else:
             avatars[hero['id']] = result
+
+    resolved_avatars = sum(1 for hero in all_heroes if avatars.get(hero['id']) is not None)
+    source_counts = {}
+    for hero in all_heroes:
+        source_key = avatar_sources.get(hero['id'], "unknown")
+        source_counts[source_key] = source_counts.get(source_key, 0) + 1
+    logger.info(
+        "create_infographic: avatars resolved=%s/%s, sources=[%s]",
+        resolved_avatars,
+        len(all_heroes),
+        ", ".join(f"{key}={value}" for key, value in sorted(source_counts.items())),
+    )
 
     # Fallback: для героев без аватарки используем Steam default avatar
     def _get_steam_default_avatar():
