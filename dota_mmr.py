@@ -262,7 +262,7 @@ async def _check_rate_limit_async():
         await asyncio.sleep(wait)
 
 
-async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 15, max_retries: int = 2) -> dict:
+async def _api_get_async(url: str, params: dict = None, use_session: bool = True, timeout: int = 20, max_retries: int = 3) -> dict:
     """Асинхронная функция для API-запросов с переиспользуемой сессией, retry и rate limiting"""
     if not _circuit_breaker_can_execute():
         logger.warning("Circuit breaker: skipping async request, API unavailable")
@@ -289,7 +289,7 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
         session = None
 
     for attempt in range(max_retries + 1):
-        current_timeout = timeout if attempt == 0 else timeout + 5
+        current_timeout = timeout if attempt == 0 else timeout + 10
         try:
             if session:
                 async with session.get(url, params=params, headers={"User-Agent": "FissureBot/1.0 (Dota2 Telegram Bot)"}, timeout=aiohttp.ClientTimeout(total=current_timeout)) as resp:
@@ -301,7 +301,7 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
         except TimeoutError:
             logger.warning(f"API request timeout ({current_timeout}s), retrying... ({attempt + 1}/{max_retries + 1})")
             if attempt < max_retries:
-                await asyncio.sleep(1 + attempt)
+                await asyncio.sleep(3 + attempt * 2)
                 continue
             _circuit_breaker_record_failure()
             return None
@@ -309,20 +309,20 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
             if "Event loop is closed" in str(e):
                 logger.warning(f"Async API error ({e}), retrying... ({attempt + 1}/{max_retries + 1})")
                 if attempt < max_retries:
-                    await asyncio.sleep(1 + attempt)
+                    await asyncio.sleep(3 + attempt * 2)
                     continue
                 _circuit_breaker_record_failure()
                 return None
             logger.error(f"Async API request error: {e}", exc_info=True)
             if attempt < max_retries:
-                await asyncio.sleep(1 + attempt)
+                await asyncio.sleep(3 + attempt * 2)
                 continue
             _circuit_breaker_record_failure()
             return None
         except Exception as e:
             logger.error(f"Async API request error: {e}", exc_info=True)
             if attempt < max_retries:
-                await asyncio.sleep(1 + attempt)
+                await asyncio.sleep(3 + attempt * 2)
                 continue
             _circuit_breaker_record_failure()
             return None

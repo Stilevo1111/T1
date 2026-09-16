@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379"
     ADMIN_CHAT_ID: int | None = None
     OPENAI_API_KEY: str | None = None
+    OPENDOTA_API_KEY: str | None = None
     OBS_WIDGET_STEAM_ID: int | None = None
 
     # Performance settings

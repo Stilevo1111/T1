@@ -406,7 +406,7 @@ async def _load_heroes() -> dict[int, str]:
 
     url = f"{OPENDOTA_API_URL}/heroes"
 
-    heroes = await _api_get_async(url, timeout=10)
+    heroes = await _api_get_async(url, timeout=20, max_retries=3)
 
     if not heroes:
         return {}
@@ -850,7 +850,7 @@ async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> l
         try:
             async with semaphore:
                 match_url = f"{OPENDOTA_API_URL}/matches/{match_id}"
-                match_data = await _api_get_async(match_url, timeout=12, max_retries=1)
+                match_data = await _api_get_async(match_url, timeout=20, max_retries=3)
             player_stats = {}
             if match_data and "players" in match_data:
                 for p in match_data["players"]:
@@ -919,7 +919,8 @@ async def get_last_matches(telegram_id: int, limit: int = 10) -> list[dict[str, 
     matches = await _api_get_async(
         url,
         params={"limit": limit},
-        timeout=15
+        timeout=25,
+        max_retries=3
     )
 
     if not matches:
