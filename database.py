@@ -764,6 +764,19 @@ def _ensure_pg_columns(cursor):
         cursor.execute(sql)
 
 
+def _ensure_sqlite_columns(cursor):
+    """SQLite-аналог _ensure_pg_columns.
+
+    SQLite не поддерживает "ADD COLUMN IF NOT EXISTS", поэтому новые колонки
+    добавляем только если их нет (проверка через PRAGMA table_info)."""
+    cursor.execute("PRAGMA table_info(users)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if not columns:
+        return
+    if 'free_rolls' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN free_rolls INTEGER DEFAULT 0")
+
+
 def _reset_persistent_pg_conn(reason: str = ""):
     """Reset the PostgreSQL connection pool on connection errors."""
     global _pg_pool
@@ -968,6 +981,8 @@ def init_db():
         if row and row[0] == SCHEMA_VERSION:
             if is_pg:
                 _ensure_pg_columns(cursor)
+            else:
+                _ensure_sqlite_columns(cursor)
             conn.commit()
             logger.info("init_db: schema up to date, skipped DDL")
             return
@@ -1184,6 +1199,7 @@ wins INTEGER DEFAULT 0,
                      current_win_streak INTEGER DEFAULT 0,
                      current_lose_streak INTEGER DEFAULT 0,
                      best_lose_streak INTEGER DEFAULT 0,
+                     free_rolls INTEGER DEFAULT 0,
                      avatar TEXT
                  )
             """)
@@ -1273,6 +1289,8 @@ wins INTEGER DEFAULT 0,
                 cursor.execute("ALTER TABLE users ADD COLUMN weekly_top3 INTEGER DEFAULT 0")
             if 'user_tags' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN user_tags TEXT DEFAULT '[]'")
+            if 'free_rolls' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN free_rolls INTEGER DEFAULT 0")
 
             # Создаём индексы для часто используемых полей (улучшение производительности)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)")
@@ -1691,6 +1709,7 @@ class Database:
                         "weekly_top2": int(user["weekly_top2"]) if user.get("weekly_top2") is not None else 0,
                         "weekly_top3": int(user["weekly_top3"]) if user.get("weekly_top3") is not None else 0,
                         "user_tags": user.get("user_tags") or "[]",
+                        "free_rolls": int(user.get("free_rolls", 0)) if user.get("free_rolls") is not None else 0,
                     }
                     if username is not None and username != result.get('username'):
                         old_username = result.get('username')
@@ -1748,6 +1767,7 @@ class Database:
                             "weekly_top2": int(u["weekly_top2"]) if u.get("weekly_top2") is not None else 0,
                             "weekly_top3": int(u["weekly_top3"]) if u.get("weekly_top3") is not None else 0,
                             "user_tags": u.get("user_tags") or "[]",
+                            "free_rolls": int(u.get("free_rolls", 0)) if u.get("free_rolls") is not None else 0,
                         }
                         if username is not None and username != result.get('username'):
                             old_username = result.get('username')
@@ -2353,6 +2373,7 @@ def get_user(telegram_id, username=None):
         cached_user.setdefault('weekly_top2', 0)
         cached_user.setdefault('weekly_top3', 0)
         cached_user.setdefault('user_tags', [])
+        cached_user.setdefault('free_rolls', 0)
         # If the cached week_start_date differs from the current week,
         # the cached week_games/week_wins are stale — force a DB re-read.
         cached_week_start = cached_user.get('week_start_date')
@@ -2384,6 +2405,7 @@ def get_user(telegram_id, username=None):
         user.setdefault('weekly_top2', 0)
         user.setdefault('weekly_top3', 0)
         user.setdefault('user_tags', [])
+        user.setdefault('free_rolls', 0)
         user_cache.set(tid, user, skip_dirty=True)
         return user
 
@@ -2998,13 +3020,13 @@ _ALLOWED_USER_FIELDS = frozenset([
     'steam_id', 'steam_nickname', 'avatar', 'mmr', 'rank_tier',
     'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'dota_total_games',
     'dota_wins', 'last_dota_games', 'last_dota_wins', 'wins', 'losses', 'week_start_date',
-    'mmr_last_updated', 'message_count', 'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags',
+    'mmr_last_updated', 'message_count', 'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags', 'free_rolls',
 ])
 _NUMERIC_USER_FIELDS = frozenset([
     'fissure', 'last_fissure', 'total_rolls', 'total_growth', 'current_streak', 'best_streak',
     'mmr', 'rank_tier', 'week_games', 'week_wins', 'week_best_streak', 'week_current_streak',
     'dota_total_games', 'dota_wins', 'last_dota_games', 'last_dota_wins', 'wins', 'losses',
-    'message_count', 'weekly_mvp', 'weekly_top2', 'weekly_top3',
+    'message_count', 'weekly_mvp', 'weekly_top2', 'weekly_top3', 'free_rolls',
 ])
 
 

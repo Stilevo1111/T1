@@ -1874,6 +1874,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             def __init__(self):
                 self.update_id = update.update_id
                 self.message = fake_msg
+                # fissure() reads update.effective_message, so the synthetic update
+                # must expose it too (otherwise AttributeError for real user objects)
+                self.effective_message = fake_msg
                 self.effective_user = _FakeUser()
                 self.effective_chat = _FakeChat()
 
@@ -1958,16 +1961,70 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         update_last_message_id(callback_query.from_user.id, result_msg.message_id)
         return
 
+    # Techies "roll again" button — user guessed the mine, offer another fissure roll.
+    # NOTE: this branch MUST stay above the generic "techies_" branch below: the latter
+    # catches every "techies_*" callback, so "techies_again_<user_id>" would be swallowed
+    # by handle_techies_button (which needs >= 5 underscore-separated parts).
+    if data and data.startswith("techies_again_"):
+        import time as _time
+
+        # The button is emitted per-user as "techies_again_<user_id>", so only the player
+        # who defused the mine may use it (same rule as in techies.handle_techies_button).
+        try:
+            _again_owner_id = int(data.rsplit("_", 1)[1])
+        except (IndexError, ValueError):
+            _again_owner_id = None
+        if _again_owner_id is not None and callback_query.from_user.id != _again_owner_id:
+            await callback_query.answer("🧨 Это не твоя мина, бродяга!", show_alert=True)
+            return
+
+        await callback_query.answer("🎲 Запускаю ещё один ролл!")
+        user_obj = callback_query.from_user
+        chat_id = callback_query.message.chat_id if callback_query.message else None
+        chat_type = callback_query.message.chat.type if callback_query.message else 'private'
+
+        class _FakeChat_again:
+            def __init__(self):
+                self.id = chat_id
+                self.type = chat_type
+
+        class _FakeUser_again:
+            def __init__(self):
+                self.id = user_obj.id
+                self.is_bot = user_obj.is_bot
+                self.first_name = user_obj.first_name or ''
+                self.username = user_obj.username
+                self.last_name = getattr(user_obj, 'last_name', None)
+                self.language_code = getattr(user_obj, 'language_code', None)
+
+        class _FakeMsg_again:
+            def __init__(self):
+                self.message_id = 0
+                self.chat_id = chat_id
+                self.chat = _FakeChat_again()
+                self.from_user = _FakeUser_again()
+                self.date = int(_time.time())
+                self.text = '/fissure'
+
+        _fake_msg = _FakeMsg_again()
+
+        class _FakeUpdate_again:
+            def __init__(self):
+                self.update_id = update.update_id
+                self.message = _fake_msg
+                # fissure() reads update.effective_message, so the synthetic update
+                # must expose it too (otherwise AttributeError for real user objects)
+                self.effective_message = _fake_msg
+                self.effective_user = _FakeUser_again()
+                self.effective_chat = _FakeChat_again()
+
+        await fissure(_FakeUpdate_again(), context)
+        return
+
     # Techies buttons answer inside handler (wrong-user alert / already exploded)
     if data and data.startswith("techies_"):
         from techies import handle_techies_button
         await handle_techies_button(update, context, record_recent_fissure_roll)
-        return
-
-    # Techies "roll again" button — user guessed the mine, offer another fissure roll
-    if data and data.startswith("techies_again_"):
-        await callback_query.answer("🎲 Запускаю ещё один ролл!")
-        await fissure(update, context)
         return
 
     # Party buttons - send @username with party invitation (with anti-spam protection)

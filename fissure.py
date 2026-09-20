@@ -76,8 +76,10 @@ async def delete_fissure_user_and_last_messages(bot, chat_id, user_id, user_msg_
     Безопасное удаление сообщений пользователя и последнего бота при /fissure.
     Логика полностью сохранена из main.py.
     """
-    # Delete user message only in groups/channels (not in private)
-    if chat_type in ['group', 'supergroup', 'channel']:
+    # Delete user message only in groups/channels (not in private).
+    # user_msg_id may be 0 when the roll is triggered from an inline button
+    # (no real user message) — skip the API call in that case.
+    if chat_type in ['group', 'supergroup', 'channel'] and user_msg_id:
         if await bot_can_delete(bot, chat_id):
             try:
                 await bot.delete_message(chat_id, user_msg_id)
@@ -212,14 +214,15 @@ def process_multicast_result(roll, cascade_count, MULTICAST_TEXTS):
 
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Increase fissure"""
-    logger.info(f" fissure CALLED user={update.effective_user.id} chat={update.effective_chat.id} text={update.message.text if update.message else 'no_message'}")
+    msg = update.effective_message
+    logger.info(f" fissure CALLED user={update.effective_user.id} chat={update.effective_chat.id} text={msg.text if msg else 'no_message'}")
 
     user_obj = update.effective_user
     username = user_obj.username
     display_username = make_clickable(username or user_obj.first_name or "Игрок", user_obj.id)
-    chat_id = update.message.chat_id
-    chat_type = update.message.chat.type
-    user_msg_id = update.message.message_id
+    chat_id = msg.chat_id if msg else update.effective_chat.id
+    chat_type = msg.chat.type if msg else 'private'
+    user_msg_id = msg.message_id if msg else 0
     now = time.time()
 
     # Глобальная проверка rate limit - защита от всплеска запросов при атаке/боте
@@ -365,7 +368,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
 
                 msg = await context.bot.send_message(
-                    chat_id=update.message.chat_id,
+                    chat_id=chat_id,
                     text=f"🎰 {' | '.join(slots)} | x2"
                 )
                 slot_msg_ids.append(msg.message_id)
@@ -378,7 +381,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
 
                     msg = await context.bot.send_message(
-                        chat_id=update.message.chat_id,
+                        chat_id=chat_id,
                         text=f"🎰 {' | '.join(slots)} | x3"
                     )
                     slot_msg_ids.append(msg.message_id)
@@ -391,7 +394,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
 
                         msg = await context.bot.send_message(
-                            chat_id=update.message.chat_id,
+                            chat_id=chat_id,
                             text=f"🎰 {' | '.join(slots)} | x4"
                         )
                         slot_msg_ids.append(msg.message_id)
@@ -400,7 +403,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         # Не попали в x4 - проигрышный спин и финиш на x3
                         slots = random.sample(slot_emojis, 3)
                         msg = await context.bot.send_message(
-                            chat_id=update.message.chat_id,
+                            chat_id=chat_id,
                             text=f"🎰 {' | '.join(slots)} | x3"
                         )
                         slot_msg_ids.append(msg.message_id)
@@ -409,7 +412,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Не попали в x3 - проигрышный спин и финиш на x2
                     slots = random.sample(slot_emojis, 3)
                     msg = await context.bot.send_message(
-                        chat_id=update.message.chat_id,
+                        chat_id=chat_id,
                         text=f"🎰 {' | '.join(slots)} | x2"
                     )
                     slot_msg_ids.append(msg.message_id)
@@ -418,7 +421,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Не попали в x2 - обычный мультикаст x2
                 slots = random.sample(slot_emojis, 3)
                 msg = await context.bot.send_message(
-                    chat_id=update.message.chat_id,
+                    chat_id=chat_id,
                     text=f"🎰 {' | '.join(slots)} | x2"
                 )
                 slot_msg_ids.append(msg.message_id)
@@ -541,7 +544,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if zeus_text:
             text = f"{text}\n{zeus_text}"
 
-        logger.info(f"Sending result message to chat_id={update.message.chat_id}")
+        logger.info(f"Sending result message to chat_id={chat_id}")
 
         # Шапка: старая для обычных, новая для мультикаста
         if cascade_count > 1:
@@ -553,7 +556,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if roll_banner_url:
                 result_msg = await context.bot.send_photo(
-                    chat_id=update.message.chat_id,
+                    chat_id=chat_id,
                     photo=roll_banner_url,
                     caption=text,
                     parse_mode="HTML",
@@ -561,7 +564,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             else:
                 result_msg = await context.bot.send_message(
-                    chat_id=update.message.chat_id,
+                    chat_id=chat_id,
                     text=text,
                     parse_mode="HTML",
                     reply_markup=main_menu()
@@ -576,12 +579,12 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as edit_error:
                     logger.debug(f"Could not edit anim_msg: {edit_error}")
                     result_msg = await context.bot.send_message(
-                        chat_id=update.message.chat_id, text=text,
+                        chat_id=chat_id, text=text,
                         parse_mode="HTML", reply_markup=main_menu()
                     )
             else:
                 result_msg = await context.bot.send_message(
-                    chat_id=update.message.chat_id, text=text,
+                    chat_id=chat_id, text=text,
                     parse_mode="HTML", reply_markup=main_menu()
                 )
 
