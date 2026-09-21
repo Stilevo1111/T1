@@ -665,6 +665,13 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     keyboard = _build_analytics_table_keyboard(pages, generated)
                     chart_image = context.user_data.get('analytics_chart_image')
                     table_shown = False
+                    if loading_msg:
+                        _loading_msg_id = loading_msg.message_id
+                        loading_msg = None  # Stop animation
+                        try:
+                            await context.bot.delete_message(chat_id, _loading_msg_id)
+                        except Exception:
+                            pass
                     if chart_image:
                         try:
                             chart_msg = await context.bot.send_photo(
