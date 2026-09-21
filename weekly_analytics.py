@@ -550,56 +550,39 @@ async def _get_hero_icon(hero_id: int) -> Image.Image | None:
         else:
             return cached
 
-    # Try local disk cache first (faster than API)
+    # Try local disk cache first (faster than API).
+    # get_hero_icon_cached expects the hero short name (str), not the numeric id.
     from dota_mmr import get_hero_icon_cached
-    icon = await asyncio.to_thread(get_hero_icon_cached, hero_id)
-    if icon is not None:
-        # Convert bytes to PIL Image if needed
-        if isinstance(icon, bytes):
-            try:
-                icon = Image.open(io.BytesIO(icon)).convert("RGBA")
-            except Exception:
-                return None
-        image_cache.set(str(hero_id), icon)
-        return icon
 
     heroes = await _load_heroes()
-
-    hero_name = heroes.get(hero_id)
+    hero_name = heroes.get(hero_id) if hero_id else None
 
     if hero_name:
-        file_name = _normalize_hero_file_name(hero_name)
-        cache_file = Path("hero_cache") / f"{file_name}.webp"
-        icon = None
-
         try:
-            if cache_file.exists():
-                icon = Image.open(cache_file).convert("RGBA")
+            icon = await asyncio.to_thread(get_hero_icon_cached, hero_name)
         except Exception:
-            pass
+            icon = None
+        if icon is not None:
+            # Convert bytes to PIL Image if needed
+            if isinstance(icon, bytes):
+                try:
+                    icon = Image.open(io.BytesIO(icon)).convert("RGBA")
+                except Exception:
+                    icon = None
+                    pass
+            if icon is not None:
+                image_cache.set(str(hero_id), icon)
+                return icon
 
-        if icon is None:
-            try:
-                url = f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{file_name}.png"
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                        if resp.status == 200:
-                            icon = Image.open(io.BytesIO(await resp.read())).convert("RGBA")
-                            try:
-                                cache_file.parent.mkdir(parents=True, exist_ok=True)
-                                icon.save(cache_file, "WEBP", quality=85)
-                            except Exception:
-                                pass
-            except Exception:
-                pass
-
-        if icon:
-            image_cache.set(str(hero_id), icon)
-            return icon
+    if not hero_name:
+        # No hero name resolved (e.g. OpenDota /heroes unavailable) — cannot locate assets.
+        try:
+            return Image.new("RGBA", (64, 64), (128, 128, 128, 255))
+        except Exception:
+            return None
 
     try:
-        img = Image.new("RGBA", (64, 64), (128, 128, 128, 255))
-        return img
+        return Image.new("RGBA", (64, 64), (128, 128, 128, 255))
     except Exception:
         logger.exception("Failed to create default icon")
         return None
