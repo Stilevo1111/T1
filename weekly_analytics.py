@@ -10,6 +10,7 @@
 # Public API:
 # - generate_weekly_analytics
 # - generate_chart_only
+# - generate_chart_image
 # - get_analytics_pages
 # - get_last_matches
 # - fetch_match_details
@@ -57,6 +58,7 @@ __all__ = [
     # Public API used by main.py and generate_weekly_chart.py
     "generate_weekly_analytics",
     "generate_chart_only",
+    "generate_chart_image",
     "get_analytics_pages",
     "get_last_matches",
     "fetch_match_details",
@@ -1067,6 +1069,24 @@ def get_analytics_pages(role: str, stats: dict[str, Any]) -> list[dict[str, Any]
         {"title": "🆚Сравнение с Pro", "text": pro_text},
         {"title": "📊 Подробное сравнение", "text": detailed_text},
     ]
+
+
+async def generate_chart_image(telegram_id: int) -> bytes | None:
+    """
+    График еженедельного импакта игрока для /analyze.
+
+    Использует свежий/свежий fallback-кэш через generate_chart_only, чтобы не
+    блокировать интерфейс. Возвращает PNG-байты или None при недоступности Dota.
+    """
+    try:
+        chart_data = await asyncio.wait_for(generate_chart_only(telegram_id), timeout=20.0)
+    except (asyncio.TimeoutError, Exception) as e:
+        logger.warning(f"generate_chart_image: failed for {telegram_id}: {type(e).__name__}: {e}")
+        return None
+
+    if isinstance(chart_data, dict) and chart_data.get("image"):
+        return chart_data.get("image")
+    return None
 
 
 # =========================================================

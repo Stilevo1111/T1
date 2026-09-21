@@ -241,6 +241,30 @@ def _build_analytics_keyboard(page_idx, total_pages, generated, page_titles=None
     return InlineKeyboardMarkup([buttons])
 
 
+def _build_analytics_table_keyboard(pages, generated):
+    """Кнопки переключения между таблицами аналитики (Pro / Подробное сравнение).
+
+    Используется под chart фото в /analyze: каждая кнопка редактирует caption
+    фото выбранной таблицей, без удаления самого графика.
+    """
+    generated = generated or set()
+    any_page = any(p for p in pages if p)
+    if not any_page:
+        return InlineKeyboardMarkup([[]])
+
+    buttons = []
+    for i, page in enumerate(pages):
+        if not page:
+            continue
+        title = page.get("title", f"Стр. {i+1}")
+        active = i in generated
+        label = f"✅ {title}" if active else title
+        buttons.append(InlineKeyboardButton(label, callback_data=f"analytics_table_{i}"))
+    if not buttons:
+        return InlineKeyboardMarkup([[]])
+    return InlineKeyboardMarkup([buttons])
+
+
 def _build_stats_button_keyboard():
     """Build inline keyboard for stats page"""
     return InlineKeyboardMarkup([

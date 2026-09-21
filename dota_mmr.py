@@ -20,7 +20,14 @@ from cache_service import (
     opendota_circuit_breaker,
     opendota_rate_limiter,
 )
-from constants import get_banner_path
+from constants import (
+    PROFILE_CARD_H,
+    PROFILE_CARD_LADDER_TOTAL,
+    PROFILE_CARD_RANKS_PER_TIER,
+    PROFILE_CARD_SS,
+    PROFILE_CARD_W,
+    get_banner_path,
+)
 from database import get_aiohttp_session, get_user, get_user_by_steam_id, update_user_fields_batch
 from hero_names import get_cdn_hero_name
 
@@ -1015,24 +1022,25 @@ def rank_to_mmr(rank_tier: int) -> int:
     return row[star] if star < len(row) else row[-1]
 
 
+MMR_RANK_THRESHOLDS = [
+    (150, 11), (300, 12), (460, 13), (610, 14), (760, 15),
+    (920, 21), (1080, 22), (1230, 23), (1400, 24), (1570, 25),
+    (1700, 31), (1850, 32), (2000, 33), (2150, 34), (2300, 35),
+    (2450, 41), (2610, 42), (2770, 43), (2930, 44), (3090, 45),
+    (3230, 51), (3390, 52), (3540, 53), (3700, 54), (3860, 55),
+    (4000, 61), (4150, 62), (4300, 63), (4460, 64), (4620, 65),
+    (4820, 71), (5020, 72), (5220, 73), (5420, 74), (5620, 75),
+    (5620, 81), (5620, 82), (5620, 83), (5620, 84), (5620, 85),
+]
+
+
 def mmr_to_rank_tier(mmr: int) -> int:
     """Convert MMR to rank_tier using the exact MMR table."""
     if not mmr or mmr <= 0:
         return 0
 
-    _MMR_RANKS = [
-        (150, 11), (300, 12), (460, 13), (610, 14), (760, 15),
-        (920, 21), (1080, 22), (1230, 23), (1400, 24), (1570, 25),
-        (1700, 31), (1850, 32), (2000, 33), (2150, 34), (2300, 35),
-        (2450, 41), (2610, 42), (2770, 43), (2930, 44), (3090, 45),
-        (3230, 51), (3390, 52), (3540, 53), (3700, 54), (3860, 55),
-        (4000, 61), (4150, 62), (4300, 63), (4460, 64), (4620, 65),
-        (4820, 71), (5020, 72), (5220, 73), (5420, 74), (5620, 75),
-        (5620, 81), (5620, 82), (5620, 83), (5620, 84), (5620, 85),
-    ]
-
     best_rank = 0
-    for threshold, rank in _MMR_RANKS:
+    for threshold, rank in MMR_RANK_THRESHOLDS:
         if mmr >= threshold:
             best_rank = rank
         else:
@@ -2291,5 +2299,1010 @@ def generate_top_card(
     except Exception:
         import logging
         logging.exception("generate_top_card error")
+        return None
+
+
+# ========================
+# 🎴 ПРОФИЛЬНАЯ КАРТОЧКА — звание, статы, герои недели и награды
+# ========================
+
+# Палитра: те же акценты, что на сайте и в утверждённых макетах
+_PC_GOLD = (215, 175, 85)
+_PC_GOLD_LIGHT = (250, 226, 160)
+_PC_ORANGE = (255, 140, 66)
+_PC_WHITE = (242, 242, 248)
+_PC_GREY = (152, 158, 178)
+_PC_PANEL = (22, 26, 42)
+_PC_GREEN = (86, 200, 130)
+_PC_SILVER = (200, 208, 222)
+_PC_BRONZE = (200, 132, 82)
+_PC_PURPLE = (168, 130, 255)
+_PC_PINK = (240, 120, 170)
+_PC_BLUE_GREY = (150, 190, 255)
+_PC_DARK = (12, 15, 26)
+
+_profile_font_cache: dict = {}
+_profile_bg_cache = None
+_profile_hero_cache: dict = {}
+
+
+def _profile_font(role: str, size: int):
+    """Шрифт с поддержкой кириллицы: NotoSans (assets/fonts) → Arial/DejaVu → default."""
+    from PIL import ImageFont
+
+    key = (role, int(size))
+    cached = _profile_font_cache.get(key)
+    if cached is not None:
+        return cached
+
+    base = Path(__file__).parent
+    noto_regular = base / "assets" / "fonts" / "NotoSans-Regular.ttf"
+    noto_bold = base / "assets" / "fonts" / "NotoSans-Bold.ttf"
+    if role == "bold":
+        candidates = [
+            noto_bold,
+            Path(r"C:\Windows\Fonts\arialbd.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ]
+    else:
+        candidates = [
+            noto_regular,
+            Path(r"C:\Windows\Fonts\arial.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        ]
+    candidates.append(noto_regular)
+
+    font = None
+    for path in candidates:
+        try:
+            if path.exists():
+                font = ImageFont.truetype(str(path), int(size))
+                break
+        except Exception:
+            continue
+    if font is None:
+        font = ImageFont.load_default()
+    _profile_font_cache[key] = font
+    return font
+
+
+_profile_glyph_cache: dict = {}
+
+
+def _profile_supports_glyph(font, char: str) -> bool:
+    """Есть ли у шрифта глиф для символа.
+
+    У NotoSans нет, например, «★» (U+2605) — Pillow рисует вместо него .notdef
+    («тофу»-квадрат), поэтому такие символы вычищаются из текста карточки.
+    """
+    key = (id(font), char)
+    cached = _profile_glyph_cache.get(key)
+    if cached is not None:
+        return cached[1]
+
+    supported = True
+    try:
+        notdef = bytes(font.getmask("\ue001"))
+        if notdef:
+            supported = bytes(font.getmask(char)) != notdef
+    except Exception:
+        supported = True
+    # Шрифт держим в значении: id() не должен переиспользоваться после GC
+    _profile_glyph_cache[key] = (font, supported)
+    return supported
+
+
+def _profile_clean_text(text, font) -> str:
+    """Убрать символы, которых нет в шрифте (иначе на карточке «тофу»-квадраты)."""
+    text = "" if text is None else str(text)
+    if not text:
+        return ""
+    return "".join(ch for ch in text if not ch.strip() or _profile_supports_glyph(font, ch))
+
+
+def _profile_radial_mask(width: int, height: int, cx: float, cy: float, radius: float,
+                         sharpness: float = 1.0):
+    """Мягкая радиальная маска (L). Считается в 1/4 размера и растягивается LANCZOS."""
+    small_w = max(8, width // 4)
+    small_h = max(8, height // 4)
+    s_cx = cx * small_w / max(1, width)
+    s_cy = cy * small_h / max(1, height)
+    s_radius = max(1.0, radius * small_w / max(1, width))
+
+    data = []
+    for y in range(small_h):
+        dy = (y - s_cy) / s_radius
+        for x in range(small_w):
+            dx = (x - s_cx) / s_radius
+            dist = (dx * dx + dy * dy) ** 0.5
+            value = 1.0 - dist
+            data.append(0 if value <= 0 else int(255 * min(1.0, value ** sharpness)))
+
+    mask = Image.new("L", (small_w, small_h))
+    mask.putdata(data)
+    return mask.resize((width, height), Image.LANCZOS)
+
+
+def _profile_background():
+    """Фон карточки: градиент + 3 свечения + звёздная пыль + винетка (кешируется)."""
+    global _profile_bg_cache
+    if _profile_bg_cache is not None:
+        return _profile_bg_cache
+
+    import random
+
+    from PIL import ImageDraw
+
+    width, height = PROFILE_CARD_W, PROFILE_CARD_H
+    img = Image.new("RGB", (width, height), _PC_DARK)
+    draw = ImageDraw.Draw(img)
+
+    # Вертикальный градиент (тёмный фэнтези-фон сайта #0a0a0f → #161c2f)
+    for y in range(height):
+        t = y / max(1, height - 1)
+        draw.line([(0, y), (width, y)],
+                  fill=(int(10 + 10 * t), int(11 + 13 * t), int(20 + 24 * t)))
+
+    # Свечения: оранжевое (акцент сайта), золотое и синее
+    for fx, fy, fr, color, alpha, sharp in (
+        (0.10, 0.00, 0.90, _PC_ORANGE, 80, 1.35),
+        (0.92, 0.04, 0.58, _PC_GOLD, 44, 1.55),
+        (1.02, 1.12, 0.90, (72, 112, 224), 72, 1.35),
+    ):
+        mask = _profile_radial_mask(width, height, fx * width, fy * height, fr * width, sharp)
+        if alpha < 255:
+            mask = mask.point(lambda a, alpha=alpha: int(a * alpha / 255))
+        img = Image.composite(Image.new("RGB", (width, height), color), img, mask)
+
+    # Опциональная текстура из баннера репозитория (если файл есть) — низкая прозрачность
+    try:
+        from constants import PROFILE_CARD_BG_FALLBACK
+
+        if PROFILE_CARD_BG_FALLBACK.exists():
+            texture = Image.open(PROFILE_CARD_BG_FALLBACK).convert("RGB")
+            tw, th = texture.size
+            scale = max(width / tw, height / th)
+            texture = texture.resize((max(1, int(tw * scale)), max(1, int(th * scale))), Image.LANCZOS)
+            tx = (texture.width - width) // 2
+            ty = (texture.height - height) // 2
+            texture = texture.crop((tx, ty, tx + width, ty + height))
+            mask = _profile_radial_mask(width, height, width * 0.5, height * 0.5, width * 0.85)
+            mask = mask.point(lambda a: int(a * 42 / 255))
+            img = Image.composite(texture, img, mask)
+    except Exception as e:
+        logger.debug(f"profile card background texture skipped: {e}")
+
+    # Звёздная пыль (детерминированная — карточка стабильна между рендерами)
+    rnd = random.Random(20240920)
+    stars = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    star_draw = ImageDraw.Draw(stars)
+    for _ in range(150):
+        sx = rnd.uniform(0, width)
+        sy = rnd.uniform(0, height)
+        size = rnd.choice([1, 1, 1, 2])
+        star_draw.ellipse([sx, sy, sx + size, sy + size],
+                          fill=(255, 250, 235, rnd.randint(26, 105)))
+    img = Image.alpha_composite(img.convert("RGBA"), stars).convert("RGB")
+
+    # Винетка по краям
+    vig = _profile_radial_mask(width, height, width * 0.5, height * 0.42, width * 0.98)
+    vig = vig.point(lambda a: int((255 - a) * 0.42))
+    img = Image.composite(Image.new("RGB", (width, height), (6, 7, 14)), img, vig)
+
+    _profile_bg_cache = img
+    return img
+
+
+def rank_mmr_threshold(rank_tier: int) -> int:
+    """MMR-порог для конкретного звания (МС: «Легенда IV» → rank_tier 54 → 3700).
+
+    Берётся из той же таблицы, что и mmr_to_rank_tier(), поэтому round-trip корректен.
+    Звание вида «50» (нулевая звезда) приводится к V-й звезде, как везде в боте.
+    """
+    try:
+        rank_tier = int(rank_tier or 0)
+    except (TypeError, ValueError):
+        return 0
+    if rank_tier <= 0:
+        return 0
+
+    tier = min(max(rank_tier // 10, 1), 8)
+    star = rank_tier % 10 or PROFILE_CARD_RANKS_PER_TIER
+    star = min(star, PROFILE_CARD_RANKS_PER_TIER)
+    target = tier * 10 + star
+    for threshold, rank in MMR_RANK_THRESHOLDS:
+        if rank == target:
+            return threshold
+    return 0
+
+
+def rank_progress(rank_tier: int = 0, mmr: int = 0) -> dict:
+    """Прогресс по лестнице ЗВАНИЙ (7 тиров × 5 звёзд = 35 шагов) + MMR до следующего звания.
+
+    Возвращает dict:
+      tier/star/step/total/frac/left — позиция на лестнице звёзд (полоска «B»);
+      name/next                     — текущее и следующее звание (русские названия бота);
+      calibrated/maxed              — не калиброван / Титан (вершина);
+      mmr/mmr_base/mmr_next/mmr_frac/mmr_left — MMR-прогресс внутри текущего звания (игла «A»).
+    """
+    try:
+        rank_tier = int(rank_tier or 0)
+    except (TypeError, ValueError):
+        rank_tier = 0
+    try:
+        mmr = int(mmr or 0)
+    except (TypeError, ValueError):
+        mmr = 0
+
+    if rank_tier <= 0 and mmr > 0:
+        rank_tier = mmr_to_rank_tier(mmr)
+
+    total = PROFILE_CARD_LADDER_TOTAL
+    per_tier = PROFILE_CARD_RANKS_PER_TIER
+    calibrated = rank_tier > 0 or mmr > 0
+
+    if rank_tier > 0:
+        tier = min(max(rank_tier // 10, 1), 8)
+        star = rank_tier % 10 or per_tier
+        star = min(star, per_tier)
+    else:
+        tier, star = 0, 0
+
+    if tier >= 8:
+        step, frac, left = total, 1.0, 0
+        next_name = None
+        mmr_base = rank_mmr_threshold(rank_tier)
+        mmr_next = None
+        mmr_frac = 1.0
+    else:
+        step = min((tier - 1) * per_tier + star, total) if tier >= 1 else 0
+        frac = step / total
+        left = max(0, total - step)
+        if tier == 0:
+            next_rank_tier = 11                      # Рекрут I
+        elif star < per_tier:
+            next_rank_tier = rank_tier + 1
+        else:
+            next_rank_tier = (tier + 1) * 10 + 1
+        next_name = rank_to_string(next_rank_tier)
+        mmr_base = rank_mmr_threshold(rank_tier) if rank_tier > 0 else 0
+        mmr_next = rank_mmr_threshold(next_rank_tier)
+        if mmr_next <= mmr_base:
+            mmr_frac = 1.0
+        else:
+            mmr_frac = min(1.0, max(0.0, (mmr - mmr_base) / (mmr_next - mmr_base)))
+
+    if mmr_next is None:
+        mmr_left = 0
+    else:
+        mmr_left = max(0, mmr_next - mmr)
+
+    return {
+        "rank_tier": rank_tier,
+        "tier": tier,
+        "star": star,
+        "step": step,
+        "total": total,
+        "frac": frac,
+        "left": left,
+        "name": rank_to_string(rank_tier),
+        "next": next_name,
+        "calibrated": calibrated,
+        "maxed": tier >= 8,
+        "mmr": mmr,
+        "mmr_base": mmr_base,
+        "mmr_next": mmr_next,
+        "mmr_frac": mmr_frac,
+        "mmr_left": mmr_left,
+    }
+
+
+def _profile_num(value) -> str:
+    """1234567 → «1 234 567» (узкие пробелы вместо запятых)."""
+    try:
+        return f"{int(value):,}".replace(",", " ")
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _profile_percent(wins: int, games: int) -> str:
+    """Винрейт в процентах; 0 игр → «—»."""
+    try:
+        games = int(games or 0)
+        wins = int(wins or 0)
+    except (TypeError, ValueError):
+        return "—"
+    if games <= 0:
+        return "—"
+    return f"{round(wins / games * 100)}%"
+
+
+def _profile_streak_sub(current_streak, best_streak) -> str | None:
+    """Подпись к плитке «СТРИК»: рекорд с учётом текущей серии (иначе «лучший 0»)."""
+    def _num(value):
+        try:
+            return max(0, int(value or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    best = max(_num(current_streak), _num(best_streak))
+    return f"лучший {best}" if best > 0 else None
+
+
+def _profile_ellipsis(draw, text: str, font, max_width: float) -> str:
+    """Обрезать текст с «…», чтобы он гарантированно влез в max_width рендера."""
+    text = "" if text is None else str(text)
+    if not text:
+        return ""
+    if max_width <= 0:
+        return ""
+    if draw.textlength(text, font=font) <= max_width:
+        return text
+    cut = text
+    while cut and draw.textlength(cut + "…", font=font) > max_width:
+        cut = cut[:-1]
+    return (cut + "…") if cut else "…"
+
+
+def _profile_wrap_two(draw, text: str, font, max_width: float, max_lines: int = 2) -> list:
+    """Разбить текст на строки (не более max_lines), последнюю — с «…» при переполнении."""
+    words = ("" if text is None else str(text)).split()
+    if not words:
+        return []
+    lines = []
+    current = ""
+    for word in words:
+        probe = f"{current} {word}".strip()
+        if draw.textlength(probe, font=font) <= max_width or not current:
+            current = probe
+        else:
+            lines.append(current)
+            current = word
+            if len(lines) == max_lines - 1:
+                break
+    if current and len(lines) < max_lines:
+        lines.append(current)
+    if not lines:
+        return []
+    if len(lines) == max_lines:
+        lines[-1] = _profile_ellipsis(draw, lines[-1], font, max_width)
+    return lines
+
+
+def _profile_load_avatar(avatar_url, size: int):
+    """Аватар → квадрат по центру (RGBA). Понимает URL, локальный файл и bytes."""
+    if not avatar_url or size <= 0:
+        return None
+    try:
+        import os
+
+        src = None
+        if isinstance(avatar_url, (bytes, bytearray)):
+            src = Image.open(io.BytesIO(bytes(avatar_url)))
+        elif isinstance(avatar_url, str):
+            if os.path.isfile(avatar_url):
+                src = Image.open(avatar_url)
+            elif avatar_url.startswith(("http://", "https://")):
+                content = None
+                try:
+                    import requests
+
+                    resp = requests.get(avatar_url, timeout=8,
+                                        headers={"User-Agent": "fissure-bot/1.0"})
+                    if resp.status_code == 200 and resp.content:
+                        content = resp.content
+                except ImportError:
+                    from urllib.request import Request, urlopen
+
+                    with urlopen(Request(avatar_url, headers={"User-Agent": "fissure-bot/1.0"}),
+                                 timeout=8) as resp:
+                        if resp.status == 200:
+                            content = resp.read()
+                if content:
+                    src = Image.open(io.BytesIO(content))
+        if src is None:
+            return None
+
+        img = src.convert("RGBA")
+        w, h = img.size
+        side = min(w, h)
+        img = img.crop(((w - side) // 2, (h - side) // 2, (w - side) // 2 + side, (h - side) // 2 + side))
+        return img.resize((int(size), int(size)), Image.LANCZOS)
+    except Exception as e:
+        logger.warning(f"_profile_load_avatar failed: {e}")
+        return None
+
+
+def _profile_rank_medal(rank_tier: int, size: int):
+    """Медаль звания: images/ranks/rank_T_S.webp (Титан — только 5-я звезда, как в generate_start_card)."""
+    try:
+        rank_tier = int(rank_tier or 0)
+    except (TypeError, ValueError):
+        return None
+    if rank_tier <= 0 or size <= 0:
+        return None
+
+    tier = min(max(rank_tier // 10, 1), 8)
+    star = rank_tier % 10 or PROFILE_CARD_RANKS_PER_TIER
+    if tier == 8:
+        star = PROFILE_CARD_RANKS_PER_TIER
+    star = min(star, PROFILE_CARD_RANKS_PER_TIER)
+
+    key = (tier, star)
+    icon = _rank_icons_cache.get(key)
+    if icon is None:
+        base = Path(__file__).parent / "images" / "ranks"
+        for ext in (".webp", ".png"):
+            path = base / f"rank_{tier}_{star}{ext}"
+            if not path.exists():
+                continue
+            try:
+                icon = Image.open(path).convert("RGBA")
+                _rank_icons_cache[key] = icon
+                break
+            except Exception:
+                continue
+    if icon is None:
+        return None
+    try:
+        return icon.resize((int(size), int(size)), Image.LANCZOS)
+    except Exception:
+        return None
+
+
+def _profile_hero_image(name: str, size: int, image_url: str | None = None):
+    """Портрет героя: прямой image_url → assets/heroes_webp(+portraits)/<name>.webp (кешируется)."""
+    if (not name and not image_url) or size <= 0:
+        return None
+    if name:
+        name = str(name).replace("npc_dota_hero_", "").strip().lower()
+    key = (str(name), int(size), str(image_url))
+    cached = _profile_hero_cache.get(key)
+    if cached is not None:
+        return cached
+
+    base = Path(__file__).parent / "assets" / "heroes_webp"
+    candidates = []
+    if image_url:
+        candidates.append(Path(str(image_url)))
+    if name:
+        candidates.extend([
+            base / "portraits" / f"{name}.webp",
+            base / f"{name}.webp",
+            base / "portraits" / f"{name}.png",
+        ])
+
+    img = None
+    for path in candidates:
+        try:
+            if path.is_file():
+                img = Image.open(path).convert("RGB")
+                break
+        except Exception:
+            continue
+    if img is None:
+        return None
+
+    w, h = img.size
+    side = min(w, h)
+    img = img.crop(((w - side) // 2, (h - side) // 2, (w - side) // 2 + side, (h - side) // 2 + side))
+    img = img.resize((int(size), int(size)), Image.LANCZOS)
+    _profile_hero_cache[key] = img
+    return img
+
+
+_profile_icon_cache: dict = {}
+
+
+_award_png_cache: dict = {}
+
+
+def _profile_award_png(kind: str, size: int):
+    """PNG-иконка награды из assets/awards (kind → имя файла), кешируется."""
+    if not kind:
+        return None
+    cached = _award_png_cache.get((kind, size))
+    if cached is not None:
+        return cached.copy()
+    path = Path(__file__).parent / "assets" / "awards" / f"{kind}.png"
+    if not path.exists():
+        return None
+    try:
+        icon = Image.open(path).convert("RGBA")
+        icon = icon.resize((max(1, int(size)), max(1, int(size))), Image.LANCZOS)
+        _award_png_cache[(kind, size)] = icon.copy()
+        return icon
+    except Exception as e:
+        logger.warning(f"Exception loading award png {kind}: {e}")
+        return None
+
+
+def _profile_award_icon(kind: str, size: int, color):
+    """Картинка награды: рисуется фигурами под нужный размер (кешируется по виду и цвету)."""
+    from PIL import ImageDraw
+
+    size = int(size)
+    if size <= 0:
+        return None
+    rgb = tuple(int(v) for v in (color or _PC_GOLD)[:3])
+    key = (str(kind or "star").lower(), size, rgb)
+    cached = _profile_icon_cache.get(key)
+    if cached is not None:
+        return cached
+
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img, "RGBA")
+    s = float(size)
+    main = (*rgb, 255)
+    light = tuple(min(255, int(v + (255 - v) * 0.5)) for v in rgb) + (255,)
+    soft = (*rgb, 135)
+    dark = (12, 15, 26, 225)
+
+    def poly(pairs, fill):
+        draw.polygon([(s * px, s * py) for px, py in pairs], fill=fill)
+
+    def star(cx, cy, radius, fill, ratio: float = 0.46):
+        import math
+
+        points = []
+        for i in range(10):
+            angle = -math.pi / 2 + i * math.pi / 5
+            rad = radius if i % 2 == 0 else radius * ratio
+            points.append((cx + rad * math.cos(angle), cy + rad * math.sin(angle)))
+        draw.polygon(points, fill=fill)
+
+    kind = str(kind or "star").lower()
+    if kind == "crown":
+        poly([(0.08, 0.72), (0.10, 0.28), (0.30, 0.52), (0.50, 0.14),
+              (0.70, 0.52), (0.90, 0.28), (0.92, 0.72)], main)
+        draw.rounded_rectangle([s * 0.08, s * 0.68, s * 0.92, s * 0.87],
+                               radius=s * 0.05, fill=light)
+        for jx in (0.30, 0.50, 0.70):
+            draw.ellipse([s * (jx - 0.045), s * 0.55, s * (jx + 0.045), s * 0.64], fill=light)
+    elif kind == "medal":
+        poly([(0.30, 0.05), (0.49, 0.05), (0.45, 0.54), (0.26, 0.54)], soft)
+        poly([(0.70, 0.05), (0.51, 0.05), (0.55, 0.54), (0.74, 0.54)], soft)
+        draw.ellipse([s * 0.23, s * 0.41, s * 0.77, s * 0.95], fill=dark)
+        draw.ellipse([s * 0.27, s * 0.45, s * 0.73, s * 0.91], fill=main)
+        star(s * 0.5, s * 0.68, s * 0.13, light)
+    elif kind == "diamond":
+        poly([(0.50, 0.07), (0.89, 0.40), (0.50, 0.95), (0.11, 0.40)], main)
+        poly([(0.50, 0.07), (0.66, 0.40), (0.50, 0.95), (0.34, 0.40)], light)
+    elif kind == "shield":
+        poly([(0.50, 0.05), (0.91, 0.22), (0.83, 0.63), (0.50, 0.95),
+              (0.17, 0.63), (0.09, 0.22)], main)
+        draw.line([(s * 0.5, s * 0.16), (s * 0.5, s * 0.85)],
+                  fill=dark, width=max(1, int(s * 0.055)))
+    elif kind == "flame":
+        poly([(0.50, 0.04), (0.68, 0.30), (0.87, 0.54), (0.76, 0.81),
+              (0.50, 0.97), (0.24, 0.81), (0.13, 0.54), (0.36, 0.28)], main)
+        poly([(0.50, 0.34), (0.62, 0.60), (0.50, 0.86), (0.38, 0.60)], light)
+    elif kind == "dice":
+        draw.rounded_rectangle([s * 0.11, s * 0.11, s * 0.89, s * 0.89],
+                               radius=s * 0.16, fill=main)
+        for dx, dy in ((0.30, 0.30), (0.70, 0.30), (0.50, 0.50), (0.30, 0.70), (0.70, 0.70)):
+            draw.ellipse([s * (dx - 0.07), s * (dy - 0.07), s * (dx + 0.07), s * (dy + 0.07)],
+                         fill=dark)
+    elif kind == "trophy":
+        draw.arc([s * 0.03, s * 0.10, s * 0.34, s * 0.48], start=90, end=270,
+                 fill=soft, width=max(1, int(s * 0.07)))
+        draw.arc([s * 0.66, s * 0.10, s * 0.97, s * 0.48], start=-90, end=90,
+                 fill=soft, width=max(1, int(s * 0.07)))
+        poly([(0.26, 0.10), (0.74, 0.10), (0.67, 0.58), (0.33, 0.58)], main)
+        draw.rectangle([s * 0.45, s * 0.56, s * 0.55, s * 0.78], fill=main)
+        draw.rounded_rectangle([s * 0.28, s * 0.78, s * 0.72, s * 0.92],
+                               radius=s * 0.06, fill=light)
+        star(s * 0.5, s * 0.30, s * 0.12, light)
+    elif kind == "chat":
+        draw.rounded_rectangle([s * 0.07, s * 0.13, s * 0.93, s * 0.72],
+                               radius=s * 0.19, fill=main)
+        poly([(0.28, 0.68), (0.47, 0.68), (0.30, 0.95)], main)
+        for dx in (0.30, 0.50, 0.70):
+            draw.ellipse([s * (dx - 0.06), s * 0.37, s * (dx + 0.06), s * 0.49], fill=dark)
+    else:
+        star(s * 0.5, s * 0.52, s * 0.44, main, ratio=0.42)
+
+    _profile_icon_cache[key] = img
+    return img
+
+
+def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 0,
+                    best_streak: int = 0, message_count: int = 0) -> list:
+    """Награды без дублей: теги бота + счётчики недели + производные достижения."""
+    meta = {
+        "weekly_mvp": ("MVP", _PC_GOLD, "mvp"),
+        "weekly_top2": ("ТОП 2", _PC_SILVER, "silver"),
+        "weekly_top3": ("ТОП 3", _PC_BRONZE, "bronze"),
+        "weekly_top1": ("ТОП 1", _PC_GOLD, "top1"),
+        "fissure_master": ("МАСТЕР ФИССУР", _PC_PINK, "diamond"),
+        "admin_custom": ("АДМИН", _PC_PURPLE, "shield"),
+    }
+    counts = counts or {}
+    tags = set(tags or [])
+    result = []
+    seen = set()
+
+    def add(key, label, color, count=None, icon="star"):
+        if key in seen:
+            return
+        seen.add(key)
+        result.append({"key": key, "label": label, "color": color,
+                       "count": count, "icon": icon})
+
+    for key in ("weekly_mvp", "weekly_top2", "weekly_top3", "fissure_master", "admin_custom"):
+        try:
+            count = int(counts.get(key) or 0)
+        except (TypeError, ValueError):
+            count = 0
+        if key in tags or count > 0:
+            label, color, icon = meta[key]
+            add(key, label, color, count or None, icon)
+
+    try:
+        total_rolls = int(total_rolls or 0)
+        best_streak = int(best_streak or 0)
+        mmr = int(mmr or 0)
+        message_count = int(message_count or 0)
+    except (TypeError, ValueError):
+        total_rolls = best_streak = mmr = message_count = 0
+
+    if best_streak >= 10:
+        add("streak10", f"СТРИК {best_streak}", _PC_ORANGE, icon="flame")
+    if total_rolls >= 300:
+        add("rolls300", "300 БРОСКОВ", _PC_BLUE_GREY, icon="dice")
+    elif total_rolls >= 100:
+        add("rolls100", "100 БРОСКОВ", _PC_BLUE_GREY, icon="dice")
+    if mmr >= 6000:
+        add("immortal6000", "ИММОРТАЛ", _PC_GOLD, icon="trophy")
+    if message_count >= 20000:
+        add("chat_legend", "ЛЕГЕНДА ЧАТА", _PC_PURPLE, icon="chat")
+    return result
+
+
+_PROFILE_AWARDS_PER_ROW = 5
+_PROFILE_AWARDS_ROWS = 1
+_PROFILE_AWARDS_MAX = _PROFILE_AWARDS_PER_ROW * _PROFILE_AWARDS_ROWS
+
+
+def _profile_awards_cap(total) -> tuple:
+    """Сколько значков наград влезает в блок и подпись к нему («9 шт.» / «5 из 12»)."""
+    try:
+        total = max(0, int(total or 0))
+    except (TypeError, ValueError):
+        total = 0
+    shown = min(total, _PROFILE_AWARDS_MAX)
+    return shown, (f"{total} шт." if shown == total else f"{shown} из {total}")
+
+
+def _profile_awards_layout(count) -> dict:
+    """Геометрия значков наград: один ряд крупных плиток внизу карточки.
+
+    Низ плиток — 586 px при высоте карточки 600 (тест проверяет инвариант).
+    """
+    try:
+        count = max(0, int(count or 0))
+    except (TypeError, ValueError):
+        count = 0
+    tile, gap, per_row, top = 140.0, 21.0, _PROFILE_AWARDS_PER_ROW, 446.0
+    rows = 1 if count > 0 else 0
+    return {
+        "tile": tile,
+        "gap": gap,
+        "per_row": per_row,
+        "top": top,
+        "row_gap": 0.0,
+        "rows": max(1, rows),
+        "bottom": top + tile if count > 0 else top,
+    }
+
+
+class _ProfileCanvas:
+    """Хелпер рисования карточки в суперсэмплинге: координаты задаются в логических px."""
+
+    def __init__(self, img, ss: int = PROFILE_CARD_SS):
+        from PIL import ImageDraw
+
+        self.img = img
+        self.ss = max(1, int(ss))
+        self.draw = ImageDraw.Draw(img, "RGBA")
+
+    def p(self, value) -> int:
+        return int(round(float(value) * self.ss))
+
+    def font(self, size: int, role: str = "regular"):
+        return _profile_font(role, max(1, int(round(size * self.ss))))
+
+    def text(self, xy, text, size, color, role: str = "regular", anchor: str = "la"):
+        text = _profile_clean_text(text, self.font(size, role))
+        if not text:
+            return
+        self.draw.text((self.p(xy[0]), self.p(xy[1])), text,
+                       font=self.font(size, role), fill=color, anchor=anchor)
+
+    def text_width(self, text, size, role: str = "regular") -> float:
+        text = _profile_clean_text(text, self.font(size, role))
+        if not text:
+            return 0.0
+        return self.draw.textlength(text, font=self.font(size, role)) / self.ss
+
+    def text_tracked(self, xy, text, size, color, role: str = "bold",
+                     tracking: float = 1.2, anchor: str = "la"):
+        """Капс-заголовок с разрядкой между буквами."""
+        text = _profile_clean_text(text, self.font(size, role))
+        if not text:
+            return
+        x = float(xy[0])
+        if anchor == "ra":
+            x -= self.text_width(text, size, role) + tracking * max(0, len(text) - 1)
+        for ch in text:
+            self.draw.text((self.p(x), self.p(xy[1])), ch,
+                           font=self.font(size, role), fill=color, anchor="la")
+            x += self.text_width(ch, size, role) + tracking
+
+    def fit(self, text, size, role, max_w) -> str:
+        font = self.font(size, role)
+        return _profile_ellipsis(self.draw, _profile_clean_text(text, font), font, self.p(max_w))
+
+    def wrap(self, text, size, role, max_w, max_lines: int = 2) -> list:
+        font = self.font(size, role)
+        return _profile_wrap_two(self.draw, _profile_clean_text(text, font), font,
+                                 self.p(max_w), max_lines)
+
+    def line(self, x1, y1, x2, y2, color, width: float = 1):
+        self.draw.line([(self.p(x1), self.p(y1)), (self.p(x2), self.p(y2))],
+                       fill=color, width=max(1, self.p(width)))
+
+    def rect(self, x, y, w, h, radius: float = 12, fill=None, outline=None, width: float = 1):
+        self.draw.rounded_rectangle([self.p(x), self.p(y), self.p(x + w), self.p(y + h)],
+                                    radius=self.p(radius), fill=fill, outline=outline,
+                                    width=max(1, self.p(width)))
+
+    def circle(self, cx, cy, r, fill=None, outline=None, width: float = 1):
+        self.draw.ellipse([self.p(cx - r), self.p(cy - r), self.p(cx + r), self.p(cy + r)],
+                          fill=fill, outline=outline, width=max(1, self.p(width)))
+
+    def paste(self, image, x, y, mask=None):
+        self.img.paste(image, (self.p(x), self.p(y)), mask)
+
+    def star(self, cx, cy, r, color, inner_ratio: float = 0.46):
+        """Пятиконечная звезда (рисуется полигоном: не зависит от глифа «★» в шрифте)."""
+        import math
+
+        points = []
+        for i in range(10):
+            angle = -math.pi / 2 + i * math.pi / 5
+            radius = r if i % 2 == 0 else r * inner_ratio
+            points.append((self.p(cx + radius * math.cos(angle)), self.p(cy + radius * math.sin(angle))))
+        self.draw.polygon(points, fill=color)
+
+
+# Короткие подписи тиров для ленты званий (8 тиров)
+_PC_TIER_SHORT = ["РЕКРУТ", "СТРАЖ", "РЫЦАРЬ", "ГЕРОЙ", "ЛЕГЕНДА", "ВЛАСТЕЛИН", "БОЖЕСТВО", "ТИТАН"]
+
+
+def _profile_round_mask(size: int, radius: float):
+    from PIL import ImageDraw
+
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, size - 1, size - 1],
+                                            radius=max(1, int(radius)), fill=255)
+    return mask
+
+
+def _profile_masked(image, mask):
+    """Наложить маску на изображение, сохранив его собственную прозрачность."""
+    layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    layer.paste(image, (0, 0), mask)
+    return layer
+
+
+def generate_profile_card(
+    avatar_url=None,
+    username: str | None = None,
+    steam_nickname: str | None = None,
+    steam_id: int | None = None,
+    mmr: int = 0,
+    rank_tier: int = 0,
+    fissure: float = 0.0,
+    total_rolls: int = 0,
+    weekly_rolls: int = 0,
+    current_streak: int = 0,
+    best_streak: int = 0,
+    message_count: int = 0,
+    week_games: int = 0,
+    week_wins: int = 0,
+    dota_total_games: int = 0,
+    dota_wins: int = 0,
+    top_heroes: list | None = None,
+    tags: list | None = None,
+    award_counts: dict | None = None,
+    position: int | None = None,
+) -> bytes | None:
+    """Карточка /profile: звание, статы, герои недели и награды.
+
+    MMR-числа OpenDota отдаёт нестабильно, поэтому на карточке только звание
+    (медаль + лента тиров) и статистика бота — без MMR и без «прогресса звания».
+
+    Возвращает PNG-байты либо None при любой ошибке — исключения не пробрасываются,
+    чтобы вызывающий код мог спокойно откатиться на баннер/график.
+    """
+    try:
+        from PIL import ImageDraw
+
+        def _int(value):
+            try:
+                return int(value or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        try:
+            fissure = float(fissure or 0.0)
+        except (TypeError, ValueError):
+            fissure = 0.0
+
+        total_rolls = _int(total_rolls)
+        weekly_rolls = _int(weekly_rolls)
+        current_streak = _int(current_streak)
+        best_streak = _int(best_streak)
+        message_count = _int(message_count)
+        week_games = _int(week_games)
+        week_wins = _int(week_wins)
+        dota_total_games = _int(dota_total_games)
+        dota_wins = _int(dota_wins)
+
+        prog = rank_progress(rank_tier, mmr)
+        awards = _profile_awards(
+            tags, award_counts,
+            mmr=prog["mmr"], total_rolls=total_rolls,
+            best_streak=best_streak, message_count=message_count,
+        )
+        heroes = [h for h in (top_heroes or []) if isinstance(h, dict)][:4]
+
+        ss = PROFILE_CARD_SS
+        canvas_img = _profile_background().resize(
+            (PROFILE_CARD_W * ss, PROFILE_CARD_H * ss), Image.LANCZOS
+        ).convert("RGBA")
+        c = _ProfileCanvas(canvas_img, ss)
+
+        # ============ Аватар + ник + сообщения (как в стартовой карточке) ============
+        av_x, av_y, av_size = 44.0, 36.0, 260.0
+        cx = av_x + av_size / 2
+
+        # Квадратное фото с золотой рамкой 4px (как в /start), без скруглений
+        avatar = _profile_load_avatar(avatar_url, c.p(av_size))
+        if avatar is None:
+            placeholder = Image.new("RGB", (c.p(av_size), c.p(av_size)), (40, 55, 80))
+            ph = ImageDraw.Draw(placeholder)
+            ph.ellipse([c.p(45), c.p(35), c.p(95), c.p(105)], fill=(80, 100, 130))
+            avatar = placeholder.convert("RGBA")
+        c.paste(avatar, av_x, av_y)
+        c.rect(av_x, av_y, av_size, av_size, radius=0, fill=None,
+               outline=(215, 175, 85, 255), width=4.0)
+
+        # Медаль звания — наполовину заходит на фото (как в /start)
+        medal_size = 176.0
+        medal_cy = av_y + av_size
+        medal = _profile_rank_medal(prog["rank_tier"], c.p(medal_size))
+        if medal is not None:
+            c.paste(medal, cx - medal_size / 2, medal_cy - medal_size / 2, medal)
+
+        # Ник справа от аватара + количество сообщений под ним
+        info_x = av_x + av_size + 28.0
+        title = f"@{username}" if username else (steam_nickname or "Игрок")
+        c.text((info_x, 40), c.fit(title, 40, "bold", 560.0), 40, _PC_WHITE, "bold", "la")
+        c.text((info_x + 4, 100), "ВСЕГО СООБЩЕНИЙ", 13, _PC_GREY, "bold", "la")
+        c.text((info_x + 2, 122), _profile_num(message_count), 40, _PC_GOLD_LIGHT, "bold", "la")
+        if username and steam_nickname:
+            c.text((info_x + 4, 178), c.fit(steam_nickname, 18, "regular", 560.0),
+                   18, _PC_GREY, "regular", "la")
+
+        # Сетка статов: один ряд из четырёх ячеек
+        cell_h, cell_gap_x = 74.0, 14.0
+        grid_y = 216.0
+        col_w = 1158.0 - info_x
+        small_w = (col_w - 3 * cell_gap_x) / 4
+
+        week_losses = max(0, week_games - week_wins)
+        if week_games > 0:
+            wr_label = "WR ЗА НЕДЕЛЮ"
+            wr_value = _profile_percent(week_wins, week_games)
+            wr_sub = f"{week_wins}W · {week_losses}L"
+        elif dota_total_games > 0:
+            wr_label = "WR"
+            wr_value = _profile_percent(dota_wins, dota_total_games)
+            wr_sub = "за всё время"
+        else:
+            wr_label, wr_value, wr_sub = "WR", "—", "нет данных"
+
+        streak_sub = _profile_streak_sub(current_streak, best_streak)
+
+        row_small = [
+            ("ФИССУРА", f"{fissure:.1f} см", _PC_ORANGE,
+             f"топ #{_int(position)}" if position else None),
+            ("БРОСКИ", _profile_num(total_rolls), _PC_WHITE,
+             f"+{_profile_num(weekly_rolls)} за неделю" if weekly_rolls > 0 else None),
+            ("СТРИК", _profile_num(current_streak), _PC_ORANGE, streak_sub),
+            (wr_label, wr_value, _PC_GREEN, wr_sub),
+        ]
+
+        def _draw_cell(x, y, w, label, value, accent, sub):
+            if value == "—":
+                accent = _PC_GREY      # прочерк не должен светиться «хорошим» цветом
+            c.rect(x, y, w, cell_h, radius=14, fill=(20, 24, 38, 210),
+                   outline=(255, 255, 255, 22), width=1)
+            c.rect(x, y + 12, 3.5, cell_h - 24, radius=2,
+                   fill=(accent[0], accent[1], accent[2], 225))
+            c.text((x + 16, y + 12), label, 12, _PC_GREY, "bold", "la")
+            sub_w = c.text_width(sub, 12, "regular") if sub else 0.0
+            value_max = w - 32 - (sub_w + 12 if sub else 0)
+            c.text((x + 16, y + 34), c.fit(value, 26, "bold", max(48.0, value_max)),
+                   26, accent, "bold", "la")
+            if sub:
+                c.text((x + w - 16, y + cell_h - 16),
+                       c.fit(sub, 12, "regular", w - 56), 12, _PC_GREY, "regular", "ra")
+
+        for index, (label, value, accent, sub) in enumerate(row_small):
+            _draw_cell(info_x + index * (small_w + cell_gap_x), grid_y, small_w,
+                       label, value, accent, sub)
+
+        # ============ Герои недели (как в карточке топ-рейтинга: квадраты с золотой рамкой) ============
+        if heroes:
+            hero_size, hero_gap = 82.0, 12.0
+            c.text((info_x, 314), "ГЕРОИ НЕДЕЛИ", 12, _PC_GOLD_LIGHT, "bold", "la")
+            hx = info_x
+            for hero in heroes[:5]:
+                hero_img = _profile_hero_image(
+                    hero.get("short_name") or hero.get("name"),
+                    c.p(hero_size),
+                    image_url=hero.get("image_url"),
+                )
+                if hero_img is not None:
+                    c.paste(hero_img, hx, 334)
+                else:
+                    c.rect(hx, 334, hero_size, hero_size, radius=0, fill=(55, 45, 70))
+                c.rect(hx - 1, 333, hero_size + 2, hero_size + 2, radius=0,
+                       outline=(215, 175, 85), width=2)
+                hx += hero_size + hero_gap
+
+        # ============ Награды — внизу во всю ширину карточки ============
+        if awards:
+            shown, caption = _profile_awards_cap(len(awards))
+            awards = awards[:shown]
+            c.text((44.0, 422), "НАГРАДЫ", 12, _PC_GOLD_LIGHT, "bold", "la")
+            c.text((1158.0, 422), caption, 12, _PC_GREY, "regular", "ra")
+
+            layout = _profile_awards_layout(len(awards))
+            tile, gap, per_row = layout["tile"], layout["gap"], layout["per_row"]
+            tile_y, tile_x = layout["top"], 44.0
+            for award in awards[:per_row]:
+                accent = award["color"]
+                c.rect(tile_x, tile_y, tile, tile, radius=16, fill=(20, 24, 38, 215),
+                       outline=(accent[0], accent[1], accent[2], 150), width=1.4)
+                # Иконка награды — PNG из assets/awards, запасной вариант — нарисованная фигура
+                icon = _profile_award_png(award.get("icon"), c.p(52))
+                if icon is None:
+                    icon = _profile_award_icon(award.get("icon"), c.p(52), accent)
+                if icon is not None:
+                    c.paste(icon, tile_x + (tile - 52) / 2, tile_y + 10, icon)
+                lines = c.wrap(award["label"], 11, "bold", tile - 12, 2)
+                text_y = tile_y + 66 if len(lines) > 1 else tile_y + 72
+                for line in lines:
+                    c.text((tile_x + tile / 2, text_y), line, 11, _PC_WHITE, "bold", "ma")
+                    text_y += 14
+                if award.get("count"):
+                    c.rect(tile_x + tile - 30, tile_y - 7, 30, 20, radius=10,
+                           fill=(9, 12, 22, 240), outline=(accent[0], accent[1], accent[2], 210), width=1)
+                    c.text((tile_x + tile - 15, tile_y + 3), f"x{award['count']}",
+                           11, accent, "bold", "mm")
+                tile_x += tile + gap
+
+        # ============ Сборка: суперсэмплинг → логический размер ============
+        final = canvas_img.convert("RGB").resize((PROFILE_CARD_W, PROFILE_CARD_H), Image.LANCZOS)
+        buf = io.BytesIO()
+        final.save(buf, format="PNG", optimize=True)
+        buf.seek(0)
+        return buf.read()
+    except Exception:
+        logger.exception("generate_profile_card error")
         return None
 

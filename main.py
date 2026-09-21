@@ -632,6 +632,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     context.user_data['analytics_page'] = 0
                     context.user_data['analytics_history'] = history
                     context.user_data['analytics_matches'] = matches
+                    context.user_data['analytics_chart_image'] = chart_image
                     context.user_data['analytics_pages'] = [
                         {"title": "🆚Сравнение с Pro", "text": pro_text} if pro_text else None,
                         {"title": "📊 Подробное сравнение", "text": detailed_text} if detailed_text else None
@@ -640,74 +641,59 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         i for i, p in enumerate([pro_text, detailed_text]) if p is not None
                     }
 
+                    old_chart_msg_id = context.user_data.get('analytics_chart_msg_id')
                     old_table_msg_id = context.user_data.get('analytics_table_msg_id')
-                    if old_table_msg_id:
-                        try:
-                            await context.bot.delete_message(chat_id, old_table_msg_id)
-                        except Exception as e:
-                            logger.debug(f"Could not delete old analytics table: {e}")
-                        context.user_data['analytics_table_msg_id'] = None
+                    if old_chart_msg_id or old_table_msg_id:
+                        for mid in (old_chart_msg_id, old_table_msg_id):
+                            if not mid:
+                                continue
+                            try:
+                                await context.bot.delete_message(chat_id, mid)
+                            except Exception as e:
+                                logger.debug(f"Could not delete old analytics message: {e}")
+                        context.user_data.pop('analytics_chart_msg_id', None)
+                        context.user_data.pop('analytics_table_msg_id', None)
 
                     pages = context.user_data['analytics_pages']
                     generated = context.user_data['analytics_generated']
-                    page_titles = [p.get("title", f"Стр. {i+1}") for i, p in enumerate(pages) if p]
-                    
                     first_page_idx = sorted(generated)[0] if generated else 0
-                    first_page = pages[first_page_idx] if pages and first_page_idx < len(pages) else None
-                    
-                    if first_page:
-                        text = first_page["text"]
-                        total_pages = len(pages)
-                        keyboard = _build_analytics_keyboard(first_page_idx, total_pages, generated, page_titles)
-                        
-                        msg_id = loading_msg.message_id if loading_msg else None
-                        loading_msg = None
-                        if msg_id:
-                            try:
-                                await context.bot.edit_message_text(
-                                    chat_id=chat_id,
-                                    message_id=msg_id,
-                                    text=text,
-                                    reply_markup=keyboard,
-                                    parse_mode="HTML"
-                                )
-                                context.user_data['analytics_table_msg_id'] = msg_id
-                                job_queue = context.job_queue
-                                if job_queue:
-                                    schedule_delete(context.bot, chat_id, msg_id, 60, job_queue)
-                            except Exception as e:
-                                logger.debug(f"Could not show analytics table: {e}")
-                                msg_id = None
-                        
-                        if not msg_id:
-                            try:
-                                await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
-                            except Exception:
-                                pass
-                            new_msg = await context.bot.send_message(
-                                chat_id=chat_id,
-                                text=text,
-                                reply_markup=keyboard,
-                                parse_mode="HTML"
-                            )
-                            context.user_data['analytics_table_msg_id'] = new_msg.message_id
-                            job_queue = context.job_queue
-                            if job_queue:
-                                schedule_delete(context.bot, chat_id, new_msg.message_id, 60, job_queue)
+                    if pages and first_page_idx < len(pages) and pages[first_page_idx]:
+                        first_text = pages[first_page_idx]["text"]
                     else:
-                        error_text = "⚠️ Не удалось сгенерировать таблицы аналитики. Попробуйте позже."
+                        first_text = "⚠️ Не удалось сгенерировать таблицы аналитики. Попробуйте позже."
+
+                    keyboard = _build_analytics_table_keyboard(pages, generated)
+                    chart_image = context.user_data.get('analytics_chart_image')
+                    table_shown = False
+                    if chart_image:
                         try:
-                            msg_id = loading_msg.message_id if loading_msg else None
-                            loading_msg = None
-                            if msg_id:
-                                await context.bot.edit_message_text(
-                                    chat_id=chat_id,
-                                    message_id=msg_id,
-                                    text=error_text
-                                )
-                                schedule_delete(context.bot, chat_id, msg_id, 10, context.job_queue)
+                            chart_msg = await context.bot.send_photo(
+                                chat_id=chat_id,
+                                photo=io.BytesIO(chart_image),
+                                caption=first_text,
+                                reply_markup=keyboard,
+                                parse_mode="HTML",
+                            )
+                            context.user_data['analytics_chart_msg_id'] = chart_msg.message_id
+                            schedule_delete(context.bot, chat_id, chart_msg.message_id, 60, context.job_queue)
+                            table_shown = True
+                        except Exception as e:
+                            logger.debug(f"Could not send analytics chart photo: {e}")
+                    if not table_shown:
+                        try:
+                            await delete_last_bot_message(context.bot, chat_id, update.effective_user.id)
                         except Exception:
                             pass
+                        new_msg = await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=first_text,
+                            reply_markup=keyboard,
+                            parse_mode="HTML"
+                        )
+                        context.user_data['analytics_table_msg_id'] = new_msg.message_id
+                        job_queue = context.job_queue
+                        if job_queue:
+                            schedule_delete(context.bot, chat_id, new_msg.message_id, 60, job_queue)
 
             except Exception as e:
                 logger.error(f"Error in background analytics generation: {e}")
@@ -914,7 +900,7 @@ async def announce_weekly_mmr_winner(bot) -> None:
         except Exception as e:
             logger.warning(f"Не удалось забрать тег у прошлого победителя: {e}")
 
-    mvp_tag = "MVP недели"
+    mvp_tag = "MVP"
     tag_set = False
     if telegram_id and digest_chat_id:
         try:
@@ -956,7 +942,7 @@ async def announce_weekly_mmr_winner(bot) -> None:
                 try:
                     await add_user_tag(top2_tg_id, "weekly_top2", bot=bot, chat_id=digest_chat_id)
                 except Exception as e:
-                    logger.warning(f"Не удалось выдать тег Топ-2 для {top2_tg_id}: {e}")
+                    logger.warning(f"Не удалось выдать тег ТОП 2 для {top2_tg_id}: {e}")
     if len(active_users) > 2:
         top3_user = active_users[2]
         top3_tg_id = top3_user.get('telegram_id')
@@ -966,7 +952,7 @@ async def announce_weekly_mmr_winner(bot) -> None:
                 try:
                     await add_user_tag(top3_tg_id, "weekly_top3", bot=bot, chat_id=digest_chat_id)
                 except Exception as e:
-                    logger.warning(f"Не удалось выдать тег Топ-3 для {top3_tg_id}: {e}")
+                    logger.warning(f"Не удалось выдать тег ТОП 3 для {top3_tg_id}: {e}")
 
     week_heroes = []
     winner_steam_id = winner.get('steam_id')
@@ -997,11 +983,11 @@ async def announce_weekly_mmr_winner(bot) -> None:
             text += f"👑 Титул «{mvp_tag}» в чате\n"
         if weekly_mvp_count > 0:
             mvp_line = f" ×{weekly_mvp_count}" if weekly_mvp_count > 1 else ""
-            text += f"🏅 Медаль MVP недели{mvp_line} — в профиле\n"
+            text += f"🏅 Медаль MVP{mvp_line} — в профиле\n"
         if weekly_top2_count > 0:
-            text += f"🥈 Медаль Топ-2 MMR ×{weekly_top2_count} — в профиле\n"
+            text += f"🥈 Медаль ТОП 2 ×{weekly_top2_count} — в профиле\n"
         if weekly_top3_count > 0:
-            text += f"🥉 Медаль Топ-3 MMR ×{weekly_top3_count} — в профиле"
+            text += f"🥉 Медаль ТОП 3 ×{weekly_top3_count} — в профиле"
 
     from dota_mmr import generate_start_card
 
@@ -1491,6 +1477,7 @@ async def dota_digest_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 from bot_utils import (
     ManualContext,
     _build_analytics_keyboard,
+    _build_analytics_table_keyboard,
     add_bot_message,
     clickable_name,
     delete_last_bot_message,
@@ -1903,6 +1890,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         pass
         return
 
+    # Handle analytics table buttons (Pro / Подробное сравнение)
+    if data and data.startswith("analytics_table_"):
+        await callback_query.answer()
+        try:
+            table_idx = int(data.split("_")[-1])
+            await _show_analytics_page(callback_query, table_idx, context)
+        except Exception as e:
+            logger.error(f"Error in button_callback: {e}", exc_info=True)
+        return
+
     # Handle analytics_page_N - no loading indicator (pages already generated or will show error)
     if data and data.startswith("analytics_page_"):
         await callback_query.answer()
@@ -2296,6 +2293,37 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
     keyboard = _build_analytics_keyboard(page_idx, total_pages, generated, page_titles)
 
     try:
+        chart_msg_id = context.user_data.get('analytics_chart_msg_id')
+
+        # If a chart photo is already shown above the table, just update its caption.
+        if chart_msg_id:
+            keyboard = _build_analytics_table_keyboard(pages, generated)
+            try:
+                await context.bot.edit_message_caption(
+                    chat_id=chat_id,
+                    message_id=chart_msg_id,
+                    caption=text,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                )
+                if loading_msg:
+                    _loading_msg_id = loading_msg.message_id
+                    loading_msg = None  # Stop animation
+                    try:
+                        await context.bot.delete_message(chat_id, _loading_msg_id)
+                    except Exception:
+                        pass
+                return
+            except Exception as edit_err:
+                err_str = str(edit_err).lower()
+                if "not modified" in err_str:
+                    return  # Same content, nothing to do
+                logger.debug(f"Could not edit chart caption: {edit_err}")
+                context.user_data.pop('analytics_chart_msg_id', None)
+
+        # No chart photo yet: fall back to editing/sending a plain table message.
+        keyboard = _build_analytics_keyboard(page_idx, total_pages, generated, page_titles)
+
         # Check if there's an existing table message to edit (for pagination between pages)
         existing_msg_id = context.user_data.get('analytics_table_msg_id')
 
@@ -2356,6 +2384,12 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
                 # Fall through to send new message
 
         # Send a NEW message with the analytics table (first click or previous was deleted)
+        if loading_msg:
+            try:
+                await context.bot.delete_message(chat_id, loading_msg.message_id)
+            except Exception:
+                pass
+            loading_msg = None
         new_msg = await context.bot.send_message(
             chat_id=chat_id,
             text=text,
@@ -2640,7 +2674,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             winrate,
         )
 
-        profile_banner_url = await _resolve_profile_banner(target_user)
+        profile_banner = await _build_profile_progress_card(context.bot, target_user)
+        if profile_banner is None:
+            profile_banner = await _resolve_profile_banner(target_user)
+        profile_banner_url = profile_banner
 
         result_msg = await context.bot.send_photo(
             chat_id=update.effective_chat.id,
@@ -2765,11 +2802,11 @@ def _build_profile_text(
     if mvp_count or top2_count or top3_count:
         text += "\n\n✨ <b>Награды недели</b>"
         if mvp_count:
-            text += f"\n🏆 MVP недели ×<b>{mvp_count}</b>"
+            text += f"\n🏆 MVP ×<b>{mvp_count}</b>"
         if top2_count:
-            text += f"\n🥈 Топ-2 MMR ×<b>{top2_count}</b>"
+            text += f"\n🥈 ТОП 2 ×<b>{top2_count}</b>"
         if top3_count:
-            text += f"\n🥉 Топ-3 MMR ×<b>{top3_count}</b>"
+            text += f"\n🥉 ТОП 3 ×<b>{top3_count}</b>"
 
     if steam_id:
         text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%"
@@ -2778,29 +2815,101 @@ def _build_profile_text(
 
 
 async def _resolve_profile_banner(target_user: dict) -> str | io.BytesIO:
-    logger.info(f"_resolve_profile_banner called uid={target_user.get('telegram_id')} steam_id={target_user.get('steam_id')}")
-    profile_banner_url = get_banner_path("profile")
-    if target_user.get('steam_id'):
-        try:
-            from weekly_analytics import generate_chart_only
-            chart_data = await asyncio.wait_for(
-                generate_chart_only(target_user.get('telegram_id')),
-                timeout=20.0
-            )
-            logger.info(f"generate_chart_only result uid={target_user.get('telegram_id')} chart_data={chart_data is not None} image={chart_data.get('image') is not None if isinstance(chart_data, dict) else 'N/A'}")
-            if chart_data and chart_data.get("image"):
-                profile_banner_url = io.BytesIO(chart_data["image"])
-                profile_banner_url.name = "profile_analytics.png"
-                logger.info(f"Using analytics chart for profile uid={target_user.get('telegram_id')}")
-            else:
-                logger.info(f"No analytics chart for profile uid={target_user.get('telegram_id')}, using default banner")
-        except asyncio.TimeoutError:
-            logger.warning(f"Could not generate profile analytics chart: timeout (20s) for uid={target_user.get('telegram_id')}")
-        except Exception as e:
-            logger.warning(f"Could not generate profile analytics chart: {type(e).__name__}: {e} for uid={target_user.get('telegram_id')}")
-    else:
-        logger.info(f"No steam_id for profile uid={target_user.get('telegram_id')}, using default banner")
-    return profile_banner_url
+    logger.info(f"_resolve_profile_banner called uid={target_user.get('telegram_id')}")
+    return get_banner_path("profile")
+
+
+async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | None:
+    """Карточка прогресса ЗВАНИЙ для /profile.
+
+    Возвращает io.BytesIO с PNG либо None — тогда stats() откатывается на
+    прежний график/баннер (_resolve_profile_banner). Никакие исключения наружу.
+    """
+    telegram_id = target_user.get("telegram_id")
+    steam_id = target_user.get("steam_id")
+    try:
+        from dota_mmr import generate_profile_card, get_week_top_heroes_async
+        from tags import get_user_tags
+
+        avatar_url = await resolve_avatar_url_for_card(
+            bot,
+            telegram_id=telegram_id,
+            steam_id=steam_id,
+            db_avatar=target_user.get("avatar"),
+            fetch_steam=False,
+        )
+
+        top_heroes = []
+        if steam_id:
+            try:
+                top_heroes = await asyncio.wait_for(
+                    get_week_top_heroes_async(steam_id, top_k=3),
+                    timeout=12.0
+                )
+            except Exception as e:
+                logger.debug(f"profile card heroes skipped uid={telegram_id}: {e}")
+
+        tags = []
+        if telegram_id:
+            try:
+                tags = await asyncio.to_thread(get_user_tags, telegram_id)
+            except Exception as e:
+                logger.debug(f"profile card tags skipped uid={telegram_id}: {e}")
+
+        position = target_user.get("current_position")
+        if not position and telegram_id:
+            try:
+                position = await asyncio.to_thread(get_fissure_rank, telegram_id)
+            except Exception as e:
+                logger.debug(f"profile card rank skipped uid={telegram_id}: {e}")
+
+        card_bytes = await asyncio.wait_for(
+            asyncio.to_thread(
+                generate_profile_card,
+                avatar_url=avatar_url,
+                username=target_user.get("username"),
+                steam_nickname=target_user.get("steam_nickname"),
+                steam_id=steam_id,
+                mmr=target_user.get("mmr") or 0,
+                rank_tier=target_user.get("rank_tier") or 0,
+                fissure=target_user.get("fissure") or 0.0,
+                total_rolls=target_user.get("total_rolls") or 0,
+                weekly_rolls=target_user.get("weekly_rolls") or 0,
+                current_streak=target_user.get("current_streak") or 0,
+                best_streak=target_user.get("best_streak") or 0,
+                message_count=target_user.get("message_count") or 0,
+                week_games=target_user.get("week_games") or 0,
+                week_wins=target_user.get("week_wins") or 0,
+                dota_total_games=target_user.get("dota_total_games") or 0,
+                dota_wins=target_user.get("dota_wins") or 0,
+                top_heroes=top_heroes,
+                tags=tags,
+                award_counts={
+                    "weekly_mvp": target_user.get("weekly_mvp") or 0,
+                    "weekly_top2": target_user.get("weekly_top2") or 0,
+                    "weekly_top3": target_user.get("weekly_top3") or 0,
+                    "fissure_master": 1 if "fissure_master" in tags else 0,
+                    "admin_custom": 1 if "admin_custom" in tags else 0,
+                },
+                position=position,
+            ),
+            timeout=30.0
+        )
+
+        if not card_bytes:
+            logger.info(f"Profile card returned None uid={telegram_id}, fallback to banner")
+            return None
+
+        buffer = io.BytesIO(card_bytes)
+        buffer.name = "profile_card.png"
+        logger.info(f"Profile card built uid={telegram_id} size={len(card_bytes)} bytes")
+        return buffer
+    except TimeoutError:
+        logger.warning(f"Profile card timeout for uid={telegram_id}, fallback to banner")
+        return None
+    except Exception as e:
+        logger.warning(f"Profile card failed for uid={telegram_id}: {type(e).__name__}: {e}")
+        return None
 
 
 @rate_limit(tokens=1)

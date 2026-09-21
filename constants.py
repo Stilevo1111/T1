@@ -42,6 +42,14 @@ __all__ = [
     "WELCOME_PHRASES",
     # Keep-alive
     "KEEPALIVE_PING_NEON_HOURS",
+    # Profile card (/profile)
+    "PROFILE_CARD_W",
+    "PROFILE_CARD_H",
+    "PROFILE_CARD_SS",
+    "PROFILE_CARD_RANKS_PER_TIER",
+    "PROFILE_CARD_LADDER_TOTAL",
+    "PROFILE_CARD_FONT_DIR",
+    "PROFILE_CARD_BG_FALLBACK",
 ]
 
 # Cooldown for fissure rolls (24 hours)
@@ -127,3 +135,15 @@ def get_random_cooldown_banner_path() -> Path:
     import random
     name = random.choice(COOLDOWN_BANNERS)
     return BANNER_DIR / f"{name}.webp"
+
+
+# ---------------------------------------------------------------------------
+# Profile card (/profile) — карточка прогресса ЗВАНИЙ (не фиссуры)
+# ---------------------------------------------------------------------------
+PROFILE_CARD_W = 1200                    # ширина карточки (превью Telegram 2:1)
+PROFILE_CARD_H = 600                     # высота карточки
+PROFILE_CARD_SS = 3                      # суперсэмплинг: рисуем в 3× и уменьшаем LANCZOS
+PROFILE_CARD_RANKS_PER_TIER = 5          # звёзд в одном звании (I..V)
+PROFILE_CARD_LADDER_TOTAL = 35           # 7 тиров × 5 звёзд = 35 шагов до Титана
+PROFILE_CARD_FONT_DIR = Path(__file__).parent / "assets" / "fonts"
+PROFILE_CARD_BG_FALLBACK = BANNER_DIR / "background.webp"

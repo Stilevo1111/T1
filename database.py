@@ -2924,7 +2924,7 @@ def get_free_rolls(telegram_id: int) -> int:
 
 
 def increment_weekly_mmr_award(telegram_id: int, place: int = 1) -> int:
-    """Увеличить счётчик награды за место в недельном топе MMR (1=MVP, 2=топ-2, 3=топ-3)."""
+    """Увеличить счётчик награды за место в недельном топе MMR (1=MVP, 2=ТОП 2, 3=ТОП 3)."""
     if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
         logger.warning(f"increment_weekly_mmr_award: invalid telegram_id={telegram_id}")
         return 0

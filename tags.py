@@ -5,17 +5,17 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 TAG_TYPES = {
-    "weekly_mvp": "MVP недели",
-    "weekly_top2": "Топ-2 MMR",
-    "weekly_top3": "Топ-3 MMR",
+    "weekly_mvp": "MVP",
+    "weekly_top2": "ТОП 2",
+    "weekly_top3": "ТОП 3",
     "fissure_master": "Мастер фиссур",
     "admin_custom": "Админ",
 }
 
 TAG_DISPLAY = {
-    "weekly_mvp": "🏆 MVP недели",
-    "weekly_top2": "🥈 Топ-2 MMR",
-    "weekly_top3": "🥉 Топ-3 MMR",
+    "weekly_mvp": "🏆 MVP",
+    "weekly_top2": "🥈 ТОП 2",
+    "weekly_top3": "🥉 ТОП 3",
     "fissure_master": "🍆 Мастер фиссур",
     "admin_custom": "👑 Админ",
 }
