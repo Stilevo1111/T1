@@ -4,6 +4,7 @@ import datetime
 import io
 import json
 import os
+from pathlib import Path
 import random
 import re
 import signal
@@ -58,7 +59,7 @@ from database import (
     update_user_fields_batch,
     user_cache,
 )
-from dota_mmr import _get_start_card_background, update_user_mmr
+from dota_mmr import _get_start_card_background, generate_achievement_banner, update_user_mmr
 from mute import register_handlers as register_mute_handlers
 from rate_limiter import is_rate_limited, rate_limit, set_rate_limited
 from tags import (
@@ -798,6 +799,9 @@ async def weekly_mmr_reset_job(context):
                     week_wins = 0,
                     week_current_streak = 0,
                     week_best_streak = GREATEST(week_best_streak, week_current_streak),
+                    weekly_mvp = 0,
+                    weekly_top2 = 0,
+                    weekly_top3 = 0,
                     week_start_date = %s
                 WHERE steam_id IS NOT NULL
             """, (current_week_start,))
@@ -808,6 +812,9 @@ async def weekly_mmr_reset_job(context):
                     week_wins = 0,
                     week_current_streak = 0,
                     week_best_streak = MAX(week_best_streak, week_current_streak),
+                    weekly_mvp = 0,
+                    weekly_top2 = 0,
+                    weekly_top3 = 0,
                     week_start_date = ?
                 WHERE steam_id IS NOT NULL
             """, (current_week_start,))
@@ -820,6 +827,33 @@ async def weekly_mmr_reset_job(context):
         user_cache.delete_key('dota_week_top')
         from database import set_config
         set_config('weekly_mmr_reset_date', current_week_start)
+        # Снятие тегов чемпионов/топов предыдущей недели (MVP, ТОП 2, ТОП 3) для всех, кто держит
+        try:
+            from database import get_connection as _gc, release_connection as _rel
+            _conn = _gc()
+            _cur = _conn.cursor()
+            if "postgres" in scheme:
+                for _tag in ("weekly_mvp", "weekly_top2", "weekly_top3"):
+                    _cur.execute("SELECT telegram_id FROM users WHERE user_tags::text LIKE %s", (f"%{_tag}%",))
+                    for _row in _cur.fetchall():
+                        try:
+                            await remove_user_tag(int(_row[0]), _tag, bot=context.bot)
+                        except Exception as _te:
+                            logger.warning(f"weekly_reset tag remove failed for {_tag} {_row[0]}: {_te}")
+            else:
+                for _tag in ("weekly_mvp", "weekly_top2", "weekly_top3"):
+                    _cur.execute("SELECT telegram_id FROM users WHERE user_tags LIKE ?", (f"%{_tag}%",))
+                    for _row in _cur.fetchall():
+                        try:
+                            await remove_user_tag(int(_row[0]), _tag, bot=context.bot)
+                        except Exception as _te:
+                            logger.warning(f"weekly_reset tag remove failed for {_tag} {_row[0]}: {_te}")
+            _conn.commit()
+            _cur.close()
+            release_connection(_conn)
+            from tags import remove_user_tag  # noqa: F811
+        except Exception as _ge:
+            logger.warning(f"weekly_reset tag cleanup skipped: {_ge}")
         logger.info("weekly_mmr_reset_job: еженедельная статистика MMR сброшена в 00:00 MSK")
     except Exception as e:
         logger.error(f"weekly_mmr_reset_job: ошибка при сбросе статистики: {e}")
@@ -973,15 +1007,18 @@ async def announce_weekly_mmr_winner(bot) -> None:
     net_wins = week_wins - week_losses
     net_sign = "+" if net_wins >= 0 else ""
 
+    _top2_disp = (make_clickable(top2_user.get("username") or top2_user.get("steam_nickname"), top2_user.get("telegram_id")) if len(active_users) > 1 else "")
+    _top3_disp = (make_clickable(top3_user.get("username") or top3_user.get("steam_nickname"), top3_user.get("telegram_id")) if len(active_users) > 2 else "")
     text = (
-        f"<b>🏆 ЧЕМПИОН НЕДЕЛИ MMR 🏆</b>\n"
+        f"🏆 <b>ЧЕМПИОНЫ НЕДЕЛИ MMR</b> 🏆\n"
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🥇 <b>{name_display}</b>\n"
-        f"🗡️ <i>{rank_str}</i>\n\n"
-        f"<b>📈 Статистика недели</b>\n"
-        f"▫️ Побед: <code>{week_wins}</code> • Поражений: <code>{week_losses}</code> • WR <b>{winrate}%</b>\n"
-        f"▫️ Игр: <code>{week_games}</code> • Чистый баланс <b>{net_sign}{net_wins}</b>\n\n"
-        f"🔥 <i>Лучший результат в топе MMR этой недели!</i>"
+        f"🥈 <b>{_top2_disp}</b>\n"
+        f"🥉 <b>{_top3_disp}</b>\n\n"
+        f"✨ <b>Награды и теги выданы:</b>\n"
+        f"👑 Чемпион (1-е место) — тег «MVP» в чат + медаль + ачивка «Писатель 100» → в профиль\n"
+        f"🥈 Второе место — тег «🥈 ТОП 2» в чат + медаль → в профиль\n"
+        f"🥉 Третье место — тег «🥉 ТОП 3» в чат + медаль → в профиль"
     )
 
     if tag_set or weekly_mvp_count > 0 or weekly_top2_count > 0 or weekly_top3_count > 0:
@@ -1240,7 +1277,7 @@ async def update_all_mmr_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         # Отправляем уведомления о ранк-апах параллельно
         if digest_chat_id and rank_up_users:
-            from dota_mmr import generate_start_card, get_week_top_heroes
+            from dota_mmr import generate_start_card, generate_achievement_banner, get_week_top_heroes
 
             async def notify_rank_up(user, rank_info):
                 try:
@@ -3110,7 +3147,6 @@ async def testtechies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lambda uid, uname, growth, new_fissure, cascade: None
     )
 
-
 @rate_limit(tokens=1)
 async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Топ игроков по MMR за неделю"""
@@ -3567,7 +3603,6 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-
 async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from config import settings
     ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
@@ -3627,7 +3662,6 @@ async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=f"✅ Тег «{label}» выдан пользователю {target}",
         reply_markup=main_menu()
     )
-
 
 async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from config import settings
@@ -3689,7 +3723,6 @@ async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-
 async def tags_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = None
     if context.args and len(context.args) >= 1:
@@ -3722,7 +3755,6 @@ async def tags_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=text,
         reply_markup=main_menu()
     )
-
 
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Информация с кнопкой перехода на патч заметки"""
@@ -3841,6 +3873,34 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                     # Сохраняем в БД сразу чтобы данные не терялись при деплое
                     await asyncio.to_thread(update_user_fields_batch, user_id, updates, save_to_db=True)
                     logger.info(f"Cached message_count for {user_id}: {new_count}")
+
+                    try:
+                        from achievements import check_and_award as _aha_check
+                        from achievements import ACHIEVEMENTS as _AH
+                        _awarded = await asyncio.to_thread(_aha_check, user_id, 'message_count', new_count)
+                        if _awarded:
+                            _labels = ", ".join(_AH[k]["label"] for k in _awarded)
+                            _nick = update.effective_user.username or update.effective_user.full_name or f"id{user_id}"
+                            _mention = make_clickable(_nick, user_id)
+                            _text = f"🏆 {_mention} получил(а) достижение: {_labels}!"
+                            _banner = await asyncio.to_thread(
+                                generate_achievement_banner, _awarded[0], _AH[_awarded[0]]["label"], _nick
+                            )
+                            try:
+                                await context.bot.send_photo(
+                                    chat_id=digest_chat_id,
+                                    photo=_banner or open(Path("assets/awards/%s.png" % _awarded[0]), "rb"),
+                                    caption=_text,
+                                    parse_mode="HTML",
+                                )
+                            except Exception:
+                                await context.bot.send_message(
+                                    chat_id=digest_chat_id,
+                                    text=_text,
+                                    parse_mode="HTML",
+                                )
+                    except Exception as _e:
+                        logger.warning(f"achievements: message_count check failed: {_e}")
         except Exception as e:
             logger.error(f"Error updating message_count: {e}")
 
@@ -4802,6 +4862,7 @@ if __name__ == "__main__":
         logger.debug(f"Could not preload heroes: {e}")
 
     asyncio.run(main())
+
 
 
 

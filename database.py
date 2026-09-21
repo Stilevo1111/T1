@@ -755,6 +755,7 @@ _PG_ENSURE_COLUMNS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_top3 INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS user_tags TEXT DEFAULT '[]'",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS free_rolls INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS achievements TEXT DEFAULT '{}' ",
     "UPDATE users SET in_chat = TRUE WHERE in_chat IS NULL OR in_chat = FALSE",
 )
 
@@ -775,6 +776,8 @@ def _ensure_sqlite_columns(cursor):
         return
     if 'free_rolls' not in columns:
         cursor.execute("ALTER TABLE users ADD COLUMN free_rolls INTEGER DEFAULT 0")
+    if 'achievements' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN achievements TEXT DEFAULT '{}' ")
 
 
 def _reset_persistent_pg_conn(reason: str = ""):
@@ -2882,7 +2885,7 @@ def update_user_field(telegram_id, field, value):
         immediate_fields = {
             'fissure', 'last_fissure', 'steam_id', 'steam_nickname', 'mmr', 'rank_tier', 'wins', 'losses',
             'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'week_start_date',
-            'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags', 'free_rolls',
+            'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags', 'free_rolls', 'achievements',
         }
         if field in immediate_fields:
             _save_user_to_db_immediately(telegram_id, user)
@@ -3020,7 +3023,7 @@ _ALLOWED_USER_FIELDS = frozenset([
     'steam_id', 'steam_nickname', 'avatar', 'mmr', 'rank_tier',
     'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'dota_total_games',
     'dota_wins', 'last_dota_games', 'last_dota_wins', 'wins', 'losses', 'week_start_date',
-    'mmr_last_updated', 'message_count', 'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags', 'free_rolls',
+    'mmr_last_updated', 'message_count',     'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags', 'free_rolls', 'achievements',
 ])
 _NUMERIC_USER_FIELDS = frozenset([
     'fissure', 'last_fissure', 'total_rolls', 'total_growth', 'current_streak', 'best_streak',

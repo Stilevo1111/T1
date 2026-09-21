@@ -2491,6 +2491,48 @@ def _profile_background():
 
     _profile_bg_cache = img
     return img
+def generate_achievement_banner(key: str, label: str = "", mention: str = "") -> bytes | None:
+    """Баннер выдачи ачивки: фон из images/banners/achiv_bg.png + центрированная иконка ачивки.
+
+    - Фон масштабируется `cover` до PROFILE_CARD_W x PROFILE_CARD_H (без искажений, crop).
+    - Иконка ачивки (assets/awards/<key>.png) накладывается в ОРИГИНАЛЬНОМ размере,
+      смещённая на 5 px влево от центра. Никаких текстовых подписей.
+    """
+    try:
+        import io
+        from constants import BANNER_DIR, PROFILE_CARD_W, PROFILE_CARD_H
+        from PIL import Image
+
+        width, height = PROFILE_CARD_W, PROFILE_CARD_H
+
+        # 1. Фон — оригинальный размер, cover-crop до 1200x600.
+        bg_path = BANNER_DIR / "achiv_bg.png"
+        bg = Image.open(bg_path).convert("RGBA")
+        bw, bh = bg.size
+        scale = max(width / bw, height / bh)
+        bw2, bh2 = max(1, int(bw * scale)), max(1, int(bh * scale))
+        bg = bg.resize((bw2, bh2), Image.LANCZOS)
+        bx = (bw2 - width) // 2
+        by = (bh2 - height) // 2
+        bg = bg.crop((max(0, bx), max(0, by), max(0, bx) + width, max(0, by) + height))
+        canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        canvas.paste(bg, (0, 0), bg)
+
+        # 2. Иконка ачивки — оригинальный размер, центр + 5px влево.
+        icon_path = Path(__file__).parent / "assets" / "awards" / f"{key}.png"
+        icon = Image.open(icon_path).convert("RGBA")
+        x = (width - icon.width) // 2 - 5
+        y = (height - icon.height) // 2
+        canvas.paste(icon, (x, y), icon)
+
+        buf = io.BytesIO()
+        canvas.convert("RGB").save(buf, format="WEBP", quality=95, method=6)
+        return buf.getvalue()
+    except Exception as e:
+        logger.warning(f"generate_achievement_banner failed: {e}")
+        return None
+
+
 
 
 def rank_mmr_threshold(rank_tier: int) -> int:
@@ -2911,9 +2953,7 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
     """Награды без дублей: теги бота + счётчики недели + производные достижения."""
     meta = {
         "weekly_mvp": ("MVP", _PC_GOLD, "mvp"),
-        "weekly_top2": ("ТОП 2", _PC_SILVER, "silver"),
         "weekly_top3": ("ТОП 3", _PC_BRONZE, "bronze"),
-        "weekly_top1": ("ТОП 1", _PC_GOLD, "top1"),
         "fissure_master": ("МАСТЕР ФИССУР", _PC_PINK, "diamond"),
         "admin_custom": ("АДМИН", _PC_PURPLE, "shield"),
     }
@@ -2954,8 +2994,22 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
         add("rolls100", "100 БРОСКОВ", _PC_BLUE_GREY, icon="dice")
     if mmr >= 6000:
         add("immortal6000", "ИММОРТАЛ", _PC_GOLD, icon="trophy")
-    if message_count >= 20000:
-        add("chat_legend", "ЛЕГЕНДА ЧАТА", _PC_PURPLE, icon="chat")
+
+    # Badges за писательство — только ЛУЧШЕЕ достижение по количеству сообщений.
+    # Если пользователь имеет 5000 сообщений, он автоматически прошел пороги 100/500/1000,
+    # но на карточке должен отображаться только бейдж 5000 (или 20000, если есть).
+    _msg_badges = [
+        (20000, _PC_GOLD,      "ЛЕГЕНДА ЧАТА",  "chat_legend"),
+        (10000, _PC_ORANGE,    "ПИСАТЕЛЬ 10000", "ah_msg10000"),
+        (5000,  _PC_BLUE_GREY, "ПИСАТЕЛЬ 5000",  "ah_msg5000"),
+        (1000,  _PC_SILVER,    "ПИСАТЕЛЬ 1000",  "ah_msg1000"),
+        (500,   _PC_SILVER,    "ПИСАТЕЛЬ 500",   "ah_msg500"),
+        (100,   _PC_BRONZE,    "ПИСАТЕЛЬ 100",   "ah_msg100"),
+    ]
+    for _msg_target, _color, _label, _icon in _msg_badges:
+        if message_count >= _msg_target:
+            add(_icon, _label, _color, icon=_icon)
+            break  # показываем только самый высокий достижимый бейдж
     return result
 
 
@@ -3097,211 +3151,196 @@ def _profile_masked(image, mask):
 
 
 def generate_profile_card(
-    avatar_url=None,
-    username: str | None = None,
-    steam_nickname: str | None = None,
-    steam_id: int | None = None,
-    mmr: int = 0,
+    avatar_url: str = None,
+    username: str = None,
+    steam_nickname: str = None,
+    steam_id: int = None,
     rank_tier: int = 0,
-    fissure: float = 0.0,
+    message_count: int = 0,
     total_rolls: int = 0,
     weekly_rolls: int = 0,
     current_streak: int = 0,
     best_streak: int = 0,
-    message_count: int = 0,
-    week_games: int = 0,
     week_wins: int = 0,
-    dota_total_games: int = 0,
-    dota_wins: int = 0,
-    top_heroes: list | None = None,
-    tags: list | None = None,
-    award_counts: dict | None = None,
-    position: int | None = None,
+    week_losses: int = 0,
+    top_heroes: list = None,
+    weekly_mvp: int = 0,
+    weekly_top2: int = 0,
+    weekly_top3: int = 0,
 ) -> bytes | None:
-    """Карточка /profile: звание, статы, герои недели и награды.
-
-    MMR-числа OpenDota отдаёт нестабильно, поэтому на карточке только звание
-    (медаль + лента тиров) и статистика бота — без MMR и без «прогресса звания».
-
-    Возвращает PNG-байты либо None при любой ошибке — исключения не пробрасываются,
-    чтобы вызывающий код мог спокойно откатиться на баннер/график.
-    """
+    """Карточка /profile — точная копия /start (кадр, ник, медаль) + герои (если Steam)
+    и награды внизу."""
+    logger.info(
+        f"generate_profile_card INPUT: username={username} steam_id={steam_id} "
+        f"rank_tier={rank_tier} message_count={message_count} "
+        f"top_heroes={len(top_heroes or [])} weekly_mvp={weekly_mvp}"
+    )
     try:
-        from PIL import ImageDraw
+        import io
 
-        def _int(value):
+        import requests
+        from PIL import Image, ImageDraw, ImageFont
+
+        # ===== Точные параметры из generate_start_card: 1024x500, scale=1.8 =====
+        width = 1024
+        height = 500
+        scale = 1.8
+
+        # ===== Фон как в /start (яркий, без тёмной пелёнки) =====
+        try:
+            bg_image = _get_start_card_background()
+            if bg_image is not None:
+                img = bg_image.copy()
+            else:
+                img = Image.new("RGB", (width, height), (15, 20, 35))
+        except Exception as e:
+            logger.error(f"Profile background error: {e}")
+            img = Image.new("RGB", (width, height), (15, 20, 35))
+        draw = ImageDraw.Draw(img)
+
+        # --- Аватар + золотая рамка (как в /start) -----
+        avatar_x_offset = -100
+        avatar_size = int(140 * scale)                 # 252
+        avatar_x = int(120 * scale) + avatar_x_offset  # 116
+        avatar_y = int((height - avatar_size) // 2 - 10)  # 114
+
+        avatar_loaded = False
+        if avatar_url:
             try:
-                return int(value or 0)
-            except (TypeError, ValueError):
-                return 0
+                logger.info(f"Profile avatar: {avatar_url[:80]}")
+                if os.path.isfile(avatar_url):
+                    avatar = Image.open(avatar_url).convert("RGBA")
+                else:
+                    resp = requests.get(
+                        avatar_url,
+                        timeout=10,
+                        headers={"User-Agent": "fissure-bot/1.0"},
+                    )
+                    if resp.status_code == 200 and resp.content:
+                        from io import BytesIO
+                        avatar = Image.open(BytesIO(resp.content)).convert("RGBA")
+                    else:
+                        avatar = None
+                if avatar:
+                    w, h = avatar.size
+                    side = min(w, h)
+                    left = (w - side) // 2
+                    top = (h - side) // 2
+                    avatar = avatar.crop((left, top, left + side, top + side))
+                    avatar = avatar.resize((avatar_size, avatar_size), Image.LANCZOS)
+                    draw.rectangle(
+                        [avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size],
+                        outline=(215, 175, 85), width=int(4 * scale),
+                    )
+                    img.paste(avatar, (avatar_x, avatar_y))
+                    avatar_loaded = True
+            except Exception as e:
+                logger.warning(f"Profile avatar error: {e}")
+
+        if not avatar_loaded:
+            draw.rectangle(
+                [avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size],
+                fill=(40, 55, 80), outline=(215, 175, 85), width=int(4 * scale),
+            )
+            draw.ellipse(
+                [avatar_x + int(45 * scale), avatar_y + int(35 * scale),
+                 avatar_x + int(95 * scale), avatar_y + int(105 * scale)],
+                fill=(80, 100, 130),
+            )
+
+        # ===== Ник + шрифты — точно как в /start =====
+        info_x = avatar_x + avatar_size + int(30 * scale)  # 116 + 252 + 54 = 422
+        info_y = avatar_y + int(20 * scale)  # 114 + 36 = 150
 
         try:
-            fissure = float(fissure or 0.0)
-        except (TypeError, ValueError):
-            fissure = 0.0
+            font_title = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(40 * scale),
+            )
+            font_small = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(26 * scale),
+            )
+            font_fissure = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(36 * scale),
+            )
+        except Exception:
+            font_title = font_small = font_fissure = ImageFont.load_default()
 
-        total_rolls = _int(total_rolls)
-        weekly_rolls = _int(weekly_rolls)
-        current_streak = _int(current_streak)
-        best_streak = _int(best_streak)
-        message_count = _int(message_count)
-        week_games = _int(week_games)
-        week_wins = _int(week_wins)
-        dota_total_games = _int(dota_total_games)
-        dota_wins = _int(dota_wins)
+        display_name = f"@{username}" if username else (steam_nickname or "Unknown")
 
-        prog = rank_progress(rank_tier, mmr)
-        awards = _profile_awards(
-            tags, award_counts,
-            mmr=prog["mmr"], total_rolls=total_rolls,
-            best_streak=best_streak, message_count=message_count,
-        )
-        heroes = [h for h in (top_heroes or []) if isinstance(h, dict)][:4]
 
-        ss = PROFILE_CARD_SS
-        canvas_img = _profile_background().resize(
-            (PROFILE_CARD_W * ss, PROFILE_CARD_H * ss), Image.LANCZOS
-        ).convert("RGBA")
-        c = _ProfileCanvas(canvas_img, ss)
-
-        # ============ Аватар + ник + сообщения (как в стартовой карточке) ============
-        av_x, av_y, av_size = 44.0, 36.0, 260.0
-        cx = av_x + av_size / 2
-
-        # Квадратное фото с золотой рамкой 4px (как в /start), без скруглений
-        avatar = _profile_load_avatar(avatar_url, c.p(av_size))
-        if avatar is None:
-            placeholder = Image.new("RGB", (c.p(av_size), c.p(av_size)), (40, 55, 80))
-            ph = ImageDraw.Draw(placeholder)
-            ph.ellipse([c.p(45), c.p(35), c.p(95), c.p(105)], fill=(80, 100, 130))
-            avatar = placeholder.convert("RGBA")
-        c.paste(avatar, av_x, av_y)
-        c.rect(av_x, av_y, av_size, av_size, radius=0, fill=None,
-               outline=(215, 175, 85, 255), width=4.0)
-
-        # Медаль звания — наполовину заходит на фото (как в /start)
-        medal_size = 176.0
-        medal_cy = av_y + av_size
-        medal = _profile_rank_medal(prog["rank_tier"], c.p(medal_size))
+        # --- Медаль звания — наполовину заходит на фото (как в /start) ---
+        medal_size = 180
+        medal_y = avatar_y + avatar_size
+        medal = _profile_rank_medal(rank_tier, medal_size)
         if medal is not None:
-            c.paste(medal, cx - medal_size / 2, medal_cy - medal_size / 2, medal)
+            cx = avatar_x + avatar_size // 2
+            img.paste(medal, (cx - medal_size // 2, medal_y - medal_size // 2), medal)
 
-        # Ник справа от аватара + количество сообщений под ним
-        info_x = av_x + av_size + 28.0
-        title = f"@{username}" if username else (steam_nickname or "Игрок")
-        c.text((info_x, 40), c.fit(title, 40, "bold", 560.0), 40, _PC_WHITE, "bold", "la")
-        c.text((info_x + 4, 100), "ВСЕГО СООБЩЕНИЙ", 13, _PC_GREY, "bold", "la")
-        c.text((info_x + 2, 122), _profile_num(message_count), 40, _PC_GOLD_LIGHT, "bold", "la")
-        if username and steam_nickname:
-            c.text((info_x + 4, 178), c.fit(steam_nickname, 18, "regular", 560.0),
-                   18, _PC_GREY, "regular", "la")
+        # --- Ник: белый цвет, как в /start (NotoSans-Bold 72px) ---
+        draw.text((info_x, info_y), display_name, fill=(255, 255, 255), font=font_title)
 
-        # Сетка статов: один ряд из четырёх ячеек
-        cell_h, cell_gap_x = 74.0, 14.0
-        grid_y = 216.0
-        col_w = 1158.0 - info_x
-        small_w = (col_w - 3 * cell_gap_x) / 4
-
-        week_losses = max(0, week_games - week_wins)
-        if week_games > 0:
-            wr_label = "WR ЗА НЕДЕЛЮ"
-            wr_value = _profile_percent(week_wins, week_games)
-            wr_sub = f"{week_wins}W · {week_losses}L"
-        elif dota_total_games > 0:
-            wr_label = "WR"
-            wr_value = _profile_percent(dota_wins, dota_total_games)
-            wr_sub = "за всё время"
-        else:
-            wr_label, wr_value, wr_sub = "WR", "—", "нет данных"
-
-        streak_sub = _profile_streak_sub(current_streak, best_streak)
-
-        row_small = [
-            ("ФИССУРА", f"{fissure:.1f} см", _PC_ORANGE,
-             f"топ #{_int(position)}" if position else None),
-            ("БРОСКИ", _profile_num(total_rolls), _PC_WHITE,
-             f"+{_profile_num(weekly_rolls)} за неделю" if weekly_rolls > 0 else None),
-            ("СТРИК", _profile_num(current_streak), _PC_ORANGE, streak_sub),
-            (wr_label, wr_value, _PC_GREEN, wr_sub),
-        ]
-
-        def _draw_cell(x, y, w, label, value, accent, sub):
-            if value == "—":
-                accent = _PC_GREY      # прочерк не должен светиться «хорошим» цветом
-            c.rect(x, y, w, cell_h, radius=14, fill=(20, 24, 38, 210),
-                   outline=(255, 255, 255, 22), width=1)
-            c.rect(x, y + 12, 3.5, cell_h - 24, radius=2,
-                   fill=(accent[0], accent[1], accent[2], 225))
-            c.text((x + 16, y + 12), label, 12, _PC_GREY, "bold", "la")
-            sub_w = c.text_width(sub, 12, "regular") if sub else 0.0
-            value_max = w - 32 - (sub_w + 12 if sub else 0)
-            c.text((x + 16, y + 34), c.fit(value, 26, "bold", max(48.0, value_max)),
-                   26, accent, "bold", "la")
-            if sub:
-                c.text((x + w - 16, y + cell_h - 16),
-                       c.fit(sub, 12, "regular", w - 56), 12, _PC_GREY, "regular", "ra")
-
-        for index, (label, value, accent, sub) in enumerate(row_small):
-            _draw_cell(info_x + index * (small_w + cell_gap_x), grid_y, small_w,
-                       label, value, accent, sub)
-
-        # ============ Герои недели (как в карточке топ-рейтинга: квадраты с золотой рамкой) ============
-        if heroes:
-            hero_size, hero_gap = 82.0, 12.0
-            c.text((info_x, 314), "ГЕРОИ НЕДЕЛИ", 12, _PC_GOLD_LIGHT, "bold", "la")
-            hx = info_x
-            for hero in heroes[:5]:
+        # --- Герои недели (квадраты с золотой обводкой, как в топ-ммр) ---
+        # Без Steam (top_heroes пуст или None) — показываем текст из стартовой карточки:
+        # "ВСЕГО СООБЩЕНИЙ:" + сообщения, выровненные по левому краю как иконки
+        hero_size = 96
+        hero_gap = 16
+        gy = 254  # += 50 (как в /start, но на 50 ниже)
+        if top_heroes:
+            hx = info_x  # прижаты к левому краю, начинаются с info_x
+            for hero in top_heroes[:5]:
                 hero_img = _profile_hero_image(
                     hero.get("short_name") or hero.get("name"),
-                    c.p(hero_size),
+                    hero_size,
                     image_url=hero.get("image_url"),
                 )
                 if hero_img is not None:
-                    c.paste(hero_img, hx, 334)
+                    img.alpha_composite(hero_img, (hx, gy))
                 else:
-                    c.rect(hx, 334, hero_size, hero_size, radius=0, fill=(55, 45, 70))
-                c.rect(hx - 1, 333, hero_size + 2, hero_size + 2, radius=0,
-                       outline=(215, 175, 85), width=2)
+                    draw.rectangle([hx, gy, hx + hero_size, gy + hero_size],
+                                   fill=(55, 45, 70), outline=None)
+                draw.rectangle([hx - 1, gy - 1, hx + hero_size + 1, gy + hero_size + 1],
+                               outline=(215, 175, 85), width=2)
                 hx += hero_size + hero_gap
+        elif not steam_id:
+            # Без Steam — карточка как в /start:
+            # длина фиссуры + всего сообщений, выровненные по левому краю как иконки
+            draw.text((info_x, gy), "ВСЕГО СООБЩЕНИЙ:", fill=(255, 255, 255),
+                      font=font_small)
+            draw.text((info_x, gy + 32), str(message_count), fill=(255, 255, 255),
+                      font=font_title)
 
-        # ============ Награды — внизу во всю ширину карточки ============
+        # --- Награды — по левому краю от текста, 5px от низа ---
         if awards:
-            shown, caption = _profile_awards_cap(len(awards))
+            shown, _caption = _profile_awards_cap(len(awards))
             awards = awards[:shown]
-            c.text((44.0, 422), "НАГРАДЫ", 12, _PC_GOLD_LIGHT, "bold", "la")
-            c.text((1158.0, 422), caption, 12, _PC_GREY, "regular", "ra")
-
-            layout = _profile_awards_layout(len(awards))
-            tile, gap, per_row = layout["tile"], layout["gap"], layout["per_row"]
-            tile_y, tile_x = layout["top"], 44.0
-            for award in awards[:per_row]:
+            tile = 40  # 0.5 от 80 (по запросу пользователя)
+            gap = 24
+            tile_x = info_x - 5  # на 5px левее текста
+            tile_y = height - 5 - tile  # 5px от низа
+            for award in awards[:5]:
                 accent = award["color"]
-                c.rect(tile_x, tile_y, tile, tile, radius=16, fill=(20, 24, 38, 215),
-                       outline=(accent[0], accent[1], accent[2], 150), width=1.4)
-                # Иконка награды — PNG из assets/awards, запасной вариант — нарисованная фигура
-                icon = _profile_award_png(award.get("icon"), c.p(52))
-                if icon is None:
-                    icon = _profile_award_icon(award.get("icon"), c.p(52), accent)
+                icon = _profile_award_png(award.get("icon"), tile)
                 if icon is not None:
-                    c.paste(icon, tile_x + (tile - 52) / 2, tile_y + 10, icon)
-                lines = c.wrap(award["label"], 11, "bold", tile - 12, 2)
-                text_y = tile_y + 66 if len(lines) > 1 else tile_y + 72
-                for line in lines:
-                    c.text((tile_x + tile / 2, text_y), line, 11, _PC_WHITE, "bold", "ma")
-                    text_y += 14
+                    img.alpha_composite(icon, (tile_x, tile_y))
+                else:
+                    draw.rounded_rectangle(
+                        [tile_x, tile_y, tile_x + tile, tile_y + tile],
+                        radius=8, fill=(20, 24, 38), outline=accent, width=1)
+
                 if award.get("count"):
-                    c.rect(tile_x + tile - 30, tile_y - 7, 30, 20, radius=10,
-                           fill=(9, 12, 22, 240), outline=(accent[0], accent[1], accent[2], 210), width=1)
-                    c.text((tile_x + tile - 15, tile_y + 3), f"x{award['count']}",
-                           11, accent, "bold", "mm")
+                    draw.rounded_rectangle(
+                        [tile_x + tile - 34, tile_y - 8, tile_x + tile - 2, tile_y + 14],
+                        radius=6, fill=(9, 12, 22), outline=accent, width=1)
+                    draw.text((tile_x + tile - 18, tile_y + 1), f"x{award['count']}",
+                              fill=accent, font=font_small)
+
                 tile_x += tile + gap
 
-        # ============ Сборка: суперсэмплинг → логический размер ============
-        final = canvas_img.convert("RGB").resize((PROFILE_CARD_W, PROFILE_CARD_H), Image.LANCZOS)
         buf = io.BytesIO()
-        final.save(buf, format="PNG", optimize=True)
+        img.save(buf, format="JPEG", quality=90)
         buf.seek(0)
         return buf.read()
+
     except Exception:
         logger.exception("generate_profile_card error")
         return None

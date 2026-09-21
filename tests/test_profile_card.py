@@ -344,8 +344,10 @@ class TestProfileCardRegressions:
         for banned in ("MMR\"", "ПРОГРЕСС ЗВАНИЯ", "ПРОГРЕСС ДО СЛЕДУЮЩЕГО ЗВАНИЯ",
                        "звёзд звания", "_profile_bottom_captions"):
             assert banned not in src, banned
-        # герои переехали в правую колонку (x0 = 372)
-        assert "ГЕРОИ НЕДЕЛИ" in src
+        # Геометрия утверждённого макета 1024x500: без Steam вместо героев —
+        # текст из стартовой карточки (длина фиссуры + всего сообщений)
+        assert "ВСЕГО СООБЩЕНИЙ" in src
+        assert "Герои недели".lower() in src.lower() or "герои" in src.lower()
 
     def test_awards_capped_to_five_with_counter(self):
         assert dota_mmr._profile_awards_cap(5) == (5, "5 шт.")
