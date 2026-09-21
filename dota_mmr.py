@@ -2953,7 +2953,9 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
     """Награды без дублей: теги бота + счётчики недели + производные достижения."""
     meta = {
         "weekly_mvp": ("MVP", _PC_GOLD, "mvp"),
+        "weekly_top2": ("ТОП 2", _PC_SILVER, "silver"),
         "weekly_top3": ("ТОП 3", _PC_BRONZE, "bronze"),
+        "weekly_top1": ("ТОП 1", _PC_GOLD, "top1"),
         "fissure_master": ("МАСТЕР ФИССУР", _PC_PINK, "diamond"),
         "admin_custom": ("АДМИН", _PC_PURPLE, "shield"),
     }
@@ -3033,11 +3035,11 @@ def _profile_awards_layout(count) -> dict:
 
     Низ плиток — 586 px при высоте карточки 600 (тест проверяет инвариант).
     """
+    tile, gap, per_row, top = 40.0, 24.0, _PROFILE_AWARDS_PER_ROW, 455.0
     try:
         count = max(0, int(count or 0))
     except (TypeError, ValueError):
         count = 0
-    tile, gap, per_row, top = 140.0, 21.0, _PROFILE_AWARDS_PER_ROW, 446.0
     rows = 1 if count > 0 else 0
     return {
         "tile": tile,
@@ -3156,27 +3158,33 @@ def generate_profile_card(
     steam_nickname: str = None,
     steam_id: int = None,
     rank_tier: int = 0,
+    mmr: int = 0,
+    fissure: float = 0.0,
     message_count: int = 0,
     total_rolls: int = 0,
     weekly_rolls: int = 0,
     current_streak: int = 0,
     best_streak: int = 0,
+    week_games: int = 0,
     week_wins: int = 0,
     week_losses: int = 0,
+    dota_total_games: int = 0,
+    dota_wins: int = 0,
     top_heroes: list = None,
-    weekly_mvp: int = 0,
-    weekly_top2: int = 0,
-    weekly_top3: int = 0,
+    tags: list = None,
+    award_counts: dict = None,
+    position: int = None,
 ) -> bytes | None:
-    """Карточка /profile — точная копия /start (кадр, ник, медаль) + герои (если Steam)
-    и награды внизу."""
+    """Карточка /profile — точная копия /start (фон, аватар, медаль, ник) + герои (если Steam)
+    и награды внизу. Без Steam — карточка как в /start (только сообщения вместо героев)."""
     logger.info(
         f"generate_profile_card INPUT: username={username} steam_id={steam_id} "
-        f"rank_tier={rank_tier} message_count={message_count} "
-        f"top_heroes={len(top_heroes or [])} weekly_mvp={weekly_mvp}"
+        f"rank_tier={rank_tier} mmr={mmr} message_count={message_count} "
+        f"top_heroes={len(top_heroes or [])} has_tags={bool(tags)}"
     )
     try:
         import io
+        import os
 
         import requests
         from PIL import Image, ImageDraw, ImageFont
@@ -3197,6 +3205,10 @@ def generate_profile_card(
             logger.error(f"Profile background error: {e}")
             img = Image.new("RGB", (width, height), (15, 20, 35))
         draw = ImageDraw.Draw(img)
+
+        # --- Награды ---
+        awards = _profile_awards(tags, award_counts, mmr=mmr, total_rolls=total_rolls,
+                                 best_streak=best_streak, message_count=message_count)
 
         # --- Аватар + золотая рамка (как в /start) -----
         avatar_x_offset = -100
@@ -3288,13 +3300,15 @@ def generate_profile_card(
         if top_heroes:
             hx = info_x  # прижаты к левому краю, начинаются с info_x
             for hero in top_heroes[:5]:
+                if not hero:
+                    continue
                 hero_img = _profile_hero_image(
                     hero.get("short_name") or hero.get("name"),
                     hero_size,
                     image_url=hero.get("image_url"),
                 )
                 if hero_img is not None:
-                    img.alpha_composite(hero_img, (hx, gy))
+                    img.paste(hero_img, (hx, gy))
                 else:
                     draw.rectangle([hx, gy, hx + hero_size, gy + hero_size],
                                    fill=(55, 45, 70), outline=None)
@@ -3321,7 +3335,7 @@ def generate_profile_card(
                 accent = award["color"]
                 icon = _profile_award_png(award.get("icon"), tile)
                 if icon is not None:
-                    img.alpha_composite(icon, (tile_x, tile_y))
+                    img.paste(icon, (tile_x, tile_y), icon)
                 else:
                     draw.rounded_rectangle(
                         [tile_x, tile_y, tile_x + tile, tile_y + tile],
@@ -3337,7 +3351,7 @@ def generate_profile_card(
                 tile_x += tile + gap
 
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=90)
+        img.save(buf, format="PNG", optimize=True)
         buf.seek(0)
         return buf.read()
 
