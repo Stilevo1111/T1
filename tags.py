@@ -59,6 +59,8 @@ def get_user_tags(telegram_id: int) -> list:
             return [t for t in data if t in TAG_TYPES]
     except Exception:
         pass
+    if isinstance(raw, str) and raw in TAG_TYPES:
+        return [raw]
     return []
 
 
@@ -299,7 +301,16 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
 
     top_users = get_fissure_top(15)
     if not top_users:
+        logger.info("tag_manager: refresh_fissure_top_tags: no top users")
         return
+
+    logger.info(f"tag_manager: refresh_fissure_top_tags: top_users count={len(top_users)}")
+    if top_users:
+        logger.info(f"tag_manager: top1={_tg(top_users[0]) if len(top_users) > 0 else None}")
+        if len(top_users) > 1:
+            logger.info(f"tag_manager: top2={_tg(top_users[1])}")
+        if len(top_users) > 2:
+            logger.info(f"tag_manager: top3-15={[_tg(u) for u in top_users[2:15]]}")
 
     # Текущие держатели тегов
     current_top1 = top_users[0] if len(top_users) > 0 else None
@@ -443,3 +454,86 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
                     logger.error(f"tag_manager: refresh_fissure_top_tags: failed to set F3 for {new_tg}: {e}")
 
     set_config('current_F3_telegram_ids', ','.join(str(x) for x in new_top3))
+
+
+async def refresh_mmr_top_tags(bot, chat_id: int) -> None:
+    """Обновляет теги MMR топа (Top-1, MMR Top-2, MMR Top-3).
+
+    - Top-1 - единственный, выдается раз в неделю
+    - MMR Top-2, MMR Top-3 - аналогично фиссурным тегам
+    """
+    from database import get_mmr_top, get_config
+    from datetime import datetime
+
+    try:
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            return
+        chat_id = int(digest_chat_id)
+    except Exception:
+        return
+
+    top_users = get_mmr_top(10)
+    if not top_users:
+        return
+
+    current_top1 = top_users[0] if top_users else None
+    current_top2 = top_users[1] if len(top_users) > 1 else None
+    current_top3 = [u for u in top_users[2:10]] if len(top_users) > 2 else []
+
+    def _tg(u):
+        return u.get('telegram_id') if u else None
+
+    def _name(u):
+        if not u:
+            return ""
+        return u.get('username') or u.get('steam_nickname') or str(u.get('telegram_id'))
+
+    async def _is_admin(tg_id):
+        if not tg_id:
+            return False
+        try:
+            member = await bot.get_chat_member(chat_id=chat_id, user_id=int(tg_id))
+            return member.status in ("administrator", "creator")
+        except Exception:
+            return False
+
+    now_week = datetime.now().isocalendar()[:2]
+
+    # Top-1 (единственный, раз в неделю)
+    new_top1 = _tg(current_top1)
+    last_mmr_top1_week = get_config('last_mmr_top1_week')
+    try:
+        last_week = json.loads(last_mmr_top1_week or "{}") if last_mmr_top1_week else {}
+        is_new_week = last_week.get('week') != now_week
+    except Exception:
+        is_new_week = True
+
+    if new_top1 and is_new_week and not await _is_admin(new_top1):
+        try:
+            await add_user_tag(int(new_top1), "weekly_top1", bot=bot, chat_id=chat_id)
+            logger.info(f"tag_manager: MMR Top-1 -> {_name(current_top1)}")
+            set_config('last_mmr_top1_week', json.dumps({'week': now_week}))
+        except Exception as e:
+            logger.error(f"tag_manager: failed to set MMR Top-1: {e}")
+
+    # MMR Top-2, Top-3 (аналогично F2, F3)
+    new_top2 = _tg(current_top2)
+    new_top3_ids = [_tg(u) for u in current_top3 if _tg(u)]
+
+    # Выдаём MMR Top-2 новым
+    if new_top2 and not await _is_admin(new_top2):
+        try:
+            await add_user_tag(int(new_top2), "weekly_top2", bot=bot, chat_id=chat_id)
+            logger.info(f"tag_manager: MMR Top-2 -> {_name(current_top2)}")
+        except Exception as e:
+            logger.error(f"tag_manager: failed to set MMR Top-2: {e}")
+
+    # Выдаём MMR Top-3 новым
+    for tg_id in new_top3_ids:
+        if tg_id and not await _is_admin(tg_id):
+            try:
+                await add_user_tag(int(tg_id), "weekly_top3", bot=bot, chat_id=chat_id)
+                logger.info(f"tag_manager: MMR Top-3 -> {tg_id}")
+            except Exception as e:
+                logger.error(f"tag_manager: failed to set MMR Top-3: {e}")
