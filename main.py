@@ -2875,7 +2875,7 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
     steam_id = target_user.get("steam_id")
     try:
         from dota_mmr import generate_profile_card, get_week_top_heroes_async
-        from tags import get_user_tags
+        from tags import get_user_tags, add_user_tag
 
         avatar_url = await resolve_avatar_url_for_card(
             bot,
@@ -2908,6 +2908,28 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                 position = await asyncio.to_thread(get_fissure_rank, telegram_id)
             except Exception as e:
                 logger.debug(f"profile card rank skipped uid={telegram_id}: {e}")
+
+        if telegram_id and "F1" not in tags and position == 1:
+            try:
+                await add_user_tag(telegram_id, "F1", bot=context.bot, chat_id=chat_id)
+                tags = tags + ["F1"]
+                logger.info(f"profile card: added F1 tag to user {telegram_id}")
+            except Exception as e:
+                logger.debug(f"profile card F1 tag skip uid={telegram_id}: {e}")
+        elif telegram_id and "F2" not in tags and position == 2:
+            try:
+                await add_user_tag(telegram_id, "F2", bot=context.bot, chat_id=chat_id)
+                tags = tags + ["F2"]
+                logger.info(f"profile card: added F2 tag to user {telegram_id}")
+            except Exception as e:
+                logger.debug(f"profile card F2 tag skip uid={telegram_id}: {e}")
+        elif telegram_id and "F3" not in tags and (position is not None and 3 <= position <= 15):
+            try:
+                await add_user_tag(telegram_id, "F3", bot=context.bot, chat_id=chat_id)
+                tags = tags + ["F3"]
+                logger.info(f"profile card: added F3 tag to user {telegram_id}")
+            except Exception as e:
+                logger.debug(f"profile card F3 tag skip uid={telegram_id}: {e}")
 
         card_bytes = await asyncio.wait_for(
             asyncio.to_thread(
