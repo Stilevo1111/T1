@@ -4224,3 +4224,47 @@ def validate_user_registry():
     except Exception as e:
         logger.error(f"validate_user_registry error: {e}")
         return -1
+
+
+def get_vip_users() -> set:
+    """Получить множество VIP пользователей из конфига."""
+    import json
+    vip_data = get_config('vip_users_list')
+    if not vip_data:
+        return set()
+    try:
+        return set(int(x) for x in json.loads(vip_data) if x)
+    except Exception:
+        return set()
+
+
+def add_vip_user(telegram_id: int) -> bool:
+    """Добавить пользователя в список VIP."""
+    import json
+    vip_users = get_vip_users()
+    if telegram_id in vip_users:
+        return True
+    vip_users.add(telegram_id)
+    try:
+        set_config('vip_users_list', json.dumps(list(vip_users)))
+        logger.info(f"vip: added user {telegram_id} to VIP list")
+        return True
+    except Exception as e:
+        logger.warning(f"vip: failed to add user {telegram_id}: {e}")
+        return False
+
+
+def remove_vip_user(telegram_id: int) -> bool:
+    """Удалить пользователя из списка VIP."""
+    import json
+    vip_users = get_vip_users()
+    if telegram_id not in vip_users:
+        return True
+    vip_users.discard(telegram_id)
+    try:
+        set_config('vip_users_list', json.dumps(list(vip_users)))
+        logger.info(f"vip: removed user {telegram_id} from VIP list")
+        return True
+    except Exception as e:
+        logger.warning(f"vip: failed to remove user {telegram_id}: {e}")
+        return False

@@ -44,24 +44,30 @@ TAG_PRIORITY = {
 
 
 def get_user_tags(telegram_id: int) -> list:
-    from database import get_user
+    from database import get_user, get_vip_users
     user = get_user(telegram_id)
     if not user:
         return []
     raw = user.get("user_tags")
-    if not raw:
-        return []
-    if isinstance(raw, list):
-        return [t for t in raw if t in TAG_TYPES]
-    try:
-        data = json.loads(raw)
-        if isinstance(data, list):
-            return [t for t in data if t in TAG_TYPES]
-    except Exception:
-        pass
-    if isinstance(raw, str) and raw in TAG_TYPES:
-        return [raw]
-    return []
+    tags = []
+    if raw:
+        if isinstance(raw, list):
+            tags = [t for t in raw if t in TAG_TYPES]
+        else:
+            try:
+                data = json.loads(raw)
+                if isinstance(data, list):
+                    tags = [t for t in data if t in TAG_TYPES]
+            except Exception:
+                if isinstance(raw, str) and raw in TAG_TYPES:
+                    tags = [raw]
+    
+    vip_users = get_vip_users()
+    if str(telegram_id) in [str(uid) for uid in vip_users] or telegram_id in vip_users:
+        if "VIP" not in tags:
+            tags = tags + ["VIP"]
+    
+    return tags
 
 
 def _save_user_tags(telegram_id: int, tags: list) -> None:
@@ -304,6 +310,14 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
         logger.info("tag_manager: refresh_fissure_top_tags: no top users")
         return
 
+    def _tg(u):
+        return u.get('telegram_id') if u else None
+
+    def _name(u):
+        if not u:
+            return ""
+        return u.get('username') or u.get('steam_nickname') or str(u.get('telegram_id'))
+
     logger.info(f"tag_manager: refresh_fissure_top_tags: top_users count={len(top_users)}")
     if top_users:
         logger.info(f"tag_manager: top1={_tg(top_users[0]) if len(top_users) > 0 else None}")
@@ -316,22 +330,6 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
     current_top1 = top_users[0] if len(top_users) > 0 else None
     current_top2 = top_users[1] if len(top_users) > 1 else None
     current_top3 = [u for u in top_users[2:15]] if len(top_users) > 2 else []
-
-    def _tg(u):
-        return u.get('telegram_id') if u else None
-
-    def _name(u):
-        if not u:
-            return ""
-        return u.get('username') or u.get('steam_nickname') or str(u.get('telegram_id'))
-
-    async def _is_admin(tg_id):
-        if not tg_id:
-            return False
-        try:
-            return await _is_admin(bot, chat_id, int(tg_id))
-        except Exception:
-            return False
 
     # --- ТОП 1 (F1) ---
     new_top1_tg = _tg(current_top1)
@@ -347,7 +345,7 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
 
     if stored_top1_tg and str(new_top1_tg) != str(stored_top1_tg) and int(stored_top1_tg) != 0:
         # Забираем у старого
-        if not await _is_admin(int(stored_top1_tg)):
+        if not await _is_admin(bot, chat_id, int(stored_top1_tg)):
             try:
                 await remove_user_tag(int(stored_top1_tg), "F1", bot=bot, chat_id=chat_id)
                 logger.info(f"tag_manager: refresh_fissure_top_tags: removed F1 from {stored_top1_tg}")
@@ -373,7 +371,7 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
                     logger.info(f"tag_manager: refresh_fissure_top_tags: passed F3 to old top-1 {stored_top1_tg}")
 
     # Выдаём новому
-    if new_top1_tg and not await _is_admin(new_top1_tg):
+    if new_top1_tg and not await _is_admin(bot, chat_id, int(new_top1_tg)):
         try:
             await add_user_tag(int(new_top1_tg), "F1", bot=bot, chat_id=chat_id)
             set_config('current_F1_telegram_id', str(new_top1_tg))
@@ -396,7 +394,7 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
                 break
 
     if stored_top2_tg and str(new_top2_tg) != str(stored_top2_tg) and int(stored_top2_tg) != 0:
-        if not await _is_admin(int(stored_top2_tg)):
+        if not await _is_admin(bot, chat_id, int(stored_top2_tg)):
             try:
                 await remove_user_tag(int(stored_top2_tg), "F2", bot=bot, chat_id=chat_id)
                 logger.info(f"tag_manager: refresh_fissure_top_tags: removed F2 from {stored_top2_tg}")
@@ -414,7 +412,7 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
                             logger.info(f"tag_manager: refresh_fissure_top_tags: passed F3 to old top-2 {stored_top2_tg}")
                     break
 
-    if new_top2_tg and not await _is_admin(new_top2_tg):
+    if new_top2_tg and not await _is_admin(bot, chat_id, int(new_top2_tg)):
         try:
             await add_user_tag(int(new_top2_tg), "F2", bot=bot, chat_id=chat_id)
             set_config('current_F2_telegram_id', str(new_top2_tg))

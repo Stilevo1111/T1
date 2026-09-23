@@ -354,8 +354,8 @@ class TestProfileCardRegressions:
         assert dota_mmr._profile_awards_cap(8) == (5, "5 из 8")
         assert dota_mmr._profile_awards_cap(6) == (5, "5 из 6")
         layout = dota_mmr._profile_awards_layout(5)
-        assert layout["rows"] == 1 and layout["tile"] == 60.0
-        assert layout["top"] == 240.0
+        assert layout["rows"] == 1 and layout["tile"] == 120.0
+        assert layout["top"] == 245.0
         assert layout["bottom"] <= PROFILE_CARD_H - 4
 
     @pytest.mark.parametrize("current,best,expected", [

@@ -3673,8 +3673,9 @@ async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="Использование: /tag <@username|telegram_id> <тип>\n"
-                 "Типы: weekly_mvp, weekly_top2, weekly_top3, fissure_master, admin_custom\n"
-                 "Пример: /tag @user weekly_mvp",
+                 "Типы: weekly_mvp, weekly_top2, weekly_top3, fissure_master, admin_custom, VIP\n"
+                 "Пример: /tag @user weekly_mvp\n"
+                 "VIP: добавляет в список VIP (требуется ручное подтверждение в Telegram)",
             reply_markup=main_menu()
         )
         return
@@ -3707,6 +3708,24 @@ async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target_id = target_user.get('telegram_id')
     chat_id = update.effective_chat.id
+    
+    if tag_type == "VIP":
+        from database import add_vip_user
+        if await asyncio.to_thread(add_vip_user, target_id):
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"✅ Пользователь {target} добавлен в VIP список\n"
+                     f"⚠️ ВАЖНО: VIP тег нужно установить вручную в приложении Telegram",
+                reply_markup=main_menu()
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"❌ Ошибка при добавлении VIP для {target}",
+                reply_markup=main_menu()
+            )
+        return
+    
     ok = await add_user_tag(target_id, tag_type, bot=context.bot, chat_id=chat_id)
     label = TAG_DISPLAY.get(tag_type, TAG_TYPES.get(tag_type, tag_type))
     await context.bot.send_message(
@@ -3733,7 +3752,7 @@ async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="Использование: /untag <@username|telegram_id> <тип>\n"
-                 "Типы: weekly_mvp, weekly_top2, weekly_top3, fissure_master, admin_custom\n"
+                 "Типы: weekly_mvp, weekly_top2, weekly_top3, fissure_master, admin_custom, VIP\n"
                  "Пример: /untag @user weekly_mvp",
             reply_markup=main_menu()
         )
@@ -3767,6 +3786,23 @@ async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target_id = target_user.get('telegram_id')
     chat_id = update.effective_chat.id
+    
+    if tag_type == "VIP":
+        from database import remove_vip_user
+        if await asyncio.to_thread(remove_vip_user, target_id):
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"✅ Пользователь {target} удалён из VIP списка",
+                reply_markup=main_menu()
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"❌ Ошибка при удалении VIP для {target}",
+                reply_markup=main_menu()
+            )
+        return
+    
     ok = await remove_user_tag(target_id, tag_type, bot=context.bot, chat_id=chat_id)
     label = TAG_DISPLAY.get(tag_type, TAG_TYPES.get(tag_type, tag_type))
     await context.bot.send_message(
