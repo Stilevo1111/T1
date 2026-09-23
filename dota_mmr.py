@@ -3035,7 +3035,7 @@ def _profile_awards_layout(count) -> dict:
 
     Низ плиток — 586 px при высоте карточки 600 (тест проверяет инвариант).
     """
-    tile, gap, per_row, top = 40.0, 24.0, _PROFILE_AWARDS_PER_ROW, 455.0
+    tile, gap, per_row, top = 120.0, 28.0, _PROFILE_AWARDS_PER_ROW, 365.0
     try:
         count = max(0, int(count or 0))
     except (TypeError, ValueError):
@@ -3050,6 +3050,27 @@ def _profile_awards_layout(count) -> dict:
         "rows": max(1, rows),
         "bottom": top + tile if count > 0 else top,
     }
+
+
+def _profile_apply_circle_mask(img):
+    """Применить круглую маску к изображению (modifies in place)."""
+    from PIL import Image, ImageDraw
+
+    w, h = img.size
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).ellipse([0, 0, w, h], fill=255)
+    img.putalpha(mask)
+
+
+def _profile_apply_rounded_square_mask(img, radius: float = 0.0):
+    """Применить маску с закругленными краями к изображению (modifies in place)."""
+    from PIL import Image, ImageDraw
+
+    w, h = img.size
+    r = max(0, int(radius))
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, w, h], radius=r, fill=255)
+    img.putalpha(mask)
 
 
 class _ProfileCanvas:
@@ -3170,6 +3191,7 @@ def generate_profile_card(
     week_losses: int = 0,
     dota_total_games: int = 0,
     dota_wins: int = 0,
+    dota_losses: int = 0,
     top_heroes: list = None,
     tags: list = None,
     award_counts: dict = None,
@@ -3280,7 +3302,7 @@ def generate_profile_card(
         display_name = f"@{username}" if username else (steam_nickname or "Unknown")
 
 
-        # --- Медаль звания — наполовину заходит на фото (как в /start) ---
+        # --- Медаль звания — наполовину заходит на аватар (как в /start) ---
         medal_size = 180
         medal_y = avatar_y + avatar_size
         medal = _profile_rank_medal(rank_tier, medal_size)
@@ -3288,64 +3310,50 @@ def generate_profile_card(
             cx = avatar_x + avatar_size // 2
             img.paste(medal, (cx - medal_size // 2, medal_y - medal_size // 2), medal)
 
-        # --- Ник: белый цвет, как в /start (NotoSans-Bold 72px) ---
-        draw.text((info_x, info_y), display_name, fill=(255, 255, 255), font=font_title)
+        # --- Ник: белый цвет (как в /start) ---
+        draw.text((info_x, info_y), display_name, fill=_PC_WHITE, font=font_title)
 
-        # --- Герои недели (квадраты с золотой обводкой, как в топ-ммр) ---
-        # Без Steam (top_heroes пуст или None) — показываем текст из стартовой карточки:
-        # "ВСЕГО СООБЩЕНИЙ:" + сообщения, выровненные по левому краю как иконки
-        hero_size = 96
-        hero_gap = 16
-        gy = 254  # += 50 (как в /start, но на 50 ниже)
+        # --- Текстовые метки: Всегда как в /start ---
+        msg_label_y = info_y + int(50 * scale)
+        if week_wins is not None and week_losses is not None:
+            wr = round(week_wins / (week_wins + week_losses) * 100) if (week_wins + week_losses) > 0 else 0
+            draw.text((info_x, msg_label_y), "За неделю:", fill=_PC_WHITE, font=font_small)
+            draw.text((info_x, msg_label_y + int(28 * scale)),
+                      f"{week_wins}W/{week_losses}L/{wr}%", fill=_PC_WHITE, font=font_title)
+        else:
+            draw.text((info_x, msg_label_y), "Всего сообщений:", fill=_PC_WHITE, font=font_small)
+            draw.text((info_x, msg_label_y + int(28 * scale)),
+                      str(message_count), fill=_PC_WHITE, font=font_title)
+
+        # --- Герои недели: рендеринг из /start (квадраты 82px) ---
         if top_heroes:
-            hx = info_x  # прижаты к левому краю, начинаются с info_x
-            for hero in top_heroes[:5]:
-                if not hero:
-                    continue
-                hero_img = _profile_hero_image(
-                    hero.get("short_name") or hero.get("name"),
-                    hero_size,
-                    image_url=hero.get("image_url"),
-                )
-                if hero_img is not None:
-                    img.paste(hero_img, (hx, gy))
-                else:
-                    draw.rectangle([hx, gy, hx + hero_size, gy + hero_size],
-                                   fill=(55, 45, 70), outline=None)
-                draw.rectangle([hx - 1, gy - 1, hx + hero_size + 1, gy + hero_size + 1],
-                               outline=(215, 175, 85), width=2)
-                hx += hero_size + hero_gap
-        elif not steam_id:
-            # Без Steam — карточка как в /start:
-            # длина фиссуры + всего сообщений, выровненные по левому краю как иконки
-            draw.text((info_x, gy), "ВСЕГО СООБЩЕНИЙ:", fill=(255, 255, 255),
-                      font=font_small)
-            draw.text((info_x, gy + 32), str(message_count), fill=(255, 255, 255),
-                      font=font_title)
+            clean_heroes = [h for h in top_heroes if h and isinstance(h, dict)]
+            if clean_heroes:
+                awards_tile = int(_profile_awards_layout(len(awards))["tile"]) if awards else 0
+                hero_base_height = height if not awards else height - awards_tile
+                img, draw = _draw_hero_squares_on_card(img, draw, clean_heroes, hero_base_height, width)
 
-        # --- Награды — по левому краю от текста, 5px от низа ---
+        # --- Награды — на их месте (где сейчас) ---
         if awards:
             shown, _caption = _profile_awards_cap(len(awards))
             awards = awards[:shown]
-            tile = 40  # 0.5 от 80 (по запросу пользователя)
-            gap = 24
-            tile_x = info_x - 5  # на 5px левее текста
-            tile_y = height - 5 - tile  # 5px от низа
+            layout = _profile_awards_layout(len(awards))
+            tile = int(layout["tile"])
+            gap = int(layout["gap"])
+            tile_x = info_x - 5
+            tile_y = height - 5 - tile
             for award in awards[:5]:
                 accent = award["color"]
                 icon = _profile_award_png(award.get("icon"), tile)
                 if icon is not None:
                     img.paste(icon, (tile_x, tile_y), icon)
                 else:
-                    draw.rounded_rectangle(
+                    draw.ellipse(
                         [tile_x, tile_y, tile_x + tile, tile_y + tile],
-                        radius=8, fill=(20, 24, 38), outline=accent, width=1)
+                        fill=(20, 24, 38), outline=accent, width=2)
 
                 if award.get("count"):
-                    draw.rounded_rectangle(
-                        [tile_x + tile - 34, tile_y - 8, tile_x + tile - 2, tile_y + 14],
-                        radius=6, fill=(9, 12, 22), outline=accent, width=1)
-                    draw.text((tile_x + tile - 18, tile_y + 1), f"x{award['count']}",
+                    draw.text((tile_x + tile - 14, tile_y + 3), f"x{award['count']}",
                               fill=accent, font=font_small)
 
                 tile_x += tile + gap
