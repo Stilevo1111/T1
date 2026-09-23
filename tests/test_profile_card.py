@@ -346,7 +346,7 @@ class TestProfileCardRegressions:
             assert banned not in src, banned
         # Геометрия утверждённого макета 1024x500: без Steam вместо героев —
         # текст из стартовой карточки (длина фиссуры + всего сообщений)
-        assert "ВСЕГО СООБЩЕНИЙ" in src
+        assert "Всего сообщений" in src
         assert "Герои недели".lower() in src.lower() or "герои" in src.lower()
 
     def test_awards_capped_to_five_with_counter(self):
@@ -354,7 +354,8 @@ class TestProfileCardRegressions:
         assert dota_mmr._profile_awards_cap(8) == (5, "5 из 8")
         assert dota_mmr._profile_awards_cap(6) == (5, "5 из 6")
         layout = dota_mmr._profile_awards_layout(5)
-        assert layout["rows"] == 1 and layout["tile"] == 40.0
+        assert layout["rows"] == 1 and layout["tile"] == 60.0
+        assert layout["top"] == 240.0
         assert layout["bottom"] <= PROFILE_CARD_H - 4
 
     @pytest.mark.parametrize("current,best,expected", [

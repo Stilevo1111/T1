@@ -2176,8 +2176,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             current = int(get_config(key) or 0)
             set_config(key, current + 1)
 
-            # Add reaction to message
+            # Add reaction to message (with answer to prevent rate limiting)
             try:
+                await callback_query.answer(cache_time=0)
                 await context.bot.set_message_reaction(
                     chat_id=chat_id,
                     message_id=callback_query.message.message_id,
@@ -2186,7 +2187,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             except Exception:
                 pass
 
-            # Update button text with new count
+            # Update button text with new count (optimized to avoid rate limit)
             try:
                 good_count = int(get_config(f"greeting_{date_str}_good") or 0)
                 bad_count = int(get_config(f"greeting_{date_str}_bad") or 0)
@@ -2924,8 +2925,10 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                 message_count=target_user.get("message_count") or 0,
                 week_games=target_user.get("week_games") or 0,
                 week_wins=target_user.get("week_wins") or 0,
+                week_losses=target_user.get("week_losses") or 0,
                 dota_total_games=target_user.get("dota_total_games") or 0,
                 dota_wins=target_user.get("dota_wins") or 0,
+                dota_losses=target_user.get("dota_losses") or 0,
                 top_heroes=top_heroes,
                 tags=tags,
                 award_counts={

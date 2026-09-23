@@ -3031,11 +3031,8 @@ def _profile_awards_cap(total) -> tuple:
 
 
 def _profile_awards_layout(count) -> dict:
-    """Геометрия значков наград: один ряд крупных плиток внизу карточки.
-
-    Низ плиток — 586 px при высоте карточки 600 (тест проверяет инвариант).
-    """
-    tile, gap, per_row, top = 120.0, 28.0, _PROFILE_AWARDS_PER_ROW, 365.0
+    """Геометрия значков наград: один ряд плиток в центральной области карточки."""
+    tile, gap, per_row, top = 60.0, 28.0, _PROFILE_AWARDS_PER_ROW, 240.0
     try:
         count = max(0, int(count or 0))
     except (TypeError, ValueError):
@@ -3313,36 +3310,20 @@ def generate_profile_card(
         # --- Ник: белый цвет (как в /start) ---
         draw.text((info_x, info_y), display_name, fill=_PC_WHITE, font=font_title)
 
-        # --- Текстовые метки: Всегда как в /start ---
         msg_label_y = info_y + int(50 * scale)
-        if week_wins is not None and week_losses is not None:
-            wr = round(week_wins / (week_wins + week_losses) * 100) if (week_wins + week_losses) > 0 else 0
-            draw.text((info_x, msg_label_y), "За неделю:", fill=_PC_WHITE, font=font_small)
-            draw.text((info_x, msg_label_y + int(28 * scale)),
-                      f"{week_wins}W/{week_losses}L/{wr}%", fill=_PC_WHITE, font=font_title)
-        else:
-            draw.text((info_x, msg_label_y), "Всего сообщений:", fill=_PC_WHITE, font=font_small)
-            draw.text((info_x, msg_label_y + int(28 * scale)),
-                      str(message_count), fill=_PC_WHITE, font=font_title)
 
-        # --- Герои недели: рендеринг из /start (квадраты 82px) ---
-        if top_heroes:
-            clean_heroes = [h for h in top_heroes if h and isinstance(h, dict)]
-            if clean_heroes:
-                awards_tile = int(_profile_awards_layout(len(awards))["tile"]) if awards else 0
-                hero_base_height = height if not awards else height - awards_tile
-                img, draw = _draw_hero_squares_on_card(img, draw, clean_heroes, hero_base_height, width)
-
-        # --- Награды — на их месте (где сейчас) ---
+        # --- Награды в центральной области, где раньше был текст ---
         if awards:
             shown, _caption = _profile_awards_cap(len(awards))
             awards = awards[:shown]
             layout = _profile_awards_layout(len(awards))
             tile = int(layout["tile"])
             gap = int(layout["gap"])
-            tile_x = info_x - 5
-            tile_y = height - 5 - tile
-            for award in awards[:5]:
+            per_row = int(layout["per_row"])
+            awards_width = len(awards) * tile + max(0, len(awards) - 1) * gap
+            tile_x = info_x + max(0, (width - info_x - awards_width) // 2)
+            tile_y = int(layout["top"])
+            for award in awards[:per_row]:
                 accent = award["color"]
                 icon = _profile_award_png(award.get("icon"), tile)
                 if icon is not None:
@@ -3357,6 +3338,22 @@ def generate_profile_card(
                               fill=accent, font=font_small)
 
                 tile_x += tile + gap
+        else:
+            if week_wins is not None and week_losses is not None:
+                wr = round(week_wins / (week_wins + week_losses) * 100) if (week_wins + week_losses) > 0 else 0
+                draw.text((info_x, msg_label_y), "За неделю:", fill=_PC_WHITE, font=font_small)
+                draw.text((info_x, msg_label_y + int(28 * scale)),
+                          f"{week_wins}W/{week_losses}L/{wr}%", fill=_PC_WHITE, font=font_title)
+            else:
+                draw.text((info_x, msg_label_y), "Всего сообщений:", fill=_PC_WHITE, font=font_small)
+                draw.text((info_x, msg_label_y + int(28 * scale)),
+                          str(message_count), fill=_PC_WHITE, font=font_title)
+
+        # --- Герои недели: рендеринг из /start (квадраты 82px) ---
+        if top_heroes:
+            clean_heroes = [h for h in top_heroes if h and isinstance(h, dict)]
+            if clean_heroes:
+                img, draw = _draw_hero_squares_on_card(img, draw, clean_heroes, height, width)
 
         buf = io.BytesIO()
         img.save(buf, format="PNG", optimize=True)
