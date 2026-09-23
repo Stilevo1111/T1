@@ -338,6 +338,7 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
     # --- ТОП 1 (F1) ---
     new_top1_tg = _tg(current_top1)
     stored_top1_tg = get_config('current_F1_telegram_id')
+    logger.info(f"tag_manager: stored_top1_tg={stored_top1_tg}, new_top1_tg={new_top1_tg}")
 
     # Где упал старый топ 1?
     stored_old_top1 = None
@@ -346,6 +347,8 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
             if u and u.get('telegram_id') == int(stored_top1_tg):
                 stored_old_top1 = u
                 break
+    
+    logger.debug(f"tag_manager: stored_old_top1={stored_old_top1}")
 
     if stored_top1_tg and str(new_top1_tg) != str(stored_top1_tg) and int(stored_top1_tg) != 0:
         # Забираем у старого
