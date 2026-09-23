@@ -3811,6 +3811,77 @@ async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
+
+async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выдача VIP тега пользователю"""
+    from config import settings
+    ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
+    user_id = update.effective_user.id
+
+    if not ADMIN_CHAT_ID or user_id != ADMIN_CHAT_ID:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❌ Только администратор может использовать эту команду",
+            reply_markup=main_menu()
+        )
+        return
+
+    args = context.args
+    if not args or len(args) < 1:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Использование: /vip <@username|telegram_id>\n"
+                 "Пример: /vip @user\n"
+                 "Выдаёт VIP тег пользователю",
+            reply_markup=main_menu()
+        )
+        return
+
+    target = args[0].lstrip('@')
+    target_user = None
+    if target.isdigit():
+        target_user = get_user(int(target))
+    else:
+        target_user = get_user_by_username(target)
+
+    if not target_user:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"❌ Пользователь {target} не найден",
+            reply_markup=main_menu()
+        )
+        return
+
+    target_id = target_user.get('telegram_id')
+    chat_id = update.effective_chat.id
+    
+    added = await add_user_tag(target_id, "VIP", bot=context.bot, chat_id=chat_id)
+    
+    from database import add_vip_user
+    db_added = add_vip_user(target_id)
+    
+    if added and db_added:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"✅ VIP тег выдан пользователю {target}\n"
+                 f"🎉 Пользователь теперь имеет статус VIP",
+            reply_markup=main_menu()
+        )
+    elif db_added:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"✅ VIP добавлен в список для {target}\n"
+                 f"⚠️ Тег нужно установить вручную в Telegram",
+            reply_markup=main_menu()
+        )
+    else:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"❌ Ошибка при выдаче VIP для {target}",
+            reply_markup=main_menu()
+        )
+
+
 async def tags_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = None
     if context.args and len(context.args) >= 1:
@@ -4660,6 +4731,7 @@ async def main():
         app.add_handler(CommandHandler("admin_unlink", admin_unlink))
         app.add_handler(CommandHandler("tag", admin_tag))
         app.add_handler(CommandHandler("untag", admin_untag))
+        app.add_handler(CommandHandler("vip", vip_command))
         app.add_handler(CommandHandler("tags", tags_list))
         app.add_handler(CommandHandler("setdigestchat", digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
@@ -4703,6 +4775,7 @@ async def main():
             BotCommand("info", "📖 Информация"),
             BotCommand("resetgame", "🔄 Сброс игры"),
             BotCommand("digestnow", "📊 Обновить дайджест"),
+            BotCommand("vip", "💎 Выдать VIP"),
         ]
         try:
             await app.bot.set_my_commands(bot_commands)
