@@ -351,11 +351,15 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
                     old_pos = i + 1
                     break
             if old_pos == 2:
-                await add_user_tag(int(stored_top1_tg), "F2", bot=bot, chat_id=chat_id)
-                logger.info(f"tag_manager: refresh_fissure_top_tags: passed F2 to old top-1 {stored_top1_tg}")
+                old_tags = get_user_tags(int(stored_top1_tg))
+                if "VIP" not in old_tags:
+                    await add_user_tag(int(stored_top1_tg), "F2", bot=bot, chat_id=chat_id)
+                    logger.info(f"tag_manager: refresh_fissure_top_tags: passed F2 to old top-1 {stored_top1_tg}")
             elif old_pos >= 3:
-                await add_user_tag(int(stored_top1_tg), "F3", bot=bot, chat_id=chat_id)
-                logger.info(f"tag_manager: refresh_fissure_top_tags: passed F3 to old top-1 {stored_top1_tg}")
+                old_tags = get_user_tags(int(stored_top1_tg))
+                if "VIP" not in old_tags:
+                    await add_user_tag(int(stored_top1_tg), "F3", bot=bot, chat_id=chat_id)
+                    logger.info(f"tag_manager: refresh_fissure_top_tags: passed F3 to old top-1 {stored_top1_tg}")
 
     # Выдаём новому
     if new_top1_tg and not await _is_admin(new_top1_tg):
@@ -393,8 +397,10 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
             for i, u in enumerate(top_users):
                 if u and u.get('telegram_id') == int(stored_top2_tg):
                     if i + 1 >= 3:
-                        await add_user_tag(int(stored_top2_tg), "F3", bot=bot, chat_id=chat_id)
-                        logger.info(f"tag_manager: refresh_fissure_top_tags: passed F3 to old top-2 {stored_top2_tg}")
+                        old_tags = get_user_tags(int(stored_top2_tg))
+                        if "VIP" not in old_tags:
+                            await add_user_tag(int(stored_top2_tg), "F3", bot=bot, chat_id=chat_id)
+                            logger.info(f"tag_manager: refresh_fissure_top_tags: passed F3 to old top-2 {stored_top2_tg}")
                     break
 
     if new_top2_tg and not await _is_admin(new_top2_tg):
