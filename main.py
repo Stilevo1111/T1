@@ -2905,7 +2905,9 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
         position = target_user.get("current_position")
         if not position and telegram_id:
             try:
-                position = await asyncio.to_thread(get_fissure_rank, telegram_id)
+                pos_result = await asyncio.to_thread(get_fissure_rank, telegram_id)
+                if pos_result:
+                    position = pos_result.get('rank') if isinstance(pos_result, dict) else pos_result
             except Exception as e:
                 logger.debug(f"profile card rank skipped uid={telegram_id}: {e}")
 
