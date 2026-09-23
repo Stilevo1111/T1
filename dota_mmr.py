@@ -3311,7 +3311,7 @@ def generate_profile_card(
             gap = int(layout["gap"])
             per_row = int(layout["per_row"])
             awards_width = len(awards) * tile + max(0, len(awards) - 1) * gap
-            tile_x = info_x + max(0, (width - info_x - awards_width) // 2)
+            tile_x = info_x
             tile_y = int(layout["top"])
             for award in awards[:per_row]:
                 accent = award["color"]
