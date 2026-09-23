@@ -93,13 +93,15 @@ async def _is_admin(bot, chat_id: int, user_id: int) -> bool:
 
 async def _set_member_tag(bot, chat_id: int, user_id: int, tag: str) -> bool:
     try:
-        return await bot.do_api_request(
+        result = await bot.do_api_request(
             endpoint="setChatMemberTag",
             api_kwargs={"chat_id": chat_id, "user_id": user_id, "tag": tag},
             return_type=bool,
         )
+        logger.info(f"tag_manager: {tag} tag applied to {user_id}: {result}")
+        return result
     except Exception as e:
-        logger.warning(f"tag_manager: setChatMemberTag failed for {user_id}: {e}")
+        logger.warning(f"tag_manager: setChatMemberTag failed for {user_id} ({tag}): {e}")
         return False
 
 
