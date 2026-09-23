@@ -3283,8 +3283,11 @@ def generate_profile_card(
             font_fissure = ImageFont.truetype(
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(36 * scale),
             )
+            font_count = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(18 * scale),
+            )
         except Exception:
-            font_title = font_small = font_fissure = ImageFont.load_default()
+            font_title = font_small = font_fissure = font_count = ImageFont.load_default()
 
         display_name = f"@{username}" if username else (steam_nickname or "Unknown")
 
@@ -3324,8 +3327,8 @@ def generate_profile_card(
                         fill=(20, 24, 38), outline=accent, width=2)
 
                 if award.get("count"):
-                    draw.text((tile_x + tile - 14, tile_y + 3), f"x{award['count']}",
-                            fill=_PC_WHITE, font=font_small)
+                    draw.text((tile_x, tile_y - 20), f"x{award['count']}",
+                            fill=_PC_WHITE, font=font_count)
 
                 tile_x += tile + gap
         else:
