@@ -2519,7 +2519,7 @@ def generate_achievement_banner(key: str, label: str = "", mention: str = "") ->
         canvas.paste(bg, (0, 0), bg)
 
         # 2. Иконка ачивки — оригинальный размер, центр + 5px влево.
-        icon_path = Path(__file__).parent / "assets" / "awards" / f"{key}.png"
+        icon_path = Path(__file__).parent / "assets" / "awards" / f"{key}.webp"
         icon = Image.open(icon_path).convert("RGBA")
         x = (width - icon.width) // 2 - 5
         y = (height - icon.height) // 2
@@ -2846,7 +2846,7 @@ def _profile_award_png(kind: str, size: int):
     cached = _award_png_cache.get((kind, size))
     if cached is not None:
         return cached.copy()
-    path = Path(__file__).parent / "assets" / "awards" / f"{kind}.png"
+    path = Path(__file__).parent / "assets" / "awards" / f"{kind}.webp"
     if not path.exists():
         return None
     try:
@@ -2952,12 +2952,11 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
                     best_streak: int = 0, message_count: int = 0) -> list:
     """Награды без дублей: теги бота + счётчики недели + производные достижения."""
     meta = {
-        "weekly_mvp": ("MVP", _PC_GOLD, "mvp"),
-        "weekly_top2": ("ТОП 2", _PC_SILVER, "silver"),
-        "weekly_top3": ("ТОП 3", _PC_BRONZE, "bronze"),
-        "weekly_top1": ("ТОП 1", _PC_GOLD, "top1"),
-        "fissure_master": ("МАСТЕР ФИССУР", _PC_PINK, "diamond"),
-        "admin_custom": ("АДМИН", _PC_PURPLE, "shield"),
+        "weekly_mvp": ("MVP", None, "mvp"),
+        "F1": ("F1", None, "gold"),
+        "F2": ("F2", None, "silver"),
+        "F3": ("F3", None, "bronze"),
+        "VIP": ("VIP", None, "vip"),
     }
     counts = counts or {}
     tags = set(tags or [])
@@ -2971,7 +2970,7 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
         result.append({"key": key, "label": label, "color": color,
                        "count": count, "icon": icon})
 
-    for key in ("weekly_mvp", "weekly_top2", "weekly_top3", "fissure_master", "admin_custom"):
+    for key in ("weekly_mvp", "F1", "F2", "F3", "VIP"):
         try:
             count = int(counts.get(key) or 0)
         except (TypeError, ValueError):
@@ -2988,25 +2987,16 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
     except (TypeError, ValueError):
         total_rolls = best_streak = mmr = message_count = 0
 
-    if best_streak >= 10:
-        add("streak10", f"СТРИК {best_streak}", _PC_ORANGE, icon="flame")
-    if total_rolls >= 300:
-        add("rolls300", "300 БРОСКОВ", _PC_BLUE_GREY, icon="dice")
-    elif total_rolls >= 100:
-        add("rolls100", "100 БРОСКОВ", _PC_BLUE_GREY, icon="dice")
-    if mmr >= 6000:
-        add("immortal6000", "ИММОРТАЛ", _PC_GOLD, icon="trophy")
-
     # Badges за писательство — только ЛУЧШЕЕ достижение по количеству сообщений.
     # Если пользователь имеет 5000 сообщений, он автоматически прошел пороги 100/500/1000,
     # но на карточке должен отображаться только бейдж 5000 (или 20000, если есть).
     _msg_badges = [
-        (20000, _PC_GOLD,      "ЛЕГЕНДА ЧАТА",  "chat_legend"),
-        (10000, _PC_ORANGE,    "ПИСАТЕЛЬ 10000", "ah_msg10000"),
-        (5000,  _PC_BLUE_GREY, "ПИСАТЕЛЬ 5000",  "ah_msg5000"),
-        (1000,  _PC_SILVER,    "ПИСАТЕЛЬ 1000",  "ah_msg1000"),
-        (500,   _PC_SILVER,    "ПИСАТЕЛЬ 500",   "ah_msg500"),
-        (100,   _PC_BRONZE,    "ПИСАТЕЛЬ 100",   "ah_msg100"),
+        (20000, None, "ПИСАТЕЛЬ 20000", "ah_msg20000"),
+        (10000, None, "ПИСАТЕЛЬ 10000", "ah_msg10000"),
+        (5000,  None, "ПИСАТЕЛЬ 5000",  "ah_msg5000"),
+        (1000,  None, "ПИСАТЕЛЬ 1000", "ah_msg1000"),
+        (500,   None, "ПИСАТЕЛЬ 500",   "ah_msg500"),
+        (100,   None, "ПИСАТЕЛЬ 100",   "ah_msg100"),
     ]
     for _msg_target, _color, _label, _icon in _msg_badges:
         if message_count >= _msg_target:
@@ -3032,7 +3022,7 @@ def _profile_awards_cap(total) -> tuple:
 
 def _profile_awards_layout(count) -> dict:
     """Геометрия значков наград: один ряд плиток в центральной области карточки."""
-    tile, gap, per_row, top = 60.0, 28.0, _PROFILE_AWARDS_PER_ROW, 240.0
+    tile, gap, per_row, top = 120.0, 22.0, _PROFILE_AWARDS_PER_ROW, 245.0
     try:
         count = max(0, int(count or 0))
     except (TypeError, ValueError):
@@ -3335,7 +3325,7 @@ def generate_profile_card(
 
                 if award.get("count"):
                     draw.text((tile_x + tile - 14, tile_y + 3), f"x{award['count']}",
-                              fill=accent, font=font_small)
+                            fill=_PC_WHITE, font=font_small)
 
                 tile_x += tile + gap
         else:

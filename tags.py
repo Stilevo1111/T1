@@ -6,24 +6,38 @@ logger = logging.getLogger(__name__)
 
 TAG_TYPES = {
     "weekly_mvp": "MVP",
-    "weekly_top2": "ТОП 2",
-    "weekly_top3": "ТОП 3",
+    "weekly_top1": "TOP 1",
+    "weekly_top2": "TOP 2",
+    "weekly_top3": "TOP 3",
     "fissure_master": "Мастер фиссур",
+    "F1": "F1",
+    "F2": "F2",
+    "F3": "F3",
     "admin_custom": "Админ",
+    "VIP": "VIP",
 }
 
 TAG_DISPLAY = {
-    "weekly_mvp": "🏆 MVP",
-    "weekly_top2": "🥈 ТОП 2",
-    "weekly_top3": "🥉 ТОП 3",
-    "fissure_master": "🍆 Мастер фиссур",
-    "admin_custom": "👑 Админ",
+    "weekly_mvp": "MVP",
+    "weekly_top1": "TOP 1",
+    "weekly_top2": "TOP 2",
+    "weekly_top3": "TOP 3",
+    "fissure_master": "Мастер фиссур",
+    "F1": "F1",
+    "F2": "F2",
+    "F3": "F3",
+    "admin_custom": "Админ",
+    "VIP": "VIP",
 }
 
 TAG_PRIORITY = {
+    "VIP": 1000,
     "weekly_mvp": 100,
     "weekly_top2": 90,
     "weekly_top3": 80,
+    "F1": 78,
+    "F2": 76,
+    "F3": 74,
     "fissure_master": 70,
     "admin_custom": 50,
 }
@@ -264,3 +278,159 @@ async def refresh_fissure_master_tag(bot, chat_id: int, notify: bool = True) -> 
                 logger.warning(f"tag_manager: refresh_fissure_master_tag: failed to send notification: {e}")
     except Exception as e:
         logger.error(f"tag_manager: refresh_fissure_master_tag: failed to set tag for {current_winner_tg_id}: {e}")
+
+
+async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> None:
+    """Обновляет теги ТОП 1/2/3 фиссуры при смене мест в топе.
+
+    Золото — 1 место, серебро — 2 место, бронза — 3-15 место.
+    Теги забираются у предыдущих держателей при смене состава топа.
+    Администраторы пропускаются — они держат свой админ-тег.
+    """
+    from database import get_fissure_top, get_config, set_config, get_user
+    try:
+        digest_chat_id = get_config('digest_chat_id')
+        if not digest_chat_id:
+            return
+        chat_id = int(digest_chat_id)
+    except Exception as e:
+        logger.debug(f"tag_manager: refresh_fissure_top_tags: invalid digest_chat_id: {e}")
+        return
+
+    top_users = get_fissure_top(15)
+    if not top_users:
+        return
+
+    # Текущие держатели тегов
+    current_top1 = top_users[0] if len(top_users) > 0 else None
+    current_top2 = top_users[1] if len(top_users) > 1 else None
+    current_top3 = [u for u in top_users[2:15]] if len(top_users) > 2 else []
+
+    def _tg(u):
+        return u.get('telegram_id') if u else None
+
+    def _name(u):
+        if not u:
+            return ""
+        return u.get('username') or u.get('steam_nickname') or str(u.get('telegram_id'))
+
+    async def _is_admin(tg_id):
+        if not tg_id:
+            return False
+        try:
+            return await _is_admin(bot, chat_id, int(tg_id))
+        except Exception:
+            return False
+
+    # --- ТОП 1 (F1) ---
+    new_top1_tg = _tg(current_top1)
+    stored_top1_tg = get_config('current_F1_telegram_id')
+
+    # Где упал старый топ 1?
+    stored_old_top1 = None
+    if stored_top1_tg:
+        for u in top_users:
+            if u and u.get('telegram_id') == int(stored_top1_tg):
+                stored_old_top1 = u
+                break
+
+    if str(new_top1_tg) != str(stored_top1_tg) and int(stored_top1_tg) != 0:
+        # Забираем у старого
+        if not await _is_admin(int(stored_top1_tg)):
+            try:
+                await remove_user_tag(int(stored_top1_tg), "F1", bot=bot, chat_id=chat_id)
+                logger.info(f"tag_manager: refresh_fissure_top_tags: removed F1 from {stored_top1_tg}")
+            except Exception as e:
+                logger.warning(f"tag_manager: refresh_fissure_top_tags: failed to remove F1 from {stored_top1_tg}: {e}")
+
+        # Где упал старый топ 1?
+        if stored_old_top1:
+            old_pos = None
+            for i, u in enumerate(top_users):
+                if u and u.get('telegram_id') == int(stored_top1_tg):
+                    old_pos = i + 1
+                    break
+            if old_pos == 2:
+                await add_user_tag(int(stored_top1_tg), "F2", bot=bot, chat_id=chat_id)
+                logger.info(f"tag_manager: refresh_fissure_top_tags: passed F2 to old top-1 {stored_top1_tg}")
+            elif old_pos >= 3:
+                await add_user_tag(int(stored_top1_tg), "F3", bot=bot, chat_id=chat_id)
+                logger.info(f"tag_manager: refresh_fissure_top_tags: passed F3 to old top-1 {stored_top1_tg}")
+
+    # Выдаём новому
+    if new_top1_tg and not await _is_admin(new_top1_tg):
+        try:
+            await add_user_tag(int(new_top1_tg), "F1", bot=bot, chat_id=chat_id)
+            set_config('current_F1_telegram_id', str(new_top1_tg))
+            logger.info(f"tag_manager: refresh_fissure_top_tags: F1 -> {_name(current_top1)} ({new_top1_tg})")
+        except Exception as e:
+            logger.error(f"tag_manager: refresh_fissure_top_tags: failed to set F1 for {new_top1_tg}: {e}")
+    else:
+        set_config('current_F1_telegram_id', str(new_top1_tg) if new_top1_tg else "")
+
+    # --- ТОП 2 (F2) ---
+    new_top2_tg = _tg(current_top2)
+    stored_top2_tg = get_config('current_F2_telegram_id')
+
+    # Где упал старый топ 2?
+    stored_old_top2 = None
+    if stored_top2_tg:
+        for u in top_users:
+            if u and u.get('telegram_id') == int(stored_top2_tg):
+                stored_old_top2 = u
+                break
+
+    if str(new_top2_tg) != str(stored_top2_tg) and int(stored_top2_tg) != 0:
+        if not await _is_admin(int(stored_top2_tg)):
+            try:
+                await remove_user_tag(int(stored_top2_tg), "F2", bot=bot, chat_id=chat_id)
+                logger.info(f"tag_manager: refresh_fissure_top_tags: removed F2 from {stored_top2_tg}")
+            except Exception as e:
+                logger.warning(f"tag_manager: refresh_fissure_top_tags: failed to remove F2 from {stored_top2_tg}: {e}")
+
+        # Где упал старый топ 2?
+        if stored_old_top2:
+            for i, u in enumerate(top_users):
+                if u and u.get('telegram_id') == int(stored_top2_tg):
+                    if i + 1 >= 3:
+                        await add_user_tag(int(stored_top2_tg), "F3", bot=bot, chat_id=chat_id)
+                        logger.info(f"tag_manager: refresh_fissure_top_tags: passed F3 to old top-2 {stored_top2_tg}")
+                    break
+
+    if new_top2_tg and not await _is_admin(new_top2_tg):
+        try:
+            await add_user_tag(int(new_top2_tg), "F2", bot=bot, chat_id=chat_id)
+            set_config('current_F2_telegram_id', str(new_top2_tg))
+            logger.info(f"tag_manager: refresh_fissure_top_tags: F2 -> {_name(current_top2)} ({new_top2_tg})")
+        except Exception as e:
+            logger.error(f"tag_manager: refresh_fissure_top_tags: failed to set F2 for {new_top2_tg}: {e}")
+    else:
+        set_config('current_F2_telegram_id', str(new_top2_tg) if new_top2_tg else "")
+
+    # --- ТОП 3 (F3, 3-15 место) ---
+    stored_top3_raw = get_config('current_F3_telegram_ids') or ""
+    try:
+        stored_top3 = [int(x) for x in stored_top3_raw.split(',') if x.strip()]
+    except Exception:
+        stored_top3 = []
+    new_top3 = [_tg(u) for u in current_top3 if _tg(u)]
+
+    # Убираем теги с тех, кого больше нет в топе 3-15
+    for old_tg in stored_top3:
+        if old_tg not in new_top3 and not await _is_admin(old_tg):
+            try:
+                await remove_user_tag(int(old_tg), "F3", bot=bot, chat_id=chat_id)
+                logger.info(f"tag_manager: refresh_fissure_top_tags: removed F3 from {old_tg}")
+            except Exception as e:
+                logger.warning(f"tag_manager: refresh_fissure_top_tags: failed to remove F3 from {old_tg}: {e}")
+
+    # Выдаём теги новым держателям 3-15 места
+    for new_tg in new_top3:
+        if new_tg not in stored_top3 and not await _is_admin(new_tg):
+            try:
+                await add_user_tag(int(new_tg), "F3", bot=bot, chat_id=chat_id)
+                logger.info(f"tag_manager: refresh_fissure_top_tags: F3 -> {new_tg}")
+            except Exception as e:
+                logger.error(f"tag_manager: refresh_fissure_top_tags: failed to set F3 for {new_tg}: {e}")
+
+    set_config('current_F3_telegram_ids', ','.join(str(x) for x in new_top3))

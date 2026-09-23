@@ -68,6 +68,7 @@ from tags import (
     add_user_tag,
     format_user_tags,
     refresh_fissure_master_tag,
+    refresh_fissure_top_tags,
     remove_user_tag,
 )
 
@@ -2935,6 +2936,9 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                     "weekly_mvp": target_user.get("weekly_mvp") or 0,
                     "weekly_top2": target_user.get("weekly_top2") or 0,
                     "weekly_top3": target_user.get("weekly_top3") or 0,
+                    "F1": 1 if "F1" in tags else 0,
+                    "F2": 1 if "F2" in tags else 0,
+                    "F3": 1 if "F3" in tags else 0,
                     "fissure_master": 1 if "fissure_master" in tags else 0,
                     "admin_custom": 1 if "admin_custom" in tags else 0,
                 },
@@ -3006,6 +3010,9 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         # Автоматически обновляем тег fissure_master при изменении топ-1
         await refresh_fissure_master_tag(context.bot, chat_id)
+
+        # Обновляем теги ТОП 1/2/3 фиссуры при смене мест
+        await refresh_fissure_top_tags(context.bot, chat_id)
 
         if winner_telegram_id:
             try:
@@ -3892,7 +3899,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                             try:
                                 await context.bot.send_photo(
                                     chat_id=digest_chat_id,
-                                    photo=_banner or open(Path("assets/awards/%s.png" % _awarded[0]), "rb"),
+                                    photo=_banner or open(Path("assets/achievements/%s.webp" % _awarded[0]), "rb"),
                                     caption=_text,
                                     parse_mode="HTML",
                                 )
