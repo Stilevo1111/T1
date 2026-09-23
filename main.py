@@ -955,6 +955,14 @@ async def announce_weekly_mmr_winner(bot) -> None:
     set_config('current_mvp_telegram_id', str(telegram_id) if telegram_id else "")
     set_config('current_mvp_tag', mvp_tag)
 
+    # Обновляем теги MMR топа (Top-1, MMR Top-2, MMR Top-3)
+    try:
+        from tags import refresh_mmr_top_tags
+        await refresh_mmr_top_tags(bot, digest_chat_id)
+        logger.info("MMR top tags refresh completed")
+    except Exception as e:
+        logger.warning(f"Failed to refresh MMR top tags: {e}")
+
     ranks = ["🌱 Рекрут", "🔰 Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
     if rank_tier:
         tier = min(rank_tier // 10, 8)
