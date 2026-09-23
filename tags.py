@@ -300,11 +300,13 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
     from database import get_fissure_top, get_config, set_config, get_user
     try:
         digest_chat_id = get_config('digest_chat_id')
-        if not digest_chat_id:
-            return
-        chat_id = int(digest_chat_id)
+        if digest_chat_id:
+            chat_id = int(digest_chat_id)
     except Exception as e:
         logger.debug(f"tag_manager: refresh_fissure_top_tags: invalid digest_chat_id: {e}")
+
+    if not chat_id:
+        logger.info("tag_manager: refresh_fissure_top_tags: no valid chat_id")
         return
 
     top_users = get_fissure_top(15)
@@ -467,10 +469,12 @@ async def refresh_mmr_top_tags(bot, chat_id: int) -> None:
 
     try:
         digest_chat_id = get_config('digest_chat_id')
-        if not digest_chat_id:
-            return
-        chat_id = int(digest_chat_id)
+        if digest_chat_id:
+            chat_id = int(digest_chat_id)
     except Exception:
+        pass
+
+    if not chat_id:
         return
 
     top_users = get_mmr_top(10)
