@@ -3330,8 +3330,9 @@ def generate_profile_card(
                         [tile_x, tile_y, tile_x + tile, tile_y + tile],
                         fill=(20, 24, 38), outline=accent, width=2)
 
-                if award.get("count"):
-                    draw.text((tile_x, tile_y - 20), f"x{award['count']}",
+                # Цифры только у MVP - в правом верхнем углу
+                if award.get("count") and award["key"] == "weekly_mvp":
+                    draw.text((tile_x + tile - 10, tile_y + 5), f"x{award['count']}",
                             fill=_PC_WHITE, font=font_count)
 
                 tile_x += tile + gap
