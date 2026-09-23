@@ -2953,9 +2953,13 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
     """Награды без дублей: теги бота + счётчики недели + производные достижения."""
     meta = {
         "weekly_mvp": ("MVP", None, "mvp"),
-        "F1": ("F1", None, "gold"),
-        "F2": ("F2", None, "silver"),
-        "F3": ("F3", None, "bronze"),
+        "weekly_top1": ("Top-1", None, "gold"),
+        "weekly_top2": ("MMR Top-2", None, "silver"),
+        "weekly_top3": ("MMR Top-3", None, "bronze"),
+        "fissure_master": ("Fissure Master", None, "star"),
+        "F1": ("Fissure Gold", None, "gold"),
+        "F2": ("Fissure Silver", None, "silver"),
+        "F3": ("Fissure Bronze", None, "bronze"),
         "VIP": ("VIP", None, "vip"),
     }
     counts = counts or {}
@@ -2970,7 +2974,7 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
         result.append({"key": key, "label": label, "color": color,
                        "count": count, "icon": icon})
 
-    for key in ("weekly_mvp", "F1", "F2", "F3", "VIP"):
+    for key in ("weekly_mvp", "weekly_top1", "weekly_top2", "weekly_top3", "F1", "F2", "F3", "VIP"):
         try:
             count = int(counts.get(key) or 0)
         except (TypeError, ValueError):
