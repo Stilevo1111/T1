@@ -22,11 +22,11 @@ TAG_DISPLAY = {
     "weekly_top1": "TOP 1",
     "weekly_top2": "TOP 2",
     "weekly_top3": "TOP 3",
-    "fissure_master": "Мастер фиссур",
-    "F1": "F1",
-    "F2": "F2",
-    "F3": "F3",
-    "admin_custom": "Админ",
+    "fissure_master": "Master of Fissure",
+    "F1": "Fissure Gold",
+    "F2": "Fissure Silver",
+    "F3": "Fissure Bronze",
+    "admin_custom": "Administrator",
     "VIP": "VIP",
 }
 
@@ -433,10 +433,13 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
     # Выдаём теги новым держателям 3-15 места
     for new_tg in new_top3:
         if new_tg not in stored_top3 and not await _is_admin(new_tg):
-            try:
-                await add_user_tag(int(new_tg), "F3", bot=bot, chat_id=chat_id)
-                logger.info(f"tag_manager: refresh_fissure_top_tags: F3 -> {new_tg}")
-            except Exception as e:
-                logger.error(f"tag_manager: refresh_fissure_top_tags: failed to set F3 for {new_tg}: {e}")
+            existing_tags = get_user_tags(int(new_tg))
+            logger.debug(f"tag_manager: F3 check for {new_tg}: existing_tags={existing_tags}, in_stored={new_tg in stored_top3}")
+            if "VIP" not in existing_tags:
+                try:
+                    await add_user_tag(int(new_tg), "F3", bot=bot, chat_id=chat_id)
+                    logger.info(f"tag_manager: refresh_fissure_top_tags: F3 -> {new_tg}")
+                except Exception as e:
+                    logger.error(f"tag_manager: refresh_fissure_top_tags: failed to set F3 for {new_tg}: {e}")
 
     set_config('current_F3_telegram_ids', ','.join(str(x) for x in new_top3))
