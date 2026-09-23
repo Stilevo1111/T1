@@ -330,15 +330,41 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
         if len(top_users) > 2:
             logger.info(f"tag_manager: top3-15={[_tg(u) for u in top_users[2:15]]}")
 
-    # Текущие держатели тегов
     current_top1 = top_users[0] if len(top_users) > 0 else None
     current_top2 = top_users[1] if len(top_users) > 1 else None
     current_top3 = [u for u in top_users[2:15]] if len(top_users) > 2 else []
 
-    # --- ТОП 1 (F1) ---
-    new_top1_tg = _tg(current_top1)
-    stored_top1_tg = get_config('current_F1_telegram_id')
+    stored_top1_tg = get_config('current_F1_telegram_id') or ""
     logger.info(f"tag_manager: stored_top1_tg={stored_top1_tg}, new_top1_tg={new_top1_tg}")
+
+    if not stored_top1_tg and new_top1_tg:
+        logger.info("tag_manager: no stored F1 tag, performing initial tag assignment")
+        if not await _is_admin(bot, chat_id, int(new_top1_tg)):
+            try:
+                await add_user_tag(int(new_top1_tg), "F1", bot=bot, chat_id=chat_id)
+                set_config('current_F1_telegram_id', str(new_top1_tg))
+                logger.info(f"tag_manager: initial F1 assignment -> {_name(current_top1)}")
+            except Exception as e:
+                logger.error(f"tag_manager: failed initial F1 assignment: {e}")
+    
+    if not get_config('current_F2_telegram_id') and new_top2_tg:
+        if not await _is_admin(bot, chat_id, int(new_top2_tg)):
+            try:
+                await add_user_tag(int(new_top2_tg), "F2", bot=bot, chat_id=chat_id)
+                set_config('current_F2_telegram_id', str(new_top2_tg))
+                logger.info(f"tag_manager: initial F2 assignment -> {_name(current_top2)}")
+            except Exception as e:
+                logger.error(f"tag_manager: failed initial F2 assignment: {e}")
+    
+    if not get_config('current_F3_telegram_ids'):
+        for u in current_top3:
+            tg = _tg(u)
+            if tg and not await _is_admin(bot, chat_id, tg):
+                try:
+                    await add_user_tag(tg, "F3", bot=bot, chat_id=chat_id)
+                    logger.info(f"tag_manager: initial F3 assignment -> {_name(u)}")
+                except Exception as e:
+                    logger.error(f"tag_manager: failed initial F3 assignment for {tg}: {e}")
 
     # Где упал старый топ 1?
     stored_old_top1 = None
