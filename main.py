@@ -4288,6 +4288,14 @@ async def main():
         init_db()
         migrate_db()
 
+        # Load resource usage statistics from DB (to survive redeploy)
+        try:
+            from analytics_dashboard import load_resource_stats
+            load_resource_stats()
+            logger.info("Resource statistics loaded from database")
+        except Exception as e:
+            logger.warning(f"Could not load resource stats: {e}")
+
         from database import (
             get_all_users,
             get_connection,
