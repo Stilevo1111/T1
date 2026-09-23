@@ -2913,23 +2913,32 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
 
         if telegram_id and "F1" not in tags and position == 1:
             try:
-                await add_user_tag(telegram_id, "F1", bot=context.bot, chat_id=chat_id)
-                tags = tags + ["F1"]
-                logger.info(f"profile card: added F1 tag to user {telegram_id}")
+                result = await add_user_tag(telegram_id, "F1", bot=context.bot, chat_id=chat_id)
+                if result:
+                    tags = tags + ["F1"]
+                    logger.info(f"profile card: added F1 tag to user {telegram_id}")
+                else:
+                    logger.debug(f"profile card F1 tag not added uid={telegram_id} - API returned False")
             except Exception as e:
                 logger.debug(f"profile card F1 tag skip uid={telegram_id}: {e}")
         elif telegram_id and "F2" not in tags and position == 2:
             try:
-                await add_user_tag(telegram_id, "F2", bot=context.bot, chat_id=chat_id)
-                tags = tags + ["F2"]
-                logger.info(f"profile card: added F2 tag to user {telegram_id}")
+                result = await add_user_tag(telegram_id, "F2", bot=context.bot, chat_id=chat_id)
+                if result:
+                    tags = tags + ["F2"]
+                    logger.info(f"profile card: added F2 tag to user {telegram_id}")
+                else:
+                    logger.debug(f"profile card F2 tag not added uid={telegram_id} - API returned False")
             except Exception as e:
                 logger.debug(f"profile card F2 tag skip uid={telegram_id}: {e}")
         elif telegram_id and "F3" not in tags and (position is not None and 3 <= position <= 15):
             try:
-                await add_user_tag(telegram_id, "F3", bot=context.bot, chat_id=chat_id)
-                tags = tags + ["F3"]
-                logger.info(f"profile card: added F3 tag to user {telegram_id}")
+                result = await add_user_tag(telegram_id, "F3", bot=context.bot, chat_id=chat_id)
+                if result:
+                    tags = tags + ["F3"]
+                    logger.info(f"profile card: added F3 tag to user {telegram_id}")
+                else:
+                    logger.debug(f"profile card F3 tag not added uid={telegram_id} - API returned False")
             except Exception as e:
                 logger.debug(f"profile card F3 tag skip uid={telegram_id}: {e}")
 
