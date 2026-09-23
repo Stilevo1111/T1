@@ -2899,6 +2899,7 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
         if telegram_id:
             try:
                 tags = await asyncio.to_thread(get_user_tags, telegram_id)
+                logger.debug(f"profile card: got tags for uid={telegram_id}: {tags}")
             except Exception as e:
                 logger.debug(f"profile card tags skipped uid={telegram_id}: {e}")
 
