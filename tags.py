@@ -334,7 +334,7 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
                 stored_old_top1 = u
                 break
 
-    if str(new_top1_tg) != str(stored_top1_tg) and int(stored_top1_tg) != 0:
+    if stored_top1_tg and str(new_top1_tg) != str(stored_top1_tg) and int(stored_top1_tg) != 0:
         # Забираем у старого
         if not await _is_admin(int(stored_top1_tg)):
             try:
@@ -380,7 +380,7 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
                 stored_old_top2 = u
                 break
 
-    if str(new_top2_tg) != str(stored_top2_tg) and int(stored_top2_tg) != 0:
+    if stored_top2_tg and str(new_top2_tg) != str(stored_top2_tg) and int(stored_top2_tg) != 0:
         if not await _is_admin(int(stored_top2_tg)):
             try:
                 await remove_user_tag(int(stored_top2_tg), "F2", bot=bot, chat_id=chat_id)
