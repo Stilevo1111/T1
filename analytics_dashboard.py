@@ -27,26 +27,38 @@ def load_resource_stats():
     
     # Загружаем OpenDota токены за последние 2 дня (чтобы покрыть смену даты)
     opendota_data = get_config('analytics_opendota_tokens')
-    if opendota_data:
+    if opendota_data and opendota_data.strip():
         try:
             stored = json.loads(opendota_data)
+            if not isinstance(stored, list):
+                logger.warning(f"analytics: opendota data is not a list: {type(stored)}")
+                stored = []
             # Фильтруем записи за последние 2 дня
             two_days_ago = now - 2 * 24 * 3600
             _resource_usage["opendota_tokens"] = [(ts, t) for ts, t in stored if ts >= two_days_ago]
             logger.info(f"analytics: loaded {len(_resource_usage['opendota_tokens'])} opendota token records")
         except Exception as e:
             logger.warning(f"analytics: failed to load opendota stats: {e}")
+            logger.debug(f"analytics: opendota data raw: {opendota_data[:200]}")
+    else:
+        logger.debug("analytics: no opendota data found in config")
     
     # Загружаем Neon часы за последний месяц
     neon_data = get_config('analytics_neon_hours')
-    if neon_data:
+    if neon_data and neon_data.strip():
         try:
             stored = json.loads(neon_data)
+            if not isinstance(stored, list):
+                logger.warning(f"analytics: neon data is not a list: {type(stored)}")
+                stored = []
             month_ago = now - 30 * 24 * 3600
             _resource_usage["neon_hours"] = [(ts, h) for ts, h in stored if ts >= month_ago]
             logger.info(f"analytics: loaded {len(_resource_usage['neon_hours'])} neon hour records")
         except Exception as e:
             logger.warning(f"analytics: failed to load neon stats: {e}")
+            logger.debug(f"analytics: neon data raw: {neon_data[:200]}")
+    else:
+        logger.debug("analytics: no neon data found in config")
 
 def save_resource_stats():
     """Сохраняет текущую статистику в БД."""
