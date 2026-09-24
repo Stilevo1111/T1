@@ -3728,9 +3728,16 @@ async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     ok = await add_user_tag(target_id, tag_type, bot=context.bot, chat_id=chat_id)
     label = TAG_DISPLAY.get(tag_type, TAG_TYPES.get(tag_type, tag_type))
+    if ok:
+        text = f"✅ Тег «{label}» выдан пользователю {target}"
+    else:
+        text = (
+            f"❌ Не удалось выдать тег «{label}» пользователю {target}. "
+            "Проверьте, что бот администратор с правом «Управлять тегами»."
+        )
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"✅ Тег «{label}» выдан пользователю {target}",
+        text=text,
         reply_markup=main_menu()
     )
 
@@ -3805,9 +3812,16 @@ async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     ok = await remove_user_tag(target_id, tag_type, bot=context.bot, chat_id=chat_id)
     label = TAG_DISPLAY.get(tag_type, TAG_TYPES.get(tag_type, tag_type))
+    if ok:
+        text = f"✅ Тег «{label}» снят с пользователя {target}"
+    else:
+        text = (
+            f"❌ Не удалось снять тег «{label}» с пользователя {target}. "
+            "Проверьте, что бот администратор с правом «Управлять тегами»."
+        )
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"✅ Тег «{label}» снят с пользователя {target}",
+        text=text,
         reply_markup=main_menu()
     )
 
