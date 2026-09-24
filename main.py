@@ -3049,12 +3049,6 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         winner_avatar = None
         winner_telegram_id = winner.get('telegram_id')
 
-        # Автоматически обновляем тег fissure_master при изменении топ-1
-        await refresh_fissure_master_tag(context.bot, chat_id)
-
-        # Обновляем теги ТОП 1/2/3 фиссуры при смене мест
-        await refresh_fissure_top_tags(context.bot, chat_id)
-
         if winner_telegram_id:
             try:
                 tg_avatar = await get_user_avatar_url(context.bot, winner_telegram_id)
@@ -3235,14 +3229,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.info("topmmr: weekly top empty, using MMR top")
             top_users = await asyncio.to_thread(get_dota_mmr_top, 10)
             logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from MMR DB")
-
-        # Автоматически обновляем теги MMR топа (Top-1, MMR Top-2, MMR Top-3)
-        try:
-            from tags import refresh_mmr_top_tags
-            await refresh_mmr_top_tags(context.bot, chat_id)
-            logger.info("MMR top tags refresh completed in topmmr")
-        except Exception as e:
-            logger.warning(f"Failed to refresh MMR top tags in topmmr: {e}")
 
         # Find user's position
         user_pos = None
