@@ -425,8 +425,6 @@ async def refresh_mmr_top_tags(bot, chat_id: int) -> None:
     - Top-1 - единственный, выдается раз в неделю
     - MMR Top-2, MMR Top-3 - аналогично фиссурным тегам
     """
-    from datetime import datetime
-
     from database import get_config, get_mmr_top, set_config
 
     try:
@@ -464,25 +462,33 @@ async def refresh_mmr_top_tags(bot, chat_id: int) -> None:
         except Exception:
             return False
 
-    now_week = tuple(datetime.now().isocalendar()[:2])
-
-    # Top-1 (единственный, раз в неделю)
+    # MMR Top-1 (1-е место) — персистентный конфиг как у Top-2/Top-3
     new_top1 = _tg(current_top1)
-    last_mmr_top1_week = get_config('last_mmr_top1_week')
-    try:
-        last_week = json.loads(last_mmr_top1_week or "{}") if last_mmr_top1_week else {}
-        stored_week = tuple(last_week.get('week', [])) if last_week.get('week') else ()
-        is_new_week = stored_week != now_week
-    except Exception:
-        is_new_week = True
+    stored_mmr_top1 = get_config('current_mmr_top1_telegram_id')
 
-    if new_top1 and is_new_week and not await _is_admin(new_top1):
+    if stored_mmr_top1 and str(new_top1) != str(stored_mmr_top1) and int(stored_mmr_top1) != 0:
+        if not await _is_admin(int(stored_mmr_top1)):
+            try:
+                await remove_user_tag(int(stored_mmr_top1), "weekly_top1", bot=bot, chat_id=chat_id)
+                logger.info(f"tag_manager: refresh_mmr_top_tags: removed weekly_top1 from {stored_mmr_top1}")
+            except Exception as e:
+                logger.warning(f"tag_manager: refresh_mmr_top_tags: failed to remove weekly_top1 from {stored_mmr_top1}: {e}")
+
+    if new_top1 and str(new_top1) != str(stored_mmr_top1) and not await _is_admin(new_top1):
         ok = await add_user_tag(int(new_top1), "weekly_top1", bot=bot, chat_id=chat_id)
         if ok:
-            logger.info(f"tag_manager: MMR Top-1 -> {_name(current_top1)}")
-            set_config('last_mmr_top1_week', json.dumps({'week': list(now_week)}))
+            set_config('current_mmr_top1_telegram_id', str(new_top1))
+            logger.info(f"tag_manager: refresh_mmr_top_tags: weekly_top1 -> {_name(current_top1)} ({new_top1})")
         else:
-            logger.error("tag_manager: failed to set MMR Top-1 (API)")
+            logger.error(f"tag_manager: refresh_mmr_top_tags: failed to set weekly_top1 for {new_top1} (API)")
+    elif new_top1 and str(new_top1) == str(stored_mmr_top1):
+        tags = get_user_tags(int(new_top1))
+        if "weekly_top1" not in tags:
+            ok = await add_user_tag(int(new_top1), "weekly_top1", bot=bot, chat_id=chat_id)
+            if ok:
+                logger.info(f"tag_manager: refresh_mmr_top_tags: re-applied missing weekly_top1 to {new_top1}")
+    else:
+        set_config('current_mmr_top1_telegram_id', str(new_top1) if new_top1 else "")
 
     # MMR Top-2, Top-3 (аналогично F2, F3) — с персистентным конфигом
     # Top-2

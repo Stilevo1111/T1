@@ -3905,7 +3905,7 @@ async def reset_tags_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         'current_F1_telegram_id',
         'current_F2_telegram_id',
         'current_F3_telegram_ids',
-        'last_mmr_top1_week',
+        'current_mmr_top1_telegram_id',
         'current_mmr_top2_telegram_id',
         'current_mmr_top3_telegram_id',
     ]
