@@ -2473,7 +2473,7 @@ async def set_digest_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Универсальный обработчик для команд digestnow, dotadigestnow, setdigestchat"""
+    """Универсальный обработчик для команд digestnow, dotadigestnow, setdigestchat, setfissurechat"""
     try:
         chat = update.effective_chat
         chat_id = chat.id
@@ -2490,6 +2490,11 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             set_config("digest_chat_id", str(chat_id))
             set_config("alternate_digest_message_id", None)
             await context.bot.send_message(chat_id=chat_id, text=f"Чат {chat_id} установлен для дайджестов")
+            return
+
+        if command == "setfissurechat":
+            set_config("fissure_chat_id", str(chat_id))
+            await context.bot.send_message(chat_id=chat_id, text=f"Чат {chat_id} установлен для обновления тегов фиссуры")
             return
 
         current_digest_chat = get_config('digest_chat_id')
@@ -4574,11 +4579,18 @@ async def main():
                     refresh_fissure_top_tags,
                     refresh_mmr_top_tags,
                 )
+                # Приоритет: fissure_chat_id -> digest_chat_id
+                fissure_chat_id = get_config('fissure_chat_id')
                 digest_chat_id = get_config('digest_chat_id')
-                if not digest_chat_id:
-                    logger.debug("periodic_tag_refresh: no digest_chat_id configured")
+                chat_id = fissure_chat_id or digest_chat_id
+                if not chat_id:
+                    logger.warning(
+                        "periodic_tag_refresh: не настроен ни fissure_chat_id, ни digest_chat_id. "
+                        "Теги фиссуры и MMR не будут обновляться автоматически. "
+                        "Используйте /setdigestchat <chat_id> или /setfissurechat <chat_id>."
+                    )
                     return
-                chat_id = int(digest_chat_id)
+                chat_id = int(chat_id)
                 await refresh_fissure_top_tags(context.bot, chat_id, notify=False)
                 await refresh_mmr_top_tags(context.bot, chat_id)
                 logger.info("periodic_tag_refresh: all tags refreshed")
@@ -4795,6 +4807,7 @@ async def main():
         app.add_handler(CommandHandler("resettags", reset_tags_command))
         app.add_handler(CommandHandler("tags", tags_list))
         app.add_handler(CommandHandler("setdigestchat", digest_handler))
+        app.add_handler(CommandHandler("setfissurechat", digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
         app.add_handler(CommandHandler("analyze", analyze_command))
         app.add_handler(CommandHandler(("party", "party"), party_command))
