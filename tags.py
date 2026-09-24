@@ -8,7 +8,6 @@ TAG_TYPES = {
     "weekly_top1": "TOP 1",
     "weekly_top2": "MMR Top-2",
     "weekly_top3": "MMR Top-3",
-    "fissure_master": "Fissure Master",
     "F1": "Fissure Gold",
     "F2": "Fissure Silver",
     "F3": "Fissure Bronze",
@@ -21,7 +20,6 @@ TAG_DISPLAY = {
     "weekly_top1": "Top-1",
     "weekly_top2": "MMR Top-2",
     "weekly_top3": "MMR Top-3",
-    "fissure_master": "Fissure Master",
     "F1": "Fissure Gold",
     "F2": "Fissure Silver",
     "F3": "Fissure Bronze",
@@ -37,7 +35,6 @@ TAG_PRIORITY = {
     "F1": 78,
     "F2": 76,
     "F3": 74,
-    "fissure_master": 70,
     "admin_custom": 50,
 }
 
@@ -197,128 +194,6 @@ async def get_telegram_title(bot, telegram_id: int, chat_id: int) -> str:
     title = TAG_TYPES.get(best, "") if best else ""
     await _apply_best_tag(bot, telegram_id, chat_id)
     return title
-
-
-async def ensure_fissure_master_tag(telegram_id: int, chat_id: int, bot) -> None:
-    from database import get_fissure_top
-    top_users = get_fissure_top(1)
-    if top_users and top_users[0].get('telegram_id') == telegram_id:
-        logger.info(f"tag_manager: ensure_fissure_master_tag: user {telegram_id} is top-1, ensuring tag")
-        await add_user_tag(telegram_id, 'fissure_master', bot=bot, chat_id=chat_id)
-    else:
-        logger.debug(f"tag_manager: ensure_fissure_master_tag: user {telegram_id} is not top-1, removing tag")
-        await remove_user_tag(telegram_id, 'fissure_master', bot=bot, chat_id=chat_id)
-
-
-async def refresh_fissure_master_tag(bot, chat_id: int, notify: bool = True) -> None:
-    """Independent tag refresh: compare current top-1 with stored winner and swap tag if needed.
-
-    Administrators are skipped entirely — they keep their own admin tag and are
-    never granted or stripped of fissure_master, regardless of their fissure rank.
-    """
-    from database import get_config, get_fissure_top, get_user, set_config
-    try:
-        digest_chat_id = get_config('digest_chat_id')
-        if not digest_chat_id:
-            return
-        chat_id = int(digest_chat_id)
-    except Exception as e:
-        logger.debug(f"tag_manager: refresh_fissure_master_tag: invalid digest_chat_id: {e}")
-        return
-
-    top_users = get_fissure_top(1)
-    current_winner = top_users[0] if top_users else None
-    current_winner_tg_id = current_winner.get('telegram_id') if current_winner else None
-    if not current_winner_tg_id:
-        # No current winner — clear stale tag if any
-        stored_winner_tg_id = get_config('current_fissure_master_telegram_id')
-        if stored_winner_tg_id and not await _is_admin(bot, chat_id, int(stored_winner_tg_id)):
-            old_tags = get_user_tags(int(stored_winner_tg_id))
-            if "fissure_master" in old_tags:
-                removed = await remove_user_tag(int(stored_winner_tg_id), "fissure_master", bot=bot, chat_id=chat_id)
-                if removed:
-                    set_config('current_fissure_master_telegram_id', "")
-                    logger.info(f"tag_manager: refresh_fissure_master_tag: cleared tag from old top-1 {stored_winner_tg_id}")
-        return
-
-    # Check if current winner is admin
-    current_is_admin = await _is_admin(bot, chat_id, int(current_winner_tg_id))
-    stored_winner_tg_id = get_config('current_fissure_master_telegram_id')
-
-    # If current winner is admin, never assign fissure_master but update config
-    if current_is_admin:
-        if str(current_winner_tg_id) != str(stored_winner_tg_id):
-            # Remove old tag if non-admin
-            old_removed = True
-            if stored_winner_tg_id and not await _is_admin(bot, chat_id, int(stored_winner_tg_id)):
-                old_tags = get_user_tags(int(stored_winner_tg_id))
-                if "fissure_master" in old_tags:
-                    old_removed = await remove_user_tag(int(stored_winner_tg_id), "fissure_master", bot=bot, chat_id=chat_id)
-            if old_removed:
-                set_config('current_fissure_master_telegram_id', str(current_winner_tg_id))
-                logger.info(f"tag_manager: refresh_fissure_master_tag: top-1 is admin {current_winner_tg_id}, config updated")
-        return
-
-    # Current winner is not admin
-    if str(current_winner_tg_id) == str(stored_winner_tg_id):
-        # Ensure tag exists and visible, but don't override higher-priority F1
-        tags = get_user_tags(int(current_winner_tg_id))
-        if "fissure_master" not in tags and "F1" not in tags:
-            if await add_user_tag(current_winner_tg_id, "fissure_master", bot=bot, chat_id=chat_id):
-                set_config('current_fissure_master_telegram_id', str(current_winner_tg_id))
-                logger.info(f"tag_manager: refresh_fissure_master_tag: re-applied missing tag to {current_winner_tg_id}")
-        return
-
-    # Winner changed — remove old, add new
-    old_name = ""
-    old_fissure = 0
-    old_removed = True
-    if stored_winner_tg_id:
-        if not await _is_admin(bot, chat_id, int(stored_winner_tg_id)):
-            old_tags = get_user_tags(int(stored_winner_tg_id))
-            if "fissure_master" in old_tags:
-                old_removed = await remove_user_tag(int(stored_winner_tg_id), "fissure_master", bot=bot, chat_id=chat_id)
-                if old_removed:
-                    old_winner = get_user(int(stored_winner_tg_id))
-                    if old_winner:
-                        old_name = old_winner.get('username') or old_winner.get('steam_nickname') or str(stored_winner_tg_id)
-                        old_fissure = old_winner.get('fissure', 0)
-        else:
-            logger.info(f"tag_manager: refresh_fissure_master_tag: old top-1 {stored_winner_tg_id} is admin, leaving tag alone")
-
-    # Не выдаём fissure_master, если у пользователя уже есть F1 (выше по приоритету)
-    new_added = True
-    tags = get_user_tags(int(current_winner_tg_id))
-    if "F1" not in tags:
-        new_added = await add_user_tag(current_winner_tg_id, "fissure_master", bot=bot, chat_id=chat_id)
-    else:
-        logger.debug(f"tag_manager: refresh_fissure_master_tag: winner {current_winner_tg_id} has F1, skipping fissure_master")
-    if old_removed and new_added:
-        set_config('current_fissure_master_telegram_id', str(current_winner_tg_id))
-        winner_name = current_winner.get('username') or current_winner.get('steam_nickname') or str(current_winner_tg_id)
-        logger.info(f"tag_manager: refresh_fissure_master_tag: fissure_master -> {winner_name} ({current_winner_tg_id})")
-
-        if notify:
-            new_fissure = current_winner.get('fissure', 0)
-            if old_name:
-                text = (
-                    f"👑 <b>Новый Мастер фиссур!</b>\n\n"
-                    f"Топ сменился:\n"
-                    f"🥇 <b>{winner_name}</b> — <code>{new_fissure:.1f}</code> см\n"
-                    f"👤 <b>{old_name}</b> — <code>{old_fissure:.1f}</code> см"
-                )
-            else:
-                text = (
-                    f"👑 <b>Новый Мастер фиссур!</b>\n\n"
-                    f"🥇 <b>{winner_name}</b> — <code>{new_fissure:.1f}</code> см"
-                )
-            try:
-                await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
-                logger.info(f"tag_manager: refresh_fissure_master_tag: notification sent to chat {chat_id}")
-            except Exception as e:
-                logger.warning(f"tag_manager: refresh_fissure_master_tag: failed to send notification: {e}")
-    else:
-        logger.error(f"tag_manager: refresh_fissure_master_tag: failed to transition tag for {current_winner_tg_id} (old_removed={old_removed}, new_added={new_added})")
 
 
 async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> None:

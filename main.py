@@ -67,8 +67,6 @@ from tags import (
     TAG_TYPES,
     add_user_tag,
     format_user_tags,
-    refresh_fissure_master_tag,
-    refresh_fissure_top_tags,
     remove_user_tag,
 )
 
@@ -2980,7 +2978,6 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                     "F1": 1 if "F1" in tags else 0,
                     "F2": 1 if "F2" in tags else 0,
                     "F3": 1 if "F3" in tags else 0,
-                    "fissure_master": 1 if "fissure_master" in tags else 0,
                     "admin_custom": 1 if "admin_custom" in tags else 0,
                 },
                 position=position,
@@ -3666,7 +3663,7 @@ async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="Использование: /tag <@username|telegram_id> <тип>\n"
-                 "Типы: weekly_mvp, weekly_top2, weekly_top3, fissure_master, admin_custom, VIP\n"
+                 "Типы: weekly_mvp, weekly_top2, weekly_top3, F1, F2, F3, admin_custom, VIP\n"
                  "Пример: /tag @user weekly_mvp\n"
                  "VIP: добавляет в список VIP (требуется ручное подтверждение в Telegram)",
             reply_markup=main_menu()
@@ -3752,7 +3749,7 @@ async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="Использование: /untag <@username|telegram_id> <тип>\n"
-                 "Типы: weekly_mvp, weekly_top2, weekly_top3, fissure_master, admin_custom, VIP\n"
+                 "Типы: weekly_mvp, weekly_top2, weekly_top3, F1, F2, F3, admin_custom, VIP\n"
                  "Пример: /untag @user weekly_mvp",
             reply_markup=main_menu()
         )
@@ -3905,11 +3902,12 @@ async def reset_tags_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     from database import set_config
     tag_configs = [
-        'current_fissure_master_telegram_id',
         'current_F1_telegram_id',
         'current_F2_telegram_id',
         'current_F3_telegram_ids',
         'last_mmr_top1_week',
+        'current_mmr_top2_telegram_id',
+        'current_mmr_top3_telegram_id',
     ]
     for key in tag_configs:
         set_config(key, "")
@@ -4567,20 +4565,12 @@ async def main():
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).request(request).build()
         job_queue.set_application(app)
 
-        from tags import refresh_fissure_master_tag
-        try:
-            await refresh_fissure_master_tag(app.bot, 0, notify=False)
-            logger.info("tag_manager: startup refresh_fissure_master_tag completed")
-        except Exception as e:
-            logger.debug(f"tag_manager: startup refresh_fissure_master_tag failed: {e}")
-
         # ✅ Периодическое обновление всех тегов (каждые 30 минут)
         async def periodic_tag_refresh(context):
-            """Обновляет все теги: fissure_master, F1/F2/F3, MMR top."""
+            """Обновляет все теги: F1/F2/F3, MMR top."""
             try:
                 from database import get_config
                 from tags import (
-                    refresh_fissure_master_tag,
                     refresh_fissure_top_tags,
                     refresh_mmr_top_tags,
                 )
@@ -4589,7 +4579,6 @@ async def main():
                     logger.debug("periodic_tag_refresh: no digest_chat_id configured")
                     return
                 chat_id = int(digest_chat_id)
-                await refresh_fissure_master_tag(context.bot, chat_id, notify=False)
                 await refresh_fissure_top_tags(context.bot, chat_id, notify=False)
                 await refresh_mmr_top_tags(context.bot, chat_id)
                 logger.info("periodic_tag_refresh: all tags refreshed")
