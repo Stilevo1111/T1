@@ -4,7 +4,6 @@ import datetime
 import io
 import json
 import os
-from pathlib import Path
 import random
 import re
 import signal
@@ -12,6 +11,7 @@ import time
 import traceback
 import urllib.parse as urlparse
 from datetime import timedelta, timezone
+from pathlib import Path
 
 import aiohttp
 
@@ -830,7 +830,7 @@ async def weekly_mmr_reset_job(context):
         set_config('weekly_mmr_reset_date', current_week_start)
         # Снятие тегов чемпионов/топов предыдущей недели (MVP, ТОП 2, ТОП 3) для всех, кто держит
         try:
-            from database import get_connection as _gc, release_connection as _rel
+            from database import get_connection as _gc
             _conn = _gc()
             _cur = _conn.cursor()
             if "postgres" in scheme:
@@ -852,7 +852,6 @@ async def weekly_mmr_reset_job(context):
             _conn.commit()
             _cur.close()
             release_connection(_conn)
-            from tags import remove_user_tag  # noqa: F811
         except Exception as _ge:
             logger.warning(f"weekly_reset tag cleanup skipped: {_ge}")
         logger.info("weekly_mmr_reset_job: еженедельная статистика MMR сброшена в 00:00 MSK")
@@ -1286,7 +1285,10 @@ async def update_all_mmr_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         # Отправляем уведомления о ранк-апах параллельно
         if digest_chat_id and rank_up_users:
-            from dota_mmr import generate_start_card, generate_achievement_banner, get_week_top_heroes
+            from dota_mmr import (
+                generate_start_card,
+                get_week_top_heroes,
+            )
 
             async def notify_rank_up(user, rank_info):
                 try:
@@ -1534,18 +1536,15 @@ from bot_utils import (
     add_bot_message,
     clickable_name,
     delete_last_bot_message,
-    format_time,
     get_user_avatar_url,
     main_menu,
     make_clickable,
     record_recent_fissure_roll,
-    recent_fissure_rolls,
     schedule_delete,
     set_last_bot_message,
     update_last_message_id,
 )
 from constants import (
-    COOLDOWN,
     JOB_COOLDOWN,
     KEEPALIVE_PING_NEON_HOURS,
     TOPMMR_BANNER_PATH,
@@ -2153,7 +2152,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         inviter_winrate = round(inviter_week_wins / inviter_week_games * 100) if inviter_week_games > 0 else 0
 
         # Use rank_to_string from dota_mmr for real ranks
-        from dota_mmr import mmr_to_rank_tier, rank_to_string
+        from dota_mmr import rank_to_string
         inviter_rank_name = rank_to_string(inviter.get("rank_tier", 0) or 0 if inviter else 0)
 
         invitation_text = (
@@ -2883,7 +2882,7 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
     steam_id = target_user.get("steam_id")
     try:
         from dota_mmr import generate_profile_card, get_week_top_heroes_async
-        from tags import get_user_tags, add_user_tag
+        from tags import add_user_tag, get_user_tags
 
         avatar_url = await resolve_avatar_url_for_card(
             bot,
@@ -3236,6 +3235,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.info("topmmr: weekly top empty, using MMR top")
             top_users = await asyncio.to_thread(get_dota_mmr_top, 10)
             logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from MMR DB")
+
+        # Автоматически обновляем теги MMR топа (Top-1, MMR Top-2, MMR Top-3)
+        try:
+            from tags import refresh_mmr_top_tags
+            await refresh_mmr_top_tags(context.bot, chat_id)
+            logger.info("MMR top tags refresh completed in topmmr")
+        except Exception as e:
+            logger.warning(f"Failed to refresh MMR top tags in topmmr: {e}")
 
         # Find user's position
         user_pos = None
@@ -3708,7 +3715,7 @@ async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target_id = target_user.get('telegram_id')
     chat_id = update.effective_chat.id
-    
+
     if tag_type == "VIP":
         from database import add_vip_user
         if await asyncio.to_thread(add_vip_user, target_id):
@@ -3725,7 +3732,7 @@ async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=main_menu()
             )
         return
-    
+
     ok = await add_user_tag(target_id, tag_type, bot=context.bot, chat_id=chat_id)
     label = TAG_DISPLAY.get(tag_type, TAG_TYPES.get(tag_type, tag_type))
     if ok:
@@ -3793,7 +3800,7 @@ async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target_id = target_user.get('telegram_id')
     chat_id = update.effective_chat.id
-    
+
     if tag_type == "VIP":
         from database import remove_vip_user
         if await asyncio.to_thread(remove_vip_user, target_id):
@@ -3809,7 +3816,7 @@ async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=main_menu()
             )
         return
-    
+
     ok = await remove_user_tag(target_id, tag_type, bot=context.bot, chat_id=chat_id)
     label = TAG_DISPLAY.get(tag_type, TAG_TYPES.get(tag_type, tag_type))
     if ok:
@@ -3868,12 +3875,12 @@ async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target_id = target_user.get('telegram_id')
     chat_id = update.effective_chat.id
-    
+
     added = await add_user_tag(target_id, "VIP", bot=context.bot, chat_id=chat_id)
-    
+
     from database import add_vip_user
     db_added = add_vip_user(target_id)
-    
+
     if added and db_added:
         await context.bot.send_message(
             chat_id=chat_id,
@@ -4048,8 +4055,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                     logger.info(f"Cached message_count for {user_id}: {new_count}")
 
                     try:
-                        from achievements import check_and_award as _aha_check
                         from achievements import ACHIEVEMENTS as _AH
+                        from achievements import check_and_award as _aha_check
                         _awarded = await asyncio.to_thread(_aha_check, user_id, 'message_count', new_count)
                         if _awarded:
                             _labels = ", ".join(_AH[k]["label"] for k in _awarded)

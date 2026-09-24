@@ -261,9 +261,9 @@ async def refresh_fissure_master_tag(bot, chat_id: int, notify: bool = True) -> 
 
     # Current winner is not admin
     if str(current_winner_tg_id) == str(stored_winner_tg_id):
-        # Ensure tag exists and visible
+        # Ensure tag exists and visible, but don't override higher-priority F1
         tags = get_user_tags(int(current_winner_tg_id))
-        if "fissure_master" not in tags:
+        if "fissure_master" not in tags and "F1" not in tags:
             if await add_user_tag(current_winner_tg_id, "fissure_master", bot=bot, chat_id=chat_id):
                 set_config('current_fissure_master_telegram_id', str(current_winner_tg_id))
                 logger.info(f"tag_manager: refresh_fissure_master_tag: re-applied missing tag to {current_winner_tg_id}")
@@ -286,7 +286,13 @@ async def refresh_fissure_master_tag(bot, chat_id: int, notify: bool = True) -> 
         else:
             logger.info(f"tag_manager: refresh_fissure_master_tag: old top-1 {stored_winner_tg_id} is admin, leaving tag alone")
 
-    new_added = await add_user_tag(current_winner_tg_id, "fissure_master", bot=bot, chat_id=chat_id)
+    # Не выдаём fissure_master, если у пользователя уже есть F1 (выше по приоритету)
+    new_added = True
+    tags = get_user_tags(int(current_winner_tg_id))
+    if "F1" not in tags:
+        new_added = await add_user_tag(current_winner_tg_id, "fissure_master", bot=bot, chat_id=chat_id)
+    else:
+        logger.debug(f"tag_manager: refresh_fissure_master_tag: winner {current_winner_tg_id} has F1, skipping fissure_master")
     if old_removed and new_added:
         set_config('current_fissure_master_telegram_id', str(current_winner_tg_id))
         winner_name = current_winner.get('username') or current_winner.get('steam_nickname') or str(current_winner_tg_id)
@@ -375,6 +381,9 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
                 logger.info(f"tag_manager: initial F1 assignment -> {_name(current_top1)}")
             else:
                 logger.error("tag_manager: failed initial F1 assignment (API)")
+
+    # Перечитываем конфиг после первичной выдачи, чтобы избежать дубля в блоке "Выдаём новому"
+    stored_top1_tg = get_config('current_F1_telegram_id') or ""
 
     if not get_config('current_F2_telegram_id') and new_top2_tg:
         if not await _is_admin(bot, chat_id, int(new_top2_tg)):
@@ -566,14 +575,15 @@ async def refresh_mmr_top_tags(bot, chat_id: int) -> None:
         except Exception:
             return False
 
-    now_week = datetime.now().isocalendar()[:2]
+    now_week = tuple(datetime.now().isocalendar()[:2])
 
     # Top-1 (единственный, раз в неделю)
     new_top1 = _tg(current_top1)
     last_mmr_top1_week = get_config('last_mmr_top1_week')
     try:
         last_week = json.loads(last_mmr_top1_week or "{}") if last_mmr_top1_week else {}
-        is_new_week = last_week.get('week') != now_week
+        stored_week = tuple(last_week.get('week', [])) if last_week.get('week') else ()
+        is_new_week = stored_week != now_week
     except Exception:
         is_new_week = True
 
