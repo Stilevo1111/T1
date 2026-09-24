@@ -570,7 +570,7 @@ async def refresh_mmr_top_tags(bot, chat_id: int) -> None:
 
     current_top1 = top_users[0] if top_users else None
     current_top2 = top_users[1] if len(top_users) > 1 else None
-    current_top3 = [u for u in top_users[2:10]] if len(top_users) > 2 else []
+    current_top3 = top_users[2] if len(top_users) > 2 else None
 
     def _tg(u):
         return u.get('telegram_id') if u else None
@@ -638,36 +638,30 @@ async def refresh_mmr_top_tags(bot, chat_id: int) -> None:
     else:
         set_config('current_mmr_top2_telegram_id', str(new_top2) if new_top2 else "")
 
-    # Top-3 (3-10 место)
-    stored_mmr_top3_raw = get_config('current_mmr_top3_telegram_ids') or ""
-    try:
-        stored_mmr_top3 = [int(x) for x in stored_mmr_top3_raw.split(',') if x.strip()]
-    except Exception:
-        stored_mmr_top3 = []
-    new_top3 = [_tg(u) for u in current_top3 if _tg(u)]
+    # Top-3 (только 3-е место)
+    new_top3 = _tg(current_top3)
+    stored_mmr_top3 = get_config('current_mmr_top3_telegram_id')
 
-    # Убираем теги с тех, кого больше нет в топе
-    for old_tg in stored_mmr_top3:
-        if old_tg not in new_top3 and not await _is_admin(old_tg):
+    if stored_mmr_top3 and str(new_top3) != str(stored_mmr_top3) and int(stored_mmr_top3) != 0:
+        if not await _is_admin(int(stored_mmr_top3)):
             try:
-                await remove_user_tag(int(old_tg), "weekly_top3", bot=bot, chat_id=chat_id)
-                logger.info(f"tag_manager: refresh_mmr_top_tags: removed weekly_top3 from {old_tg}")
+                await remove_user_tag(int(stored_mmr_top3), "weekly_top3", bot=bot, chat_id=chat_id)
+                logger.info(f"tag_manager: refresh_mmr_top_tags: removed weekly_top3 from {stored_mmr_top3}")
             except Exception as e:
-                logger.warning(f"tag_manager: refresh_mmr_top_tags: failed to remove weekly_top3 from {old_tg}: {e}")
+                logger.warning(f"tag_manager: refresh_mmr_top_tags: failed to remove weekly_top3 from {stored_mmr_top3}: {e}")
 
-    # Выдаём теги новым
-    successful_mmr_top3 = []
-    for new_tg in new_top3:
-        if new_tg not in stored_mmr_top3 and not await _is_admin(new_tg):
-            existing_tags = get_user_tags(int(new_tg))
-            if "VIP" not in existing_tags:
-                ok = await add_user_tag(int(new_tg), "weekly_top3", bot=bot, chat_id=chat_id)
-                if ok:
-                    successful_mmr_top3.append(new_tg)
-                    logger.info(f"tag_manager: refresh_mmr_top_tags: weekly_top3 -> {new_tg}")
-                else:
-                    logger.error(f"tag_manager: refresh_mmr_top_tags: failed to set weekly_top3 for {new_tg} (API)")
-
-    retained = [tg for tg in stored_mmr_top3 if tg in new_top3]
-    final_mmr_top3 = list(dict.fromkeys(retained + successful_mmr_top3))
-    set_config('current_mmr_top3_telegram_ids', ','.join(str(x) for x in final_mmr_top3))
+    if new_top3 and str(new_top3) != str(stored_mmr_top3) and not await _is_admin(new_top3):
+        ok = await add_user_tag(int(new_top3), "weekly_top3", bot=bot, chat_id=chat_id)
+        if ok:
+            set_config('current_mmr_top3_telegram_id', str(new_top3))
+            logger.info(f"tag_manager: refresh_mmr_top_tags: weekly_top3 -> {_name(current_top3)} ({new_top3})")
+        else:
+            logger.error(f"tag_manager: refresh_mmr_top_tags: failed to set weekly_top3 for {new_top3} (API)")
+    elif new_top3 and str(new_top3) == str(stored_mmr_top3):
+        tags = get_user_tags(int(new_top3))
+        if "weekly_top3" not in tags:
+            ok = await add_user_tag(int(new_top3), "weekly_top3", bot=bot, chat_id=chat_id)
+            if ok:
+                logger.info(f"tag_manager: refresh_mmr_top_tags: re-applied missing weekly_top3 to {new_top3}")
+    else:
+        set_config('current_mmr_top3_telegram_id', str(new_top3) if new_top3 else "")
