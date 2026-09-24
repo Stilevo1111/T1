@@ -334,6 +334,10 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
     current_top2 = top_users[1] if len(top_users) > 1 else None
     current_top3 = [u for u in top_users[2:15]] if len(top_users) > 2 else []
 
+    new_top1_tg = _tg(current_top1)
+    new_top2_tg = _tg(current_top2)
+    new_top3 = [_tg(u) for u in current_top3 if _tg(u)]
+
     stored_top1_tg = get_config('current_F1_telegram_id') or ""
     logger.info(f"tag_manager: stored_top1_tg={stored_top1_tg}, new_top1_tg={new_top1_tg}")
 
