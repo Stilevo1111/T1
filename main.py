@@ -3903,6 +3903,42 @@ async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def reset_tags_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сброс всех конфигов тегов (для переинициализации после ручного удаления)"""
+    from config import settings
+    ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
+    user_id = update.effective_user.id
+
+    if not ADMIN_CHAT_ID or user_id != ADMIN_CHAT_ID:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❌ Только администратор может использовать эту команду",
+            reply_markup=main_menu()
+        )
+        return
+
+    from database import set_config
+    tag_configs = [
+        'current_fissure_master_telegram_id',
+        'current_F1_telegram_id',
+        'current_F2_telegram_id',
+        'current_F3_telegram_ids',
+        'last_mmr_top1_week',
+    ]
+    for key in tag_configs:
+        set_config(key, "")
+
+    # Также чистим VIP-список если нужно (опционально)
+    # set_config('vip_users_list', "[]")
+
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="✅ Конфигурации тегов сброшены. При следующем обновлении теги будут выданы заново.",
+        reply_markup=main_menu()
+    )
+    logger.info(f"admin: reset_tags_command executed by {user_id}")
+
+
 async def tags_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = None
     if context.args and len(context.args) >= 1:
@@ -4552,6 +4588,34 @@ async def main():
         except Exception as e:
             logger.debug(f"tag_manager: startup refresh_fissure_master_tag failed: {e}")
 
+        # ✅ Периодическое обновление всех тегов (каждые 30 минут)
+        async def periodic_tag_refresh(context):
+            """Обновляет все теги: fissure_master, F1/F2/F3, MMR top."""
+            try:
+                from database import get_config
+                from tags import (
+                    refresh_fissure_master_tag,
+                    refresh_fissure_top_tags,
+                    refresh_mmr_top_tags,
+                )
+                digest_chat_id = get_config('digest_chat_id')
+                if not digest_chat_id:
+                    logger.debug("periodic_tag_refresh: no digest_chat_id configured")
+                    return
+                chat_id = int(digest_chat_id)
+                await refresh_fissure_master_tag(context.bot, chat_id, notify=False)
+                await refresh_fissure_top_tags(context.bot, chat_id, notify=False)
+                await refresh_mmr_top_tags(context.bot, chat_id)
+                logger.info("periodic_tag_refresh: all tags refreshed")
+            except Exception as e:
+                logger.warning(f"periodic_tag_refresh failed: {e}")
+
+        job_queue.run_repeating(
+            periodic_tag_refresh,
+            interval=datetime.timedelta(minutes=30),
+            first=datetime.timedelta(minutes=5),
+        )
+
         # ✅ Утреннее приветствие 09:00 MSK
         job_queue.run_daily(
             morning_greeting_job,
@@ -4753,6 +4817,7 @@ async def main():
         app.add_handler(CommandHandler("tag", admin_tag))
         app.add_handler(CommandHandler("untag", admin_untag))
         app.add_handler(CommandHandler("vip", vip_command))
+        app.add_handler(CommandHandler("resettags", reset_tags_command))
         app.add_handler(CommandHandler("tags", tags_list))
         app.add_handler(CommandHandler("setdigestchat", digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
