@@ -537,7 +537,19 @@ async def test_mvp_winner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @rate_limit(tokens=1)
 async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Еженедельная аналитика игрока"""
-    await asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username)
+    user_id = update.effective_user.id
+    if not hasattr(analyze_command, "_start_locks"):
+        analyze_command._start_locks = {}
+    start_lock = analyze_command._start_locks.setdefault(user_id, asyncio.Lock())
+    if start_lock.locked():
+        await update.effective_message.reply_text("⏳ Аналитика уже обновляется, дождись текущего запуска.")
+        return
+    await start_lock.acquire()
+    try:
+        await asyncio.to_thread(get_user, user_id, update.effective_user.username)
+    except Exception:
+        start_lock.release()
+        raise
     loading_msg = None
     chat_id = update.message.chat_id
 
@@ -723,19 +735,17 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Initialize _active_tasks BEFORE pop to avoid race condition
         if not hasattr(analyze_command, '_active_tasks'):
             analyze_command._active_tasks = {}
-        existing_task = analyze_command._active_tasks.pop(user_id_for_tracking, None)
+        existing_task = analyze_command._active_tasks.get(user_id_for_tracking)
         if existing_task and not existing_task.done():
-            logger.info(f"Canceling previous analytics task for user {user_id_for_tracking}")
-            existing_task.cancel()
-            try:
-                await existing_task
-            except asyncio.CancelledError:
-                pass
+            logger.info("Analytics already running for user %s; ignoring duplicate", user_id_for_tracking)
+            start_lock.release()
+            return
 
         # Start background task and track it
         task = asyncio.create_task(generate_and_update_analytics())
         task.add_done_callback(lambda t: analyze_command._active_tasks.pop(user_id_for_tracking, None))
         analyze_command._active_tasks[user_id_for_tracking] = task
+        start_lock.release()
 
         # Start cleanup task
         asyncio.create_task(_cleanup_user_analytics(context))
