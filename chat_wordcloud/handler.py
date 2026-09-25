@@ -24,10 +24,15 @@ from rate_limiter import rate_limit
 logger = logging.getLogger(__name__)
 
 
-async def _generate_wordcloud_in_thread(top_words, timeout: int) -> bytes:
+async def _generate_wordcloud_in_thread(top_words, timeout: int, *, period_label: str = "", message_count: int = 0) -> bytes:
     """Run wordcloud generation in a worker thread (no multiprocessing spawn overhead)."""
     return await asyncio.wait_for(
-        asyncio.to_thread(generate_wordcloud_image, top_words),
+        asyncio.to_thread(
+            generate_wordcloud_image,
+            top_words,
+            period_label=period_label,
+            message_count=message_count,
+        ),
         timeout=timeout,
     )
 
@@ -120,18 +125,28 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         top_word = top_words[0][0]
         top_count = top_words[0][1]
 
+        period_end = datetime.now()
+        period_start = period_end - timedelta(days=WORDCLOUD_PERIOD_DAYS)
+        period_label = (
+            f"{period_start.strftime('%d.%m.%Y')} — {period_end.strftime('%d.%m.%Y')}"
+            f"  ·  {WORDCLOUD_PERIOD_DAYS} дней"
+        )
+
         # Show a status message so the user knows the bot is working, not frozen.
         # Use send_message directly (not reply_text) — the user's /story message
         # may already be deleted by the time we reach this line, and reply_text
         # raises "Message to be replied not found".
         status_msg = await context.bot.send_message(
             chat_id=chat_id,
-            text="🎨 Генерирую облако слов чата за месяц..."
+            text="🎨 Собираю облако слов чата..."
         )
 
         try:
             png_bytes = await _generate_wordcloud_in_thread(
-                top_words, WORDCLOUD_GENERATION_TIMEOUT
+                top_words,
+                WORDCLOUD_GENERATION_TIMEOUT,
+                period_label=period_label,
+                message_count=messages_loaded or 0,
             )
         except TimeoutError:
             logger.error(
@@ -147,22 +162,30 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             pass
 
         if messages_loaded is not None:
-            messages_text = f"Сообщений: {messages_loaded}"
+            messages_text = f"📊 Сообщений: {messages_loaded}"
         else:
-            messages_text = f"Сообщений: ≤{WORDCLOUD_MESSAGE_LIMIT} (из кеша)"
+            messages_text = f"📊 Сообщений: до {WORDCLOUD_MESSAGE_LIMIT} (из кеша)"
 
-        period_end = datetime.now()
-        period_start = period_end - timedelta(days=WORDCLOUD_PERIOD_DAYS)
+        # The image itself already shows the title, period, top words and
+        # frequency legend, so the caption stays short and complementary.
+        top_word = top_words[0][0]
+        top_count = top_words[0][1]
 
         caption = (
-            f"☁️ Облако слов чата за месяц\n"
-            f"Период: {period_start.strftime('%d.%m.%Y')} — {period_end.strftime('%d.%m.%Y')}\n"
-            f"{messages_text}\n"
-            f"Уникальных слов: {unique_words}\n"
-            f"Самое популярное слово: {top_word} ({top_count})"
+            f"☁️ <b>Облако слов чата</b>\n"
+            f"🗓 Период: {period_start.strftime('%d.%m.%Y')} — "
+            f"{period_end.strftime('%d.%m.%Y')}\n"
+            f"{messages_text} · уникальных слов: {unique_words or len(top_words)}\n"
+            f"🔥 Самое частое: <b>{top_word}</b> ({top_count})\n"
+            f"<i>Чем крупнее и «горячее» слово — тем чаще оно встречается</i>"
         )
 
-        sent = await context.bot.send_photo(chat_id=chat_id, photo=png_bytes, caption=caption)
+        sent = await context.bot.send_photo(
+            chat_id=chat_id,
+            photo=png_bytes,
+            caption=caption,
+            parse_mode="HTML",
+        )
         schedule_delete(context.bot, chat_id, sent.message_id, 30, context.job_queue)
     except Exception as e:
         logger.error(f"story error: {e}", exc_info=True)

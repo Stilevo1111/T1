@@ -8,21 +8,29 @@ import random
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from scipy.ndimage import binary_dilation
 
 from chat_wordcloud.config import (
+    WORDCLOUD_ACCENT_COLOR,
+    WORDCLOUD_ACCENT_SOFT,
     WORDCLOUD_BACKGROUND_COLOR,
+    WORDCLOUD_BOTTOM_RESERVE,
     WORDCLOUD_COLORS,
     WORDCLOUD_DEBUG,
     WORDCLOUD_FONT_PATH,
+    WORDCLOUD_HEAT_RAMP,
     WORDCLOUD_HEIGHT,
     WORDCLOUD_MAX_FONT_SIZE,
     WORDCLOUD_MAX_WORDS,
     WORDCLOUD_MIN_FONT_SIZE,
+    WORDCLOUD_PANEL_COLOR,
     WORDCLOUD_RANDOM_STATE,
     WORDCLOUD_RELATIVE_SCALING,
     WORDCLOUD_SAFE_MARGIN,
+    WORDCLOUD_TEXT_COLOR,
+    WORDCLOUD_TEXT_MUTED,
+    WORDCLOUD_TOP_RESERVE,
     WORDCLOUD_TOXIC_COLORS,
     WORDCLOUD_WIDTH,
     WORDCLOUD_WORD_PADDING,
@@ -89,9 +97,7 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
 
 
 def _get_dota_color(rng):
-    """Get a random color for wordcloud words with toxic palette emphasis.
-    50% light (white/gray), 35% bright Dota colors, 15% toxic neon.
-    """
+    """Fallback random color (kept for the small-word filler pass)."""
     rgb_colors = [_hex_to_rgb(c) for c in WORDCLOUD_COLORS]
     lights = rgb_colors[:3]
     rest = rgb_colors[3:]
@@ -104,6 +110,67 @@ def _get_dota_color(rng):
         return rng.choice(rest)
     else:
         return rng.choice(toxic_rgb)
+
+
+def _lerp(a: float, b: float, t: float) -> float:
+    return a + (b - a) * t
+
+
+def _frequency_color(ratio: float) -> tuple[int, int, int]:
+    """Map normalized frequency to the heat ramp.
+
+    ratio 0.0 -> cool blue (rare), ratio 1.0 -> hot red (most frequent).
+    This makes popularity readable at a glance, unlike random colors.
+    """
+    ramp = [_hex_to_rgb(c) for c in WORDCLOUD_HEAT_RAMP]
+    if len(ramp) == 1:
+        return ramp[0]
+    ratio = min(1.0, max(0.0, float(ratio)))
+    scaled = ratio * (len(ramp) - 1)
+    idx = int(scaled)
+    if idx >= len(ramp) - 1:
+        return ramp[-1]
+    t = scaled - idx
+    c1, c2 = ramp[idx], ramp[idx + 1]
+    return (
+        int(round(_lerp(c1[0], c2[0], t))),
+        int(round(_lerp(c1[1], c2[1], t))),
+        int(round(_lerp(c1[2], c2[2], t))),
+    )
+
+
+def _draw_background(width: int, height: int) -> Image.Image:
+    """Dark vertical gradient with a subtle radial accent glow."""
+    base = _hex_to_rgb(WORDCLOUD_BACKGROUND_COLOR)
+    top = tuple(min(255, c + 12) for c in base)
+    bottom = tuple(max(0, c - 6) for c in base)
+
+    bg = Image.new("RGB", (width, height), base)
+    draw = ImageDraw.Draw(bg)
+    for y in range(height):
+        t = y / max(1, height - 1)
+        color = tuple(
+            int(round(_lerp(top[i], bottom[i], t))) for i in range(3)
+        )
+        draw.line([(0, y), (width, y)], fill=color)
+
+    # Soft accent glow near the top center for depth.
+    glow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    gdraw = ImageDraw.Draw(glow)
+    accent = _hex_to_rgb(WORDCLOUD_ACCENT_COLOR)
+    cx, cy = width // 2, int(height * 0.18)
+    max_r = int(width * 0.55)
+    steps = 26
+    for i in range(steps, 0, -1):
+        t = i / steps
+        r = int(max_r * t)
+        alpha = int(10 * (1 - t))
+        if alpha <= 0:
+            continue
+        gdraw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(*accent, alpha))
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=28))
+    bg = Image.alpha_composite(bg.convert("RGBA"), glow)
+    return bg
 
 
 def _get_word_bbox(word, font):
@@ -182,6 +249,11 @@ def _find_spiral_position(
     """
     max_radius = math.sqrt(canvas_width**2 + canvas_height**2) / 2
     safe_margin = WORDCLOUD_SAFE_MARGIN
+    # Never place words under the drawn card chrome (header/footer panels).
+    top_limit = safe_margin + WORDCLOUD_TOP_RESERVE
+    bottom_limit = canvas_height - safe_margin - WORDCLOUD_BOTTOM_RESERVE
+    if bottom_limit <= top_limit:
+        top_limit, bottom_limit = safe_margin, canvas_height - safe_margin
 
     angle_step = 1.0
     radius_step = 16
@@ -192,12 +264,12 @@ def _find_spiral_position(
         x = int(center_x + current_radius * math.cos(current_angle) - word_width / 2)
         y = int(center_y + current_radius * math.sin(current_angle) - word_height / 2)
 
-        # Strict canvas bounds check with safe margin
+        # Strict canvas bounds check with safe margin and reserved panels
         if (
             x < safe_margin
-            or y < safe_margin
+            or y < top_limit
             or x + word_width > canvas_width - safe_margin
-            or y + word_height > canvas_height - safe_margin
+            or y + word_height > bottom_limit
         ):
             current_angle += angle_step
             current_radius += radius_step / (2 * math.pi)
@@ -220,7 +292,93 @@ def _find_spiral_position(
     return None
 
 
-def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
+def _ui_font(font_path: str, size: int):
+    """Bold UI font for the card chrome (title/legend), falls back gracefully."""
+    try:
+        return ImageFont.truetype(font_path, size)
+    except Exception:
+        try:
+            return ImageFont.truetype(font_path, max(8, int(size * 0.8)))
+        except Exception:
+            return ImageFont.load_default()
+
+
+def _draw_chrome(base_img: Image.Image, top_words, period_label: str, message_count: int) -> None:
+    """Draw the OpenDota-style header, frequency legend and footer in-place."""
+    width, height = base_img.size
+    draw = ImageDraw.Draw(base_img, "RGBA")
+    font_path = _resolve_font_path() or ""
+
+    title_font = _ui_font(font_path, 34)
+    sub_font = _ui_font(font_path, 18)
+    legend_font = _ui_font(font_path, 15)
+    foot_font = _ui_font(font_path, 15)
+
+    accent = _hex_to_rgb(WORDCLOUD_ACCENT_COLOR) + (255,)
+    accent_soft = _hex_to_rgb(WORDCLOUD_ACCENT_SOFT) + (255,)
+    text = _hex_to_rgb(WORDCLOUD_TEXT_COLOR) + (255,)
+    muted = _hex_to_rgb(WORDCLOUD_TEXT_MUTED) + (255,)
+    panel = _hex_to_rgb(WORDCLOUD_PANEL_COLOR) + (215,)
+
+    # --- Header bar ---
+    draw.rectangle([0, 0, width, 86], fill=panel)
+    draw.rectangle([0, 86, width, 88], fill=accent)
+    draw.text((28, 16), "ОБЛАКО СЛОВ ЧАТА", font=title_font, fill=text)
+    draw.text((30, 56), period_label, font=sub_font, fill=muted)
+
+    # Top-3 words preview on the right of the header.
+    x_cursor = width - 28
+    for idx, (word, count) in enumerate(top_words[:3]):
+        label = f"{word} · {count}"
+        w = draw.textlength(label, font=legend_font)
+        chip_w = int(w) + 22
+        chip_h = 28
+        if idx == 0:
+            chip_fill = accent
+        elif idx == 1:
+            chip_fill = accent_soft
+        else:
+            chip_fill = (139, 148, 158, 230)
+        chip = [x_cursor - chip_w, 20, x_cursor, 20 + chip_h]
+        draw.rounded_rectangle(chip, radius=chip_h // 2, fill=chip_fill)
+        chip_text = (13, 13, 17, 255) if idx < 2 else (240, 246, 252, 255)
+        draw.text((chip[0] + 11, 24), label, font=legend_font, fill=chip_text)
+        x_cursor -= chip_w + 10
+
+    # --- Footer: frequency legend + context ---
+    foot_h = 62
+    fy = height - foot_h
+    draw.rectangle([0, fy, width, height], fill=panel)
+    draw.rectangle([0, fy, width, fy + 2], fill=accent)
+
+    lx = 28
+    ly = fy + 14
+    draw.text((lx, ly), "Реже", font=foot_font, fill=muted)
+    lx += int(draw.textlength("Реже ", font=foot_font)) + 6
+    for i in range(40):
+        ratio = i / 39
+        c = _frequency_color(ratio)
+        x = lx + i * 12
+        y = ly + 4
+        draw.rounded_rectangle([x, y, x + 10, y + 16], radius=5, fill=(*c, 255))
+    lx += 40 * 12 + 6
+    draw.text((lx, ly), "Чаще", font=foot_font, fill=muted)
+
+    msg_text = f"Сообщений: {message_count}" if message_count else "Сообщения: нет данных"
+    draw.text(
+        (width - 28 - int(draw.textlength(msg_text, font=foot_font)), ly),
+        msg_text,
+        font=foot_font,
+        fill=muted,
+    )
+
+
+def generate_wordcloud_image(
+    top_words: list[tuple[str, int]],
+    *,
+    period_label: str = "",
+    message_count: int = 0,
+) -> bytes:
     if not top_words:
         raise ValueError("No words provided for wordcloud")
 
@@ -240,17 +398,17 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
     # Sort by frequency - most important words first
     sorted_words = sorted(top_words, key=lambda x: frequencies.get(x[0], 0), reverse=True)
 
-    # Create canvas
+    # Create canvas with the styled background
     canvas_width = WORDCLOUD_WIDTH
     canvas_height = WORDCLOUD_HEIGHT
-    base_img = Image.new("RGBA", (canvas_width, canvas_height), WORDCLOUD_BACKGROUND_COLOR)
+    base_img = _draw_background(canvas_width, canvas_height)
 
     # Random generator for placement
     rng = random.Random(WORDCLOUD_RANDOM_STATE)
 
-    # Center of canvas
+    # Center of the free word area (between the drawn header and footer).
     center_x = canvas_width // 2
-    center_y = canvas_height // 2
+    center_y = (WORDCLOUD_TOP_RESERVE + canvas_height - WORDCLOUD_BOTTOM_RESERVE) // 2
 
     # Occupied mask for alpha-collision detection
     occupied_mask = np.zeros((canvas_height, canvas_width), dtype=bool)
@@ -281,7 +439,9 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
             return False
 
         angle = rng.choice(WORDCLOUD_ANGLES)
-        color = _get_dota_color(rng)
+        # Color encodes frequency: hot = popular, cool = rare.
+        ratio = (frequencies.get(word, 1) / max_freq) if max_freq > 0 else 0.0
+        color = _frequency_color(ratio)
 
         # Pre-render rotated word to get ACTUAL dimensions and alpha mask
         rotated, rw, rh = _render_rotated_word(word, current_font, color, angle)
@@ -384,7 +544,7 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
         if small_font is None:
             continue
 
-        color = _get_dota_color(rng)
+        color = _frequency_color((frequencies.get(word, 1) / max_freq) if max_freq > 0 else 0.0)
         angle = rng.choice(WORDCLOUD_ANGLES)
 
         rotated, rw, rh = _render_rotated_word(word, small_font, color, angle)
@@ -481,9 +641,16 @@ def generate_wordcloud_image(top_words: list[tuple[str, int]]) -> bytes:
         except Exception as e:
             logger.warning(f"Could not save debug files: {e}")
 
+    # Draw the OpenDota-style card chrome (header, top words, legend, footer)
+    # on top of the placed words so every card explains its own data.
+    try:
+        _draw_chrome(base_img, sorted_words, period_label, message_count)
+    except Exception as e:
+        logger.warning(f"Could not draw wordcloud chrome: {e}")
+
     # Save image
     buf = io.BytesIO()
-    base_img.save(buf, format="PNG", optimize=True)
+    base_img.convert("RGB").save(buf, format="PNG", optimize=True)
     buf.seek(0)
     result_bytes = buf.getvalue()
     logger.info(f"WordCloud image generated: {len(result_bytes)} bytes, size={base_img.size}")
