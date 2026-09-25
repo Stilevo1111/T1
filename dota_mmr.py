@@ -2963,7 +2963,7 @@ def _profile_award_icon(kind: str, size: int, color):
 
 def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 0,
                     best_streak: int = 0, message_count: int = 0,
-                    achievements: dict | None = None) -> list:
+                    achievements: dict | None = None, position: int | None = None) -> list:
     """Return persisted tags, award counters, and awarded writer badges."""
     meta = {
         "weekly_mvp": ("MVP", None, "mvp"),
@@ -2989,14 +2989,26 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
         result.append({"key": key, "label": label, "color": color,
                        "count": count, "icon": icon})
 
-    # Fissure medals are mutually exclusive: show only the current best
-    # position.  A stale F3/F2 in the profile cache must not create a second
-    # bronze/silver picture next to F1.
-    fissure_tags = [key for key in ("F1", "F2", "F3") if key in tags]
-    if fissure_tags:
-        key = fissure_tags[0]
-        label, color, icon = meta[key]
-        add(key, label, color, None, icon)
+    # Fissure medal follows the current rank, not a possibly stale stored F-tag.
+    # Only when rank is unavailable do we use the tag fallback.
+    fissure_key = None
+    try:
+        rank = int(position) if position is not None else 0
+    except (TypeError, ValueError):
+        rank = 0
+    if rank == 1:
+        fissure_key = "F1"
+    elif rank == 2:
+        fissure_key = "F2"
+    elif 3 <= rank <= 15:
+        fissure_key = "F3"
+    else:
+        fissure_tags = [key for key in ("F1", "F2", "F3") if key in tags]
+        if fissure_tags:
+            fissure_key = fissure_tags[0]
+    if fissure_key:
+        label, color, icon = meta[fissure_key]
+        add(fissure_key, label, color, None, icon)
 
     for key in ("weekly_mvp", "weekly_top1", "weekly_top2", "weekly_top3", "VIP", "admin_custom"):
         try:
@@ -3237,7 +3249,7 @@ def generate_profile_card(
         awards = _profile_awards(
             tags, award_counts, mmr=mmr, total_rolls=total_rolls,
             best_streak=best_streak, message_count=message_count,
-            achievements=achievements,
+            achievements=achievements, position=position,
         )
 
         # --- Аватар + золотая рамка (как в /start) -----
