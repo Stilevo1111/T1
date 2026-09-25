@@ -22,18 +22,36 @@ LOADING_ICON = "🪝 "
 
 # Spinner styles. Every frame inside a style must differ from the previous one,
 # otherwise Telegram answers "message is not modified" and rejects the edit.
+# The last frame must also differ from the first, since the style loops.
 SPINNERS = {
+    # --- neutral ---
     "dots": ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"),
     "circle": ("◐", "◓", "◑", "◒"),
     "triangle": ("▹", "▸", "▹", "◃"),
     "bounce": ("⠁", "⠂", "⠄", "⠂"),
-    "moon": ("🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"),
-    "clock": ("🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗",
-              "🕘", "🕙", "🕚", "🕛"),
     "bar": ("▁", "▃", "▄", "▅", "▆", "▇", "▆", "▅", "▄", "▃"),
     "quadrant": ("▖", "▘", "▝", "▗"),
     "arrow": ("←", "↖", "↑", "↗", "→", "↘", "↓", "↙"),
     "pulse": ("●", "○", "●", "○"),
+    # --- emoji ---
+    "moon": ("🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"),
+    "clock": ("🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗",
+              "🕘", "🕙", "🕚", "🕛"),
+    "hourglass": ("⌛", "⏳", "⌛", "⏳"),
+    "water": ("💧", "💧.", "💦", "💦."),
+    "bubble": ("🫧", "🫧.", "🫧..", "🫧..."),
+    "fish": ("🐟", "🐠", "🐡"),
+    # --- thematic for the fissure bot ---
+    "dice": ("🎲", "🎲.", "🎲..", "🎲..."),
+    "crack": ("🪨", "💥", "🪨", "💥"),
+    "zeus": ("⚡", "🌩️", "⚡", "🌩️"),
+    "fissure": ("🕳️", "🕳️.", "🕳️..", "🕳️..."),
+    "dota": ("🗡️", "🏹", "🔮", "🛡️"),
+    "heart": ("❤️", "🧡", "💛", "💚", "💙", "💜", "🖤"),
+    "dots3": ("⋮", "⋯", "⋮", "⋯"),
+    "grow": ("▘", "▝", "▗", "▖"),
+    "flip": ("⇀", "⇄", "⇆", "⇄"),
+    "wait": ("…", "……", "………"),
 }
 DEFAULT_SPINNER = "dots"
 
