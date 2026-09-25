@@ -886,7 +886,9 @@ async def create_infographic(hero_stats, bot=None):
 
     best_players = {}
     try:
-        best_players = get_best_players_per_hero(limit_per_hero=1, days=7)
+        best_players = await asyncio.to_thread(
+            get_best_players_per_hero, 1, 7
+        )
     except Exception as e:
         logger.warning(f"Failed to load best players for hero meta avatars: {e}")
 
@@ -966,8 +968,18 @@ async def create_infographic(hero_stats, bot=None):
             icons[hero['id']] = result
 
     async with aiohttp.ClientSession() as avatar_session:
-        avatar_tasks = [fetch_avatar_for_hero(h['id'], avatar_session) for h in all_heroes]
-        avatar_results = await asyncio.gather(*avatar_tasks, return_exceptions=True)
+        avatar_tasks = [
+            asyncio.wait_for(fetch_avatar_for_hero(h['id'], avatar_session), timeout=5.0)
+            for h in all_heroes
+        ]
+        try:
+            avatar_results = await asyncio.wait_for(
+                asyncio.gather(*avatar_tasks, return_exceptions=True),
+                timeout=15.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Hero meta avatar collection timed out; using placeholders")
+            avatar_results = [None] * len(all_heroes)
     avatars = {}
     for hero, result in zip(all_heroes, avatar_results):
         if isinstance(result, Exception):
