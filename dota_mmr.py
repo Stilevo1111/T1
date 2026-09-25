@@ -2853,23 +2853,28 @@ _award_png_cache: dict = {}
 
 
 def _profile_award_png(kind: str, size: int):
-    """PNG-иконка награды из assets/awards (kind → имя файла), кешируется."""
+    """Load an existing transparent award asset and preserve its alpha."""
     if not kind:
         return None
+    kind = str(kind)
     cached = _award_png_cache.get((kind, size))
     if cached is not None:
         return cached.copy()
-    path = Path(__file__).parent / "assets" / "awards" / f"{kind}.webp"
-    if not path.exists():
-        return None
-    try:
-        icon = Image.open(path).convert("RGBA")
-        icon = icon.resize((max(1, int(size)), max(1, int(size))), Image.LANCZOS)
-        _award_png_cache[(kind, size)] = icon.copy()
-        return icon
-    except Exception as e:
-        logger.warning(f"Exception loading award png {kind}: {e}")
-        return None
+    award_dir = Path(__file__).parent / "assets" / "awards"
+    candidates = [award_dir / f"{kind}.webp", award_dir / f"{kind}.png"]
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            with Image.open(path) as source:
+                icon = source.convert("RGBA")
+            icon = icon.resize((max(1, int(size)), max(1, int(size))), Image.Resampling.LANCZOS)
+            _award_png_cache[(kind, size)] = icon.copy()
+            return icon
+        except Exception as e:
+            logger.warning("Could not load award asset %s: %s", path, e)
+    logger.warning("Award asset not found: %s", kind)
+    return None
 
 
 def _profile_award_icon(kind: str, size: int, color):
