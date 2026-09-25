@@ -3010,14 +3010,25 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
         label, color, icon = meta[fissure_key]
         add(fissure_key, label, color, None, icon)
 
-    for key in ("weekly_mvp", "weekly_top1", "weekly_top2", "weekly_top3", "VIP", "admin_custom"):
-        try:
-            count = int(counts.get(key) or 0)
-        except (TypeError, ValueError):
-            count = 0
-        if key in tags or count > 0:
+    # Only one live MMR placement is a current award. Historical medal counts
+    # remain in the profile text and must not create extra image tiles.
+    mmr_live_tags = [key for key in ("weekly_top1", "weekly_top2", "weekly_top3") if key in tags]
+    if mmr_live_tags:
+        key = mmr_live_tags[0]
+        label, color, icon = meta[key]
+        add(key, label, color, None, icon)
+
+    try:
+        mvp_count = int(counts.get("weekly_mvp") or 0)
+    except (TypeError, ValueError):
+        mvp_count = 0
+    if "weekly_mvp" in tags or mvp_count > 0:
+        label, color, icon = meta["weekly_mvp"]
+        add("weekly_mvp", label, color, mvp_count or None, icon)
+    for key in ("VIP", "admin_custom"):
+        if key in tags or int(counts.get(key) or 0) > 0:
             label, color, icon = meta[key]
-            add(key, label, color, count or None, icon)
+            add(key, label, color, counts.get(key), icon)
 
     # Writer profile shows only the highest awarded level. Chat notifications
     # are still emitted separately by achievements.check_and_award().

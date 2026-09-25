@@ -2988,7 +2988,7 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
         if steam_id:
             try:
                 top_heroes = await asyncio.wait_for(
-                    get_week_top_heroes_async(steam_id, top_k=3),
+                    get_week_top_heroes_async(steam_id, top_k=5),
                     timeout=12.0
                 )
             except Exception as e:
