@@ -18,6 +18,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 TYPED_LABEL = "Хукаю..."
+LOADING_ICON = "🪝 "
 CURSOR = "▌"
 FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 
@@ -79,16 +80,20 @@ async def _edit(bot, chat_id: int, message_id: int, text: str) -> bool:
             return True
 
 
-async def _type_then_spin(bot, chat_id: int, message_id: int, label: str) -> None:
+async def _type_then_spin(
+    bot, chat_id: int, message_id: int, label: str, icon: str
+) -> None:
     loop = asyncio.get_running_loop()
     started = loop.time()
 
-    # Phase 1: type the label, TYPE_CHUNK characters per frame.
+    # Phase 1: type the label, TYPE_CHUNK characters per frame. The icon is
+    # prepended as a whole and never typed: emoji are surrogate pairs in
+    # Python strings, so slicing them per frame could split a glyph in half.
     for end in range(TYPE_CHUNK, len(label) + TYPE_CHUNK, TYPE_CHUNK):
         if asyncio.current_task().cancelling():
             return
         if not await _edit(
-            bot, chat_id, message_id, f"<b>{label[:end]}{CURSOR}</b>"
+            bot, chat_id, message_id, f"<b>{icon}{label[:end]}{CURSOR}</b>"
         ):
             return
         if loop.time() - started > MAX_EDIT_SECONDS:
@@ -101,7 +106,7 @@ async def _type_then_spin(bot, chat_id: int, message_id: int, label: str) -> Non
         if asyncio.current_task().cancelling():
             return
         if not await _edit(
-            bot, chat_id, message_id, f"<b>{FRAMES[i % len(FRAMES)]} {label}</b>"
+            bot, chat_id, message_id, f"<b>{FRAMES[i % len(FRAMES)]} {icon}{label}</b>"
         ):
             return
         i += 1
@@ -110,17 +115,19 @@ async def _type_then_spin(bot, chat_id: int, message_id: int, label: str) -> Non
         await asyncio.sleep(SPIN_INTERVAL)
 
 
-async def show_loading(bot, chat_id: int, label: str = TYPED_LABEL) -> Loading:
+async def show_loading(
+    bot, chat_id: int, label: str = TYPED_LABEL, icon: str = LOADING_ICON
+) -> Loading:
     """Send the loading message and start the animation."""
     try:
         msg = await bot.send_message(
-            chat_id=chat_id, text=f"<b>{label[:1]}{CURSOR}</b>", parse_mode="HTML"
+            chat_id=chat_id, text=f"<b>{icon}{label[:1]}{CURSOR}</b>", parse_mode="HTML"
         )
     except Exception as e:
         logger.debug(f"loading_flow: could not send loading message: {e}")
         return Loading(chat_id, 0, None)
 
-    task = asyncio.create_task(_type_then_spin(bot, chat_id, msg.message_id, label))
+    task = asyncio.create_task(_type_then_spin(bot, chat_id, msg.message_id, label, icon))
     handle = Loading(chat_id, msg.message_id, task)
     _active[(chat_id, msg.message_id)] = handle
     return handle

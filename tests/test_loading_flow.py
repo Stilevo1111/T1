@@ -24,6 +24,7 @@ import loading_flow  # noqa: E402
 from loading_flow import (  # noqa: E402
     CURSOR,
     FRAMES,
+    LOADING_ICON,
     TYPED_LABEL,
     show_loading,
     stop_loading,
@@ -76,19 +77,28 @@ def test_types_label_then_spins():
         bot = _Bot()
         handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
 
-        assert bot.sent == [f"<b>{TYPED_LABEL[:1]}{CURSOR}</b>"]
+        assert bot.sent == [f"<b>{LOADING_ICON}{TYPED_LABEL[:1]}{CURSOR}</b>"]
 
         await _spin()
         await stop_loading(handle)
 
         assert handle.message_id
         assert len(bot.edits) >= 2
+        # The icon is present from the very first frame, so a half-typed emoji
+        # can never appear. Spin frames lead with the spinner glyph instead.
+        assert bot.sent[0].startswith(f"<b>{LOADING_ICON}")
+        for frame in bot.edits:
+            glyph = frame[len("<b>")]
+            if CURSOR in frame:
+                assert frame.startswith(f"<b>{LOADING_ICON}")
+            else:
+                assert glyph in FRAMES, f"spin frame must lead with a spinner glyph: {frame!r}"
         # Growing prefix while typing...
-        assert bot.edits[0] == f"<b>{TYPED_LABEL[:2]}{CURSOR}</b>"
-        assert bot.edits[1] == f"<b>{TYPED_LABEL[:4]}{CURSOR}</b>"
+        assert bot.edits[0] == f"<b>{LOADING_ICON}{TYPED_LABEL[:2]}{CURSOR}</b>"
+        assert bot.edits[1] == f"<b>{LOADING_ICON}{TYPED_LABEL[:4]}{CURSOR}</b>"
         # ...then the spinner takes over with the full label.
         assert f"<b>{TYPED_LABEL}</b>" not in bot.edits
-        spinner_frames = {f"<b>{f} {TYPED_LABEL}</b>" for f in FRAMES}
+        spinner_frames = {f"<b>{f} {LOADING_ICON}{TYPED_LABEL}</b>" for f in FRAMES}
         assert spinner_frames & set(bot.edits)
 
     asyncio.run(run())
@@ -167,5 +177,38 @@ def test_send_failure_returns_falsy_handle():
         assert not handle
         assert handle.message_id == 0
         await stop_loading(handle)
+
+    asyncio.run(run())
+
+
+def test_icon_never_split_into_broken_surrogates():
+    """Emoji are surrogate pairs: a per-frame slice must not cut one in half."""
+    label = "Хукаю..."
+
+    async def run():
+        bot = _Bot()
+        handle = await show_loading(bot, bot.chat_id, label)
+        await _spin()
+        await stop_loading(handle)
+
+        for frame in [bot.sent[0], *bot.edits]:
+            body = frame[len("<b>"):-len("</b>")]
+            leading = body[0]
+            assert leading == LOADING_ICON[0] or leading in FRAMES, (
+                f"frame must lead with the hook icon or a spinner glyph: {frame!r}"
+            )
+            # No lone surrogate anywhere in the rendered frame.
+            assert not any(0xD800 <= ord(c) <= 0xDFFF for c in body)
+
+    asyncio.run(run())
+
+
+def test_icon_is_optional():
+    async def run():
+        bot = _Bot()
+        handle = await show_loading(bot, bot.chat_id, TYPED_LABEL, icon="")
+        await _spin()
+        await stop_loading(handle)
+        assert bot.sent == [f"<b>{TYPED_LABEL[:1]}{CURSOR}</b>"]
 
     asyncio.run(run())
