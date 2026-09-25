@@ -1023,8 +1023,9 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
         t2 += f"{label:<8} {u_str:>5} {p_str:>5} {square}\n"
     t2 += "</pre>"
 
-    header = f"<b>📊 ANALYTICS ({role})</b>"
-    text = f"{header}\n\n{t1}"
+    # The chart already contains the analytics title and role; keep the
+    # comparison page focused on the table itself.
+    text = t1
 
     header_detailed = "<b>📈 Подробное сравнение</b>"
     text_detailed = f"{header_detailed}\n\n{t2}"
