@@ -19,7 +19,7 @@ MESSAGE_THRESHOLDS = (100, 500, 1000, 5000, 10000, 20000)
 ACHIEVEMENTS: dict[str, dict] = {
     **{
         f"ah_msg{t}": {
-            "label": f"Сообщения {t}",
+            "label": f"{t} Сообщений",
             "metric": "message_count",
             "target": t,
             "once": True,
