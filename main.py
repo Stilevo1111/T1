@@ -3045,26 +3045,24 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
         # F1/F2/F3 are reconciled exclusively by refresh_fissure_top_tags.
         # The profile is read-only here: assigning tags from a card caused
 
-        # Awards are independent of Telegram's visual tag application.  MMR
-        # Top-1 is a live weekly placement, and writer level is derived from
-        # the persisted message counter when the legacy achievements JSON is
-        # empty.  This makes the profile self-healing without mutating awards.
+        # MMR Top-1 is the current holder persisted by the weekly tag job.
+        # The tag API is visual only and must not decide whether the profile
+        # has a live MMR award.
         try:
-            from database import get_dota_week_top_from_db
-            live_top = await asyncio.to_thread(get_dota_week_top_from_db, 3)
-            live_top_ids = {
-                int(u["telegram_id"]) for u in (live_top or [])
-                if u.get("telegram_id")
-            }
-            if telegram_id in live_top_ids:
+            from database import get_config
+            current_top1 = get_config("current_mmr_top1_telegram_id")
+            if current_top1 and str(telegram_id) == str(current_top1):
                 tags = list(dict.fromkeys([*tags, "weekly_top1"]))
         except Exception as e:
-            logger.debug(f"profile live MMR placement unavailable uid={telegram_id}: {e}")
-        if not achievements:
-            from achievements import MESSAGE_THRESHOLDS
-            for threshold in MESSAGE_THRESHOLDS:
-                if int(target_user.get("message_count") or 0) >= threshold:
-                    achievements[f"ah_msg{threshold}"] = 1
+            logger.debug(f"profile live MMR holder unavailable uid={telegram_id}: {e}")
+
+        # Writer badges are cumulative. Derive the highest badge from the
+        # counter even when the legacy achievements JSON is absent or stale.
+        from achievements import MESSAGE_THRESHOLDS
+        message_count = int(target_user.get("message_count") or 0)
+        for threshold in MESSAGE_THRESHOLDS:
+            if message_count >= threshold:
+                achievements[f"ah_msg{threshold}"] = 1
 
         # DB/config drift and visible tag flicker.
 

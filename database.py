@@ -2883,8 +2883,8 @@ def update_last_message_id(telegram_id, message_id):
     db = Database()
     db.update_last_message_id(telegram_id, message_id)
 
-def update_user_field(telegram_id, field, value):
-    """Обновление любого поля пользователя - пишем в кеш и сразу в БД"""
+def update_user_field(telegram_id, field, value, save_to_db=True):
+    """Update a user field, cache it, and persist it immediately by default."""
     if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
         logger.warning(f"update_user_field: invalid telegram_id={telegram_id}, skipping")
         return False
