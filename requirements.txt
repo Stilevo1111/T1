@@ -11,3 +11,4 @@ numpy>=1.26.0
 pydantic-settings>=2.0.3
 structlog==23.2.0
 scipy>=1.10.0
+redis>=5.0.0
