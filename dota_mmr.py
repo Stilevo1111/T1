@@ -2989,8 +2989,16 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
         result.append({"key": key, "label": label, "color": color,
                        "count": count, "icon": icon})
 
-    for key in ("weekly_mvp", "weekly_top1", "weekly_top2", "weekly_top3",
-                "F1", "F2", "F3", "VIP", "admin_custom"):
+    # Fissure medals are mutually exclusive: show only the current best
+    # position.  A stale F3/F2 in the profile cache must not create a second
+    # bronze/silver picture next to F1.
+    fissure_tags = [key for key in ("F1", "F2", "F3") if key in tags]
+    if fissure_tags:
+        key = fissure_tags[0]
+        label, color, icon = meta[key]
+        add(key, label, color, None, icon)
+
+    for key in ("weekly_mvp", "weekly_top1", "weekly_top2", "weekly_top3", "VIP", "admin_custom"):
         try:
             count = int(counts.get(key) or 0)
         except (TypeError, ValueError):
@@ -3031,7 +3039,7 @@ def _profile_awards_cap(total) -> tuple:
 
 def _profile_awards_layout(count) -> dict:
     """Геометрия значков наград: один ряд плиток в центральной области карточки."""
-    tile, gap, per_row, top = 120.0, 22.0, _PROFILE_AWARDS_PER_ROW, 245.0
+    tile, gap, per_row, top = 120.0, 8.0, _PROFILE_AWARDS_PER_ROW, 245.0
     try:
         count = max(0, int(count or 0))
     except (TypeError, ValueError):
