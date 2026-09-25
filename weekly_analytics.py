@@ -68,6 +68,9 @@ __all__ = [
 
 # Cache for background image
 _CHART_BG_CACHE = None
+_CHART_STYLE = "hud"
+_CHART_CACHE = {}
+_CHART_CACHE_LIMIT = 32
 
 # Chart dimensions
 WIDTH = 1200
@@ -1554,31 +1557,34 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
 
     canvas = bg.convert("RGB").resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
     draw = ImageDraw.Draw(canvas, "RGBA")
-    # Dark glass panel keeps the existing brand background but improves contrast.
-    draw.rounded_rectangle((28, 24, 1172, 776), radius=32, fill=(8, 11, 22, 224), outline=(255, 255, 255, 28), width=2)
-    draw.rounded_rectangle((58, 52, 244, 106), radius=26, fill=(255, 140, 66, 34), outline=(255, 140, 66, 130), width=2)
-    draw.text((84, 61), "РАЗБОР ИГРЫ", font=font(23, True), fill="#f8fafc")
-    draw.text((58, 132), "Ориентировочный индекс", font=font(34, True), fill="#f8fafc")
-    draw.text((58, 181), "последние 10 матчей • данные OpenDota", font=font(20), fill="#94a3b8")
-    accent = "#2dd4bf" if average >= 1 else "#fb923c"
+    # Game-HUD framing: neon accents, angled panels and XP-style labels.
+    draw.rounded_rectangle((28, 24, 1172, 776), radius=22, fill=(7, 8, 18, 235), outline=(91, 75, 255, 180), width=3)
+    draw.rounded_rectangle((44, 40, 1156, 760), radius=16, outline=(255, 140, 66, 75), width=2)
+    draw.rounded_rectangle((58, 52, 282, 112), radius=8, fill=(111, 76, 255, 105), outline=(177, 160, 255, 220), width=2)
+    draw.text((82, 65), "MATCH HISTORY", font=font(22, True), fill="#f4f1ff")
+    draw.text((58, 132), "БОЕВОЙ ОТЧЁТ", font=font(38, True), fill="#ffffff")
+    draw.text((60, 184), "последние 10 матчей  •  живая статистика OpenDota", font=font(19), fill="#b7a9ff")
+    accent = "#7CFFB2" if average >= 1 else "#FFB347"
     cards = ((58, 230, 390, 326), (410, 230, 690, 326), (710, 230, 1140, 326))
-    for box in cards:
-        draw.rounded_rectangle(box, radius=22, fill=(255, 255, 255, 15), outline=(255, 255, 255, 24), width=1)
-    draw.text((82, 244), f"{average:.2f}", font=font(46, True), fill=accent)
-    draw.text((190, 258), "средний индекс", font=font(18), fill="#cbd5e1")
-    draw.text((435, 246), f"{wins}W · {len(entries) - wins}L", font=font(34, True), fill="#f8fafc")
-    trend = "растёт" if len(values) >= 3 and values[-1] > values[0] else "снижается" if len(values) >= 3 and values[-1] < values[0] else "стабильно"
-    draw.text((735, 248), f"Динамика: {trend}", font=font(24, True), fill="#cbd5e1")
+    for index, box in enumerate(cards):
+        edge = (124, 255, 178, 120) if index == 0 else (255, 140, 66, 105) if index == 1 else (125, 108, 255, 125)
+        draw.rounded_rectangle(box, radius=12, fill=(18, 18, 42, 220), outline=edge, width=2)
+    draw.text((82, 244), f"★ {average:.2f}", font=font(42, True), fill=accent)
+    draw.text((205, 258), "индекс", font=font(18), fill="#c4b5fd")
+    draw.text((435, 246), f"{wins}П  ·  {len(entries) - wins}П", font=font(30, True), fill="#7CFFB2")
+    trend = "РОСТ" if len(values) >= 3 and values[-1] > values[0] else "СПАД" if len(values) >= 3 and values[-1] < values[0] else "СТАБИЛЬНО"
+    trend_color = "#7CFFB2" if trend == "РОСТ" else "#FFB347" if trend == "СПАД" else "#C4B5FD"
+    draw.text((735, 248), f"↗ {trend}", font=font(25, True), fill=trend_color)
     left, right, top, bottom = 105, 1115, 392, 670
     for value in (0, 0.5, 1, 1.5, 2):
         y = bottom - (bottom - top) * value / 2
-        draw.line((left, y, right, y), fill=(255, 255, 255, 22), width=1)
+        draw.line((left, y, right, y), fill=(143, 120, 255, 35), width=1)
     draw.text((58, 344), "ИНДЕКС", font=font(17, True), fill="#64748b")
     draw.text((58, 384), "2.0", font=font(16), fill="#64748b")
     draw.text((58, 658), "0.0", font=font(16), fill="#64748b")
     points = [(left + (right - left) * i / max(len(values) - 1, 1), bottom - (bottom - top) * value / 2) for i, value in enumerate(values)]
     if len(points) > 1:
-        draw.line(points, fill="#ff8c42", width=6, joint="curve")
+        draw.line(points, fill="#FF7A00", width=7, joint="curve")
     for (x, y), item in zip(points, entries):
         color = "#2dd4bf" if item.get("win") else "#fb7185"
         draw.ellipse((x - 10, y - 10, x + 10, y + 10), fill="#101827", outline=color, width=5)
