@@ -1210,6 +1210,8 @@ wins INTEGER DEFAULT 0,
                      current_lose_streak INTEGER DEFAULT 0,
                      best_lose_streak INTEGER DEFAULT 0,
                      free_rolls INTEGER DEFAULT 0,
+                     achievements TEXT DEFAULT '{}',
+                     user_tags TEXT DEFAULT '[]',
                      avatar TEXT
                  )
             """)
@@ -3552,6 +3554,17 @@ def update_weekly_digest_snapshot():
     top_cache.invalidate_top_cache()
     return result
 
+def _derive_mmr_rank_tier(rank_tier: int | None, mmr: int | None) -> int:
+    """Return stored rank, or derive it from MMR with one shared rule."""
+    if rank_tier:
+        return int(rank_tier)
+    try:
+        from dota_mmr import mmr_to_rank_tier
+        return int(mmr_to_rank_tier(int(mmr or 0)))
+    except Exception:
+        return 0
+
+
 def get_dota_mmr_top(limit=50):
     """Получение топа игроков Dota 2 по MMR с кешем (limit-aware)"""
     from main import get_config, set_config
@@ -3586,6 +3599,7 @@ def get_dota_mmr_top(limit=50):
                     FROM users
                     WHERE steam_id IS NOT NULL
                        AND (in_chat = TRUE OR in_chat IS NULL)
+
                     ORDER BY
                         COALESCE(rank_tier, 0) DESC,
                         mmr DESC,
@@ -3822,18 +3836,10 @@ def _get_dota_week_top_query(limit):
 
         cursor = conn.cursor()
 
-        # Сначала проверим, есть ли вообще данные
-        try:
-            cursor.execute("""
-                SELECT COUNT(*) FROM users
-                WHERE steam_id IS NOT NULL
-                  AND (in_chat = TRUE OR in_chat IS NULL)
-            """)
-            total_with_steam = cursor.fetchone()[0]
-            logger.info(f"get_dota_week_top: {total_with_steam} users with steam_id")
-        except Exception as e:
-            logger.error(f"get_dota_week_top: failed to count users: {e}")
-            total_with_steam = 0
+        # Основной запрос с LIMIT сам возвращает пустой результат, когда
+        # подходящих игроков нет. Дополнительный COUNT(*) не нужен и добавлял
+        # лишний round-trip к Neon на каждом cache miss.
+        total_with_steam = 1
 
         # Если есть пользователи с steam_id, выполняем запрос
         if total_with_steam > 0:

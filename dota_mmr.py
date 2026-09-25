@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import aiohttp
+import requests
 from PIL import Image
 
 from cache_service import (
@@ -85,6 +86,13 @@ async def get_hero_list():
 
 OPENDOTA_API_URL = "https://api.opendota.com/api"
 STEAM_OFFSET = 76561197960265728
+
+# Legacy synchronous rate limiter retained for helper functions that still use
+# the sync bridge. Async OpenDota calls use the shared token limiter above.
+_api_rate_limit = {"last_request": 0, "requests_count": 0, "window_start": 0}
+API_RATE_LIMIT = 20
+API_RATE_WINDOW = 60
+API_MIN_INTERVAL = 0
 
 # Глобальное состояние rate limit для сообщений об ошибках (fallback)
 _opendota_rate_limited_until = 0
@@ -1385,7 +1393,8 @@ def _apply_private_profile_binding(telegram_id: int, steam_id: int, stats: dict)
     })
     return {
         "success": True,
-        "message": "✅ Аккаунт привязан! Ваш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику:\n⚠️ В игре: \nнастройки → сообщество → настройки → общедоступная история матчей → включить",
+        "private_profile": True,
+        "message": "✅ Аккаунт привязан! Но история матчей в Dota 2 закрыта.\n\nЧтобы бот видел ваши матчи, MMR и обновлял статистику:\n⚙️ Настройки → Сообщество → Настройки → Общедоступная история матчей → Включить",
     }
 
 
@@ -1488,7 +1497,8 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                     })
                     return {
                         "success": True,
-                        "message": "✅ Аккаунт привязан! Ваш Dota 2 профиль закрыт. Чтобы бот мог обновлять статистику:\n⚠️ В игре: \nнастройки → сообщество → настройки → общедоступная история матчей → включить",
+                        "private_profile": True,
+                        "message": "✅ Аккаунт привязан! Но история матчей в Dota 2 закрыта.\n\nЧтобы бот видел ваши матчи, MMR и обновлял статистику:\n⚙️ Настройки → Сообщество → Настройки → Общедоступная история матчей → Включить",
                     }
                 return {
                     "success": True,

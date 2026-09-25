@@ -70,6 +70,25 @@ MIN_SPAM_INTERVAL = 3.0
 logger = logging.getLogger(__name__)
 
 
+# Compatibility hooks for older integrations/tests. The production roll
+# balancer is currently stateless; keeping these no-op symbols avoids breaking
+# external code that used to import them from this module.
+def init_global_stats() -> None:
+    return None
+
+
+def record_player_roll(*args, **kwargs) -> None:
+    return None
+
+
+def update_global_stats_on_event(*args, **kwargs) -> None:
+    return None
+
+
+def maybe_persist_global_stats(*args, **kwargs) -> None:
+    return None
+
+
 # =====================
 # HELPER FUNCTIONS (pure, safe to extract)
 # =====================
@@ -612,8 +631,17 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for msg_id in slot_msg_ids:
                 schedule_delete(context.bot, chat_id, msg_id, 30, context.job_queue)
 
-        # Сохраняем fissure + last_message_id одним запросом
-        update_fissure(user_obj.id, new_fissure, now, growth, last_message_id=result_msg.message_id)
+        # Fissure write is synchronous (psycopg2/sqlite), so keep it off the
+        # event loop. This is especially important because the roll handler
+        # continues with live tag reconciliation and digest scheduling.
+        await asyncio.to_thread(
+            update_fissure,
+            user_obj.id,
+            new_fissure,
+            now,
+            growth,
+            last_message_id=result_msg.message_id,
+        )
 
         # Инвалидируем кеш дайджеста чтобы следующий job показал свежие данные
         invalidate_digest_cache()

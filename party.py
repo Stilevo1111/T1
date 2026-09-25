@@ -109,7 +109,14 @@ async def party_for_user(chat_id, chat_type, requester, context):
 
         from database import get_all_users_with_steam
         candidates = get_all_users_with_steam() or []
-        candidates = [c for c in candidates if c.get("steam_id") and c.get("telegram_id") != requester.get("telegram_id")]
+        # Party is a live matchmaking list: only players with at least one
+        # recorded Dota match in the current week are useful candidates.
+        candidates = [
+            c for c in candidates
+            if c.get("steam_id")
+            and c.get("telegram_id") != requester.get("telegram_id")
+            and (c.get("week_games") or 0) > 0
+        ]
 
         req_rank = requester.get("rank_tier") or 0
         logger.info(f"party: requester telegram_id={requester.get('telegram_id')} rank_tier={req_rank} candidates={len(candidates)}")

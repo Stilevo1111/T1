@@ -269,7 +269,7 @@ def _build_stats_button_keyboard():
     """Build inline keyboard for stats page"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 Статистика", callback_data="analytics_show")],
-        [InlineKeyboardButton("🆚 Сравнение с Pro", callback_data="analytics_pro_compare")]
+        [InlineKeyboardButton("⚠️ Ориентировочный бенчмарк", callback_data="analytics_pro_compare")]
     ])
 
 

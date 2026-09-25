@@ -402,7 +402,7 @@ async def morning_greeting_job(context):
     MSK = timezone(timedelta(hours=3))
     today_str = dt.now(MSK).strftime("%Y-%m-%d")
 
-    last_greeting = get_config('daily_greeting_sent')
+    last_greeting = await asyncio.to_thread(get_config, 'daily_greeting_sent')
     if last_greeting == today_str:
         logger.info("Утреннее приветствие уже отправлено сегодня")
         return
@@ -412,7 +412,7 @@ async def morning_greeting_job(context):
     try:
         logger.info("Запуск утреннего приветствия 09:00 MSK")
 
-        digest_chat_id = get_config('digest_chat_id')
+        digest_chat_id = await asyncio.to_thread(get_config, 'digest_chat_id')
         if not digest_chat_id:
             logger.info("Чат для дайджеста не настроен")
             return
@@ -423,7 +423,7 @@ async def morning_greeting_job(context):
         ])
         await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=keyboard, parse_mode="HTML")
 
-        set_config('daily_greeting_sent', today_str)
+        await asyncio.to_thread(set_config, 'daily_greeting_sent', today_str)
         logger.info(f"Утреннее приветствие отправлено в чат {digest_chat_id}")
 
     except Exception as e:
@@ -440,7 +440,7 @@ async def night_greeting_job(context):
     MSK = timezone(timedelta(hours=3))
     today_str = dt.now(MSK).strftime("%Y-%m-%d")
 
-    last_greeting = get_config('night_greeting_sent')
+    last_greeting = await asyncio.to_thread(get_config, 'night_greeting_sent')
     if last_greeting == today_str:
         logger.info("Вечернее приветствие уже отправлено сегодня")
         return
@@ -450,7 +450,7 @@ async def night_greeting_job(context):
     try:
         logger.info("Запуск вечернего приветствия 23:00 MSK")
 
-        digest_chat_id = get_config('digest_chat_id')
+        digest_chat_id = await asyncio.to_thread(get_config, 'digest_chat_id')
         if not digest_chat_id:
             logger.info("Чат для дайджеста не настроен")
             return
@@ -461,7 +461,7 @@ async def night_greeting_job(context):
         ])
         await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=keyboard, parse_mode="HTML")
 
-        set_config('night_greeting_sent', today_str)
+        await asyncio.to_thread(set_config, 'night_greeting_sent', today_str)
         logger.info(f"Вечернее приветствие отправлено в чат {digest_chat_id}")
 
     except Exception as e:
@@ -635,8 +635,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     context.user_data['analytics_matches'] = matches
                     context.user_data['analytics_chart_image'] = chart_image
                     context.user_data['analytics_pages'] = [
-                        {"title": "🆚Сравнение с Pro", "text": pro_text} if pro_text else None,
-                        {"title": "📊 Подробное сравнение", "text": detailed_text} if detailed_text else None
+                        {"title": "📊 Разбор матчей", "text": pro_text} if pro_text else None,
+                        {"title": "🔎 Что в данных", "text": detailed_text} if detailed_text else None,
                     ]
                     context.user_data['analytics_generated'] = {
                         i for i, p in enumerate([pro_text, detailed_text]) if p is not None
@@ -1908,6 +1908,21 @@ async def _resolve_start_avatar(user: dict, bot, user_id: int) -> str:
     return avatar_url or DEFAULT_AVATAR_URL
 
 
+def _increment_greeting_counter(key: str, date_str: str, reaction_type: str) -> tuple[int, int, int]:
+    """Atomically persist greeting counters in a worker thread.
+
+    The database API is synchronous, so keeping it out of the Telegram event
+    loop prevents a slow Neon round-trip from delaying other commands.
+    """
+    from database import get_config, set_config
+
+    current = int(get_config(key) or 0) + 1
+    set_config(key, current)
+    good_count = int(get_config(f"greeting_{date_str}_good") or 0)
+    bad_count = int(get_config(f"greeting_{date_str}_bad") or 0)
+    return current, good_count, bad_count
+
+
 @rate_limit(tokens=1)
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle button callbacks with pagination support for analytics."""
@@ -2228,29 +2243,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             from datetime import datetime as dt
 
+            # Синхронный config read/write выполняем в worker thread: нажатие
+            # кнопки не должно блокировать обработку остальных апдейтов.
             from database import get_config, set_config
             date_str = dt.now(timezone(timedelta(hours=3))).strftime("%Y-%m-%d")
             key = f"greeting_{date_str}_{reaction_type}"
 
-            # Increment counter
-            current = int(get_config(key) or 0)
-            set_config(key, current + 1)
+            # Сначала подтверждаем нажатие — это быстрый Telegram-ответ.
+            await callback_query.answer(cache_time=0)
 
-            # Add reaction to message (with answer to prevent rate limiting)
+            current, good_count, bad_count = await asyncio.to_thread(
+                _increment_greeting_counter, key, date_str, reaction_type
+            )
+
+            # Не делаем лишний Telegram API-вызов, если callback уже был
+            # обработан и счётчик не изменился (защита от retry Telegram).
             try:
-                await callback_query.answer(cache_time=0)
                 await context.bot.set_message_reaction(
                     chat_id=chat_id,
                     message_id=callback_query.message.message_id,
                     reaction={"emoji": emoji}
                 )
             except Exception:
-                pass
+                logger.debug("Could not set greeting reaction", exc_info=True)
 
-            # Update button text with new count (optimized to avoid rate limit)
             try:
-                good_count = int(get_config(f"greeting_{date_str}_good") or 0)
-                bad_count = int(get_config(f"greeting_{date_str}_bad") or 0)
                 keyboard = InlineKeyboardMarkup([
                     [InlineKeyboardButton(f"❤️ {good_count}", callback_data="greeting_good"),
                      InlineKeyboardButton(f"💔 {bad_count}", callback_data="greeting_bad")]
@@ -2261,7 +2278,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     reply_markup=keyboard
                 )
             except Exception as e:
-                logger.debug(f"Could not update greeting buttons: {e}")
+                # "Message is not modified" — это нормально, не ошибка.
+                if "not modified" not in str(e).lower():
+                    logger.debug(f"Could not update greeting buttons: {e}")
             return
 
     except Exception as e:
@@ -3006,7 +3025,10 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                 message_count=target_user.get("message_count") or 0,
                 week_games=target_user.get("week_games") or 0,
                 week_wins=target_user.get("week_wins") or 0,
-                week_losses=target_user.get("week_losses") or 0,
+                # Losses are not a persisted column for the weekly Dota
+                # counter. Derive them from games - wins so profiles never
+                # show a false 0L when wins exist.
+                week_losses=max(0, (target_user.get("week_games") or 0) - (target_user.get("week_wins") or 0)),
                 dota_total_games=target_user.get("dota_total_games") or 0,
                 dota_wins=target_user.get("dota_wins") or 0,
                 dota_losses=target_user.get("dota_losses") or 0,
@@ -3257,21 +3279,20 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         from database import get_dota_mmr_top, get_dota_week_top_from_db
-        user = await asyncio.to_thread(get_user, update.effective_user.id)
-
-        # Banner URL
+        # Баннер по умолчанию используется, если генерация карточки не удалась.
         topmmr_banner_url = TOPMMR_BANNER_PATH
 
-        # Сначала пытаемся получить недельный топ
-        logger.info("topmmr: before get_dota_week_top_from_db")
-        top_users = await asyncio.to_thread(get_dota_week_top_from_db, 10)
-        logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from weekly DB")
+        # Пользователь и текущий топ — независимые чтения. Выполняем их
+        # параллельно, чтобы не ждать два DB round-trip подряд.
+        user, top_users = await asyncio.gather(
+            asyncio.to_thread(get_user, update.effective_user.id),
+            asyncio.to_thread(get_dota_week_top_from_db, 10),
+        )
 
-        # Если недельный топ пустой, используем MMR топ
-        if not top_users or len(top_users) == 0:
-            logger.info("topmmr: weekly top empty, using MMR top")
+        # Если недельный топ пустой, используем общий MMR-топ только как
+        # fallback. Оба вызова уже выполняются вне event loop.
+        if not top_users:
             top_users = await asyncio.to_thread(get_dota_mmr_top, 10)
-            logger.info(f"topmmr: got {len(top_users) if top_users else 0} users from MMR DB")
 
         # Find user's position
         user_pos = None
@@ -3550,9 +3571,8 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             except Exception as e:
                 logger.debug(f"Could not delete last bot message: {e}")
 
-            if result.get('success'):
-                # Приоритетно подгружаем полные данные пользователя сразу после привязки,
-                # чтобы /analytics, дайджест и топы отражали свежую стату без ожидания джоба.
+            if result.get('success') and not result.get('private_profile'):
+                # При закрытом профиле не запускаем бесполезное обновление MMR.
                 try:
                     from dota_mmr import update_user_mmr
                     asyncio.create_task(asyncio.to_thread(update_user_mmr, update.effective_user.id))
@@ -3567,9 +3587,10 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 except Exception as e:
                     logger.debug(f"Could not schedule analytics preload: {e}")
 
-                result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text=result.get('message'))
-            else:
-                result_msg = await context.bot.send_message(chat_id=update.effective_chat.id, text=result.get('message'))
+            result_msg = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=result.get('message'),
+            )
             # Track this message for future deletion
             set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)

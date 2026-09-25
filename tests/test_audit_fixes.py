@@ -544,6 +544,16 @@ def test_top_commands_use_expected_limits_and_mmr_format():
 
 
 
+def test_party_filters_inactive_candidates():
+    from pathlib import Path
+    source = (Path(__file__).resolve().parent.parent / "party.py").read_text(encoding="utf-8")
+    assert 'and (c.get("week_games") or 0) > 0' in source
+    assert 'c.get("week_games")' in source
+
+    source = (Path(__file__).resolve().parent.parent / "digest.py").read_text(encoding="utf-8")
+    assert 'parts.append("\\n\\n🔷<a href=' not in source
+    assert 'parts.append("🔷<a href=' in source
+
 def test_weekly_award_grant_is_idempotent(monkeypatch):
     import database
 
@@ -639,3 +649,50 @@ def test_tag_persistence_survives_telegram_failure(monkeypatch):
     removed = asyncio.run(tags.remove_user_tag(1, "F1", bot=object(), chat_id=10))
     assert removed is True
     assert saved[-1] == []
+
+
+def test_analytics_does_not_fabricate_missing_open_dota_values():
+    from weekly_analytics import calculate_player_stats
+
+    stats = calculate_player_stats([{
+        "kills": 5, "deaths": 3, "assists": 12, "win": True,
+        "duration": 1800, "last_hits": 0,
+    }])
+    assert stats["wins"] == 1
+    assert stats["losses"] == 0
+    assert stats["apm"] is None
+    assert stats["gpm"] is None
+    assert stats["h_dmg"] is None
+    assert stats["data_quality"]["full_matches"] == 0
+    assert stats["data_quality"]["confidence"] == "низкая"
+
+
+def test_analytics_report_is_explicitly_approximate():
+    from weekly_analytics import _generate_report_text
+
+    stats = {
+        "wins": 7, "losses": 3, "wr": 70, "kda": "7/5/12",
+        "gpm": 480, "xpm": 560, "lh": 44, "duration": 34,
+        "kills": 7, "deaths": 5, "h_dmg": 12, "t_dmg": 3,
+        "apm": None, "data_quality": {
+            "total_matches": 10, "full_matches": 9, "confidence": "средняя",
+        },
+    }
+    report = _generate_report_text("CARRY", stats)
+    assert "не рейтинг игрока" in report["benchmark"]
+    assert "APM: <b>Н/Д</b>" in report["detailed"]
+    assert "9 из 10" in report["detailed"]
+
+
+def test_modern_chart_renders_without_fabricated_points():
+    import asyncio
+    from PIL import Image
+    from weekly_analytics import _create_visual_chart_sync
+
+    image = _create_visual_chart_sync(
+        [{"imp": 0.8, "hero_id": 1, "win": True}, {"imp": 1.1, "hero_id": 2, "win": False}],
+        {1: Image.new("RGBA", (64, 64), "red"), 2: Image.new("RGBA", (64, 64), "blue")},
+        Image.new("RGB", (1200, 800), (10, 12, 20)),
+    )
+    assert image and image[:8] == b"\x89PNG\r\n\x1a\n"
+    assert _create_visual_chart_sync([{"imp": None}], {}, Image.new("RGB", (10, 10))) is None
