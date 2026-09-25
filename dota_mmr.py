@@ -2967,9 +2967,9 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
     """Return persisted tags, award counters, and awarded writer badges."""
     meta = {
         "weekly_mvp": ("MVP", None, "mvp"),
-        "weekly_top1": ("Top-1", None, "gold"),
-        "weekly_top2": ("MMR Top-2", None, "silver"),
-        "weekly_top3": ("MMR Top-3", None, "bronze"),
+        "weekly_top1": ("Top-1", None, "top1"),
+        "weekly_top2": ("MMR Top-2", None, "top2"),
+        "weekly_top3": ("MMR Top-3", None, "top3"),
         "F1": ("Fissure Gold", None, "gold"),
         "F2": ("Fissure Silver", None, "silver"),
         "F3": ("Fissure Bronze", None, "bronze"),
