@@ -3013,6 +3013,16 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                     raw_achievements = json.loads(raw_achievements)
                 if isinstance(raw_achievements, dict):
                     achievements = raw_achievements
+                # A cached user row may predate these columns and silently yield
+                # empty lists. Re-read from the DB before rendering the card.
+                if not tags or not achievements:
+                    tags = await asyncio.to_thread(get_user_tags, telegram_id)
+                    from achievements import get_user_achievements
+                    achievements = await asyncio.to_thread(get_user_achievements, telegram_id)
+                    logger.debug(
+                        f"profile card: refreshed awards uid={telegram_id} "
+                        f"tags={len(tags)} achievements={len(achievements)}"
+                    )
             except Exception as e:
                 logger.debug(f"profile card award data skipped uid={telegram_id}: {e}")
                 # Fresh read is a safe fallback for an older cached row.
