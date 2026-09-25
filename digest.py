@@ -882,29 +882,33 @@ async def alternate_digest_job(context):
             hero_meta_banner = None
             need_hero_meta = should_create_new or now - _digest_state_container.get_last_hero_meta_refresh() > HERO_META_DIGEST_REFRESH_INTERVAL
             
-            # Generate a fresh banner before deleting the current digest.
-            # A slow image must never remove a working text digest first.
+            # Если нужно геро-мета и сообщение существует, удаляем его перед созданием нового с фото
             if need_hero_meta and last_message_id:
-                logger.info(f"Обновляем геро-мета перед ротацией дайджеста (message_id={last_message_id})")
+                logger.info(f"Генерируем геро-мета (need_hero_meta=True), удаляем старое сообщение {last_message_id} для создания с фото")
+                try:
+                    msg_id_int = int(last_message_id)
+                    if msg_id_int > 0:
+                        await bot.delete_message(chat_id=int(digest_chat_id), message_id=msg_id_int)
+                        logger.info(f"Удалено старое сообщение {last_message_id}")
+                except Exception as e:
+                    logger.debug(f"Старое сообщение уже удалено: {e}")
+                set_config('alternate_digest_message_id', None)
+                last_message_id = None
                 should_create_new = True
-
+            
             if should_create_new:
                 try:
-                    from hero_meta import get_hero_meta_banner
-                    hero_meta_banner = await asyncio.wait_for(
-                        get_hero_meta_banner(context.application.bot), timeout=25.0
-                    )
+                    from hero_meta import clear_hero_meta_cache_async, get_hero_meta_banner
+                    if should_create_new:
+                        await clear_hero_meta_cache_async()
+                    hero_meta_banner = await asyncio.wait_for(get_hero_meta_banner(context.application.bot), timeout=90.0)
                     if hero_meta_banner:
                         set_config('last_hero_meta_update', int(now))
                         _digest_state_container.set_last_hero_meta_refresh(now)
                         logger.info("Hero meta banner generated for digest")
                 except Exception as e:
-                    logger.warning("Hero meta refresh failed; using fallback banner: %s", e)
-                    try:
-                        from hero_meta import get_static_fallback_banner
-                        hero_meta_banner = get_static_fallback_banner()
-                    except Exception:
-                        hero_meta_banner = None
+                    logger.warning(f"Could not generate hero meta banner: {e}")
+                    hero_meta_banner = None
 
                 # Создаём новое сообщение
                 try:

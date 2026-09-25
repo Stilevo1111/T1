@@ -957,13 +957,7 @@ async def create_infographic(hero_stats, bot=None):
         return img
 
     tasks = [fetch_hero_portrait(None, h['img']) for h in all_heroes]
-    try:
-        results = await asyncio.wait_for(
-            asyncio.gather(*tasks, return_exceptions=True), timeout=12.0
-        )
-    except asyncio.TimeoutError:
-        logger.warning("Hero meta portraits timed out; using local/placeholder icons")
-        results = [None] * len(tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
     icons = {}
     for hero, result in zip(all_heroes, results):
         if isinstance(result, Exception):
@@ -973,13 +967,7 @@ async def create_infographic(hero_stats, bot=None):
 
     async with aiohttp.ClientSession() as avatar_session:
         avatar_tasks = [fetch_avatar_for_hero(h['id'], avatar_session) for h in all_heroes]
-        try:
-            avatar_results = await asyncio.wait_for(
-                asyncio.gather(*avatar_tasks, return_exceptions=True), timeout=12.0
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Hero meta avatars timed out; using placeholders")
-            avatar_results = [None] * len(avatar_tasks)
+        avatar_results = await asyncio.gather(*avatar_tasks, return_exceptions=True)
     avatars = {}
     for hero, result in zip(all_heroes, avatar_results):
         if isinstance(result, Exception):
