@@ -1,10 +1,12 @@
-"""Tests for the unified animated loading flow (loading_flow.py).
+"""Tests for the unified typed loading flow (loading_flow.py).
 
 Covered:
-  1. The label is typed chunk by chunk, then the spinner keeps running.
-  2. Every frame is distinct, so Telegram never answers "message is not modified".
-  3. stop_loading() cancels the animation: no edits arrive after the result.
-  4. A deleted message stops the loop instead of raising.
+  1. The label is typed chunk by chunk and then left in place - no spinner.
+  2. Every frame differs from the previous one, so Telegram never answers
+     "message is not modified".
+  3. stop_loading() / delete_loading() cancel the typing task, so a deleted
+     message is no longer edited.
+  4. A message that vanished on its own stops the loop instead of raising.
   5. Send failure degrades to a falsy handle instead of crashing the handler.
 
 The project has no pytest-asyncio, so async tests use asyncio.run like the rest
@@ -22,10 +24,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import loading_flow  # noqa: E402
 from loading_flow import (  # noqa: E402
-    DEFAULT_SPINNER,
     LOADING_ICON,
-    SPINNERS,
     TYPED_LABEL,
+    delete_loading,
     show_loading,
     stop_loading,
     stop_loading_by_id,
@@ -39,43 +40,48 @@ class _Msg:
 
 
 class _Bot:
-    """Minimal telegram.Bot stand-in that records every edit."""
+    """Minimal telegram.Bot stand-in that records every edit and delete."""
 
-    def __init__(self, chat_id=1, deleted_after=None):
+    def __init__(self, chat_id=1, gone_after=None, gone_error=None):
         self.chat_id = chat_id
         self.sent = []
         self.edits = []
-        self.deleted_after = deleted_after
+        self.deletes = []
+        self.gone_after = gone_after
+        self.gone_error = gone_error or "Bad Request: message to edit not found"
 
     async def send_message(self, chat_id, text, parse_mode=None):
         self.sent.append(text)
         return _Msg(1000 + len(self.sent), chat_id)
 
     async def edit_message_text(self, chat_id, message_id, text, parse_mode=None):
-        if self.deleted_after is not None and len(self.edits) >= self.deleted_after:
-            raise RuntimeError("Bad Request: message to edit not found")
+        if self.gone_after is not None and len(self.edits) >= self.gone_after:
+            raise RuntimeError(self.gone_error)
         self.edits.append(text)
         return _Msg(message_id, chat_id)
+
+    async def delete_message(self, chat_id, message_id):
+        self.deletes.append(message_id)
+        self.gone_after = 0
+        return True
 
 
 @pytest.fixture(autouse=True)
 def _fast_timing(monkeypatch):
-    """Zero delays so each animation step costs a single loop iteration."""
+    """Zero delays so each typing step costs a single loop iteration."""
     monkeypatch.setattr(loading_flow, "TYPE_INTERVAL", 0)
-    monkeypatch.setattr(loading_flow, "SPIN_INTERVAL", 0)
     monkeypatch.setattr(loading_flow, "MAX_EDIT_SECONDS", 30.0)
 
 
 async def _spin(iterations=20):
-    """Give the animation task `iterations` event-loop turns."""
+    """Give the typing task `iterations` event-loop turns."""
     for _ in range(iterations):
         await asyncio.sleep(0)
 
 
-def test_types_label_then_spins():
+def test_types_label_and_leaves_it_in_place():
     async def run():
         bot = _Bot()
-        frames = SPINNERS[DEFAULT_SPINNER]
         handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
 
         assert bot.sent == [f"<b>{LOADING_ICON}{TYPED_LABEL[:2]}</b>"]
@@ -84,59 +90,45 @@ def test_types_label_then_spins():
         await stop_loading(handle)
 
         assert handle.message_id
-        assert len(bot.edits) >= 2
-        # The icon is present from the very first frame, so a half-typed emoji
-        # can never appear. Spin frames lead with the spinner glyph instead.
-        assert bot.sent[0].startswith(f"<b>{LOADING_ICON}")
-        for frame in bot.edits:
-            if frame[len("<b>")] == LOADING_ICON[0]:
-                continue
-            assert frame[len("<b>")] in frames, (
-                f"spin frame must lead with a spinner glyph: {frame!r}"
-            )
-        # Growing prefix while typing, no cursor block anywhere...
+        # The first typed chunk is skipped: it is what send_message showed, and
+        # re-editing identical text makes Telegram reject the edit.
         assert bot.edits[0] == f"<b>{LOADING_ICON}{TYPED_LABEL[:4]}</b>"
         assert bot.edits[1] == f"<b>{LOADING_ICON}{TYPED_LABEL[:6]}</b>"
-        # The first frame must differ from what send_message already showed.
         assert bot.sent[0] != bot.edits[0]
-        # ...then the spinner takes over.
-        spinner_frames = {f"<b>{f} {LOADING_ICON}{TYPED_LABEL}</b>" for f in frames}
-        assert spinner_frames & set(bot.edits)
-        assert not any("▌" in e for e in [bot.sent[0], *bot.edits])
+        # Every frame leads with the icon and ends up showing the full label.
+        assert all(e.startswith(f"<b>{LOADING_ICON}") for e in bot.edits)
+        assert bot.edits[-1] == f"<b>{LOADING_ICON}{TYPED_LABEL}</b>"
+        # No spinner glyph and no typing cursor anywhere.
+        assert not any(c in e for e in [bot.sent[0], *bot.edits] for c in "⠋⠙⠹⠸⠼▌")
 
     asyncio.run(run())
 
 
-def test_every_spinner_works_and_differs_per_frame():
-    """Each style must cycle only through frames Telegram will accept."""
-    for name, frames in SPINNERS.items():
-        assert len(frames) >= 2, f"{name}: a spinner needs at least two frames"
-        assert all(
-            a != b for a, b in zip(frames, frames[1:] + frames[:1])
-        ), f"{name}: consecutive frames must differ"
+def test_typing_stops_on_its_own():
+    """After the label is typed the task must end, not keep editing."""
 
-        async def run(name=name, frames=frames):
-            bot = _Bot()
-            handle = await show_loading(bot, bot.chat_id, TYPED_LABEL, spinner=name)
-            await _spin(iterations=len(frames) * 2 + 4)
-            await stop_loading(handle)
-            assert len(bot.edits) > len(frames)
-            assert all(a != b for a, b in zip(bot.edits, bot.edits[1:]))
-            expected = {f"<b>{f} {LOADING_ICON}{TYPED_LABEL}</b>" for f in frames}
-            assert expected & set(bot.edits), f"{name}: no spinner frame rendered"
-
-        asyncio.run(run())
-
-
-def test_unknown_spinner_falls_back_to_default():
     async def run():
         bot = _Bot()
-        frames = SPINNERS[DEFAULT_SPINNER]
-        handle = await show_loading(bot, bot.chat_id, TYPED_LABEL, spinner="nope")
-        await _spin(iterations=len(frames) + 2)
+        handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
+        await _spin(iterations=30)
+        assert handle.stopped, "typing task must finish once the label is complete"
+
+        count = len(bot.edits)
+        await _spin()
+        assert len(bot.edits) == count
         await stop_loading(handle)
-        expected = {f"<b>{f} {LOADING_ICON}{TYPED_LABEL}</b>" for f in frames}
-        assert expected & set(bot.edits)
+
+    asyncio.run(run())
+
+
+def test_frames_differ_from_previous():
+    async def run():
+        bot = _Bot()
+        handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
+        await _spin()
+        await stop_loading(handle)
+        frames = [bot.sent[0], *bot.edits]
+        assert all(a != b for a, b in zip(frames, frames[1:]))
 
     asyncio.run(run())
 
@@ -145,7 +137,7 @@ def test_stop_loading_silences_animation():
     async def run():
         bot = _Bot()
         handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
-        await _spin()
+        await _spin(2)
         await stop_loading(handle)
 
         count = len(bot.edits)
@@ -158,12 +150,62 @@ def test_stop_loading_silences_animation():
     asyncio.run(run())
 
 
-def test_deleted_message_stops_loop():
+def test_delete_loading_stops_typing_before_deleting():
+    """Regression: a deleted message must not be edited again afterwards."""
+
     async def run():
-        bot = _Bot(deleted_after=2)
+        bot = _Bot()
+        handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
+        await _spin(2)
+        await delete_loading(bot, handle)
+
+        assert bot.deletes == [handle.message_id]
+        count = len(bot.edits)
+        await _spin()
+        assert len(bot.edits) == count, "typing continued after the message was deleted"
+
+    asyncio.run(run())
+
+
+def test_delete_loading_is_safe_without_handle():
+    async def run():
+        bot = _Bot()
+        await delete_loading(bot, None)
+        assert bot.deletes == []
+
+    asyncio.run(run())
+
+
+def test_delete_tolerates_already_deleted_message():
+    class _Strict(_Bot):
+        async def delete_message(self, chat_id, message_id):
+            self.deletes.append(message_id)
+            raise RuntimeError("Bad Request: message to delete not found")
+
+    async def run():
+        bot = _Strict()
+        handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
+        await delete_loading(bot, handle)  # must not raise
+        assert bot.deletes == [handle.message_id]
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        "Bad Request: message to edit not found",
+        "Bad Request: message can't be edited",
+        "Bad Request: message can't be deleted",
+        "Bad Request: message to delete not found",
+    ],
+)
+def test_vanished_message_stops_loop(error):
+    async def run():
+        bot = _Bot(gone_after=2, gone_error=error)
         handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
         await _spin()
-        assert handle.stopped, "animation must stop once the message is gone"
+        assert handle.stopped, f"typing must stop when Telegram says: {error}"
         await stop_loading(handle)
 
         count = len(bot.edits)
@@ -173,11 +215,27 @@ def test_deleted_message_stops_loop():
     asyncio.run(run())
 
 
+def test_not_modified_is_not_treated_as_gone():
+    class _Same(_Bot):
+        async def edit_message_text(self, chat_id, message_id, text, parse_mode=None):
+            self.edits.append(text)
+            raise RuntimeError("Bad Request: message is not modified")
+
+    async def run():
+        bot = _Same()
+        handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
+        await _spin(3)
+        await stop_loading(handle)
+        assert len(bot.edits) > 1, "typing must continue on 'not modified'"
+
+    asyncio.run(run())
+
+
 def test_stop_loading_by_id():
     async def run():
         bot = _Bot()
         handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
-        await _spin()
+        await _spin(2)
         await stop_loading_by_id(bot, bot.chat_id, handle.message_id)
 
         count = len(bot.edits)
@@ -197,6 +255,7 @@ def test_send_failure_returns_falsy_handle():
         assert not handle
         assert handle.message_id == 0
         await stop_loading(handle)
+        await delete_loading(None, handle)
 
     asyncio.run(run())
 
@@ -213,11 +272,9 @@ def test_icon_never_split_into_broken_surrogates():
 
         for frame in [bot.sent[0], *bot.edits]:
             body = frame[len("<b>"):-len("</b>")]
-            leading = body[0]
-            assert leading == LOADING_ICON[0] or leading in SPINNERS[DEFAULT_SPINNER], (
-                f"frame must lead with the hook icon or a spinner glyph: {frame!r}"
+            assert body[0] == LOADING_ICON[0], (
+                f"frame must lead with the hook icon: {frame!r}"
             )
-            # No lone surrogate anywhere in the rendered frame.
             assert not any(0xD800 <= ord(c) <= 0xDFFF for c in body)
 
     asyncio.run(run())

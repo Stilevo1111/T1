@@ -33,7 +33,7 @@ from telegram.ext import (
 from telegram.request import HTTPXRequest
 
 from chat_wordcloud.handler import story_command
-from loading_flow import show_loading, stop_loading, stop_loading_by_id
+from loading_flow import delete_loading, show_loading, stop_loading
 from database import (
     DATABASE_URL,
     Database,
@@ -684,13 +684,9 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     chart_image = context.user_data.get('analytics_chart_image')
                     table_shown = False
                     if loading_msg:
-                        _loading_msg_id = loading_msg.message_id
-                        loading_msg = None  # Stop animation
-                        await stop_loading_by_id(context.bot, chat_id, _loading_msg_id)
-                        try:
-                            await context.bot.delete_message(chat_id, _loading_msg_id)
-                        except Exception:
-                            pass
+                        _handle = loading_msg
+                        loading_msg = None
+                        await delete_loading(context.bot, _handle)
                     if chart_image:
                         try:
                             chart_msg = await context.bot.send_photo(
@@ -1898,11 +1894,7 @@ async def _send_profile_card(update: Update, user_id: int, context: ContextTypes
         await menu_handler(update, context)
 
     if loading_msg:
-        await stop_loading(loading_msg)
-        try:
-            await context.bot.delete_message(chat_id, loading_msg.message_id)
-        except Exception:
-            pass
+        await delete_loading(context.bot, loading_msg)
 
 
 async def _resolve_start_avatar(user: dict, bot, user_id: int) -> str:
@@ -2349,10 +2341,9 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         if not user or not user.get('steam_id'):
             await callback_query.answer(text="🎮 У вас не привязан аккаунт Steam. Используйте /link для привязки.", show_alert=True)
             if loading_msg:
-                try:
-                    await context.bot.delete_message(chat_id, loading_msg.message_id)
-                except Exception:
-                    pass
+                _handle = loading_msg
+                loading_msg = None
+                await delete_loading(context.bot, _handle)
             return
 
     if page_idx < 0:
@@ -2473,13 +2464,9 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
                     parse_mode="HTML",
                 )
                 if loading_msg:
-                    _loading_msg_id = loading_msg.message_id
-                    await stop_loading(loading_msg)
-                    loading_msg = None  # Stop animation
-                    try:
-                        await context.bot.delete_message(chat_id, _loading_msg_id)
-                    except Exception:
-                        pass
+                    _handle = loading_msg
+                    loading_msg = None
+                    await delete_loading(context.bot, _handle)
                 return
             except Exception as edit_err:
                 err_str = str(edit_err).lower()
@@ -2553,11 +2540,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
 
         # Send a NEW message with the analytics table (first click or previous was deleted)
         if loading_msg:
-            await stop_loading(loading_msg)
-            try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-            except Exception:
-                pass
+            await delete_loading(context.bot, loading_msg)
             loading_msg = None
         new_msg = await context.bot.send_message(
             chat_id=chat_id,
@@ -2864,11 +2847,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"stats: profile card sent uid={target_user.get('telegram_id')} week_games={week_games} week_wins={week_wins} msg_id={result_msg.message_id}")
 
         if loading_msg:
-            await stop_loading(loading_msg)
-            try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-            except Exception:
-                pass
+            await delete_loading(context.bot, loading_msg)
 
         set_last_bot_message(chat_id, user_id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
@@ -2889,11 +2868,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in stats: {e}\n{traceback.format_exc()}")
         if loading_msg:
-            await stop_loading(loading_msg)
-            try:
-                await context.bot.delete_message(chat_id, loading_msg.message_id)
-            except Exception:
-                pass
+            await delete_loading(context.bot, loading_msg)
         if "Timed out" not in str(e):
             try:
                 await context.bot.send_message(

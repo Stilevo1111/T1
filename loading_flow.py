@@ -20,46 +20,22 @@ logger = logging.getLogger(__name__)
 TYPED_LABEL = "Хукаю..."
 LOADING_ICON = "🪝 "
 
-# Spinner styles. Every frame inside a style must differ from the previous one,
-# otherwise Telegram answers "message is not modified" and rejects the edit.
-# The last frame must also differ from the first, since the style loops.
-SPINNERS = {
-    # --- neutral ---
-    "dots": ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"),
-    "circle": ("◐", "◓", "◑", "◒"),
-    "triangle": ("▹", "▸", "▹", "◃"),
-    "bounce": ("⠁", "⠂", "⠄", "⠂"),
-    "bar": ("▁", "▃", "▄", "▅", "▆", "▇", "▆", "▅", "▄", "▃"),
-    "quadrant": ("▖", "▘", "▝", "▗"),
-    "arrow": ("←", "↖", "↑", "↗", "→", "↘", "↓", "↙"),
-    "pulse": ("●", "○", "●", "○"),
-    # --- emoji ---
-    "moon": ("🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"),
-    "clock": ("🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗",
-              "🕘", "🕙", "🕚", "🕛"),
-    "hourglass": ("⌛", "⏳", "⌛", "⏳"),
-    "water": ("💧", "💧.", "💦", "💦."),
-    "bubble": ("🫧", "🫧.", "🫧..", "🫧..."),
-    "fish": ("🐟", "🐠", "🐡"),
-    # --- thematic for the fissure bot ---
-    "dice": ("🎲", "🎲.", "🎲..", "🎲..."),
-    "crack": ("🪨", "💥", "🪨", "💥"),
-    "zeus": ("⚡", "🌩️", "⚡", "🌩️"),
-    "fissure": ("🕳️", "🕳️.", "🕳️..", "🕳️..."),
-    "dota": ("🗡️", "🏹", "🔮", "🛡️"),
-    "heart": ("❤️", "🧡", "💛", "💚", "💙", "💜", "🖤"),
-    "dots3": ("⋮", "⋯", "⋮", "⋯"),
-    "grow": ("▘", "▝", "▗", "▖"),
-    "flip": ("⇀", "⇄", "⇆", "⇄"),
-    "wait": ("…", "……", "………"),
-}
-DEFAULT_SPINNER = "dots"
-
 TYPE_CHUNK = 2
 TYPE_INTERVAL = 0.16
-SPIN_INTERVAL = 0.45
 MIN_EDIT_GAP = 0.12
 MAX_EDIT_SECONDS = 12.0
+
+# Error fragments that mean "this message can no longer be edited". Telegram
+# words them differently depending on the reason it became uneditable, and a
+# deleted message must stop the animation instead of raising every tick.
+_GONE_MARKERS = (
+    "message to edit not found",
+    "message can't be edited",
+    "message can't be deleted",
+    "message to delete not found",
+    "message identifier is not specified",
+    "message is not modified",
+)
 
 _active: dict = {}
 _chat_locks: dict = {}
@@ -93,7 +69,7 @@ def _lock_for(chat_id: int) -> asyncio.Lock:
 
 
 async def _edit(bot, chat_id: int, message_id: int, text: str) -> bool:
-    """Edit the message, throttled per chat. Returns False if the message is gone."""
+    """Edit the message, throttled per chat. Returns False if it is gone."""
     lock = _lock_for(chat_id)
     async with lock:
         try:
@@ -106,25 +82,27 @@ async def _edit(bot, chat_id: int, message_id: int, text: str) -> bool:
             msg = str(e).lower()
             if "not modified" in msg:
                 return True
-            if "message to edit not found" in msg or "message can't be deleted" in msg:
+            if any(marker in msg for marker in _GONE_MARKERS):
                 logger.debug(f"loading_flow: message {message_id} is gone ({name})")
                 return False
             logger.debug(f"loading_flow: edit failed ({name}: {e})")
             return True
 
 
-async def _type_then_spin(
-    bot, chat_id: int, message_id: int, label: str, icon: str, frames: tuple
+async def _type_label(
+    bot, chat_id: int, message_id: int, label: str, icon: str
 ) -> None:
+    """Type the label out, then leave the finished text in place.
+
+    The icon is prepended as a whole and never typed: emoji are surrogate pairs
+    in Python strings, so slicing them per frame could split a glyph in half.
+    The first chunk is skipped because it is what send_message already showed,
+    and re-editing identical text makes Telegram answer "message is not
+    modified".
+    """
     loop = asyncio.get_running_loop()
     started = loop.time()
 
-    # Phase 1: type the label, TYPE_CHUNK characters per frame. The icon is
-    # prepended as a whole and never typed: emoji are surrogate pairs in
-    # Python strings, so slicing them per frame could split a glyph in half.
-    # The first chunk is skipped because it is what send_message already
-    # displayed, and re-editing identical text makes Telegram answer
-    # "message is not modified".
     for end in range(TYPE_CHUNK * 2, len(label) + TYPE_CHUNK, TYPE_CHUNK):
         if asyncio.current_task().cancelling():
             return
@@ -134,34 +112,14 @@ async def _type_then_spin(
             return
         await asyncio.sleep(TYPE_INTERVAL)
 
-    # Phase 2: keep spinning until the caller stops us.
-    i = 0
-    while True:
-        if asyncio.current_task().cancelling():
-            return
-        spinner = frames[i % len(frames)]
-        if not await _edit(
-            bot, chat_id, message_id, f"<b>{spinner} {icon}{label}</b>"
-        ):
-            return
-        i += 1
-        if loop.time() - started > MAX_EDIT_SECONDS:
-            return
-        await asyncio.sleep(SPIN_INTERVAL)
-
 
 async def show_loading(
     bot,
     chat_id: int,
     label: str = TYPED_LABEL,
     icon: str = LOADING_ICON,
-    spinner: str = DEFAULT_SPINNER,
 ) -> Loading:
-    """Send the loading message and start the animation.
-
-    spinner: key of SPINNERS. Falls back to the default for unknown keys.
-    """
-    frames = SPINNERS.get(spinner) or SPINNERS[DEFAULT_SPINNER]
+    """Send the loading message and type the label into it."""
     try:
         msg = await bot.send_message(
             chat_id=chat_id, text=f"<b>{icon}{label[:TYPE_CHUNK]}</b>", parse_mode="HTML"
@@ -170,9 +128,7 @@ async def show_loading(
         logger.debug(f"loading_flow: could not send loading message: {e}")
         return Loading(chat_id, 0, None)
 
-    task = asyncio.create_task(
-        _type_then_spin(bot, chat_id, msg.message_id, label, icon, frames)
-    )
+    task = asyncio.create_task(_type_label(bot, chat_id, msg.message_id, label, icon))
     handle = Loading(chat_id, msg.message_id, task)
     _active[(chat_id, msg.message_id)] = handle
     return handle
@@ -208,3 +164,23 @@ async def stop_loading_by_id(bot, chat_id: int, message_id: int) -> None:
     for (cid, mid), h in list(_active.items()):
         if cid == chat_id and mid == message_id:
             await stop_loading(h)
+
+
+async def delete_loading(bot, handle) -> None:
+    """Stop the animation and remove the loading message.
+
+    Always use this instead of calling bot.delete_message directly: the typing
+    task would otherwise keep editing a message that no longer exists and
+    Telegram would reject every following edit.
+    """
+    if not handle:
+        return
+    message_id = getattr(handle, "message_id", 0)
+    chat_id = getattr(handle, "chat_id", None)
+    if not message_id or chat_id is None:
+        return
+    await stop_loading(handle)
+    try:
+        await bot.delete_message(chat_id, message_id)
+    except Exception as e:
+        logger.debug(f"loading_flow: delete failed for {message_id}: {e}")
