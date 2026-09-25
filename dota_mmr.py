@@ -3066,7 +3066,7 @@ def _profile_awards_cap(total) -> tuple:
 
 def _profile_awards_layout(count) -> dict:
     """Геометрия значков наград: один ряд плиток в центральной области карточки."""
-    tile, gap, per_row, top = 120.0, 8.0, _PROFILE_AWARDS_PER_ROW, 245.0
+    tile, gap, per_row, top = 120.0, 4.0, _PROFILE_AWARDS_PER_ROW, 245.0
     try:
         count = max(0, int(count or 0))
     except (TypeError, ValueError):
@@ -3362,7 +3362,8 @@ def generate_profile_card(
             gap = int(layout["gap"])
             per_row = int(layout["per_row"])
             awards_width = len(awards) * tile + max(0, len(awards) - 1) * gap
-            tile_x = info_x
+            # Keep the award row slightly closer to the avatar column.
+            tile_x = info_x - 5
             tile_y = int(layout["top"])
             for award in awards[:per_row]:
                 accent = award["color"]
