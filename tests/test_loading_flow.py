@@ -84,7 +84,8 @@ def test_types_label_and_leaves_it_in_place():
         bot = _Bot()
         handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
 
-        assert bot.sent == [f"<b>{LOADING_ICON}{TYPED_LABEL[:2]}</b>"]
+        # Short label: sent with the first character already shown.
+        assert bot.sent == [f"<b>{LOADING_ICON}{TYPED_LABEL[:1]}</b>"]
 
         await _spin()
         await stop_loading(handle)
@@ -92,8 +93,7 @@ def test_types_label_and_leaves_it_in_place():
         assert handle.message_id
         # The first typed chunk is skipped: it is what send_message showed, and
         # re-editing identical text makes Telegram reject the edit.
-        assert bot.edits[0] == f"<b>{LOADING_ICON}{TYPED_LABEL[:4]}</b>"
-        assert bot.edits[1] == f"<b>{LOADING_ICON}{TYPED_LABEL[:6]}</b>"
+        assert bot.edits[0] == f"<b>{LOADING_ICON}{TYPED_LABEL[:2]}</b>"
         assert bot.sent[0] != bot.edits[0]
         # Every frame leads with the icon and ends up showing the full label.
         assert all(e.startswith(f"<b>{LOADING_ICON}") for e in bot.edits)
@@ -102,6 +102,59 @@ def test_types_label_and_leaves_it_in_place():
         assert not any(c in e for e in [bot.sent[0], *bot.edits] for c in "⠋⠙⠹⠸⠼▌")
 
     asyncio.run(run())
+
+
+def test_short_label_is_typed_one_char_at_a_time():
+    async def run():
+        bot = _Bot()
+        handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
+        await _spin()
+        await stop_loading(handle)
+
+        frames = [bot.sent[0], *bot.edits]
+        typed = [f[len(f"<b>{LOADING_ICON}"):-len("</b>")] for f in frames]
+        assert typed == [
+            TYPED_LABEL[: n + 1] for n in range(len(TYPED_LABEL))
+        ], f"expected one new character per frame, got {typed}"
+        assert len(frames) == len(TYPED_LABEL)
+
+    asyncio.run(run())
+
+
+def test_long_label_types_two_chars_per_frame():
+    """A long label would take ~4s at one char per frame, so it chunks."""
+
+    async def run():
+        label = "Привязываю аккаунт Dota 2…"
+        assert len(label) > loading_flow.SHORT_LABEL_CHARS
+        bot = _Bot()
+        handle = await show_loading(bot, bot.chat_id, label)
+        await _spin(iterations=40)
+        await stop_loading(handle)
+
+        frames = [bot.sent[0], *bot.edits]
+        assert len(frames) <= len(label) // 2 + 2
+        assert frames[-1] == f"<b>{LOADING_ICON}{label}</b>"
+        # Growth stays monotonic: each frame reveals strictly more text.
+        sizes = [len(f) for f in frames]
+        assert sizes == sorted(sizes)
+        assert len(set(sizes)) == len(sizes)
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "label, expected_chunk",
+    [
+        ("Хукаю...", 1),
+        ("Хукаю график...", 2),
+        ("Хукаю аналитику...", 2),
+        ("Хукаю сравнение с Pro...", 2),
+        ("Привязываю аккаунт Dota 2…", 2),
+    ],
+)
+def test_chunk_depends_on_label_length(label, expected_chunk):
+    assert loading_flow._chunk_for(label) == expected_chunk
 
 
 def test_typing_stops_on_its_own():
@@ -286,6 +339,6 @@ def test_icon_is_optional():
         handle = await show_loading(bot, bot.chat_id, TYPED_LABEL, icon="")
         await _spin()
         await stop_loading(handle)
-        assert bot.sent == [f"<b>{TYPED_LABEL[:2]}</b>"]
+        assert bot.sent == [f"<b>{TYPED_LABEL[:1]}</b>"]
 
     asyncio.run(run())

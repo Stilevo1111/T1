@@ -20,8 +20,15 @@ logger = logging.getLogger(__name__)
 TYPED_LABEL = "Хукаю..."
 LOADING_ICON = "🪝 "
 
-TYPE_CHUNK = 2
-TYPE_INTERVAL = 0.16
+# Short labels ("Хукаю...") are typed one character at a time, which reads as
+# real typing. Longer ones move two characters per frame: at one char per frame
+# a 25-character label would take four seconds of pure animation, which is
+# worse than a slightly chunkier effect. Both stay far below Telegram's rate
+# limits - a long label is ~13 edits in total.
+SHORT_LABEL_CHARS = 12
+TYPE_CHUNK_SHORT = 1
+TYPE_CHUNK_LONG = 2
+TYPE_INTERVAL = 0.11
 MIN_EDIT_GAP = 0.12
 MAX_EDIT_SECONDS = 12.0
 
@@ -89,6 +96,11 @@ async def _edit(bot, chat_id: int, message_id: int, text: str) -> bool:
             return True
 
 
+def _chunk_for(label: str) -> int:
+    """Characters revealed per frame for this label."""
+    return TYPE_CHUNK_SHORT if len(label) <= SHORT_LABEL_CHARS else TYPE_CHUNK_LONG
+
+
 async def _type_label(
     bot, chat_id: int, message_id: int, label: str, icon: str
 ) -> None:
@@ -102,8 +114,9 @@ async def _type_label(
     """
     loop = asyncio.get_running_loop()
     started = loop.time()
+    chunk = _chunk_for(label)
 
-    for end in range(TYPE_CHUNK * 2, len(label) + TYPE_CHUNK, TYPE_CHUNK):
+    for end in range(chunk * 2, len(label) + chunk, chunk):
         if asyncio.current_task().cancelling():
             return
         if not await _edit(bot, chat_id, message_id, f"<b>{icon}{label[:end]}</b>"):
@@ -122,7 +135,9 @@ async def show_loading(
     """Send the loading message and type the label into it."""
     try:
         msg = await bot.send_message(
-            chat_id=chat_id, text=f"<b>{icon}{label[:TYPE_CHUNK]}</b>", parse_mode="HTML"
+            chat_id=chat_id,
+            text=f"<b>{icon}{label[:_chunk_for(label)]}</b>",
+            parse_mode="HTML",
         )
     except Exception as e:
         logger.debug(f"loading_flow: could not send loading message: {e}")
