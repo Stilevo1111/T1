@@ -2899,7 +2899,7 @@ def update_user_field(telegram_id, field, value, save_to_db=True):
         immediate_fields = {
             'fissure', 'last_fissure', 'steam_id', 'steam_nickname', 'mmr', 'rank_tier', 'wins', 'losses',
             'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'week_start_date',
-            'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags', 'free_rolls', 'achievements',
+            'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags', 'free_rolls',
         }
         if field in immediate_fields:
             _save_user_to_db_immediately(telegram_id, user)
@@ -3150,7 +3150,11 @@ _ALLOWED_USER_FIELDS = frozenset([
     'steam_id', 'steam_nickname', 'avatar', 'mmr', 'rank_tier',
     'week_games', 'week_wins', 'week_best_streak', 'week_current_streak', 'dota_total_games',
     'dota_wins', 'last_dota_games', 'last_dota_wins', 'wins', 'losses', 'week_start_date',
-    'mmr_last_updated', 'message_count',     'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags', 'free_rolls', 'achievements',
+    'mmr_last_updated', 'message_count',     'weekly_mvp', 'weekly_top2', 'weekly_top3', 'user_tags', 'free_rolls',
+    # 'achievements' is deliberately absent: it is owned solely by
+    # achievements.py. Including it here made every whole-row save rewrite the
+    # column from an in-memory snapshot, so a background job holding a stale
+    # copy could wipe a just-awarded badge and the next message re-awarded it.
 ])
 _NUMERIC_USER_FIELDS = frozenset([
     'fissure', 'last_fissure', 'total_rolls', 'total_growth', 'current_streak', 'best_streak',
