@@ -10,6 +10,7 @@ import signal
 import time
 import traceback
 import urllib.parse as urlparse
+from collections import OrderedDict
 from datetime import timedelta, timezone
 from pathlib import Path
 
@@ -44,10 +45,10 @@ from database import (
     get_dota_week_rank,
     get_dota_week_top,
     get_fissure_rank,
+    grant_weekly_mmr_awards,
     get_fissure_top,
     get_user,
     get_user_by_username,
-    increment_weekly_mmr_award,
     init_db,
     migrate_db,
     release_connection,
@@ -824,6 +825,11 @@ async def weekly_mmr_reset_job(context):
         user_cache.clear()
         top_cache.clear()
         user_cache.delete_key('dota_week_top')
+        # This helper has its own 30-minute cache, outside top_cache.
+        from database import get_dota_week_top_from_db
+        digest_chat_id = get_config('digest_chat_id')
+        mmr_tag_chat_id = get_config('mmr_chat_id') or digest_chat_id
+        get_dota_week_top_from_db._cache = {}
         from database import set_config
         set_config('weekly_mmr_reset_date', current_week_start)
         # Снятие тегов чемпионов/топов предыдущей недели (MVP, ТОП 2, ТОП 3) для всех, кто держит
@@ -832,24 +838,41 @@ async def weekly_mmr_reset_job(context):
             _conn = _gc()
             _cur = _conn.cursor()
             if "postgres" in scheme:
-                for _tag in ("weekly_mvp", "weekly_top2", "weekly_top3"):
+                for _tag in ("weekly_mvp", "weekly_top1", "weekly_top2", "weekly_top3"):
                     _cur.execute("SELECT telegram_id FROM users WHERE user_tags::text LIKE %s", (f"%{_tag}%",))
                     for _row in _cur.fetchall():
                         try:
-                            await remove_user_tag(int(_row[0]), _tag, bot=context.bot)
+                            tag_chat_id = digest_chat_id if _tag == "weekly_mvp" else mmr_tag_chat_id
+                            await remove_user_tag(
+                                int(_row[0]), _tag, bot=context.bot, chat_id=tag_chat_id
+                            )
                         except Exception as _te:
                             logger.warning(f"weekly_reset tag remove failed for {_tag} {_row[0]}: {_te}")
             else:
-                for _tag in ("weekly_mvp", "weekly_top2", "weekly_top3"):
+                for _tag in ("weekly_mvp", "weekly_top1", "weekly_top2", "weekly_top3"):
                     _cur.execute("SELECT telegram_id FROM users WHERE user_tags LIKE ?", (f"%{_tag}%",))
                     for _row in _cur.fetchall():
                         try:
-                            await remove_user_tag(int(_row[0]), _tag, bot=context.bot)
+                            tag_chat_id = digest_chat_id if _tag == "weekly_mvp" else mmr_tag_chat_id
+                            await remove_user_tag(
+                                int(_row[0]), _tag, bot=context.bot, chat_id=tag_chat_id
+                            )
                         except Exception as _te:
                             logger.warning(f"weekly_reset tag remove failed for {_tag} {_row[0]}: {_te}")
             _conn.commit()
             _cur.close()
             release_connection(_conn)
+            # Do not let the next refresh re-add last week's holders to the
+            # freshly reset (empty) weekly top.
+            for _key in (
+                'current_mvp_telegram_id',
+                'current_mvp_tag',
+                'current_mmr_top1_telegram_id',
+                'current_mmr_top2_telegram_id',
+                'current_mmr_top3_telegram_id',
+                'mmr_week_awards_granted',
+            ):
+                set_config(_key, "")
         except Exception as _ge:
             logger.warning(f"weekly_reset tag cleanup skipped: {_ge}")
         logger.info("weekly_mmr_reset_job: еженедельная статистика MMR сброшена в 00:00 MSK")
@@ -943,22 +966,20 @@ async def announce_weekly_mmr_winner(bot) -> None:
     tag_set = False
     if telegram_id and digest_chat_id:
         try:
-            await add_user_tag(telegram_id, "weekly_mvp", bot=bot, chat_id=digest_chat_id)
-            tag_set = True
-            logger.info(f"Установлен тег {mvp_tag} для победителя {telegram_id}")
+            tag_set = await add_user_tag(
+                telegram_id, "weekly_mvp", bot=bot, chat_id=digest_chat_id
+            )
+            if tag_set:
+                set_config('current_mvp_telegram_id', str(telegram_id))
+                set_config('current_mvp_tag', mvp_tag)
+                logger.info(f"Установлен тег {mvp_tag} для победителя {telegram_id}")
+            else:
+                logger.warning(f"Telegram API не подтвердил MVP-тег для {telegram_id}")
         except Exception as e:
             logger.warning(f"Не удалось установить тег победителю: {e}")
 
-    set_config('current_mvp_telegram_id', str(telegram_id) if telegram_id else "")
-    set_config('current_mvp_tag', mvp_tag)
-
-    # Обновляем теги MMR топа (Top-1, MMR Top-2, MMR Top-3)
-    try:
-        from tags import refresh_mmr_top_tags
-        await refresh_mmr_top_tags(bot, digest_chat_id)
-        logger.info("MMR top tags refresh completed")
-    except Exception as e:
-        logger.warning(f"Failed to refresh MMR top tags: {e}")
+    # TOP 1/2/3 are live weekly standings and are updated by the MMR job.
+    # The ceremony owns MVP only; it must not also become a second MMR writer.
 
     ranks = ["🌱 Рекрут", "🔰 Страж", "⚔️ Рыцарь", "🗡️ Герой", "💫 Легенда", "👑 Властелин", "💎 Божество", "🔱 Титан"]
     if rank_tier:
@@ -978,28 +999,27 @@ async def announce_weekly_mmr_winner(bot) -> None:
     weekly_mvp_count = 0
     weekly_top2_count = 0
     weekly_top3_count = 0
-    if telegram_id:
-        weekly_mvp_count = await asyncio.to_thread(increment_weekly_mmr_award, telegram_id, 1)
+    placements = [(telegram_id, 1)] if telegram_id else []
     if len(active_users) > 1:
         top2_user = active_users[1]
         top2_tg_id = top2_user.get('telegram_id')
         if top2_tg_id:
-            weekly_top2_count = await asyncio.to_thread(increment_weekly_mmr_award, top2_tg_id, 2)
-            if digest_chat_id:
-                try:
-                    await add_user_tag(top2_tg_id, "weekly_top2", bot=bot, chat_id=digest_chat_id)
-                except Exception as e:
-                    logger.warning(f"Не удалось выдать тег ТОП 2 для {top2_tg_id}: {e}")
+            placements.append((top2_tg_id, 2))
     if len(active_users) > 2:
         top3_user = active_users[2]
         top3_tg_id = top3_user.get('telegram_id')
         if top3_tg_id:
-            weekly_top3_count = await asyncio.to_thread(increment_weekly_mmr_award, top3_tg_id, 3)
-            if digest_chat_id:
-                try:
-                    await add_user_tag(top3_tg_id, "weekly_top3", bot=bot, chat_id=digest_chat_id)
-                except Exception as e:
-                    logger.warning(f"Не удалось выдать тег ТОП 3 для {top3_tg_id}: {e}")
+            placements.append((top3_tg_id, 3))
+
+    award_counts = await asyncio.to_thread(
+        grant_weekly_mmr_awards, current_week_start, placements
+    )
+    if award_counts is None:
+        logger.error("Не удалось атомарно начислить недельные награды; церемония будет повторена")
+        return False
+    weekly_mvp_count = award_counts.get(1, 0)
+    weekly_top2_count = award_counts.get(2, 0)
+    weekly_top3_count = award_counts.get(3, 0)
 
     week_heroes = []
     winner_steam_id = winner.get('steam_id')
@@ -1255,8 +1275,18 @@ async def update_all_mmr_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         # Update top cache once after all updates
         from database import get_dota_week_top_from_db, update_dota_week_top_cache
         await asyncio.to_thread(update_dota_week_top_cache)
-        # Clear top cache to force refresh on next read
-        get_dota_week_top_from_db._cache = (None, 0)
+        # Clear top cache to force refresh on next read. The helper expects a
+        # dict; the old (None, 0) tuple made the next call rebuild the dict.
+        get_dota_week_top_from_db._cache = {}
+
+        # TOP 1/2/3 are live standings. Reconcile them immediately after the
+        # weekly MMR data has been saved, without waiting for the 30-min job.
+        try:
+            from tags import refresh_mmr_top_tags
+            await refresh_mmr_top_tags(context.bot)
+            logger.info("MMR job: live TOP 1/2/3 tags refreshed")
+        except Exception as e:
+            logger.warning(f"MMR job: failed to refresh TOP 1/2/3 tags: {e}")
 
         # Invalidate dota_digest_stats cache to force fresh data on next read
         from database import user_cache
@@ -1604,6 +1634,30 @@ async def fetch_hero_icon(url, session=None, size=96):
 
 
 DEFAULT_AVATAR_URL = str(get_banner_path("default_avatar"))
+
+_TOP_CARD_CACHE: OrderedDict[tuple, bytes] = OrderedDict()
+_TOP_CARD_CACHE_MAX_SIZE = 20
+
+
+def get_cached_top_card(generator, cache_key: tuple, **kwargs):
+    """Generate a top card once per unchanged leader data and keep it in RAM.
+
+    The old implementation downloaded the winner's avatar and rebuilt the same
+    PNG on every command invocation.  Cache keys contain every visible input,
+    so a leader/MMR/fissure/name/avatar change immediately produces a new card.
+    """
+    cached = _TOP_CARD_CACHE.get(cache_key)
+    if cached is not None:
+        _TOP_CARD_CACHE.move_to_end(cache_key)
+        return cached
+
+    card = generator(**kwargs)
+    if card:
+        _TOP_CARD_CACHE[cache_key] = card
+        _TOP_CARD_CACHE.move_to_end(cache_key)
+        while len(_TOP_CARD_CACHE) > _TOP_CARD_CACHE_MAX_SIZE:
+            _TOP_CARD_CACHE.popitem(last=False)
+    return card
 
 
 async def resolve_avatar_url_for_card(
@@ -2497,6 +2551,11 @@ async def digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=chat_id, text=f"Чат {chat_id} установлен для обновления тегов фиссуры")
             return
 
+        if command == "setmmrchat":
+            set_config("mmr_chat_id", str(chat_id))
+            await context.bot.send_message(chat_id=chat_id, text=f"Чат {chat_id} установлен для обновления тегов MMR")
+            return
+
         current_digest_chat = get_config('digest_chat_id')
         if not current_digest_chat:
             set_config("digest_chat_id", str(chat_id))
@@ -2885,7 +2944,7 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
     steam_id = target_user.get("steam_id")
     try:
         from dota_mmr import generate_profile_card, get_week_top_heroes_async
-        from tags import add_user_tag, get_user_tags
+        from tags import get_user_tags
 
         avatar_url = await resolve_avatar_url_for_card(
             bot,
@@ -2906,10 +2965,13 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                 logger.debug(f"profile card heroes skipped uid={telegram_id}: {e}")
 
         tags = []
+        achievements = {}
         if telegram_id:
             try:
                 tags = await asyncio.to_thread(get_user_tags, telegram_id)
-                logger.debug(f"profile card: got tags for uid={telegram_id}: {tags}")
+                from achievements import get_user_achievements
+                achievements = await asyncio.to_thread(get_user_achievements, telegram_id)
+                logger.debug(f"profile card: got tags and awards for uid={telegram_id}")
             except Exception as e:
                 logger.debug(f"profile card tags skipped uid={telegram_id}: {e}")
 
@@ -2922,36 +2984,9 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
             except Exception as e:
                 logger.debug(f"profile card rank skipped uid={telegram_id}: {e}")
 
-        if telegram_id and "F1" not in tags and position == 1:
-            try:
-                result = await add_user_tag(telegram_id, "F1", bot=context.bot, chat_id=chat_id)
-                if result:
-                    tags = tags + ["F1"]
-                    logger.info(f"profile card: added F1 tag to user {telegram_id}")
-                else:
-                    logger.debug(f"profile card F1 tag not added uid={telegram_id} - API returned False")
-            except Exception as e:
-                logger.debug(f"profile card F1 tag skip uid={telegram_id}: {e}")
-        elif telegram_id and "F2" not in tags and position == 2:
-            try:
-                result = await add_user_tag(telegram_id, "F2", bot=context.bot, chat_id=chat_id)
-                if result:
-                    tags = tags + ["F2"]
-                    logger.info(f"profile card: added F2 tag to user {telegram_id}")
-                else:
-                    logger.debug(f"profile card F2 tag not added uid={telegram_id} - API returned False")
-            except Exception as e:
-                logger.debug(f"profile card F2 tag skip uid={telegram_id}: {e}")
-        elif telegram_id and "F3" not in tags and (position is not None and 3 <= position <= 15):
-            try:
-                result = await add_user_tag(telegram_id, "F3", bot=context.bot, chat_id=chat_id)
-                if result:
-                    tags = tags + ["F3"]
-                    logger.info(f"profile card: added F3 tag to user {telegram_id}")
-                else:
-                    logger.debug(f"profile card F3 tag not added uid={telegram_id} - API returned False")
-            except Exception as e:
-                logger.debug(f"profile card F3 tag skip uid={telegram_id}: {e}")
+        # F1/F2/F3 are reconciled exclusively by refresh_fissure_top_tags.
+        # The profile is read-only here: assigning tags from a card caused
+        # DB/config drift and visible tag flicker.
 
         card_bytes = await asyncio.wait_for(
             asyncio.to_thread(
@@ -2985,6 +3020,7 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                     "F3": 1 if "F3" in tags else 0,
                     "admin_custom": 1 if "admin_custom" in tags else 0,
                 },
+                achievements=achievements,
                 position=position,
             ),
             timeout=30.0
@@ -3029,9 +3065,11 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.debug(f"Could not delete last bot message: {e}")
 
     try:
-        top_users = await asyncio.to_thread(get_fissure_top, 10)
-        user_rank = await asyncio.to_thread(get_fissure_rank, update.effective_user.id)
-        user = await asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username)
+        top_users, user_rank, user = await asyncio.gather(
+            asyncio.to_thread(get_fissure_top, 10),
+            asyncio.to_thread(get_fissure_rank, update.effective_user.id),
+            asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username),
+        )
         username = update.effective_user.username or update.effective_user.first_name
 
         if not top_users:
@@ -3045,13 +3083,16 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             update_last_message_id(update.effective_user.id, result_msg.message_id)
             return
 
-        # Generate top banner with winner info
+        # Generate top banner with persisted winner data.
         winner = top_users[0]
-        # Try Telegram avatar first, then Steam
-        winner_avatar = None
+        # Prefer the persisted avatar: it avoids an extra Telegram API request
+        # on every /top invocation. Fall back to Telegram when no URL is stored.
         winner_telegram_id = winner.get('telegram_id')
+        winner_avatar = winner.get('avatar')
+        if not winner_avatar or not str(winner_avatar).startswith('http'):
+            winner_avatar = None
 
-        if winner_telegram_id:
+        if winner_telegram_id and not winner_avatar:
             try:
                 tg_avatar = await get_user_avatar_url(context.bot, winner_telegram_id)
                 if tg_avatar:
@@ -3059,13 +3100,6 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     logger.info(f"top: using Telegram avatar for user {winner_telegram_id}")
             except Exception as e:
                 logger.debug(f"Could not get Telegram avatar for top user: {e}")
-
-        if not winner_avatar:
-            winner_avatar = winner.get('avatar')
-            if not winner_avatar or not str(winner_avatar).strip():
-                winner_avatar = None
-            elif not str(winner_avatar).startswith('http'):
-                winner_avatar = None
 
         winner_name = (winner.get('username') or winner.get('steam_nickname') or winner.get('first_name') or str(winner.get('telegram_id', 'Игрок'))).strip()
         winner_fissure = winner.get('fissure', 0)
@@ -3081,8 +3115,14 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         try:
             from dota_mmr import generate_top_card
+            card_cache_key = (
+                "fissure", winner_avatar, winner.get('telegram_id'), winner_name,
+                winner_fissure, winner_rank_tier,
+            )
             banner_bytes = await asyncio.to_thread(
+                get_cached_top_card,
                 generate_top_card,
+                card_cache_key,
                 avatar_url=winner_avatar,
                 username=winner_name,
                 telegram_id=winner.get('telegram_id'),
@@ -3283,12 +3323,15 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
             return
         else:
-            # Generate MMR top banner with winner info
-            # Try Telegram avatar first, then Steam
+            # Generate MMR top banner with persisted winner data.
             winner = top_users[0]
-            winner_avatar = None
+            # Prefer the persisted avatar to avoid a Telegram API request on
+            # every /topmmr invocation. Fall back to Telegram when it is absent.
             winner_telegram_id = winner.get('telegram_id')
-            if winner_telegram_id:
+            winner_avatar = winner.get('avatar')
+            if not winner_avatar or not str(winner_avatar).startswith('http'):
+                winner_avatar = None
+            if winner_telegram_id and not winner_avatar:
                 try:
                     tg_avatar = await get_user_avatar_url(context.bot, winner_telegram_id)
                     if tg_avatar:
@@ -3296,13 +3339,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                         logger.info(f"topmmr: using Telegram avatar for user {winner_telegram_id}")
                 except Exception as e:
                     logger.debug(f"Could not get Telegram avatar for topmmr user: {e}")
-
-            if not winner_avatar:
-                winner_avatar = winner.get('avatar')
-                if not winner_avatar or not str(winner_avatar).strip():
-                    winner_avatar = None
-                elif not str(winner_avatar).startswith('http'):
-                    winner_avatar = None
 
             # If still no avatar, use DEFAULT_AVATAR_URL
             if not winner_avatar:
@@ -3319,8 +3355,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
             try:
                 from dota_mmr import generate_start_card
+                card_cache_key = (
+                    "mmr", winner_avatar, winner.get('telegram_id'), winner_name,
+                    winner_rank_tier, winner_week_wins, winner_week_losses,
+                )
                 banner_bytes = await asyncio.to_thread(
+                    get_cached_top_card,
                     generate_start_card,
+                    card_cache_key,
                     avatar_url=winner_avatar,
                     message_count=None,
                     username=winner_name,
@@ -4572,30 +4614,19 @@ async def main():
 
         # ✅ Периодическое обновление всех тегов (каждые 30 минут)
         async def periodic_tag_refresh(context):
-            """Обновляет все теги: F1/F2/F3, MMR top."""
-            try:
-                from database import get_config
-                from tags import (
-                    refresh_fissure_top_tags,
-                    refresh_mmr_top_tags,
-                )
-                # Приоритет: fissure_chat_id -> digest_chat_id
-                fissure_chat_id = get_config('fissure_chat_id')
-                digest_chat_id = get_config('digest_chat_id')
-                chat_id = fissure_chat_id or digest_chat_id
-                if not chat_id:
-                    logger.warning(
-                        "periodic_tag_refresh: не настроен ни fissure_chat_id, ни digest_chat_id. "
-                        "Теги фиссуры и MMR не будут обновляться автоматически. "
-                        "Используйте /setdigestchat <chat_id> или /setfissurechat <chat_id>."
-                    )
-                    return
-                chat_id = int(chat_id)
-                await refresh_fissure_top_tags(context.bot, chat_id, notify=False)
-                await refresh_mmr_top_tags(context.bot, chat_id)
-                logger.info("periodic_tag_refresh: all tags refreshed")
-            except Exception as e:
-                logger.warning(f"periodic_tag_refresh failed: {e}")
+            """Independently refresh Fissure and MMR tags in their own chats."""
+            from tags import refresh_fissure_top_tags, refresh_mmr_top_tags
+
+            results = await asyncio.gather(
+                refresh_fissure_top_tags(context.bot, notify=False),
+                refresh_mmr_top_tags(context.bot),
+                return_exceptions=True,
+            )
+            for family, result in zip(("fissure", "mmr"), results, strict=True):
+                if isinstance(result, Exception):
+                    logger.warning(f"periodic_tag_refresh {family} failed: {result}")
+                else:
+                    logger.info(f"periodic_tag_refresh {family} completed")
 
         job_queue.run_repeating(
             periodic_tag_refresh,
@@ -4703,49 +4734,20 @@ async def main():
             time=datetime.time(hour=6, minute=0),  # 6:00 UTC = 9:00 MSK
         )
 
-        # Если бот стартует в понедельник после 00:00 - выполняем сброс немедленно
+        # Если бот стартует в понедельник после 00:00 — используем тот же
+        # полный reset, что и scheduled job (stats + tags + holder configs + caches).
         from datetime import datetime as dt
         from datetime import timedelta, timezone
         MSK = timezone(timedelta(hours=3))
         now_msk = dt.now(MSK)
-        if now_msk.weekday() == 0:  # Понедельник
-            # Проверяем, не был ли уже сброс сегодня
-            from database import get_config, set_config
+        if now_msk.weekday() == 0:
+            from database import get_config
             today = now_msk.strftime("%Y-%m-%d")
-            last_reset = get_config('weekly_mmr_reset_date')
-            if last_reset != today:
+            if get_config('weekly_mmr_reset_date') != today:
+                from types import SimpleNamespace
                 try:
-                    # Выполняем синхронный сброс
-                    import urllib.parse as urlparse
-
-                    from database import DATABASE_URL, get_connection
-                    conn = get_connection()
-                    cursor = conn.cursor()
-                    url_parsed = urlparse.urlparse(DATABASE_URL)
-                    scheme = url_parsed.scheme
-                    current_week_start = today
-                    if "postgres" in scheme:
-                        cursor.execute("""
-                            UPDATE users SET week_games = 0, week_wins = 0, week_current_streak = 0,
-                                week_best_streak = GREATEST(week_best_streak, week_current_streak),
-                                week_start_date = %s WHERE steam_id IS NOT NULL
-                        """, (current_week_start,))
-                    else:
-                        cursor.execute("""
-                            UPDATE users SET week_games = 0, week_wins = 0, week_current_streak = 0,
-                                week_best_streak = MAX(week_best_streak, week_current_streak),
-                                week_start_date = ? WHERE steam_id IS NOT NULL
-                        """, (current_week_start,))
-                    conn.commit()
-                    cursor.close()
-                    from database import release_connection
-                    release_connection(conn)
-                    from database import top_cache, user_cache
-                    user_cache.clear()
-                    top_cache.clear()
-                    user_cache.delete_key('dota_week_top')
-                    set_config('weekly_mmr_reset_date', today)
-                    logger.info(f"Startup: weekly stats reset for {current_week_start}")
+                    await weekly_mmr_reset_job(SimpleNamespace(bot=app.bot))
+                    logger.info("Startup: full weekly reset executed")
                 except Exception as e:
                     logger.error(f"Startup weekly reset error: {e}")
 
@@ -4808,6 +4810,7 @@ async def main():
         app.add_handler(CommandHandler("tags", tags_list))
         app.add_handler(CommandHandler("setdigestchat", digest_handler))
         app.add_handler(CommandHandler("setfissurechat", digest_handler))
+        app.add_handler(CommandHandler("setmmrchat", digest_handler))
         app.add_handler(CommandHandler("resetgame", reset_game))
         app.add_handler(CommandHandler("analyze", analyze_command))
         app.add_handler(CommandHandler(("party", "party"), party_command))

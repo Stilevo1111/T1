@@ -302,7 +302,13 @@ class TTLCache:
             self._cache.clear()
 
     def invalidate_top_cache(self):
-        keys_to_remove = [k for k in list(self._cache.keys()) if isinstance(k, str) and k.startswith(('fissure_top_', 'mmr_top_', 'dota_week_top_', 'user_rank_', 'fissure_rank_'))]
+        keys_to_remove = [
+            k for k in list(self._cache.keys())
+            if isinstance(k, str) and k.startswith(
+                ('fissure_top_', 'mmr_top_', 'dota_week_top_',
+                 'user_rank_', 'fissure_rank_')
+            )
+        ]
         with self._lock:
             for k in keys_to_remove:
                 self._cache.pop(k, None)
@@ -743,6 +749,7 @@ _PG_INDEXES = (
     # Critical composite indexes for top queries
     "CREATE INDEX IF NOT EXISTS idx_users_mmr_steam ON users(mmr DESC) WHERE steam_id IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS idx_users_fissure_inchat ON users(fissure DESC) WHERE in_chat",
+    "CREATE INDEX IF NOT EXISTS idx_users_fissure_rank ON users(COALESCE(fissure, 0) DESC) WHERE in_chat = TRUE OR in_chat IS NULL",
     "CREATE INDEX IF NOT EXISTS idx_users_last_activity ON users(last_activity) WHERE in_chat",
 )
 
@@ -1819,7 +1826,7 @@ class Database:
                 users = self.execute_query(query, (limit,), fetch="all")
                 return [{"telegram_id": u["telegram_id"], "username": u["username"], "steam_nickname": u["steam_nickname"], "first_name": u["first_name"], "steam_id": u.get("steam_id"), "fissure": u["fissure"], "avatar": u.get("avatar"), "rank_tier": u.get("rank_tier", 0)} for u in users]
             else:
-                query = "SELECT telegram_id, username, steam_nickname, first_name, steam_id, fissure, avatar, rank_tier FROM users ORDER BY fissure DESC LIMIT ?"
+                query = "SELECT telegram_id, username, steam_nickname, first_name, steam_id, fissure, avatar, rank_tier FROM users WHERE (in_chat = 1 OR in_chat IS NULL) ORDER BY fissure DESC LIMIT ?"
                 users = self.execute_query(query, (limit,), fetch="all")
                 return [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2], "first_name": u[3], "steam_id": u[4], "fissure": u[5], "avatar": u[6], "rank_tier": u[7] if len(u) > 7 else 0} for u in users]
         except Exception as e:
@@ -2973,6 +2980,119 @@ def increment_weekly_mmr_award(telegram_id: int, place: int = 1) -> int:
 
     logger.info(f"increment_weekly_mmr_award: user {telegram_id} {field} -> {new_count}")
     return new_count
+
+
+
+def grant_weekly_mmr_awards(
+    week_start: str,
+    placements: list[tuple[int, int]],
+) -> dict[int, int] | None:
+    """Atomically grant weekly MMR medals once per week.
+
+    Returns medal counts (including counts from an earlier successful retry),
+    or None when the award transaction fails.
+    """
+    valid = []
+    for telegram_id, place in placements:
+        if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
+            continue
+        if place in (1, 2, 3):
+            valid.append((telegram_id, place))
+    if not valid:
+        return {}
+
+    field_map = {1: 'weekly_mvp', 2: 'weekly_top2', 3: 'weekly_top3'}
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        is_pg = get_db_type() == 'postgresql'
+        if is_pg:
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            # Serialize across Render instances. Locking an absent marker row
+            # is not enough for the first award of a week.
+            cursor.execute("SELECT pg_advisory_xact_lock(1947329101)")
+            cursor.execute(
+                "SELECT value FROM bot_config WHERE key = %s FOR UPDATE",
+                ('mmr_week_awards_granted',),
+            )
+        else:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT value FROM bot_config WHERE key = ?",
+                ('mmr_week_awards_granted',),
+            )
+
+        marker = cursor.fetchone()
+        marker_value = marker.get('value') if isinstance(marker, dict) else marker[0] if marker else None
+        if str(marker_value or '') == str(week_start):
+            conn.commit()
+            result = {}
+            for telegram_id, place in valid:
+                field = field_map[place]
+                if is_pg:
+                    cursor.execute(f"SELECT {field} FROM users WHERE telegram_id = %s", (telegram_id,))
+                else:
+                    cursor.execute(f"SELECT {field} FROM users WHERE telegram_id = ?", (telegram_id,))
+                row = cursor.fetchone()
+                result[place] = int(row[field] if isinstance(row, dict) else row[0]) if row else 0
+            return result
+
+        for telegram_id, place in valid:
+            field = field_map[place]
+            if is_pg:
+                cursor.execute(
+                    f"UPDATE users SET {field} = COALESCE({field}, 0) + 1 WHERE telegram_id = %s",
+                    (telegram_id,),
+                )
+            else:
+                cursor.execute(
+                    f"UPDATE users SET {field} = COALESCE({field}, 0) + 1 WHERE telegram_id = ?",
+                    (telegram_id,),
+                )
+
+        if is_pg:
+            cursor.execute(
+                """
+                INSERT INTO bot_config (key, value) VALUES (%s, %s)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                """,
+                ('mmr_week_awards_granted', str(week_start)),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO bot_config (key, value) VALUES (?, ?)
+                ON CONFLICT (key) DO UPDATE SET value = excluded.value
+                """,
+                ('mmr_week_awards_granted', str(week_start)),
+            )
+        conn.commit()
+
+        result = {}
+        for telegram_id, place in valid:
+            field = field_map[place]
+            if is_pg:
+                cursor.execute(f"SELECT {field} FROM users WHERE telegram_id = %s", (telegram_id,))
+            else:
+                cursor.execute(f"SELECT {field} FROM users WHERE telegram_id = ?", (telegram_id,))
+            row = cursor.fetchone()
+            result[place] = int(row[field] if isinstance(row, dict) else row[0]) if row else 0
+            user = get_user(telegram_id)
+            if user:
+                user[field] = result[place]
+                user_cache.set(telegram_id, user)
+        return result
+    except Exception as e:
+        if conn is not None:
+            conn.rollback()
+        logger.error(f"grant_weekly_mmr_awards failed for {week_start}: {e}")
+        return None
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            release_connection(conn)
 
 
 def update_user_fields_batch(telegram_id: int, fields: dict, save_to_db: bool = True, update_top_cache: bool = True):

@@ -2949,21 +2949,23 @@ def _profile_award_icon(kind: str, size: int, color):
 
 
 def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 0,
-                    best_streak: int = 0, message_count: int = 0) -> list:
-    """Награды без дублей: теги бота + счётчики недели + производные достижения."""
+                    best_streak: int = 0, message_count: int = 0,
+                    achievements: dict | None = None) -> list:
+    """Return persisted tags, award counters, and awarded writer badges."""
     meta = {
         "weekly_mvp": ("MVP", None, "mvp"),
         "weekly_top1": ("Top-1", None, "gold"),
         "weekly_top2": ("MMR Top-2", None, "silver"),
         "weekly_top3": ("MMR Top-3", None, "bronze"),
-        "fissure_master": ("Fissure Master", None, "star"),
         "F1": ("Fissure Gold", None, "gold"),
         "F2": ("Fissure Silver", None, "silver"),
         "F3": ("Fissure Bronze", None, "bronze"),
         "VIP": ("VIP", None, "vip"),
+        "admin_custom": ("Administrator", None, "admin"),
     }
     counts = counts or {}
     tags = set(tags or [])
+    achievements = achievements or {}
     result = []
     seen = set()
 
@@ -2974,7 +2976,8 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
         result.append({"key": key, "label": label, "color": color,
                        "count": count, "icon": icon})
 
-    for key in ("weekly_mvp", "weekly_top1", "weekly_top2", "weekly_top3", "F1", "F2", "F3", "VIP"):
+    for key in ("weekly_mvp", "weekly_top1", "weekly_top2", "weekly_top3",
+                "F1", "F2", "F3", "VIP", "admin_custom"):
         try:
             count = int(counts.get(key) or 0)
         except (TypeError, ValueError):
@@ -2983,29 +2986,18 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
             label, color, icon = meta[key]
             add(key, label, color, count or None, icon)
 
-    try:
-        total_rolls = int(total_rolls or 0)
-        best_streak = int(best_streak or 0)
-        mmr = int(mmr or 0)
-        message_count = int(message_count or 0)
-    except (TypeError, ValueError):
-        total_rolls = best_streak = mmr = message_count = 0
-
-    # Badges за писательство — только ЛУЧШЕЕ достижение по количеству сообщений.
-    # Если пользователь имеет 5000 сообщений, он автоматически прошел пороги 100/500/1000,
-    # но на карточке должен отображаться только бейдж 5000 (или 20000, если есть).
-    _msg_badges = [
-        (20000, None, "ПИСАТЕЛЬ 20000", "ah_msg20000"),
-        (10000, None, "ПИСАТЕЛЬ 10000", "ah_msg10000"),
-        (5000,  None, "ПИСАТЕЛЬ 5000",  "ah_msg5000"),
-        (1000,  None, "ПИСАТЕЛЬ 1000", "ah_msg1000"),
-        (500,   None, "ПИСАТЕЛЬ 500",   "ah_msg500"),
-        (100,   None, "ПИСАТЕЛЬ 100",   "ah_msg100"),
+    # Writer profile shows only the highest awarded level. Chat notifications
+    # are still emitted separately by achievements.check_and_award().
+    from achievements import ACHIEVEMENTS as _writer_achievements
+    awarded_writers = [
+        (int(spec.get("target", 0)), key)
+        for key, spec in _writer_achievements.items()
+        if achievements.get(key)
     ]
-    for _msg_target, _color, _label, _icon in _msg_badges:
-        if message_count >= _msg_target:
-            add(_icon, _label, _color, icon=_icon)
-            break  # показываем только самый высокий достижимый бейдж
+    if awarded_writers:
+        highest_target, highest_key = max(awarded_writers)
+        add(highest_key, f"ПИСАТЕЛЬ {highest_target}", None, icon=highest_key)
+
     return result
 
 
@@ -3186,6 +3178,7 @@ def generate_profile_card(
     top_heroes: list = None,
     tags: list = None,
     award_counts: dict = None,
+    achievements: dict = None,
     position: int = None,
 ) -> bytes | None:
     """Карточка /profile — точная копия /start (фон, аватар, медаль, ник) + герои (если Steam)
@@ -3220,8 +3213,11 @@ def generate_profile_card(
         draw = ImageDraw.Draw(img)
 
         # --- Награды ---
-        awards = _profile_awards(tags, award_counts, mmr=mmr, total_rolls=total_rolls,
-                                 best_streak=best_streak, message_count=message_count)
+        awards = _profile_awards(
+            tags, award_counts, mmr=mmr, total_rolls=total_rolls,
+            best_streak=best_streak, message_count=message_count,
+            achievements=achievements,
+        )
 
         # --- Аватар + золотая рамка (как в /start) -----
         avatar_x_offset = -100

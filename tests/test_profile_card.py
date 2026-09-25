@@ -149,17 +149,29 @@ class TestProfileAwards:
         assert keys.count("weekly_top2") == 1
         assert len(keys) == len(set(keys))
 
-    def test_derived_awards(self):
+    def test_no_derived_awards_are_invented(self):
         awards = dota_mmr._profile_awards(
             None, None, mmr=6200, total_rolls=350, best_streak=14, message_count=25000
         )
-        keys = {a["key"] for a in awards}
-        assert {"immortal6000", "rolls300", "streak10", "chat_legend"} <= keys
+        assert awards == []
 
-    def test_low_rolls_use_hundreds_badge(self):
-        keys = {a["key"] for a in dota_mmr._profile_awards(None, None, total_rolls=120)}
-        assert "rolls100" in keys
-        assert "rolls300" not in keys
+    def test_writer_awards_use_persisted_achievements(self):
+        awards = dota_mmr._profile_awards(
+            achievements={"ah_msg100": 1, "ah_msg1000": 1}
+        )
+        keys = {a["key"] for a in awards}
+        assert keys == {"ah_msg1000"}
+        assert "ah_msg500" not in keys
+        assert "ah_msg20000" not in keys
+
+    def test_profile_shows_only_highest_writer_award(self):
+        awards = dota_mmr._profile_awards(
+            achievements={"ah_msg100": 1, "ah_msg1000": 1, "ah_msg20000": 1}
+        )
+        writer_awards = [a for a in awards if a["key"].startswith("ah_msg")]
+        assert len(writer_awards) == 1
+        assert writer_awards[0]["key"] == "ah_msg20000"
+        assert writer_awards[0]["label"] == "ПИСАТЕЛЬ 20000"
 
     def test_empty_returns_empty_list(self):
         assert dota_mmr._profile_awards(None, None) == []
@@ -170,8 +182,8 @@ class TestProfileAwards:
 
     def test_unknown_tag_ignored(self):
         awards = dota_mmr._profile_awards(["какой-то_тег"], None)
-        assert all(a["key"] in {"weekly_mvp", "weekly_top2", "weekly_top3",
-                                "fissure_master", "admin_custom"} for a in awards)
+        assert all(a["key"] in {"weekly_mvp", "weekly_top1", "weekly_top2", "weekly_top3",
+                                "F1", "F2", "F3", "VIP", "admin_custom"} for a in awards)
 
 
 def _png_size(data: bytes):

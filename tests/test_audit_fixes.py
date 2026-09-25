@@ -351,3 +351,255 @@ def test_clear_hero_meta_cache_invalidates_redis(monkeypatch):
 
     assert deleted_keys == [hero_meta.HERO_META_REDIS_KEY]
     assert hero_meta._hero_meta_cache == {"data": None, "timestamp": 0}
+
+
+
+def test_top_card_cache_reuses_unchanged_card_and_evicts_old_entries():
+    import main
+
+    main._TOP_CARD_CACHE.clear()
+    calls = []
+
+    def generator(value):
+        calls.append(value)
+        return f"card-{value}".encode()
+
+    first = main.get_cached_top_card(generator, ("fissure", 1, "A"), value=1)
+    second = main.get_cached_top_card(generator, ("fissure", 1, "A"), value=1)
+    assert first == second == b"card-1"
+    assert calls == [1]
+
+    for i in range(main._TOP_CARD_CACHE_MAX_SIZE + 1):
+        main.get_cached_top_card(generator, ("fissure", i, "A"), value=i)
+
+    assert len(main._TOP_CARD_CACHE) == main._TOP_CARD_CACHE_MAX_SIZE
+    assert ("fissure", 0, "A") not in main._TOP_CARD_CACHE
+
+
+def test_top_cache_invalidation_supports_mmr_key():
+    from database import top_cache
+
+    top_cache.set("mmr_top_10", [{"telegram_id": 1}])
+    top_cache.set("unrelated", "keep")
+
+    top_cache.invalidate_top_cache()
+
+    assert top_cache.get("mmr_top_10") is None
+    assert top_cache.get("unrelated") == "keep"
+
+
+def test_fissure_rank_has_expression_index():
+    from pathlib import Path
+
+    database_path = Path(__file__).resolve().parent.parent / "database.py"
+    content = database_path.read_text(encoding="utf-8")
+    assert "idx_users_fissure_rank ON users(COALESCE(fissure, 0) DESC)" in content
+
+
+
+def test_profile_does_not_assign_fissure_tags():
+    import main
+
+    content = Path(main.__file__).read_text(encoding="utf-8")
+    profile_start = content.index("async def _build_profile_progress_card")
+    profile_end = content.index("async def refreshmmr", profile_start)
+    profile_source = content[profile_start:profile_end]
+    assert "add_user_tag(" not in profile_source
+    assert "F1/F2/F3 are reconciled exclusively" in profile_source
+
+
+def test_periodic_tag_refresh_is_independent(monkeypatch):
+    import main
+
+    async def fake_fissure(*args, **kwargs):
+        raise RuntimeError("fissure failed")
+
+    async def fake_mmr(*args, **kwargs):
+        calls.append("mmr")
+
+    calls = []
+    content = Path(main.__file__).read_text(encoding="utf-8")
+    start = content.index("async def periodic_tag_refresh")
+    end = content.index("job_queue.run_repeating", start)
+    namespace = {"asyncio": main.asyncio, "logger": main.logger}
+    exec(content[start:end], namespace)
+    main.periodic_tag_refresh = namespace["periodic_tag_refresh"]
+    monkeypatch.setattr("tags.refresh_fissure_top_tags", fake_fissure)
+    monkeypatch.setattr("tags.refresh_mmr_top_tags", fake_mmr)
+    from types import SimpleNamespace
+    main.asyncio.run(main.periodic_tag_refresh(SimpleNamespace(bot=object())))
+    assert calls == ["mmr"]
+
+
+def test_mmr_tags_use_weekly_top_source(monkeypatch):
+    import asyncio
+    import tags
+
+    calls = []
+
+    def fake_week_top(limit):
+        calls.append(limit)
+        return []
+
+    monkeypatch.setattr(tags, "_MMR_TAG_REFRESH_LOCK", asyncio.Lock())
+    monkeypatch.setattr("database.get_config", lambda key: "10" if key == "mmr_chat_id" else None)
+    monkeypatch.setattr("database.get_dota_week_top_from_db", fake_week_top)
+    asyncio.run(tags.refresh_mmr_top_tags(object()))
+    assert calls == [10]
+
+
+def test_weekly_reset_clears_previous_mmr_holder_state():
+    import main
+
+    content = Path(main.__file__).read_text(encoding="utf-8")
+    reset_start = content.index("async def weekly_mmr_reset_job")
+    reset_end = content.index("async def announce_weekly_mmr_winner", reset_start)
+    reset_source = content[reset_start:reset_end]
+    assert '("weekly_mvp", "weekly_top1", "weekly_top2", "weekly_top3")' in reset_source
+    assert "'current_mmr_top1_telegram_id'" in reset_source
+    assert "get_dota_week_top_from_db._cache = {}" in reset_source
+
+
+def test_dead_fissure_master_refresh_removed():
+    content = Path("fissure.py").read_text(encoding="utf-8")
+    assert "refresh_fissure_master_tag" not in content
+
+
+def test_mvp_ceremony_does_not_write_live_top_tags():
+    import main
+
+    content = Path(main.__file__).read_text(encoding="utf-8")
+    start = content.index("async def announce_weekly_mmr_winner")
+    end = content.index("async def refresh_digest_message", start)
+    # The MMR job is defined between ceremony and refresh_digest_message;
+    # limit this assertion to the ceremony itself.
+    ceremony = content[start:content.index("async def claim_or_check_mmr_leader", start)]
+    assert 'telegram_id, "weekly_mvp"' in ceremony
+    assert "refresh_mmr_top_tags" not in ceremony
+    assert 'add_user_tag(telegram_id, "weekly_top' not in ceremony
+
+
+def test_mmr_job_refreshes_live_top_tags_immediately():
+    import main
+
+    content = Path(main.__file__).read_text(encoding="utf-8")
+    start = content.index("async def update_all_mmr_job")
+    end = content.index("async def refresh_digest_message", start)
+    source = content[start:end]
+    assert "get_dota_week_top_from_db._cache = {}" in source
+    assert "await refresh_mmr_top_tags(context.bot)" in source
+
+
+def test_fissure_tags_refresh_live_for_top15_players():
+    content = Path("fissure.py").read_text(encoding="utf-8")
+    update_pos = content.index("update_fissure(user_obj.id, new_fissure")
+    rank_pos = content.index("get_fissure_rank, user_obj.id")
+    refresh_pos = content.index("await refresh_fissure_top_tags(context.bot)")
+    assert update_pos < rank_pos < refresh_pos
+    assert "1 <= int(live_rank) <= 15" in content
+
+
+def test_sqlite_fissure_top_filters_users_who_left_chat():
+    import database
+
+    source = Path(database.__file__).read_text(encoding="utf-8")
+    assert "WHERE (in_chat = 1 OR in_chat IS NULL) ORDER BY fissure DESC LIMIT ?" in source
+
+
+
+
+def test_weekly_award_grant_is_idempotent(monkeypatch):
+    import database
+
+    calls = []
+
+    class FakeCursor:
+        def __init__(self):
+            self.first_fetch = True
+
+        def execute(self, sql, params=()):
+            calls.append((sql, params))
+
+        def fetchone(self):
+            if self.first_fetch:
+                self.first_fetch = False
+                return {"value": "2026-09-21"}
+            return {"weekly_mvp": 2, "weekly_top2": 1, "weekly_top3": 0}
+
+        def close(self):
+            pass
+
+    class FakeConn:
+        def cursor(self, **kwargs):
+            return FakeCursor()
+
+        def commit(self):
+            calls.append(("commit", ()))
+
+        def rollback(self):
+            calls.append(("rollback", ()))
+
+    monkeypatch.setattr(database, "get_connection", lambda: FakeConn())
+    monkeypatch.setattr(database, "get_db_type", lambda: "postgresql")
+    monkeypatch.setattr(database, "release_connection", lambda conn: None)
+    monkeypatch.setattr(database, "get_user", lambda uid: None)
+
+    # The fake cursor returns a dict; emulate the real count projection by
+    # keeping this test focused on the early-return branch for an existing marker.
+    result = database.grant_weekly_mmr_awards(
+        "2026-09-21", [(1, 1), (2, 2), (3, 3)]
+    )
+    assert result is not None
+    assert not any("UPDATE users SET" in sql for sql, _ in calls)
+    assert not any("INSERT INTO bot_config" in sql for sql, _ in calls)
+
+
+def test_ceremony_uses_atomic_award_grant():
+    import main
+
+    content = Path(main.__file__).read_text(encoding="utf-8")
+    start = content.index("async def announce_weekly_mmr_winner")
+    end = content.index("async def claim_or_check_mmr_leader", start)
+    ceremony = content[start:end]
+    assert "grant_weekly_mmr_awards" in ceremony
+    assert "increment_weekly_mmr_award" not in ceremony
+    assert "tag_set = await add_user_tag" in ceremony
+
+
+def test_startup_uses_full_weekly_reset():
+    import main
+
+    content = Path(main.__file__).read_text(encoding="utf-8")
+    assert "await weekly_mmr_reset_job(SimpleNamespace(bot=app.bot))" in content
+    assert "Startup: weekly stats reset for" not in content
+
+
+
+def test_weekly_top1_has_display_priority():
+    from tags import TAG_PRIORITY
+
+    assert TAG_PRIORITY["weekly_top1"] > TAG_PRIORITY["weekly_top2"]
+    assert TAG_PRIORITY["weekly_top2"] > TAG_PRIORITY["weekly_top3"]
+    assert TAG_PRIORITY["weekly_mvp"] > TAG_PRIORITY["weekly_top1"]
+
+
+def test_tag_persistence_rolls_back_on_telegram_failure(monkeypatch):
+    import asyncio
+    import tags
+
+    saved = []
+    monkeypatch.setattr(tags, "get_user_tags", lambda uid: [])
+    monkeypatch.setattr(tags, "_save_user_tags", lambda uid, values: saved.append(list(values)))
+
+    async def reject(bot, uid, chat_id):
+        return False
+
+    monkeypatch.setattr(tags, "_apply_best_tag", reject)
+    added = asyncio.run(tags.add_user_tag(1, "F1", bot=object(), chat_id=10))
+    assert added is False
+    assert saved[-1] == []
+
+    monkeypatch.setattr(tags, "get_user_tags", lambda uid: ["F1"])
+    removed = asyncio.run(tags.remove_user_tag(1, "F1", bot=object(), chat_id=10))
+    assert removed is False
+    assert saved[-1] == ["F1"]

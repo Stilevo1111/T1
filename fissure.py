@@ -33,7 +33,17 @@ from constants import (
     get_banner_path,
     get_random_cooldown_banner_path,
 )
-from database import consume_free_roll, get_free_rolls, get_user, update_fissure, update_last_message_id, update_user_field, user_cache, zeus_strike
+from database import (
+    consume_free_roll,
+    get_fissure_rank,
+    get_free_rolls,
+    get_user,
+    update_fissure,
+    update_last_message_id,
+    update_user_field,
+    user_cache,
+    zeus_strike,
+)
 from digest import invalidate_digest_cache
 from rate_limiter import is_rate_limited
 from rolls import (
@@ -608,12 +618,24 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Инвалидируем кеш дайджеста чтобы следующий job показал свежие данные
         invalidate_digest_cache()
 
-        # Мгновенно обновляем тег fissure_master независимо от действий пользователя
+        # Live F1/F2/F3 reconciliation. Only top-15 users can change the tag
+        # set, so avoid a burst of Telegram API calls for everyone else.
         try:
-            from tags import refresh_fissure_master_tag
-            await refresh_fissure_master_tag(context.bot, chat_id)
+            rank_result = await asyncio.to_thread(get_fissure_rank, user_obj.id)
+            live_rank = (
+                rank_result.get('rank')
+                if isinstance(rank_result, dict)
+                else rank_result
+            )
+            if live_rank is not None and 1 <= int(live_rank) <= 15:
+                from tags import refresh_fissure_top_tags
+                await refresh_fissure_top_tags(context.bot)
+                logger.info(
+                    f"Live Fissure tags refreshed after roll by user={user_obj.id} rank={live_rank}"
+                )
         except Exception as e:
-            logger.debug(f"Could not refresh fissure_master tag: {e}")
+            # The 30-minute reconciler will retry if Telegram/DB is temporarily down.
+            logger.warning(f"Live Fissure tag refresh skipped after roll: {e}")
 
         # Мгновенный (дебаунснутый) апдейт закреплённого дайджеста сразу после ролла
         try:

@@ -1,7 +1,13 @@
+import asyncio
 import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Telegram tag changes are stateful. Serialize reconciliation so a periodic
+# refresh and a weekly ceremony cannot mutate the same holders concurrently.
+_FISSURE_TAG_REFRESH_LOCK = asyncio.Lock()
+_MMR_TAG_REFRESH_LOCK = asyncio.Lock()
 
 TAG_TYPES = {
     "weekly_mvp": "MVP",
@@ -30,6 +36,7 @@ TAG_DISPLAY = {
 TAG_PRIORITY = {
     "VIP": 1000,
     "weekly_mvp": 100,
+    "weekly_top1": 95,
     "weekly_top2": 90,
     "weekly_top3": 80,
     "F1": 78,
@@ -139,7 +146,12 @@ async def add_user_tag(telegram_id: int, tag_type: str, bot=None, chat_id: int |
     _save_user_tags(telegram_id, current)
     logger.info(f"tag_manager: added tag {tag_type} to user {telegram_id}")
     if bot and chat_id:
-        return await _apply_best_tag(bot, telegram_id, chat_id)
+        applied = await _apply_best_tag(bot, telegram_id, chat_id)
+        if not applied:
+            # Do not persist a logical award that Telegram rejected.
+            current = [t for t in current if t != tag_type]
+            _save_user_tags(telegram_id, current)
+        return applied
     return True
 
 
@@ -147,11 +159,15 @@ async def remove_user_tag(telegram_id: int, tag_type: str, bot=None, chat_id: in
     current = get_user_tags(telegram_id)
     if tag_type not in current:
         return False
+    previous = list(current)
     current = [t for t in current if t != tag_type]
     _save_user_tags(telegram_id, current)
     logger.info(f"tag_manager: removed tag {tag_type} from user {telegram_id}")
     if bot and chat_id:
-        return await _apply_best_tag(bot, telegram_id, chat_id)
+        applied = await _apply_best_tag(bot, telegram_id, chat_id)
+        if not applied:
+            _save_user_tags(telegram_id, previous)
+        return applied
     return True
 
 
@@ -196,7 +212,20 @@ async def get_telegram_title(bot, telegram_id: int, chat_id: int) -> str:
     return title
 
 
-async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> None:
+async def refresh_fissure_top_tags(bot, chat_id: int | None = None, notify: bool = True) -> None:
+    """Serialize and reconcile F1/F2/F3 against the configured Fissure chat."""
+    from database import get_config
+
+    async with _FISSURE_TAG_REFRESH_LOCK:
+        configured = get_config('fissure_chat_id') or get_config('digest_chat_id')
+        target_chat_id = chat_id or configured
+        if not target_chat_id:
+            logger.info("tag_manager: no fissure chat configured")
+            return
+        await _refresh_fissure_top_tags(bot, int(target_chat_id), notify=notify)
+
+
+async def _refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> None:
     """Обновляет теги ТОП 1/2/3 фиссуры при смене мест в топе.
 
     Золото — 1 место, серебро — 2 место, бронза — 3-15 место.
@@ -204,20 +233,6 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
     Администраторы пропускаются — они держат свой админ-тег.
     """
     from database import get_config, get_fissure_top, set_config
-    try:
-        # Приоритет: fissure_chat_id -> digest_chat_id
-        fissure_chat_id = get_config('fissure_chat_id')
-        digest_chat_id = get_config('digest_chat_id')
-        chat_id = fissure_chat_id or digest_chat_id
-        if chat_id:
-            chat_id = int(chat_id)
-    except Exception as e:
-        logger.debug(f"tag_manager: refresh_fissure_top_tags: invalid chat_id config: {e}")
-
-    if not chat_id:
-        logger.info("tag_manager: refresh_fissure_top_tags: no valid chat_id (set fissure_chat_id or digest_chat_id)")
-        return
-
     top_users = get_fissure_top(15)
     if not top_users:
         logger.info("tag_manager: refresh_fissure_top_tags: no top users")
@@ -301,24 +316,6 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
             except Exception as e:
                 logger.warning(f"tag_manager: refresh_fissure_top_tags: failed to remove F1 from {stored_top1_tg}: {e}")
 
-        # Где упал старый топ 1?
-        if stored_old_top1:
-            old_pos = None
-            for i, u in enumerate(top_users):
-                if u and u.get('telegram_id') == int(stored_top1_tg):
-                    old_pos = i + 1
-                    break
-            if old_pos == 2:
-                old_tags = get_user_tags(int(stored_top1_tg))
-                if "VIP" not in old_tags:
-                    await add_user_tag(int(stored_top1_tg), "F2", bot=bot, chat_id=chat_id)
-                    logger.info(f"tag_manager: refresh_fissure_top_tags: passed F2 to old top-1 {stored_top1_tg}")
-            elif old_pos >= 3:
-                old_tags = get_user_tags(int(stored_top1_tg))
-                if "VIP" not in old_tags:
-                    await add_user_tag(int(stored_top1_tg), "F3", bot=bot, chat_id=chat_id)
-                    logger.info(f"tag_manager: refresh_fissure_top_tags: passed F3 to old top-1 {stored_top1_tg}")
-
     # Выдаём новому — только если топ-1 изменился
     if new_top1_tg and str(new_top1_tg) != str(stored_top1_tg) and not await _is_admin(bot, chat_id, int(new_top1_tg)):
         ok = await add_user_tag(int(new_top1_tg), "F1", bot=bot, chat_id=chat_id)
@@ -356,17 +353,6 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
                 logger.info(f"tag_manager: refresh_fissure_top_tags: removed F2 from {stored_top2_tg}")
             except Exception as e:
                 logger.warning(f"tag_manager: refresh_fissure_top_tags: failed to remove F2 from {stored_top2_tg}: {e}")
-
-        # Где упал старый топ 2?
-        if stored_old_top2:
-            for i, u in enumerate(top_users):
-                if u and u.get('telegram_id') == int(stored_top2_tg):
-                    if i + 1 >= 3:
-                        old_tags = get_user_tags(int(stored_top2_tg))
-                        if "VIP" not in old_tags:
-                            await add_user_tag(int(stored_top2_tg), "F3", bot=bot, chat_id=chat_id)
-                            logger.info(f"tag_manager: refresh_fissure_top_tags: passed F3 to old top-2 {stored_top2_tg}")
-                    break
 
     # Выдаём F2 новому — только если топ-2 изменился
     if new_top2_tg and str(new_top2_tg) != str(stored_top2_tg) and not await _is_admin(bot, chat_id, int(new_top2_tg)):
@@ -422,29 +408,27 @@ async def refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> No
     set_config('current_F3_telegram_ids', ','.join(str(x) for x in final_f3))
 
 
-async def refresh_mmr_top_tags(bot, chat_id: int) -> None:
-    """Обновляет теги MMR топа (Top-1, MMR Top-2, MMR Top-3).
+async def refresh_mmr_top_tags(bot, chat_id: int | None = None) -> None:
+    """Serialize and reconcile weekly MMR tags against the configured MMR chat."""
+    from database import get_config
 
-    - Top-1 - единственный, выдается раз в неделю
-    - MMR Top-2, MMR Top-3 - аналогично фиссурным тегам
+    async with _MMR_TAG_REFRESH_LOCK:
+        configured = get_config('mmr_chat_id') or get_config('digest_chat_id')
+        target_chat_id = chat_id or configured
+        if not target_chat_id:
+            logger.info("tag_manager: no MMR chat configured")
+            return
+        await _refresh_mmr_top_tags(bot, int(target_chat_id))
+
+
+async def _refresh_mmr_top_tags(bot, chat_id: int) -> None:
+    """Обновляет теги MMR-топа той же недели, которые показывает /topmmr.
+
+    Top-1/Top-2/Top-3 относятся к текущей неделе, а не к общему MMR.
     """
-    from database import get_config, get_mmr_top, set_config
+    from database import get_config, get_dota_week_top_from_db, set_config
 
-    try:
-        # Приоритет: fissure_chat_id -> digest_chat_id
-        fissure_chat_id = get_config('fissure_chat_id')
-        digest_chat_id = get_config('digest_chat_id')
-        chat_id = fissure_chat_id or digest_chat_id
-        if chat_id:
-            chat_id = int(chat_id)
-    except Exception:
-        chat_id = None
-
-    if not chat_id:
-        logger.info("tag_manager: refresh_mmr_top_tags: no valid chat_id (set fissure_chat_id or digest_chat_id)")
-        return
-
-    top_users = get_mmr_top(10)
+    top_users = get_dota_week_top_from_db(10)
     if not top_users:
         return
 
