@@ -898,9 +898,10 @@ async def alternate_digest_job(context):
             
             if should_create_new:
                 try:
-                    from hero_meta import clear_hero_meta_cache_async, get_hero_meta_banner
-                    if should_create_new:
-                        await clear_hero_meta_cache_async()
+                    # Do not clear a valid 12-hour banner on every digest rotation.
+                    # A rotation must reuse the cached infographic; only explicit
+                    # cache refresh flows may invalidate it.
+                    from hero_meta import get_hero_meta_banner
                     hero_meta_banner = await asyncio.wait_for(get_hero_meta_banner(context.application.bot), timeout=90.0)
                     if hero_meta_banner:
                         set_config('last_hero_meta_update', int(now))
