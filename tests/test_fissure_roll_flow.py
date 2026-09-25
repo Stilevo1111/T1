@@ -46,6 +46,17 @@ def test_roll_types_one_live_message():
     assert "finish_loading(" in content
 
 
+def test_multicast_has_no_loading_animation():
+    """Multicast must go straight to the final banner, with no typing."""
+    content = _source()
+    assert "if not is_multicast:" in content, (
+        "the loading message must be created for the normal roll only"
+    )
+    block = content[content.index("anim_msg = None\n        if not is_multicast:"):]
+    assert 'show_loading(context.bot, chat_id, "Подбрасываю кости...")' in block
+    assert "anim_msg = None" in block.split("if not is_multicast:")[0]
+
+
 def test_fallback_deletes_the_loading_message():
     """If the banner cannot replace the loading, it must not be left behind."""
     content = _source()
@@ -58,6 +69,22 @@ def test_techies_flow_is_untouched():
     assert "show_loading" not in techies_branch.split("return")[0]
     # Techies keeps its own animation in techies.py.
     assert "handle_techies_event(" in content
+
+
+def test_multicast_falls_back_to_a_plain_banner():
+    """With no loading handle, finish_loading must be a no-op, not an error."""
+    import loading_flow
+
+    async def run():
+        bot = _Bot()
+        result = await loading_flow.finish_loading(
+            bot, None, text="Мультикаст ×3", media="roll_fatal.webp"
+        )
+        assert result is None
+        assert not bot.media_edits
+        assert not bot.deletes
+
+    asyncio.run(run())
 
 
 def test_zeus_uses_loading_too():

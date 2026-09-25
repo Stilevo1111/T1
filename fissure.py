@@ -45,7 +45,7 @@ from database import (
     zeus_strike,
 )
 from digest import invalidate_digest_cache
-from loading_flow import finish_loading, show_loading
+from loading_flow import delete_loading, finish_loading, show_loading
 from rate_limiter import is_rate_limited
 from rolls import (
     MULTICAST_TEXTS,
@@ -383,16 +383,19 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         original_roll = None
         base_roll_before_streak = None  # Сохраняем ролл ДО стрика для вывода
 
-        # Живое сообщение: сначала печатается "Подбрасываю кости...", затем
-        # превращается в итоговый баннер. Мультикаст больше не плодит
-        # отдельные сообщения со слотами - только финальный результат.
-        anim_msg = await show_loading(context.bot, chat_id, "Подбрасываю кости...")
+        is_multicast = event_roll < zeus_chance + techies_chance + multicast_chance
 
-        if event_roll < zeus_chance + techies_chance + multicast_chance:
-            # 🎰 МУЛЬТИКАСТ — счётчик множителя, но без сообщений со слотами
+        # Живое сообщение печатает только обычный ролл: там есть что показать
+        # до результата. Мультикаст не анимируется вовсе - только финальный
+        # баннер, как и раньше, без сообщений со слотами.
+        anim_msg = None
+        if not is_multicast:
+            anim_msg = await show_loading(context.bot, chat_id, "Подбрасываю кости...")
+
+        if is_multicast:
+            # 🎰 МУЛЬТИКАСТ — счётчик множителя, без сообщений со слотами
             multicast_text = ""
             cascade_count = 1
-            is_multicast = True
 
             # Get base roll first
             roll, special_message, is_fatal, got_help = calculate_fissure_roll(user.get("fissure", 0))
@@ -429,7 +432,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
             cascade_count = 1
-            is_multicast = False
             roll, special_message, is_fatal, got_help = calculate_fissure_roll(user.get("fissure", 0))
             base_roll_before_streak = roll  # Сохраняем исходный ролл
             current_win_streak = user.get('current_win_streak', 0)
@@ -549,7 +551,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if result_msg is None:
             # Загрузку не удалось превратить в баннер - убираем её, иначе она
             # останется в чате навсегда, и шлём результат отдельным сообщением.
-            from loading_flow import delete_loading
+            # Для мультикаста anim_msg уже None, тут ничего удалять не нужно.
             await delete_loading(context.bot, anim_msg)
             anim_msg = None
             try:
