@@ -3709,6 +3709,20 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Small delay to ensure message is visible
     await asyncio.sleep(0.1)
 
+async def _delete_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remove an admin command from group chats without affecting private chats."""
+    message = update.effective_message
+    chat = update.effective_chat
+    if not message or not chat or chat.type not in {"group", "supergroup"}:
+        return
+    try:
+        if await bot_can_delete(context.bot, chat.id):
+            await context.bot.delete_message(chat.id, message.message_id)
+    except Exception as e:
+        logger.debug(f"Could not delete admin command: {e}")
+
+
+
 async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Административная команда: раз-prивязать Steam-аккаунт по Telegram username."""
     from bot_utils import _telegram_error_contains
@@ -3788,6 +3802,7 @@ async def admin_unlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _delete_admin_command(update, context)
     from config import settings
     ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
     user_id = update.effective_user.id
@@ -3881,6 +3896,7 @@ async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _delete_admin_command(update, context)
     from config import settings
     ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
     user_id = update.effective_user.id
@@ -3975,6 +3991,7 @@ async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Выдача VIP тега пользователю"""
+    await _delete_admin_command(update, context)
     from config import settings
     ADMIN_CHAT_ID = getattr(settings, 'ADMIN_CHAT_ID', None)
     user_id = update.effective_user.id
