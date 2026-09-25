@@ -21,9 +21,9 @@ TECHIES_MINE_MIN_DAMAGE = 1
 TECHIES_MINE_MAX_DAMAGE = 5
 
 BUTTONS = [
-    ("🟢", "Зелёная", "green"),
-    ("🔴", "Красная", "red"),
-    ("🟡", "Жёлтая", "yellow"),
+    ("🟢", "green"),
+    ("🔴", "red"),
+    ("🟡", "yellow"),
 ]
 
 SUCCESS_PHRASES = [
@@ -65,10 +65,10 @@ def _session_key(chat_id: int, user_id: int) -> str:
 def _build_techies_keyboard(user_id: int, explosive_button: str, start_time: float) -> InlineKeyboardMarkup:
     ts = int(start_time * 1000)
     row = []
-    for emoji, label, value in BUTTONS:
+    for emoji, value in BUTTONS:
         row.append(
             InlineKeyboardButton(
-                f"{emoji} {label}",
+                emoji,
                 callback_data=f"techies_{value}_{user_id}_{explosive_button}_{ts}",
             )
         )
