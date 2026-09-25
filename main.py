@@ -3013,6 +3013,11 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                     raw_achievements = json.loads(raw_achievements)
                 if isinstance(raw_achievements, dict):
                     achievements = raw_achievements
+                # VIP is a live award from bot_config, not necessarily a
+                # persisted user tag. Always merge it before building the card.
+                from database import get_vip_users
+                if str(telegram_id) in {str(uid) for uid in get_vip_users()}:
+                    tags = list(dict.fromkeys([*tags, "VIP"]))
                 # A cached user row may predate these columns and silently yield
                 # empty lists. Re-read from the DB before rendering the card.
                 if not tags or not achievements:
