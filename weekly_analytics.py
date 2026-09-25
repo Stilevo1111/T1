@@ -1053,8 +1053,8 @@ def get_analytics_pages(role: str, stats: dict[str, Any]) -> list[dict[str, Any]
     detailed_text = tables["detailed"]
 
     return [
-        {"title": "📊 Разбор матчей", "text": pro_text},
-        {"title": "🔎 Что в данных", "text": detailed_text},
+        {"title": "📊 Показатели матчей", "text": pro_text},
+        {"title": "🔎 Подробная статистика", "text": detailed_text},
     ]
 
 

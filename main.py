@@ -675,7 +675,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     else:
                         first_text = "⚠️ Не удалось сгенерировать таблицы аналитики. Попробуйте позже."
 
-                    keyboard = _build_analytics_table_keyboard(pages, generated)
+                    keyboard = _build_analytics_table_keyboard(pages, generated, first_page_idx)
                     chart_image = context.user_data.get('analytics_chart_image')
                     table_shown = False
                     if loading_msg:
@@ -2431,7 +2431,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
 
         # If a chart photo is already shown above the table, just update its caption.
         if chart_msg_id:
-            keyboard = _build_analytics_table_keyboard(pages, generated)
+            keyboard = _build_analytics_table_keyboard(pages, generated, page_idx)
             try:
                 await context.bot.edit_message_caption(
                     chat_id=chat_id,

@@ -241,28 +241,18 @@ def _build_analytics_keyboard(page_idx, total_pages, generated, page_titles=None
     return InlineKeyboardMarkup([buttons])
 
 
-def _build_analytics_table_keyboard(pages, generated):
-    """Build clear analytics table switch buttons.
-
-    ``generated`` means that a page is available, not that it is currently
-    selected. Therefore it must not be rendered as a checkmark on every
-    available page.  A single neutral dot marks the first available page only;
-    pagination callbacks still switch pages normally.
-    """
+def _build_analytics_table_keyboard(pages, generated, active_idx=0):
+    """Build analytics buttons with exactly one check on the active page."""
     generated = generated or set()
     available = [i for i, page in enumerate(pages) if page]
     if not available:
         return InlineKeyboardMarkup([[]])
-
-    first_available = available[0]
+    if active_idx not in available:
+        active_idx = available[0]
     buttons = []
-    for i, page in enumerate(pages):
-        if not page:
-            continue
-        title = page.get("title", f"Стр. {i+1}")
-        # Keep buttons neutral: availability is not a status, and marking all
-        # generated pages with ✅ created two green checks at once.
-        label = ("• " if i == first_available else "") + title
+    for i in available:
+        title = pages[i].get("title", f"Стр. {i+1}")
+        label = f"✅ {title}" if i == active_idx else title
         buttons.append(InlineKeyboardButton(label, callback_data=f"analytics_table_{i}"))
     return InlineKeyboardMarkup([buttons])
 
