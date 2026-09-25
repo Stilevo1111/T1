@@ -1571,12 +1571,22 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
             except OSError: return ImageFont.load_default()
     accent = random.choice(["#ff8c42", "#a855f7", "#22c55e", "#f43f5e", "#06b6d4", "#facc15", "#38bdf8"])
     secondary = random.choice(["#22d3ee", "#f97316", "#38bdf8", "#fbbf24", "#a855f7", "#84cc16"])
-    canvas = bg.convert("RGB").resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS).convert("RGBA")
+    # Build the same self-contained HUD background as the final option generator.
+    # Do not reuse the legacy chart_bg_fallback asset: it is the old visual design.
+    bg_base = random.choice([(9, 12, 22), (20, 10, 32), (5, 18, 30), (30, 12, 18), (12, 24, 18)])
+    canvas = Image.new("RGBA", (WIDTH, HEIGHT), (*bg_base, 255))
     draw = ImageDraw.Draw(canvas, "RGBA")
+    if random.choice(("diagonal", "orb", "rays", "corner")) == "diagonal":
+        draw.polygon([(0, 0), (WIDTH, 0), (WIDTH, 180), (0, 320)], fill=(*tuple(int(accent[i:i+2], 16) for i in (1, 3, 5)), 28))
+    elif random.choice(("orb", "rays", "corner")) == "orb":
+        draw.ellipse((650, -260, 1350, 440), fill=(*tuple(int(secondary[i:i+2], 16) for i in (1, 3, 5)), 24))
+    else:
+        draw.polygon([(0, HEIGHT), (WIDTH, HEIGHT), (WIDTH, 520), (0, 680)], fill=(*tuple(int(accent[i:i+2], 16) for i in (1, 3, 5)), 18))
     rgb = tuple(int(accent[i:i+2], 16) for i in (1, 3, 5))
     draw.rounded_rectangle((30, 24, 1170, 776), 22, fill=(8, 10, 20, 220), outline=(*rgb, 190), width=3)
     draw.text((58, 48), "ИСТОРИЯ МАТЧЕЙ", font=font(24, True), fill=accent)
-    draw.text((58, 88), f"ПОСЛЕДНИЕ {len(entries)} МАТЧЕЙ", font=font(18), fill="#cbd5e1")
+    role = str(entries[0].get("role") or "НЕ ОПРЕДЕЛЕНА").upper()
+    draw.text((58, 88), f"РОЛЬ: {role}  •  ПОСЛЕДНИЕ {len(entries)} МАТЧЕЙ", font=font(18), fill="#cbd5e1")
     left, right, top, bottom = 145, 1085, 175, 690
     for value in (0.0, 0.5, 1.0, 1.5, 2.0):
         y = bottom - (bottom - top) * value / 2
