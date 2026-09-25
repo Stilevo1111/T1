@@ -4225,8 +4225,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
                             _nick = update.effective_user.username or update.effective_user.full_name or f"id{user_id}"
                             _mention = make_clickable(_nick, user_id)
                             _text = f"🏆 {_mention} получил(а) достижение: {_labels}!"
+                            # Notify about all newly reached levels, but render
+                            # the highest badge on the single image banner.
+                            _banner_key = max(
+                                _awarded,
+                                key=lambda key: int(_AH[key].get("target", 0)),
+                            )
                             _banner = await asyncio.to_thread(
-                                generate_achievement_banner, _awarded[0], _AH[_awarded[0]]["label"], _nick
+                                generate_achievement_banner, _banner_key, _AH[_banner_key]["label"], _nick
                             )
                             try:
                                 await context.bot.send_photo(
