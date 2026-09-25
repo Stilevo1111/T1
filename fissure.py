@@ -203,7 +203,7 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
     )
 
     zeus_banner_url = get_banner_path("zeus")
-    # Картинка появляется сразу, текст под ней печатается построчно.
+    # Картинка появляется сразу и без подписи, текст печатается под ней.
     result_msg = await show_photo_with_typing(
         bot,
         chat_id,
@@ -211,7 +211,6 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
         caption=text,
         parse_mode="HTML",
         reply_markup=main_menu(),
-        label="⚡ Гремит гром...",
     )
     if result_msg is None:
         result_msg = await bot.send_photo(
@@ -526,8 +525,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             roll_banner_url = get_banner_path("roll_normal")
 
-        # Обычный ролл: картинка появляется сразу, текст под ней печатается
-        # построчно. Мультикаст не печатает ничего - только финальный баннер.
+        # Обычный ролл: картинка появляется сразу и без подписи, текст под ней
+        # печатается следом. Мультикаст не печатает ничего - только финальный баннер.
         result_msg = None
         if roll_banner_url:
             result_msg = await show_photo_with_typing(
@@ -537,7 +536,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=text,
                 parse_mode="HTML",
                 reply_markup=main_menu(),
-                label=("" if is_multicast else "🎲 Хукаю кости..."),
             )
 
         if result_msg is None:

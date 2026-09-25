@@ -40,19 +40,20 @@ def test_multicast_sends_no_slot_messages():
 
 
 def test_roll_posts_picture_then_types_caption():
-    """The roll has no separate loading message: the picture comes first and
-    its caption is typed underneath it."""
+    """The roll has no loading message and no placeholder caption: the picture
+    comes first, bare, and the result is typed underneath it."""
     content = _source()
     assert "show_photo_with_typing(" in content
-    assert "🎲 Хукаю кости..." in content
-    # No separate "Подбрасываю кости..." message for the roll any more.
+    # No invented placeholder text on the picture.
+    assert "Хукаю кости" not in content
     assert "Подбрасываю кости" not in content
+    assert "Гремит гром" not in content
 
 
-def test_multicast_has_no_typing():
-    """Multicast must show only the final banner, nothing is typed."""
+def test_roll_passes_no_label():
+    """The placeholder parameter is gone entirely rather than passed empty."""
     content = _source()
-    assert 'label=("" if is_multicast else "🎲 Хукаю кости..."),' in content
+    assert "label=" not in content
 
 
 def test_roll_has_no_orphan_loading_message():
@@ -94,7 +95,7 @@ def test_multicast_falls_back_to_a_plain_banner():
     asyncio.run(run())
 
 
-def _roll_with_caption(caption, label="", media="roll_normal.webp", **kw):
+def _roll_with_caption(caption, media="roll_normal.webp", **kw):
     """Post a roll picture and let its caption finish typing.
 
     Returns the bot stub and the message. `bot.at_return` is a snapshot of the
@@ -107,7 +108,7 @@ def _roll_with_caption(caption, label="", media="roll_normal.webp", **kw):
 
     async def run():
         msg = await loading_flow.show_photo_with_typing(
-            bot, 1, media=media, caption=caption, label=label, **kw
+            bot, 1, media=media, caption=caption, **kw
         )
         bot.at_return = list(bot.caption_edits)
         # Drain the background animation inside this same loop, since the task
@@ -125,14 +126,12 @@ def _roll_with_caption(caption, label="", media="roll_normal.webp", **kw):
 
 def test_photo_appears_first_then_caption_is_typed():
     caption = "🎲 TestUser\n\nПроклял Акадо на 12 см!\n\n📏 41.2 см → 29.2 см"
-    bot, msg = _roll_with_caption(
-        caption, label="🎲 Хукаю кости...", reply_markup="markup"
-    )
+    bot, msg = _roll_with_caption(caption, reply_markup="markup")
 
     assert msg is not None
-    # The picture is posted first, carrying only the label as its caption.
+    # The picture is posted first, with no caption of its own.
     assert bot.photos[0][0] == "roll_normal.webp"
-    assert bot.photos[0][1] == "<b>🎲 Хукаю кости...</b>"
+    assert bot.photos[0][1] is None
 
     # The handler got control back before any typing happened, so the database
     # write and cooldown are not stuck behind a three second animation.
@@ -145,11 +144,12 @@ def test_photo_appears_first_then_caption_is_typed():
     assert bot.caption_edits[-1] == caption
 
 
-def test_photo_caption_typing_without_label_starts_empty():
-    """Multicast passes no label: the picture shows with an ellipsis caption."""
-    bot, _ = _roll_with_caption("Мультикаст ×3", label="", media="roll_fatal.webp")
-    assert bot.photos[0][1] == "…"
-    assert bot.caption_edits[-1] == "Мультикаст ×3"
+def test_banner_is_never_sent_with_a_placeholder():
+    """No ellipsis, no label, no loading text on the picture at any point."""
+    bot, _ = _roll_with_caption("Мультикаст ×3", media="roll_fatal.webp")
+    assert bot.photos[0][1] is None
+    assert bot.caption_edits[0], "typing must start with real text"
+    assert "…" not in bot.caption_edits[0]
 
 
 def test_caption_frames_never_split_emoji_or_html():
@@ -182,10 +182,14 @@ def test_photo_send_failure_returns_none():
     asyncio.run(run())
 
 
-def test_zeus_uses_loading_too():
+def test_zeus_uses_the_same_picture_then_text_flow():
+    """Zeus gets the same treatment: picture first, result typed under it."""
     content = _source()
-    assert "⚡ Гремит гром..." in content
-    assert "show_photo_with_typing(" in content
+    start = content.index('zeus_banner_url = get_banner_path("zeus")')
+    end = content.index("\ndef ", start)
+    zeus = content[start:end]
+    assert "show_photo_with_typing(" in zeus
+    assert "label=" not in zeus
 
 
 # --- finish_loading behaviour -------------------------------------------------

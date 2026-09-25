@@ -163,14 +163,12 @@ async def show_photo_with_typing(
     caption: str,
     parse_mode: str = "HTML",
     reply_markup=None,
-    label: str = "",
 ):
     """Post the picture first, then type the caption underneath it.
 
     The roll used to appear as a picture with its full caption at once. Here
-    the picture shows up right away and the caption is typed out character by
-    character, so the result reads as it is being written. A non-empty `label`
-    is the caption until typing starts.
+    the picture shows up right away with no caption of its own, and the result
+    is typed out underneath it, so it reads as it is being written.
 
     The typing runs as a background task and this function returns as soon as
     the picture is posted. That matters for the roll: it still has to write the
@@ -179,12 +177,10 @@ async def show_photo_with_typing(
 
     Returns the Message, or None when the picture could not be sent.
     """
-    first = f"<b>{label}</b>" if label else "…"
     try:
         msg = await bot.send_photo(
             chat_id=chat_id,
             photo=media,
-            caption=first,
             parse_mode=parse_mode,
             reply_markup=reply_markup,
         )
