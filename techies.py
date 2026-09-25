@@ -64,12 +64,20 @@ def _session_key(chat_id: int, user_id: int) -> str:
 
 def _build_techies_keyboard(user_id: int, explosive_button: str, start_time: float) -> InlineKeyboardMarkup:
     ts = int(start_time * 1000)
+    styles = {
+        "green": "success",
+        "red": "danger",
+        "yellow": "primary",
+    }
     row = []
     for emoji, value in BUTTONS:
+        style = styles.get(value)
+        kwargs = {"api_kwargs": {"style": style}} if style else {}
         row.append(
             InlineKeyboardButton(
                 emoji,
                 callback_data=f"techies_{value}_{user_id}_{explosive_button}_{ts}",
+                **kwargs,
             )
         )
     return InlineKeyboardMarkup([row])
@@ -384,7 +392,7 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
     reply_markup = None
     if button_pressed != explosive_button:
         reply_markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🎲 Ещё один ролл!", callback_data=f"techies_again_{user_id}")
+            InlineKeyboardButton("🎲 Ещё один ролл!", callback_data=f"techies_again_{user_id}", api_kwargs={"style": "success"})
         ]])
 
     await _send_techies_result(context.bot, query.message.chat_id, query.message.message_id, text, image_path=image_path, reply_markup=reply_markup)

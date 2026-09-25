@@ -419,7 +419,10 @@ async def morning_greeting_job(context):
 
         bot = context.application.bot
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("❤️", callback_data="greeting_good"), InlineKeyboardButton("💔", callback_data="greeting_bad")]
+            [
+                InlineKeyboardButton("❤️", callback_data="greeting_good", api_kwargs={"style": "success"}),
+                InlineKeyboardButton("💔", callback_data="greeting_bad", api_kwargs={"style": "danger"})
+            ]
         ])
         await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=keyboard, parse_mode="HTML")
 
@@ -457,7 +460,10 @@ async def night_greeting_job(context):
 
         bot = context.application.bot
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("❤️", callback_data="greeting_good"), InlineKeyboardButton("💔", callback_data="greeting_bad")]
+            [
+                InlineKeyboardButton("❤️", callback_data="greeting_good", api_kwargs={"style": "success"}),
+                InlineKeyboardButton("💔", callback_data="greeting_bad", api_kwargs={"style": "danger"})
+            ]
         ])
         await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=keyboard, parse_mode="HTML")
 
@@ -2279,8 +2285,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             try:
                 keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"❤️ {good_count}", callback_data="greeting_good"),
-                     InlineKeyboardButton(f"💔 {bad_count}", callback_data="greeting_bad")]
+                    [InlineKeyboardButton(f"❤️ {good_count}", callback_data="greeting_good", api_kwargs={"style": "success"}),
+                     InlineKeyboardButton(f"💔 {bad_count}", callback_data="greeting_bad", api_kwargs={"style": "danger"})]
                 ])
                 await context.bot.edit_message_reply_markup(
                     chat_id=chat_id,
@@ -4506,8 +4512,8 @@ async def _welcome_joined_member(chat_id: int, user_obj, context: ContextTypes.D
 
     phrase = random.choice(WELCOME_PHRASES)
     keyboard = [
-        [InlineKeyboardButton("🎲 Ролл Фиссуры", callback_data="roll_fissure")],
-        [InlineKeyboardButton("🔑 Привязать Аккаунт", callback_data="link")]
+        [InlineKeyboardButton("🎲 Ролл Фиссуры", callback_data="roll_fissure", api_kwargs={"style": "primary"})],
+        [InlineKeyboardButton("🔑 Привязать Аккаунт", callback_data="link", api_kwargs={"style": "success"})]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 

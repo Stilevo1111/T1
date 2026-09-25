@@ -161,11 +161,21 @@ def clickable_name(username, telegram_id=None, steam_id=None):
 
 
 def main_menu():
-    """Return main menu reply markup"""
+    """Return main menu reply markup with styled buttons"""
+    from telegram import KeyboardButton
     keyboard = [
-        ["🎲 Ролл Фиссуры", "👤 Профиль"],
-        ["🏆 Топ Фиссур", "🏆 Топ MMR"],
-        ["🔎 Аналитика", "🔑 Привязать Аккаунт"]
+        [
+            KeyboardButton("🎲 Ролл Фиссуры", api_kwargs={"style": "primary"}),
+            KeyboardButton("👤 Профиль", api_kwargs={"style": "primary"}),
+        ],
+        [
+            KeyboardButton("🏆 Топ Фиссур", api_kwargs={"style": "success"}),
+            KeyboardButton("🏆 Топ MMR", api_kwargs={"style": "success"}),
+        ],
+        [
+            KeyboardButton("🔎 Аналитика", api_kwargs={"style": "primary"}),
+            KeyboardButton("🔑 Привязать Аккаунт", api_kwargs={"style": "primary"}),
+        ]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -252,16 +262,19 @@ def _build_analytics_table_keyboard(pages, generated, active_idx=0):
     buttons = []
     for i in available:
         title = pages[i].get("title", f"Стр. {i+1}")
-        label = f"✅ {title}" if i == active_idx else title
-        buttons.append(InlineKeyboardButton(label, callback_data=f"analytics_table_{i}"))
+        is_active = (i == active_idx)
+        label = f"✅ {title}" if is_active else title
+        style = "primary" if is_active else None
+        kwargs = {"api_kwargs": {"style": style}} if style else {}
+        buttons.append(InlineKeyboardButton(label, callback_data=f"analytics_table_{i}", **kwargs))
     return InlineKeyboardMarkup([buttons])
 
 
 def _build_stats_button_keyboard():
     """Build inline keyboard for stats page"""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("Показатели", callback_data="analytics_show")],
-        [InlineKeyboardButton("Сравнение с Pro", callback_data="analytics_pro_compare")]
+        [InlineKeyboardButton("Показатели", callback_data="analytics_show", api_kwargs={"style": "primary"})],
+        [InlineKeyboardButton("Сравнение с Pro", callback_data="analytics_pro_compare", api_kwargs={"style": "primary"})]
     ])
 
 
