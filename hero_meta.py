@@ -727,7 +727,8 @@ def _get_hero_stats_from_db(days=7):
                 player_slot INTEGER,
                 radiant_win INTEGER,
                 start_time INTEGER,
-                steam_id BIGINT
+                steam_id BIGINT,
+                lane_role SMALLINT
             )
             """)
         try:
@@ -744,6 +745,15 @@ def _get_hero_stats_from_db(days=7):
                 """)
         except Exception as e:
             logger.warning(f"hero_meta migration warning: {e}")
+        try:
+            if scheme.startswith("sqlite"):
+                columns = {row[1] for row in cursor.execute("PRAGMA table_info(public_player_matches)").fetchall()}
+                if "lane_role" not in columns:
+                    cursor.execute("ALTER TABLE public_player_matches ADD COLUMN lane_role SMALLINT")
+            else:
+                cursor.execute("ALTER TABLE public_player_matches ADD COLUMN IF NOT EXISTS lane_role SMALLINT")
+        except Exception as e:
+            logger.warning("public_player_matches lane_role migration: %s", e)
     except Exception:
         pass
 
@@ -751,6 +761,7 @@ def _get_hero_stats_from_db(days=7):
         cursor.execute("""
             SELECT
                 hero_id,
+                COALESCE(lane_role, 0) AS lane_role,
                 COUNT(*) as pub_pick,
                 SUM(CASE
                     WHEN (radiant_win = 1 AND player_slot < 128) OR (radiant_win = 0 AND player_slot >= 128) THEN 1
@@ -758,12 +769,13 @@ def _get_hero_stats_from_db(days=7):
                 END) as pub_win
             FROM public_player_matches
             WHERE start_time >= %s AND steam_id IS NOT NULL
-            GROUP BY hero_id
+            GROUP BY hero_id, lane_role
         """, (week_ago,))
     else:
         cursor.execute("""
             SELECT
                 hero_id,
+                COALESCE(lane_role, 0) AS lane_role,
                 COUNT(*) as pub_pick,
                 SUM(CASE
                     WHEN (radiant_win = 1 AND player_slot < 128) OR (radiant_win = 0 AND player_slot >= 128) THEN 1
@@ -771,7 +783,7 @@ def _get_hero_stats_from_db(days=7):
                 END) as pub_win
             FROM public_player_matches
             WHERE start_time >= ? AND steam_id IS NOT NULL
-            GROUP BY hero_id
+            GROUP BY hero_id, lane_role
         """, (week_ago,))
 
     rows = cursor.fetchall()
@@ -783,18 +795,21 @@ def _get_hero_stats_from_db(days=7):
     hero_stats = []
     for row in rows:
         hero_id = row[0]
-        pub_pick = row[1] or 0
-        pub_win = row[2] or 0
+        lane_role = row[1] or 0
+        pub_pick = row[2] or 0
+        pub_win = row[3] or 0
         pub_win = int(pub_win) if pub_win else 0
         logger.info(f"_get_hero_stats_from_db: hero_id={hero_id}, pub_pick={pub_pick}, pub_win={pub_win}")
 
         hero_info = heroes_data.get(hero_id, {}) if heroes_data else {}
         hero_name = hero_info.get("name", f"Hero {hero_id}")
 
-        if hero_name and hero_name in hero_positions:
+        if lane_role in (1, 2, 3, 4, 5):
+            position = int(lane_role)
+        elif hero_name and hero_name in hero_positions:
             position = hero_positions[hero_name]
         else:
-            position = detect_hero_position({"roles": hero_info.get("roles", [])})
+            position = detect_hero_position({"roles": hero_info.get("roles", []), "localized_name": hero_name})
 
         winrate = pub_win / pub_pick if pub_pick > 0 else 0
         pub_losses = pub_pick - pub_win
@@ -802,6 +817,7 @@ def _get_hero_stats_from_db(days=7):
         hero_stats.append({
             "hero_id": hero_id,
             "position": position,
+            "lane_role": int(lane_role or 0),
             "pub_pick": pub_pick,
             "pub_win": pub_win,
             "pub_losses": pub_losses,

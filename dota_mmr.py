@@ -1815,7 +1815,8 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                             player_slot INTEGER,
                             radiant_win INTEGER,
                             start_time INTEGER,
-                            steam_id BIGINT
+                            steam_id BIGINT,
+                lane_role SMALLINT
                         )
                         """)
                     for match in matches:
@@ -1829,12 +1830,13 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
                         logger.info(f"topmmr: Hero meta saving - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win_int} (api_radiant_win={radiant_win_api}, player_slot={player_slot}), steam_id={steam_id}")
+                        lane_role = match.get("lane_role")
                         if match_id and hero_id is not None and player_slot is not None:
                             cursor.execute("""
-                                INSERT INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
-                                VALUES (%s, %s, %s, %s, %s, %s)
+                                INSERT INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id, lane_role)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
                                 ON CONFLICT DO NOTHING
-                            """, (match_id, hero_id, player_slot, radiant_win_int, start_time, steam_id))
+                            """, (match_id, hero_id, player_slot, radiant_win_int, start_time, steam_id, lane_role))
                 else:
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS public_player_matches (
@@ -1854,12 +1856,13 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         radiant_win_int = 1 if radiant_win_api else 0
                         start_time = match.get("start_time")
                         steam_id = user.get("steam_id")
-                        logger.info(f"topmmr: Hero meta saving (SQLite) - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win_int} (api_radiant_win={radiant_win_api}, player_slot={player_slot}), steam_id={steam_id}")
+                        lane_role = match.get("lane_role")
+                        logger.info(f"topmmr: Hero meta saving (SQLite) - match_id={match_id}, hero_id={hero_id}, lane_role={lane_role}, steam_id={steam_id}")
                         if match_id and hero_id is not None and player_slot is not None:
                             cursor.execute("""
-                                INSERT OR IGNORE INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id)
-                                VALUES (?, ?, ?, ?, ?, ?)
-                            """, (match_id, hero_id, player_slot, radiant_win_int, start_time, steam_id))
+                                INSERT OR IGNORE INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id, lane_role)
+                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """, (match_id, hero_id, player_slot, radiant_win_int, start_time, steam_id, lane_role))
                 conn.commit()
             except Exception as e:
                 logger.warning(f"Failed to save matches to public_player_matches: {e}")

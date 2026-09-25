@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 """
 Еженедельная аналитика игроков Dota 2.
@@ -687,103 +687,7 @@ async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
     return None
 
 
-def _mean_available(matches: list[dict[str, Any]], key: str) -> float | None:
-    """Average only values explicitly returned by OpenDota.
-
-    Zero is a valid value for some metrics, so presence is checked by key rather
-    than truthiness. Missing fields must never be replaced with fabricated data.
-    """
-    values = [
-        float(m[key])
-        for m in matches
-        if isinstance(m.get(key), (int, float)) and not isinstance(m.get(key), bool)
-    ]
-    return round(sum(values) / len(values), 1) if values else None
-
-
-def _data_quality(matches: list[dict[str, Any]]) -> dict[str, Any]:
-    """Describe how much of the report is based on real OpenDota fields."""
-    advanced_keys = ("gold_per_min", "xp_per_min", "last_hits", "hero_damage", "actions_per_min")
-    full = sum(
-        1
-        for match in matches
-        if all(isinstance(match.get(key), (int, float)) for key in advanced_keys)
-    )
-    core = sum(
-        1
-        for match in matches
-        if all(isinstance(match.get(key), (int, float)) for key in ("kills", "deaths", "assists"))
-        and isinstance(match.get("win"), bool)
-    )
-    total = len(matches)
-    ratio = (full / total) if total else 0
-    level = "высокая" if total >= 10 and ratio >= 0.8 else "средняя" if total >= 5 and ratio >= 0.5 else "низкая"
-    return {
-        "total_matches": total,
-        "full_matches": full,
-        "core_matches": core,
-        "confidence": level,
-    }
-
-
 def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
-    """Build transparent aggregate statistics from available OpenDota fields."""
-    quality = _data_quality(matches)
-    if not matches:
-        return {
-            "wr": None, "wins": 0, "losses": 0, "gpm": None, "xpm": None,
-            "lh": None, "deny": None, "stacks": None, "deaths": None,
-            "h_dmg": None, "t_dmg": None, "util": None, "apm": None,
-            "kda_number": None, "kda": "—", "data_quality": quality,
-        }
-
-    core = [m for m in matches if all(isinstance(m.get(k), (int, float)) for k in ("kills", "deaths", "assists"))]
-    n = len(core)
-    wins = sum(1 for m in matches if m.get("win") is True)
-    losses = sum(1 for m in matches if m.get("win") is False)
-    avg_kills = _mean_available(core, "kills") or 0.0
-    avg_deaths = _mean_available(core, "deaths") or 0.0
-    avg_assists = _mean_available(core, "assists") or 0.0
-    durations = [float(m["duration"]) for m in matches if isinstance(m.get("duration"), (int, float)) and m["duration"] > 0]
-    lh_per_10 = [
-        float(m["last_hits"]) / max(float(m.get("duration") or 0) / 600, 0.33)
-        for m in matches
-        if isinstance(m.get("last_hits"), (int, float)) and isinstance(m.get("duration"), (int, float))
-    ]
-    utility_values = []
-    for match in matches:
-        available = [match[k] for k in ("stuns", "hero_healing", "creeps_stacked", "observer_uses", "sentry_uses") if isinstance(match.get(k), (int, float))]
-        if available:
-            utility_values.append(float(match.get("stuns") or 0) * 0.3 + float(match.get("hero_healing") or 0) / 1000)
-
-    kda_number = (avg_kills + avg_assists) / max(avg_deaths, 1) if n else None
-    return {
-        "wr": round(wins / max(wins + losses, 1) * 100, 1) if wins + losses else None,
-        "wins": wins,
-        "losses": losses,
-        "gpm": _mean_available(matches, "gold_per_min"),
-        "xpm": _mean_available(matches, "xp_per_min"),
-        "lh": round(sum(lh_per_10) / len(lh_per_10), 1) if lh_per_10 else None,
-        "deny": _mean_available(matches, "denies"),
-        "stacks": _mean_available(matches, "creeps_stacked"),
-        "deaths": _mean_available(core, "deaths"),
-        "h_dmg": round(_mean_available(matches, "hero_damage") / 1000, 1) if _mean_available(matches, "hero_damage") is not None else None,
-        "t_dmg": round(_mean_available(matches, "tower_damage") / 1000, 1) if _mean_available(matches, "tower_damage") is not None else None,
-        "util": round(sum(utility_values) / len(utility_values), 1) if utility_values else None,
-        "apm": _mean_available(matches, "actions_per_min"),
-        "kills": round(avg_kills, 1) if n else None,
-        "assists": round(avg_assists, 1) if n else None,
-        "duration": round(sum(durations) / len(durations) / 60, 1) if durations else None,
-        "kda_number": round(kda_number, 2) if kda_number is not None else None,
-        "kda": f"{avg_kills:.1f}/{avg_deaths:.1f}/{avg_assists:.1f}" if n else "—",
-        "data_quality": quality,
-    }
-
-
-def _legacy_calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
-    """Old body retained below during transition; use the transparent version above."""
-    if not matches:
-        return {"wr": 50.0, "gpm": 400, "xpm": 500, "lh": 0, "deny": 0, "stacks": 0, "deaths": 5.0, "h_dmg": 10.0, "t_dmg": 2.0, "util": 8.0, "apm": 250, "kda": "3/4/8"}
     """Посчитать агрегированную статистику игрока (KDA, импакт, винрейт) по списку матчей."""
 
 
@@ -939,16 +843,24 @@ async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> l
                         player_stats = p
                         break
 
-            # Preserve explicit API values. Missing optional fields stay missing
-            # and are rendered as Н/Д instead of fabricated zeroes/estimates.
-            for field in (
-                "kills", "deaths", "assists", "gold_per_min", "xp_per_min",
-                "last_hits", "gold", "gold_spent", "hero_damage", "tower_damage",
-                "denies", "actions_per_min", "stuns", "hero_healing",
-                "creeps_stacked", "observer_uses", "sentry_uses",
-            ):
-                if field in player_stats:
-                    m[field] = player_stats[field]
+            # Enrich the match data
+            m["kills"] = player_stats.get("kills", m.get("kills", 0))
+            m["deaths"] = player_stats.get("deaths", m.get("deaths", 0))
+            m["assists"] = player_stats.get("assists", m.get("assists", 0))
+            m["gold_per_min"] = player_stats.get("gold_per_min", 0)
+            m["xp_per_min"] = player_stats.get("xp_per_min", 0)
+            m["last_hits"] = player_stats.get("last_hits", 0)
+            m["gold"] = player_stats.get("gold", 0)
+            m["gold_spent"] = player_stats.get("gold_spent", 0)
+            m["hero_damage"] = player_stats.get("hero_damage", 0)
+            m["tower_damage"] = player_stats.get("tower_damage", 0)
+            m["denies"] = player_stats.get("denies", 0)
+            m["actions_per_min"] = player_stats.get("actions_per_min", 0)
+            m["stuns"] = player_stats.get("stuns", 0.0) if isinstance(player_stats.get("stuns"), (int, float)) else 0
+            m["hero_healing"] = player_stats.get("hero_healing", 0)
+            m["creeps_stacked"] = player_stats.get("creeps_stacked", 0)
+            m["observer_uses"] = player_stats.get("observer_uses", 0)
+            m["sentry_uses"] = player_stats.get("sentry_uses", 0)
         except Exception as e:
             logger.debug(f"Failed to fetch match {match_id}: {e}")
         return m
@@ -1021,14 +933,14 @@ async def get_last_matches(telegram_id: int, limit: int = 10) -> list[dict[str, 
             "kills": kills,
             "deaths": deaths,
             "assists": assists,
-            "gold_per_min": None,
+            "gold_per_min": 0,
             "duration": duration,
-            "gold": None,
-            "gold_spent": None,
-            "xp_per_min": None,
-            "last_hits": None,
-            "hero_damage": None,
-            "tower_damage": None,
+            "gold": 0,
+            "gold_spent": 0,
+            "xp_per_min": 0,
+            "last_hits": 0,
+            "hero_damage": 0,
+            "tower_damage": 0,
             "lane_role": 0,
             "start_time": m.get("start_time", 0),
             "win": is_win,
@@ -1050,51 +962,71 @@ async def get_last_matches(telegram_id: int, limit: int = 10) -> list[dict[str, 
 # =========================================================
 
 def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, Any]:
-    """Generate transparent facts, observations and recommendations for Telegram."""
-    quality = user_stats.get("data_quality") or {}
-    total = quality.get("total_matches", 0)
-    full = quality.get("full_matches", 0)
-    confidence = quality.get("confidence", "низкая")
+    """Генерация текстовых таблиц — мобильная совместимая версия (<pre> для Telegram)"""
+    db = PRO_DB.get(role, PRO_DB["CARRY"])
 
-    def value(key: str, suffix: str = "") -> str:
-        val = user_stats.get(key)
-        return f"{val:g}{suffix}" if isinstance(val, (int, float)) else "Н/Д"
+    def _clean_name(name: str) -> str:
+        """Убрать название команды в скобках: 'Yatoro (Spirit)' -> 'Yatoro'"""
+        return name.split(" (")[0]
 
-    facts = (
-        f"<b>📊 Разбор последних матчей</b>\n"
-        f"Период: {total} матчей • достоверность: <b>{confidence}</b>\n\n"
-        f"<pre>W/L      {user_stats.get('wins', 0)}/{user_stats.get('losses', 0)}\n"
-        f"Winrate   {value('wr', '%')}\n"
-        f"KDA       {user_stats.get('kda', '—')}\n"
-        f"GPM       {value('gpm')}\n"
-        f"XPM       {value('xpm')}\n"
-        f"LH/10min  {value('lh')}\n"
-        f"Средняя   {value('duration')} мин</pre>"
-    )
+    def _square(better: bool | None) -> str:
+        """Зелёный квадратик если лучше про, красный если хуже, пусто если нет данных"""
+        if better is None:
+            return ""
+        return "🟢" if better else "🔴"
 
+    # Table 1: PRO comparison — <pre> with tight columns for mobile
+    t1 = "<pre>"
+    t1 += f"{'Player':<8} {'WR':>3} {'GPM':>4} {'KDA':>11}\n"
+    t1 += "────────────────────────\n"
+    for name, s in db["players"].items():
+        clean_name = _clean_name(name)[:8]
+        wr = f"{int(round(s['wr']))}%" if s.get('wr') is not None else "—"
+        gpm = f"{int(round(s['gpm']))}" if s.get('gpm') is not None else "—"
+        kda = s.get('kda', '—') or "—"
+        t1 += f"{clean_name:<8} {wr:>3} {gpm:>4} {kda:>11}\n"
+    t1 += "────────────────────────\n"
+    gpm_val = int(user_stats['gpm']) if user_stats.get('gpm', 0) > 0 else 0
+    wr_val = f"{int(round(user_stats['wr']))}%" if user_stats.get('wr') is not None else "—"
+    t1 += f"{'YOU':<8} {wr_val:>3} {gpm_val:>4} {user_stats['kda']:>11}\n"
+    t1 += "</pre>"
+
+    # Table 2: Detailed comparison — <pre> with squares, tight columns
+    t2 = "<pre>"
+    t2 += f"{'Metric':<8} {'You':>5} {'PRO':>5} {'±':>1}\n"
+    t2 += "────────────────────────\n"
+    bench = db["benchmarks"]
     metrics = [
-        ("Kills/матч", value("kills"), "Стабильность участия в убийствах"),
-        ("Deaths/матч", value("deaths"), "Снижение ранних смертей"),
-        ("Hero DMG", f"{value('h_dmg')}k", "Урон по героям"),
-        ("Tower DMG", f"{value('t_dmg')}k", "Воздействие на объекты"),
-        ("APM", value("apm"), "Темп действий — только реальные OpenDota-данные"),
+        ("LH@10", user_stats.get('lh', 0), bench.get('lh'), False),
+        ("Denies", user_stats.get('deny', 0), bench.get('deny'), False),
+        ("GPM", user_stats.get('gpm', 0), bench.get('gpm'), False),
+        ("XPM", user_stats.get('xpm', 0), bench.get('xpm'), False),
+        ("Deaths", user_stats.get('deaths', 0), bench.get('deaths'), True),
+        ("H DMG", user_stats.get('h_dmg', 0), bench.get('h_dmg'), False),
+        ("T DMG", user_stats.get('t_dmg', 0), bench.get('t_dmg'), False),
+        ("Stacks", user_stats.get('stacks', 0), bench.get('stacks'), False),
+        ("Util", user_stats.get('util', 0), bench.get('utility'), False),
+        ("APM", user_stats.get('apm', 0), bench.get('apm'), False),
     ]
-    rows = "\n".join(f"• {name}: <b>{metric}</b> — {hint}" for name, metric, hint in metrics)
-    detailed = (
-        "<b>🔎 Что в данных</b>\n"
-        f"Полные матчи: {full} из {total}\n\n"
-        f"{rows}\n\n"
-        "<i>Отсутствующие поля не заменяются предположительными значениями.</i>"
-    )
+    for label, u, p, lower_is_better in metrics:
+        u_str = f"{u:.0f}" if isinstance(u, (int, float)) and u >= 100 else f"{u:.1f}" if isinstance(u, (int, float)) else "—"
+        p_str = f"{p:.0f}" if isinstance(p, (int, float)) and p >= 100 else f"{p:.1f}" if isinstance(p, (int, float)) else "—"
+        if not isinstance(p, (int, float)) or not isinstance(u, (int, float)):
+            square = ""
+        else:
+            diff = u - p
+            is_bad = diff > 0 if lower_is_better else diff < 0
+            square = _square(not is_bad)
+        t2 += f"{label:<8} {u_str:>5} {p_str:>5} {square}\n"
+    t2 += "</pre>"
 
-    benchmark = (
-        f"<b>⚠️ Ориентировочный бенчмарк: {role}</b>\n\n"
-        f"Направление сравнения использует опубликованный бенчмарк роли, "
-        "но это не рейтинг игрока и не официальная метрика Dota 2.\n\n"
-        "<i>Контекст матча, патч, состав команды и уровень соперников не учитываются полностью. "
-        "Используйте разбор как ориентир для самопроверки.</i>"
-    )
-    return {"pro": facts, "detailed": detailed, "benchmark": benchmark}
+    header = f"<b>📊 ANALYTICS ({role})</b>"
+    text = f"{header}\n\n{t1}"
+
+    header_detailed = "<b>📈 Подробное сравнение</b>"
+    text_detailed = f"{header_detailed}\n\n{t2}"
+
+    return {"pro": text, "detailed": text_detailed}
 
 
 def get_analytics_pages(role: str, stats: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1117,9 +1049,8 @@ def get_analytics_pages(role: str, stats: dict[str, Any]) -> list[dict[str, Any]
     detailed_text = tables["detailed"]
 
     return [
-        {"title": "📊 Разбор матчей", "text": pro_text},
-        {"title": "🔎 Что в данных", "text": detailed_text},
-        {"title": "⚠️ Ориентировочный бенчмарк", "text": tables["benchmark"]},
+        {"title": "🆚Сравнение с Pro", "text": pro_text},
+        {"title": "📊 Подробное сравнение", "text": detailed_text},
     ]
 
 
@@ -1375,11 +1306,7 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
                     "error": "opendota_rate_limit",
                     "message": "⚠️ OpenDota API временно недоступен. Вернётся, когда кто-то купит варды 👁️"
                 }
-    logger.info(
-        "generate_weekly_analytics: after details, GPM fields=%s/%s",
-        sum(isinstance(m.get("gold_per_min"), (int, float)) for m in matches),
-        len(matches),
-    )
+    logger.info(f"generate_weekly_analytics: after fetch_match_details, gpm={sum(m.get('gold_per_min', 0) for m in matches)}")
 
     # Matches are already sorted newest-first from API, keep this order
     # Role detection using OpenDota hero roles + match stats
@@ -1405,38 +1332,154 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
 
     for m in matches:
 
-        # Transparent history: never invent GPM, XPM, APM or impact.
-        gpm = m.get("gold_per_min")
-        xpm = m.get("xp_per_min")
-        hero_damage = m.get("hero_damage")
-        tower_damage = m.get("tower_damage")
-        duration = m.get("duration")
-        kills = m.get("kills")
-        deaths = m.get("deaths")
-        assists = m.get("assists")
-        complete = all(isinstance(value, (int, float)) for value in (gpm, xpm, duration, kills, deaths, assists))
-        imp = _calculate_imp(
-            float(gpm or 0),
-            ((float(kills or 0) + float(assists or 0)) / max(float(deaths or 0), 1)),
-            _calculate_utility(role, stuns=m.get("stuns", 0), heals=m.get("hero_healing", 0), stacks=m.get("creeps_stacked", 0), wards=m.get("observer_uses", 0) + m.get("sentry_uses", 0), observer_uses=m.get("observer_uses", 0), sentry_uses=m.get("sentry_uses", 0), hero_damage=hero_damage or 0, tower_damage=tower_damage or 0),
-            float(m.get("actions_per_min") or 0),
+        gpm = m.get("gold_per_min", 0)
+        xpm = m.get("xp_per_min", 0)
+        last_hits = m.get("last_hits", 0)
+        denies = m.get("denies", 0)
+        hero_damage = m.get("hero_damage", 0)
+        tower_damage = m.get("tower_damage", 0)
+        creeps_stacked = m.get("creeps_stacked", 0)
+        duration = m.get("duration", 600)
+        win = m.get("win", False)
+
+        if gpm == 0 and last_hits > 0:
+            gpm = last_hits * 60 / max(duration / 60, 1) if duration > 0 else 300
+        if xpm == 0:
+            xpm = gpm * 0.8
+
+        kills = m.get("kills", 0)
+        deaths = m.get("deaths", 0)
+        assists = m.get("assists", 0)
+
+        kda = (kills + assists) / max(deaths, 1)
+
+        utility = _calculate_utility(
             role,
-            win=m.get("win", False),
-            duration=duration or 0,
-        ) if complete else None
+            stuns=m.get("stuns", 0),
+            heals=m.get("hero_healing", 0),
+            stacks=creeps_stacked,
+            wards=m.get("observer_uses", 0) + m.get("sentry_uses", 0),
+            observer_uses=m.get("observer_uses", 0),
+            sentry_uses=m.get("sentry_uses", 0),
+            hero_damage=hero_damage,
+            tower_damage=tower_damage,
+        )
+
+        apm = m.get("actions_per_min", 0)
+        if apm == 0:
+            apm = 250
+
+        imp = _calculate_imp(
+            gpm,
+            kda,
+            utility,
+            apm,
+            role,
+            win=win,
+            duration=duration,
+        )
 
         game_history.append({
             "imp": imp,
             "hero_id": m.get("hero_id", 0),
-            "win": m.get("win", False),
+            "win": win,
             "imp_unavailable": imp is None,
         })
 
-        # Aggregates are computed centrally by calculate_player_stats(). Do not
-        # duplicate totals or replace missing OpenDota fields with estimates here.
+        total_gpm += gpm
+        total_kills += kills
+        total_deaths += deaths
+        total_assists += assists
+        total_lh += m.get("last_hits", 0)
+        # LH@10: normalize last_hits to 10 minutes (duration in seconds)
+        duration = m.get("duration", 600)
+        lh_per_10min = m.get("last_hits", 0) / max(duration / 600, 0.33) if duration > 0 else 0
+        total_lh_10min += lh_per_10min
+        total_apm += apm
+        total_denies += m.get("denies", 0)
+        total_stacks += m.get("creeps_stacked", 0)
+        total_xpm += m.get("xp_per_min", 0)
+
+        total_utility += utility
+
+        # Fallback for hero_damage from kills
+        h_dmg = m.get("hero_damage", 0)
+        if h_dmg == 0:
+            h_dmg = kills * 200  # ~200 damage per kill
+        total_h_dmg += h_dmg
+
+        # Fallback for tower_damage
+        t_dmg = m.get("tower_damage", 0)
+        if t_dmg == 0:
+            t_dmg = kills * 50  # rough estimate
+        total_t_dmg += t_dmg
+
+        if m.get("win", False):
+            total_wins += 1
+
+    logger.info(f"User {telegram_id} totals: gpm={total_gpm}, lh={total_lh}, denies={total_denies}, kills={total_kills}, deaths={total_deaths}, assists={total_assists}, wins={total_wins}, match_count={len(matches)}")
 
     match_count = len(matches)
-    user_stats = calculate_player_stats(matches) if match_count else calculate_player_stats([])
+
+    if match_count == 0:
+        user_stats = {
+            "wr": 0.0,
+            "lh": 0.0,
+            "deny": 0.0,
+            "stacks": 0.0,
+            "gpm": 0.0,
+            "xpm": 0.0,
+            "h_dmg": 0.0,
+            "t_dmg": 0.0,
+            "util": 0.0,
+            "apm": 0.0,
+            "deaths": 0.0,
+            "kda_number": 0.0,
+            "kda": "0.0/0.0/0.0"
+        }
+        tables = _generate_report_text(role, user_stats)
+        chart_image = await _create_visual_chart(game_history)
+        data = {
+            "image": chart_image,
+            "history": game_history,
+            "pro_text": tables["pro"],
+            "detailed_text": tables["detailed"],
+        }
+        data.update(user_stats)
+        return data
+
+    avg_gpm = total_gpm / match_count
+    avg_lh = total_lh_10min / match_count
+    avg_apm = total_apm / match_count
+    avg_denies = total_denies / match_count
+    avg_xpm = total_xpm / match_count
+    avg_stacks = total_stacks / match_count
+    avg_h_dmg = total_h_dmg / match_count / 1000
+    avg_t_dmg = total_t_dmg / match_count / 1000
+    avg_utility = total_utility / match_count
+    avg_deaths = total_deaths / match_count
+    avg_kills = total_kills / match_count
+    avg_assists = total_assists / match_count
+
+    wr = (total_wins / match_count) * 100
+
+    real_kda = (avg_kills + avg_assists) / max(avg_deaths, 1)
+
+    user_stats = {
+        "wr": round(wr, 1),
+        "lh": round(avg_lh, 1),
+        "deny": round(avg_denies, 1),
+        "stacks": round(avg_stacks, 1),
+        "gpm": round(avg_gpm, 1),
+        "xpm": round(avg_xpm, 1),
+        "h_dmg": round(avg_h_dmg, 1),
+        "t_dmg": round(avg_t_dmg, 1),
+        "util": round(avg_utility, 1),
+        "apm": round(avg_apm, 1),
+        "deaths": round(avg_deaths, 1),
+        "kda_number": round(real_kda, 2),
+        "kda": f"{round(avg_kills,1)}/{round(avg_deaths,1)}/{round(avg_assists,1)}"
+    }
 
     # Генерация таблиц
     tables = _generate_report_text(role, user_stats)
@@ -1482,46 +1525,308 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
 # =========================================================
 
 def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Image.Image) -> bytes | None:
-    """Render a restrained, modern Telegram analytics card without matplotlib."""
-    import io
-    from PIL import ImageDraw, ImageFont
+    """Sync matplotlib chart generation - runs in thread pool. All matplotlib ops here."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        from pathlib import Path
 
-    entries = [g for g in list(reversed(history))[:10] if isinstance(g.get("imp"), (int, float))]
-    if not entries:
+        import matplotlib.pyplot as plt
+        from matplotlib import font_manager, rcParams
+        from matplotlib import patheffects as pe
+        from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+
+        # Register and use local NotoSans font for Cyrillic support
+        font_path = Path(__file__).resolve().parent / "assets" / "fonts" / "NotoSans-Regular.ttf"
+        font_loaded = False
+        if font_path.exists():
+            try:
+                font_manager.fontManager.addfont(str(font_path))
+                rcParams['font.family'] = 'Noto Sans'
+                font_loaded = True
+            except Exception:
+                pass
+        if not font_loaded:
+            rcParams['font.family'] = 'DejaVu Sans'
+
+        rcParams['path.simplify'] = False
+        rcParams['lines.solid_capstyle'] = 'round'
+        rcParams['lines.solid_joinstyle'] = 'round'
+        rcParams['svg.image_inline'] = True
+
+        import io
+
+        import numpy as np
+        from PIL import Image
+
+    except ImportError:
         return None
-    values = [min(max(float(g["imp"]), 0), 2) for g in entries]
-    wins = sum(bool(g.get("win")) for g in entries)
-    canvas = bg.convert("RGBA").resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
-    overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0)); od = ImageDraw.Draw(overlay)
-    od.rounded_rectangle((28,24,1172,776), 34, fill=(8,11,22,225), outline=(255,255,255,28), width=2)
-    canvas = Image.alpha_composite(canvas, overlay); draw = ImageDraw.Draw(canvas, "RGBA")
-    fd = Path(__file__).resolve().parent / "assets" / "fonts"
-    def ft(size, bold=False):
-        p = fd / ("NotoSans-Bold.ttf" if bold else "NotoSans-Regular.ttf")
-        try: return ImageFont.truetype(str(p), size)
-        except OSError: return ImageFont.load_default()
-    draw.rounded_rectangle((58,52,230,104), 25, fill=(255,140,66,35), outline=(255,140,66,120), width=2)
-    draw.text((82,62), "РАЗБОР ИГРЫ", font=ft(23,True), fill="#f8fafc")
-    draw.text((60,132), "Ориентировочный индекс", font=ft(34,True), fill="#f8fafc")
-    draw.text((60,180), "по последним 10 матчам • не официальный Impact", font=ft(20), fill="#94a3b8")
-    avg=sum(values)/len(values); accent="#38d39f" if avg>=1 else "#fb923c"
-    trend="растёт" if len(values)>=3 and values[-1]>values[0] else "снижается" if len(values)>=3 and values[-1]<values[0] else "стабильно"
-    for box in ((58,230,390,326),(410,230,690,326),(710,230,1140,326)):
-        draw.rounded_rectangle(box,22,fill=(255,255,255,15),outline=(255,255,255,22),width=1)
-    draw.text((82,244),f"{avg:.2f}",font=ft(45,True),fill=accent); draw.text((190,258),"средний",font=ft(19),fill="#cbd5e1")
-    draw.text((435,246),f"{wins}W · {len(entries)-wins}L",font=ft(34,True),fill="#f8fafc")
-    draw.text((735,246),f"Динамика: {trend}",font=ft(24,True),fill="#cbd5e1")
-    left,right,top,bottom=105,1115,392,670
-    for val in (0,0.5,1,1.5,2):
-        y=bottom-(bottom-top)*val/2; draw.line((left,y,right,y),fill=(255,255,255,22),width=1)
-    draw.text((58,345),"ИНДЕКС",font=ft(17,True),fill="#64748b"); draw.text((58,658),"0.0",font=ft(16),fill="#64748b"); draw.text((58,384),"2.0",font=ft(16),fill="#64748b")
-    points=[(left+(right-left)*i/max(len(values)-1,1), bottom-(bottom-top)*v/2) for i,v in enumerate(values)]
-    if len(points)>1: draw.line(points,fill="#ff8c42",width=6,joint="curve")
-    for (x,y),item in zip(points,entries):
-        color="#2dd4bf" if item.get("win") else "#fb7185"; draw.ellipse((x-11,y-11,x+11,y+11),fill="#101827",outline=color,width=5)
-    draw.text((58,712),"СТАРЫЕ",font=ft(15,True),fill="#64748b"); draw.text((1010,712),"НОВЫЕ",font=ft(15,True),fill="#64748b")
-    draw.text((55,744),"Внутренний ориентир по доступным метрикам, не рейтинг качества игрока.",font=ft(16),fill="#718096")
-    buf=io.BytesIO(); canvas.convert("RGB").save(buf,format="PNG",optimize=True); return buf.getvalue()
+
+    DPI = 72
+
+    reversed_history = list(reversed(history))[:10]
+
+    # Skip entries where IMP could not be calculated due to missing
+    # TI 2026 benchmark — treating IMP=0 as a real result would mislead users.
+    available = [g for g in reversed_history if not g.get("imp_unavailable")]
+
+    raw_impacts = [
+        min(round(g["imp"], 2), 2.0)
+        for g in available
+    ]
+
+    wins = [g.get("win", True) for g in available]
+
+    if not raw_impacts:
+        return None
+
+    x = np.arange(1, len(raw_impacts) + 1)
+
+    avg = float(np.mean(raw_impacts))
+
+    if avg >= 1.05:
+        stroke_color = "#00cc55"
+    elif avg >= 0.75:
+        stroke_color = "#ccaa00"
+    else:
+        stroke_color = "#cc2f2f"
+
+    fig = plt.figure(
+        figsize=(WIDTH / DPI, HEIGHT / DPI),
+        dpi=DPI
+    )
+
+    ax = plt.axes([0, 0, 1, 1])
+
+    fig.patch.set_facecolor("#000000")
+
+    ax.imshow(
+        bg,
+        extent=[0, 11, 0, 2],
+        aspect='auto',
+        interpolation='bilinear',
+        alpha=1.0,
+        zorder=0
+    )
+
+    ax.set_xlim(0, 11)
+    ax.set_ylim(0, 2)
+
+    ax.axhline(
+        1.0,
+        linestyle=(0, (6, 6)),
+        color="#ffff00",
+        linewidth=2.5,
+        alpha=0.8,
+        zorder=2
+    )
+
+    ax.text(
+        len(raw_impacts) + 0.2,
+        1.0,
+        "1.00",
+        fontsize=14,
+        color="#ffff00",
+        ha="left",
+        va="center",
+        fontweight="bold",
+        zorder=3
+    )
+
+    ax.text(
+        len(raw_impacts) + 0.15,
+        1.15,
+        "PRO",
+        fontsize=14,
+        color="white",
+        alpha=0.8,
+        weight="bold",
+        va="center",
+        zorder=3
+    )
+
+    if len(raw_impacts) >= 3:
+        x = np.arange(1, len(raw_impacts) + 1)
+        trend_x = np.linspace(1, len(raw_impacts), 100)
+        trend_coef = np.polyfit(x, raw_impacts, 1)
+        trend_y = np.clip(trend_coef[0] * trend_x + trend_coef[1], 0, 2)
+
+        ax.plot(
+            trend_x,
+            trend_y,
+            color="#ffffff",
+            linewidth=3,
+            linestyle="--",
+            alpha=0.5,
+            zorder=4
+        )
+
+    # Smooth cubic spline through the data points with glow/shadow
+    x = np.arange(1, len(raw_impacts) + 1)
+    if len(x) >= 4:
+        from scipy.interpolate import CubicSpline
+        try:
+            cs = CubicSpline(x, raw_impacts, bc_type="natural")
+            spline_x = np.linspace(1, len(raw_impacts), 400)
+            spline_y = np.clip(cs(spline_x), 0, 2)
+            line = ax.plot(
+                spline_x,
+                spline_y,
+                color="#f4c430",
+                linewidth=10,
+                solid_capstyle='round',
+                solid_joinstyle='round',
+                antialiased=True,
+                zorder=5
+            )[0]
+            line.set_path_effects([
+                pe.Stroke(
+                    linewidth=16,
+                    foreground=stroke_color,
+                    alpha=0.35
+                ),
+                pe.Normal()
+            ])
+        except Exception:
+            line = ax.plot(
+                x,
+                raw_impacts,
+                color="#f4c430",
+                linewidth=10,
+                solid_capstyle='round',
+                solid_joinstyle='round',
+                antialiased=True,
+                zorder=5
+            )[0]
+            line.set_path_effects([
+                pe.Stroke(
+                    linewidth=16,
+                    foreground=stroke_color,
+                    alpha=0.35
+                ),
+                pe.Normal()
+            ])
+    else:
+        line = ax.plot(
+            x,
+            raw_impacts,
+            color="#f4c430",
+            linewidth=10,
+            solid_capstyle='round',
+            solid_joinstyle='round',
+            antialiased=True,
+            zorder=5
+        )[0]
+        line.set_path_effects([
+            pe.Stroke(
+                linewidth=16,
+                foreground=stroke_color,
+                alpha=0.35
+            ),
+            pe.Normal()
+        ])
+
+    for idx, g in enumerate(available):
+        hero_id = g["hero_id"]
+        hero_img = hero_icon_map.get(hero_id)
+
+        if not hero_img:
+            continue
+
+        imp = raw_impacts[idx]
+        win = g.get("win", True)
+        border = "#00ff66" if win else "#ff3b3b"
+        glow = "#00ff66" if win else "#ff3b3b"
+
+        hero_img = hero_img.resize(
+            (82, 82),
+            Image.LANCZOS
+        )
+
+        imagebox = OffsetImage(
+            hero_img,
+            zoom=0.65
+        )
+
+        # Hero icon sits ON the spline line (zorder 9), with glow underneath (zorder 8)
+        # Center of the icon is placed exactly on the data point (imp), not below it.
+        ab = AnnotationBbox(
+            imagebox,
+            (idx + 1, imp),
+            frameon=True,
+            bboxprops=dict(
+                edgecolor=border,
+                linewidth=8,
+                boxstyle="circle,pad=0.15",
+                facecolor="none",
+                alpha=1.0,
+                joinstyle="round"
+            ),
+            zorder=9
+        )
+
+        ax.add_artist(ab)
+
+        ax.scatter(
+            idx + 1,
+            imp,
+            s=1500,
+            color=glow,
+            alpha=0.18,
+            zorder=8
+        )
+
+    ax.set_xlim(0, 11)
+    ax.set_ylim(0, 2)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(
+        [str(i) for i in x],
+        fontsize=22,
+        color="white",
+        weight="bold"
+    )
+
+    ax.set_yticks([
+        0,
+        0.5,
+        1.0,
+        1.5,
+        2.0
+    ])
+
+    ax.set_yticklabels(
+        ["0", "0.5", "1.0", "1.5", "2.0"],
+        fontsize=18,
+        color="white"
+    )
+
+    ax.grid(
+        axis="y",
+        color="white",
+        alpha=0.08,
+        linewidth=1
+    )
+
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    buf = io.BytesIO()
+
+    plt.savefig(
+        buf,
+        format="png",
+        dpi=DPI,
+        facecolor=fig.get_facecolor(),
+        bbox_inches=None,
+        pad_inches=0,
+        pil_kwargs={'quality': 100}
+    )
+
+    plt.close('all')
+    buf.seek(0)
+
+    return buf.getvalue()
 
 
 async def _create_visual_chart(history: list[dict]) -> bytes | None:
