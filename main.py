@@ -33,6 +33,7 @@ from telegram.ext import (
 from telegram.request import HTTPXRequest
 
 from chat_wordcloud.handler import story_command
+from loading_flow import show_loading, stop_loading, stop_loading_by_id
 from database import (
     DATABASE_URL,
     Database,
@@ -589,12 +590,9 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             context.user_data['analytics_chart_msg_id'] = None
 
         # Send loading message and start animation
+        loading_msg = None
         try:
-            loading_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text="<b>🪝Хукаю график...</b>",
-                parse_mode="HTML"
-            )
+            loading_msg = await show_loading(context.bot, chat_id, "Хукаю график...")
             logger.info(f"Created loading message in analyze: chat_id={chat_id}, msg_id={loading_msg.message_id if loading_msg else None}")
         except Exception as e:
             logger.debug(f"Could not send loading message: {e}")
@@ -613,6 +611,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 if chart_data:
                     if isinstance(chart_data, dict) and chart_data.get("error") in ("opendota_rate_limit", "no_steam_linked"):
                         if loading_msg:
+                            await stop_loading(loading_msg)
                             try:
                                 await context.bot.edit_message_text(
                                     chat_id=chat_id,
@@ -687,6 +686,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     if loading_msg:
                         _loading_msg_id = loading_msg.message_id
                         loading_msg = None  # Stop animation
+                        await stop_loading_by_id(context.bot, chat_id, _loading_msg_id)
                         try:
                             await context.bot.delete_message(chat_id, _loading_msg_id)
                         except Exception:
@@ -724,6 +724,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             except Exception as e:
                 logger.error(f"Error in background analytics generation: {e}")
                 err_msg_id = loading_msg.message_id if loading_msg else None
+                await stop_loading(loading_msg)
                 loading_msg = None
                 try:
                     await context.bot.edit_message_text(
@@ -1831,11 +1832,7 @@ async def _send_profile_card(update: Update, user_id: int, context: ContextTypes
 
     loading_msg = None
     try:
-        loading_msg = await context.bot.send_message(
-            chat_id=chat_id,
-            text="<b>🪝Хукаю...</b>",
-            parse_mode="HTML"
-        )
+        loading_msg = await show_loading(context.bot, chat_id)
     except Exception as e:
         logger.debug(f"Could not send loading message in start: {e}")
 
@@ -1901,6 +1898,7 @@ async def _send_profile_card(update: Update, user_id: int, context: ContextTypes
         await menu_handler(update, context)
 
     if loading_msg:
+        await stop_loading(loading_msg)
         try:
             await context.bot.delete_message(chat_id, loading_msg.message_id)
         except Exception:
@@ -2008,7 +2006,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Handle analytics_show separately with loading indicator (as chat message)
     if data == "analytics_show":
         await callback_query.answer()
-        loading_msg = await context.bot.send_message(chat_id=chat_id, text="<b>🪝Хукаю аналитику...</b>", parse_mode="HTML")
+        # Pages are generated lazily: the loading message is only useful while
+        # the page is actually being computed. An already generated page just
+        # edits the existing table, and a spinner there would only flicker.
+        loading_msg = None
+        if _analytics_page_needs_generation(context, 0):
+            loading_msg = await show_loading(context.bot, chat_id, "Хукаю аналитику...")
 
         try:
             await _show_analytics_page(callback_query, 0, context, loading_msg=loading_msg)
@@ -2016,6 +2019,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             logger.error(f"Error in button_callback: {e}", exc_info=True)
             if loading_msg:
                 msg_id = loading_msg.message_id if loading_msg else None
+                await stop_loading(loading_msg)
                 loading_msg = None
                 if msg_id:
                     try:
@@ -2051,7 +2055,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Handle pro compare button from chart
     if data == "analytics_pro_compare":
         await callback_query.answer()
-        loading_msg = await context.bot.send_message(chat_id=chat_id, text="<b>🪝Хукаю сравнение с Pro...</b>", parse_mode="HTML")
+        # Same rule as above: spinner only while the page is being generated.
+        loading_msg = None
+        if _analytics_page_needs_generation(context, 0):
+            loading_msg = await show_loading(context.bot, chat_id, "Хукаю сравнение с Pro...")
         try:
             await _show_analytics_page(callback_query, 0, context, loading_msg=loading_msg)
         except Exception as e:
@@ -2304,6 +2311,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await callback_query.answer(text="Ошибка при обработке кнопки", show_alert=True)
 
 
+def _analytics_page_needs_generation(context, page_idx: int) -> bool:
+    """True when opening the page will actually compute something.
+
+    Mirrors the lazy-loading rule in _show_analytics_page: a page is generated
+    on first open only. Switching between already generated pages is an instant
+    message edit, so it must not show a loading indicator.
+    """
+    generated = context.user_data.get('analytics_generated', set())
+    pages = context.user_data.get('analytics_pages', [])
+    if pages == [None, None] or len(pages) == 0:
+        return True
+    if page_idx not in generated:
+        return True
+    return not pages[page_idx]
+
+
 async def _show_analytics_page(callback_query, page_idx: int, context: ContextTypes.DEFAULT_TYPE, loading_msg=None) -> None:
     """Send a new message with analytics table when button is pressed.
     
@@ -2356,6 +2379,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
             await callback_query.answer(text="❌ Нет данных матчей для аналитики", show_alert=True)
             if loading_msg:
                 msg_id = loading_msg.message_id
+                await stop_loading(loading_msg)
                 loading_msg = None  # Stop animation
                 try:
                     await context.bot.delete_message(chat_id, msg_id)
@@ -2397,6 +2421,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
             await callback_query.answer(text="❌ Ошибка анализа статистики", show_alert=True)
             if loading_msg:
                 msg_id = loading_msg.message_id
+                await stop_loading(loading_msg)
                 loading_msg = None  # Stop animation
                 try:
                     await context.bot.delete_message(chat_id, msg_id)
@@ -2412,6 +2437,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
             await callback_query.answer(text=f"Ошибка: {e}", show_alert=True)
             if loading_msg:
                 msg_id = loading_msg.message_id
+                await stop_loading(loading_msg)
                 loading_msg = None  # Stop animation
                 try:
                     await context.bot.delete_message(chat_id, msg_id)
@@ -2448,6 +2474,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
                 )
                 if loading_msg:
                     _loading_msg_id = loading_msg.message_id
+                    await stop_loading(loading_msg)
                     loading_msg = None  # Stop animation
                     try:
                         await context.bot.delete_message(chat_id, _loading_msg_id)
@@ -2489,6 +2516,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
         if loading_msg:
             # Edit the loading message with the analytics table content
             msg_id = loading_msg.message_id
+            await stop_loading(loading_msg)
             loading_msg = None  # Stop animation
             try:
                 await context.bot.edit_message_text(
@@ -2525,6 +2553,7 @@ async def _show_analytics_page(callback_query, page_idx: int, context: ContextTy
 
         # Send a NEW message with the analytics table (first click or previous was deleted)
         if loading_msg:
+            await stop_loading(loading_msg)
             try:
                 await context.bot.delete_message(chat_id, loading_msg.message_id)
             except Exception:
@@ -2795,11 +2824,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user_id = target_user.get("telegram_id") or update.effective_user.id
         try:
-            loading_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text="<b>🪝Хукаю...</b>",
-                parse_mode="HTML"
-            )
+            loading_msg = await show_loading(context.bot, chat_id)
         except Exception as e:
             logger.debug(f"Could not send loading message: {e}")
 
@@ -2839,6 +2864,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"stats: profile card sent uid={target_user.get('telegram_id')} week_games={week_games} week_wins={week_wins} msg_id={result_msg.message_id}")
 
         if loading_msg:
+            await stop_loading(loading_msg)
             try:
                 await context.bot.delete_message(chat_id, loading_msg.message_id)
             except Exception:
@@ -2863,6 +2889,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in stats: {e}\n{traceback.format_exc()}")
         if loading_msg:
+            await stop_loading(loading_msg)
             try:
                 await context.bot.delete_message(chat_id, loading_msg.message_id)
             except Exception:
@@ -3627,10 +3654,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Если есть аргумент - привязываем в фоне, чтобы не блокировать event loop
     if identifier:
         try:
-            loading_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text="🪝 Привязываю аккаунт Dota 2…"
-            )
+            loading_msg = await show_loading(context.bot, chat_id, "Привязываю аккаунт Dota 2…")
 
             from dota_mmr import register_steam
             result = await asyncio.to_thread(register_steam, update.effective_user.id, identifier)
@@ -3638,6 +3662,7 @@ async def link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             # Удалить loading сообщение
             try:
                 msg_id = loading_msg.message_id if loading_msg else None
+                await stop_loading(loading_msg)
                 loading_msg = None  # Stop animation
                 if msg_id:
                     await context.bot.delete_message(chat_id, msg_id)
