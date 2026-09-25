@@ -627,15 +627,32 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if isinstance(rank_result, dict)
                 else rank_result
             )
-            if live_rank is not None and 1 <= int(live_rank) <= 15:
-                from tags import refresh_fissure_top_tags
-                await refresh_fissure_top_tags(context.bot)
-                logger.info(
-                    f"Live Fissure tags refreshed after roll by user={user_obj.id} rank={live_rank}"
-                )
+            # Refresh both when entering top-15 and when a current holder falls
+            # out of it, otherwise a stale F1/F2/F3 would survive until the
+            # 30-minute reconciliation job.
+            try:
+                from database import get_config
+                current_holders = {
+                    str(value) for value in (
+                        get_config('current_F1_telegram_id'),
+                        get_config('current_F2_telegram_id'),
+                        *filter(None, (get_config('current_F3_telegram_ids') or '').split(',')),
+                    ) if value
+                }
+                should_refresh = (
+                    live_rank is not None and 1 <= int(live_rank) <= 15
+                ) or str(user_obj.id) in current_holders
+                if should_refresh:
+                    from tags import refresh_fissure_top_tags
+                    await refresh_fissure_top_tags(context.bot)
+                    logger.info(
+                        f"Live Fissure tags refreshed after roll by user={user_obj.id} rank={live_rank}"
+                    )
+            except Exception as e:
+                # The 30-minute reconciler will retry if Telegram/DB is temporarily down.
+                logger.warning(f"Live Fissure tag refresh skipped after roll: {e}")
         except Exception as e:
-            # The 30-minute reconciler will retry if Telegram/DB is temporarily down.
-            logger.warning(f"Live Fissure tag refresh skipped after roll: {e}")
+            logger.warning(f"Live Fissure rank check failed after roll: {e}")
 
         # Мгновенный (дебаунснутый) апдейт закреплённого дайджеста сразу после ролла
         try:

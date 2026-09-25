@@ -146,12 +146,9 @@ async def add_user_tag(telegram_id: int, tag_type: str, bot=None, chat_id: int |
     _save_user_tags(telegram_id, current)
     logger.info(f"tag_manager: added tag {tag_type} to user {telegram_id}")
     if bot and chat_id:
-        applied = await _apply_best_tag(bot, telegram_id, chat_id)
-        if not applied:
-            # Do not persist a logical award that Telegram rejected.
-            current = [t for t in current if t != tag_type]
-            _save_user_tags(telegram_id, current)
-        return applied
+        # Logical award is already persisted. Telegram is a visual layer;
+        # an API/permission failure must not erase the award from the profile.
+        return await _apply_best_tag(bot, telegram_id, chat_id)
     return True
 
 
@@ -164,10 +161,10 @@ async def remove_user_tag(telegram_id: int, tag_type: str, bot=None, chat_id: in
     _save_user_tags(telegram_id, current)
     logger.info(f"tag_manager: removed tag {tag_type} from user {telegram_id}")
     if bot and chat_id:
-        applied = await _apply_best_tag(bot, telegram_id, chat_id)
-        if not applied:
-            _save_user_tags(telegram_id, previous)
-        return applied
+        # Keep the logical removal even if Telegram cannot be updated; the
+        # profile must never show an award that is no longer current.
+        await _apply_best_tag(bot, telegram_id, chat_id)
+        return True
     return True
 
 
@@ -203,6 +200,29 @@ def format_user_tags(telegram_id: int) -> str:
         label = TAG_DISPLAY.get(tag, TAG_TYPES.get(tag, tag))
         lines.append(f"• {label}")
     return "\n".join(lines)
+
+
+def _remove_profile_award(telegram_id: int, tag_type: str) -> bool:
+    """Remove a logical award without touching the user's Telegram title."""
+    current = get_user_tags(telegram_id)
+    if tag_type not in current:
+        return False
+    _save_user_tags(telegram_id, [tag for tag in current if tag != tag_type])
+    return True
+
+
+def _persist_profile_award(telegram_id: int, tag_type: str) -> bool:
+    """Save a logical award without touching Telegram chat tags.
+
+    Used for administrators: their Telegram custom title must remain
+    untouched, while the profile still needs the award.
+    """
+    current = get_user_tags(telegram_id)
+    if tag_type in current:
+        return True
+    current.append(tag_type)
+    _save_user_tags(telegram_id, current)
+    return True
 
 
 async def get_telegram_title(bot, telegram_id: int, chat_id: int) -> str:
@@ -261,6 +281,29 @@ async def _refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> N
     new_top1_tg = _tg(current_top1)
     new_top2_tg = _tg(current_top2)
     new_top3 = [_tg(u) for u in current_top3 if _tg(u)]
+
+    desired_fissure = {}
+    for telegram_id, tag_type in ((new_top1_tg, "F1"), (new_top2_tg, "F2"), *[(tg, "F3") for tg in new_top3]):
+        if telegram_id:
+            desired_fissure[int(telegram_id)] = tag_type
+
+    # Normalize every holder before assigning the new top. This removes stale
+    # F2/F3 left by a previous position, even for a user still in top-15.
+    for telegram_id in set(desired_fissure) | {
+        int(x) for x in (
+            get_config('current_F1_telegram_id'),
+            get_config('current_F2_telegram_id'),
+            *filter(None, (get_config('current_F3_telegram_ids') or '').split(',')),
+        ) if x
+    }:
+        is_admin = await _is_admin(bot, chat_id, telegram_id)
+        for tag_type in ("F1", "F2", "F3"):
+            if tag_type == desired_fissure.get(telegram_id):
+                continue
+            if is_admin:
+                _remove_profile_award(telegram_id, tag_type)
+            else:
+                await remove_user_tag(telegram_id, tag_type, bot=bot, chat_id=chat_id)
 
     stored_top1_tg = get_config('current_F1_telegram_id') or ""
     logger.info(f"tag_manager: stored_top1_tg={stored_top1_tg}, new_top1_tg={new_top1_tg}")
@@ -405,7 +448,26 @@ async def _refresh_fissure_top_tags(bot, chat_id: int, notify: bool = True) -> N
     # Update config with only successfully assigned F3 holders plus those already had tag and still in top
     retained = [tg for tg in stored_top3 if tg in new_top3]
     final_f3 = list(dict.fromkeys(retained + successful_f3))  # preserve order, unique
-    set_config('current_F3_telegram_ids', ','.join(str(x) for x in final_f3))
+    set_config('current_F3_telegram_ids', ','.join(str(x) for x in new_top3))
+    set_config('current_F1_telegram_id', str(new_top1_tg) if new_top1_tg else "")
+    set_config('current_F2_telegram_id', str(new_top2_tg) if new_top2_tg else "")
+
+    # Administrators keep their Telegram custom title untouched, but their
+    # logical Fissure awards must still be visible in the profile.
+    desired_fissure = {}
+    for telegram_id, tag_type in ((new_top1_tg, "F1"), (new_top2_tg, "F2"), *[(tg, "F3") for tg in new_top3]):
+        if telegram_id:
+            desired_fissure[int(telegram_id)] = tag_type
+    for telegram_id, tag_type in desired_fissure.items():
+        if await _is_admin(bot, chat_id, telegram_id):
+            _persist_profile_award(telegram_id, tag_type)
+    for stored_tg, tag_type in (
+        (get_config('current_F1_telegram_id'), "F1"),
+        (get_config('current_F2_telegram_id'), "F2"),
+        *[(x, "F3") for x in (get_config('current_F3_telegram_ids') or '').split(',') if x],
+    ):
+        if stored_tg and int(stored_tg) not in desired_fissure:
+            _remove_profile_award(int(stored_tg), tag_type)
 
 
 async def refresh_mmr_top_tags(bot, chat_id: int | None = None) -> None:
@@ -537,3 +599,27 @@ async def _refresh_mmr_top_tags(bot, chat_id: int) -> None:
                 logger.info(f"tag_manager: refresh_mmr_top_tags: re-applied missing weekly_top3 to {new_top3}")
     else:
         set_config('current_mmr_top3_telegram_id', str(new_top3) if new_top3 else "")
+
+    desired_mmr = {}
+    for telegram_id, tag_type in ((new_top1, "weekly_top1"), (new_top2, "weekly_top2"), (new_top3, "weekly_top3")):
+        if telegram_id:
+            desired_mmr[int(telegram_id)] = tag_type
+    for telegram_id, tag_type in desired_mmr.items():
+        if await _is_admin(telegram_id):
+            _persist_profile_award(telegram_id, tag_type)
+    old_mmr_holders = {
+        str(get_config(key) or '')
+        for key in (
+            'current_mmr_top1_telegram_id',
+            'current_mmr_top2_telegram_id',
+            'current_mmr_top3_telegram_id',
+        )
+    }
+    set_config('current_mmr_top1_telegram_id', str(new_top1) if new_top1 else "")
+    set_config('current_mmr_top2_telegram_id', str(new_top2) if new_top2 else "")
+    set_config('current_mmr_top3_telegram_id', str(new_top3) if new_top3 else "")
+    for stored_tg, tag_type in zip(
+        old_mmr_holders, ("weekly_top1", "weekly_top2", "weekly_top3"), strict=True
+    ):
+        if stored_tg and int(stored_tg) not in desired_mmr:
+            _remove_profile_award(int(stored_tg), tag_type)

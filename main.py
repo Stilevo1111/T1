@@ -2907,9 +2907,8 @@ def _build_profile_text(
 
     text += f"\n\n🍆 Фиссура: {target_user.get('fissure', 0):.1f} см\n🎲 Броски: {target_user.get('total_rolls', 0)} 🍀Стрик: {target_user.get('current_streak', 0)}/{target_user.get('best_streak', 0)}"
 
-    tags_text = format_user_tags(target_user.get('telegram_id'))
-    if tags_text:
-        text += f"\n\n🏷️ <b>Теги</b>\n{tags_text}"
+    if steam_id:
+        text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%"
 
     mvp_count = target_user.get('weekly_mvp') or 0
     top2_count = target_user.get('weekly_top2') or 0
@@ -2923,8 +2922,10 @@ def _build_profile_text(
         if top3_count:
             text += f"\n🥉 ТОП 3 ×<b>{top3_count}</b>"
 
-    if steam_id:
-        text += f"\n\n🎮 Dota за неделю:\n📊 {week_wins}W • {week_losses}L • WR {winrate}%"
+    # Keep tags as the final section of the text profile.
+    tags_text = format_user_tags(target_user.get('telegram_id'))
+    if tags_text:
+        text += f"\n\n🏷️ <b>Теги</b>\n{tags_text}"
 
     return text
 
@@ -3066,7 +3067,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         top_users, user_rank, user = await asyncio.gather(
-            asyncio.to_thread(get_fissure_top, 10),
+            asyncio.to_thread(get_fissure_top, 15),
             asyncio.to_thread(get_fissure_rank, update.effective_user.id),
             asyncio.to_thread(get_user, update.effective_user.id, update.effective_user.username),
         )
@@ -3420,7 +3421,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 lines.append(f"{medal} <b>{display_name}</b> - {rank_str}")
                 if week_games > 0:
                     wr = round((week_wins / week_games) * 100) if week_games > 0 else 0
-                    lines.append(f" └ {week_wins}W • {week_losses}L • WR {wr}%")
+                    lines.append(f" └ {week_wins}W • {week_losses}L • {wr}%")
                 else:
                     lines.append(" └ Нет игр за неделю")
 
@@ -3448,7 +3449,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 user_rank_str = rank_to_string(user_rank_tier)
                 user_display = clickable_name(user_username, user.get('telegram_id'), user.get('steam_id'))
                 top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}</b> - {user_rank_str}\n"
-                top_text += f" └ {user_week_wins}W • {user_week_losses}L • WR {user_wr}%"
+                top_text += f" └ {user_week_wins}W • {user_week_losses}L • {user_wr}%"
             elif user and user_week_games == 0:
                 user_rank_str = rank_to_string(user.get('rank_tier', 0))
                 user_display = clickable_name(user_username, user.get('telegram_id'), user.get('steam_id'))
@@ -3710,9 +3711,9 @@ async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="Использование: /tag <@username|telegram_id> <тип>\n"
-                 "Типы: weekly_mvp, weekly_top2, weekly_top3, F1, F2, F3, admin_custom, VIP\n"
-                 "Пример: /tag @user weekly_mvp\n"
-                 "VIP: добавляет в список VIP (требуется ручное подтверждение в Telegram)",
+                 "Типы: weekly_mvp, weekly_top1, weekly_top2, weekly_top3, F1, F2, F3, admin_custom, VIP\n"
+                 "Пример: /tag @user weekly_top1\n"
+                 "VIP: добавляет в список VIP и пытается назначить Telegram-тег",
             reply_markup=main_menu()
         )
         return
@@ -3748,17 +3749,24 @@ async def admin_tag(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if tag_type == "VIP":
         from database import add_vip_user
-        if await asyncio.to_thread(add_vip_user, target_id):
+        db_added = await asyncio.to_thread(add_vip_user, target_id)
+        tag_added = await add_user_tag(target_id, "VIP", bot=context.bot, chat_id=chat_id)
+        if db_added and tag_added:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"✅ Пользователь {target} добавлен в VIP список\n"
-                     f"⚠️ ВАЖНО: VIP тег нужно установить вручную в приложении Telegram",
+                text=f"✅ VIP тег выдан пользователю {target}\n🎉 Пользователь теперь имеет статус VIP",
+                reply_markup=main_menu()
+            )
+        elif db_added:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"✅ Пользователь {target} добавлен в VIP список\n⚠️ Telegram-тег не удалось применить",
                 reply_markup=main_menu()
             )
         else:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"❌ Ошибка при добавлении VIP для {target}",
+                text=f"❌ Ошибка при выдаче VIP для {target}",
                 reply_markup=main_menu()
             )
         return
@@ -3833,10 +3841,18 @@ async def admin_untag(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if tag_type == "VIP":
         from database import remove_vip_user
-        if await asyncio.to_thread(remove_vip_user, target_id):
+        list_removed = await asyncio.to_thread(remove_vip_user, target_id)
+        tag_removed = await remove_user_tag(target_id, "VIP", bot=context.bot, chat_id=chat_id)
+        if list_removed and tag_removed:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"✅ Пользователь {target} удалён из VIP списка",
+                text=f"✅ VIP снят с пользователя {target}",
+                reply_markup=main_menu()
+            )
+        elif list_removed or tag_removed:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"✅ VIP удалён из профиля/списка для {target}\n⚠️ Telegram-тег не удалось снять",
                 reply_markup=main_menu()
             )
         else:

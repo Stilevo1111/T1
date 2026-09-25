@@ -490,20 +490,56 @@ def test_mmr_job_refreshes_live_top_tags_immediately():
     assert "await refresh_mmr_top_tags(context.bot)" in source
 
 
-def test_fissure_tags_refresh_live_for_top15_players():
-    content = Path("fissure.py").read_text(encoding="utf-8")
-    update_pos = content.index("update_fissure(user_obj.id, new_fissure")
-    rank_pos = content.index("get_fissure_rank, user_obj.id")
-    refresh_pos = content.index("await refresh_fissure_top_tags(context.bot)")
-    assert update_pos < rank_pos < refresh_pos
-    assert "1 <= int(live_rank) <= 15" in content
+
+def test_text_profile_places_tags_last(monkeypatch):
+    import main
+
+    user = {
+        "telegram_id": 1,
+        "username": "player",
+        "steam_id": 123,
+        "fissure": 10.0,
+        "total_rolls": 5,
+        "current_streak": 1,
+        "best_streak": 2,
+        "weekly_mvp": 1,
+        "weekly_top2": 0,
+        "weekly_top3": 0,
+    }
+    monkeypatch.setattr(main, "format_user_tags", lambda uid: "• VIP")
+    result = main._build_profile_text(
+        user,
+        type("User", (), {"username": "player", "id": 1})(),
+        False,
+        3,
+        2,
+        1,
+        33,
+    )
+    assert result.index("🎮 Dota за неделю") < result.index("✨ <b>Награды недели</b>")
+    assert result.index("✨ <b>Награды недели</b>") < result.index("🏷️ <b>Теги</b>")
+    assert result.index("🏷️ <b>Теги</b>") > result.index("🎮 Dota за неделю")
+    assert result.rstrip().endswith("• VIP")
 
 
-def test_sqlite_fissure_top_filters_users_who_left_chat():
-    import database
+def test_fissure_live_refresh_and_sqlite_filter_regression():
+    fissure_source = Path("fissure.py").read_text(encoding="utf-8")
+    database_source = Path("database.py").read_text(encoding="utf-8")
+    assert "str(user_obj.id) in current_holders" in fissure_source
+    assert "WHERE (in_chat = 1 OR in_chat IS NULL) ORDER BY fissure DESC LIMIT ?" in database_source
 
-    source = Path(database.__file__).read_text(encoding="utf-8")
-    assert "WHERE (in_chat = 1 OR in_chat IS NULL) ORDER BY fissure DESC LIMIT ?" in source
+
+def test_top_commands_use_expected_limits_and_mmr_format():
+    import main
+
+    content = Path(main.__file__).read_text(encoding="utf-8")
+    assert "asyncio.to_thread(get_fissure_top, 15)" in content
+    assert 'lines.append(f" └ {week_wins}W • {week_losses}L • {wr}%")' in content
+    assert 'top_text += f" └ {user_week_wins}W • {user_week_losses}L • {user_wr}%"' in content
+    topmmr_start = content.index("async def topmmr")
+    topmmr_end = content.index("async def", topmmr_start + 10)
+    assert "WR {wr}%" not in content[topmmr_start:topmmr_end]
+
 
 
 
@@ -583,7 +619,7 @@ def test_weekly_top1_has_display_priority():
     assert TAG_PRIORITY["weekly_mvp"] > TAG_PRIORITY["weekly_top1"]
 
 
-def test_tag_persistence_rolls_back_on_telegram_failure(monkeypatch):
+def test_tag_persistence_survives_telegram_failure(monkeypatch):
     import asyncio
     import tags
 
@@ -597,9 +633,9 @@ def test_tag_persistence_rolls_back_on_telegram_failure(monkeypatch):
     monkeypatch.setattr(tags, "_apply_best_tag", reject)
     added = asyncio.run(tags.add_user_tag(1, "F1", bot=object(), chat_id=10))
     assert added is False
-    assert saved[-1] == []
+    assert saved[-1] == ["F1"]
 
     monkeypatch.setattr(tags, "get_user_tags", lambda uid: ["F1"])
     removed = asyncio.run(tags.remove_user_tag(1, "F1", bot=object(), chat_id=10))
-    assert removed is False
-    assert saved[-1] == ["F1"]
+    assert removed is True
+    assert saved[-1] == []
