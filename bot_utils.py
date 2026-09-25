@@ -242,26 +242,28 @@ def _build_analytics_keyboard(page_idx, total_pages, generated, page_titles=None
 
 
 def _build_analytics_table_keyboard(pages, generated):
-    """Кнопки переключения между таблицами аналитики (Pro / Подробное сравнение).
+    """Build clear analytics table switch buttons.
 
-    Используется под chart фото в /analyze: каждая кнопка редактирует caption
-    фото выбранной таблицей, без удаления самого графика.
+    ``generated`` means that a page is available, not that it is currently
+    selected. Therefore it must not be rendered as a checkmark on every
+    available page.  A single neutral dot marks the first available page only;
+    pagination callbacks still switch pages normally.
     """
     generated = generated or set()
-    any_page = any(p for p in pages if p)
-    if not any_page:
+    available = [i for i, page in enumerate(pages) if page]
+    if not available:
         return InlineKeyboardMarkup([[]])
 
+    first_available = available[0]
     buttons = []
     for i, page in enumerate(pages):
         if not page:
             continue
         title = page.get("title", f"Стр. {i+1}")
-        active = i in generated
-        label = f"✅ {title}" if active else title
+        # Keep buttons neutral: availability is not a status, and marking all
+        # generated pages with ✅ created two green checks at once.
+        label = ("• " if i == first_available else "") + title
         buttons.append(InlineKeyboardButton(label, callback_data=f"analytics_table_{i}"))
-    if not buttons:
-        return InlineKeyboardMarkup([[]])
     return InlineKeyboardMarkup([buttons])
 
 
