@@ -1523,6 +1523,31 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
 
     return data
 
+
+
+def _smooth_chart_curve(points: list[tuple[float, float]], samples: int = 80) -> list[tuple[float, float]]:
+    """Smooth the match trend without Matplotlib/SciPy."""
+    if len(points) < 2:
+        return points
+    result = []
+    for i in range(len(points) - 1):
+        p0, p1 = points[max(i - 1, 0)], points[i]
+        p2, p3 = points[i + 1], points[min(i + 2, len(points) - 1)]
+        c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
+        c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
+        lo, hi = min(p1[1], p2[1]), max(p1[1], p2[1])
+        c1 = (c1[0], max(lo, min(hi, c1[1])))
+        c2 = (c2[0], max(lo, min(hi, c2[1])))
+        for step in range(samples):
+            t = step / samples
+            q = 1 - t
+            result.append((
+                q**3*p1[0] + 3*q*q*t*c1[0] + 3*q*t*t*c2[0] + t**3*p2[0],
+                q**3*p1[1] + 3*q*q*t*c1[1] + 3*q*t*t*c2[1] + t**3*p2[1],
+            ))
+    result.append(points[-1])
+    return result
+
 # =========================================================
 # CHART (matplotlib runs in thread pool via asyncio.to_thread)
 # =========================================================
@@ -1584,7 +1609,12 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
     draw.text((58, 658), "0.0", font=font(16), fill="#64748b")
     points = [(left + (right - left) * i / max(len(values) - 1, 1), bottom - (bottom - top) * value / 2) for i, value in enumerate(values)]
     if len(points) > 1:
-        draw.line(points, fill="#FF7A00", width=7, joint="curve")
+        curve = _smooth_chart_curve(points)
+        curve_layer = Image.new("RGBA", (WIDTH * 2, HEIGHT * 2), (0, 0, 0, 0))
+        curve_draw = ImageDraw.Draw(curve_layer)
+        curve_draw.line([(x * 2, y * 2) for x, y in curve], fill="#FF7A00", width=14, joint="curve")
+        canvas = Image.alpha_composite(canvas.convert("RGBA"), curve_layer.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)).convert("RGB")
+        draw = ImageDraw.Draw(canvas, "RGBA")
     for (x, y), item in zip(points, entries):
         color = "#2dd4bf" if item.get("win") else "#fb7185"
         draw.ellipse((x - 10, y - 10, x + 10, y + 10), fill="#101827", outline=color, width=5)
