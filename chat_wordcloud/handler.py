@@ -161,30 +161,12 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         except Exception:
             pass
 
-        if messages_loaded is not None:
-            messages_text = f"📊 Сообщений: {messages_loaded}"
-        else:
-            messages_text = f"📊 Сообщений: до {WORDCLOUD_MESSAGE_LIMIT} (из кеша)"
-
-        # The image itself already shows the title, period, top words and
-        # frequency legend, so the caption stays short and complementary.
-        top_word = top_words[0][0]
-        top_count = top_words[0][1]
-
-        caption = (
-            f"☁️ <b>Облако слов чата</b>\n"
-            f"🗓 Период: {period_start.strftime('%d.%m.%Y')} — "
-            f"{period_end.strftime('%d.%m.%Y')}\n"
-            f"{messages_text} · уникальных слов: {unique_words or len(top_words)}\n"
-            f"🔥 Самое частое: <b>{top_word}</b> ({top_count})\n"
-            f"<i>Чем крупнее и «горячее» слово — тем чаще оно встречается</i>"
-        )
-
+        # The image is self-explanatory: it already shows the title, period,
+        # top words, message count and the frequency legend, so the photo is
+        # sent without a caption to avoid duplicating the same data in text.
         sent = await context.bot.send_photo(
             chat_id=chat_id,
             photo=png_bytes,
-            caption=caption,
-            parse_mode="HTML",
         )
         schedule_delete(context.bot, chat_id, sent.message_id, 30, context.job_queue)
     except Exception as e:
