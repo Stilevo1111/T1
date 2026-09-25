@@ -368,7 +368,7 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
             "💡 Угадал — хочешь сделать ещё один ролл? Нажми:"
         )
         if record_recent_fissure_roll:
-            record_recent_fissure_roll(user_id, username or str(user_id), 0, current_fissure, cascade=0)
+            record_recent_fissure_roll(user_id, username or str(user_id), 0, current_fissure, cascade=0, event_type="techies")
 
         # Начислить free_roll — бросок будет доступен даже после удаления сообщения
         try:
