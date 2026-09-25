@@ -4039,25 +4039,30 @@ async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db_added = add_vip_user(target_id)
 
     if added and db_added:
-        await context.bot.send_message(
+        reply = await context.bot.send_message(
             chat_id=chat_id,
             text=f"✅ VIP тег выдан пользователю {target}\n"
                  f"🎉 Пользователь теперь имеет статус VIP",
             reply_markup=main_menu()
         )
     elif db_added:
-        await context.bot.send_message(
+        reply = await context.bot.send_message(
             chat_id=chat_id,
             text=f"✅ VIP добавлен в список для {target}\n"
                  f"⚠️ Тег нужно установить вручную в Telegram",
             reply_markup=main_menu()
         )
     else:
-        await context.bot.send_message(
+        reply = await context.bot.send_message(
             chat_id=chat_id,
             text=f"❌ Ошибка при выдаче VIP для {target}",
             reply_markup=main_menu()
         )
+    try:
+        if await bot_can_delete(context.bot, chat_id):
+            await context.bot.delete_message(chat_id, reply.message_id)
+    except Exception as e:
+        logger.debug(f"Could not delete VIP command response uid={user_id}: {e}")
 
 
 async def reset_tags_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
