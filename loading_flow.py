@@ -4,6 +4,10 @@ A single message is sent, "types" the label, then keeps a spinner running while
 the real work happens. Callers later edit that same message into the result, so
 no extra chat messages are produced.
 
+For results that are pictures, `show_photo_with_typing` posts the picture
+first and types the caption underneath it in the background, so the caller can
+return immediately and finish its database work without waiting.
+
 Usage:
     handle = await show_loading(bot, chat_id)
     try:
@@ -13,7 +17,9 @@ Usage:
     await bot.edit_message_text(chat_id=chat_id, message_id=handle.message_id, ...)
 """
 import asyncio
+import html
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +52,7 @@ _GONE_MARKERS = (
 
 _active: dict = {}
 _chat_locks: dict = {}
+_typing_tasks: set = set()
 
 
 class Loading:
@@ -147,6 +154,138 @@ async def show_loading(
     handle = Loading(chat_id, msg.message_id, task)
     _active[(chat_id, msg.message_id)] = handle
     return handle
+
+
+async def show_photo_with_typing(
+    bot,
+    chat_id: int,
+    media,
+    caption: str,
+    parse_mode: str = "HTML",
+    reply_markup=None,
+    label: str = "",
+):
+    """Post the picture first, then type the caption underneath it.
+
+    The roll used to appear as a picture with its full caption at once. Here
+    the picture shows up right away and the caption is typed out character by
+    character, so the result reads as it is being written. A non-empty `label`
+    is the caption until typing starts.
+
+    The typing runs as a background task and this function returns as soon as
+    the picture is posted. That matters for the roll: it still has to write the
+    fissure to the database and set the cooldown, and those must not wait three
+    seconds for an animation - or be lost if the handler is cancelled.
+
+    Returns the Message, or None when the picture could not be sent.
+    """
+    first = f"<b>{label}</b>" if label else "…"
+    try:
+        msg = await bot.send_photo(
+            chat_id=chat_id,
+            photo=media,
+            caption=first,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
+    except Exception as e:
+        logger.debug(f"loading_flow: could not send picture: {e}")
+        return None
+
+    _spawn_typing(bot, chat_id, msg.message_id, caption, parse_mode)
+    return msg
+
+
+def _spawn_typing(bot, chat_id: int, message_id: int, caption: str, parse_mode: str):
+    """Run the caption animation in the background, keeping a strong reference.
+
+    asyncio only holds weak references to tasks, so without this a typing task
+    can be garbage collected mid-animation and the caption would stop halfway.
+    """
+    task = asyncio.create_task(_type_caption(bot, chat_id, message_id, caption, parse_mode))
+    _typing_tasks.add(task)
+    task.add_done_callback(_typing_tasks.discard)
+    return task
+
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _safe_end(text: str, end: int) -> int:
+    """Pull `end` back so a frame never ends on half of an emoji.
+
+    Python strings are code points, so slicing between the two halves of a
+    surrogate pair produces a lone surrogate that Telegram rejects outright.
+    """
+    if 0 < end < len(text) and "\ud800" <= text[end - 1] <= "\udbff":
+        return end - 1
+    return end
+
+
+def _plain_text(html_text: str) -> str:
+    """The visible words of an HTML caption, with entities resolved.
+
+    Intermediate frames are typed as plain text so a frame can never cut an
+    HTML tag in half. The last frame replaces them with the real caption, so
+    the user still ends up with the formatted version.
+    """
+    return html.unescape(_TAG_RE.sub("", html_text))
+
+
+async def _type_caption(
+    bot, chat_id: int, message_id: int, caption: str, parse_mode: str
+) -> None:
+    """Reveal the caption progressively under an already posted picture.
+
+    Characters are revealed in chunks at TYPE_INTERVAL, so a ~60 character roll
+    caption takes a few seconds to write out instead of appearing at once.
+    """
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    plain = _plain_text(caption)
+    chunk = _chunk_for(plain)
+    lock = _lock_for(chat_id)
+
+    async def put(text: str) -> bool:
+        """Edit the caption; False means the message is unusable."""
+        async with lock:
+            try:
+                await bot.edit_message_caption(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    caption=text,
+                    parse_mode=parse_mode,
+                )
+                return True
+            except Exception as e:
+                name = type(e).__name__
+                msg = str(e).lower()
+                if "not modified" in msg:
+                    return True
+                if any(marker in msg for marker in _GONE_MARKERS):
+                    logger.debug(
+                        f"loading_flow: caption target {message_id} is gone ({name})"
+                    )
+                    return False
+                logger.debug(f"loading_flow: caption edit failed ({name}: {e})")
+                return False
+
+    for end in range(chunk, len(plain), chunk):
+        if asyncio.current_task().cancelling():
+            return
+        if not await put(plain[:_safe_end(plain, end)]):
+            return
+        if loop.time() - started > MAX_EDIT_SECONDS:
+            # Out of time: put the whole formatted caption in place at once.
+            await put(caption)
+            return
+        await asyncio.sleep(TYPE_INTERVAL)
+
+    # Last frame is the real caption, so the result keeps its formatting.
+    if not await put(caption):
+        return
+    if loop.time() - started > MAX_EDIT_SECONDS:
+        logger.debug("loading_flow: caption typing hit the time limit")
 
 
 async def finish_loading(

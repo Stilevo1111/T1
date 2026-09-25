@@ -45,7 +45,7 @@ from database import (
     zeus_strike,
 )
 from digest import invalidate_digest_cache
-from loading_flow import delete_loading, finish_loading, show_loading
+from loading_flow import show_photo_with_typing
 from rate_limiter import is_rate_limited
 from rolls import (
     MULTICAST_TEXTS,
@@ -169,7 +169,7 @@ async def send_fissure_cooldown_response(bot, chat_id, user_id, text, banner_url
     await asyncio.sleep(0.1)
 
 
-async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now, ZEUS_TEXTS, main_menu, set_last_bot_message, schedule_delete, update_fissure, update_last_message_id, zeus_strike, record_recent_fissure_roll=None, loading=None):
+async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now, ZEUS_TEXTS, main_menu, set_last_bot_message, schedule_delete, update_fissure, update_last_message_id, zeus_strike, record_recent_fissure_roll=None):
     """
     Handles the Zeus strike event (no roll, dynamic % to all fissures).
     Logic and all messages are 100% preserved from the original.
@@ -203,13 +203,15 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
     )
 
     zeus_banner_url = get_banner_path("zeus")
-    result_msg = await finish_loading(
+    # Картинка появляется сразу, текст под ней печатается построчно.
+    result_msg = await show_photo_with_typing(
         bot,
-        loading,
-        text=text,
+        chat_id,
         media=zeus_banner_url,
+        caption=text,
         parse_mode="HTML",
         reply_markup=main_menu(),
+        label="⚡ Гремит гром...",
     )
     if result_msg is None:
         result_msg = await bot.send_photo(
@@ -341,7 +343,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if event_roll < zeus_chance:
             zeus_triggered = True
-            zeus_loading = await show_loading(context.bot, chat_id, "Гремит гром...")
             await handle_zeus_event(
                 context.bot,
                 chat_id,
@@ -356,8 +357,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update_fissure,
                 update_last_message_id,
                 zeus_strike,
-                record_recent_fissure_roll,
-                loading=zeus_loading
+                record_recent_fissure_roll
             )
             return
 
@@ -384,13 +384,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         base_roll_before_streak = None  # Сохраняем ролл ДО стрика для вывода
 
         is_multicast = event_roll < zeus_chance + techies_chance + multicast_chance
-
-        # Живое сообщение печатает только обычный ролл: там есть что показать
-        # до результата. Мультикаст не анимируется вовсе - только финальный
-        # баннер, как и раньше, без сообщений со слотами.
-        anim_msg = None
-        if not is_multicast:
-            anim_msg = await show_loading(context.bot, chat_id, "Подбрасываю кости...")
 
         if is_multicast:
             # 🎰 МУЛЬТИКАСТ — счётчик множителя, без сообщений со слотами
@@ -533,27 +526,23 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             roll_banner_url = get_banner_path("roll_normal")
 
-        try:
-            # Загрузка превращается в баннер на месте: в чате остаётся одно
-            # сообщение вместо «печать -> новый баннер».
-            result_msg = await finish_loading(
+        # Обычный ролл: картинка появляется сразу, текст под ней печатается
+        # построчно. Мультикаст не печатает ничего - только финальный баннер.
+        result_msg = None
+        if roll_banner_url:
+            result_msg = await show_photo_with_typing(
                 context.bot,
-                anim_msg,
-                text=text,
+                chat_id,
                 media=roll_banner_url,
+                caption=text,
                 parse_mode="HTML",
                 reply_markup=main_menu(),
+                label=("" if is_multicast else "🎲 Хукаю кости..."),
             )
-        except Exception as e:
-            logger.debug(f"Could not finish loading into banner: {e}")
-            result_msg = None
 
         if result_msg is None:
-            # Загрузку не удалось превратить в баннер - убираем её, иначе она
-            # останется в чате навсегда, и шлём результат отдельным сообщением.
-            # Для мультикаста anim_msg уже None, тут ничего удалять не нужно.
-            await delete_loading(context.bot, anim_msg)
-            anim_msg = None
+            # Баннер не отправился: шлём результат обычным сообщением, чтобы
+            # ролл не пропал молча.
             try:
                 if roll_banner_url:
                     result_msg = await context.bot.send_photo(

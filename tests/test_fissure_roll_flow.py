@@ -1,8 +1,8 @@
 """Tests for the Fissure roll flow.
 
-The roll now types a single live message ("Подбрасываю кости...") and then
-converts that very message into the result banner. Multicast no longer sends
-separate slot messages, and Techies keeps its own flow untouched.
+The roll posts its banner first and types the result into the picture caption,
+in the background, with no separate loading message. Multicast posts the same
+banner but types nothing, and Techies keeps its own flow untouched.
 
 fissure.py cannot be imported here (no redis package), so these tests assert on
 the source and on loading_flow, which is where the behaviour lives.
@@ -39,28 +39,35 @@ def test_multicast_sends_no_slot_messages():
     assert "🎰" not in code, "multicast slot messages must be gone"
 
 
-def test_roll_types_one_live_message():
+def test_roll_posts_picture_then_types_caption():
+    """The roll has no separate loading message: the picture comes first and
+    its caption is typed underneath it."""
     content = _source()
-    assert 'show_loading(context.bot, chat_id, "Подбрасываю кости...")' in content
-    # The result is produced by converting the loading message in place.
-    assert "finish_loading(" in content
+    assert "show_photo_with_typing(" in content
+    assert "🎲 Хукаю кости..." in content
+    # No separate "Подбрасываю кости..." message for the roll any more.
+    assert "Подбрасываю кости" not in content
 
 
-def test_multicast_has_no_loading_animation():
-    """Multicast must go straight to the final banner, with no typing."""
+def test_multicast_has_no_typing():
+    """Multicast must show only the final banner, nothing is typed."""
     content = _source()
-    assert "if not is_multicast:" in content, (
-        "the loading message must be created for the normal roll only"
-    )
-    block = content[content.index("anim_msg = None\n        if not is_multicast:"):]
-    assert 'show_loading(context.bot, chat_id, "Подбрасываю кости...")' in block
-    assert "anim_msg = None" in block.split("if not is_multicast:")[0]
+    assert 'label=("" if is_multicast else "🎲 Хукаю кости..."),' in content
 
 
-def test_fallback_deletes_the_loading_message():
-    """If the banner cannot replace the loading, it must not be left behind."""
+def test_roll_has_no_orphan_loading_message():
+    """The roll posts the picture directly, so there is no loading message
+    that a failed banner could leave stranded in the chat."""
     content = _source()
-    assert "delete_loading(context.bot, anim_msg)" in content
+    assert "anim_msg" not in content
+    assert "delete_loading" not in content
+
+
+def test_roll_falls_back_to_a_plain_message():
+    """If the banner cannot be posted, the roll must still reach the chat."""
+    content = _source()
+    assert "if result_msg is None:" in content
+    assert "Could not send roll banner" in content
 
 
 def test_techies_flow_is_untouched():
@@ -87,10 +94,98 @@ def test_multicast_falls_back_to_a_plain_banner():
     asyncio.run(run())
 
 
+def _roll_with_caption(caption, label="", media="roll_normal.webp", **kw):
+    """Post a roll picture and let its caption finish typing.
+
+    Returns the bot stub and the message. `bot.at_return` is a snapshot of the
+    caption edits recorded by the moment the caller got control back, which is
+    what proves the typing does not block the roll handler.
+    """
+    bot = _Bot()
+    interval = loading_flow.TYPE_INTERVAL
+    loading_flow.TYPE_INTERVAL = 0.0
+
+    async def run():
+        msg = await loading_flow.show_photo_with_typing(
+            bot, 1, media=media, caption=caption, label=label, **kw
+        )
+        bot.at_return = list(bot.caption_edits)
+        # Drain the background animation inside this same loop, since the task
+        # belongs to the loop that created it.
+        while loading_flow._typing_tasks:
+            await asyncio.gather(*list(loading_flow._typing_tasks))
+        return msg
+
+    try:
+        msg = asyncio.run(run())
+    finally:
+        loading_flow.TYPE_INTERVAL = interval
+    return bot, msg
+
+
+def test_photo_appears_first_then_caption_is_typed():
+    caption = "🎲 TestUser\n\nПроклял Акадо на 12 см!\n\n📏 41.2 см → 29.2 см"
+    bot, msg = _roll_with_caption(
+        caption, label="🎲 Хукаю кости...", reply_markup="markup"
+    )
+
+    assert msg is not None
+    # The picture is posted first, carrying only the label as its caption.
+    assert bot.photos[0][0] == "roll_normal.webp"
+    assert bot.photos[0][1] == "<b>🎲 Хукаю кости...</b>"
+
+    # The handler got control back before any typing happened, so the database
+    # write and cooldown are not stuck behind a three second animation.
+    assert bot.at_return == []
+
+    # The caption is then typed out, growing until it is complete.
+    assert bot.caption_edits, "caption must be typed after the picture"
+    for a, b in zip(bot.caption_edits, bot.caption_edits[1:]):
+        assert len(b) >= len(a), "caption must never shrink"
+    assert bot.caption_edits[-1] == caption
+
+
+def test_photo_caption_typing_without_label_starts_empty():
+    """Multicast passes no label: the picture shows with an ellipsis caption."""
+    bot, _ = _roll_with_caption("Мультикаст ×3", label="", media="roll_fatal.webp")
+    assert bot.photos[0][1] == "…"
+    assert bot.caption_edits[-1] == "Мультикаст ×3"
+
+
+def test_caption_frames_never_split_emoji_or_html():
+    """Frames are plain text, so no frame can cut a tag or an emoji in half."""
+    caption = "<b>🎲 TestUser</b>\n\nПроклял Акадо на 12 см!\n📏 41 см"
+    bot, _ = _roll_with_caption(caption, parse_mode="HTML")
+
+    # Every frame before the last is tag-free and free of lone surrogates.
+    for text in bot.caption_edits[:-1]:
+        assert "<b>" not in text
+        assert not any("\ud800" <= c <= "\udfff" for c in text)
+    # The last frame is the real, formatted caption.
+    assert bot.caption_edits[-1] == caption
+
+
+def test_photo_send_failure_returns_none():
+    class _NoPhoto(_Bot):
+        async def send_photo(self, chat_id, photo, caption=None, parse_mode=None,
+                             reply_markup=None):
+            raise RuntimeError("Bad Request: chat not found")
+
+    async def run():
+        bot = _NoPhoto()
+        result = await loading_flow.show_photo_with_typing(
+            bot, 1, media="x.webp", caption="text"
+        )
+        assert result is None
+        assert not bot.caption_edits
+
+    asyncio.run(run())
+
+
 def test_zeus_uses_loading_too():
     content = _source()
-    assert 'show_loading(context.bot, chat_id, "Гремит гром...")' in content
-    assert "loading=zeus_loading" in content
+    assert "⚡ Гремит гром..." in content
+    assert "show_photo_with_typing(" in content
 
 
 # --- finish_loading behaviour -------------------------------------------------
@@ -111,8 +206,9 @@ class _Bot:
         self.media_edits = []
         self.markup_edits = []
         self.deletes = []
+        self.photos = []
+        self.caption_edits = []
         self.supports_media = supports_media
-
     async def send_message(self, chat_id, text, parse_mode=None):
         self.sent.append(text)
         return _Msg(100 + len(self.sent), chat_id)
@@ -126,6 +222,16 @@ class _Bot:
         if not self.supports_media:
             raise RuntimeError("Bad Request: unsupported media")
         self.media_edits.append(media)
+        return _Msg(message_id, chat_id)
+
+    async def send_photo(self, chat_id, photo, caption=None, parse_mode=None,
+                         reply_markup=None):
+        self.photos.append((photo, caption))
+        return _Msg(500, chat_id)
+
+    async def edit_message_caption(self, chat_id, message_id, caption,
+                                   parse_mode=None):
+        self.caption_edits.append(caption)
         return _Msg(message_id, chat_id)
 
     async def edit_message_reply_markup(self, chat_id, message_id, reply_markup):
