@@ -22,9 +22,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import loading_flow  # noqa: E402
 from loading_flow import (  # noqa: E402
-    CURSOR,
-    FRAMES,
+    DEFAULT_SPINNER,
     LOADING_ICON,
+    SPINNERS,
     TYPED_LABEL,
     show_loading,
     stop_loading,
@@ -75,9 +75,10 @@ async def _spin(iterations=20):
 def test_types_label_then_spins():
     async def run():
         bot = _Bot()
+        frames = SPINNERS[DEFAULT_SPINNER]
         handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
 
-        assert bot.sent == [f"<b>{LOADING_ICON}{TYPED_LABEL[:1]}{CURSOR}</b>"]
+        assert bot.sent == [f"<b>{LOADING_ICON}{TYPED_LABEL[:2]}</b>"]
 
         await _spin()
         await stop_loading(handle)
@@ -88,35 +89,54 @@ def test_types_label_then_spins():
         # can never appear. Spin frames lead with the spinner glyph instead.
         assert bot.sent[0].startswith(f"<b>{LOADING_ICON}")
         for frame in bot.edits:
-            glyph = frame[len("<b>")]
-            if CURSOR in frame:
-                assert frame.startswith(f"<b>{LOADING_ICON}")
-            else:
-                assert glyph in FRAMES, f"spin frame must lead with a spinner glyph: {frame!r}"
-        # Growing prefix while typing...
-        assert bot.edits[0] == f"<b>{LOADING_ICON}{TYPED_LABEL[:2]}{CURSOR}</b>"
-        assert bot.edits[1] == f"<b>{LOADING_ICON}{TYPED_LABEL[:4]}{CURSOR}</b>"
-        # ...then the spinner takes over with the full label.
-        assert f"<b>{TYPED_LABEL}</b>" not in bot.edits
-        spinner_frames = {f"<b>{f} {LOADING_ICON}{TYPED_LABEL}</b>" for f in FRAMES}
+            if frame[len("<b>")] == LOADING_ICON[0]:
+                continue
+            assert frame[len("<b>")] in frames, (
+                f"spin frame must lead with a spinner glyph: {frame!r}"
+            )
+        # Growing prefix while typing, no cursor block anywhere...
+        assert bot.edits[0] == f"<b>{LOADING_ICON}{TYPED_LABEL[:4]}</b>"
+        assert bot.edits[1] == f"<b>{LOADING_ICON}{TYPED_LABEL[:6]}</b>"
+        # The first frame must differ from what send_message already showed.
+        assert bot.sent[0] != bot.edits[0]
+        # ...then the spinner takes over.
+        spinner_frames = {f"<b>{f} {LOADING_ICON}{TYPED_LABEL}</b>" for f in frames}
         assert spinner_frames & set(bot.edits)
+        assert not any("▌" in e for e in [bot.sent[0], *bot.edits])
 
     asyncio.run(run())
 
 
-def test_frames_are_unique():
-    """Telegram rejects an edit that does not change the text.
+def test_every_spinner_works_and_differs_per_frame():
+    """Each style must cycle only through frames Telegram will accept."""
+    for name, frames in SPINNERS.items():
+        assert len(frames) >= 2, f"{name}: a spinner needs at least two frames"
+        assert all(
+            a != b for a, b in zip(frames, frames[1:] + frames[:1])
+        ), f"{name}: consecutive frames must differ"
 
-    The spinner cycles through FRAMES, so only *consecutive* frames must differ.
-    """
+        async def run(name=name, frames=frames):
+            bot = _Bot()
+            handle = await show_loading(bot, bot.chat_id, TYPED_LABEL, spinner=name)
+            await _spin(iterations=len(frames) * 2 + 4)
+            await stop_loading(handle)
+            assert len(bot.edits) > len(frames)
+            assert all(a != b for a, b in zip(bot.edits, bot.edits[1:]))
+            expected = {f"<b>{f} {LOADING_ICON}{TYPED_LABEL}</b>" for f in frames}
+            assert expected & set(bot.edits), f"{name}: no spinner frame rendered"
 
+        asyncio.run(run())
+
+
+def test_unknown_spinner_falls_back_to_default():
     async def run():
         bot = _Bot()
-        handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
-        await _spin(iterations=len(FRAMES) * 3)
+        frames = SPINNERS[DEFAULT_SPINNER]
+        handle = await show_loading(bot, bot.chat_id, TYPED_LABEL, spinner="nope")
+        await _spin(iterations=len(frames) + 2)
         await stop_loading(handle)
-        assert len(bot.edits) > len(FRAMES)
-        assert all(a != b for a, b in zip(bot.edits, bot.edits[1:]))
+        expected = {f"<b>{f} {LOADING_ICON}{TYPED_LABEL}</b>" for f in frames}
+        assert expected & set(bot.edits)
 
     asyncio.run(run())
 
@@ -194,7 +214,7 @@ def test_icon_never_split_into_broken_surrogates():
         for frame in [bot.sent[0], *bot.edits]:
             body = frame[len("<b>"):-len("</b>")]
             leading = body[0]
-            assert leading == LOADING_ICON[0] or leading in FRAMES, (
+            assert leading == LOADING_ICON[0] or leading in SPINNERS[DEFAULT_SPINNER], (
                 f"frame must lead with the hook icon or a spinner glyph: {frame!r}"
             )
             # No lone surrogate anywhere in the rendered frame.
@@ -209,6 +229,6 @@ def test_icon_is_optional():
         handle = await show_loading(bot, bot.chat_id, TYPED_LABEL, icon="")
         await _spin()
         await stop_loading(handle)
-        assert bot.sent == [f"<b>{TYPED_LABEL[:1]}{CURSOR}</b>"]
+        assert bot.sent == [f"<b>{TYPED_LABEL[:2]}</b>"]
 
     asyncio.run(run())

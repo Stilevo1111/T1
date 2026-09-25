@@ -19,8 +19,23 @@ logger = logging.getLogger(__name__)
 
 TYPED_LABEL = "Хукаю..."
 LOADING_ICON = "🪝 "
-CURSOR = "▌"
-FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+
+# Spinner styles. Every frame inside a style must differ from the previous one,
+# otherwise Telegram answers "message is not modified" and rejects the edit.
+SPINNERS = {
+    "dots": ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"),
+    "circle": ("◐", "◓", "◑", "◒"),
+    "triangle": ("▹", "▸", "▹", "◃"),
+    "bounce": ("⠁", "⠂", "⠄", "⠂"),
+    "moon": ("🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"),
+    "clock": ("🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗",
+              "🕘", "🕙", "🕚", "🕛"),
+    "bar": ("▁", "▃", "▄", "▅", "▆", "▇", "▆", "▅", "▄", "▃"),
+    "quadrant": ("▖", "▘", "▝", "▗"),
+    "arrow": ("←", "↖", "↑", "↗", "→", "↘", "↓", "↙"),
+    "pulse": ("●", "○", "●", "○"),
+}
+DEFAULT_SPINNER = "dots"
 
 TYPE_CHUNK = 2
 TYPE_INTERVAL = 0.16
@@ -81,7 +96,7 @@ async def _edit(bot, chat_id: int, message_id: int, text: str) -> bool:
 
 
 async def _type_then_spin(
-    bot, chat_id: int, message_id: int, label: str, icon: str
+    bot, chat_id: int, message_id: int, label: str, icon: str, frames: tuple
 ) -> None:
     loop = asyncio.get_running_loop()
     started = loop.time()
@@ -89,12 +104,13 @@ async def _type_then_spin(
     # Phase 1: type the label, TYPE_CHUNK characters per frame. The icon is
     # prepended as a whole and never typed: emoji are surrogate pairs in
     # Python strings, so slicing them per frame could split a glyph in half.
-    for end in range(TYPE_CHUNK, len(label) + TYPE_CHUNK, TYPE_CHUNK):
+    # The first chunk is skipped because it is what send_message already
+    # displayed, and re-editing identical text makes Telegram answer
+    # "message is not modified".
+    for end in range(TYPE_CHUNK * 2, len(label) + TYPE_CHUNK, TYPE_CHUNK):
         if asyncio.current_task().cancelling():
             return
-        if not await _edit(
-            bot, chat_id, message_id, f"<b>{icon}{label[:end]}{CURSOR}</b>"
-        ):
+        if not await _edit(bot, chat_id, message_id, f"<b>{icon}{label[:end]}</b>"):
             return
         if loop.time() - started > MAX_EDIT_SECONDS:
             return
@@ -105,8 +121,9 @@ async def _type_then_spin(
     while True:
         if asyncio.current_task().cancelling():
             return
+        spinner = frames[i % len(frames)]
         if not await _edit(
-            bot, chat_id, message_id, f"<b>{FRAMES[i % len(FRAMES)]} {icon}{label}</b>"
+            bot, chat_id, message_id, f"<b>{spinner} {icon}{label}</b>"
         ):
             return
         i += 1
@@ -116,18 +133,28 @@ async def _type_then_spin(
 
 
 async def show_loading(
-    bot, chat_id: int, label: str = TYPED_LABEL, icon: str = LOADING_ICON
+    bot,
+    chat_id: int,
+    label: str = TYPED_LABEL,
+    icon: str = LOADING_ICON,
+    spinner: str = DEFAULT_SPINNER,
 ) -> Loading:
-    """Send the loading message and start the animation."""
+    """Send the loading message and start the animation.
+
+    spinner: key of SPINNERS. Falls back to the default for unknown keys.
+    """
+    frames = SPINNERS.get(spinner) or SPINNERS[DEFAULT_SPINNER]
     try:
         msg = await bot.send_message(
-            chat_id=chat_id, text=f"<b>{icon}{label[:1]}{CURSOR}</b>", parse_mode="HTML"
+            chat_id=chat_id, text=f"<b>{icon}{label[:TYPE_CHUNK]}</b>", parse_mode="HTML"
         )
     except Exception as e:
         logger.debug(f"loading_flow: could not send loading message: {e}")
         return Loading(chat_id, 0, None)
 
-    task = asyncio.create_task(_type_then_spin(bot, chat_id, msg.message_id, label, icon))
+    task = asyncio.create_task(
+        _type_then_spin(bot, chat_id, msg.message_id, label, icon, frames)
+    )
     handle = Loading(chat_id, msg.message_id, task)
     _active[(chat_id, msg.message_id)] = handle
     return handle
