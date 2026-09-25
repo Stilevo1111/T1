@@ -149,6 +149,68 @@ async def show_loading(
     return handle
 
 
+async def finish_loading(
+    bot,
+    handle,
+    text: str,
+    media=None,
+    parse_mode: str = "HTML",
+    reply_markup=None,
+):
+    """Turn the loading message into the result, in place.
+
+    With `media` the message is converted to a photo and `text` becomes its
+    caption, so the chat keeps a single message from loading to result. Returns
+    the resulting Message, or None when the loading message cannot be reused -
+    callers then fall back to sending a fresh message.
+    """
+    if not handle:
+        return None
+    message_id = getattr(handle, "message_id", 0)
+    chat_id = getattr(handle, "chat_id", None)
+    if not message_id or chat_id is None:
+        return None
+
+    await stop_loading(handle)
+
+    if media is not None:
+        try:
+            from telegram import InputMediaPhoto
+        except ImportError:  # pragma: no cover - telegram is a hard dependency
+            return None
+        try:
+            result = await bot.edit_message_media(
+                chat_id=chat_id,
+                message_id=message_id,
+                media=InputMediaPhoto(media, caption=text, parse_mode=parse_mode),
+            )
+            if reply_markup is not None:
+                try:
+                    await bot.edit_message_reply_markup(
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        reply_markup=reply_markup,
+                    )
+                except Exception as e:
+                    logger.debug(f"loading_flow: reply markup failed: {e}")
+            return result
+        except Exception as e:
+            logger.debug(f"loading_flow: cannot convert to media ({e})")
+            return None
+
+    try:
+        return await bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
+    except Exception as e:
+        logger.debug(f"loading_flow: cannot finish with text ({e})")
+        return None
+
+
 async def stop_loading(handle) -> None:
     """Stop the animation, if the handle is still running."""
     if handle is None:

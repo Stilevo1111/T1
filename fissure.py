@@ -45,6 +45,7 @@ from database import (
     zeus_strike,
 )
 from digest import invalidate_digest_cache
+from loading_flow import finish_loading, show_loading
 from rate_limiter import is_rate_limited
 from rolls import (
     MULTICAST_TEXTS,
@@ -168,7 +169,7 @@ async def send_fissure_cooldown_response(bot, chat_id, user_id, text, banner_url
     await asyncio.sleep(0.1)
 
 
-async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now, ZEUS_TEXTS, main_menu, set_last_bot_message, schedule_delete, update_fissure, update_last_message_id, zeus_strike, record_recent_fissure_roll=None):
+async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now, ZEUS_TEXTS, main_menu, set_last_bot_message, schedule_delete, update_fissure, update_last_message_id, zeus_strike, record_recent_fissure_roll=None, loading=None):
     """
     Handles the Zeus strike event (no roll, dynamic % to all fissures).
     Logic and all messages are 100% preserved from the original.
@@ -202,13 +203,22 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
     )
 
     zeus_banner_url = get_banner_path("zeus")
-    result_msg = await bot.send_photo(
-        chat_id=chat_id,
-        photo=zeus_banner_url,
-        caption=text,
+    result_msg = await finish_loading(
+        bot,
+        loading,
+        text=text,
+        media=zeus_banner_url,
         parse_mode="HTML",
-        reply_markup=main_menu()
+        reply_markup=main_menu(),
     )
+    if result_msg is None:
+        result_msg = await bot.send_photo(
+            chat_id=chat_id,
+            photo=zeus_banner_url,
+            caption=text,
+            parse_mode="HTML",
+            reply_markup=main_menu()
+        )
     if record_recent_fissure_roll:
         record_recent_fissure_roll(user_obj.id, user_obj.username, initiator_gain, new_fissure, cascade=0, event_type="zeus")
 
@@ -328,10 +338,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Один рандом: что выпало?
         event_roll = random.random()
         multicast_chance, zeus_chance, techies_chance = get_event_chances()
-        anim_msg = None
 
         if event_roll < zeus_chance:
             zeus_triggered = True
+            zeus_loading = await show_loading(context.bot, chat_id, "Гремит гром...")
             await handle_zeus_event(
                 context.bot,
                 chat_id,
@@ -346,7 +356,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update_fissure,
                 update_last_message_id,
                 zeus_strike,
-                record_recent_fissure_roll
+                record_recent_fissure_roll,
+                loading=zeus_loading
             )
             return
 
@@ -372,14 +383,15 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         original_roll = None
         base_roll_before_streak = None  # Сохраняем ролл ДО стрика для вывода
 
-        slot_msg_ids = []
+        # Живое сообщение: сначала печатается "Подбрасываю кости...", затем
+        # превращается в итоговый баннер. Мультикаст больше не плодит
+        # отдельные сообщения со слотами - только финальный результат.
+        anim_msg = await show_loading(context.bot, chat_id, "Подбрасываю кости...")
 
         if event_roll < zeus_chance + techies_chance + multicast_chance:
-            # 🎰 МУЛЬТИКАСТ — слоты как в казино
-            slot_emojis = ["🍒", "🍋", "🍇", "🔔", "💎"]
+            # 🎰 МУЛЬТИКАСТ — счётчик множителя, но без сообщений со слотами
             multicast_text = ""
             cascade_count = 1
-            slot_msg_ids = []
             is_multicast = True
 
             # Get base roll first
@@ -393,68 +405,15 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Проверяем переход на x2 (скрытый рандом 75%)
             if random.random() < 0.75:
                 cascade_count = 2
-                jackpot_symbol = random.choice(slot_emojis)
-                slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-
-                msg = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x2"
-                )
-                slot_msg_ids.append(msg.message_id)
-                await asyncio.sleep(1)
 
                 # Проверяем переход на x3 (скрытый рандом 25%)
                 if random.random() < 0.25:
                     cascade_count = 3
-                    jackpot_symbol = random.choice(slot_emojis)
-                    slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-
-                    msg = await context.bot.send_message(
-                        chat_id=chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x3"
-                    )
-                    slot_msg_ids.append(msg.message_id)
-                    await asyncio.sleep(1)
 
                     # Проверяем переход на x4 (скрытый рандом 15%)
                     if random.random() < 0.15:
                         cascade_count = 4
-                        jackpot_symbol = random.choice(slot_emojis)
-                        slots = [jackpot_symbol, jackpot_symbol, jackpot_symbol]
-
-                        msg = await context.bot.send_message(
-                            chat_id=chat_id,
-                            text=f"🎰 {' | '.join(slots)} | x4"
-                        )
-                        slot_msg_ids.append(msg.message_id)
-                        await asyncio.sleep(0.5)
-                    else:
-                        # Не попали в x4 - проигрышный спин и финиш на x3
-                        slots = random.sample(slot_emojis, 3)
-                        msg = await context.bot.send_message(
-                            chat_id=chat_id,
-                            text=f"🎰 {' | '.join(slots)} | x3"
-                        )
-                        slot_msg_ids.append(msg.message_id)
-                        await asyncio.sleep(0.5)
-                else:
-                    # Не попали в x3 - проигрышный спин и финиш на x2
-                    slots = random.sample(slot_emojis, 3)
-                    msg = await context.bot.send_message(
-                        chat_id=chat_id,
-                        text=f"🎰 {' | '.join(slots)} | x2"
-                    )
-                    slot_msg_ids.append(msg.message_id)
-                    await asyncio.sleep(0.5)
-            else:
-                # Не попали в x2 - обычный мультикаст x2
-                slots = random.sample(slot_emojis, 3)
-                msg = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"🎰 {' | '.join(slots)} | x2"
-                )
-                slot_msg_ids.append(msg.message_id)
-                await asyncio.sleep(0.5)
+            # иначе остаётся x2
 
             # Сохраняем base_roll как original_roll для отображения
             saved_original_roll = base_roll_before_streak
@@ -466,12 +425,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Сохраняем значение после применения множителя (до бонуса выходного дня)
             multiplied_roll = roll
             logger.info(f"fissure multicast: roll after multiply={roll}, cascade_count={cascade_count}")
-            if cascade_count >= 4:
-                pass
-            elif cascade_count >= 3:
-                pass
-            elif cascade_count >= 2:
-                pass
 
         else:
             # 🎲 ОБЫЧНЫЙ РОЛЛ (90%)
@@ -483,10 +436,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             roll, streak_text = calculate_streak_bonus(current_win_streak, roll)
             # Для обычного ролла original_roll = roll со стриком
             original_roll = None  # Сохраняем None чтобы не входить в мультфилияр
-
-        # Даем время slot сообщениям отправиться перед итоговым
-        if cascade_count > 1:
-            await asyncio.sleep(0.3)
 
         roll, protection_msg = apply_fissure_protection(user.get("fissure", 0), roll, is_fatal)
 
@@ -583,39 +532,50 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             roll_banner_url = get_banner_path("roll_normal")
 
         try:
-            if roll_banner_url:
-                result_msg = await context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=roll_banner_url,
-                    caption=text,
-                    parse_mode="HTML",
-                    reply_markup=main_menu()
-                )
-            else:
-                result_msg = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=text,
-                    parse_mode="HTML",
-                    reply_markup=main_menu()
-                )
-            add_bot_message(chat_id, user_obj.id, result_msg.message_id)
+            # Загрузка превращается в баннер на месте: в чате остаётся одно
+            # сообщение вместо «печать -> новый баннер».
+            result_msg = await finish_loading(
+                context.bot,
+                anim_msg,
+                text=text,
+                media=roll_banner_url,
+                parse_mode="HTML",
+                reply_markup=main_menu(),
+            )
         except Exception as e:
-            logger.debug(f"Could not send roll banner: {e}")
-            if anim_msg:
-                try:
-                    await anim_msg.edit_text(text=text, parse_mode="HTML", reply_markup=main_menu())
-                    result_msg = anim_msg
-                except Exception as edit_error:
-                    logger.debug(f"Could not edit anim_msg: {edit_error}")
-                    result_msg = await context.bot.send_message(
-                        chat_id=chat_id, text=text,
-                        parse_mode="HTML", reply_markup=main_menu()
+            logger.debug(f"Could not finish loading into banner: {e}")
+            result_msg = None
+
+        if result_msg is None:
+            # Загрузку не удалось превратить в баннер - убираем её, иначе она
+            # останется в чате навсегда, и шлём результат отдельным сообщением.
+            from loading_flow import delete_loading
+            await delete_loading(context.bot, anim_msg)
+            anim_msg = None
+            try:
+                if roll_banner_url:
+                    result_msg = await context.bot.send_photo(
+                        chat_id=chat_id,
+                        photo=roll_banner_url,
+                        caption=text,
+                        parse_mode="HTML",
+                        reply_markup=main_menu()
                     )
-            else:
+                else:
+                    result_msg = await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=text,
+                        parse_mode="HTML",
+                        reply_markup=main_menu()
+                    )
+            except Exception as e:
+                logger.debug(f"Could not send roll banner: {e}")
                 result_msg = await context.bot.send_message(
                     chat_id=chat_id, text=text,
                     parse_mode="HTML", reply_markup=main_menu()
                 )
+
+        add_bot_message(chat_id, user_obj.id, result_msg.message_id)
 
         logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
         set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
@@ -624,12 +584,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Small delay to ensure message is visible before any further processing
         await asyncio.sleep(0.1)
-
-        # Удаляем анимационные сообщения слотов
-        if slot_msg_ids:
-            await asyncio.sleep(0.2)
-            for msg_id in slot_msg_ids:
-                schedule_delete(context.bot, chat_id, msg_id, 30, context.job_queue)
 
         # Fissure write is synchronous (psycopg2/sqlite), so keep it off the
         # event loop. This is especially important because the roll handler
