@@ -19,7 +19,7 @@ from PIL import Image, ImageDraw, ImageFont
 from hero_positions import hero_positions
 from constants import get_banner_path
 
-from dota_mmr import get_player_stats_async
+from dota_mmr import get_player_stats_async, get_cached_avatar
 from bot_utils import get_user_avatar_url
 
 logger = logging.getLogger(__name__)
@@ -706,56 +706,68 @@ async def create_infographic(hero_stats, bot=None):
         if hero_id in avatar_cache:
             return avatar_cache[hero_id]
         player = best_players.get(hero_id, [{}])[0]
-        avatar_url = player.get('avatar')
-        telegram_id = player.get('telegram_id')
+        steam_id = player.get('steam_id')
         img = None
-        
-        # 1. Try Telegram profile photo first (via bot instance if available)
-        if telegram_id and bot:
+
+        # 1. Try cached avatar from Redis (populated during MMR updates)
+        if steam_id:
             try:
-                tg_avatar_url = await get_user_avatar_url(bot, telegram_id)
-                if tg_avatar_url:
-                    def _download_avatar():
-                        resp = requests.get(
-                            tg_avatar_url,
-                            timeout=10,
-                            headers={"User-Agent": "fissure-bot/1.0"},
-                        )
-                        if resp.status_code == 200 and resp.content:
-                            return Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                        return None
-                    img = await asyncio.to_thread(_download_avatar)
-                    if img:
-                        logger.debug(f"Telegram avatar via bot for hero {hero_id}")
+                avatar_bytes = await get_cached_avatar(steam_id)
+                if avatar_bytes:
+                    img = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
+                    logger.debug(f"Using cached avatar for hero {hero_id} (steam_id={steam_id})")
             except Exception as e:
-                logger.debug(f"Telegram avatar via bot failed for hero {hero_id}: {e}")
-        
-        # 2. If bot not available, try raw API calls
-        if not img and telegram_id:
-            try:
-                from config import BOT_TOKEN
-                img = await _fetch_telegram_profile_photo(BOT_TOKEN, telegram_id)
-            except Exception as e:
-                logger.debug(f"Telegram profile photo failed for hero {hero_id}: {e}")
-        
-        # 3. Try Telegram avatar file_id (not http URLs)
-        if not img and avatar_url and not avatar_url.startswith('http'):
-            try:
-                from config import BOT_TOKEN
-                img = await _fetch_telegram_avatar(BOT_TOKEN, avatar_url)
-            except Exception as e:
-                logger.debug(f"Telegram avatar fallback failed for hero {hero_id}: {e}")
-        
-        # 4. Fallback to Steam/direct avatar URL (http URLs only)
-        if not img and avatar_url and avatar_url.startswith('http'):
-            img = await fetch_hero_icon(None, avatar_url)
-        
-        # 5. Fallback: fetch avatar directly from OpenDota by steam_id
+                logger.debug(f"Failed to load cached avatar for hero {hero_id}: {e}")
+
+        # 2. Fallback to old methods only if no cached avatar
         if not img:
-            steam_id = player.get('steam_id')
-            if steam_id:
+            avatar_url = player.get('avatar')
+            telegram_id = player.get('telegram_id')
+
+            # Try Telegram profile photo first (via bot instance if available)
+            if telegram_id and bot:
+                try:
+                    tg_avatar_url = await get_user_avatar_url(bot, telegram_id)
+                    if tg_avatar_url:
+                        def _download_avatar():
+                            resp = requests.get(
+                                tg_avatar_url,
+                                timeout=10,
+                                headers={"User-Agent": "fissure-bot/1.0"},
+                            )
+                            if resp.status_code == 200 and resp.content:
+                                return Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                            return None
+                        img = await asyncio.to_thread(_download_avatar)
+                        if img:
+                            logger.debug(f"Telegram avatar via bot for hero {hero_id}")
+                except Exception as e:
+                    logger.debug(f"Telegram avatar via bot failed for hero {hero_id}: {e}")
+
+            # If bot not available, try raw API calls
+            if not img and telegram_id:
+                try:
+                    from config import BOT_TOKEN
+                    img = await _fetch_telegram_profile_photo(BOT_TOKEN, telegram_id)
+                except Exception as e:
+                    logger.debug(f"Telegram profile photo failed for hero {hero_id}: {e}")
+
+            # Try Telegram avatar file_id (not http URLs)
+            if not img and avatar_url and not avatar_url.startswith('http'):
+                try:
+                    from config import BOT_TOKEN
+                    img = await _fetch_telegram_avatar(BOT_TOKEN, avatar_url)
+                except Exception as e:
+                    logger.debug(f"Telegram avatar fallback failed for hero {hero_id}: {e}")
+
+            # Fallback to Steam/direct avatar URL (http URLs only)
+            if not img and avatar_url and avatar_url.startswith('http'):
+                img = await fetch_hero_icon(None, avatar_url)
+
+            # Fallback: fetch avatar directly from OpenDota by steam_id
+            if not img and steam_id:
                 img = await fetch_avatar_by_steam_id(steam_id)
-        
+
         avatar_cache[hero_id] = img
         return img
 

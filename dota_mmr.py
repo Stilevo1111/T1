@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import contextvars
 import functools
 import io
@@ -14,6 +15,7 @@ import aiohttp
 import requests
 from PIL import Image
 
+from cache import cache as redis_cache
 from cache_service import (
     api_cache,
     hero_cache,
@@ -131,9 +133,42 @@ def reset_circuit_breaker():
     logger.info("Circuit breaker manually reset to CLOSED")
 
 
+AVATAR_CACHE_TTL = 30 * 86400  # 30 days
 
 
-# Background retry task for circuit breaker recovery
+async def _cache_avatar(steam_id: int, avatar_url: str) -> None:
+    """Download and cache player avatar in Redis."""
+    if not avatar_url or not steam_id:
+        return
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+            async with session.get(avatar_url, headers={"User-Agent": "FissureBot/1.0"}) as resp:
+                if resp.status == 200:
+                    data = await resp.read()
+                    if data:
+                        import base64
+                        encoded = base64.b64encode(data).decode()
+                        await redis_cache.set(f"avatar:{steam_id}", encoded, ttl=AVATAR_CACHE_TTL)
+                        logger.debug(f"Cached avatar for steam_id={steam_id}")
+    except Exception as e:
+        logger.debug(f"Failed to cache avatar for {steam_id}: {e}")
+
+
+async def get_cached_avatar(steam_id: int) -> bytes | None:
+    """Get cached avatar bytes from Redis."""
+    if not steam_id:
+        return None
+    try:
+        cached = await redis_cache.get(f"avatar:{steam_id}")
+        if cached:
+            import base64
+            return base64.b64decode(cached)
+    except Exception as e:
+        logger.debug(f"Failed to get cached avatar for {steam_id}: {e}")
+    return None
+
+
+# Background retry task for circuit breaker recovery# Background retry task for circuit breaker recovery
 _retry_task = None
 
 def start_background_retry(max_retries=3, retry_interval=30):
@@ -1295,6 +1330,11 @@ async def get_player_stats_async(steam_id: int, use_cache: bool = True, timeout:
             "losses": losses,
             "winrate": winrate,
         }
+
+        # Cache avatar for hero meta infographic
+        avatar_url = result.get("avatar")
+        if avatar_url:
+            await _cache_avatar(steam_id, avatar_url)
 
         _set_cached(cache_key, result)
         return result
