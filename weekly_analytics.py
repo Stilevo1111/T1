@@ -1553,81 +1553,50 @@ def _smooth_chart_curve(points: list[tuple[float, float]], samples: int = 80) ->
 # =========================================================
 
 def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Image.Image) -> bytes | None:
-    """Render a fast modern analytics card with Pillow only.
-
-    The public function runs this in a worker thread. No matplotlib/SciPy imports,
-    spline fitting, or remote calls are needed in the hot rendering path.
-    """
+    """Render the selected Pillow analytics HUD card."""
     import io
+    import random
     from PIL import ImageDraw, ImageFont
-
     entries = [g for g in list(reversed(history))[:10] if isinstance(g.get("imp"), (int, float))]
     if not entries:
         return None
-
     values = [min(max(float(g["imp"]), 0.0), 2.0) for g in entries]
     wins = sum(bool(g.get("win")) for g in entries)
-    average = sum(values) / len(values)
     font_dir = Path(__file__).resolve().parent / "assets" / "fonts"
-
     def font(size: int, bold: bool = False):
         name = "NotoSans-Bold.ttf" if bold else "NotoSans-Regular.ttf"
-        try:
-            return ImageFont.truetype(str(font_dir / name), size)
+        try: return ImageFont.truetype(str(font_dir / name), size)
         except OSError:
-            try:
-                return ImageFont.truetype("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf", size)
-            except OSError:
-                return ImageFont.load_default()
-
-    canvas = bg.convert("RGB").resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+            try: return ImageFont.truetype("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf", size)
+            except OSError: return ImageFont.load_default()
+    accent = random.choice(["#ff8c42", "#a855f7", "#22c55e", "#f43f5e", "#06b6d4", "#facc15", "#38bdf8"])
+    secondary = random.choice(["#22d3ee", "#f97316", "#38bdf8", "#fbbf24", "#a855f7", "#84cc16"])
+    canvas = bg.convert("RGB").resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS).convert("RGBA")
     draw = ImageDraw.Draw(canvas, "RGBA")
-    # Game-HUD framing: neon accents, angled panels and XP-style labels.
-    draw.rounded_rectangle((28, 24, 1172, 776), radius=22, fill=(7, 8, 18, 235), outline=(91, 75, 255, 180), width=3)
-    draw.rounded_rectangle((44, 40, 1156, 760), radius=16, outline=(255, 140, 66, 75), width=2)
-    draw.rounded_rectangle((58, 52, 282, 112), radius=8, fill=(111, 76, 255, 105), outline=(177, 160, 255, 220), width=2)
-    draw.text((82, 65), "MATCH HISTORY", font=font(22, True), fill="#f4f1ff")
-    draw.text((58, 132), "БОЕВОЙ ОТЧЁТ", font=font(38, True), fill="#ffffff")
-    draw.text((60, 184), "последние 10 матчей  •  живая статистика OpenDota", font=font(19), fill="#b7a9ff")
-    accent = "#7CFFB2" if average >= 1 else "#FFB347"
-    cards = ((58, 230, 390, 326), (410, 230, 690, 326), (710, 230, 1140, 326))
-    for index, box in enumerate(cards):
-        edge = (124, 255, 178, 120) if index == 0 else (255, 140, 66, 105) if index == 1 else (125, 108, 255, 125)
-        draw.rounded_rectangle(box, radius=12, fill=(18, 18, 42, 220), outline=edge, width=2)
-    draw.text((82, 244), f"★ {average:.2f}", font=font(42, True), fill=accent)
-    draw.text((205, 258), "индекс", font=font(18), fill="#c4b5fd")
-    draw.text((435, 246), f"{wins}П  ·  {len(entries) - wins}П", font=font(30, True), fill="#7CFFB2")
-    trend = "РОСТ" if len(values) >= 3 and values[-1] > values[0] else "СПАД" if len(values) >= 3 and values[-1] < values[0] else "СТАБИЛЬНО"
-    trend_color = "#7CFFB2" if trend == "РОСТ" else "#FFB347" if trend == "СПАД" else "#C4B5FD"
-    draw.text((735, 248), f"↗ {trend}", font=font(25, True), fill=trend_color)
-    left, right, top, bottom = 105, 1115, 392, 670
-    for value in (0, 0.5, 1, 1.5, 2):
+    rgb = tuple(int(accent[i:i+2], 16) for i in (1, 3, 5))
+    draw.rounded_rectangle((30, 24, 1170, 776), 22, fill=(8, 10, 20, 220), outline=(*rgb, 190), width=3)
+    draw.text((58, 48), "ИСТОРИЯ МАТЧЕЙ", font=font(24, True), fill=accent)
+    draw.text((58, 88), f"ПОСЛЕДНИЕ {len(entries)} МАТЧЕЙ", font=font(18), fill="#cbd5e1")
+    left, right, top, bottom = 145, 1085, 175, 690
+    for value in (0.0, 0.5, 1.0, 1.5, 2.0):
         y = bottom - (bottom - top) * value / 2
-        draw.line((left, y, right, y), fill=(143, 120, 255, 35), width=1)
-    draw.text((58, 344), "ИНДЕКС", font=font(17, True), fill="#64748b")
-    draw.text((58, 384), "2.0", font=font(16), fill="#64748b")
-    draw.text((58, 658), "0.0", font=font(16), fill="#64748b")
-    points = [(left + (right - left) * i / max(len(values) - 1, 1), bottom - (bottom - top) * value / 2) for i, value in enumerate(values)]
-    if len(points) > 1:
-        curve = _smooth_chart_curve(points)
-        curve_layer = Image.new("RGBA", (WIDTH * 2, HEIGHT * 2), (0, 0, 0, 0))
-        curve_draw = ImageDraw.Draw(curve_layer)
-        curve_draw.line([(x * 2, y * 2) for x, y in curve], fill="#FF7A00", width=14, joint="curve")
-        canvas = Image.alpha_composite(canvas.convert("RGBA"), curve_layer.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)).convert("RGB")
-        draw = ImageDraw.Draw(canvas, "RGBA")
+        draw.text((72, y - 11), f"{value:.1f}", font=font(16, True), fill="#94a3b8")
+    points = [(left + (right-left)*i/max(len(values)-1, 1), bottom-(bottom-top)*v/2) for i, v in enumerate(values)]
+    layer = Image.new("RGBA", (WIDTH * 2, HEIGHT * 2), (0, 0, 0, 0))
+    ImageDraw.Draw(layer).line([(x*2, y*2) for x, y in _smooth_chart_curve(points)], fill=accent, width=14, joint="curve")
+    canvas = Image.alpha_composite(canvas, layer.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS))
+    draw = ImageDraw.Draw(canvas, "RGBA")
     for (x, y), item in zip(points, entries):
-        color = "#2dd4bf" if item.get("win") else "#fb7185"
-        draw.ellipse((x - 10, y - 10, x + 10, y + 10), fill="#101827", outline=color, width=5)
+        color = secondary if item.get("win") else "#fb7185"
+        draw.ellipse((x-27, y-27, x+27, y+27), fill=(14, 18, 32, 255), outline=color, width=6)
         icon = hero_icon_map.get(item.get("hero_id"))
         if icon is not None:
-            icon = icon.convert("RGBA").resize((42, 42), Image.Resampling.LANCZOS)
-            canvas.paste(icon, (int(x - 21), int(y - 21)), icon)
-    draw.text((58, 710), "СТАРЫЕ", font=font(15, True), fill="#64748b")
-    draw.text((1010, 710), "НОВЫЕ", font=font(15, True), fill="#64748b")
-    draw.text((58, 744), "Индекс — внутренний ориентир, не рейтинг качества игрока.", font=font(16), fill="#718096")
-    result = io.BytesIO()
-    canvas.save(result, format="PNG", optimize=True)
-    return result.getvalue()
+            canvas.alpha_composite(icon.convert("RGBA").resize((48, 48), Image.Resampling.LANCZOS), (int(x-24), int(y-24)))
+        else: draw.ellipse((x-12, y-12, x+12, y+12), fill=color)
+        draw.text((int(x-18), int(y-52)), f"{float(item['imp']):.2f}", font=font(15, True), fill="#f8fafc")
+    draw.text((58, 700), f"СРЕДНИЙ ИНДЕКС: {sum(values)/len(values):.2f}  •  ПОБЕД: {wins}  •  ПОРАЖЕНИЙ: {len(entries)-wins}", font=font(25, True), fill="#f8fafc")
+    draw.text((58, 744), "ЛИНИЯ = ДИНАМИКА ИНДЕКСА  •  ИКОНКА = ГЕРОЙ  •  ЦВЕТ = РЕЗУЛЬТАТ МАТЧА", font=font(16), fill="#94a3b8")
+    result = io.BytesIO(); canvas.convert("RGB").save(result, format="PNG", optimize=True); return result.getvalue()
 
 
 async def _create_visual_chart(history: list[dict]) -> bytes | None:
