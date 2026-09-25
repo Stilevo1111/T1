@@ -3,6 +3,7 @@ import base64
 import contextvars
 import functools
 import io
+import json
 import logging
 import re
 import threading
@@ -427,6 +428,48 @@ HERO_ICON_BASE = str(HERO_CACHE_DIR)
 HEROES_STRIP_BG_URL = get_banner_path("heroes_profil")
 HEROES_STRIP_BG_CACHE = "heroes_profil.webp"
 
+# Static hero catalog shipped with the bot. The API copy lives in a plain dict
+# in memory, so after every deploy the first /heroes call is exposed to the
+# OpenDota rate limit - and when it is refused, callers get no hero names, no
+# roles and no image paths, which renders an empty hero meta infographic.
+HERO_CATALOG_PATH = Path(__file__).parent / "assets" / "heroes_catalog.json"
+_local_hero_catalog: dict | None = None
+
+
+def _build_hero_entry(hero: dict) -> dict:
+    """Shape one hero into the structure the rest of the code expects."""
+    short_name = hero["short_name"]
+    cdn_name = get_cdn_hero_name(short_name)
+    return {
+        "id": hero["id"],
+        "name": hero["name"],
+        "short_name": short_name,
+        "image_url": str(Path(HERO_IMAGE_BASE) / f"{cdn_name}.webp"),
+        "icon_url": str(Path(HERO_ICON_BASE) / f"{cdn_name}.webp"),
+        "img": str(Path(HERO_IMAGE_BASE) / f"{cdn_name}.webp"),
+        "roles": hero.get("roles", []),
+    }
+
+
+def get_local_heroes_data() -> dict:
+    """Hero metadata from the bundled catalog, keyed by hero id.
+
+    The keys are ints to match the API response and the ids stored in
+    public_player_matches.
+    """
+    global _local_hero_catalog
+    if _local_hero_catalog is None:
+        try:
+            raw = json.loads(HERO_CATALOG_PATH.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.error(f"Could not read local hero catalog: {e}")
+            raw = {}
+        _local_hero_catalog = {
+            int(hero_id): _build_hero_entry({**hero, "id": int(hero_id)})
+            for hero_id, hero in raw.items()
+        }
+    return _local_hero_catalog
+
 
 def get_hero_icon_cached(hero_short_name: str, timeout: int = 3) -> bytes | None:
     """Get hero icon from local assets only."""
@@ -617,11 +660,19 @@ async def get_heroes_data_async() -> dict:
     if cached:
         return cached
 
+    local = get_local_heroes_data()
+
     try:
         url = f"{OPENDOTA_API_URL}/heroes"
         data = await _api_get_async(url)
         if not data:
-            return {}
+            # Rate limited or offline. The bundled catalog keeps hero names,
+            # roles and image paths available, so the UI still renders.
+            logger.warning(
+                "OpenDota /heroes unavailable, using local catalog "
+                f"({len(local)} heroes)"
+            )
+            return local
 
         heroes = {}
         for hero in data:
@@ -635,6 +686,9 @@ async def get_heroes_data_async() -> dict:
                 "image_url": str(Path(HERO_IMAGE_BASE) / f"{cdn_name}.webp"),
                 "icon_url": str(Path(HERO_ICON_BASE) / f"{cdn_name}.webp"),
                 "img": str(Path(HERO_IMAGE_BASE) / f"{cdn_name}.webp"),
+                # Roles drive position detection for heroes missing from the
+                # manual table, so keep them rather than dropping them.
+                "roles": hero.get("roles", []),
             }
 
         _set_cached("heroes_data", heroes)
@@ -642,6 +696,9 @@ async def get_heroes_data_async() -> dict:
         return heroes
     except Exception as e:
         logger.error(f"get_heroes_data_async error: {e}", exc_info=True)
+        if local:
+            logger.warning(f"Falling back to local hero catalog ({len(local)} heroes)")
+            return local
         return {}
 
 

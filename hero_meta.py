@@ -973,40 +973,51 @@ def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, g
             icon_raw = icons.get(hero['id'])
 
             if icon_raw is None:
-                draw.rounded_rectangle(
-                    [x + 20, y + 5, x + col_width - 5, y + icon_height],
-                    radius=10, fill=(80, 80, 80)
+                # No art for this hero: draw a placeholder tile, but still show
+                # the player avatar. Bailing out here used to hide every avatar
+                # whenever icon loading failed, leaving an empty infographic.
+                tile_w, tile_h = col_width - 25, icon_height
+                tile = Image.new("RGBA", (tile_w, tile_h), (0, 0, 0, 0))
+                tile_draw = ImageDraw.Draw(tile)
+                tile_draw.rounded_rectangle(
+                    [0, 0, tile_w - 1, tile_h - 1], radius=10, fill=(80, 80, 80)
                 )
                 try:
                     ph_font = ImageFont.truetype(FONT_PATH, 16)
                 except Exception as e:
                     logger.debug(f"Could not load small font: {e}")
                     ph_font = ImageFont.load_default()
-                draw.text((x + 25, y + icon_height // 2 - 8), "N/A", fill=(120, 120, 120), font=ph_font)
-                continue
-
-            scale = icon_height / icon_raw.height
-            nw = int(icon_raw.width * scale)
-            nh = icon_height
-            if nw > col_width:
-                scale = col_width / icon_raw.width
-                nw = col_width
-                nh = int(icon_raw.height * scale)
-
-            icon_scaled = icon_raw.resize((nw, nh), Image.Resampling.LANCZOS)
-            winrate = hero.get('winrate', 0)
-            if winrate >= 0.55:
-                border_color = (0, 255, 100, 255)
-            elif winrate >= 0.50:
-                border_color = (255, 210, 0, 255)
+                tile_draw.text(
+                    (tile_w // 2 - 12, tile_h // 2 - 8),
+                    "N/A",
+                    fill=(120, 120, 120),
+                    font=ph_font,
+                )
+                icon_proc = tile
+                nh = icon_height
             else:
-                border_color = (255, 80, 80, 255)
+                scale = icon_height / icon_raw.height
+                nw = int(icon_raw.width * scale)
+                nh = icon_height
+                if nw > col_width:
+                    scale = col_width / icon_raw.width
+                    nw = col_width
+                    nh = int(icon_raw.height * scale)
 
-            icon_proc = apply_fancy_style(icon_scaled, size=(nw, nh),
-                                          radius=max(8, nh // 12), border_width=4,
-                                          border_color=border_color)
+                icon_scaled = icon_raw.resize((nw, nh), Image.Resampling.LANCZOS)
+                winrate = hero.get('winrate', 0)
+                if winrate >= 0.55:
+                    border_color = (0, 255, 100, 255)
+                elif winrate >= 0.50:
+                    border_color = (255, 210, 0, 255)
+                else:
+                    border_color = (255, 80, 80, 255)
 
-            pw = nw + 4
+                icon_proc = apply_fancy_style(icon_scaled, size=(nw, nh),
+                                              radius=max(8, nh // 12), border_width=4,
+                                              border_color=border_color)
+
+            pw = icon_proc.width + 4
             icon_x = x + (col_width - pw) // 2 + 15
             icon_y = y + 5
 
@@ -1015,7 +1026,6 @@ def _compose_infographic(base, draw, grid, icons, font_lg, margin_x, margin_y, g
                 icon_proc = _draw_avatar_circle(icon_proc, avatar_img, size=40, border=3)
 
             base.paste(icon_proc, (icon_x, icon_y), icon_proc)
-
             wr_text = "%dW/%dL/%d%%" % (hero['pub_win'], hero['pub_losses'], hero['winrate'] * 100)
 
             try:
