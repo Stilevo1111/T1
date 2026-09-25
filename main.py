@@ -3028,6 +3028,7 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                         f"profile card: refreshed awards uid={telegram_id} "
                         f"tags={len(tags)} achievements={len(achievements)}"
                     )
+
             except Exception as e:
                 logger.debug(f"profile card award data skipped uid={telegram_id}: {e}")
                 # Fresh read is a safe fallback for an older cached row.
@@ -3037,6 +3038,15 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                     achievements = await asyncio.to_thread(get_user_achievements, telegram_id)
                 except Exception as fallback_error:
                     logger.debug(f"profile card award fallback failed uid={telegram_id}: {fallback_error}")
+
+        # Re-apply the live VIP award after all tag fallbacks, so an empty
+        # cached tag row cannot erase it from the rendered profile.
+        try:
+            from database import get_vip_users
+            if str(telegram_id) in {str(uid) for uid in get_vip_users()}:
+                tags = list(dict.fromkeys([*tags, "VIP"]))
+        except Exception as e:
+            logger.debug(f"profile live VIP award unavailable uid={telegram_id}: {e}")
 
         position = target_user.get("current_position")
         if not position and telegram_id:
