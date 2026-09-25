@@ -3046,6 +3046,7 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                 tags=tags,
                 award_counts={
                     "weekly_mvp": target_user.get("weekly_mvp") or 0,
+                    "weekly_top1": 1 if "weekly_top1" in tags else 0,
                     "weekly_top2": target_user.get("weekly_top2") or 0,
                     "weekly_top3": target_user.get("weekly_top3") or 0,
                     "F1": 1 if "F1" in tags else 0,
