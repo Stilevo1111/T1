@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """
 Еженедельная аналитика игроков Dota 2.
@@ -1525,308 +1525,73 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
 # =========================================================
 
 def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Image.Image) -> bytes | None:
-    """Sync matplotlib chart generation - runs in thread pool. All matplotlib ops here."""
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        from pathlib import Path
+    """Render a fast modern analytics card with Pillow only.
 
-        import matplotlib.pyplot as plt
-        from matplotlib import font_manager, rcParams
-        from matplotlib import patheffects as pe
-        from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+    The public function runs this in a worker thread. No matplotlib/SciPy imports,
+    spline fitting, or remote calls are needed in the hot rendering path.
+    """
+    import io
+    from PIL import ImageDraw, ImageFont
 
-        # Register and use local NotoSans font for Cyrillic support
-        font_path = Path(__file__).resolve().parent / "assets" / "fonts" / "NotoSans-Regular.ttf"
-        font_loaded = False
-        if font_path.exists():
-            try:
-                font_manager.fontManager.addfont(str(font_path))
-                rcParams['font.family'] = 'Noto Sans'
-                font_loaded = True
-            except Exception:
-                pass
-        if not font_loaded:
-            rcParams['font.family'] = 'DejaVu Sans'
-
-        rcParams['path.simplify'] = False
-        rcParams['lines.solid_capstyle'] = 'round'
-        rcParams['lines.solid_joinstyle'] = 'round'
-        rcParams['svg.image_inline'] = True
-
-        import io
-
-        import numpy as np
-        from PIL import Image
-
-    except ImportError:
+    entries = [g for g in list(reversed(history))[:10] if isinstance(g.get("imp"), (int, float))]
+    if not entries:
         return None
 
-    DPI = 72
+    values = [min(max(float(g["imp"]), 0.0), 2.0) for g in entries]
+    wins = sum(bool(g.get("win")) for g in entries)
+    average = sum(values) / len(values)
+    font_dir = Path(__file__).resolve().parent / "assets" / "fonts"
 
-    reversed_history = list(reversed(history))[:10]
-
-    # Skip entries where IMP could not be calculated due to missing
-    # TI 2026 benchmark — treating IMP=0 as a real result would mislead users.
-    available = [g for g in reversed_history if not g.get("imp_unavailable")]
-
-    raw_impacts = [
-        min(round(g["imp"], 2), 2.0)
-        for g in available
-    ]
-
-    wins = [g.get("win", True) for g in available]
-
-    if not raw_impacts:
-        return None
-
-    x = np.arange(1, len(raw_impacts) + 1)
-
-    avg = float(np.mean(raw_impacts))
-
-    if avg >= 1.05:
-        stroke_color = "#00cc55"
-    elif avg >= 0.75:
-        stroke_color = "#ccaa00"
-    else:
-        stroke_color = "#cc2f2f"
-
-    fig = plt.figure(
-        figsize=(WIDTH / DPI, HEIGHT / DPI),
-        dpi=DPI
-    )
-
-    ax = plt.axes([0, 0, 1, 1])
-
-    fig.patch.set_facecolor("#000000")
-
-    ax.imshow(
-        bg,
-        extent=[0, 11, 0, 2],
-        aspect='auto',
-        interpolation='bilinear',
-        alpha=1.0,
-        zorder=0
-    )
-
-    ax.set_xlim(0, 11)
-    ax.set_ylim(0, 2)
-
-    ax.axhline(
-        1.0,
-        linestyle=(0, (6, 6)),
-        color="#ffff00",
-        linewidth=2.5,
-        alpha=0.8,
-        zorder=2
-    )
-
-    ax.text(
-        len(raw_impacts) + 0.2,
-        1.0,
-        "1.00",
-        fontsize=14,
-        color="#ffff00",
-        ha="left",
-        va="center",
-        fontweight="bold",
-        zorder=3
-    )
-
-    ax.text(
-        len(raw_impacts) + 0.15,
-        1.15,
-        "PRO",
-        fontsize=14,
-        color="white",
-        alpha=0.8,
-        weight="bold",
-        va="center",
-        zorder=3
-    )
-
-    if len(raw_impacts) >= 3:
-        x = np.arange(1, len(raw_impacts) + 1)
-        trend_x = np.linspace(1, len(raw_impacts), 100)
-        trend_coef = np.polyfit(x, raw_impacts, 1)
-        trend_y = np.clip(trend_coef[0] * trend_x + trend_coef[1], 0, 2)
-
-        ax.plot(
-            trend_x,
-            trend_y,
-            color="#ffffff",
-            linewidth=3,
-            linestyle="--",
-            alpha=0.5,
-            zorder=4
-        )
-
-    # Smooth cubic spline through the data points with glow/shadow
-    x = np.arange(1, len(raw_impacts) + 1)
-    if len(x) >= 4:
-        from scipy.interpolate import CubicSpline
+    def font(size: int, bold: bool = False):
+        name = "NotoSans-Bold.ttf" if bold else "NotoSans-Regular.ttf"
         try:
-            cs = CubicSpline(x, raw_impacts, bc_type="natural")
-            spline_x = np.linspace(1, len(raw_impacts), 400)
-            spline_y = np.clip(cs(spline_x), 0, 2)
-            line = ax.plot(
-                spline_x,
-                spline_y,
-                color="#f4c430",
-                linewidth=10,
-                solid_capstyle='round',
-                solid_joinstyle='round',
-                antialiased=True,
-                zorder=5
-            )[0]
-            line.set_path_effects([
-                pe.Stroke(
-                    linewidth=16,
-                    foreground=stroke_color,
-                    alpha=0.35
-                ),
-                pe.Normal()
-            ])
-        except Exception:
-            line = ax.plot(
-                x,
-                raw_impacts,
-                color="#f4c430",
-                linewidth=10,
-                solid_capstyle='round',
-                solid_joinstyle='round',
-                antialiased=True,
-                zorder=5
-            )[0]
-            line.set_path_effects([
-                pe.Stroke(
-                    linewidth=16,
-                    foreground=stroke_color,
-                    alpha=0.35
-                ),
-                pe.Normal()
-            ])
-    else:
-        line = ax.plot(
-            x,
-            raw_impacts,
-            color="#f4c430",
-            linewidth=10,
-            solid_capstyle='round',
-            solid_joinstyle='round',
-            antialiased=True,
-            zorder=5
-        )[0]
-        line.set_path_effects([
-            pe.Stroke(
-                linewidth=16,
-                foreground=stroke_color,
-                alpha=0.35
-            ),
-            pe.Normal()
-        ])
+            return ImageFont.truetype(str(font_dir / name), size)
+        except OSError:
+            try:
+                return ImageFont.truetype("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf", size)
+            except OSError:
+                return ImageFont.load_default()
 
-    for idx, g in enumerate(available):
-        hero_id = g["hero_id"]
-        hero_img = hero_icon_map.get(hero_id)
-
-        if not hero_img:
-            continue
-
-        imp = raw_impacts[idx]
-        win = g.get("win", True)
-        border = "#00ff66" if win else "#ff3b3b"
-        glow = "#00ff66" if win else "#ff3b3b"
-
-        hero_img = hero_img.resize(
-            (82, 82),
-            Image.LANCZOS
-        )
-
-        imagebox = OffsetImage(
-            hero_img,
-            zoom=0.65
-        )
-
-        # Hero icon sits ON the spline line (zorder 9), with glow underneath (zorder 8)
-        # Center of the icon is placed exactly on the data point (imp), not below it.
-        ab = AnnotationBbox(
-            imagebox,
-            (idx + 1, imp),
-            frameon=True,
-            bboxprops=dict(
-                edgecolor=border,
-                linewidth=8,
-                boxstyle="circle,pad=0.15",
-                facecolor="none",
-                alpha=1.0,
-                joinstyle="round"
-            ),
-            zorder=9
-        )
-
-        ax.add_artist(ab)
-
-        ax.scatter(
-            idx + 1,
-            imp,
-            s=1500,
-            color=glow,
-            alpha=0.18,
-            zorder=8
-        )
-
-    ax.set_xlim(0, 11)
-    ax.set_ylim(0, 2)
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(
-        [str(i) for i in x],
-        fontsize=22,
-        color="white",
-        weight="bold"
-    )
-
-    ax.set_yticks([
-        0,
-        0.5,
-        1.0,
-        1.5,
-        2.0
-    ])
-
-    ax.set_yticklabels(
-        ["0", "0.5", "1.0", "1.5", "2.0"],
-        fontsize=18,
-        color="white"
-    )
-
-    ax.grid(
-        axis="y",
-        color="white",
-        alpha=0.08,
-        linewidth=1
-    )
-
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
-    buf = io.BytesIO()
-
-    plt.savefig(
-        buf,
-        format="png",
-        dpi=DPI,
-        facecolor=fig.get_facecolor(),
-        bbox_inches=None,
-        pad_inches=0,
-        pil_kwargs={'quality': 100}
-    )
-
-    plt.close('all')
-    buf.seek(0)
-
-    return buf.getvalue()
+    canvas = bg.convert("RGB").resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    # Dark glass panel keeps the existing brand background but improves contrast.
+    draw.rounded_rectangle((28, 24, 1172, 776), radius=32, fill=(8, 11, 22, 224), outline=(255, 255, 255, 28), width=2)
+    draw.rounded_rectangle((58, 52, 244, 106), radius=26, fill=(255, 140, 66, 34), outline=(255, 140, 66, 130), width=2)
+    draw.text((84, 61), "РАЗБОР ИГРЫ", font=font(23, True), fill="#f8fafc")
+    draw.text((58, 132), "Ориентировочный индекс", font=font(34, True), fill="#f8fafc")
+    draw.text((58, 181), "последние 10 матчей • данные OpenDota", font=font(20), fill="#94a3b8")
+    accent = "#2dd4bf" if average >= 1 else "#fb923c"
+    cards = ((58, 230, 390, 326), (410, 230, 690, 326), (710, 230, 1140, 326))
+    for box in cards:
+        draw.rounded_rectangle(box, radius=22, fill=(255, 255, 255, 15), outline=(255, 255, 255, 24), width=1)
+    draw.text((82, 244), f"{average:.2f}", font=font(46, True), fill=accent)
+    draw.text((190, 258), "средний индекс", font=font(18), fill="#cbd5e1")
+    draw.text((435, 246), f"{wins}W · {len(entries) - wins}L", font=font(34, True), fill="#f8fafc")
+    trend = "растёт" if len(values) >= 3 and values[-1] > values[0] else "снижается" if len(values) >= 3 and values[-1] < values[0] else "стабильно"
+    draw.text((735, 248), f"Динамика: {trend}", font=font(24, True), fill="#cbd5e1")
+    left, right, top, bottom = 105, 1115, 392, 670
+    for value in (0, 0.5, 1, 1.5, 2):
+        y = bottom - (bottom - top) * value / 2
+        draw.line((left, y, right, y), fill=(255, 255, 255, 22), width=1)
+    draw.text((58, 344), "ИНДЕКС", font=font(17, True), fill="#64748b")
+    draw.text((58, 384), "2.0", font=font(16), fill="#64748b")
+    draw.text((58, 658), "0.0", font=font(16), fill="#64748b")
+    points = [(left + (right - left) * i / max(len(values) - 1, 1), bottom - (bottom - top) * value / 2) for i, value in enumerate(values)]
+    if len(points) > 1:
+        draw.line(points, fill="#ff8c42", width=6, joint="curve")
+    for (x, y), item in zip(points, entries):
+        color = "#2dd4bf" if item.get("win") else "#fb7185"
+        draw.ellipse((x - 10, y - 10, x + 10, y + 10), fill="#101827", outline=color, width=5)
+        icon = hero_icon_map.get(item.get("hero_id"))
+        if icon is not None:
+            icon = icon.convert("RGBA").resize((42, 42), Image.Resampling.LANCZOS)
+            canvas.paste(icon, (int(x - 21), int(y - 21)), icon)
+    draw.text((58, 710), "СТАРЫЕ", font=font(15, True), fill="#64748b")
+    draw.text((1010, 710), "НОВЫЕ", font=font(15, True), fill="#64748b")
+    draw.text((58, 744), "Индекс — внутренний ориентир, не рейтинг качества игрока.", font=font(16), fill="#718096")
+    result = io.BytesIO()
+    canvas.save(result, format="PNG", optimize=True)
+    return result.getvalue()
 
 
 async def _create_visual_chart(history: list[dict]) -> bytes | None:
