@@ -1,8 +1,9 @@
 """Tests for the Fissure roll flow.
 
-The roll posts its banner first and types the result into the picture caption,
-in the background, with no separate loading message. Multicast posts the same
-banner but types nothing, and Techies keeps its own flow untouched.
+The normal roll and Zeus post their banner first and type the result into the
+picture caption, in the background, with no separate loading message. Multicast
+posts a plain banner with its full caption and types nothing, and Techies keeps
+its own flow untouched.
 
 fissure.py cannot be imported here (no redis package), so these tests assert on
 the source and on loading_flow, which is where the behaviour lives.
@@ -186,6 +187,18 @@ def test_photo_send_failure_returns_none():
         assert not bot.caption_edits
 
     asyncio.run(run())
+
+
+def test_main_menu_buttons_are_all_red():
+    """Every main menu button uses the red (danger) style."""
+    content = (PROJECT_ROOT / "bot_utils.py").read_text(encoding="utf-8-sig")
+    start = content.index("def main_menu():")
+    block = content[start:content.index("\ndef ", start)]
+
+    assert block.count('"style"') == 6, "main menu has six buttons"
+    assert 'api_kwargs={"style": "danger"}' in block
+    for other in ("primary", "success"):
+        assert other not in block, f"no main menu button may use {other}"
 
 
 def test_zeus_uses_the_same_picture_then_text_flow():
