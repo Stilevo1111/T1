@@ -1,19 +1,20 @@
-﻿"""Р”РѕСЃС‚РёР¶РµРЅРёСЏ Р·Р° Р°РєС‚РёРІРЅРѕСЃС‚СЊ РІ С‡Р°С‚Рµ (СЃРѕРѕР±С‰РµРЅРёСЏ, СЃС‚СЂРёРєРё).
+"""Достижения за активность в чате (сообщения, стрики).
 
-РҐСЂР°РЅСЏС‚СЃСЏ РІ РєРѕР»РѕРЅРєРµ ``users.achievements`` РєР°Рє JSON dict:
+Хранятся в колонке users.achievements как JSON dict:
     {"ah_msg100": 1, ...}
-РєР»СЋС‡ вЂ” id РґРѕСЃС‚РёР¶РµРЅРёСЏ, Р·РЅР°С‡РµРЅРёРµ вЂ” 1 РІС‹РґР°РЅРѕ / 0 РЅРµ РІС‹РґР°РЅРѕ.
+ключ — id достижения, значение — 1 выдано / 0 не выдано.
 
-Р“СЂР°С„РёРєР° Рє РєР°Р¶РґРѕРјСѓ РґРѕСЃС‚РёР¶РµРЅРёСЋ (assets/achievements/<key>.webp) РґРѕР±Р°РІР»СЏРµС‚СЃСЏ РїРѕР·Р¶Рµ.
+Графика к каждому достижению (assets/achievements/<key>.webp) добавляется позже.
 """
 from __future__ import annotations
 
 import json
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
-# РџРѕСЂРѕРіРё РґР»СЏ РґРѕСЃС‚РёР¶РµРЅРёР№ Р·Р° СЃРѕРѕР±С‰РµРЅРёСЏ: 100 вЂ” РїРµСЂРІР°СЏ СЃРѕС‚РЅСЏ, 20000 вЂ” РјР°РєСЃРёРјСѓРј.
+# Пороги для достижений за сообщения: 100 — первая сотня, 20000 — максимум.
 MESSAGE_THRESHOLDS = (100, 500, 1000, 5000, 10000, 20000)
 
 ACHIEVEMENTS: dict[str, dict] = {
@@ -37,50 +38,100 @@ _AH_COLORS = {
     "ah_msg20000":  (234, 67, 53),
 }
 
+_award_lock = threading.Lock()
+
 
 def award(telegram_id: int, key: str) -> bool:
-    """РџРѕСЃС‚Р°РІРёС‚СЊ РґРѕСЃС‚РёР¶РµРЅРёРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ. True вЂ” С‚РѕР»СЊРєРѕ С‡С‚Рѕ РІС‹РґР°РЅРѕ."""
+    """Поставить достижение пользователю. True — только что выдано."""
     if key not in ACHIEVEMENTS:
         return False
-    from database import get_user, update_user_field
+    from database import Database, get_db_type, get_user, user_cache
 
-    user = get_user(telegram_id)
-    if not user:
-        return False
+    with _award_lock:
+        user = get_user(telegram_id)
+        if not user:
+            return False
 
-    raw = user.get("achievements") or "{}"
-    try:
-        achieved = json.loads(raw) if isinstance(raw, str) else (raw or {})
-    except Exception:
-        achieved = {}
+        raw = user.get("achievements") or "{}"
+        try:
+            achieved = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        except Exception:
+            achieved = {}
 
-    if achieved.get(key):
-        return False
+        if achieved.get(key):
+            return False
 
-    achieved[key] = 1
-    update_user_field(
-        telegram_id,
-        "achievements",
-        json.dumps(achieved, ensure_ascii=False),
-        save_to_db=True,
-    )
-    return True
+        achieved[key] = 1
+        serialized = json.dumps(achieved, ensure_ascii=False)
+
+        # 1. Update in-memory user objects and cache
+        user["achievements"] = serialized
+        user_cache.set(telegram_id, user)
+        user_cache.mark_dirty(telegram_id)
+
+        # 2. Persist directly to DB to avoid overwrite races
+        try:
+            db = Database()
+            scheme = get_db_type()
+            placeholder = "%s" if "postgres" in scheme else "?"
+            db.execute_query(
+                f"UPDATE users SET achievements = {placeholder} WHERE telegram_id = {placeholder}",
+                (serialized, telegram_id)
+            )
+        except Exception as e:
+            logger.error(f"award: failed to persist achievements for {telegram_id}: {e}")
+
+        return True
 
 
 def check_and_award(telegram_id: int, metric: str, new_value: int) -> list[str]:
-    """РџСЂРѕРІРµСЂРёС‚СЊ РїРѕСЂРѕРіРё РґРѕСЃС‚РёР¶РµРЅРёР№ РґР»СЏ РјРµС‚СЂРёРєРё Рё РІС‹РґР°С‚СЊ РЅРѕРІС‹Рµ."""
+    """Проверить пороги достижений для метрики и выдать новые."""
     new: list[str] = []
-    for key, spec in ACHIEVEMENTS.items():
-        if spec["metric"] != metric:
-            continue
-        if new_value >= spec["target"]:
-            if award(telegram_id, key):
-                new.append(key)
+    with _award_lock:
+        from database import Database, get_db_type, get_user, user_cache
+
+        user = get_user(telegram_id)
+        if not user:
+            return []
+
+        raw = user.get("achievements") or "{}"
+        try:
+            achieved = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        except Exception:
+            achieved = {}
+
+        for key, spec in ACHIEVEMENTS.items():
+            if spec["metric"] != metric:
+                continue
+            if new_value >= spec["target"]:
+                if not achieved.get(key):
+                    achieved[key] = 1
+                    new.append(key)
+
+        if not new:
+            return []
+
+        serialized = json.dumps(achieved, ensure_ascii=False)
+        user["achievements"] = serialized
+        user_cache.set(telegram_id, user)
+        user_cache.mark_dirty(telegram_id)
+
+        try:
+            db = Database()
+            scheme = get_db_type()
+            placeholder = "%s" if "postgres" in scheme else "?"
+            db.execute_query(
+                f"UPDATE users SET achievements = {placeholder} WHERE telegram_id = {placeholder}",
+                (serialized, telegram_id)
+            )
+        except Exception as e:
+            logger.error(f"check_and_award: failed to persist achievements for {telegram_id}: {e}")
+
     return new
 
 
 def get_user_achievements(telegram_id: int) -> dict[str, int]:
-    """Р’РµСЂРЅСѓС‚СЊ dict {key: 1} РІС‹РґР°РЅРЅС‹С… РґРѕСЃС‚РёР¶РµРЅРёР№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ."""
+    """Вернуть dict {key: 1} выданных достижений пользователю."""
     from database import get_user
 
     user = get_user(telegram_id)
@@ -92,4 +143,3 @@ def get_user_achievements(telegram_id: int) -> dict[str, int]:
     except Exception:
         data = {}
     return {k: v for k, v in data.items() if k in ACHIEVEMENTS and v}
-
