@@ -525,18 +525,28 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             roll_banner_url = get_banner_path("roll_normal")
 
-        # Обычный ролл: картинка появляется сразу и без подписи, текст под ней
-        # печатается следом. Мультикаст не печатает ничего - только финальный баннер.
         result_msg = None
         if roll_banner_url:
-            result_msg = await show_photo_with_typing(
-                context.bot,
-                chat_id,
-                media=roll_banner_url,
-                caption=text,
-                parse_mode="HTML",
-                reply_markup=main_menu(),
-            )
+            if cascade_count > 1:
+                # Мультикаст: только финальный баннер, текст не печатается.
+                result_msg = await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=roll_banner_url,
+                    caption=text,
+                    parse_mode="HTML",
+                    reply_markup=main_menu(),
+                )
+            else:
+                # Обычный ролл: картинка появляется сразу и без подписи, текст
+                # под ней печатается следом.
+                result_msg = await show_photo_with_typing(
+                    context.bot,
+                    chat_id,
+                    media=roll_banner_url,
+                    caption=text,
+                    parse_mode="HTML",
+                    reply_markup=main_menu(),
+                )
 
         if result_msg is None:
             # Баннер не отправился: шлём результат обычным сообщением, чтобы

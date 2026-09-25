@@ -144,12 +144,18 @@ def test_photo_appears_first_then_caption_is_typed():
     assert bot.caption_edits[-1] == caption
 
 
-def test_banner_is_never_sent_with_a_placeholder():
-    """No ellipsis, no label, no loading text on the picture at any point."""
-    bot, _ = _roll_with_caption("Мультикаст ×3", media="roll_fatal.webp")
-    assert bot.photos[0][1] is None
-    assert bot.caption_edits[0], "typing must start with real text"
-    assert "…" not in bot.caption_edits[0]
+def test_multicast_shows_banner_without_typing():
+    """Multicast keeps the plain banner: picture with the full caption at once."""
+    content = _source()
+    start = content.index('roll_banner_url = get_banner_path("roll_fatal")')
+    block = content[start:content.index("if result_msg is None:", start)]
+    # Multicast goes out as a single send_photo, not through the typing flow.
+    assert "if cascade_count > 1:" in block
+    assert "context.bot.send_photo(" in block
+    # And the typing call is only on the normal-roll branch.
+    assert block.index("context.bot.send_photo(") < block.index(
+        "show_photo_with_typing("
+    )
 
 
 def test_caption_frames_never_split_emoji_or_html():
