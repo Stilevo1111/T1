@@ -379,7 +379,7 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         parts.append("🍀—\n")
 
     # Keep the link directly below the last statistic line: no extra blank row.
-    parts.append("🔷<a href=\"https://seredin999.onrender.com/patch-fissure\">Подробнее на сайте</a>")
+    parts.append("🔷<a href=\"https://seredin999.onrender.com/fissure-bot\">Подробнее на сайте</a>")
     return "".join(parts)
 
 
