@@ -3044,6 +3044,28 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
 
         # F1/F2/F3 are reconciled exclusively by refresh_fissure_top_tags.
         # The profile is read-only here: assigning tags from a card caused
+
+        # Awards are independent of Telegram's visual tag application.  MMR
+        # Top-1 is a live weekly placement, and writer level is derived from
+        # the persisted message counter when the legacy achievements JSON is
+        # empty.  This makes the profile self-healing without mutating awards.
+        try:
+            from database import get_dota_week_top_from_db
+            live_top = await asyncio.to_thread(get_dota_week_top_from_db, 3)
+            live_top_ids = {
+                int(u["telegram_id"]) for u in (live_top or [])
+                if u.get("telegram_id")
+            }
+            if telegram_id in live_top_ids:
+                tags = list(dict.fromkeys([*tags, "weekly_top1"]))
+        except Exception as e:
+            logger.debug(f"profile live MMR placement unavailable uid={telegram_id}: {e}")
+        if not achievements:
+            from achievements import MESSAGE_THRESHOLDS
+            for threshold in MESSAGE_THRESHOLDS:
+                if int(target_user.get("message_count") or 0) >= threshold:
+                    achievements[f"ah_msg{threshold}"] = 1
+
         # DB/config drift and visible tag flicker.
 
         card_bytes = await asyncio.wait_for(
