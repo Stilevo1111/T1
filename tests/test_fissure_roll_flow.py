@@ -189,16 +189,19 @@ def test_photo_send_failure_returns_none():
     asyncio.run(run())
 
 
-def test_main_menu_buttons_are_all_red():
-    """Every main menu button uses the red (danger) style."""
+def test_main_menu_buttons_are_green_except_link():
+    """Every main menu button is green except "Привязать Аккаунт", which is red."""
     content = (PROJECT_ROOT / "bot_utils.py").read_text(encoding="utf-8-sig")
     start = content.index("def main_menu():")
     block = content[start:content.index("\ndef ", start)]
 
     assert block.count('"style"') == 6, "main menu has six buttons"
-    assert 'api_kwargs={"style": "danger"}' in block
-    for other in ("primary", "success"):
-        assert other not in block, f"no main menu button may use {other}"
+    assert block.count('api_kwargs={"style": "success"}') == 5
+    assert block.count('api_kwargs={"style": "danger"}') == 1
+    assert "primary" not in block
+    # The single red button is the account link one.
+    red = [line for line in block.splitlines() if '"danger"' in line]
+    assert len(red) == 1 and "Привязать Аккаунт" in red[0]
 
 
 def test_zeus_uses_the_same_picture_then_text_flow():

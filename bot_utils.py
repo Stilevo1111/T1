@@ -165,15 +165,15 @@ def main_menu():
     from telegram import KeyboardButton
     keyboard = [
         [
-            KeyboardButton("🎲 Ролл Фиссуры", api_kwargs={"style": "danger"}),
-            KeyboardButton("👤 Профиль", api_kwargs={"style": "danger"}),
+            KeyboardButton("🎲 Ролл Фиссуры", api_kwargs={"style": "success"}),
+            KeyboardButton("👤 Профиль", api_kwargs={"style": "success"}),
         ],
         [
-            KeyboardButton("🏆 Топ Фиссур", api_kwargs={"style": "danger"}),
-            KeyboardButton("🏆 Топ MMR", api_kwargs={"style": "danger"}),
+            KeyboardButton("🏆 Топ Фиссур", api_kwargs={"style": "success"}),
+            KeyboardButton("🏆 Топ MMR", api_kwargs={"style": "success"}),
         ],
         [
-            KeyboardButton("🔎 Аналитика", api_kwargs={"style": "danger"}),
+            KeyboardButton("🔎 Аналитика", api_kwargs={"style": "success"}),
             KeyboardButton("🔑 Привязать Аккаунт", api_kwargs={"style": "danger"}),
         ]
     ]
