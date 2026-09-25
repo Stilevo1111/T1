@@ -18,7 +18,6 @@ TAG_TYPES = {
     "F2": "Fissure Silver",
     "F3": "Fissure Bronze",
     "VIP": "VIP",
-    "admin_custom": "Administrator",
 }
 
 TAG_DISPLAY = {
@@ -29,7 +28,6 @@ TAG_DISPLAY = {
     "F1": "Fissure Gold",
     "F2": "Fissure Silver",
     "F3": "Fissure Bronze",
-    "admin_custom": "Administrator",
     "VIP": "VIP",
 }
 
@@ -42,7 +40,6 @@ TAG_PRIORITY = {
     "F1": 78,
     "F2": 76,
     "F3": 74,
-    "admin_custom": 50,
 }
 
 

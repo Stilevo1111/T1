@@ -2979,7 +2979,6 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
         "F2": ("Fissure Silver", None, "silver"),
         "F3": ("Fissure Bronze", None, "bronze"),
         "VIP": ("VIP", None, "vip"),
-        "admin_custom": ("Administrator", None, "admin"),
     }
     counts = counts or {}
     tags = set(tags or [])
@@ -3030,7 +3029,7 @@ def _profile_awards(tags=None, counts=None, *, mmr: int = 0, total_rolls: int = 
     if "weekly_mvp" in tags or mvp_count > 0:
         label, color, icon = meta["weekly_mvp"]
         add("weekly_mvp", label, color, mvp_count or None, icon)
-    for key in ("VIP", "admin_custom"):
+    for key in ("VIP",):
         if key in tags or int(counts.get(key) or 0) > 0:
             label, color, icon = meta[key]
             add(key, label, color, counts.get(key), icon)

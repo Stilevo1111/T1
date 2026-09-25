@@ -3052,7 +3052,6 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
                     "F1": 1 if "F1" in tags else 0,
                     "F2": 1 if "F2" in tags else 0,
                     "F3": 1 if "F3" in tags else 0,
-                    "admin_custom": 1 if "admin_custom" in tags else 0,
                 },
                 achievements=achievements,
                 position=position,
