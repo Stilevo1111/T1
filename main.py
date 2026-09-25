@@ -647,8 +647,8 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     context.user_data['analytics_matches'] = matches
                     context.user_data['analytics_chart_image'] = chart_image
                     context.user_data['analytics_pages'] = [
-                        {"title": "📊 Разбор матчей", "text": pro_text} if pro_text else None,
-                        {"title": "🔎 Что в данных", "text": detailed_text} if detailed_text else None,
+                        {"title": "Показатели", "text": pro_text} if pro_text else None,
+                        {"title": "Сравнение с Pro", "text": detailed_text} if detailed_text else None,
                     ]
                     context.user_data['analytics_generated'] = {
                         i for i, p in enumerate([pro_text, detailed_text]) if p is not None

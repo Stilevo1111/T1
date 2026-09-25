@@ -1053,8 +1053,8 @@ def get_analytics_pages(role: str, stats: dict[str, Any]) -> list[dict[str, Any]
     detailed_text = tables["detailed"]
 
     return [
-        {"title": "Показатели матчей", "text": pro_text},
-        {"title": "Подробная статистика", "text": detailed_text},
+        {"title": "Показатели", "text": pro_text},
+        {"title": "Сравнение с Pro", "text": detailed_text},
     ]
 
 
@@ -1387,6 +1387,7 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
             "imp": imp,
             "hero_id": m.get("hero_id", 0),
             "win": win,
+            "role": role,
             "imp_unavailable": imp is None,
         })
 
@@ -1606,7 +1607,6 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
         else: draw.ellipse((x-12, y-12, x+12, y+12), fill=color)
         draw.text((int(x-18), int(y-52)), f"{float(item['imp']):.2f}", font=font(15, True), fill="#f8fafc")
     draw.text((58, 700), f"СРЕДНИЙ ИНДЕКС: {sum(values)/len(values):.2f}  •  ПОБЕД: {wins}  •  ПОРАЖЕНИЙ: {len(entries)-wins}", font=font(25, True), fill="#f8fafc")
-    draw.text((58, 744), "ЛИНИЯ = ДИНАМИКА ИНДЕКСА  •  ИКОНКА = ГЕРОЙ  •  ЦВЕТ = РЕЗУЛЬТАТ МАТЧА", font=font(16), fill="#94a3b8")
     result = io.BytesIO(); canvas.convert("RGB").save(result, format="PNG", optimize=True); return result.getvalue()
 
 
