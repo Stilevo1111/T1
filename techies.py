@@ -14,6 +14,11 @@ TECHIES_BASE_URL = Path(__file__).resolve().parent / "assets" / "techies" / "bas
 TECHIES_SUCCESS_URL = Path(__file__).resolve().parent / "assets" / "techies" / "success.jpg"
 TECHIES_EXPLOSION_URL = Path(__file__).resolve().parent / "assets" / "techies" / "explosion.jpg"
 TECHIES_TIMEOUT_SEC = 20
+# Techies should be a meaningful risk, not a balance reset.  Four mines at
+# 1–5 cm produce a 4–20 cm loss (10 cm average), instead of 4–40 cm (22 cm
+# average) from the old 1–10 range.
+TECHIES_MINE_MIN_DAMAGE = 1
+TECHIES_MINE_MAX_DAMAGE = 5
 
 BUTTONS = [
     ("🟢", "Зелёная", "green"),
@@ -50,7 +55,7 @@ _active_techies_sessions: dict[str, dict] = {}
 
 def generate_mines(count: int = 4) -> list[int]:
     """Сгенерировать позиции мин (0/1) для мини-игры Техиес."""
-    return [random.randint(1, 10) for _ in range(count)]
+    return [random.randint(TECHIES_MINE_MIN_DAMAGE, TECHIES_MINE_MAX_DAMAGE) for _ in range(count)]
 
 
 def _session_key(chat_id: int, user_id: int) -> str:
