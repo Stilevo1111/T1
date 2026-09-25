@@ -176,6 +176,16 @@ class TestProfileAwards:
     def test_empty_returns_empty_list(self):
         assert dota_mmr._profile_awards(None, None) == []
 
+    def test_profile_keeps_current_top1_and_highest_writer(self):
+        awards = dota_mmr._profile_awards(
+            ["weekly_top1", "weekly_top2", "weekly_top3"],
+            {"weekly_top1": 1, "weekly_top2": 2, "weekly_top3": 1},
+            achievements={"ah_msg100": 1, "ah_msg1000": 1, "ah_msg20000": 1},
+        )
+        assert [a["key"] for a in awards if a["key"].startswith("weekly_top")] == ["weekly_top1"]
+        assert [a["key"] for a in awards if a["key"].startswith("ah_msg")] == ["ah_msg20000"]
+
+
     def test_garbage_inputs_do_not_crash(self):
         awards = dota_mmr._profile_awards("не-список", {"weekly_mvp": "abc"}, mmr="x")
         assert isinstance(awards, list)

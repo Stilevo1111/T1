@@ -2998,12 +2998,30 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
         achievements = {}
         if telegram_id:
             try:
-                tags = await asyncio.to_thread(get_user_tags, telegram_id)
-                from achievements import get_user_achievements
-                achievements = await asyncio.to_thread(get_user_achievements, telegram_id)
-                logger.debug(f"profile card: got tags and awards for uid={telegram_id}")
+                # Use the same user row that powers the profile. Re-reading
+                # through a stale in-memory cache can lose newly awarded tags.
+                raw_tags = target_user.get("user_tags") or "[]"
+                if isinstance(raw_tags, str):
+                    raw_tags = json.loads(raw_tags)
+                if isinstance(raw_tags, list):
+                    tags = [t for t in raw_tags if t in {
+                        "weekly_mvp", "weekly_top1", "weekly_top2", "weekly_top3",
+                        "F1", "F2", "F3", "VIP",
+                    }]
+                raw_achievements = target_user.get("achievements") or "{}"
+                if isinstance(raw_achievements, str):
+                    raw_achievements = json.loads(raw_achievements)
+                if isinstance(raw_achievements, dict):
+                    achievements = raw_achievements
             except Exception as e:
-                logger.debug(f"profile card tags skipped uid={telegram_id}: {e}")
+                logger.debug(f"profile card award data skipped uid={telegram_id}: {e}")
+                # Fresh read is a safe fallback for an older cached row.
+                try:
+                    tags = await asyncio.to_thread(get_user_tags, telegram_id)
+                    from achievements import get_user_achievements
+                    achievements = await asyncio.to_thread(get_user_achievements, telegram_id)
+                except Exception as fallback_error:
+                    logger.debug(f"profile card award fallback failed uid={telegram_id}: {fallback_error}")
 
         position = target_user.get("current_position")
         if not position and telegram_id:

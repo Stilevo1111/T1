@@ -38,6 +38,7 @@ class User:
     best_lose_streak: int = 0
     message_count: int = 0
     user_tags: str | None = None
+    achievements: str | None = None
 
     @classmethod
     def from_row(cls, row: tuple | dict, db_type: str = "sqlite") -> User:
@@ -58,6 +59,7 @@ class User:
                 best_lose_streak=row.get("best_lose_streak", 0),
                 message_count=row.get("message_count", 0),
                 user_tags=row.get("user_tags"),
+                achievements=row.get("achievements"),
             )
         return cls(
             telegram_id=row[1] if len(row) > 1 else 0,
@@ -1721,6 +1723,7 @@ class Database:
                         "weekly_top2": int(user["weekly_top2"]) if user.get("weekly_top2") is not None else 0,
                         "weekly_top3": int(user["weekly_top3"]) if user.get("weekly_top3") is not None else 0,
                         "user_tags": user.get("user_tags") or "[]",
+                        "achievements": user.get("achievements") or "{}",
                         "free_rolls": int(user.get("free_rolls", 0)) if user.get("free_rolls") is not None else 0,
                     }
                     if username is not None and username != result.get('username'):
@@ -1779,6 +1782,7 @@ class Database:
                             "weekly_top2": int(u["weekly_top2"]) if u.get("weekly_top2") is not None else 0,
                             "weekly_top3": int(u["weekly_top3"]) if u.get("weekly_top3") is not None else 0,
                             "user_tags": u.get("user_tags") or "[]",
+                            "achievements": u.get("achievements") or "{}",
                             "free_rolls": int(u.get("free_rolls", 0)) if u.get("free_rolls") is not None else 0,
                         }
                         if username is not None and username != result.get('username'):
@@ -2417,6 +2421,7 @@ def get_user(telegram_id, username=None):
         user.setdefault('weekly_top2', 0)
         user.setdefault('weekly_top3', 0)
         user.setdefault('user_tags', [])
+        user.setdefault('achievements', '{}')
         user.setdefault('free_rolls', 0)
         user_cache.set(tid, user, skip_dirty=True)
         return user
