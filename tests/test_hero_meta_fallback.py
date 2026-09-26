@@ -51,6 +51,21 @@ def test_heroes_data_falls_back_to_local_catalog(monkeypatch):
     assert Path(heroes[1]["img"]).exists()
 
 
+def test_sync_heroes_data_falls_back_to_catalog_on_timeout(monkeypatch):
+    """A sync timeout must not yield {}, which collapses roles to SUPPORT."""
+
+    def timeout(coro, *args, **kwargs):
+        coro.close()
+        raise TimeoutError
+
+    monkeypatch.setattr(dota_mmr, "_run_async", timeout)
+
+    heroes = dota_mmr.get_heroes_data()
+
+    assert len(heroes) > 100
+    assert all(hero["roles"] for hero in heroes.values())
+
+
 def test_roles_spread_heroes_across_positions():
     """Empty roles used to send every hero to SUPPORT, blanking four columns."""
     heroes = dota_mmr.get_local_heroes_data()

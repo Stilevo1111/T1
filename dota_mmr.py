@@ -725,8 +725,11 @@ def get_heroes_data() -> dict:
     try:
         return _run_async(get_heroes_data_async())
     except TimeoutError:
+        # Must not return an empty dict: callers derive hero names, roles and
+        # image paths from this, and empty roles collapse every hero into
+        # SUPPORT, which empties four of the five infographic columns.
         logger.warning("get_heroes_data timeout")
-        return {}
+        return get_local_heroes_data()
 
 
 def get_top_heroes(steam_id: int, last_n: int = 10, top_k: int = 3) -> list:
