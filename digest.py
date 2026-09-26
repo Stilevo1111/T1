@@ -285,6 +285,45 @@ def refresh_dota_digest_cache():
 
 
 
+def _restore_created_at(msg_id) -> float:
+    """Rebuild the in-memory digest creation time after a restart.
+
+    The timestamp of the last real creation is kept in
+    alternate_digest_last_created, so a fresh process can tell how old the
+    cached digest actually is. Returning 0 when nothing is known keeps the old
+    behaviour: no post yet, so the first run legitimately creates one.
+    """
+    now = time.time()
+    try:
+        from database import get_config
+
+        raw = get_config('alternate_digest_last_created')
+        if raw and str(raw).strip():
+            created = float(raw)
+            if 0 < created <= now + 60:
+                return created
+            logger.warning(
+                f"alternate_digest_job: ignoring implausible "
+                f"alternate_digest_last_created={created}"
+            )
+    except Exception as e:
+        logger.debug(f"Could not restore created_at from DB: {e}")
+        return 0.0
+
+    if not msg_id:
+        # No message and no creation time: the first digest has to be made.
+        return 0.0
+
+    # A message exists but the creation time is gone. Pretend it is fresh so we
+    # edit the pinned post instead of rotating, and the next real creation
+    # records a proper timestamp.
+    logger.info(
+        "alternate_digest_job: message exists but creation time is unknown, "
+        "treating the cache as fresh to avoid a false rotation"
+    )
+    return now
+
+
 def _build_digest_text_for_type(digest_type: str) -> str | None:
     """Генерирует объединённый текст дайджеста (Fissure + Dota) в одном сообщении."""
     try:
@@ -537,15 +576,24 @@ async def alternate_digest_job(context):
         now = time.time()
 
         # === ЗАЩИТА ОТ ЛОЖНОЙ РОТАЦИИ ПОСЛЕ РЕСТАРТА ===
-        # Если в БД уже есть alternate_digest_message_id — пост существует,
-        # значит мы должны РЕДАКТИРОВАТЬ его, а не создавать новый.
-        # created_at=0 после импорта модуля больше не должен триггерить should_create_new.
+        # created_at живёт только в памяти процесса, поэтому после деплоя он
+        # равен 0. Раньше его подменяли на "сейчас минус 30 секунд", но только
+        # когда сообщение уже существует: если alternate_digest_message_id ещё
+        # не записан, защита не срабатывала вовсе, проверка now - 0 >
+        # rotation_interval проходила и дайджест уходил в ложную ротацию.
+        # Ротация удаляет закреплённый пост и заставляет перегенерировать баннер
+        # hero meta, то есть снова обходить OpenDota и снова упираться в rate limit.
+        # Поэтому восстанавливаем реальное время последнего создания из БД.
         cache = _digest_cache
         msg_id = get_config('alternate_digest_message_id')
-        if msg_id:
-            if not cache.get("created_at") or cache.get("created_at", 0) <= 0:
-                cache["created_at"] = time.time() - 30
-                logger.info("alternate_digest_job: existing message_id in config, created_at adjusted to prevent false rotation after restart")
+        if not cache.get("created_at") or cache.get("created_at", 0) <= 0:
+            restored = _restore_created_at(msg_id)
+            if restored > 0:
+                cache["created_at"] = restored
+                logger.info(
+                    f"alternate_digest_job: created_at restored from DB to "
+                    f"{restored} (message_id={msg_id})"
+                )
 
         # === УМНАЯ СИСТЕМА КЕШИРОВАНИЯ ДАЙДЖЕСТОВ ===
         should_create_new = False
