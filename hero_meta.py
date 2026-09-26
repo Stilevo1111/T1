@@ -19,7 +19,7 @@ from PIL import Image, ImageDraw, ImageFont
 from hero_positions import hero_positions
 from constants import get_banner_path
 
-from dota_mmr import get_player_stats_async, get_cached_avatar
+from dota_mmr import get_player_stats_async, get_cached_avatar, cache_avatar_bytes
 from bot_utils import get_user_avatar_url
 
 logger = logging.getLogger(__name__)
@@ -723,6 +723,7 @@ async def create_infographic(hero_stats, bot=None):
         if not img:
             avatar_url = player.get('avatar')
             telegram_id = player.get('telegram_id')
+            resolved_from_cache = False
 
             # Try Telegram profile photo first (via bot instance if available)
             if telegram_id and bot:
@@ -763,6 +764,16 @@ async def create_infographic(hero_stats, bot=None):
             # Fallback to Steam/direct avatar URL (http URLs only)
             if not img and avatar_url and avatar_url.startswith('http'):
                 img = await fetch_hero_icon(None, avatar_url)
+
+            # Persist avatars resolved without OpenDota, so a later rate limit
+            # does not turn a known avatar into the gray Steam placeholder.
+            if img and steam_id and not resolved_from_cache:
+                try:
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    await cache_avatar_bytes(steam_id, buf.getvalue())
+                except Exception as e:
+                    logger.debug(f"Failed to warm avatar cache for hero {hero_id}: {e}")
 
             # Fallback: fetch avatar directly from OpenDota by steam_id
             if not img and steam_id:

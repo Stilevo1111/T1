@@ -155,6 +155,24 @@ async def _cache_avatar(steam_id: int, avatar_url: str) -> None:
         logger.debug(f"Failed to cache avatar for {steam_id}: {e}")
 
 
+async def cache_avatar_bytes(steam_id: int, data: bytes) -> None:
+    """Store already-downloaded avatar bytes in Redis.
+
+    Used when the avatar was resolved from Telegram or a direct URL, so the
+    next read hits the cache instead of falling through to OpenDota (which
+    may be rate limited).
+    """
+    if not data or not steam_id:
+        return
+    try:
+        import base64
+        encoded = base64.b64encode(data).decode()
+        await redis_cache.set(f"avatar:{steam_id}", encoded, ttl=AVATAR_CACHE_TTL)
+        logger.debug(f"Cached avatar bytes for steam_id={steam_id}")
+    except Exception as e:
+        logger.debug(f"Failed to cache avatar bytes for {steam_id}: {e}")
+
+
 async def get_cached_avatar(steam_id: int) -> bytes | None:
     """Get cached avatar bytes from Redis."""
     if not steam_id:
