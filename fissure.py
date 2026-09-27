@@ -45,7 +45,6 @@ from database import (
     zeus_strike,
 )
 from digest import invalidate_digest_cache
-from loading_flow import show_photo_with_typing
 from rate_limiter import is_rate_limited
 from rolls import (
     MULTICAST_TEXTS,
@@ -203,23 +202,13 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
     )
 
     zeus_banner_url = get_banner_path("zeus")
-    # Картинка появляется сразу и без подписи, текст печатается под ней.
-    result_msg = await show_photo_with_typing(
-        bot,
-        chat_id,
-        media=zeus_banner_url,
+    result_msg = await bot.send_photo(
+        chat_id=chat_id,
+        photo=zeus_banner_url,
         caption=text,
         parse_mode="HTML",
         reply_markup=main_menu(),
     )
-    if result_msg is None:
-        result_msg = await bot.send_photo(
-            chat_id=chat_id,
-            photo=zeus_banner_url,
-            caption=text,
-            parse_mode="HTML",
-            reply_markup=main_menu()
-        )
     if record_recent_fissure_roll:
         record_recent_fissure_roll(user_obj.id, user_obj.username, initiator_gain, new_fissure, cascade=0, event_type="zeus")
 
@@ -527,26 +516,13 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         result_msg = None
         if roll_banner_url:
-            if cascade_count > 1:
-                # Мультикаст: только финальный баннер, текст не печатается.
-                result_msg = await context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=roll_banner_url,
-                    caption=text,
-                    parse_mode="HTML",
-                    reply_markup=main_menu(),
-                )
-            else:
-                # Обычный ролл: картинка появляется сразу и без подписи, текст
-                # под ней печатается следом.
-                result_msg = await show_photo_with_typing(
-                    context.bot,
-                    chat_id,
-                    media=roll_banner_url,
-                    caption=text,
-                    parse_mode="HTML",
-                    reply_markup=main_menu(),
-                )
+            result_msg = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=roll_banner_url,
+                caption=text,
+                parse_mode="HTML",
+                reply_markup=main_menu(),
+            )
 
         if result_msg is None:
             # Баннер не отправился: шлём результат обычным сообщением, чтобы

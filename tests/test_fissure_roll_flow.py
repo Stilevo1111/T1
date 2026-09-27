@@ -1,12 +1,11 @@
 """Tests for the Fissure roll flow.
 
-The normal roll and Zeus post their banner first and type the result into the
-picture caption, in the background, with no separate loading message. Multicast
-posts a plain banner with its full caption and types nothing, and Techies keeps
+The normal roll and Zeus post their banner with the full caption at once.
+Multicast also posts a plain banner with its full caption, and Techies keeps
 its own flow untouched.
 
 fissure.py cannot be imported here (no redis package), so these tests assert on
-the source and on loading_flow, which is where the behaviour lives.
+the source, which is where the behaviour lives.
 """
 
 import asyncio
@@ -40,11 +39,10 @@ def test_multicast_sends_no_slot_messages():
     assert "🎰" not in code, "multicast slot messages must be gone"
 
 
-def test_roll_posts_picture_then_types_caption():
-    """The roll has no loading message and no placeholder caption: the picture
-    comes first, bare, and the result is typed underneath it."""
+def test_roll_posts_picture_with_caption_directly():
+    """The roll sends the picture with its full caption at once."""
     content = _source()
-    assert "show_photo_with_typing(" in content
+    assert "show_photo_with_typing(" not in content
     # No invented placeholder text on the picture.
     assert "Хукаю кости" not in content
     assert "Подбрасываю кости" not in content
@@ -145,18 +143,14 @@ def test_photo_appears_first_then_caption_is_typed():
     assert bot.caption_edits[-1] == caption
 
 
-def test_multicast_shows_banner_without_typing():
-    """Multicast keeps the plain banner: picture with the full caption at once."""
+def test_all_rolls_send_photo_with_caption():
+    """Both normal and multicast rolls send the banner with full caption at once."""
     content = _source()
-    start = content.index('roll_banner_url = get_banner_path("roll_fatal")')
+    start = content.index('roll_banner_url = get_banner_path')
     block = content[start:content.index("if result_msg is None:", start)]
-    # Multicast goes out as a single send_photo, not through the typing flow.
-    assert "if cascade_count > 1:" in block
-    assert "context.bot.send_photo(" in block
-    # And the typing call is only on the normal-roll branch.
-    assert block.index("context.bot.send_photo(") < block.index(
-        "show_photo_with_typing("
-    )
+    # Both branches send the banner directly with a caption - no typing flow.
+    assert "send_photo(" in block
+    assert "show_photo_with_typing(" not in block
 
 
 def test_caption_frames_never_split_emoji_or_html():
@@ -204,13 +198,14 @@ def test_main_menu_buttons_are_green_except_link():
     assert len(red) == 1 and "Привязать Аккаунт" in red[0]
 
 
-def test_zeus_uses_the_same_picture_then_text_flow():
-    """Zeus gets the same treatment: picture first, result typed under it."""
+def test_zeus_sends_banner_with_caption():
+    """Zeus sends the picture with full caption at once."""
     content = _source()
     start = content.index('zeus_banner_url = get_banner_path("zeus")')
     end = content.index("\ndef ", start)
     zeus = content[start:end]
-    assert "show_photo_with_typing(" in zeus
+    assert "send_photo(" in zeus
+    assert "show_photo_with_typing(" not in zeus
     assert "label=" not in zeus
 
 
