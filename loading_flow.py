@@ -264,7 +264,7 @@ async def _type_caption(
                     )
                     return False
                 logger.debug(f"loading_flow: caption edit failed ({name}: {e})")
-                return False
+                return True
 
     for end in range(chunk, len(plain), chunk):
         if asyncio.current_task().cancelling():
