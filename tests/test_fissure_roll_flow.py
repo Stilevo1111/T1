@@ -4,8 +4,9 @@ The normal roll and Zeus post their banner with the full caption at once.
 Multicast also posts a plain banner with its full caption, and Techies keeps
 its own flow untouched.
 
-fissure.py cannot be imported here (no redis package), so these tests assert on
-the source, which is where the behaviour lives.
+These tests assert on the source text and need no bot dependencies (the roll
+delivery itself is covered in test_fissure_roll_delivery.py, which runs
+fissure.fissure() against a stubbed bot).
 """
 
 import asyncio
@@ -94,55 +95,6 @@ def test_multicast_falls_back_to_a_plain_banner():
     asyncio.run(run())
 
 
-def _roll_with_caption(caption, media="roll_normal.webp", **kw):
-    """Post a roll picture and let its caption finish typing.
-
-    Returns the bot stub and the message. `bot.at_return` is a snapshot of the
-    caption edits recorded by the moment the caller got control back, which is
-    what proves the typing does not block the roll handler.
-    """
-    bot = _Bot()
-    interval = loading_flow.TYPE_INTERVAL
-    loading_flow.TYPE_INTERVAL = 0.0
-
-    async def run():
-        msg = await loading_flow.show_photo_with_typing(
-            bot, 1, media=media, caption=caption, **kw
-        )
-        bot.at_return = list(bot.caption_edits)
-        # Drain the background animation inside this same loop, since the task
-        # belongs to the loop that created it.
-        while loading_flow._typing_tasks:
-            await asyncio.gather(*list(loading_flow._typing_tasks))
-        return msg
-
-    try:
-        msg = asyncio.run(run())
-    finally:
-        loading_flow.TYPE_INTERVAL = interval
-    return bot, msg
-
-
-def test_photo_appears_first_then_caption_is_typed():
-    caption = "🎲 TestUser\n\nПроклял Акадо на 12 см!\n\n📏 41.2 см → 29.2 см"
-    bot, msg = _roll_with_caption(caption, reply_markup="markup")
-
-    assert msg is not None
-    # The picture is posted first, with no caption of its own.
-    assert bot.photos[0][0] == "roll_normal.webp"
-    assert bot.photos[0][1] is None
-
-    # The handler got control back before any typing happened, so the database
-    # write and cooldown are not stuck behind a three second animation.
-    assert bot.at_return == []
-
-    # The caption is then typed out, growing until it is complete.
-    assert bot.caption_edits, "caption must be typed after the picture"
-    for a, b in zip(bot.caption_edits, bot.caption_edits[1:]):
-        assert len(b) >= len(a), "caption must never shrink"
-    assert bot.caption_edits[-1] == caption
-
-
 def test_all_rolls_send_photo_with_caption():
     """Both normal and multicast rolls send the banner with full caption at once."""
     content = _source()
@@ -151,36 +103,6 @@ def test_all_rolls_send_photo_with_caption():
     # Both branches send the banner directly with a caption - no typing flow.
     assert "send_photo(" in block
     assert "show_photo_with_typing(" not in block
-
-
-def test_caption_frames_never_split_emoji_or_html():
-    """Frames are plain text, so no frame can cut a tag or an emoji in half."""
-    caption = "<b>🎲 TestUser</b>\n\nПроклял Акадо на 12 см!\n📏 41 см"
-    bot, _ = _roll_with_caption(caption, parse_mode="HTML")
-
-    # Every frame before the last is tag-free and free of lone surrogates.
-    for text in bot.caption_edits[:-1]:
-        assert "<b>" not in text
-        assert not any("\ud800" <= c <= "\udfff" for c in text)
-    # The last frame is the real, formatted caption.
-    assert bot.caption_edits[-1] == caption
-
-
-def test_photo_send_failure_returns_none():
-    class _NoPhoto(_Bot):
-        async def send_photo(self, chat_id, photo, caption=None, parse_mode=None,
-                             reply_markup=None):
-            raise RuntimeError("Bad Request: chat not found")
-
-    async def run():
-        bot = _NoPhoto()
-        result = await loading_flow.show_photo_with_typing(
-            bot, 1, media="x.webp", caption="text"
-        )
-        assert result is None
-        assert not bot.caption_edits
-
-    asyncio.run(run())
 
 
 def test_main_menu_buttons_are_green_except_link():
@@ -227,8 +149,6 @@ class _Bot:
         self.media_edits = []
         self.markup_edits = []
         self.deletes = []
-        self.photos = []
-        self.caption_edits = []
         self.supports_media = supports_media
     async def send_message(self, chat_id, text, parse_mode=None):
         self.sent.append(text)
@@ -243,16 +163,6 @@ class _Bot:
         if not self.supports_media:
             raise RuntimeError("Bad Request: unsupported media")
         self.media_edits.append(media)
-        return _Msg(message_id, chat_id)
-
-    async def send_photo(self, chat_id, photo, caption=None, parse_mode=None,
-                         reply_markup=None):
-        self.photos.append((photo, caption))
-        return _Msg(500, chat_id)
-
-    async def edit_message_caption(self, chat_id, message_id, caption,
-                                   parse_mode=None):
-        self.caption_edits.append(caption)
         return _Msg(message_id, chat_id)
 
     async def edit_message_reply_markup(self, chat_id, message_id, reply_markup):

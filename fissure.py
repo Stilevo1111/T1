@@ -411,7 +411,8 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Проверяем переход на x4 (скрытый рандом 15%)
                     if random.random() < 0.15:
                         cascade_count = 4
-            # иначе остаётся x2
+            # иначе остаётся x1: мисс-слот без множителя. Weekend-бонус к нему
+            # не применяется — для этого и нужна проверка `not is_multicast` ниже.
 
             # Сохраняем base_roll как original_roll для отображения
             saved_original_roll = base_roll_before_streak

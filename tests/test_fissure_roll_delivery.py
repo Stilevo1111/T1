@@ -153,7 +153,8 @@ def _assert_valid_html(caption):
 # --- Fissure wiring -----------------------------------------------------------
 
 
-def _stub(monkeypatch, *, roll=12.0, chances=(0.0, 0.0, 0.0), fissure_value=100.0):
+def _stub(monkeypatch, *, roll=12.0, chances=(0.0, 0.0, 0.0), fissure_value=100.0,
+          weekend=False):
     """Replace storage, events and randomness with deterministic doubles."""
 
     async def _noop_async(*args, **kwargs):
@@ -167,7 +168,7 @@ def _stub(monkeypatch, *, roll=12.0, chances=(0.0, 0.0, 0.0), fissure_value=100.
     # The anti-spam window is module state; give every run a clean one.
     monkeypatch.setattr(fissure, "_user_fissure_processing", {})
     monkeypatch.setattr(fissure, "is_rate_limited", lambda: False)
-    monkeypatch.setattr(fissure, "is_weekend_msk", lambda: False)
+    monkeypatch.setattr(fissure, "is_weekend_msk", lambda: weekend)
     monkeypatch.setattr(fissure, "get_event_chances", lambda: chances)
     monkeypatch.setattr(fissure, "calculate_fissure_roll", lambda current: (roll, "", False, False))
     monkeypatch.setattr(fissure, "get_free_rolls", lambda telegram_id: 0)
@@ -296,4 +297,28 @@ def test_roll_still_reaches_the_chat_when_the_banner_fails(monkeypatch):
     assert bot.messages, "the roll text must still be delivered as a message"
     assert "📏 100.0 см → 112.0 см" in bot.messages[0]
     assert not bot.messages[0].startswith("❌ Ошибка обработки запроса")
+
+
+def test_multicast_miss_slot_stays_a_plain_roll(monkeypatch):
+    """The x1 cascade is an intentional miss, not a broken multiplier.
+
+    fissure.py keeps x1 as the multicast baseline and skips the weekend bonus
+    for it (the `not is_multicast` check). If that ever changes, this test shows
+    it was a deliberate decision rather than an accident.
+    """
+    monkeypatch.setattr(fissure.random, "random", lambda: 0.9)
+    bot = _run_roll(monkeypatch, roll=12.0, chances=(1.0, 0.0, 0.0), weekend=True)
+
+    assert len(bot.photos) == 1
+    photo = bot.photos[0]
+    assert photo["photo"] == "roll_normal.webp", "an x1 miss uses the normal banner"
+
+    caption = photo["caption"]
+    assert "МУЛЬТИКАСТ" not in caption, "no multiplier indicator for x1"
+    assert "ВЫХОДНОЙ" not in caption, "the weekend bonus skips multicast slots"
+    assert "📏 100.0 см → 112.0 см" in caption
+    _assert_valid_html(caption)
+
+    assert bot.caption_edits == []
+    assert bot.messages == []
 

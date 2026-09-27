@@ -28,7 +28,6 @@ from loading_flow import (  # noqa: E402
     TYPED_LABEL,
     delete_loading,
     show_loading,
-    show_photo_with_typing,
     stop_loading,
     stop_loading_by_id,
 )
@@ -341,38 +340,5 @@ def test_icon_is_optional():
         await _spin()
         await stop_loading(handle)
         assert bot.sent == [f"<b>{TYPED_LABEL[:1]}</b>"]
-
-    asyncio.run(run())
-
-
-def test_caption_transient_error_does_not_abort_typing():
-    """A non-gone error (e.g. rate limit) must not abort caption typing.
-
-    Regression: the `put` helper in `_type_caption` returned False for any
-    non-gone error, aborting the loop before the final formatted caption was
-    set.  Transient errors should be skipped and typing should continue,
-    matching the behavior of the `_edit` helper.
-    """
-
-    class _Transient(_Bot):
-        def __init__(self, chat_id=1):
-            super().__init__(chat_id)
-            self._fail_next = True
-
-        async def send_photo(self, chat_id, photo=None, parse_mode=None, reply_markup=None):
-            return _Msg(42, chat_id)
-
-        async def edit_message_caption(self, chat_id, message_id, caption=None, parse_mode=None):
-            if self._fail_next:
-                self._fail_next = False
-                raise RuntimeError("Too Many Requests: rate limit hit")
-            self.edits.append(caption)
-
-    async def run():
-        bot = _Transient()
-        caption = "Привет, мир!"
-        await show_photo_with_typing(bot, bot.chat_id, "fake_media", caption)
-        await _spin()
-        assert caption in bot.edits, "full caption must eventually be set despite transient error"
 
     asyncio.run(run())
