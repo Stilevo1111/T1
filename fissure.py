@@ -202,13 +202,27 @@ async def handle_zeus_event(bot, chat_id, user, user_obj, display_username, now,
     )
 
     zeus_banner_url = get_banner_path("zeus")
-    result_msg = await bot.send_photo(
-        chat_id=chat_id,
-        photo=zeus_banner_url,
-        caption=text,
-        parse_mode="HTML",
-        reply_markup=main_menu(),
-    )
+    result_msg = None
+    if zeus_banner_url:
+        try:
+            result_msg = await bot.send_photo(
+                chat_id=chat_id,
+                photo=zeus_banner_url,
+                caption=text,
+                parse_mode="HTML",
+                reply_markup=main_menu(),
+            )
+        except Exception as e:
+            # Do not let a Telegram hiccup swallow the event: fall back to text
+            # below and keep the strike results in the chat.
+            logger.warning(f"zeus: banner send failed ({e}), falling back to text")
+    if result_msg is None:
+        result_msg = await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=main_menu(),
+        )
     if record_recent_fissure_roll:
         record_recent_fissure_roll(user_obj.id, user_obj.username, initiator_gain, new_fissure, cascade=0, event_type="zeus")
 
@@ -516,13 +530,18 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         result_msg = None
         if roll_banner_url:
-            result_msg = await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=roll_banner_url,
-                caption=text,
-                parse_mode="HTML",
-                reply_markup=main_menu(),
-            )
+            try:
+                result_msg = await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=roll_banner_url,
+                    caption=text,
+                    parse_mode="HTML",
+                    reply_markup=main_menu(),
+                )
+            except Exception as e:
+                # Leave result_msg as None so the fallback below still delivers
+                # the roll text instead of the handler ending with an error.
+                logger.warning(f"fissure: roll banner send failed ({e}), falling back")
 
         if result_msg is None:
             # Баннер не отправился: шлём результат обычным сообщением, чтобы
