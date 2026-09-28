@@ -843,6 +843,19 @@ def _get_week_start_utc():
     return week_start_msk.astimezone(UTC)
 
 
+def _get_week_start_str() -> str:
+    """Возвращает понедельник текущей недели как 'YYYY-MM-DD' (в часовом поясе МСК).
+
+    Используется для week_start_date в БД, чтобы запросы в
+    announce_weekly_mmr_winner находили игроков текущей недели.
+    """
+    from datetime import datetime, timedelta, timezone
+    MSK = timezone(timedelta(hours=3))
+    today_msk = datetime.now(MSK)
+    monday_msk = today_msk - timedelta(days=today_msk.weekday())
+    return monday_msk.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%d")
+
+
 def get_week_top_heroes(steam_id: int, top_k: int = 5, match_limit: int = 50) -> list:
     """Топ героев игрока за текущую неделю (по числу игр)."""
     from collections import Counter
@@ -1507,7 +1520,7 @@ def _apply_private_profile_binding(telegram_id: int, steam_id: int, stats: dict)
         "rank_tier": 0,
         "wins": 0,
         "losses": 0,
-        "week_start_date": datetime.now(UTC).date().isoformat(),
+        "week_start_date": _get_week_start_str(),
     })
     return {
         "success": True,
@@ -1525,7 +1538,7 @@ def _apply_normal_binding(telegram_id: int, steam_id: int, stats: dict) -> dict:
         "rank_tier": stats.get("rank_tier", 0),
         "wins": stats.get("wins", 0),
         "losses": stats.get("losses", 0),
-        "week_start_date": datetime.now(UTC).date().isoformat(),
+        "week_start_date": _get_week_start_str(),
     })
     update_user_mmr(telegram_id)
 
@@ -1611,7 +1624,7 @@ def register_steam(telegram_id: int, identifier: str) -> dict:
                         "rank_tier": 0,
                         "wins": 0,
                         "losses": 0,
-                        "week_start_date": datetime.now(UTC).date().isoformat(),
+                        "week_start_date": _get_week_start_str(),
                     })
                     return {
                         "success": True,
