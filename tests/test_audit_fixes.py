@@ -610,6 +610,14 @@ def test_startup_uses_full_weekly_reset():
     assert "Startup: weekly stats reset for" not in content
 
 
+def test_startup_has_monday_champion_catchup():
+    import main
+
+    content = Path(main.__file__).read_text(encoding="utf-8")
+    assert "Понедельник после 9:00 MSK" in content
+    assert "weekly champion catch-up announced on Monday startup" in content
+
+
 
 def test_weekly_top1_has_display_priority():
     from tags import TAG_PRIORITY

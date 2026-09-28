@@ -4900,17 +4900,23 @@ async def main():
         from datetime import timedelta, timezone
         MSK = timezone(timedelta(hours=3))
         now_msk = dt.now(MSK)
-        if now_msk.weekday() == 6 and now_msk.hour >= 21:  # Воскресенье после 21:00 MSK
-            from database import get_config as _get_cfg
-            monday_msk = now_msk - timedelta(days=now_msk.weekday())
-            current_week_start = monday_msk.strftime("%Y-%m-%d")
-            last_announced = _get_cfg('mmr_week_top_announced')
-            if last_announced != current_week_start:
+        from database import get_config as _get_cfg
+        monday_msk = now_msk - timedelta(days=now_msk.weekday())
+        current_week_start = monday_msk.strftime("%Y-%m-%d")
+        last_announced = _get_cfg('mmr_week_top_announced')
+        if last_announced != current_week_start:
+            if now_msk.weekday() == 6 and now_msk.hour >= 21:  # Воскресенье после 21:00 MSK
                 try:
                     await announce_weekly_mmr_winner(app.bot)
                     logger.info("Startup: weekly champion announced on Sunday startup")
                 except Exception as e:
                     logger.error(f"Startup weekly champion announcement error: {e}")
+            elif now_msk.weekday() == 0 and now_msk.hour >= 9:  # Понедельник после 9:00 MSK — догоняем чемпиона
+                try:
+                    await announce_weekly_mmr_winner(app.bot)
+                    logger.info("Startup: weekly champion catch-up announced on Monday startup")
+                except Exception as e:
+                    logger.error(f"Startup Monday champion catch-up error: {e}")
 
         # Если бот стартовал после 9:00 MSK — догоняем утренний дайджест, если он не был отправлен сегодня
         from datetime import datetime as dt
