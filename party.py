@@ -104,8 +104,10 @@ async def party_for_user(chat_id, chat_type, requester, context):
         )
         return
 
+    from loading_flow import show_loading, finish_loading, delete_loading
+
     try:
-        loading = await context.bot.send_message(chat_id=chat_id, text="<b>🪝 Ищу игроков...</b>", parse_mode="HTML")
+        loading = await show_loading(context.bot, chat_id, "Ищу игроков...")
 
         from database import get_all_users_with_steam
         candidates = get_all_users_with_steam() or []
@@ -164,30 +166,31 @@ async def party_for_user(chat_id, chat_type, requester, context):
 
         text = "\n".join(lines) if lines else "❌ Не найдено игроков для подбора."
 
-        try:
-            await loading.delete()
-        except Exception as e:
-            logger.debug(f"Could not delete loading message: {e}")
+        keyboard = build_callback_keyboard(players) if players else None
 
-        if players:
-            keyboard = build_callback_keyboard(players)
-            result_msg = await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
-            # Schedule auto-delete after 30 seconds
-            try:
-                async def delete_after_delay():
-                    await asyncio.sleep(30)
-                    try:
-                        await context.bot.delete_message(chat_id=chat_id, message_id=result_msg.message_id)
-                    except Exception:
-                        pass
-                asyncio.create_task(delete_after_delay())
-            except Exception as e:
-                logger.debug(f"Could not schedule auto-delete: {e}")
-        else:
-            await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+        result_msg = await finish_loading(
+            context.bot, loading, text=text, reply_markup=keyboard
+        )
+
+        # Schedule auto-delete after 30 seconds
+        try:
+            async def delete_after_delay():
+                await asyncio.sleep(30)
+                try:
+                    msg_id = result_msg.message_id if result_msg else loading.message_id
+                    await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                except Exception:
+                    pass
+            asyncio.create_task(delete_after_delay())
+        except Exception as e:
+            logger.debug(f"Could not schedule auto-delete: {e}")
 
     except Exception as e:
         logger.error(f"Error in party_for_user: {e}", exc_info=True)
+        try:
+            await delete_loading(context.bot, loading)
+        except Exception:
+            pass
         try:
             await context.bot.send_message(chat_id=chat_id, text="❌ Ошибка подбора. Попробуй позже.")
         except Exception as send_error:

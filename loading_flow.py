@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 TYPED_LABEL = "Хукаю..."
 LOADING_ICON = "🪝 "
+SPINNER_FRAMES = ["🪝", "🔄", "⏳", "🔄"]
+SPINNER_INTERVAL = 0.5
 
 # Short labels ("Хукаю...") are typed one character at a time, which reads as
 # real typing. Longer ones move two characters per frame: at one char per frame
@@ -46,6 +48,7 @@ _GONE_MARKERS = (
 
 _active: dict = {}
 _chat_locks: dict = {}
+_last_edit_time: dict = {}
 
 
 class Loading:
@@ -79,20 +82,28 @@ async def _edit(bot, chat_id: int, message_id: int, text: str) -> bool:
     """Edit the message, throttled per chat. Returns False if it is gone."""
     lock = _lock_for(chat_id)
     async with lock:
+        last_edit = _last_edit_time.get(chat_id, 0)
+        now = asyncio.get_running_loop().time()
+        gap = now - last_edit
+        if gap < MIN_EDIT_GAP:
+            await asyncio.sleep(MIN_EDIT_GAP - gap)
         try:
             await bot.edit_message_text(
                 chat_id=chat_id, message_id=message_id, text=text, parse_mode="HTML"
             )
+            _last_edit_time[chat_id] = asyncio.get_running_loop().time()
             return True
         except Exception as e:
             name = type(e).__name__
             msg = str(e).lower()
             if "not modified" in msg:
+                _last_edit_time[chat_id] = asyncio.get_running_loop().time()
                 return True
             if any(marker in msg for marker in _GONE_MARKERS):
                 logger.debug(f"loading_flow: message {message_id} is gone ({name})")
                 return False
             logger.debug(f"loading_flow: edit failed ({name}: {e})")
+            _last_edit_time[chat_id] = asyncio.get_running_loop().time()
             return True
 
 
@@ -101,29 +112,54 @@ def _chunk_for(label: str) -> int:
     return TYPE_CHUNK_SHORT if len(label) <= SHORT_LABEL_CHARS else TYPE_CHUNK_LONG
 
 
+async def _spinner_loop(
+    bot, chat_id: int, message_id: int, label: str, icon: str, last_text: str = ""
+) -> None:
+    """Cycle the icon emoji to show the process is still alive after typing."""
+    frame_idx = 0
+    while True:
+        if asyncio.current_task().cancelling():
+            return
+        frame = SPINNER_FRAMES[frame_idx % len(SPINNER_FRAMES)]
+        text = f"<b>{frame} {label}</b>"
+        if text == last_text:
+            frame_idx += 1
+            continue
+        if not await _edit(bot, chat_id, message_id, text):
+            return
+        last_text = text
+        frame_idx += 1
+        await asyncio.sleep(SPINNER_INTERVAL)
+
+
 async def _type_label(
     bot, chat_id: int, message_id: int, label: str, icon: str
 ) -> None:
-    """Type the label out, then leave the finished text in place.
+    """Type the label out, then keep a spinner running until cancelled.
 
-    The icon is prepended as a whole and never typed: emoji are surrogate pairs
-    in Python strings, so slicing them per frame could split a glyph in half.
+    The icon is prepended as a whole and never typed: emoji may be surrogate
+    pairs in Python strings, so slicing them per frame could split a glyph.
     The first chunk is skipped because it is what send_message already showed,
     and re-editing identical text makes Telegram answer "message is not
-    modified".
+    modified". After the label is fully typed, a spinner loop takes over
+    to keep editing the icon and signal that the background work continues.
     """
     loop = asyncio.get_running_loop()
     started = loop.time()
     chunk = _chunk_for(label)
+    last_text = f"<b>{icon}{label}</b>"
 
     for end in range(chunk * 2, len(label) + chunk, chunk):
         if asyncio.current_task().cancelling():
             return
-        if not await _edit(bot, chat_id, message_id, f"<b>{icon}{label[:end]}</b>"):
+        last_text = f"<b>{icon}{label[:end]}</b>"
+        if not await _edit(bot, chat_id, message_id, last_text):
             return
         if loop.time() - started > MAX_EDIT_SECONDS:
-            return
+            break
         await asyncio.sleep(TYPE_INTERVAL)
+
+    await _spinner_loop(bot, chat_id, message_id, label, icon, last_text)
 
 
 async def show_loading(

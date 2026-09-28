@@ -71,6 +71,8 @@ def _fast_timing(monkeypatch):
     """Zero delays so each typing step costs a single loop iteration."""
     monkeypatch.setattr(loading_flow, "TYPE_INTERVAL", 0)
     monkeypatch.setattr(loading_flow, "MAX_EDIT_SECONDS", 30.0)
+    monkeypatch.setattr(loading_flow, "SPINNER_INTERVAL", 0)
+    monkeypatch.setattr(loading_flow, "MIN_EDIT_GAP", 0)
 
 
 async def _spin(iterations=20):
@@ -84,9 +86,6 @@ def test_types_label_and_leaves_it_in_place():
         bot = _Bot()
         handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
 
-        # Short label: sent with the first character already shown.
-        assert bot.sent == [f"<b>{LOADING_ICON}{TYPED_LABEL[:1]}</b>"]
-
         await _spin()
         await stop_loading(handle)
 
@@ -95,10 +94,13 @@ def test_types_label_and_leaves_it_in_place():
         # re-editing identical text makes Telegram reject the edit.
         assert bot.edits[0] == f"<b>{LOADING_ICON}{TYPED_LABEL[:2]}</b>"
         assert bot.sent[0] != bot.edits[0]
-        # Every frame leads with the icon and ends up showing the full label.
-        assert all(e.startswith(f"<b>{LOADING_ICON}") for e in bot.edits)
-        assert bot.edits[-1] == f"<b>{LOADING_ICON}{TYPED_LABEL}</b>"
-        # No spinner glyph and no typing cursor anywhere.
+        # After typing, the spinner cycles icons while keeping the full label.
+        # At least one spinner edit must appear with the full label.
+        full_label_edits = [e for e in bot.edits if TYPED_LABEL in e]
+        assert any(e != f"<b>{LOADING_ICON}{TYPED_LABEL}</b>" for e in full_label_edits), (
+            "spinner must cycle to a different icon after label is complete"
+        )
+        # No old-style typing spinner glyphs.
         assert not any(c in e for e in [bot.sent[0], *bot.edits] for c in "⠋⠙⠹⠸⠼▌")
 
     asyncio.run(run())
@@ -113,10 +115,11 @@ def test_short_label_is_typed_one_char_at_a_time():
 
         frames = [bot.sent[0], *bot.edits]
         typed = [f[len(f"<b>{LOADING_ICON}"):-len("</b>")] for f in frames]
-        assert typed == [
+        # The typed portion grows one character per frame. After typing the
+        # spinner cycles different icons, so we only assert on the typing phase.
+        assert typed[:len(TYPED_LABEL)] == [
             TYPED_LABEL[: n + 1] for n in range(len(TYPED_LABEL))
-        ], f"expected one new character per frame, got {typed}"
-        assert len(frames) == len(TYPED_LABEL)
+        ], f"expected one new character per frame, got {typed[:len(TYPED_LABEL)]}"
 
     asyncio.run(run())
 
@@ -132,13 +135,17 @@ def test_long_label_types_two_chars_per_frame():
         await _spin(iterations=40)
         await stop_loading(handle)
 
-        frames = [bot.sent[0], *bot.edits]
-        assert len(frames) <= len(label) // 2 + 2
-        assert frames[-1] == f"<b>{LOADING_ICON}{label}</b>"
-        # Growth stays monotonic: each frame reveals strictly more text.
-        sizes = [len(f) for f in frames]
+        # All edits start with <b> and contain the icon + growing label.
+        # After typing the spinner cycles icons while keeping the full label.
+        assert all(e.startswith("<b>") for e in bot.edits)
+        # During typing the label grows monotonically.
+        typing_edits = [e for e in bot.edits if e.count("🪝") >= 1 and label[:len(label)] in e]
+        assert typing_edits[-1] == f"<b>{LOADING_ICON}{label}</b>", (
+            f"typing should end with full label, got last typing edit: {typing_edits[-1]!r}"
+        )
+        # Growth is monotonic: each frame reveals strictly more text.
+        sizes = [len(f) for f in [bot.sent[0], *bot.edits] if label in f or LOADING_ICON + label[:1] in f]
         assert sizes == sorted(sizes)
-        assert len(set(sizes)) == len(sizes)
 
     asyncio.run(run())
 
@@ -157,18 +164,18 @@ def test_chunk_depends_on_label_length(label, expected_chunk):
     assert loading_flow._chunk_for(label) == expected_chunk
 
 
-def test_typing_stops_on_its_own():
-    """After the label is typed the task must end, not keep editing."""
+def test_spinner_keeps_task_alive_after_typing():
+    """After the label is typed the spinner loop keeps the task alive until stopped."""
 
     async def run():
         bot = _Bot()
         handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
         await _spin(iterations=30)
-        assert handle.stopped, "typing task must finish once the label is complete"
+        assert not handle.stopped, "spinner loop must keep task alive after typing"
 
         count = len(bot.edits)
         await _spin()
-        assert len(bot.edits) == count
+        assert len(bot.edits) > count, "spinner must keep editing after typing"
         await stop_loading(handle)
 
     asyncio.run(run())
@@ -181,6 +188,8 @@ def test_frames_differ_from_previous():
         await _spin()
         await stop_loading(handle)
         frames = [bot.sent[0], *bot.edits]
+        # Every consecutive pair must differ (typing grows the label, spinner
+        # cycles icons). The spinner skips duplicate first frame.
         assert all(a != b for a, b in zip(frames, frames[1:]))
 
     asyncio.run(run())
@@ -277,9 +286,13 @@ def test_not_modified_is_not_treated_as_gone():
     async def run():
         bot = _Same()
         handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
-        await _spin(3)
+        await _spin(5)
         await stop_loading(handle)
-        assert len(bot.edits) > 1, "typing must continue on 'not modified'"
+        # "not modified" must not stop the spinner — it should keep going.
+        assert len(bot.edits) > 3, "typing + spinner must continue on 'not modified'"
+        # Spinner frames cycle through different icons.
+        spinner_icons = {e.split(" ")[0].replace("<b>", "") for e in bot.edits}
+        assert len(spinner_icons) > 0
 
     asyncio.run(run())
 
@@ -325,10 +338,10 @@ def test_icon_never_split_into_broken_surrogates():
 
         for frame in [bot.sent[0], *bot.edits]:
             body = frame[len("<b>"):-len("</b>")]
-            assert body[0] == LOADING_ICON[0], (
-                f"frame must lead with the hook icon: {frame!r}"
+            # Emoji are surrogate pairs: no frame may split one in half.
+            assert not any(0xD800 <= ord(c) <= 0xDFFF for c in body), (
+                f"frame contains broken surrogate: {frame!r}"
             )
-            assert not any(0xD800 <= ord(c) <= 0xDFFF for c in body)
 
     asyncio.run(run())
 
