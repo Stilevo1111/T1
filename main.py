@@ -2997,10 +2997,10 @@ async def _build_profile_progress_card(bot, target_user: dict) -> io.BytesIO | N
             try:
                 top_heroes = await asyncio.wait_for(
                     get_week_top_heroes_async(steam_id, top_k=5),
-                    timeout=12.0
+                    timeout=30.0
                 )
             except Exception as e:
-                logger.debug(f"profile card heroes skipped uid={telegram_id}: {e}")
+                logger.warning(f"profile card heroes skipped uid={telegram_id}: {e}")
 
         tags = []
         achievements = {}
