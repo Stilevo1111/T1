@@ -160,3 +160,29 @@ def test_fissure_module_uses_effective_message_only():
     src = (PROJECT_ROOT / "fissure.py").read_text(encoding="utf-8")
     assert "update.message" not in src
     assert "msg = update.effective_message" in src
+
+
+def test_techies_keyboard_shuffles_button_order():
+    """Buttons should be in random order on each roll, not always green/red/yellow."""
+    from techies import _build_techies_keyboard
+
+    orders = set()
+    for _ in range(50):
+        kb = _build_techies_keyboard(USER_ID, "red", 1700000000.0)
+        row = kb.inline_keyboard[0]
+        order = tuple(btn.callback_data.split("_")[1] for btn in row)
+        orders.add(order)
+
+    assert len(orders) > 1, "Button order should vary across rolls (got only one order)"
+
+
+def test_techies_keyboard_has_three_buttons():
+    """Always exactly 3 buttons: 2 safe + 1 explosive."""
+    from techies import _build_techies_keyboard
+
+    kb = _build_techies_keyboard(USER_ID, "yellow", 1700000000.0)
+    row = kb.inline_keyboard[0]
+    assert len(row) == 3
+
+    values = {btn.callback_data.split("_")[1] for btn in row}
+    assert values == {"green", "red", "yellow"}

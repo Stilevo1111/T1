@@ -69,8 +69,10 @@ def _build_techies_keyboard(user_id: int, explosive_button: str, start_time: flo
         "red": "danger",
         "yellow": "primary",
     }
+    buttons = list(BUTTONS)
+    random.shuffle(buttons)
     row = []
-    for emoji, value in BUTTONS:
+    for emoji, value in buttons:
         style = styles.get(value)
         kwargs = {"api_kwargs": {"style": style}} if style else {}
         row.append(
