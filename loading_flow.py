@@ -95,6 +95,7 @@ async def _edit(bot, chat_id: int, message_id: int, text: str) -> bool:
             chat_id=chat_id, message_id=message_id, text=text, parse_mode="HTML"
         )
         _last_edit_time[chat_id] = asyncio.get_running_loop().time()
+        _rate_limit_failures.pop(chat_id, None)
         return True
     except Exception as e:
         name = type(e).__name__
