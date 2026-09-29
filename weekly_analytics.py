@@ -67,7 +67,6 @@ __all__ = [
 ]
 
 # Cache for background image
-_CHART_BG_CACHE = None
 _CHART_STYLE = "hud"
 _CHART_CACHE = {}
 _CHART_CACHE_LIMIT = 32
@@ -1132,6 +1131,8 @@ async def _generate_chart_only_impl(telegram_id: int) -> dict[str, Any] | None:
             "imp": round(imp, 2) if imp is not None else None,
             "hero_id": m.get("hero_id", 0),
             "win": win,
+            "role": role,
+            "start_time": m.get("start_time", 0),
             "imp_unavailable": imp is None,
         })
 
@@ -1289,6 +1290,7 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
             "hero_id": m.get("hero_id", 0),
             "win": win,
             "role": role,
+            "start_time": m.get("start_time", 0),
             "imp_unavailable": imp is None,
         })
 
@@ -1446,7 +1448,7 @@ def _smooth_chart_curve(points: list[tuple[float, float]], samples: int = 80) ->
 # CHART (matplotlib runs in thread pool via asyncio.to_thread)
 # =========================================================
 
-def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Image.Image) -> bytes | None:
+def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict) -> bytes | None:
     """Render the selected Pillow analytics HUD card."""
     import io
     import random
@@ -1454,7 +1456,13 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
     entries = [g for g in list(reversed(history))[:10] if isinstance(g.get("imp"), (int, float))]
     if not entries:
         return None
-    values = [min(max(float(g["imp"]), 0.0), 2.0) for g in entries]
+    values = [max(float(g["imp"]), 0.0) for g in entries]
+    # The axis follows the data. It used to be fixed at 0..2 with every value
+    # clamped, so a game above 2.0 was drawn at the 2.0 line while still being
+    # labelled with its real number, and the label no longer matched the point.
+    # Minimum 1.0 keeps a weak week from filling the card with 0.02-long steps.
+    axis_max = max(1.0, max(values) * 1.15)
+    axis_max = (round(axis_max * 10) + 1) / 10
     wins = sum(bool(g.get("win")) for g in entries)
     font_dir = Path(__file__).resolve().parent / "assets" / "fonts"
     def font(size: int, bold: bool = False):
@@ -1481,11 +1489,13 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
     draw.text((58, 48), "ИСТОРИЯ МАТЧЕЙ", font=font(24, True), fill=accent)
     role = str(entries[0].get("role") or "НЕ ОПРЕДЕЛЕНА").upper()
     draw.text((58, 88), f"РОЛЬ: {role}  •  ПОСЛЕДНИЕ {len(entries)} МАТЧЕЙ", font=font(18), fill="#cbd5e1")
-    left, right, top, bottom = 145, 1085, 175, 690
-    for value in (0.0, 0.5, 1.0, 1.5, 2.0):
-        y = bottom - (bottom - top) * value / 2
-        draw.text((72, y - 11), f"{value:.1f}", font=font(16, True), fill="#94a3b8")
-    points = [(left + (right-left)*i/max(len(values)-1, 1), bottom-(bottom-top)*v/2) for i, v in enumerate(values)]
+    left, right, top, bottom = 145, 1085, 175, 660
+    tick_font = font(16, True)
+    for step in range(5):
+        value = axis_max * step / 4
+        y = bottom - (bottom - top) * value / axis_max
+        draw.text((72, y - 11), f"{value:.1f}", font=tick_font, fill="#94a3b8")
+    points = [(left + (right-left)*i/max(len(values)-1, 1), bottom-(bottom-top)*v/axis_max) for i, v in enumerate(values)]
     layer = Image.new("RGBA", (WIDTH * 2, HEIGHT * 2), (0, 0, 0, 0))
     ImageDraw.Draw(layer).line([(x*2, y*2) for x, y in _smooth_chart_curve(points)], fill=accent, width=14, joint="curve")
     canvas = Image.alpha_composite(canvas, layer.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS))
@@ -1498,55 +1508,21 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict, bg: Imag
             canvas.alpha_composite(icon.convert("RGBA").resize((48, 48), Image.Resampling.LANCZOS), (int(x-24), int(y-24)))
         else: draw.ellipse((x-12, y-12, x+12, y+12), fill=color)
         draw.text((int(x-18), int(y-52)), f"{float(item['imp']):.2f}", font=font(15, True), fill="#f8fafc")
+    # Date under each point. Without it the dots are evenly spaced by position
+    # and there is no way to tell which game is which.
+    date_font = font(15)
+    for (x, _y), item in zip(points, entries):
+        stamp = item.get("start_time") or 0
+        label = (datetime.fromtimestamp(stamp).strftime("%d.%m") if stamp else "")
+        if label:
+            draw.text((int(x - draw.textlength(label, font=date_font) / 2), bottom + 12),
+                      label, font=date_font, fill="#94a3b8")
     draw.text((58, 700), f"СРЕДНИЙ ИНДЕКС: {sum(values)/len(values):.2f}  •  ПОБЕД: {wins}  •  ПОРАЖЕНИЙ: {len(entries)-wins}", font=font(25, True), fill="#f8fafc")
     result = io.BytesIO(); canvas.convert("RGB").save(result, format="PNG", optimize=True); return result.getvalue()
 
 
 async def _create_visual_chart(history: list[dict]) -> bytes | None:
-    """Non-blocking chart generation - prepares data then runs matplotlib in thread pool."""
-    import aiohttp
-
-    from constants import get_banner_path
-
-    global _CHART_BG_CACHE
-
-    if _CHART_BG_CACHE is None:
-        try:
-            import io
-            # Try local first, then remote
-            local_bg = get_banner_path("chart_bg_fallback")
-            background_url_png = "https://i.ibb.co/jkTWqcHn/pngdsadsad.png"
-            content = None
-            if isinstance(local_bg, Path) and local_bg.exists():
-                content = local_bg.read_bytes()
-            # Try png if local failed
-            if content is None:
-                try:
-                    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-                        async with session.get(background_url_png) as resp:
-                            if resp.status == 200:
-                                content = await resp.read()
-                except Exception:
-                    pass
-            if content is not None:
-                img = Image.open(io.BytesIO(content))
-                if img.mode == 'RGBA':
-                    img = img.convert('RGB')
-                _CHART_BG_CACHE = img.resize((1200, 800), Image.LANCZOS)
-        except Exception as e:
-            logger.warning("Could not load chart background: %s", e)
-
-    if _CHART_BG_CACHE is None:
-        _CHART_BG_CACHE = Image.new('RGB', (1200, 800), (15, 15, 25))
-        from PIL.ImageDraw import Draw
-        draw = Draw(_CHART_BG_CACHE)
-        for i in range(0, WIDTH, 40):
-            draw.line([(i, 0), (i, HEIGHT)], fill=(30, 30, 45), width=1)
-        for i in range(0, HEIGHT, 40):
-            draw.line([(0, i), (WIDTH, i)], fill=(30, 30, 45), width=1)
-
-    bg = _CHART_BG_CACHE
-
+    """Non-blocking chart generation - loads hero icons, renders in a thread."""
     reversed_history = list(reversed(history))[:10]
 
     # Load hero icons asynchronously
@@ -1554,5 +1530,7 @@ async def _create_visual_chart(history: list[dict]) -> bytes | None:
     hero_icons = await asyncio.gather(*[_get_hero_icon(hid) for hid in unique_hero_ids])
     hero_icon_map = {hid: icon for hid, icon in zip(unique_hero_ids, hero_icons)}
 
-    # Run matplotlib in thread pool (non-blocking)
-    return await asyncio.to_thread(_create_visual_chart_sync, history, hero_icon_map, bg)
+    # _create_visual_chart_sync paints its own HUD background, so no background
+    # image is passed in. It used to download one from i.ibb.co on every cold
+    # start and then never use it.
+    return await asyncio.to_thread(_create_visual_chart_sync, history, hero_icon_map)
