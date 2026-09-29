@@ -267,8 +267,9 @@ async def bot_can_delete(bot, chat_id):
         if current_time - cached_time < _bot_can_delete_ttl:
             return cached_val
     try:
-        me = await bot.get_me()
-        member = await bot.get_chat_member(chat_id, me.id)
+        from bot_utils import _get_cached_bot_id
+        bot_id = await _get_cached_bot_id(bot)
+        member = await bot.get_chat_member(chat_id, bot_id)
         can_delete = getattr(member, 'can_delete_messages', False) or member.status in ('administrator', 'creator')
         _bot_can_delete_cache[chat_id] = (can_delete, time.time())
         return can_delete

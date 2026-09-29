@@ -82,6 +82,20 @@ def get_recent_rolls(limit: int = 50):
 _bot_can_delete_ttl = 3600
 _BOT_CAN_DELETE_CACHE_MAX = 200
 _bot_can_delete_cache = {}
+_BOT_ID_CACHE: int | None = None
+_BOT_ID_CACHE_TIME = 0
+_BOT_ID_CACHE_TTL = 600  # 10 min — bot identity never changes mid-session
+
+
+async def _get_cached_bot_id(bot) -> int:
+    """Return the bot's Telegram user ID, cached for _BOT_ID_CACHE_TTL seconds."""
+    global _BOT_ID_CACHE, _BOT_ID_CACHE_TIME
+    now = time.time()
+    if _BOT_ID_CACHE is None or now - _BOT_ID_CACHE_TIME > _BOT_ID_CACHE_TTL:
+        me = await bot.get_me()
+        _BOT_ID_CACHE = me.id
+        _BOT_ID_CACHE_TIME = now
+    return _BOT_ID_CACHE
 
 async def bot_can_delete(bot, chat_id):
     """Проверить может ли бот удалять сообщения в чате"""
@@ -96,8 +110,8 @@ async def bot_can_delete(bot, chat_id):
         if current_time - cached_time < _bot_can_delete_ttl:
             return cached_val
     try:
-        me = await bot.get_me()
-        member = await bot.get_chat_member(chat_id, me.id)
+        bot_id = await _get_cached_bot_id(bot)
+        member = await bot.get_chat_member(chat_id, bot_id)
         can_delete = getattr(member, 'can_delete_messages', False) or member.status in ('administrator', 'creator')
         _bot_can_delete_cache[chat_id] = (can_delete, time.time())
         return can_delete

@@ -109,20 +109,22 @@ async def delete_fissure_user_and_last_messages(bot, chat_id, user_id, user_msg_
     # user_msg_id may be 0 when the roll is triggered from an inline button
     # (no real user message) — skip the API call in that case.
     if chat_type in ['group', 'supergroup', 'channel'] and user_msg_id:
-        if await bot_can_delete(bot, chat_id):
-            try:
-                await bot.delete_message(chat_id, user_msg_id)
-            except Exception as e:
-                logger.debug(f"Could not delete user message in delete_fissure_user_and_last_messages: {e}")
+        can_delete = await bot_can_delete(bot, chat_id)
+        delete_tasks = []
+        if can_delete:
+            delete_tasks.append(_safe_delete_user_msg(bot, chat_id, user_msg_id))
+        delete_tasks.append(delete_last_bot_message(bot, chat_id, user_id))
+        if delete_tasks:
+            await asyncio.gather(*delete_tasks, return_exceptions=True)
 
-    # Small delay before deleting last bot message to ensure new message can be sent
-    await asyncio.sleep(0.2)
+    return
 
-    # Delete last bot message immediately
+
+async def _safe_delete_user_msg(bot, chat_id, user_msg_id):
     try:
-        await delete_last_bot_message(bot, chat_id, user_id)
+        await bot.delete_message(chat_id, user_msg_id)
     except Exception as e:
-        logger.debug(f"Could not delete last bot message in delete_fissure_user_and_last_messages: {e}")
+        logger.debug(f"Could not delete user message: {e}")
 
 
 def build_fissure_cooldown_bar_and_text(now, last_fissure, COOLDOWN, format_time):
