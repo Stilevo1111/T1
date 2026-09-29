@@ -105,5 +105,82 @@ def test_hud_wordcloud_rejects_empty_input():
         generate_hud_wordcloud([])
 
 
+@pytest.mark.parametrize("ramp", ["accent", "heat", "monotone", "inverse"])
+def test_every_color_ramp_renders(ramp):
+    """All four ramps must produce a non-blank card."""
+    png = generate_hud_wordcloud(SAMPLE, seed=2, color_ramp=ramp)
+    assert len(png) > 10000
+    Image.open(io.BytesIO(png)).size == (HUD_WIDTH, HUD_HEIGHT)
+
+
+def test_inverse_ramp_flips_brightness():
+    """inverse must put the accent on rare words and muted on frequent ones."""
+    accent = _hex_to_rgb("#ff8c42")
+    secondary = _hex_to_rgb("#22d3ee")
+    muted = _hex_to_rgb("#94a3b8")
+    assert _word_color(0.0, accent, secondary, ramp="inverse") == accent
+    assert _word_color(1.0, accent, secondary, ramp="inverse") == muted
+    # ...whereas the default ramp is the other way around.
+    assert _word_color(1.0, accent, secondary, ramp="accent") == accent
+    assert _word_color(0.0, accent, secondary, ramp="accent") == muted
+
+
+def test_heat_ramp_is_monotonic_in_warmth():
+    """heat must go from a cool colour to a hot one as frequency rises."""
+    accent = _hex_to_rgb("#ff8c42")
+    secondary = _hex_to_rgb("#22d3ee")
+    cool = _word_color(0.0, accent, secondary, ramp="heat")
+    hot = _word_color(1.0, accent, secondary, ramp="heat")
+    assert hot[0] > cool[0], "hot end must be redder"
+    assert hot[2] < cool[2], "hot end must be less blue"
+
+
+def test_word_area_confines_words_to_the_given_box():
+    """A narrow word_area must push text away from the right-hand side."""
+    base = {
+        "seed": 2,
+        "panel": False,
+        "force_base": (9, 12, 22),
+        "force_shape": "diagonal",
+    }
+    narrow = np.array(
+        Image.open(
+            io.BytesIO(
+                generate_hud_wordcloud(SAMPLE, word_area=(76, HEADER_BOTTOM, 560, FOOTER_TOP), **base)
+            )
+        ).convert("RGB")
+    )
+    wide = np.array(
+        Image.open(io.BytesIO(generate_hud_wordcloud(SAMPLE, **base))).convert("RGB")
+    )
+
+    def right_ink(arr):
+        return (arr[:, 600:].sum(axis=2) > 300).sum()
+
+    # The relative check is the meaningful one: the backdrop shape is bright on
+    # both cards, so only a *difference* proves the words actually moved.
+    assert right_ink(narrow) < right_ink(wide), "narrow word_area still painted the right side"
+    changed = (narrow[:, 600:] != wide[:, 600:]).any(axis=2).sum()
+    assert changed > 200, f"word_area had no effect on the right side ({changed} px)"
+
+
+def test_panel_can_be_disabled():
+    """panel=False must leave the card without the rounded frame."""
+    with_panel = np.array(
+        Image.open(io.BytesIO(generate_hud_wordcloud(SAMPLE, seed=2, panel=True))).convert("RGB")
+    )
+    without = np.array(
+        Image.open(io.BytesIO(generate_hud_wordcloud(SAMPLE, seed=2, panel=False))).convert("RGB")
+    )
+    assert not np.array_equal(with_panel, without), "panel toggle had no effect"
+
+
+def test_angles_restriction_changes_layout():
+    """Restricting angles to horizontal must change the rendered result."""
+    mixed = generate_hud_wordcloud(SAMPLE, seed=9, angles=[0, 90, -90])
+    horizontal = generate_hud_wordcloud(SAMPLE, seed=9, angles=[0])
+    assert mixed != horizontal
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

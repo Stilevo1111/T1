@@ -181,23 +181,50 @@ def _draw_panel(canvas: Image.Image, accent: tuple[int, int, int]) -> Image.Imag
     return canvas
 
 
-def _font_size_for(ratio: float) -> int:
+def _font_size_for(ratio: float, max_font_size: int, relative_scaling: float) -> int:
     """Map normalized frequency to a font size (top word is always the largest)."""
     return int(
         MIN_FONT_SIZE
-        + (MAX_FONT_SIZE - MIN_FONT_SIZE) * (ratio ** WORDCLOUD_RELATIVE_SCALING)
+        + (max_font_size - MIN_FONT_SIZE) * (ratio ** relative_scaling)
     )
 
 
-def _word_color(ratio: float, accent: tuple[int, int, int], secondary: tuple[int, int, int]) -> tuple[int, int, int]:
-    """Ramp: hottest words wear the accent, mid words the secondary, rare words muted.
+def _word_color(
+    ratio: float,
+    accent: tuple[int, int, int],
+    secondary: tuple[int, int, int],
+    *,
+    ramp: str = "accent",
+) -> tuple[int, int, int]:
+    """Map normalized frequency to a colour.
 
-    A single-hue ramp keeps the card coherent, unlike the old rainbow palette.
+    ramp="accent"  - muted -> secondary -> accent (default, matches the chart)
+    ramp="heat"    - cool blue -> green -> amber -> hot (frequency as heat)
+    ramp="monotone"- dim accent -> full accent only (two-tone, max contrast)
+    ramp="inverse" - accent for rare words, muted for frequent (upside-down)
     """
     muted = _hex_to_rgb(MUTED)
+    if ramp == "monotone":
+        return _mix(_scale_rgb(accent, 0.45), accent, ratio)
+    if ramp == "inverse":
+        return _mix(accent, muted, ratio)
+    if ramp == "heat":
+        heat = [
+            _hex_to_rgb(c)
+            for c in ("#38bdf8", "#22c55e", "#facc15", "#f97316", "#ef4444")
+        ]
+        scaled = min(1.0, max(0.0, ratio)) * (len(heat) - 1)
+        idx = int(scaled)
+        if idx >= len(heat) - 1:
+            return heat[-1]
+        return _mix(heat[idx], heat[idx + 1], scaled - idx)
     if ratio >= 0.55:
         return _mix(accent, secondary, (1.0 - ratio) / 0.45)
     return _mix(muted, secondary, min(1.0, ratio / 0.55))
+
+
+def _scale_rgb(color: tuple[int, int, int], factor: float) -> tuple[int, int, int]:
+    return tuple(max(0, min(255, int(round(c * factor)))) for c in color)
 
 
 def generate_hud_wordcloud(
@@ -207,38 +234,58 @@ def generate_hud_wordcloud(
     subtitle: str = "",
     footer: str = "",
     seed: int | None = None,
+    # --- layout knobs: each variant picks its own so cards differ structurally ---
+    max_font_size: int = MAX_FONT_SIZE,
+    relative_scaling: float = WORDCLOUD_RELATIVE_SCALING,
+    angles: list[int] | None = None,
+    word_area: tuple[int, int, int, int] | None = None,
+    word_padding: int = WORDCLOUD_WORD_PADDING,
+    color_ramp: str = "accent",
+    bold_threshold: float = 0.55,
+    force_shape: str | None = None,
+    force_accent: str | None = None,
+    force_base: tuple[int, int, int] | None = None,
+    panel: bool = True,
 ) -> bytes:
     """Render a word cloud in the analytics HUD design and return PNG bytes.
 
     `seed` makes the accent/background/shape choice reproducible, so the same
-    call with the same seed always produces the same card.
+    call with the same seed always produces the same card. The keyword knobs let
+    a caller explore genuinely different layouts (rotation, density, area,
+    palette) instead of only different words.
     """
     if not top_words:
         raise ValueError("No words provided for wordcloud")
 
     rng = random.Random(seed)
-    accent_hex = rng.choice(ACCENTS)
+    accent_hex = force_accent or rng.choice(ACCENTS)
     secondary_hex = rng.choice(SECONDARIES)
     accent = _hex_to_rgb(accent_hex)
     secondary = _hex_to_rgb(secondary_hex)
-    base = rng.choice(BG_BASES)
-    shape = rng.choice(("diagonal", "orb", "rays", "corner"))
+    base = force_base or rng.choice(BG_BASES)
+    shape = force_shape or rng.choice(("diagonal", "orb", "rays", "corner"))
+    angle_choices = list(angles) if angles else list(ANGLES)
 
     logger.info(
-        "generate_hud_wordcloud: %d words, accent=%s shape=%s", len(top_words), accent_hex, shape
+        "generate_hud_wordcloud: %d words, accent=%s shape=%s ramp=%s max_font=%d",
+        len(top_words), accent_hex, shape, color_ramp, max_font_size,
     )
 
     canvas = _draw_backdrop(base, accent, secondary, shape)
-    canvas = _draw_panel(canvas, accent)
+    if panel:
+        canvas = _draw_panel(canvas, accent)
 
     words = [(w, c) for w, c in top_words if w and len(w) >= 2][:MAX_WORDS]
     words.sort(key=lambda item: item[1], reverse=True)
     max_count = words[0][1] if words else 1
 
-    left = PANEL_BOX[0] + WORD_AREA_PAD
-    right = PANEL_BOX[2] - WORD_AREA_PAD
-    top = HEADER_BOTTOM
-    bottom = FOOTER_TOP
+    if word_area:
+        left, top, right, bottom = word_area
+    else:
+        left = PANEL_BOX[0] + WORD_AREA_PAD
+        right = PANEL_BOX[2] - WORD_AREA_PAD
+        top = HEADER_BOTTOM
+        bottom = FOOTER_TOP
     center_x = (left + right) // 2
     center_y = (top + bottom) // 2
 
@@ -247,21 +294,21 @@ def generate_hud_wordcloud(
 
     for word, count in words:
         ratio = (count / max_count) if max_count else 0.0
-        size = _font_size_for(ratio)
-        color = _word_color(ratio, accent, secondary)
+        size = _font_size_for(ratio, max_font_size, relative_scaling)
+        color = _word_color(ratio, accent, secondary, ramp=color_ramp)
 
         done = False
         for shrink in range(12):
             font_size = max(MIN_FONT_SIZE, size - shrink * 2)
-            font = _font(font_size, bold=ratio >= 0.55)
-            angle = rng.choice(ANGLES)
+            font = _font(font_size, bold=ratio >= bold_threshold)
+            angle = rng.choice(angle_choices)
 
             rotated, rw, rh = _render_rotated_word(word, font, (*color, 255), angle)
             if rotated is None:
                 continue
 
             alpha = np.array(rotated.split()[-1], dtype=bool)
-            collision = _dilate_alpha_mask(alpha, WORDCLOUD_WORD_PADDING)
+            collision = _dilate_alpha_mask(alpha, word_padding)
             if collision.shape != (rh, rw):
                 continue
 
