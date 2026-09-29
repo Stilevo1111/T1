@@ -2,13 +2,21 @@
 import logging
 import re
 import unicodedata
-from collections import Counter
+from collections import Counter, defaultdict
 
 from chat_wordcloud.config import (
     STOP_WORDS,
     WORDCLOUD_DEBUG,
     WORDCLOUD_MAX_WORDS,
     WORDCLOUD_MIN_WORD_FREQUENCY,
+)
+from chat_wordcloud.curation import (
+    apply_flood_penalty,
+    collapse_inflections,
+    extract_phrases,
+    mask_profanity,
+    score_words,
+    select_phrases,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,9 +64,16 @@ EMOJI_RE = re.compile(
 )
 
 
+COMBINING_MARK_RE = re.compile(r"[\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\ufe20-\ufe2f]")
+
+
 def normalize_text(text: str) -> str:
     """Clean text keeping Cyrillic+Latin words."""
-    text = unicodedata.normalize("NFKD", text)
+    # NFC, not NFKD: NFKD decomposes "й" into "и" + COMBINING BREVE, so
+    # "жадный" became "жадныи" and "дедлайн" split into "дедлаи" + "н".
+    # NFC composes instead of decomposes and keeps Cyrillic letters intact.
+    # Any stray marks are removed as a safety net for odd input.
+    text = COMBINING_MARK_RE.sub("", unicodedata.normalize("NFC", text))
     text = text.lower()
     text = URL_RE.sub(" ", text)
     text = MENTION_RE.sub(" ", text)
@@ -73,6 +88,12 @@ def normalize_text(text: str) -> str:
     return text.strip()
 
 
+# Longest token kept on a card. Beyond this a "word" is a run-on, a URL that
+# survived normalisation, or a keyboard mash - never something a reader wants
+# to see rendered at 60px.
+MAX_WORD_LENGTH = 20
+
+
 def filter_words(text: str) -> list[str]:
     """Extract meaningful words from a single message."""
     text = normalize_text(text)
@@ -82,6 +103,8 @@ def filter_words(text: str) -> list[str]:
     filtered = []
     for w in words:
         if len(w) < 2:
+            continue
+        if len(w) > MAX_WORD_LENGTH:
             continue
         if w.startswith("/"):
             continue
@@ -129,6 +152,82 @@ def get_top_words(
     filtered = [(w, c) for w, c in counter.items() if c >= effective_min]
     filtered.sort(key=lambda x: x[1], reverse=True)
     return filtered[:max_words]
+
+
+def curate_words(
+    messages: list[str] | list[tuple[str, int | None]],
+    *,
+    max_words: int = WORDCLOUD_MAX_WORDS,
+    use_phrases: bool = True,
+    use_flood_control: bool = True,
+    max_phrase_count: int = 8,
+) -> list[tuple[str, int]]:
+    """Full curation pipeline: clean -> fold -> score -> rank.
+
+    ``messages`` may be plain strings or ``(text, user_id)`` pairs; author ids
+    are only needed for flood control, which is skipped otherwise.
+
+    Steps, in order:
+
+    1. tokenize each message (URLs, mentions, code and emoji already removed),
+       masking profanity to ``***`` rather than dropping the word;
+    2. fold inflected forms onto a shared stem, keeping the commonest spelling;
+    3. damp words that a single account is responsible for;
+    4. add multi-word expressions that occur more often than chance;
+    5. rank by a novelty-aware score instead of raw frequency.
+    """
+    if not messages:
+        return []
+
+    texts: list[str] = []
+    per_author: dict[int, Counter] = defaultdict(Counter)
+    author_known = False
+
+    for item in messages:
+        if isinstance(item, tuple):
+            text = item[0]
+            user_id = item[1] if len(item) > 1 else None
+            author_known = True
+        else:
+            text, user_id = item, None
+        if not text:
+            continue
+        texts.append(text)
+        if use_flood_control and author_known and user_id is not None:
+            per_author[user_id].update(filter_words(mask_profanity(text)))
+
+    if not texts:
+        return []
+
+    token_lists = [filter_words(mask_profanity(text)) for text in texts]
+    counter: Counter = Counter()
+    for tokens in token_lists:
+        counter.update(tokens)
+    if not counter:
+        return []
+
+    counter = collapse_inflections(counter)
+    if use_flood_control and per_author:
+        by_stem: dict[int, Counter] = defaultdict(Counter)
+        for author, counts in per_author.items():
+            for word, count in collapse_inflections(counts).items():
+                by_stem[author][word] = count
+        counter = apply_flood_penalty(counter, by_stem)
+
+    if use_phrases:
+        phrases = select_phrases(extract_phrases(token_lists), max_phrases=max_phrase_count)
+        if phrases:
+            phrase_words = set()
+            for phrase in phrases:
+                phrase_words.update(phrase.split())
+            # A phrase replaces the words it is built from, otherwise the
+            # card would show "кто мид" and "кто" and "мид" all at once.
+            for word in phrase_words:
+                counter.pop(word, None)
+            counter.update(phrases)
+
+    scored = score_words(counter, document_count=len(token_lists))
+    return scored[:max_words]
 
 
 def log_top_words(top_words: list[tuple[str, int]], label: str = "TOP 20 WORDS") -> None:

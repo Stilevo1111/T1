@@ -1,7 +1,8 @@
 ﻿"""Telegram handler for /story command."""
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from collections import Counter
+from datetime import datetime
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -13,18 +14,30 @@ from chat_wordcloud.config import (
     WORDCLOUD_GENERATION_TIMEOUT,
     WORDCLOUD_MAX_WORDS,
     WORDCLOUD_MESSAGE_LIMIT,
-    WORDCLOUD_MIN_WORD_FREQUENCY,
     WORDCLOUD_PERIOD_DAYS,
 )
+from chat_wordcloud.curation import (
+    diff_periods,
+    month_bounds,
+    month_bounds_label,
+    previous_month_bounds,
+)
 from chat_wordcloud.generator import generate_wordcloud_image
-from chat_wordcloud.processor import log_top_words, process_messages
-from database import get_chat_messages_for_story
+from chat_wordcloud.processor import curate_words, log_top_words
+from database import get_chat_messages_in_range
 from rate_limiter import rate_limit
 
 logger = logging.getLogger(__name__)
 
 
-async def _generate_wordcloud_in_thread(top_words, timeout: int, *, period_label: str = "", message_count: int = 0) -> bytes:
+async def _generate_wordcloud_in_thread(
+    top_words,
+    timeout: int,
+    *,
+    period_label: str = "",
+    message_count: int = 0,
+    rising_label: str = "",
+) -> bytes:
     """Run wordcloud generation in a worker thread (no multiprocessing spawn overhead)."""
     return await asyncio.wait_for(
         asyncio.to_thread(
@@ -32,9 +45,59 @@ async def _generate_wordcloud_in_thread(top_words, timeout: int, *, period_label
             top_words,
             period_label=period_label,
             message_count=message_count,
+            rising_label=rising_label,
         ),
         timeout=timeout,
     )
+
+
+async def _collect_monthly_words(chat_id: int, bot_user_id: int | None):
+    """Build the card data for the current calendar month.
+
+    Loads this month and the previous one, curates both with the same pipeline
+    and returns the ranked words plus what rose and faded between them. Any
+    failure degrades to an empty comparison rather than breaking the command.
+    """
+    now = datetime.now()
+    start, end = month_bounds(now)
+    prev_start, prev_end = previous_month_bounds(now)
+
+    current, current_stats = await asyncio.to_thread(
+        get_chat_messages_in_range,
+        chat_id, start, end, WORDCLOUD_MESSAGE_LIMIT, bot_user_id,
+    )
+    if not current:
+        return [], {}, [], current_stats
+
+    top_words = await asyncio.to_thread(curate_words, current, max_words=WORDCLOUD_MAX_WORDS)
+
+    rising, fading = [], []
+    try:
+        previous, _ = await asyncio.to_thread(
+            get_chat_messages_in_range,
+            chat_id, prev_start, prev_end, WORDCLOUD_MESSAGE_LIMIT, bot_user_id,
+        )
+        if previous:
+            prev_top = await asyncio.to_thread(
+                curate_words, previous, max_words=WORDCLOUD_MAX_WORDS, use_phrases=False
+            )
+            rising, fading = diff_periods(
+                Counter(dict(top_words)),
+                Counter(dict(prev_top)),
+                current_days=(end - start).days,
+                previous_days=(prev_end - prev_start).days,
+            )
+    except Exception as exc:
+        logger.warning(f"monthly comparison unavailable: {exc}", exc_info=True)
+
+    return top_words, current_stats, rising, fading
+
+
+def _format_rising(rising: list[tuple[str, int]], limit: int = 5) -> str:
+    if not rising:
+        return ""
+    names = ", ".join(word for word, _ in rising[:limit])
+    return f"НОВЫЕ В ЭТОМ МЕСЯЦЕ: {names}"
 
 
 @rate_limit(tokens=1)
@@ -53,64 +116,29 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     try:
         bot_user_id = context.bot.id
-        cache_key = f"story_top_words_{chat_id}_{WORDCLOUD_PERIOD_DAYS}"
+        now = datetime.now()
+        month_key = f"{now.year}-{now.month:02d}"
+        cache_key = f"story_monthly_{chat_id}_{month_key}"
         cached = top_cache.get(cache_key)
+        rising = []
         if cached is not None:
-            logger.info(f"story cache hit chat_id={chat_id}")
-            top_words = cached
+            logger.info(f"story cache hit chat_id={chat_id} month={month_key}")
+            top_words, rising = cached
             messages_loaded = None
             stats = {}
-            words_before = 0
-            words_after = 0
             unique_words = 0
             words_used = 0
         else:
-            logger.info(f"story cache miss chat_id={chat_id}")
-            messages, stats = await asyncio.to_thread(
-                get_chat_messages_for_story,
-                chat_id,
-                WORDCLOUD_PERIOD_DAYS,
-                WORDCLOUD_MESSAGE_LIMIT,
-                bot_user_id,
+            logger.info(f"story cache miss chat_id={chat_id} month={month_key}")
+            top_words, stats, rising, _fading = await _collect_monthly_words(
+                chat_id, bot_user_id
             )
-            messages_loaded = len(messages)
+            messages_loaded = stats.get("user_messages", 0)
             logger.info(
-                f"story messages loaded={messages_loaded} limit={WORDCLOUD_MESSAGE_LIMIT} "
-                f"total={stats.get('total_messages')} bot={stats.get('bot_messages')}"
+                f"story month={month_key} messages={messages_loaded} "
+                f"limit={WORDCLOUD_MESSAGE_LIMIT} authors={stats.get('authors')} "
+                f"rising={len(rising)}"
             )
-
-            if not messages:
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text="Недостаточно данных для создания истории чата.",
-                )
-                return
-
-            counter = await asyncio.to_thread(process_messages, messages)
-            words_before = len(counter)
-
-            total_words = sum(counter.values())
-            if total_words <= 50 or words_before <= 20:
-                effective_min = 1
-            elif total_words <= 200 or words_before <= 60:
-                effective_min = 2
-            else:
-                effective_min = WORDCLOUD_MIN_WORD_FREQUENCY
-
-            filtered = [(w, c) for w, c in counter.items() if c >= effective_min]
-            words_after = len(filtered)
-            filtered.sort(key=lambda x: x[1], reverse=True)
-            top_words = filtered[:WORDCLOUD_MAX_WORDS]
-            unique_words = len(top_words)
-            words_used = sum(c for _, c in top_words)
-
-            logger.info(
-                f"story chat_id={chat_id} words_before_filtering={words_before} "
-                f"words_after_filtering={words_after} unique_words={unique_words} "
-                f"words_used={words_used}"
-            )
-
-            log_top_words(top_words, f"TOP 20 WORDS chat_id={chat_id}")
 
             if not top_words:
                 await context.bot.send_message(
@@ -119,18 +147,20 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 )
                 return
 
-            top_cache.set(cache_key, top_words, ttl=WORDCLOUD_CACHE_TTL)
+            unique_words = len(top_words)
+            words_used = sum(c for _, c in top_words)
+            logger.info(
+                f"story chat_id={chat_id} month={month_key} unique_words={unique_words} "
+                f"words_used={words_used} phrases={sum(1 for w, _ in top_words if ' ' in w)}"
+            )
+
+            log_top_words(top_words, f"TOP 20 WORDS chat_id={chat_id}")
+
+            top_cache.set(cache_key, (top_words, rising), ttl=WORDCLOUD_CACHE_TTL)
             logger.info(f"story cached chat_id={chat_id} ttl={WORDCLOUD_CACHE_TTL}")
 
-        top_word = top_words[0][0]
-        top_count = top_words[0][1]
-
-        period_end = datetime.now()
-        period_start = period_end - timedelta(days=WORDCLOUD_PERIOD_DAYS)
-        period_label = (
-            f"{period_start.strftime('%d.%m.%Y')} — {period_end.strftime('%d.%m.%Y')}"
-            f"  ·  {WORDCLOUD_PERIOD_DAYS} дней"
-        )
+        period_label = f"{month_bounds_label(now)}  ·  {WORDCLOUD_PERIOD_DAYS} дней"
+        rising_label = _format_rising(rising)
 
         # Show a status message so the user knows the bot is working, not frozen.
         # Use send_message directly (not reply_text) — the user's /story message
@@ -147,6 +177,7 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 WORDCLOUD_GENERATION_TIMEOUT,
                 period_label=period_label,
                 message_count=messages_loaded or 0,
+                rising_label=rising_label,
             )
         except TimeoutError:
             logger.error(

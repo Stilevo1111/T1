@@ -2878,6 +2878,70 @@ def get_chat_messages_for_story(
             release_connection(conn)
 
 
+def get_chat_messages_in_range(
+    chat_id: int,
+    start,
+    end,
+    limit: int = 10000,
+    exclude_user_id: int | None = None,
+) -> tuple[list[tuple[str, int | None]], dict]:
+    """Load user messages between two timestamps, keeping the author id.
+
+    Unlike :func:`get_chat_messages_for_story` this returns
+    ``(text, user_id)`` pairs inside an explicit half-open ``[start, end)``
+    range, which the monthly word cloud needs: it compares the current
+    calendar month against the previous one, and it needs ``user_id`` to stop
+    one loud account from dominating the card.
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        db_type = get_db_type()
+        placeholder = "%s" if db_type == "postgresql" else "?"
+
+        total_query = (
+            f"SELECT COUNT(*) FROM chat_messages "
+            f"WHERE chat_id = {placeholder} AND is_bot = FALSE "
+            f"AND created_at >= {placeholder} AND created_at < {placeholder}"
+        )
+        user_query = (
+            f"SELECT message_text, user_id FROM chat_messages "
+            f"WHERE chat_id = {placeholder} AND is_bot = FALSE "
+            f"AND created_at >= {placeholder} AND created_at < {placeholder}"
+        )
+        params = [chat_id, start, end]
+        if exclude_user_id is not None:
+            user_query += f" AND user_id != {placeholder}"
+            params.append(exclude_user_id)
+        user_query += f" ORDER BY created_at DESC LIMIT {placeholder}"
+        params.append(limit)
+
+        cursor.execute(total_query, [chat_id, start, end])
+        total_messages = cursor.fetchone()[0]
+
+        cursor.execute(user_query, params)
+        rows = cursor.fetchall()
+        messages = [(row[0], row[1]) for row in rows if row[0]]
+
+        stats = {
+            "total_messages": total_messages,
+            "user_messages": len(messages),
+            "authors": len({uid for _, uid in messages if uid is not None}),
+        }
+        logger.info(
+            f"get_chat_messages_in_range chat_id={chat_id} loaded={len(messages)} "
+            f"authors={stats['authors']} start={start} end={end} limit={limit}"
+        )
+        return messages, stats
+    except Exception as e:
+        logger.error(f"get_chat_messages_in_range error: {e}")
+        return [], {"total_messages": 0, "user_messages": 0, "authors": 0}
+    finally:
+        if conn:
+            release_connection(conn)
+
+
 def update_last_message_id(telegram_id, message_id):
     """Функция для совместимости - использует новый класс Database"""
     db = Database()

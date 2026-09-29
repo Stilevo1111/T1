@@ -303,7 +303,13 @@ def _ui_font(font_path: str, size: int):
             return ImageFont.load_default()
 
 
-def _draw_chrome(base_img: Image.Image, top_words, period_label: str, message_count: int) -> None:
+def _draw_chrome(
+    base_img: Image.Image,
+    top_words,
+    period_label: str,
+    message_count: int,
+    rising_label: str = "",
+) -> None:
     """Draw the OpenDota-style header, frequency legend and footer in-place."""
     width, height = base_img.size
     draw = ImageDraw.Draw(base_img, "RGBA")
@@ -325,6 +331,8 @@ def _draw_chrome(base_img: Image.Image, top_words, period_label: str, message_co
     draw.rectangle([0, 86, width, 88], fill=accent)
     draw.text((28, 16), "ОБЛАКО СЛОВ ЧАТА", font=title_font, fill=text)
     draw.text((30, 56), period_label, font=sub_font, fill=muted)
+    if rising_label:
+        draw.text((30, 78), rising_label, font=legend_font, fill=accent)
 
     # Top-3 words preview on the right of the header.
     x_cursor = width - 28
@@ -378,6 +386,7 @@ def generate_wordcloud_image(
     *,
     period_label: str = "",
     message_count: int = 0,
+    rising_label: str = "",
 ) -> bytes:
     if not top_words:
         raise ValueError("No words provided for wordcloud")
@@ -644,7 +653,7 @@ def generate_wordcloud_image(
     # Draw the OpenDota-style card chrome (header, top words, legend, footer)
     # on top of the placed words so every card explains its own data.
     try:
-        _draw_chrome(base_img, sorted_words, period_label, message_count)
+        _draw_chrome(base_img, sorted_words, period_label, message_count, rising_label)
     except Exception as e:
         logger.warning(f"Could not draw wordcloud chrome: {e}")
 
