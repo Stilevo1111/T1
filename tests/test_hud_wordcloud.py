@@ -105,12 +105,35 @@ def test_hud_wordcloud_rejects_empty_input():
         generate_hud_wordcloud([])
 
 
-@pytest.mark.parametrize("ramp", ["accent", "heat", "monotone", "inverse"])
+@pytest.mark.parametrize("ramp", ["accent", "heat", "monotone", "inverse", "palette"])
 def test_every_color_ramp_renders(ramp):
-    """All four ramps must produce a non-blank card."""
+    """All ramps must produce a non-blank card."""
     png = generate_hud_wordcloud(SAMPLE, seed=2, color_ramp=ramp)
     assert len(png) > 10000
     Image.open(io.BytesIO(png)).size == (HUD_WIDTH, HUD_HEIGHT)
+
+
+def test_palette_ramp_cycles_through_distinct_accents():
+    """palette must give neighbouring words different colours, not one flat hue."""
+    accent = _hex_to_rgb("#ff8c42")
+    secondary = _hex_to_rgb("#22d3ee")
+    colors = [
+        _word_color(0.5, accent, secondary, ramp="palette", index=i) for i in range(len(ACCENTS))
+    ]
+    assert len(set(colors)) == len(ACCENTS), "palette ramp repeated a colour"
+    # Frequency still drives brightness, so size and colour agree.
+    bright = _word_color(1.0, accent, secondary, ramp="palette", index=0)
+    dim = _word_color(0.0, accent, secondary, ramp="palette", index=0)
+    assert sum(bright) > sum(dim)
+
+
+def test_palette_ramp_wraps_around_the_accent_list():
+    """Indices past the palette length must wrap instead of raising."""
+    accent = _hex_to_rgb("#ff8c42")
+    secondary = _hex_to_rgb("#22d3ee")
+    assert _word_color(
+        0.5, accent, secondary, ramp="palette", index=len(ACCENTS)
+    ) == _word_color(0.5, accent, secondary, ramp="palette", index=0)
 
 
 def test_inverse_ramp_flips_brightness():

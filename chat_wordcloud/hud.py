@@ -195,6 +195,7 @@ def _word_color(
     secondary: tuple[int, int, int],
     *,
     ramp: str = "accent",
+    index: int = 0,
 ) -> tuple[int, int, int]:
     """Map normalized frequency to a colour.
 
@@ -202,8 +203,15 @@ def _word_color(
     ramp="heat"    - cool blue -> green -> amber -> hot (frequency as heat)
     ramp="monotone"- dim accent -> full accent only (two-tone, max contrast)
     ramp="inverse" - accent for rare words, muted for frequent (upside-down)
+    ramp="palette" - one colour per word, cycled from the analytics ACCENTS
+                     list; frequency still controls saturation, so frequent
+                     words stay brighter than rare ones.
     """
     muted = _hex_to_rgb(MUTED)
+    if ramp == "palette":
+        base = _hex_to_rgb(ACCENTS[index % len(ACCENTS)])
+        # Brightness follows frequency so the size/colour hierarchy agrees.
+        return _scale_rgb(base, 0.52 + 0.48 * ratio)
     if ramp == "monotone":
         return _mix(_scale_rgb(accent, 0.45), accent, ratio)
     if ramp == "inverse":
@@ -292,10 +300,10 @@ def generate_hud_wordcloud(
     occupied = np.zeros((HUD_HEIGHT, HUD_WIDTH), dtype=bool)
     placed = 0
 
-    for word, count in words:
+    for index, (word, count) in enumerate(words):
         ratio = (count / max_count) if max_count else 0.0
         size = _font_size_for(ratio, max_font_size, relative_scaling)
-        color = _word_color(ratio, accent, secondary, ramp=color_ramp)
+        color = _word_color(ratio, accent, secondary, ramp=color_ramp, index=index)
 
         done = False
         for shrink in range(12):
