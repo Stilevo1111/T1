@@ -161,13 +161,13 @@ PRO_DB: ProRoleData = {
             "gpm": 833,    # mean of verified GPMs
             "xpm": 920,
             "lh": 75,
+            "lh_per_min": 7.5,   # derived from LH@10 (75 per 10 min)
             "deny": 13,
             "deaths": 2.7, # mean of verified deaths (Yatoro/Satanic/watson)
             "h_dmg": 32000,
             "t_dmg": 2800,
-            "stacks": 4.5,
             "utility": None,   # no sourced pro figure: the bot-side formula is not comparable
-            "apm": 290,
+            "apm": None,   # not exposed by OpenDota: excluded from IMP
             "kda": 9.5,    # rough KDA-ratio: (K+A)/D mean
         },
     },
@@ -191,13 +191,13 @@ PRO_DB: ProRoleData = {
             "gpm": 805,
             "xpm": 890,
             "lh": 68,
+            "lh_per_min": 6.8,   # derived from LH@10 (68 per 10 min)
             "deny": 11,
             "deaths": 3.1,
             "h_dmg": 29000,
             "t_dmg": 2200,
-            "stacks": 3.8,
             "utility": None,   # no sourced pro figure: the bot-side formula is not comparable
-            "apm": 310,
+            "apm": None,   # not exposed by OpenDota: excluded from IMP
             "kda": 6.8,
         },
     },
@@ -221,13 +221,13 @@ PRO_DB: ProRoleData = {
             "gpm": 682,
             "xpm": 780,
             "lh": 58,
+            "lh_per_min": 5.8,   # derived from LH@10 (58 per 10 min)
             "deny": 15,
             "deaths": 4.1,
             "h_dmg": 24000,
             "t_dmg": 1900,
-            "stacks": 5.2,
             "utility": None,   # no sourced pro figure: the bot-side formula is not comparable
-            "apm": 265,
+            "apm": None,   # not exposed by OpenDota: excluded from IMP
             "kda": 5.2,
         },
     },
@@ -251,13 +251,13 @@ PRO_DB: ProRoleData = {
             "gpm": 498,
             "xpm": 620,
             "lh": 42,
+            "lh_per_min": 4.2,   # derived from LH@10 (42 per 10 min)
             "deny": 18,
             "deaths": 5.2,
             "h_dmg": 18500,
             "t_dmg": 1200,
-            "stacks": 2.8,
             "utility": None,   # no sourced pro figure: the bot-side formula is not comparable
-            "apm": 340,
+            "apm": None,   # not exposed by OpenDota: excluded from IMP
             "kda": 4.1,
         },
     },
@@ -282,56 +282,6 @@ IMP_WEIGHTS: dict[RoleName, Weights] = {
 
 # =========================================================
 # UTILITY
-# =========================================================
-
-def _calculate_utility(
-    role: str,
-    stuns: float = 0,
-    heals: float = 0,
-    stacks: int = 0,
-    wards: int = 0,
-    observer_uses: int = 0,
-    sentry_uses: int = 0,
-    hero_damage: float = 0,
-    tower_damage: float = 0,
-) -> float:
-
-    if role == "SUPPORT":
-        return round(
-            (stuns * 0.3) +
-            (heals / 1000) +
-            (stacks * 1.5) +
-            ((observer_uses + sentry_uses) * 0.5),
-            2
-        )
-
-    if role in ("CARRY", "MID"):
-        return round(
-            (stuns * 0.4) +
-            (hero_damage / 1000) +
-            (tower_damage / 500) +
-            (stacks * 0.8),
-            2
-        )
-
-    if role == "OFFLANE":
-        return round(
-            (stuns * 0.5) +
-            (hero_damage / 1000) +
-            (tower_damage / 500) +
-            (stacks * 1.2) +
-            (wards * 0.3),
-            2
-        )
-
-    return round(
-        (stuns * 0.3) +
-        (heals / 1000) +
-        (stacks * 1.5) +
-        (wards * 0.5),
-        2
-    )
-
 # =========================================================
 # IMP
 # =========================================================
@@ -699,24 +649,35 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
     """
 
     if not matches:
-        return {"wr": 50.0, "gpm": 400, "xpm": 500, "lh": 0, "deny": 0, "stacks": 0, "deaths": 5.0, "h_dmg": 10.0, "t_dmg": 2.0, "util": 8.0, "apm": 250, "kda": "3/4/8"}
+        # Nothing measured. Unmeasurable metrics stay None so the table prints
+        # "—" instead of a plausible-looking placeholder.
+        return {
+            "wr": None, "gpm": None, "xpm": None, "lh": None, "lh_per_min": None,
+            "deny": None, "deaths": None, "h_dmg": None, "t_dmg": None,
+            "kda": None, "kda_number": None,
+        }
     n = len(matches)
 
-    # Collect raw data
-    raw_lh = [m.get("last_hits", 0) for m in matches]
+    # Collect raw data.
+    # OpenDota's /matches/{id} only carries some of these fields, and only for
+    # matches it has fully parsed: a ranked all-pick game comes back with
+    # last_hits/denies but no hero_damage, tower_damage or hero_healing, and
+    # never with actions_per_min, stuns or creeps_stacked. Anything measured
+    # from a field the API did not send is reported as None rather than
+    # estimated, so the table can never show an invented number.
     raw_lh_per_10min = [m.get("last_hits", 0) / max(m.get("duration", 600) / 600, 0.33) for m in matches]  # normalize to 10min
+    raw_lh_per_min = [m.get("last_hits", 0) / max(m.get("duration", 600) / 60, 1) for m in matches]
     raw_kills = [m.get("kills", 0) for m in matches]
     raw_deaths = [m.get("deaths", 0) for m in matches]
     raw_assists = [m.get("assists", 0) for m in matches]
-    raw_h_dmg = [m.get("hero_damage", 0) for m in matches]
-    raw_t_dmg = [m.get("tower_damage", 0) for m in matches]
-    raw_apm = [m.get("actions_per_min", 0) for m in matches]
-    raw_stuns = [m.get("stuns", 0) for m in matches]
-    raw_heals = [m.get("hero_healing", 0) for m in matches]
     raw_wins = [1 if m.get("win", False) else 0 for m in matches]
     raw_denies = [m.get("denies", 0) for m in matches]
-    raw_stacks = [m.get("creeps_stacked", 0) for m in matches]
     raw_xpm = [m.get("xp_per_min", 0) for m in matches]
+
+    # Damage is averaged only over the matches that actually reported it, so a
+    # partially parsed history is never mixed with fabricated values.
+    h_dmg_matches = [m["hero_damage"] for m in matches if m.get("hero_damage")]
+    t_dmg_matches = [m["tower_damage"] for m in matches if m.get("tower_damage")]
 
     # Compute GPM per match from gold and gold_spent (more reliable than gold_per_min)
     raw_gpm = []
@@ -732,83 +693,46 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
         raw_gpm.append(gpm_val)
 
     total_gpm = sum(raw_gpm)
-    # Fallbacks if GPM data is zero (e.g., missing gold info)
-    total_lh = sum(raw_lh)
-    if total_gpm == 0 and total_lh > 0:
-        total_gpm = total_lh * 60
-    elif total_gpm == 0:
-        avg_kills = sum(raw_kills) / max(n, 1)
-        avg_deaths = max(sum(raw_deaths) / max(n, 1), 1)
-        avg_assists = sum(raw_assists) / max(n, 1)
-        avg_kda = (avg_kills + avg_assists) / avg_deaths
-        total_gpm = avg_kda * 150
-
-    avg_gpm = total_gpm / n
+    # GPM is a real field when the match carried gold data. When it did not,
+    # report nothing rather than deriving a number from last hits or KDA,
+    # which is not what GPM means.
+    avg_gpm = total_gpm / n if total_gpm else None
     avg_lh_10min = sum(raw_lh_per_10min) / n
+    avg_lh_per_min = sum(raw_lh_per_min) / n
 
-    total_deaths = sum(raw_deaths)
-    avg_deaths = total_deaths / n
+    avg_deaths = sum(raw_deaths) / n
+    avg_kills = sum(raw_kills) / n
+    avg_assists = sum(raw_assists) / n
+    avg_denies = sum(raw_denies) / n
+    avg_xpm = sum(raw_xpm) / n
 
-    total_kills = sum(raw_kills)
-    avg_kills = total_kills / n
-
-    total_assists = sum(raw_assists)
-    avg_assists = total_assists / n
-
-    total_denies = sum(raw_denies)
-    avg_denies = total_denies / n
-
-    total_stacks = sum(raw_stacks)
-    avg_stacks = total_stacks / n
-
-    total_xpm = sum(raw_xpm)
-    avg_xpm = total_xpm / n
-
-
-
-    # Hero DMG fallback: estimate from kills (~200 damage per kill avg)
-    total_h_dmg = sum(raw_h_dmg)
-    if total_h_dmg == 0:
-        total_h_dmg = total_kills * 200
     # Raw damage, same unit as the PRO benchmark. This used to be divided by
     # 1000, which put the player value on a thousands scale next to a raw
     # benchmark (20400 vs 32000 rendered as "20.4 vs 32000").
-    avg_h_dmg = total_h_dmg / n
-
-    # Tower DMG fallback: estimate from kills
-    total_t_dmg = sum(raw_t_dmg)
-    if total_t_dmg == 0:
-        total_t_dmg = total_kills * 50
-    avg_t_dmg = total_t_dmg / n
-
-    # APM fallback
-    total_apm = sum(raw_apm)
-    if total_apm == 0:
-        total_apm = n * 250
-    avg_apm = total_apm / n
-
-    # Utility from stuns/heals/stacks
-    total_stuns = sum(raw_stuns)
-    total_heals = sum(raw_heals)
-    total_utility = (total_stuns * 0.3 + total_heals / 1000) / n
+    avg_h_dmg = sum(h_dmg_matches) / len(h_dmg_matches) if h_dmg_matches else None
+    avg_t_dmg = sum(t_dmg_matches) / len(t_dmg_matches) if t_dmg_matches else None
 
     total_wins = sum(raw_wins)
     wr = (total_wins / n) * 100
 
     real_kda = (avg_kills + avg_assists) / max(avg_deaths, 0.1)
 
+    def _r(value: float | None, digits: int = 1):
+        return None if value is None else round(value, digits)
+
+    # Only fields OpenDota actually returns are reported. APM, creeps_stacked
+    # and stuns are not part of the /matches/{id} player object at all, so
+    # there is no honest way to show them and they are gone rather than faked.
     return {
         "wr": round(wr, 1),
-        "gpm": round(avg_gpm, 1),
-        "xpm": round(avg_xpm, 1),
-        "lh": round(avg_lh_10min, 1),
-        "deny": round(avg_denies, 1),
-        "stacks": round(avg_stacks, 1),
-        "deaths": round(avg_deaths, 1),
-        "h_dmg": round(avg_h_dmg, 1),
-        "t_dmg": round(avg_t_dmg, 1),
-        "util": round(total_utility, 1),
-        "apm": round(avg_apm, 0),
+        "gpm": _r(avg_gpm),
+        "xpm": _r(avg_xpm),
+        "lh": _r(avg_lh_10min),
+        "lh_per_min": _r(avg_lh_per_min),
+        "deny": _r(avg_denies),
+        "deaths": _r(avg_deaths),
+        "h_dmg": _r(avg_h_dmg),
+        "t_dmg": _r(avg_t_dmg),
         "kda_number": round(real_kda, 2),
         "kda": f"{round(avg_kills,1)}/{round(avg_deaths,1)}/{round(avg_assists,1)}"
     }
@@ -861,12 +785,11 @@ async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> l
             m["hero_damage"] = player_stats.get("hero_damage", 0)
             m["tower_damage"] = player_stats.get("tower_damage", 0)
             m["denies"] = player_stats.get("denies", 0)
-            m["actions_per_min"] = player_stats.get("actions_per_min", 0)
-            m["stuns"] = player_stats.get("stuns", 0.0) if isinstance(player_stats.get("stuns"), (int, float)) else 0
             m["hero_healing"] = player_stats.get("hero_healing", 0)
-            m["creeps_stacked"] = player_stats.get("creeps_stacked", 0)
-            m["observer_uses"] = player_stats.get("observer_uses", 0)
-            m["sentry_uses"] = player_stats.get("sentry_uses", 0)
+            # actions_per_min, stuns and creeps_stacked are not part of this
+            # endpoint's player object, so they are deliberately not read here.
+            # Reading them with a 0 default is what made the table report
+            # invented numbers for APM, Stacks and Util.
         except Exception as e:
             logger.debug(f"Failed to fetch match {match_id}: {e}")
         return m
@@ -951,12 +874,7 @@ async def get_last_matches(telegram_id: int, limit: int = 10) -> list[dict[str, 
             "start_time": m.get("start_time", 0),
             "win": is_win,
             "denies": 0,
-            "actions_per_min": 0,
-            "stuns": 0.0,
             "hero_healing": 0,
-            "creeps_stacked": 0,
-            "observer_uses": 0,
-            "sentry_uses": 0,
             "match_id": match_id
         })
 
@@ -1003,16 +921,15 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
     t2 += "────────────────────────\n"
     bench = db["benchmarks"]
     metrics = [
-        ("LH@10", user_stats.get('lh', 0), bench.get('lh'), False),
-        ("Denies", user_stats.get('deny', 0), bench.get('deny'), False),
-        ("GPM", user_stats.get('gpm', 0), bench.get('gpm'), False),
-        ("XPM", user_stats.get('xpm', 0), bench.get('xpm'), False),
-        ("Deaths", user_stats.get('deaths', 0), bench.get('deaths'), True),
-        ("H DMG", user_stats.get('h_dmg', 0), bench.get('h_dmg'), False),
-        ("T DMG", user_stats.get('t_dmg', 0), bench.get('t_dmg'), False),
-        ("Stacks", user_stats.get('stacks', 0), bench.get('stacks'), False),
-        ("Util", user_stats.get('util', 0), bench.get('utility'), False),
-        ("APM", user_stats.get('apm', 0), bench.get('apm'), False),
+        ("LH@10", user_stats.get('lh'), bench.get('lh'), False),
+        ("LH/min", user_stats.get('lh_per_min'), bench.get('lh_per_min'), False),
+        ("Denies", user_stats.get('deny'), bench.get('deny'), False),
+        ("GPM", user_stats.get('gpm'), bench.get('gpm'), False),
+        ("XPM", user_stats.get('xpm'), bench.get('xpm'), False),
+        ("Deaths", user_stats.get('deaths'), bench.get('deaths'), True),
+        ("H DMG", user_stats.get('h_dmg'), bench.get('h_dmg'), False),
+        ("T DMG", user_stats.get('t_dmg'), bench.get('t_dmg'), False),
+        ("KDA", user_stats.get('kda_number'), bench.get('kda'), False),
     ]
     for label, u, p, lower_is_better in metrics:
         u_str = f"{u:.0f}" if isinstance(u, (int, float)) and u >= 100 else f"{u:.1f}" if isinstance(u, (int, float)) else "—"
@@ -1198,25 +1115,19 @@ async def _generate_chart_only_impl(telegram_id: int) -> dict[str, Any] | None:
         assists = m.get("assists", 0)
         kda = (kills + assists) / max(deaths, 1)
 
-        # Estimate GPM from last_hits (basic data from match list, no API)
         duration = m.get("duration", 600)
-        last_hits = m.get("last_hits", 0)
-        gpm = last_hits * 60 / max(duration / 60, 1) if last_hits > 0 else 300
+        # Real GPM when available, otherwise derived from gold + gold_spent.
+        # The previous "last_hits * 60" guess is not GPM.
+        gpm = m.get("gold_per_min", 0)
+        if gpm == 0:
+            gold = m.get("gold", 0) + m.get("gold_spent", 0)
+            gpm = gold * 60 / duration if gold > 0 and duration > 0 else 0
 
-        # Estimate utility from stacks and denies (minimal data)
-        stacks = m.get("creeps_stacked", 0)
-        denies = m.get("denies", 0)
-        utility = _calculate_utility(
-            role,
-            stacks=stacks,
-            wards=denies,
-        )
-
-        # Estimate APM (typical values by role)
-        apm = 250
-
+        # utility and apm cannot be measured from this endpoint; _calculate_imp
+        # drops any metric without a sourced benchmark, so they contribute
+        # nothing instead of contributing a placeholder.
         win = m.get("win", False)
-        imp = _calculate_imp(gpm, kda, utility, apm, role, win=win, duration=duration)
+        imp = _calculate_imp(gpm, kda, 0.0, 0.0, role, win=win, duration=duration)
         game_history.append({
             "imp": round(imp, 2) if imp is not None else None,
             "hero_id": m.get("hero_id", 0),
@@ -1326,33 +1237,33 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
     total_assists = 0
     total_lh = 0
     total_lh_10min = 0
-    total_apm = 0
+    total_lh_per_min = 0
     total_denies = 0
-    total_stacks = 0
     total_xpm = 0
     total_h_dmg = 0
     total_t_dmg = 0
-    total_utility = 0
+    h_dmg_count = 0
+    t_dmg_count = 0
     total_wins = 0
 
     game_history = []
 
     for m in matches:
 
+        # GPM: gold_per_min when the API sent it, otherwise derived from the
+        # real gold + gold_spent fields. The previous fallback multiplied last
+        # hits by 60, which is not GPM in any definition.
         gpm = m.get("gold_per_min", 0)
+        if gpm == 0:
+            gold = m.get("gold", 0) + m.get("gold_spent", 0)
+            duration = m.get("duration", 0)
+            if gold > 0 and duration > 0:
+                gpm = gold * 60 / duration
+        # XPM is reported as-is. It used to be filled in as gpm * 0.8, an
+        # invented number that then flowed into the chart.
         xpm = m.get("xp_per_min", 0)
-        last_hits = m.get("last_hits", 0)
-        denies = m.get("denies", 0)
-        hero_damage = m.get("hero_damage", 0)
-        tower_damage = m.get("tower_damage", 0)
-        creeps_stacked = m.get("creeps_stacked", 0)
         duration = m.get("duration", 600)
         win = m.get("win", False)
-
-        if gpm == 0 and last_hits > 0:
-            gpm = last_hits * 60 / max(duration / 60, 1) if duration > 0 else 300
-        if xpm == 0:
-            xpm = gpm * 0.8
 
         kills = m.get("kills", 0)
         deaths = m.get("deaths", 0)
@@ -1360,27 +1271,14 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
 
         kda = (kills + assists) / max(deaths, 1)
 
-        utility = _calculate_utility(
-            role,
-            stuns=m.get("stuns", 0),
-            heals=m.get("hero_healing", 0),
-            stacks=creeps_stacked,
-            wards=m.get("observer_uses", 0) + m.get("sentry_uses", 0),
-            observer_uses=m.get("observer_uses", 0),
-            sentry_uses=m.get("sentry_uses", 0),
-            hero_damage=hero_damage,
-            tower_damage=tower_damage,
-        )
-
-        apm = m.get("actions_per_min", 0)
-        if apm == 0:
-            apm = 250
-
+        # utility/apm are not measurable from this endpoint. _calculate_imp
+        # drops any metric whose benchmark is None, so passing 0 here keeps
+        # the impact score on the two metrics we can actually verify.
         imp = _calculate_imp(
             gpm,
             kda,
-            utility,
-            apm,
+            0.0,  # utility: not measurable from this endpoint
+            0.0,  # apm: not measurable from this endpoint
             role,
             win=win,
             duration=duration,
@@ -1403,24 +1301,19 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
         duration = m.get("duration", 600)
         lh_per_10min = m.get("last_hits", 0) / max(duration / 600, 0.33) if duration > 0 else 0
         total_lh_10min += lh_per_10min
-        total_apm += apm
         total_denies += m.get("denies", 0)
-        total_stacks += m.get("creeps_stacked", 0)
-        total_xpm += m.get("xp_per_min", 0)
+        total_xpm += xpm
+        total_lh_per_min += m.get("last_hits", 0) / max(duration / 60, 1)
 
-        total_utility += utility
-
-        # Fallback for hero_damage from kills
-        h_dmg = m.get("hero_damage", 0)
-        if h_dmg == 0:
-            h_dmg = kills * 200  # ~200 damage per kill
-        total_h_dmg += h_dmg
-
-        # Fallback for tower_damage
-        t_dmg = m.get("tower_damage", 0)
-        if t_dmg == 0:
-            t_dmg = kills * 50  # rough estimate
-        total_t_dmg += t_dmg
+        # Damage is accumulated only from matches that reported it. The old
+        # kills * 200 / kills * 50 fallbacks turned a missing field into a
+        # plausible number and it was then compared against a real benchmark.
+        if m.get("hero_damage"):
+            total_h_dmg += m["hero_damage"]
+            h_dmg_count += 1
+        if m.get("tower_damage"):
+            total_t_dmg += m["tower_damage"]
+            t_dmg_count += 1
 
         if m.get("win", False):
             total_wins += 1
@@ -1431,19 +1324,17 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
 
     if match_count == 0:
         user_stats = {
-            "wr": 0.0,
-            "lh": 0.0,
-            "deny": 0.0,
-            "stacks": 0.0,
-            "gpm": 0.0,
-            "xpm": 0.0,
-            "h_dmg": 0.0,
-            "t_dmg": 0.0,
-            "util": 0.0,
-            "apm": 0.0,
-            "deaths": 0.0,
-            "kda_number": 0.0,
-            "kda": "0.0/0.0/0.0"
+            "wr": None,
+            "lh": None,
+            "lh_per_min": None,
+            "deny": None,
+            "gpm": None,
+            "xpm": None,
+            "h_dmg": None,
+            "t_dmg": None,
+            "deaths": None,
+            "kda_number": None,
+            "kda": None,
         }
         tables = _generate_report_text(role, user_stats)
         chart_image = await _create_visual_chart(game_history)
@@ -1458,13 +1349,13 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
 
     avg_gpm = total_gpm / match_count
     avg_lh = total_lh_10min / match_count
-    avg_apm = total_apm / match_count
+    avg_lh_per_min = total_lh_per_min / match_count
     avg_denies = total_denies / match_count
     avg_xpm = total_xpm / match_count
-    avg_stacks = total_stacks / match_count
-    avg_h_dmg = total_h_dmg / match_count / 1000
-    avg_t_dmg = total_t_dmg / match_count / 1000
-    avg_utility = total_utility / match_count
+    # Raw damage, same unit as the PRO benchmark, and averaged only over the
+    # matches that actually reported the field.
+    avg_h_dmg = total_h_dmg / h_dmg_count if h_dmg_count else None
+    avg_t_dmg = total_t_dmg / t_dmg_count if t_dmg_count else None
     avg_deaths = total_deaths / match_count
     avg_kills = total_kills / match_count
     avg_assists = total_assists / match_count
@@ -1476,14 +1367,12 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
     user_stats = {
         "wr": round(wr, 1),
         "lh": round(avg_lh, 1),
+        "lh_per_min": round(avg_lh_per_min, 1),
         "deny": round(avg_denies, 1),
-        "stacks": round(avg_stacks, 1),
         "gpm": round(avg_gpm, 1),
         "xpm": round(avg_xpm, 1),
-        "h_dmg": round(avg_h_dmg, 1),
-        "t_dmg": round(avg_t_dmg, 1),
-        "util": round(avg_utility, 1),
-        "apm": round(avg_apm, 1),
+        "h_dmg": None if avg_h_dmg is None else round(avg_h_dmg, 1),
+        "t_dmg": None if avg_t_dmg is None else round(avg_t_dmg, 1),
         "deaths": round(avg_deaths, 1),
         "kda_number": round(real_kda, 2),
         "kda": f"{round(avg_kills,1)}/{round(avg_deaths,1)}/{round(avg_assists,1)}"
