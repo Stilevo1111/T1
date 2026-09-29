@@ -1132,7 +1132,6 @@ async def _generate_chart_only_impl(telegram_id: int) -> dict[str, Any] | None:
             "hero_id": m.get("hero_id", 0),
             "win": win,
             "role": role,
-            "start_time": m.get("start_time", 0),
             "imp_unavailable": imp is None,
         })
 
@@ -1290,7 +1289,6 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
             "hero_id": m.get("hero_id", 0),
             "win": win,
             "role": role,
-            "start_time": m.get("start_time", 0),
             "imp_unavailable": imp is None,
         })
 
@@ -1489,7 +1487,7 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict) -> bytes
     draw.text((58, 48), "ИСТОРИЯ МАТЧЕЙ", font=font(24, True), fill=accent)
     role = str(entries[0].get("role") or "НЕ ОПРЕДЕЛЕНА").upper()
     draw.text((58, 88), f"РОЛЬ: {role}  •  ПОСЛЕДНИЕ {len(entries)} МАТЧЕЙ", font=font(18), fill="#cbd5e1")
-    left, right, top, bottom = 145, 1085, 175, 660
+    left, right, top, bottom = 145, 1085, 175, 690
     tick_font = font(16, True)
     for step in range(5):
         value = axis_max * step / 4
@@ -1508,15 +1506,6 @@ def _create_visual_chart_sync(history: list[dict], hero_icon_map: dict) -> bytes
             canvas.alpha_composite(icon.convert("RGBA").resize((48, 48), Image.Resampling.LANCZOS), (int(x-24), int(y-24)))
         else: draw.ellipse((x-12, y-12, x+12, y+12), fill=color)
         draw.text((int(x-18), int(y-52)), f"{float(item['imp']):.2f}", font=font(15, True), fill="#f8fafc")
-    # Date under each point. Without it the dots are evenly spaced by position
-    # and there is no way to tell which game is which.
-    date_font = font(15)
-    for (x, _y), item in zip(points, entries):
-        stamp = item.get("start_time") or 0
-        label = (datetime.fromtimestamp(stamp).strftime("%d.%m") if stamp else "")
-        if label:
-            draw.text((int(x - draw.textlength(label, font=date_font) / 2), bottom + 12),
-                      label, font=date_font, fill="#94a3b8")
     draw.text((58, 700), f"СРЕДНИЙ ИНДЕКС: {sum(values)/len(values):.2f}  •  ПОБЕД: {wins}  •  ПОРАЖЕНИЙ: {len(entries)-wins}", font=font(25, True), fill="#f8fafc")
     result = io.BytesIO(); canvas.convert("RGB").save(result, format="PNG", optimize=True); return result.getvalue()
 
