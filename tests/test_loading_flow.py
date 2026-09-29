@@ -73,6 +73,8 @@ def _fast_timing(monkeypatch):
     monkeypatch.setattr(loading_flow, "MAX_EDIT_SECONDS", 30.0)
     monkeypatch.setattr(loading_flow, "SPINNER_INTERVAL", 0)
     monkeypatch.setattr(loading_flow, "MIN_EDIT_GAP", 0)
+    monkeypatch.setattr(loading_flow, "RATE_LIMIT_BACKOFF", 0)
+    monkeypatch.setattr(loading_flow, "MAX_FAILED_EDITS", 3)
 
 
 async def _spin(iterations=20):
@@ -353,5 +355,49 @@ def test_icon_is_optional():
         await _spin()
         await stop_loading(handle)
         assert bot.sent == [f"<b>{TYPED_LABEL[:1]}</b>"]
+
+    asyncio.run(run())
+
+
+def test_rate_limit_does_not_block_forever():
+    """429 responses must cause a sleep, not an infinite retry loop."""
+
+    class _RateLimited(_Bot):
+        def __init__(self):
+            super().__init__()
+            self._call_count = 0
+
+        async def edit_message_text(self, chat_id, message_id, text, parse_mode=None):
+            self._call_count += 1
+            if self._call_count <= 3:
+                raise RuntimeError("Bad Request: Too Many Requests to many requests")
+            self.edits.append(text)
+            return _Msg(message_id, chat_id)
+
+    async def run():
+        bot = _RateLimited()
+        handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
+        await _spin(iterations=100)
+        await stop_loading(handle)
+        # After the rate limit window, edits should resume.
+        assert len(bot.edits) > 0
+
+    asyncio.run(run())
+
+
+def test_spinner_stops_after_persistent_rate_limit():
+    """If every edit hits 429, the spinner must eventually stop."""
+
+    class _AlwaysRateLimited(_Bot):
+        async def edit_message_text(self, chat_id, message_id, text, parse_mode=None):
+            raise RuntimeError("Bad Request: Too Many Requests to many requests")
+
+    async def run():
+        bot = _AlwaysRateLimited()
+        handle = await show_loading(bot, bot.chat_id, TYPED_LABEL)
+        await _spin(iterations=500)
+        await stop_loading(handle)
+        # Typing edits also hit the same error, so the task should stop.
+        assert handle.stopped
 
     asyncio.run(run())

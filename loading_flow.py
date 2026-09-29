@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 TYPED_LABEL = "Хукаю..."
 LOADING_ICON = "🪝 "
 SPINNER_FRAMES = ["🪝", "🔄", "⏳", "🔄"]
-SPINNER_INTERVAL = 0.5
+SPINNER_INTERVAL = 2.0
+MAX_FAILED_EDITS = 10
+RATE_LIMIT_BACKOFF = 3
 
 # Short labels ("Хукаю...") are typed one character at a time, which reads as
 # real typing. Longer ones move two characters per frame: at one char per frame
@@ -49,6 +51,7 @@ _GONE_MARKERS = (
 _active: dict = {}
 _chat_locks: dict = {}
 _last_edit_time: dict = {}
+_rate_limit_failures: dict = {}  # chat_id -> consecutive 429 count
 
 
 class Loading:
@@ -87,24 +90,48 @@ async def _edit(bot, chat_id: int, message_id: int, text: str) -> bool:
         gap = now - last_edit
         if gap < MIN_EDIT_GAP:
             await asyncio.sleep(MIN_EDIT_GAP - gap)
-        try:
-            await bot.edit_message_text(
-                chat_id=chat_id, message_id=message_id, text=text, parse_mode="HTML"
+    try:
+        await bot.edit_message_text(
+            chat_id=chat_id, message_id=message_id, text=text, parse_mode="HTML"
+        )
+        _last_edit_time[chat_id] = asyncio.get_running_loop().time()
+        return True
+    except Exception as e:
+        name = type(e).__name__
+        msg = str(e).lower()
+        if "not modified" in msg:
+            _last_edit_time[chat_id] = asyncio.get_running_loop().time()
+            return True
+        if any(marker in msg for marker in _GONE_MARKERS):
+            logger.debug(f"loading_flow: message {message_id} is gone ({name})")
+            return False
+        if "retry" in name.lower() or "flood" in msg or "429" in msg:
+            retry_after = getattr(e, "retry_after", None)
+            if retry_after is None:
+                import re
+                m = re.search(r"retry after (\d+)", msg)
+                if m:
+                    retry_after = int(m.group(1))
+            wait = retry_after if retry_after is not None else RATE_LIMIT_BACKOFF
+            failures = _rate_limit_failures.get(chat_id, 0) + 1
+            _rate_limit_failures[chat_id] = failures
+            logger.warning(
+                f"loading_flow: rate-limited by Telegram (chat {chat_id}), "
+                f"retry_after={retry_after}, sleeping {wait}s, consecutive={failures}"
             )
-            _last_edit_time[chat_id] = asyncio.get_running_loop().time()
-            return True
-        except Exception as e:
-            name = type(e).__name__
-            msg = str(e).lower()
-            if "not modified" in msg:
-                _last_edit_time[chat_id] = asyncio.get_running_loop().time()
-                return True
-            if any(marker in msg for marker in _GONE_MARKERS):
-                logger.debug(f"loading_flow: message {message_id} is gone ({name})")
+            await asyncio.sleep(wait)
+            _last_edit_time[chat_id] = asyncio.get_running_loop().time() + wait
+            if failures >= MAX_FAILED_EDITS:
+                logger.warning(
+                    f"loading_flow: too many 429s for chat {chat_id}, "
+                    f"stopping spinner to avoid flood"
+                )
                 return False
-            logger.debug(f"loading_flow: edit failed ({name}: {e})")
-            _last_edit_time[chat_id] = asyncio.get_running_loop().time()
             return True
+        _rate_limit_failures.pop(chat_id, None)
+        logger.debug(f"loading_flow: edit failed ({name}: {e})")
+        _last_edit_time[chat_id] = asyncio.get_running_loop().time()
+        return True
 
 
 def _chunk_for(label: str) -> int:
@@ -117,7 +144,8 @@ async def _spinner_loop(
 ) -> None:
     """Cycle the icon emoji to show the process is still alive after typing."""
     frame_idx = 0
-    while True:
+    failed = 0
+    while failed < MAX_FAILED_EDITS:
         if asyncio.current_task().cancelling():
             return
         frame = SPINNER_FRAMES[frame_idx % len(SPINNER_FRAMES)]
