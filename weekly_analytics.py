@@ -166,7 +166,7 @@ PRO_DB: ProRoleData = {
             "h_dmg": 32000,
             "t_dmg": 2800,
             "stacks": 4.5,
-            "utility": 8.5,
+            "utility": None,   # no sourced pro figure: the bot-side formula is not comparable
             "apm": 290,
             "kda": 9.5,    # rough KDA-ratio: (K+A)/D mean
         },
@@ -196,7 +196,7 @@ PRO_DB: ProRoleData = {
             "h_dmg": 29000,
             "t_dmg": 2200,
             "stacks": 3.8,
-            "utility": 9.0,
+            "utility": None,   # no sourced pro figure: the bot-side formula is not comparable
             "apm": 310,
             "kda": 6.8,
         },
@@ -226,7 +226,7 @@ PRO_DB: ProRoleData = {
             "h_dmg": 24000,
             "t_dmg": 1900,
             "stacks": 5.2,
-            "utility": 10.5,
+            "utility": None,   # no sourced pro figure: the bot-side formula is not comparable
             "apm": 265,
             "kda": 5.2,
         },
@@ -256,7 +256,7 @@ PRO_DB: ProRoleData = {
             "h_dmg": 18500,
             "t_dmg": 1200,
             "stacks": 2.8,
-            "utility": 11.5,
+            "utility": None,   # no sourced pro figure: the bot-side formula is not comparable
             "apm": 340,
             "kda": 4.1,
         },
@@ -770,13 +770,16 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
     total_h_dmg = sum(raw_h_dmg)
     if total_h_dmg == 0:
         total_h_dmg = total_kills * 200
-    avg_h_dmg = total_h_dmg / n / 1000
+    # Raw damage, same unit as the PRO benchmark. This used to be divided by
+    # 1000, which put the player value on a thousands scale next to a raw
+    # benchmark (20400 vs 32000 rendered as "20.4 vs 32000").
+    avg_h_dmg = total_h_dmg / n
 
     # Tower DMG fallback: estimate from kills
     total_t_dmg = sum(raw_t_dmg)
     if total_t_dmg == 0:
         total_t_dmg = total_kills * 50
-    avg_t_dmg = total_t_dmg / n / 1000
+    avg_t_dmg = total_t_dmg / n
 
     # APM fallback
     total_apm = sum(raw_apm)
