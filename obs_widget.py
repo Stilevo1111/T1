@@ -17,6 +17,7 @@ Behavior:
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import os
@@ -38,9 +39,19 @@ WIDGET_HEIGHT = CARD_SIZE
 WIN_COLOR = (34, 197, 94, 255)
 LOSS_COLOR = (239, 68, 68, 255)
 UNKNOWN_COLOR = (120, 120, 120, 255)
-BG_COLOR = (0, 0, 0, 255)
+# Фон холста прозрачный. Раньше был (0, 0, 0, 255): виджет отдавался в OBS
+# чёрным прямоугольником поверх игры. Прозрачный холст совпадает с оверлеем
+# рулетки и панелью подарков — там страница тоже отдаётся без подложки,
+# и видно только то, что нарисовано.
+BG_COLOR = (0, 0, 0, 0)
+# Подложка под иконкой героя — тот же тёмный полупрозрачный цвет, что у плашки
+# донота (rgba(18, 21, 30, 0.94)). Раньше карточка заливалась цветом победы или
+# поражения целиком, и иконка лежала на яркой квадратной подложке.
+CARD_FILL = (18, 21, 30, 240)
+# Рамка вокруг героя: победа/поражение/неизвестно. Вместо сплошной заливки.
+CARD_BORDER_WIDTH = 3
 WIDGET_BORDER_RADIUS = 10
-ICON_MARGIN = 4
+ICON_MARGIN = 6
 FALLBACK_FONT_RATIO = 0.55
 
 THEME_COLORS = {
@@ -195,7 +206,7 @@ async def generate_obs_widget(
     force: bool = False,
 ) -> bytes | None:
     """Generate transparent PNG widget for last `limit` matches.
-    
+
     Args:
         steam_id: Steam ID64
         limit: Number of matches to show
@@ -203,7 +214,7 @@ async def generate_obs_widget(
     """
     cache_key = _cache_key(steam_id, limit)
     now = time.time()
-    
+
     if not force:
         cached = _widget_cache.get(cache_key)
         if cached and (now - cached[1]) < _WIDGET_CACHE_TTL:
@@ -216,7 +227,7 @@ async def generate_obs_widget(
                 except Exception:
                     pass
             return cached[0]
-    
+
     matches = await get_recent_matches_async(steam_id, limit=limit)
     if not matches:
         matches = []
@@ -250,10 +261,20 @@ async def generate_obs_widget(
             else:
                 border = UNKNOWN_COLOR
 
+            # Сначала тёмная полупрозрачная подложка под иконку, поверх неё —
+            # рамка цветом результата. Заливки результатом больше нет: раньше
+            # карточка была ярким квадратом, и «рамки вокруг героя» не было
+            # вовсе — результат читался только по цвету всей подложки.
             draw.rounded_rectangle(
                 [x, y, x + CARD_SIZE - 1, y + CARD_SIZE - 1],
-                radius=10,
-                fill=border,
+                radius=WIDGET_BORDER_RADIUS,
+                fill=CARD_FILL,
+            )
+            draw.rounded_rectangle(
+                [x, y, x + CARD_SIZE - 1, y + CARD_SIZE - 1],
+                radius=WIDGET_BORDER_RADIUS,
+                outline=border,
+                width=CARD_BORDER_WIDTH,
             )
 
             icon = None
@@ -262,8 +283,13 @@ async def generate_obs_widget(
 
             if icon:
                 icon_rgba = icon.convert("RGBA")
-                icon_resized = icon_rgba.resize((CARD_SIZE - 8, CARD_SIZE - 8), Image.Resampling.LANCZOS)
-                img.paste(icon_resized, (x + 4, y + 4), icon_resized.split()[-1])
+                # Отступ от края карточки: рамка занимает CARD_BORDER_WIDTH
+                # пикселей внутри, поэтому иконку надо держать за ней, а не
+                # вплотную — раньше зазор был 4 px, и с рамкой в 3 px иконка
+                # почти касалась обводки.
+                inner = CARD_SIZE - 2 * ICON_MARGIN
+                icon_resized = icon_rgba.resize((inner, inner), Image.Resampling.LANCZOS)
+                img.paste(icon_resized, (x + ICON_MARGIN, y + ICON_MARGIN), icon_resized.split()[-1])
             else:
                 label = "?"
                 if hero_info:
