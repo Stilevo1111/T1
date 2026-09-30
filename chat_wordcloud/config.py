@@ -72,6 +72,21 @@ WORDCLOUD_COLORS = WORDCLOUD_LIGHT_COLORS + WORDCLOUD_BRIGHT_COLORS + WORDCLOUD_
 
 WORDCLOUD_WORD_PADDING = 5
 
+# --- Card design (chat_wordcloud.hud) ---
+# The card the /story command actually sends. The HUD renderer matches the
+# weekly analytics style: 1200x800, rounded panel, mixed word rotation and a
+# different colour per word from the analytics accent palette.
+WORDCLOUD_TITLE = "ОБЛАКО СЛОВ ЧАТА"
+# One colour per word, cycled from the same ACCENTS list the analytics chart
+# uses. Other options: accent, heat, monotone, inverse.
+WORDCLOUD_COLOR_RAMP = "palette"
+# Mixed orientation, as chosen in design review: 6 horizontal words for every
+# two turned 90 degrees.
+WORDCLOUD_ANGLES = [0] * 6 + [90, -90] * 2
+WORDCLOUD_HUD_MAX_FONT_SIZE = 66
+WORDCLOUD_HUD_RELATIVE_SCALING = 0.58
+WORDCLOUD_HUD_BOLD_THRESHOLD = 0.45
+
 # Disable mask path - use solid fill like OpenDota
 WORDCLOUD_MASK_PATH = None
 

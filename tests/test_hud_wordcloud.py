@@ -1,4 +1,6 @@
 """Tests for the HUD-styled word cloud (analytics chart design)."""
+import asyncio
+import colorsys
 import io
 import sys
 from pathlib import Path
@@ -203,6 +205,51 @@ def test_angles_restriction_changes_layout():
     mixed = generate_hud_wordcloud(SAMPLE, seed=9, angles=[0, 90, -90])
     horizontal = generate_hud_wordcloud(SAMPLE, seed=9, angles=[0])
     assert mixed != horizontal
+
+
+# --- Wiring ----------------------------------------------------------------
+# The HUD renderer existed but /story kept calling the legacy generator, so the
+# new design never reached the chat. These tests pin the command to the HUD.
+
+def test_handler_renders_the_hud_card():
+    """The command must produce the 1200x800 HUD, not the legacy 900x900 card."""
+    from chat_wordcloud.handler import _generate_wordcloud_in_thread
+
+    png = asyncio.run(_generate_wordcloud_in_thread(SAMPLE, timeout=30))
+    assert Image.open(io.BytesIO(png)).size == (HUD_WIDTH, HUD_HEIGHT)
+
+
+def test_handler_falls_back_when_the_hud_renderer_fails(monkeypatch):
+    """A failure in the new renderer must not leave the command without a card."""
+    import chat_wordcloud.handler as handler
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("renderer exploded")
+
+    monkeypatch.setattr(handler, "generate_hud_wordcloud", boom)
+    png = asyncio.run(handler._generate_wordcloud_in_thread(SAMPLE, timeout=30))
+    assert len(png) > 5000, "fallback did not produce an image"
+
+
+def test_hud_card_uses_the_configured_design():
+    """Palette ramp and mixed angles are the reviewed design; keep them wired."""
+    from chat_wordcloud import config
+    from chat_wordcloud.handler import _generate_wordcloud_in_thread
+
+    assert config.WORDCLOUD_COLOR_RAMP == "palette"
+    assert 0 in config.WORDCLOUD_ANGLES
+    assert any(a != 0 for a in config.WORDCLOUD_ANGLES), "no rotated words configured"
+
+    png = asyncio.run(_generate_wordcloud_in_thread(SAMPLE, timeout=30))
+    arr = np.array(Image.open(io.BytesIO(png)).convert("RGB"))
+    # A multi-colour card has far more than a single hue; a monochrome one
+    # would sit inside a couple of hue bins.
+    hues = [
+        colorsys.rgb_to_hsv(*(c / 255 for c in px))[0]
+        for px in arr[arr.sum(axis=2) > 330][::53]
+    ]
+    hist, _ = np.histogram(hues, bins=12, range=(0, 1))
+    assert (hist > hist.max() * 0.02).sum() >= 3, "card looks single-colour"
 
 
 if __name__ == "__main__":

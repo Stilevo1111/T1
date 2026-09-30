@@ -10,11 +10,18 @@ from telegram.ext import ContextTypes
 from bot_utils import schedule_delete
 from cache_service import top_cache
 from chat_wordcloud.config import (
+    WORDCLOUD_ANGLES,
     WORDCLOUD_CACHE_TTL,
+    WORDCLOUD_COLOR_RAMP,
     WORDCLOUD_GENERATION_TIMEOUT,
+    WORDCLOUD_HUD_BOLD_THRESHOLD,
+    WORDCLOUD_HUD_MAX_FONT_SIZE,
+    WORDCLOUD_HUD_RELATIVE_SCALING,
     WORDCLOUD_MAX_WORDS,
     WORDCLOUD_MESSAGE_LIMIT,
     WORDCLOUD_PERIOD_DAYS,
+    WORDCLOUD_TITLE,
+    WORDCLOUD_WORD_PADDING,
 )
 from chat_wordcloud.curation import (
     diff_periods,
@@ -23,6 +30,7 @@ from chat_wordcloud.curation import (
     previous_month_bounds,
 )
 from chat_wordcloud.generator import generate_wordcloud_image
+from chat_wordcloud.hud import generate_hud_wordcloud
 from chat_wordcloud.processor import curate_words, log_top_words
 from database import get_chat_messages_in_range
 from rate_limiter import rate_limit
@@ -38,17 +46,42 @@ async def _generate_wordcloud_in_thread(
     message_count: int = 0,
     rising_label: str = "",
 ) -> bytes:
-    """Run wordcloud generation in a worker thread (no multiprocessing spawn overhead)."""
-    return await asyncio.wait_for(
-        asyncio.to_thread(
-            generate_wordcloud_image,
-            top_words,
-            period_label=period_label,
-            message_count=message_count,
-            rising_label=rising_label,
-        ),
-        timeout=timeout,
-    )
+    """Render the card in a worker thread (no multiprocessing spawn overhead).
+
+    Uses the HUD design from :mod:`chat_wordcloud.hud`, which matches the
+    weekly analytics card. If it raises for any reason the legacy
+    OpenDota-style renderer is used instead, so a failure in the new renderer
+    can never leave the command without a picture.
+    """
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                generate_hud_wordcloud,
+                top_words,
+                title=WORDCLOUD_TITLE,
+                subtitle=period_label,
+                footer=rising_label or "БЕЗ ИЗМЕНЕНИЙ В ЭТОМ МЕСЯЦЕ",
+                color_ramp=WORDCLOUD_COLOR_RAMP,
+                angles=WORDCLOUD_ANGLES,
+                max_font_size=WORDCLOUD_HUD_MAX_FONT_SIZE,
+                relative_scaling=WORDCLOUD_HUD_RELATIVE_SCALING,
+                word_padding=WORDCLOUD_WORD_PADDING,
+                bold_threshold=WORDCLOUD_HUD_BOLD_THRESHOLD,
+            ),
+            timeout=timeout,
+        )
+    except Exception as exc:
+        logger.warning(f"hud wordcloud failed, falling back to legacy: {exc}", exc_info=True)
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                generate_wordcloud_image,
+                top_words,
+                period_label=period_label,
+                message_count=message_count,
+                rising_label=rising_label,
+            ),
+            timeout=timeout,
+        )
 
 
 async def _collect_monthly_words(chat_id: int, bot_user_id: int | None):
