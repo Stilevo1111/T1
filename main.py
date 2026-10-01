@@ -2159,6 +2159,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await handle_techies_button(update, context, record_recent_fissure_roll)
         return
 
+    # Roshan button: answers itself (closed window / killer cannot steal / spam guard)
+    if data and data.startswith("roshan_"):
+        from roshan import handle_roshan_button
+        await handle_roshan_button(update, context)
+        return
+
     # Party buttons - send @username with party invitation (with anti-spam protection)
     if data and data.startswith("party_user:"):
         import time
@@ -4627,6 +4633,15 @@ async def main():
 
         init_db()
         migrate_db()
+        # Roshan tables live outside init_db on purpose: init_db takes a fast
+        # path when schema_version already matches and would skip the DDL on an
+        # already-deployed database. Must run on every start.
+        try:
+            from roshan import ensure_roshan_schema
+            ensure_roshan_schema()
+            logger.info("Roshan schema ready")
+        except Exception as e:
+            logger.error(f"roshan: schema init failed: {e}", exc_info=True)
 
         # Load resource usage statistics from DB (to survive redeploy)
         try:

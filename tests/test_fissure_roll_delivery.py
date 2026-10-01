@@ -165,6 +165,11 @@ def _stub(monkeypatch, *, roll=12.0, chances=(0.0, 0.0, 0.0), fissure_value=100.
 
     monkeypatch.setattr(fissure, "delete_fissure_user_and_last_messages", _noop_async)
     monkeypatch.setattr(fissure, "handle_techies_event", _noop_async)
+    # Roshan rolls on its own chance, independent of get_event_chances(). A
+    # stub with all-zero chances means "no events", so it must disable Roshan
+    # too, otherwise runs became flaky.
+    monkeypatch.setattr(fissure, "get_roshan_chance", lambda: 0.0)
+    monkeypatch.setattr(fissure, "handle_roshan_event", _noop_async)
     # The anti-spam window is module state; give every run a clean one.
     monkeypatch.setattr(fissure, "_user_fissure_processing", {})
     monkeypatch.setattr(fissure, "is_rate_limited", lambda: False)
@@ -173,6 +178,8 @@ def _stub(monkeypatch, *, roll=12.0, chances=(0.0, 0.0, 0.0), fissure_value=100.
     monkeypatch.setattr(fissure, "calculate_fissure_roll", lambda current: (roll, "", False, False))
     monkeypatch.setattr(fissure, "get_free_rolls", lambda telegram_id: 0)
     monkeypatch.setattr(fissure, "consume_free_roll", _noop)
+    # Default stub: the user holds no Roshan items.
+    monkeypatch.setattr(fissure, "consume_item", lambda telegram_id, item: False)
     monkeypatch.setattr(fissure, "get_user", lambda telegram_id, username=None: {
         "fissure": fissure_value,
         "last_fissure": 0,

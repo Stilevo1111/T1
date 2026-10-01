@@ -23,6 +23,17 @@ __all__ = [
     "MULTICAST_DEFAULT_CHANCE",
     "ZEUS_DEFAULT_CHANCE",
     "TECHIES_DEFAULT_CHANCE",
+    "ROSHAN_DEFAULT_CHANCE",
+    # Roshan event
+    "ROSHAN_STEAL_WINDOW_SEC",
+    "ROSHAN_REWARD_MIN",
+    "ROSHAN_REWARD_MAX",
+    "ROSHAN_REWARD_RATIO",
+    "ROSHAN_SESSION_TTL",
+    "ROSHAN_TEXTS",
+    "ROSHAN_AEGIS_TEXTS",
+    "ROSHAN_CHEESE_TEXTS",
+    "ROSHAN_KILL_TEXTS",
     # Digest headers/footers
     "MORNING_DIGEST_HEADER",
     "MORNING_DIGEST_FOOTER",
@@ -68,11 +79,46 @@ WEEKLY_JOB_COOLDOWN = 60          # seconds between weekly jobs
 # Weekend bonus
 WEEKEND_BONUS_MULTIPLIERS = [1.5, 2, 2.5]
 
-# Default event chances (can be overridden in DB)
-# Zeus, Techies, Multicast — equal 10% each, 70% normal roll
-MULTICAST_DEFAULT_CHANCE = 0.10
+# Default event chances
+# Roshan is rolled on its own independent draw (see stats.get_roshan_chance),
+# so it does NOT compete with the other three for probability. At 20% it is
+# deliberately the most frequent event: it is the only one that pulls the whole
+# chat into an interactive round, so it needs the volume to stay active.
+# Resulting unconditional split (each of the other three is scaled by 0.8,
+# because the Roshan draw happens first and returns early):
+#   Roshan 20% | Zeus 8% | Techies 8% | Multicast 6.4% | Plain roll 57.6%
+# The multicast cut (10% -> 8%) exists to keep that plain-roll share above ~50%.
+MULTICAST_DEFAULT_CHANCE = 0.08
 ZEUS_DEFAULT_CHANCE = 0.10
 TECHIES_DEFAULT_CHANCE = 0.10
+ROSHAN_DEFAULT_CHANCE = 0.20
+
+# Roshan event
+ROSHAN_STEAL_WINDOW_SEC = 45          # окно, в котором можно нажать кнопку
+ROSHAN_REWARD_MIN = 5.0               # floor награды убийце
+ROSHAN_REWARD_MAX = 20.0              # cap награды убийце ( leaders must not snowball)
+ROSHAN_REWARD_RATIO = 0.08            # доля текущей фиссуры
+ROSHAN_SESSION_TTL = 3600             # через сколько секунд чистим протухшие сессии
+ROSHAN_TEXTS = [
+    "🪖 Рошан пробуждён! Безымянный King смотрит на вас из темноты ямы...",
+    "🪖 Рошан пробуждён! Яма содрогается, кристаллы поют...",
+    "🪖 Рошан пробуждён! Что-то древнее поднялось со дна...",
+]
+ROSHAN_AEGIS_TEXTS = [
+    "💎 АЕГИС принадлежит тебе! Один минус ролл тебе больше не страшен.",
+    "💎 Ты забрал АЕГИС! Говорят, Рошан не любит делиться.",
+    "💎 АЕГИС твой! Один раз Фиссура не сможет тебя укусить.",
+]
+ROSHAN_CHEESE_TEXTS = [
+    "🧀 Ты проглотил СЫР! Следующий плюс будет ×1.5",
+    "🧀 СЫР твой! Рошан иногда угощает даже тех, кто его не убивал.",
+    "🧀 Ты съел СЫР! Вкусно, но главное — множитель ×1.5 на плюс.",
+]
+ROSHAN_KILL_TEXTS = [
+    "🪖 Ты убил Рошана! Фиссура растёт из ямы.",
+    "🪖 Рошан повержен! Ты забираешь его сокровища.",
+    "🪖 Последний удар твой! Рошан падает вниз.",
+]
 
 # Texts
 MORNING_DIGEST_HEADER = "🌅 ФИССУРА ДАЙДЖЕСТ"

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import random
 
+from constants import ROSHAN_REWARD_MAX, ROSHAN_REWARD_MIN, ROSHAN_REWARD_RATIO
+
 # Type aliases (purely for readability, no runtime or behavior impact)
 RollResult = tuple[float, str, bool, bool]
 ProtectionResult = tuple[float, str]
@@ -24,6 +26,9 @@ __all__ = [
     "apply_fissure_protection",
     "calculate_new_fissure",
     "calculate_streak_bonus",
+    "apply_aegis",
+    "apply_cheese",
+    "calculate_roshan_reward",
     "get_roll_text",
     "get_hero_quote",
 ]
@@ -587,6 +592,55 @@ def calculate_streak_bonus(current_win_streak: int, base_roll: float) -> tuple[f
         streak_text = f"🔥 СТРИК x{current_win_streak}: +{streak_bonus} см."
         return new_roll, streak_text
     return base_roll, ""
+
+
+# =====================
+# ROSHAN ITEMS
+# =====================
+
+
+def apply_aegis(roll: float) -> tuple[float, bool, str]:
+    """АЕГИС гасит минус ролл.
+
+    Возвращает (roll, consumed, text). Предмет списывается только на минусе:
+    на плюсе он остаётся у игрока — иначе АЕГИС сгорал бы впустую и СЫР стал
+    бы единственным полезным исходом раздачи.
+
+    Ролл обнуляется целиком, а не урезается до нуля: так игрок защищён ровно
+    так же, как от обычного apply_fissure_protection, но без оглядки на размер
+    фиссуры. is_fatal здесь НЕ проверяется — вызывающий код применяет АЕГИС
+    до пересчёта фатальности, иначе ролл -20 сначала объявили бы фатальным.
+    """
+    if roll >= 0:
+        return roll, False, ""
+    return 0.0, True, f"💎 АЕГИС: ролл {roll:.1f} см погашен"
+
+
+def apply_cheese(roll: float) -> tuple[float, bool, str]:
+    """СЫР умножает положительный ролл на 1.5.
+
+    Минус не трогаем — СЫР не должен усиливать фатальный удар. Применяется
+    после мультикаста и выходного множителя, поэтому х1.5 и x3 складываются
+    в x4.5: это осознанно сильный, но разовый бонус именно за то, что игрок
+    рискнул нажать кнопку.
+    """
+    if roll <= 0:
+        return roll, False, ""
+    boosted = roll * 1.5
+    return boosted, True, f"🧀 СЫР ×1.5 = +{boosted:.1f} см (было +{roll:.1f})"
+
+
+def calculate_roshan_reward(current_fissure: float) -> float:
+    """Награда за убийство Рошана: max(5, min(20, фиссура × 8%)).
+
+    Потолок в 20 см — ключевая часть баланса: формула ролла сама упирается в
+    spread = min(50, фиссура × 0.35), поэтому без потолка награда росла бы
+    вместе с лидерами и разрыв наверху только увеличивался. При 5% шанса
+    события это +0.4 см EV на ролл — вчетверо меньше стрика (+2.5 см EV), но
+    стрик нужно набивать месяцами, а Рошан выпадает сам.
+    """
+    raw = current_fissure * ROSHAN_REWARD_RATIO
+    return round(min(ROSHAN_REWARD_MAX, max(ROSHAN_REWARD_MIN, raw)), 1)
 
 
 # =====================

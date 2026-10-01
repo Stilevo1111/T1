@@ -35,6 +35,7 @@ from constants import (
 )
 from database import (
     consume_free_roll,
+    consume_item,
     get_fissure_rank,
     get_free_rolls,
     get_user,
@@ -46,8 +47,11 @@ from database import (
 )
 from digest import invalidate_digest_cache
 from rate_limiter import is_rate_limited
+from roshan import handle_roshan_event
 from rolls import (
     MULTICAST_TEXTS,
+    apply_aegis,
+    apply_cheese,
     apply_fissure_protection,
     calculate_fissure_roll,
     calculate_new_fissure,
@@ -55,7 +59,7 @@ from rolls import (
     get_hero_quote,
     get_roll_text,
 )
-from stats import get_event_chances
+from stats import get_event_chances, get_roshan_chance
 from techies import handle_techies_event
 
 # Fissure-specific in-memory state (moved from main.py for clean extraction)
@@ -345,6 +349,24 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         event_roll = random.random()
         multicast_chance, zeus_chance, techies_chance = get_event_chances()
 
+        # Рошан катается отдельным броском: get_event_chances() отдаёт тройку,
+        # которую распаковывают здесь и которую подменяют литералом в тестах.
+        if random.random() < get_roshan_chance():
+            await handle_roshan_event(
+                context.bot,
+                chat_id,
+                user,
+                user_obj,
+                display_username,
+                now,
+                update_fissure,
+                set_last_bot_message,
+                schedule_delete,
+                context.job_queue,
+                record_recent_fissure_roll,
+            )
+            return
+
         if event_roll < zeus_chance:
             zeus_triggered = True
             await handle_zeus_event(
@@ -437,6 +459,18 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Для обычного ролла original_roll = roll со стриком
             original_roll = None  # Сохраняем None чтобы не входить в мультфилияр
 
+        # 💎 АЕГИС гасит минус ролл. Применяется до пересчёта фатальности,
+        # поэтому предмет спасает и от фатального удара; при срабатывании
+        # is_fatal сбрасывается, иначе текст называл бы фатальным нулевой ролл.
+        aegis_text = ""
+        if roll < 0:
+            consumed = await asyncio.to_thread(consume_item, user_obj.id, "aegis")
+            if consumed:
+                roll, _, aegis_text = apply_aegis(roll)
+                is_fatal = False
+                got_help = False
+                logger.info(f"fissure: aegis absorbed roll for {user_obj.id}")
+
         roll, protection_msg = apply_fissure_protection(user.get("fissure", 0), roll, is_fatal)
 
         # Displayed roll is the BASE roll (before streak/multicast) so the breakdown
@@ -451,6 +485,18 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bonus_multiplier = random.choice(WEEKEND_BONUS_MULTIPLIERS)
             roll = roll * bonus_multiplier
             weekend_bonus = f"🎉 ВЫХОДНОЙ! x{bonus_multiplier:.1f} = {roll:.1f} см."
+
+        # 🧀 СЫР умножает положительный ролл. Ставится после стрика, выходного
+        # множителя и мультикаста, но до calculate_new_fissure — так x1.5
+        # попадёт и в новую фиссуру, и в показанный переход «📏», и они
+        # будут сходиться (это главный класс багов в этом модуле).
+        cheese_text = ""
+        if roll > 0 and not is_fatal:
+            consumed_cheese = await asyncio.to_thread(consume_item, user_obj.id, "cheese")
+            if consumed_cheese:
+                roll, _, cheese_text = apply_cheese(roll)
+                is_fatal = False
+                logger.info(f"fissure: cheese boosted roll for {user_obj.id}")
 
         result_text = get_roll_text(display_roll)
 
@@ -507,6 +553,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if cascade_count > 1:
             m_display = f"+{multiplied_roll}" if multiplied_roll > 0 else str(multiplied_roll)
             parts.append(f"МУЛЬТИКАСТ×{cascade_count} {m_display} см!")
+
+        if aegis_text:
+            parts.append(aegis_text)
+        if cheese_text:
+            parts.append(cheese_text)
 
         # Join parts with single blank line between them
         text = "\n\n".join(parts)

@@ -765,6 +765,13 @@ _PG_ENSURE_COLUMNS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS user_tags TEXT DEFAULT '[]'",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS free_rolls INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS achievements TEXT DEFAULT '{}' ",
+    # Рошан: предметы существуют в единственном экземпляре (0 = нет, 1 = есть).
+    # Намеренно НЕ входят в _ALLOWED_USER_FIELDS: колонки пишутся только
+    # своими атомарными UPDATE (grant_item/consume_item), и whole-row save
+    # со старым снапшотом затирал бы выданный предмет — ровно тот баг,
+    # из-за которого achievements исключена из whitelist.
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS aegis INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS cheese INTEGER DEFAULT 0",
     "UPDATE users SET in_chat = TRUE WHERE in_chat IS NULL OR in_chat = FALSE",
 )
 
@@ -787,6 +794,10 @@ def _ensure_sqlite_columns(cursor):
         cursor.execute("ALTER TABLE users ADD COLUMN free_rolls INTEGER DEFAULT 0")
     if 'achievements' not in columns:
         cursor.execute("ALTER TABLE users ADD COLUMN achievements TEXT DEFAULT '{}' ")
+    if 'aegis' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN aegis INTEGER DEFAULT 0")
+    if 'cheese' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN cheese INTEGER DEFAULT 0")
 
 
 def _reset_persistent_pg_conn(reason: str = ""):
@@ -1214,7 +1225,9 @@ wins INTEGER DEFAULT 0,
                      free_rolls INTEGER DEFAULT 0,
                      achievements TEXT DEFAULT '{}',
                      user_tags TEXT DEFAULT '[]',
-                     avatar TEXT
+                     avatar TEXT,
+                     aegis INTEGER DEFAULT 0,
+                     cheese INTEGER DEFAULT 0
                  )
             """)
 # Для SQLite проверяем есть ли колонки и добавляем если нет
@@ -1305,6 +1318,10 @@ wins INTEGER DEFAULT 0,
                 cursor.execute("ALTER TABLE users ADD COLUMN user_tags TEXT DEFAULT '[]'")
             if 'free_rolls' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN free_rolls INTEGER DEFAULT 0")
+            if 'aegis' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN aegis INTEGER DEFAULT 0")
+            if 'cheese' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN cheese INTEGER DEFAULT 0")
 
             # Создаём индексы для часто используемых полей (улучшение производительности)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_fissure ON users(fissure DESC)")
@@ -1725,6 +1742,8 @@ class Database:
                         "user_tags": user.get("user_tags") or "[]",
                         "achievements": user.get("achievements") or "{}",
                         "free_rolls": int(user.get("free_rolls", 0)) if user.get("free_rolls") is not None else 0,
+                        "aegis": int(user.get("aegis", 0) or 0),
+                        "cheese": int(user.get("cheese", 0) or 0),
                     }
                     if username is not None and username != result.get('username'):
                         old_username = result.get('username')
@@ -1784,6 +1803,8 @@ class Database:
                             "user_tags": u.get("user_tags") or "[]",
                             "achievements": u.get("achievements") or "{}",
                             "free_rolls": int(u.get("free_rolls", 0)) if u.get("free_rolls") is not None else 0,
+                            "aegis": int(u.get("aegis", 0) or 0),
+                            "cheese": int(u.get("cheese", 0) or 0),
                         }
                         if username is not None and username != result.get('username'):
                             old_username = result.get('username')
@@ -2390,6 +2411,8 @@ def get_user(telegram_id, username=None):
         cached_user.setdefault('weekly_top3', 0)
         cached_user.setdefault('user_tags', [])
         cached_user.setdefault('free_rolls', 0)
+        cached_user.setdefault('aegis', 0)
+        cached_user.setdefault('cheese', 0)
         # If the cached week_start_date differs from the current week,
         # the cached week_games/week_wins are stale — force a DB re-read.
         cached_week_start = cached_user.get('week_start_date')
@@ -2423,6 +2446,8 @@ def get_user(telegram_id, username=None):
         user.setdefault('user_tags', [])
         user.setdefault('achievements', '{}')
         user.setdefault('free_rolls', 0)
+        user.setdefault('aegis', 0)
+        user.setdefault('cheese', 0)
         user_cache.set(tid, user, skip_dirty=True)
         return user
 
@@ -3004,6 +3029,102 @@ def get_free_rolls(telegram_id: int) -> int:
     return int(user.get("free_rolls", 0) or 0)
 
 
+# Предметы Рошана: 'aegis' и 'cheese'. Каждый существует в единственном
+# экземпляре, поэтому хранятся как флаг 0/1, а не счётчик.
+ITEM_COLUMNS = frozenset(['aegis', 'cheese'])
+
+
+def has_item(telegram_id: int, item: str) -> bool:
+    """Есть ли у пользователя предмет (aegis/cheese)."""
+    user = get_user(telegram_id)
+    if not user:
+        return False
+    return int(user.get(item, 0) or 0) > 0
+
+
+def grant_item(telegram_id: int, item: str) -> bool:
+    """Атомарно выдать предмет. True — выдан, False — уже был или ошибка.
+
+    Условие `COALESCE(col,0) = 0` в самом UPDATE делает выдачу идемпотентной
+    на уровне БД: два конкурентных вызова (например, два инстанса Render)
+    не смогут выдать два одинаковых предмета — выиграет только один, потому
+    что UPDATE применяется к строкам, удовлетворяющим условию.
+    """
+    if item not in ITEM_COLUMNS:
+        raise ValueError(f"grant_item: unknown item {item!r}")
+    if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
+        logger.warning(f"grant_item: invalid telegram_id={telegram_id}")
+        return False
+
+    scheme = get_db_type()
+    ph = "%s" if "postgres" in scheme else "?"
+    try:
+        db = Database()
+        updated = db.execute_query(
+            f"UPDATE users SET {item} = 1 "
+            f"WHERE telegram_id = {ph} AND COALESCE({item}, 0) = 0",
+            (telegram_id,),
+        )
+    except Exception as e:
+        logger.error(f"grant_item: failed to grant {item} to {telegram_id}: {e}")
+        return False
+
+    granted = int(updated or 0) > 0
+    if granted:
+        _mirror_item_to_cache(telegram_id, item, 1)
+        logger.info(f"grant_item: {item} granted to {telegram_id}")
+    return granted
+
+
+def consume_item(telegram_id: int, item: str) -> bool:
+    """Атомарно потратить предмет. True — списан, False — нечего было тратить.
+
+    Условие `{item} > 0` гарантирует, что один ролл не спишет предмет дважды:
+    второй вызов увидит 0 и вернёт False.
+    """
+    if item not in ITEM_COLUMNS:
+        raise ValueError(f"consume_item: unknown item {item!r}")
+    if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
+        logger.warning(f"consume_item: invalid telegram_id={telegram_id}")
+        return False
+
+    scheme = get_db_type()
+    ph = "%s" if "postgres" in scheme else "?"
+    try:
+        db = Database()
+        updated = db.execute_query(
+            f"UPDATE users SET {item} = 0 WHERE telegram_id = {ph} AND {item} > 0",
+            (telegram_id,),
+        )
+    except Exception as e:
+        logger.error(f"consume_item: failed to consume {item} for {telegram_id}: {e}")
+        return False
+
+    consumed = int(updated or 0) > 0
+    if consumed:
+        _mirror_item_to_cache(telegram_id, item, 0)
+        logger.info(f"consume_item: {item} consumed by {telegram_id}")
+    return consumed
+
+
+def _mirror_item_to_cache(telegram_id: int, item: str, value: int) -> None:
+    """Синхронизировать in-memory кэш после прямой записи в БД.
+
+    Колонки aegis/cheese намеренно отсутствуют в _ALLOWED_USER_FIELDS,
+    поэтому _save_user_to_db_immediately их не затрагивает — кэш тоже нужно
+    обновить вручную, иначе get_user продолжит отдавать старый снапшот.
+    """
+    try:
+        user = user_cache.get(telegram_id)
+        if user is None:
+            return
+        user[item] = value
+        user_cache.set(telegram_id, user)
+        user_cache.mark_dirty(telegram_id)
+    except Exception as e:
+        logger.debug(f"_mirror_item_to_cache: {item} for {telegram_id} skipped: {e}")
+
+
 def increment_weekly_mmr_award(telegram_id: int, place: int = 1) -> int:
     """Увеличить счётчик награды за место в недельном топе MMR (1=MVP, 2=ТОП 2, 3=ТОП 3)."""
     if not isinstance(telegram_id, int) or telegram_id > 76561190000000000:
@@ -3219,6 +3340,9 @@ _ALLOWED_USER_FIELDS = frozenset([
     # achievements.py. Including it here made every whole-row save rewrite the
     # column from an in-memory snapshot, so a background job holding a stale
     # copy could wipe a just-awarded badge and the next message re-awarded it.
+    # 'aegis'/'cheese' are absent for the same reason: they are Roshan items
+    # written only by their own atomic UPDATE (grant_item/consume_item), so a
+    # whole-row save from a stale snapshot could silently revert one.
 ])
 _NUMERIC_USER_FIELDS = frozenset([
     'fissure', 'last_fissure', 'total_rolls', 'total_growth', 'current_streak', 'best_streak',
