@@ -856,6 +856,37 @@ def test_render_games_page_filters_by_player():
     assert "Пока нет игр" in empty
 
 
+def test_mobile_text_is_never_tiny():
+    """На телефоне ничего не должно быть мельче 11px.
+
+    Ужимание подписей до 8-9px делало страницу нечитаемой.
+    """
+    css = dota_matches.GAMES_CSS.replace("\n", "")
+    assert "@media(max-width:640px){" in css
+    mobile = css.split("@media(max-width:640px){", 1)[1]
+    sizes = [float(x) for x in re.findall(r"font-size:([0-9.]+)px", mobile)]
+    assert sizes, "в мобильных правилах не найдено ни одного font-size"
+    too_small = [s for s in sizes if s < 11]
+    assert not too_small, f"слишком мелкий шрифт на мобильном: {too_small}"
+    # Основные элементы заметно крупнее, а не 8-10px.
+    who = re.search(r"\.g-who\{font-size:([0-9.]+)px\}", mobile)
+    tab = re.search(r"\.g-tab\{[^}]*font-size:([0-9.]+)px", mobile)
+    assert who and float(who.group(1)) >= 14
+    assert tab and float(tab.group(1)) >= 12
+
+
+def test_upstream_outage_is_logged_once():
+    """Падение OpenDota не забивает лог одинаковыми строками."""
+    import dota_mmr
+
+    assert hasattr(dota_mmr, "_log_upstream_outage")
+    assert dota_mmr.OUTAGE_LOG_EVERY >= 60, "пауза между сообщениями слишком короткая"
+    # На 521/522 ставится общая пауза вместо ретрая каждого запроса.
+    src = (PROJECT_ROOT / "dota_mmr.py").read_text(encoding="utf-8")
+    assert "resp.status in (521, 522)" in src
+    assert "set_opendota_rate_limited(120)" in src
+
+
 def test_matches_cache_is_shared_across_callers():
     """Разные вызовы делят один кеш: восемь матчей покрывают запрос на три.
 

@@ -344,7 +344,9 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
 
     if is_opendota_rate_limited():
         remaining = get_opendota_rate_limit_time_remaining()
-        logger.warning(f"OpenDota still rate limited, waiting {remaining}s...")
+        # Один лог на паузу, а не по строке на каждый запрос: при
+        # параллельном обновлении игроков это десятки одинаковых строк.
+        _log_upstream_outage()
         await asyncio.sleep(remaining + 1)
 
     await _check_rate_limit_async()
@@ -405,6 +407,29 @@ async def _api_get_async(url: str, params: dict = None, use_session: bool = True
     return None
 
 
+_outage_log_at = 0.0
+OUTAGE_LOG_EVERY = 300.0  # не чаще раза в 5 минут
+
+
+def _log_upstream_outage(status: int = 0):
+    """Сообщить о недоступности OpenDota, но не засорить лог.
+
+    Когда лежит сам фронт, одинаковые 521 прилетают на каждый из
+    десятков запросов подряд. Раньше это давало сотни строк в минуту
+    и полностью забивало журнал, поэтому здесь счётчик времени.
+    """
+    global _outage_log_at
+    now = time.monotonic()
+    if now - _outage_log_at < OUTAGE_LOG_EVERY:
+        return
+    _outage_log_at = now
+    reason = f"HTTP {status}" if status else "пауза после ошибок"
+    logger.warning(
+        f"OpenDota недоступен ({reason}). Ставим паузу 120с, "
+        f"остальные ошибки того же вида в лог не пишем."
+    )
+
+
 async def _handle_api_response(resp, url: str, attempt: int, max_retries: int):
     """Handle API response and return parsed JSON or None."""
     if resp.status == 200:
@@ -421,8 +446,17 @@ async def _handle_api_response(resp, url: str, attempt: int, max_retries: int):
         wait_time = 3 * (attempt + 1)
         await asyncio.sleep(wait_time)
         return None
+    elif resp.status in (521, 522):
+        # Cloudflare сообщает, что OpenDota лежит (5xx от самого фронта).
+        # Повторять каждый запрос четыре раза бессмысленно: за это время
+        # прилетит столько же ошибок от других игроков и лог забьётся
+        # одинаковыми строками. Ставим общую паузу вместо ретраев.
+        set_opendota_rate_limited(120)
+        _log_upstream_outage(resp.status)
+        _circuit_breaker_record_failure()
+        return None
     elif resp.status >= 500:
-        logger.warning(f"Server error {resp.status} for {url[:60]}, attempt {attempt + 1}/{max_retries + 1}")
+        _log_upstream_outage(resp.status)
         _circuit_breaker_record_failure()
         await asyncio.sleep(1 + attempt)
         return None

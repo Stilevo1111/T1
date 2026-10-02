@@ -1126,23 +1126,50 @@ body{background:#07080c}
 .g-card.top3 .g-nick{color:#f7e3c0}
 
 @media(max-width:640px){
+ /* На телефоне всё, что меньше ~12px, просто не читается: держим
+    подписи, имена и цифры выше этого порога, а не ужимаем их. */
  .g-screen{border-radius:0;border-left:0;border-right:0}
  .g-body{padding-left:14px;padding-right:14px}
- .g-tabs{margin:12px 14px 0;width:calc(100% - 28px)}   /* вровень с текстом */
- .g-tab{flex:1 1 0;padding:9px 10px;text-align:center;font-size:10px;
- letter-spacing:.06em;min-width:0}                      /* не обрезаются */
- .g-heron,.g-when{display:none}
- .g-kda{font-size:11px}
- .g-mmr-head,.g-card.g-mmr .g-line{grid-template-columns:28px 26px 26px minmax(0,1fr) 88px;
- gap:6px}
- .g-rank-img,.g-face{width:22px;height:22px}
+ .g-tabs{margin:12px 14px 0;width:calc(100% - 28px)}
+ .g-tab{flex:1 1 0;padding:12px 10px;text-align:center;font-size:13px;
+ letter-spacing:.03em;min-width:0}
+
+ /* История игр: ники, герои и ранг крупнее, KDA и результат — в размер
+    пальца. Дата прячем осознанно: на телефоне важнее кто и сколько убил. */
+ .g-line{gap:9px;padding:11px 10px}
+ .g-who{font-size:14px}
+ .g-heron{display:block;font-size:12px;color:#7c869c;margin-top:3px}
+ .g-when{display:none}
+ .g-kda{font-size:13px}
+ .g-res{font-size:11px;padding:4px 8px}
+ .g-rank-img{width:26px;height:26px}
+ .g-face,.g-hero{width:30px;height:30px}
+ .g-hero{font-size:12px}
+ .g-more{width:16px;height:16px}
+ .g-acts{max-height:0}
+ .g-card.open .g-acts{max-height:90px;padding:2px 10px 11px;gap:8px}
+ .g-act{font-size:12px;padding:9px 13px;flex:1 1 0;justify-content:center}
+
+ /* Топ рангов: колонки шире, подписи и проценты крупнее. */
+ .g-mmr-head,.g-card.g-mmr .g-line{grid-template-columns:30px 28px 28px minmax(0,1fr) 96px;
+ gap:7px}
+ .g-rank{width:30px;height:30px;font-size:12.5px}
+ .g-rank-img,.g-face{width:26px;height:26px}
+ .g-nick{font-size:14px}
+ .g-heron{font-size:11.5px}
  .g-mmr-head{padding:0 10px 8px}
- /* Подписи на телефоне длинные: ужимаем шрифт и отступы, но обводку
-    и стрелки оставляем, иначе сортировка перестаёт читаться. */
- .g-hp{font-size:8.5px;letter-spacing:.05em;padding:5px 6px;gap:4px}
+ .g-hp{font-size:11px;letter-spacing:.03em;padding:7px 8px;gap:5px}
+ .g-mmr-head .g-hp{margin-right:7px}
+ .g-wr{font-size:12px}
  .g-wr-track{display:none}
- .g-wr-num{min-width:28px;font-size:11px}
- .g-wr-wl{font-size:9.5px}
+ .g-wr-num{min-width:30px;font-size:13px}
+ .g-wr-wl{font-size:11px}
+
+ /* Панель выбора игрока — крупные строки, попадать пальцем. */
+ .g-pick-btn{padding:12px;font-size:13.5px}
+ .g-pick-menu a{font-size:13px;padding:11px 10px}
+ .g-bar a{font-size:12px;padding:8px 12px}
+ .g-empty{font-size:13px}
 }
 """
 
