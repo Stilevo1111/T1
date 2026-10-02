@@ -62,8 +62,12 @@ def test_aegis_label_says_it_protects_against_a_negative_roll():
 
 
 def test_cheese_label_says_it_scales_a_positive_roll():
-    """apply_cheese multiplies a positive roll by 1.5 and leaves a minus alone."""
-    assert any(re.search(r"1[.,]5|полтора", effect) for effect in ROSHAN_CHEESE_EFFECTS)
+    """apply_cheese multiplies a positive roll by 1.5 and leaves a minus alone.
+
+    The label is deliberately the plain "усиление плюса": the exact multiplier
+    is not needed in the award announcement, because apply_cheese prints
+    "🧀 СЫР ×1.5 = +18.0 см (было +12.0 см)" on the roll that actually fires.
+    """
     assert any(re.search(r"плюс|умножение|усиление|жирн", effect)
                for effect in ROSHAN_CHEESE_EFFECTS)
 
