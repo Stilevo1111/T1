@@ -787,6 +787,20 @@ def test_sort_header_is_outlined_not_underlined():
     assert ".g-hp .ar{" in css and "opacity:.28" in css
 
 
+def test_sort_headers_all_sit_on_the_left_with_gaps():
+    """Все заголовки прижаты влево и разделены отступом.
+
+    Иначе «Статистика» уезжала к правому краю и ряд выглядел рваным.
+    """
+    css = dota_matches.GAMES_CSS.replace("\n", "")
+    assert "justify-self:end" not in css
+    assert ".g-hp.right{justify-self:start}" in css
+    assert ".g-mmr-head .g-hp{margin-right:9px}" in css
+    # Правый отступ задаётся именно в шапке, чтобы не разъехались
+    # колонки шапки и строк под ней.
+    assert ".g-card.g-mmr .g-hp{" not in css
+
+
 def test_mmr_tab_headers_are_sortable():
     """Заголовки топра кликабельны, как на странице топа."""
     players = [{"username": "a", "steam_nickname": "a", "mmr": 0,

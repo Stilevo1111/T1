@@ -1023,7 +1023,11 @@ body{background:#07080c}
  transition:color .18s ease,box-shadow .18s ease,background .18s ease}
 .g-hp:hover{color:#dbe3ef;background:rgba(255,255,255,.05);
  box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
-.g-hp.right{justify-self:end}
+/* Все подписи прижаты влево: прижим «Статистики» к правому краю
+   отрывал её от своей колонки и ломал ровный ряд. Правый отступ
+   добавляет воздуха между заголовками, не сдвигая их колонки. */
+.g-hp.right{justify-self:start}
+.g-mmr-head .g-hp{margin-right:9px}
 /* Стрелка есть у всех колонок, но у inactive — едва видна: так понятно,
    что сортировать можно и по ним, а не только по активной. */
 .g-hp .ar{font-size:8px;line-height:1;color:#e8b45c;
