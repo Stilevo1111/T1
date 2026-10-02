@@ -998,18 +998,20 @@ def render_roll(roll: dict) -> str:
         face = f'<span class="g-face g-hero">{_esc(who[:1].upper())}</span>'
 
     sign = "+" if growth >= 0 else ""
+    # Минусовой ролл — это откат, он должен читаться как тревожный.
+    gain_cls = "g-gain" if growth >= 0 else "g-gain neg"
     # Каскад — цепочка фисса, поэтому выделяем её отдельной меткой.
     chain = (f'<span class="g-rc-x">x{cascade}</span>' if cascade > 1 else "")
 
     return (
         f'<div class="g-card g-roll" data-name="{_esc(who.lower())}" '
-        f'data-growth="{growth:g}">'
+        f'data-growth="{growth:g}" data-fissure="{fissure:g}">'
         f'<div class="g-line">'
         f'{face}'
         f'<span class="g-who">'
         f'<span class="g-nick">{_esc(who)}</span>'
         f'<span class="g-heron">{time_txt}</span></span>'
-        f'<span class="g-gain">{sign}{_fmt_num(growth)}</span>'
+        f'<span class="{gain_cls}">{sign}{_fmt_num(growth)}</span>'
         f"{chain}"
         f'<span class="g-fissure">{_fmt_num(fissure)}</span>'
         f"</div></div>"
@@ -1117,9 +1119,13 @@ body{background:#07080c}
 .g-card .g-more{margin-left:auto;display:inline-flex;color:#5b6478;
  transition:transform .2s ease,color .2s ease}
 .g-card.open .g-more{transform:rotate(90deg);color:#e8b45c}
-.g-acts{display:flex;gap:6px;max-height:0;overflow:hidden;opacity:0;
- transition:max-height .24s ease,opacity .2s ease,padding .24s ease}
-.g-card.open .g-acts{max-height:60px;opacity:1;padding:0 10px 9px}
+/* Раскрытая карточка — строка смахивает влево, действия встают
+   справа от неё (а не падают вторым рядом под ней). */
+.g-card.open{display:flex;align-items:center;gap:8px}
+.g-card.open .g-line{flex:1 1 auto;min-width:0}
+.g-acts{display:flex;gap:6px;flex-shrink:0;max-height:0;overflow:hidden;opacity:0;
+ transition:max-height .24s ease,opacity .2s ease}
+.g-card.open .g-acts{max-height:none;opacity:1}
 .g-act{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:6px;
  background:#171d26;border:1px solid #262d3a;color:#b7c0d0;font:700 10px/1 Inter,sans-serif;
  cursor:pointer;transition:border-color .16s ease,color .16s ease,background .16s ease}
@@ -1130,6 +1136,7 @@ body{background:#07080c}
 .g-card.g-roll .g-line{display:flex;align-items:center;gap:10px;padding:9px 11px}
 .g-gain{font-size:13px;font-weight:900;color:#7fd18a;font-variant-numeric:tabular-nums;
  white-space:nowrap;flex-shrink:0;margin-left:auto}
+.g-gain.neg{color:#ef6a5a}
 .g-fissure{font-size:11.5px;color:#8e97aa;font-variant-numeric:tabular-nums;
  white-space:nowrap;flex-shrink:0;min-width:54px;text-align:right}
 .g-rc-x{font-size:9.5px;font-weight:800;color:#e8b45c;background:rgba(232,180,92,.12);
@@ -1280,8 +1287,8 @@ body{background:#07080c}
  .g-hero{font-size:12px}
  .g-more{width:16px;height:16px}
  .g-acts{max-height:0}
- .g-card.open .g-acts{max-height:90px;padding:2px 10px 11px;gap:8px}
- .g-act{font-size:12px;padding:9px 13px;flex:1 1 0;justify-content:center}
+ .g-card.open .g-acts{max-height:none;opacity:1}
+ .g-act{font-size:12px;padding:9px 13px;flex-shrink:0}
 
  /* Топ рангов: колонки шире, подписи и проценты крупнее. */
  .g-mmr-head,.g-card.g-mmr .g-line{grid-template-columns:30px 28px 28px minmax(0,1fr) 96px;
@@ -1378,6 +1385,8 @@ def render_games_page(
             '<div class="g-mmr-head">'
             '<span class="g-hp" data-roll-sort="name">Игрок</span>'
             '<span class="g-hp right" data-roll-sort="growth">Прирост'
+            '<span class="ar"></span></span>'
+            '<span class="g-hp right" data-roll-sort="fissure">Максимум'
             '<span class="ar"></span></span>'
             "</div>"
         )
@@ -1691,7 +1700,8 @@ ROLLS_SORT_JS = """
       if (key === 'name'){
         return (a.dataset.name > b.dataset.name ? 1 : -1) * sign;
       }
-      return (parseFloat(a.dataset.growth) - parseFloat(b.dataset.growth)) * sign;
+      return (parseFloat(a.dataset[key] || '0')
+              - parseFloat(b.dataset[key] || '0')) * sign;
     }).forEach(function(r){ head.parentNode.appendChild(r); });
     head.querySelectorAll('[data-roll-sort]').forEach(function(el){
       var on = el === h;
