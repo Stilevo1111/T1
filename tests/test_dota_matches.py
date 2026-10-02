@@ -665,8 +665,10 @@ def test_render_mmr_tab_matches_top_page():
     html = dota_matches.render_games_page([], limit=5, tab="mmr",
                                           mmr_players=players)
 
-    for title in ("Место", "Ранг", "Статистика"):
+    # Подписи колонок уступили место общему ряду сортировки.
+    for title in ("Сортировка", "Ранг", "Статистика"):
         assert title in html
+    assert "Место" not in html            # пустая подпись-заглушка убрана
     assert "#" not in html.split("</style>", 1)[-1].split("</head>")[0]
     assert 'data-sort="name"' not in html            # по нику больше не сортируем
     assert "seredin999.onrender.com/images/ranks/" in html
@@ -763,13 +765,14 @@ def test_game_row_rank_looks_like_the_ranking_tab():
 
 
 def test_ranking_header_padding_matches_row():
-    """Шапка топра стоит по тем же бокам, что и строки под ней."""
+    """Ряд сортировки стоит по тем же бокам, что и строки под ним."""
     players = [{"username": "a", "steam_nickname": "a", "mmr": 1,
                 "rank_tier": 50, "week_games": 1, "week_wins": 1}]
     html = dota_matches.render_games_page([], limit=5, tab="mmr",
                                           mmr_players=players)
     css = html.split("</style>", 1)[0].replace("\n", "")
-    head_pad = re.search(r"\.g-mmr-head\{padding:0 (\d+)px 8px\}", css)
+    head_pad = re.search(r"\.g-sort\{display:flex[^}]*padding:0 (\d+)px 8px;",
+                         css)
     # Именно строка топра: у строки роллов свой .g-line с другими
     # отступами, и раньше регулярка цеплялась к ней.
     row_pad = re.search(r"\.g-line\{display:flex;align-items:center;gap:10px;"
@@ -779,41 +782,43 @@ def test_ranking_header_padding_matches_row():
 
 
 def test_sort_header_is_outlined_not_underlined():
-    """Активная колонка обведена, а не подчёркнута."""
+    """Активная кнопка обведена, а не подчёркнута."""
     css = dota_matches.GAMES_CSS.replace("\n", "")
-    assert ".g-hp.on{" in css
+    assert ".g-sort-b.on{" in css
     assert "box-shadow:inset 0 0 0 1px rgba(232,180,92,.45)" in css
-    assert ".g-hp.on{border-bottom" not in css
-    # Стрелки подсказывают, что сортировать можно по любой колонке,
-    # поэтому они видны у всех, а не только у активной.
-    assert ".g-hp .ar{" in css and "opacity:.28" in css
+    assert ".g-sort-b.on{border-bottom" not in css
+    # Стрелка — только у активной: у неактивных она пряталась через
+    # opacity, из-за чего ряд получал разную ширину по вкладкам.
+    assert ".g-sort-b.on .g-sort-ar{opacity:1}" in css
+    assert ".g-sort-ar{" in css
 
 
-def test_sort_headers_all_sit_on_the_left_with_gaps():
-    """Все заголовки прижаты влево и разделены отступом.
+def test_sort_bar_is_a_single_flex_row():
+    """Кнопки лежат одним рядом и не привязаны к колонкам строк.
 
-    Иначе «Статистика» уезжала к правому краю и ряд выглядел рваным.
+    Раньше подписи жили в общей сетке с данными, были шире своих
+    колонок и перехватывали клики друг у друга.
     """
     css = dota_matches.GAMES_CSS.replace("\n", "")
+    assert ".g-sort{display:flex;align-items:center;flex-wrap:wrap" in css
+    # Ни одного правила, которое ставит кнопку в колонку сетки.
     assert "justify-self:end" not in css
-    assert ".g-hp.right{justify-self:start}" in css
-    assert ".g-mmr-head .g-hp{margin-right:9px}" in css
-    # Правый отступ задаётся именно в шапке, чтобы не разъехались
-    # колонки шапки и строк под ней.
-    assert ".g-card.g-mmr .g-hp{" not in css
+    assert ".g-card.g-mmr .g-sort-b{" not in css
+    # Старого общего заголовка больше нет — он и был источником наездов.
+    assert ".g-mmr-head" not in css
 
 
 def test_mmr_tab_headers_are_sortable():
-    """Заголовки топра кликабельны, как на странице топа."""
+    """Кнопки топра кликабельны, как на странице топа."""
     players = [{"username": "a", "steam_nickname": "a", "mmr": 0,
                 "rank_tier": 50, "week_games": 1, "week_wins": 1}]
     html = dota_matches.render_games_page([], limit=5, tab="mmr",
                                           mmr_players=players)
     assert 'data-sort="rank_tier"' in html
-    # По нику не сортируем: заголовок «Игрок» стал пустой подписью колонки.
+    # По нику не сортируем: в топе важнее ранг и результат.
     assert 'data-sort="name"' not in html
     assert 'data-sort="stats"' in html
-    assert "RANKS" not in html or "g-mmr-head" in html
+    assert 'class="g-sort"' in html
     # Скрипт сортировки подключён.
     assert "data-sort" in html and "g-card.g-mmr" in html
 
@@ -931,10 +936,14 @@ def test_sort_js_has_no_literal_escape_and_opens_rows():
     а обработчик клика по строке делал return вместо toggle(), поэтому
     панель «Пати» / «ДотаБаф» не появлялась.
     """
-    sort_js = dota_matches.RANKS_SORT_JS
-    assert "\\\\u25BC" not in sort_js, "стрелка должна задаваться кодом символа"
-    assert "String.fromCharCode" in sort_js
-    assert "head.contains(h)" in sort_js, "клик должен ловиться только шапкой"
+    sort_js = dota_matches.SORT_JS
+    assert "\\u25BC" not in sort_js, "стрелка должна быть CSS-треугольником"
+    assert "String.fromCharCode" not in sort_js, "укоды символов больше не нужны"
+    # Клик должен ловиться только своим рядом сортировки.
+    assert "bar.contains(b)" in sort_js
+    # Один скрипт на обе вкладки: старых копий не осталось.
+    assert not hasattr(dota_matches, "RANKS_SORT_JS")
+    assert not hasattr(dota_matches, "ROLLS_SORT_JS")
 
     acts_js = dota_matches.GAME_ACTS_JS
     assert "if (!act) { toggle(); return; }" in acts_js, \
@@ -942,7 +951,7 @@ def test_sort_js_has_no_literal_escape_and_opens_rows():
 
 
 def test_rolls_have_avatars_and_sorting():
-    """В роллах есть аватар и кликабельная сортировка по приросту."""
+    """В роллах есть аватар и те же кнопки сортировки, что и в топе."""
     rolls = [{"ts": 1700000000, "username": "wawa", "growth": 12.5,
               "fissure": 340.0, "cascade": 3, "avatar": "http://a/1.jpg"},
              {"ts": 1700000100, "username": "frost", "growth": -4.0,
@@ -952,28 +961,37 @@ def test_rolls_have_avatars_and_sorting():
 
     assert 'class="g-face" src="http://a/1.jpg"' in body   # аватар из users
     assert "g-face g-hero" in body                        # заглушка без него
-    assert 'data-roll-sort="name"' in body
-    assert 'data-roll-sort="growth"' in body
+    assert 'data-sort="name"' in body
+    assert 'data-sort="growth"' in body
+    assert 'data-sort="fissure"' in body
     assert 'data-name="wawa"' in body and 'data-growth="12.5"' in body
-    assert "data-roll-sort" in dota_matches.ROLLS_SORT_JS
+    # Общий для вкладок ряд сортировки указывает на свои строки.
+    assert 'class="g-sort" data-rows=".g-card.g-roll"' in body
+    # Селектор строк берётся из data-rows, а не зашивается в скрипт.
+    assert "bar.dataset.rows" in dota_matches.SORT_JS
+    assert "document.querySelectorAll(sel)" in dota_matches.SORT_JS
+    # Минусовой ролл читается как тревожный, а не зелёный.
+    assert "g-gain neg" in body
     # Аватары подставляет обработчик: bot_utils их не хранит.
     src = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
     assert "_attach_roll_avatars" in src
 
 
 def test_ranking_header_has_no_empty_cells():
-    """Пустые ячейки в шапке наезжали на подписи и перехватывали клики."""
+    """В ряду сортировки нет пустых заглушек, перехватывающих клики."""
     players = [{"username": "a", "steam_nickname": "a", "mmr": 1,
                 "rank_tier": 50, "week_games": 2, "week_wins": 1}]
     html = dota_matches.render_games_page([], tab="mmr", mmr_players=players)
-    head = re.search(r'<div class="g-mmr-head">(.*?)</div>', html, re.S).group(1)
+    head = re.search(r'<div class="g-sort"[^>]*>(.*?)</div>', html,
+                     re.S).group(1)
 
     assert '<span class="g-hp"></span>' not in head
-    assert head.count("data-sort=") == 2          # Ранг и Статистика
-    assert "Место" in head                        # не сортируется
+    assert '<button type="button"' in head          # кнопки, а не подписи
+    assert head.count("data-sort=") == 2            # Ранг и Статистика
+    assert 'data-sort="rank_tier"' in head
     # Подписи не в общей сетке с колонками — иначе снова наезжают.
     css = dota_matches.GAMES_CSS.replace("\n", "")
-    assert ".g-mmr-head{display:flex" in css
+    assert ".g-sort{display:flex" in css
 
 
 def test_history_repairs_its_own_schema():

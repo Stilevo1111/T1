@@ -1143,39 +1143,33 @@ body{background:#07080c}
  border:1px solid rgba(232,180,92,.25);border-radius:4px;padding:1px 5px;flex-shrink:0}
 
 /* ── Вкладка «Топ рангов»: те же поля, что на странице топа ─────────────── */
-.g-mmr-head,.g-card.g-mmr .g-line{display:grid;
+.g-card.g-mmr .g-line{display:grid;
  grid-template-columns:34px 34px 30px minmax(0,1fr) 210px;align-items:center;gap:10px}
-/* Отступ шапки совпадает с .g-line (10px по бокам), иначе заголовки
-   стоят левее своих данных на 4px. */
-/* Шапка — свой ряд: подписи «Место» и «Статистика» шире своих
-   колонок (34px), в общей сетке они наезжали друг на друга и
-   перехватывали клики друг друга. */
-.g-mmr-head{display:flex;align-items:center;gap:6px;padding:0 10px 8px}
-/* Без курсора-указателя: не все подписи сортируемые. */
-.g-hp:not([data-sort]){cursor:default}
-.g-hp{position:relative;display:inline-flex;align-items:center;gap:5px;
- padding:6px 9px;border-radius:7px;user-select:none;flex-shrink:0;
- font-size:10.5px;font-weight:800;letter-spacing:.08em;
- text-transform:uppercase;color:#7c869c;white-space:nowrap;
+/* Единый селектор сортировки. Один блок на обе вкладки:
+   одна плашка с кнопками, активная подсвечена, стрелка показывает
+   направление. Вёрстка строк от него не зависит — кнопки лежат
+   отдельным рядом сверху и не наезжают на колонки. */
+.g-sort{display:flex;align-items:center;flex-wrap:wrap;gap:6px;
+ padding:0 10px 8px;user-select:none}
+.g-sort-l{font-size:10.5px;font-weight:800;letter-spacing:.08em;
+ text-transform:uppercase;color:#5c6580;flex-shrink:0}
+.g-sort-b{position:relative;display:inline-flex;align-items:center;gap:5px;
+ padding:6px 9px;border:0;border-radius:7px;background:transparent;
+ font:inherit;font-size:10.5px;font-weight:800;letter-spacing:.08em;
+ text-transform:uppercase;color:#7c869c;white-space:nowrap;cursor:pointer;
  box-shadow:inset 0 0 0 1px transparent;
  transition:color .18s ease,box-shadow .18s ease,background .18s ease}
-.g-hp[data-sort]{cursor:pointer}
-.g-hp[data-sort]:hover{color:#dbe3ef;background:rgba(255,255,255,.05);
+.g-sort-b:hover{color:#dbe3ef;background:rgba(255,255,255,.05);
  box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
-.g-hp.right{margin-left:auto}
-/* Все подписи прижаты влево: прижим «Статистики» к правому краю
-   отрывал её от своей колонки и ломал ровный ряд. Правый отступ
-   добавляет воздуха между заголовками, не сдвигая их колонки. */
-.g-hp.right{justify-self:start}
-.g-mmr-head .g-hp{margin-right:9px}
-/* Стрелка есть у всех колонок, но у inactive — едва видна: так понятно,
-   что сортировать можно и по ним, а не только по активной. */
-.g-hp .ar{font-size:8px;line-height:1;color:#e8b45c;
- opacity:.28;transition:opacity .18s ease,transform .18s ease}
-.g-hp:hover .ar{opacity:.6}
-.g-hp.on{color:#f7e3c0;background:rgba(232,180,92,.11);
+.g-sort-b.on{color:#f7e3c0;background:rgba(232,180,92,.11);
  box-shadow:inset 0 0 0 1px rgba(232,180,92,.45)}
-.g-hp.on .ar{opacity:1}
+/* Стрелка — только у активной. У неактивных места нет, чтобы ряд
+   не рвался при смене колонки. */
+.g-sort-ar{width:0;height:0;border-left:3.5px solid transparent;
+ border-right:3.5px solid transparent;border-top:4px solid #e8b45c;
+ opacity:0;transition:opacity .18s ease,transform .18s ease}
+.g-sort-b.on .g-sort-ar{opacity:1}
+.g-sort-b.on:not([data-dir="up"]) .g-sort-ar{transform:rotate(180deg)}
 .g-rank-img{width:26px;height:26px;object-fit:contain;flex-shrink:0}
 .g-rank-blank{display:grid;place-items:center;color:#4a5262;font-size:12px}
 /* Ранг в строке игры: иконка в рамке с названием, оба мелкие —
@@ -1291,15 +1285,15 @@ body{background:#07080c}
  .g-act{font-size:12px;padding:9px 13px;flex-shrink:0}
 
  /* Топ рангов: колонки шире, подписи и проценты крупнее. */
- .g-mmr-head,.g-card.g-mmr .g-line{grid-template-columns:30px 28px 28px minmax(0,1fr) 96px;
+ .g-card.g-mmr .g-line{grid-template-columns:30px 28px 28px minmax(0,1fr) 96px;
  gap:7px}
  .g-rank{width:30px;height:30px;font-size:12.5px}
  .g-rank-img,.g-face{width:26px;height:26px}
  .g-nick{font-size:14px}
  .g-heron{font-size:11.5px}
- .g-mmr-head{padding:0 10px 8px}
- .g-hp{font-size:11px;letter-spacing:.03em;padding:7px 8px;gap:5px}
- .g-mmr-head .g-hp{margin-right:7px}
+ .g-sort{padding:0 10px 8px;gap:5px}
+ .g-sort-l{display:none}
+ .g-sort-b{font-size:11px;letter-spacing:.03em;padding:7px 8px;gap:5px}
  .g-wr{font-size:12px}
  .g-wr-track{display:none}
  .g-wr-num{min-width:30px;font-size:13px}
@@ -1312,6 +1306,19 @@ body{background:#07080c}
  .g-empty{font-size:13px}
 }
 """
+
+def sort_btn(key: str, label: str, default: bool = False) -> str:
+    """Кнопка сортировки. Один вид для всех вкладок.
+
+    Ключ — имя data-атрибута в строке (rank_tier, stats, growth,
+    fissure, name). Переставляет строки общий SORT_JS, поэтому
+    разметка не знает, на какой вкладке она находится.
+    """
+    on = " on" if default else ""
+    return (f'<button type="button" class="g-sort-b{on}" '
+            f'data-sort="{key}">{_esc(label)}'
+            f'<span class="g-sort-ar"></span></button>')
+
 
 def render_games_page(
     games: list[dict],
@@ -1359,18 +1366,13 @@ def render_games_page(
 
     if tab == "mmr":
         rows = sorted(mmr_players or [], key=mmr_sort_key)
-        # Заголовки кликабельные — сортировка как на странице топа.
-        # «Ранг» активен сразу: это сортировка по умолчанию.
-        # По нику не сортируем — в топе важнее ранг и результат.
-        # Ячеек столько же, сколько колонок в строке (5), иначе
-        # заголовки съезжают относительно данных.
+        # Сортировка одна на обе вкладки: набор кнопок в .g-sort,
+        # строки переставляет общий скрипт SORT_JS.
         head = (
-            '<div class="g-mmr-head">'
-            '<span class="g-hp">Место</span>'
-            '<span class="g-hp on" data-sort="rank_tier">Ранг'
-            '<span class="ar">▼</span></span>'
-            '<span class="g-hp right" data-sort="stats">Статистика'
-            '<span class="ar">▼</span></span>'
+            '<div class="g-sort" data-rows=".g-card.g-mmr">'
+            '<span class="g-sort-l">Сортировка:</span>'
+            f'{sort_btn("rank_tier", "Ранг", True)}'
+            f'{sort_btn("stats", "Статистика")}'
             "</div>"
         )
         # Данные для клиентской сортировки кладём в data-* самой строки.
@@ -1382,12 +1384,11 @@ def render_games_page(
         # История роллов приходит с самой страницы бота, newest first.
         items = list(rolls or [])
         head = (
-            '<div class="g-mmr-head">'
-            '<span class="g-hp" data-roll-sort="name">Игрок</span>'
-            '<span class="g-hp right" data-roll-sort="growth">Прирост'
-            '<span class="ar"></span></span>'
-            '<span class="g-hp right" data-roll-sort="fissure">Максимум'
-            '<span class="ar"></span></span>'
+            '<div class="g-sort" data-rows=".g-card.g-roll">'
+            '<span class="g-sort-l">Сортировка:</span>'
+            f'{sort_btn("name", "Игрок")}'
+            f'{sort_btn("growth", "Прирост")}'
+            f'{sort_btn("fissure", "Максимум")}'
             "</div>"
         )
         body = head + ("".join(render_roll(r) for r in items[:limit * 4]) or (
@@ -1466,7 +1467,7 @@ f"<script>{GAME_ACTS_JS}</script>\n"
         "<script>document.addEventListener('click',function(e){var p=e.target"
         ".closest('[data-tg]');if(!p)return;e.preventDefault();e.stopPropagation();"
         "open('tg://user?id='+p.dataset.tg);});</script>\n"
-        f"{(ROLLS_SORT_JS if tab == 'rolls' else RANKS_SORT_JS)}"
+        f"<script>{SORT_JS}</script>\n"
         '<script>setTimeout(function(){ location.reload(); }, 60000);</script>\n'
         "</body>\n</html>"
     )
@@ -1676,95 +1677,70 @@ GAME_ACTS_JS = """
 </script>
 """
 
-ROLLS_SORT_JS = """
+SORT_JS = """
 <script>
-// Сортировка истории роллов: по игроку и по приросту фисса.
+// Одна сортировка на обе вкладки.
+// Разметка лишь говорит, какой колонкой сортировать (data-sort) и где
+// лежат строки (data-rows) — порядок, переключение направления и
+// перерисовка номеров делает этот код, поэтому вкладкам не нужен
+// свой скрипт.
 (function(){
-  var head = document.querySelector('.g-mmr-head [data-roll-sort]')
-             && document.querySelector('.g-mmr-head');
-  if (!head) return;
-  var CARET_DOWN = String.fromCharCode(9660);
-  var CARET_UP = String.fromCharCode(9650);
-  var dir = {};
+  var bar = document.querySelector('.g-sort');
+  if (!bar) return;
+  var sel = bar.dataset.rows;
+  if (!sel) return;
+  var sign = {};                     // колонка -> 1 (↑) / -1 (↓)
+
+  // Колонка, активная на старте, уже отсортирована по убыванию.
+  var first = bar.querySelector('[data-sort].on');
+  if (first) sign[first.dataset.sort] = -1;
+
   function rows(){
-    return Array.prototype.slice.call(
-      document.querySelectorAll('.g-card.g-roll'));
-  }
-  head.addEventListener('click', function(e){
-    var h = e.target.closest('[data-roll-sort]');
-    if (!h || !head.contains(h)) return;
-    var key = h.dataset.rollSort;
-    dir[key] = dir[key] === 1 ? -1 : 1;
-    var sign = dir[key];
-    rows().sort(function(a, b){
-      if (key === 'name'){
-        return (a.dataset.name > b.dataset.name ? 1 : -1) * sign;
-      }
-      return (parseFloat(a.dataset[key] || '0')
-              - parseFloat(b.dataset[key] || '0')) * sign;
-    }).forEach(function(r){ head.parentNode.appendChild(r); });
-    head.querySelectorAll('[data-roll-sort]').forEach(function(el){
-      var on = el === h;
-      el.classList.toggle('on', on);
-      var ar = el.querySelector('.ar');
-      if (ar) ar.textContent = on ? (sign === 1 ? CARET_DOWN : CARET_UP) : '';
-    });
-  });
-})();
-</script>
-"""
-RANKS_SORT_JS = """
-<script>
-// Сортировка топа по клику на заголовок — как на странице рейтинга.
-(function(){
-  var head = document.querySelector('.g-mmr-head');
-  if (!head) return;
-  var dir = {};                       // колонка -> 1 / -1
-  var CARET_DOWN = String.fromCharCode(9660);
-  var CARET_UP = String.fromCharCode(9650);
-  function rows(){
-    return Array.prototype.slice.call(
-      document.querySelectorAll('.g-card.g-mmr'));
+    return Array.prototype.slice.call(document.querySelectorAll(sel));
   }
   function value(row, key){
-    var v = parseInt(row.dataset[key] || '0', 10);
-    return isNaN(v) ? 0 : v;
+    var n = parseFloat(row.dataset[key]);
+    return isNaN(n) ? 0 : n;
   }
+  // Номера мест и подсветка топ-3 должны следовать за порядком строк.
   function paint(){
     rows().forEach(function(r, i){
-      r.querySelector('.g-rank').textContent = i + 1;
+      var n = r.querySelector('.g-rank');
+      if (n) n.textContent = i + 1;
       r.classList.toggle('top3', i < 3);
     });
   }
-  // Заголовок целиком кликабелен: пустые ячейки-разделители под
-  // аватаром и ником не должны перехватывать клик по «Статистике».
-  head.addEventListener('click', function(e){
-    var h = e.target.closest('[data-sort]');
-    if (!h || !head.contains(h)) return;
-    var key = h.dataset.sort;
-    dir[key] = dir[key] === 1 ? -1 : 1;
-    var sign = dir[key];
-    rows().sort(function(a, b){
-      // Без игр всегда внизу — как на сайте.
-      var ga = value(a, 'games'), gb = value(b, 'games');
-      if ((ga === 0) !== (gb === 0)) return ga === 0 ? 1 : -1;
-      return (value(a, key) - value(b, key)) * sign;
-    }).forEach(function(r){ head.parentNode.appendChild(r); });
-    // Подсветку переносим на активную колонку, а не пересоздаём стрелку,
-    // чтобы заголовки не «прыгали» при клике.
-    head.querySelectorAll('[data-sort]').forEach(function(el){
-      var on = el === h;
+  bar.addEventListener('click', function(e){
+    var b = e.target.closest('[data-sort]');
+    if (!b || !bar.contains(b)) return;
+    var key = b.dataset.sort;
+    if (!(key in sign)) sign[key] = key === 'name' ? 1 : -1;
+    else sign[key] = -sign[key];
+    var s = sign[key];
+    rows().sort(function(a, c){
+      // В топе без игр всегда внизу — как на странице рейтинга.
+      if ('games' in a.dataset && 'games' in c.dataset){
+        var ga = value(a, 'games'), gc = value(c, 'games');
+        if ((ga === 0) !== (gc === 0)) return ga === 0 ? 1 : -1;
+      }
+      if (key === 'name')            // по нику — по алфавиту, не по длине
+        return String(a.dataset.name || '').localeCompare(
+          String(c.dataset.name || ''), 'ru') * s;
+      return (value(a, key) - value(c, key)) * s;
+    }).forEach(function(r){ bar.parentNode.appendChild(r); });
+
+    // Подсветку переносим, а не пересоздаём кнопки — ряд не прыгает.
+    bar.querySelectorAll('[data-sort]').forEach(function(el){
+      var on = el === b;
       el.classList.toggle('on', on);
-      var ar = el.querySelector('.ar');
-      if (ar) ar.textContent = on ? (sign === 1 ? CARET_DOWN : CARET_UP) : '';
+      if (on) el.dataset.dir = s === 1 ? 'up' : 'down';
+      else delete el.dataset.dir;
     });
     paint();
   });
 })();
 </script>
 """
-
-
 def render_page(matches: list[dict], limit: int = DEFAULT_LIMIT, miniapp: bool = False) -> str:
     """Full HTML page with the match list rendered server-side.
 
