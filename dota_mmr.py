@@ -1357,7 +1357,16 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
                 await asyncio.sleep(5)
 
         if matches is None:
-            # API never succeeded — mark as not-found so we don't retry for 60s
+            # Отличаем «игрока нет» от «сервис лежит»: при 521/522
+            # запрос помечался как not-found, и страница истории
+            # оставалась пустой, пока OpenDota не поднимался.
+            if is_opendota_rate_limited() or not _circuit_breaker_can_execute():
+                logger.debug(
+                    "Recent matches: OpenDota недоступен, не помечаем "
+                    f"игрока {steam_id} как отсутствующего"
+                )
+                return []
+            # Настоящий 404: не будем дёргать API ещё минуту.
             _mark_not_found(url)
             return []
 

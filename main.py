@@ -2791,9 +2791,11 @@ async def games_page_handler(request):
         miniapp = request.query.get('miniapp', '0').lower() in ('1', 'true', 'yes')
         tab = (request.query.get('tab') or 'games').strip().lower()
         # Принимаем и 'ranks', и прежнее 'mmr' — по старым ссылкам.
-        tab = 'mmr' if tab in ('ranks', 'mmr') else 'games'
+        tab = ('rolls' if tab == 'rolls' else
+               'mmr' if tab in ('ranks', 'mmr') else 'games')
 
         mmr_players = []
+        rolls = []
         games = []
         # Каждая вкладка тянет только свои данные: топ — из БД, история —
         # из OpenDota. Раньше игры запрашивались всегда, и переход на
@@ -2801,11 +2803,15 @@ async def games_page_handler(request):
         if tab == 'mmr':
             from database import get_dota_mmr_top
             mmr_players = await asyncio.to_thread(get_dota_mmr_top, 100) or []
+        elif tab == 'rolls':
+            from bot_utils import get_recent_rolls
+            rolls = await asyncio.to_thread(get_recent_rolls, 50) or []
         else:
             games = await get_player_games(limit=limit)
         return web.Response(
             text=render_games_page(games, limit, player=player, miniapp=miniapp,
-                                   tab=tab, mmr_players=mmr_players),
+                                   tab=tab, mmr_players=mmr_players,
+                                   rolls=rolls),
             content_type='text/html',
         )
     except Exception as e:

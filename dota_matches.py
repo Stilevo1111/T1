@@ -904,6 +904,46 @@ def mmr_sort_keys(player: dict) -> dict:
     }
 
 
+def render_roll(roll: dict) -> str:
+    """Строка истории роллов: кто крутил, на сколько и сколько стало."""
+    try:
+        ts = float(roll.get("ts") or 0)
+    except (TypeError, ValueError):
+        ts = 0.0
+
+    when = _local_stamp(ts)
+    time_txt = when.strftime("%d.%m %H:%M") if when else "—"
+
+    who = (roll.get("username") or "Игрок")[:25]
+    growth = float(roll.get("growth") or 0)
+    fissure = float(roll.get("fissure") or 0)
+    cascade = int(roll.get("cascade") or 1)
+
+    sign = "+" if growth >= 0 else ""
+    # Каскад — цепочка фисса, поэтому выделяем её отдельной меткой.
+    chain = (f'<span class="g-rc-x">x{cascade}</span>' if cascade > 1 else "")
+
+    return (
+        f'<div class="g-card g-roll">'
+        f'<div class="g-line">'
+        f'<span class="g-face g-hero">{_esc(who[:1].upper())}</span>'
+        f'<span class="g-who">'
+        f'<span class="g-nick">{_esc(who)}</span>'
+        f'<span class="g-heron">{time_txt}</span></span>'
+        f'<span class="g-gain">{sign}{_fmt_num(growth)}</span>'
+        f"{chain}"
+        f'<span class="g-fissure">{_fmt_num(fissure)}</span>'
+        f"</div></div>"
+    )
+
+
+def _fmt_num(value: float) -> str:
+    """Число без хвоста .0 — в разрядах он только шумит."""
+    if abs(value - round(value)) < 0.05:
+        return f"{int(round(value)):,}".replace(",", " ")
+    return f"{value:,.1f}".replace(",", " ")
+
+
 def render_mmr_row(player: dict, place: int, sort_keys: dict | None = None) -> str:
     """Строка топа MMR: тот же набор полей, что на странице топа."""
     nick = (player.get("steam_nickname") or player.get("username") or "Аноним")
@@ -1006,6 +1046,15 @@ body{background:#07080c}
  cursor:pointer;transition:border-color .16s ease,color .16s ease,background .16s ease}
 .g-act:hover{border-color:rgba(232,180,92,.5);color:#f7e3c0;background:#1c232e}
 .g-act.dotabuff:hover{border-color:rgba(214,69,69,.55);color:#f0a5a5}
+
+/* ── История роллов ── */
+.g-card.g-roll .g-line{display:flex;align-items:center;gap:10px;padding:9px 11px}
+.g-gain{font-size:13px;font-weight:900;color:#7fd18a;font-variant-numeric:tabular-nums;
+ white-space:nowrap;flex-shrink:0;margin-left:auto}
+.g-fissure{font-size:11.5px;color:#8e97aa;font-variant-numeric:tabular-nums;
+ white-space:nowrap;flex-shrink:0;min-width:54px;text-align:right}
+.g-rc-x{font-size:9.5px;font-weight:800;color:#e8b45c;background:rgba(232,180,92,.12);
+ border:1px solid rgba(232,180,92,.25);border-radius:4px;padding:1px 5px;flex-shrink:0}
 
 /* ── Вкладка «Топ рангов»: те же поля, что на странице топа ─────────────── */
 .g-mmr-head,.g-card.g-mmr .g-line{display:grid;
@@ -1180,11 +1229,13 @@ def render_games_page(
     miniapp: bool = False,
     tab: str = "games",
     mmr_players: list[dict] | None = None,
+    rolls: list[dict] | None = None,
 ) -> str:
     """Страница матчей и топа MMR в оформлении «Боевого кубока»."""
     suffix = "&miniapp=1" if miniapp else ""
     # 'ranks' — понятное имя вкладки, 'mmr' оставлен для старых ссылок.
-    tab = "mmr" if tab in ("ranks", "mmr") else "games"
+    tab = ("rolls" if tab == "rolls" else
+           "mmr" if tab in ("ranks", "mmr") else "games")
 
     # Счётчики по игрокам питают чипы фильтра.
     players: dict[str, dict] = {}
@@ -1238,21 +1289,30 @@ def render_games_page(
             "".join(render_mmr_row(p, i, sort_keys=mmr_sort_keys(p))
                     for i, p in enumerate(rows, 1))
             or '<div class="g-empty">Рейтинг пока пуст.</div>')
+    elif tab == "rolls":
+        # История роллов приходит с самой страницы бота, newest first.
+        items = list(rolls or [])
+        body = "".join(render_roll(r) for r in items[:limit * 4]) or (
+            '<div class="g-empty">Роллов пока нет.<br>'
+            "Крутаните фисс — и он появится здесь.</div>")
     else:
         body = "".join(render_game(g) for g in games) or (
             '<div class="g-empty">Пока нет игр.<br>'
             "Привяжите Steam в боте — и последние игры появятся здесь.</div>")
 
     def tab_link(key: str, label: str) -> str:
-        href = "/matches" if key == "games" else "/matches?tab=ranks"
+        paths = {"games": "/matches", "mmr": "/matches?tab=ranks",
+                 "rolls": "/matches?tab=rolls"}
+        href = paths.get(key, "/matches")
         if miniapp:
             href += "?miniapp=1" if key == "games" else "&miniapp=1"
         on = " on" if key == tab else ""
         return f'<a class="g-tab{on}" href="{href}">{label}</a>'
 
     # Заголовка на странице нет, но имя вкладки браузера нужно.
-    page_title = "Топ рангов — Fissure.Bot" if tab == "mmr" else \
-        "История игр — Fissure.Bot"
+    page_title = ("История роллов — Fissure.Bot" if tab == "rolls" else
+                  "Топ рангов — Fissure.Bot" if tab == "mmr" else \
+                  "История игр — Fissure.Bot")
 
     body_class = ' class="miniapp"' if miniapp else ""
 # Чипы — это фильтр по игрокам, он нужен только в истории игр.
@@ -1296,7 +1356,8 @@ def render_games_page(
         # Страница начинается с переключателя вкладок: логотип, заголовок
         # и подпись убраны — только список.
         '<div class="g-screen">\n'
-        f'<div class="g-tabs">{tab_link("games", "История")}{tab_link("mmr", "Топ рангов")}</div>\n'
+        f'<div class="g-tabs">{tab_link("games", "История")}{tab_link("mmr", "Топ рангов")}'
+        f'{tab_link("rolls", "Ролл")}</div>\n'
         f'<div class="g-body">{chips_bar}{body}</div>\n'
         "</div>\n"
         f"<script>{TELEGRAM_INIT_JS}</script>\n"
@@ -1490,7 +1551,7 @@ GAME_ACTS_JS = """
     }
     card.addEventListener('click', function(e){
       var act = e.target.closest('[data-act]');
-      if (!act) return;                       // обычный клик — раскрыть
+      if (!act) { toggle(); return; }   // клик по строке — раскрыть
       e.stopPropagation();
       if (act.dataset.act === 'party') {
         // Открывает окно «Поделиться» с текстом приглашения.
@@ -1514,6 +1575,8 @@ RANKS_SORT_JS = """
   var head = document.querySelector('.g-mmr-head');
   if (!head) return;
   var dir = {};                       // колонка -> 1 / -1
+  var CARET_DOWN = String.fromCharCode(9660);
+  var CARET_UP = String.fromCharCode(9650);
   function rows(){
     return Array.prototype.slice.call(
       document.querySelectorAll('.g-card.g-mmr'));
@@ -1528,9 +1591,11 @@ RANKS_SORT_JS = """
       r.classList.toggle('top3', i < 3);
     });
   }
+  // Заголовок целиком кликабелен: пустые ячейки-разделители под
+  // аватаром и ником не должны перехватывать клик по «Статистике».
   head.addEventListener('click', function(e){
     var h = e.target.closest('[data-sort]');
-    if (!h) return;
+    if (!h || !head.contains(h)) return;
     var key = h.dataset.sort;
     dir[key] = dir[key] === 1 ? -1 : 1;
     var sign = dir[key];
@@ -1538,17 +1603,15 @@ RANKS_SORT_JS = """
       // Без игр всегда внизу — как на сайте.
       var ga = value(a, 'games'), gb = value(b, 'games');
       if ((ga === 0) !== (gb === 0)) return ga === 0 ? 1 : -1;
-      if (key === 'name'){
-        return (a.dataset.name > b.dataset.name ? 1 : -1) * sign;
-      }
       return (value(a, key) - value(b, key)) * sign;
     }).forEach(function(r){ head.parentNode.appendChild(r); });
     // Подсветку переносим на активную колонку, а не пересоздаём стрелку,
     // чтобы заголовки не «прыгали» при клике.
     head.querySelectorAll('[data-sort]').forEach(function(el){
-      el.classList.toggle('on', el === h);
+      var on = el === h;
+      el.classList.toggle('on', on);
       var ar = el.querySelector('.ar');
-      if (ar) ar.textContent = sign === 1 ? '\\u25BC' : '\\u25B2';
+      if (ar) ar.textContent = on ? (sign === 1 ? CARET_DOWN : CARET_UP) : '';
     });
     paint();
   });

@@ -770,8 +770,10 @@ def test_ranking_header_padding_matches_row():
                                           mmr_players=players)
     css = html.split("</style>", 1)[0].replace("\n", "")
     head_pad = re.search(r"\.g-mmr-head\{padding:0 (\d+)px 8px\}", css)
+    # Именно строка топра: у строки роллов свой .g-line с другими
+    # отступами, и раньше регулярка цеплялась к ней.
     row_pad = re.search(r"\.g-line\{display:flex;align-items:center;gap:10px;"
-                        r"padding:\S+ (\d+)px", css)
+                        r"padding:7px (\d+)px", css)
     assert head_pad and row_pad
     assert head_pad.group(1) == row_pad.group(1)     # иначе колонки съедут
 
@@ -894,6 +896,43 @@ def test_topmmr_caption_offers_the_full_list():
     assert "Весь список" in src
     # В Mini App открывается именно вкладка рангов, а не история игр.
     assert "/matches?tab=ranks&miniapp=1" in src
+
+
+def test_rolls_tab_is_a_third_tab():
+    """Роллы — третья вкладка рядом с историей и топом рангов."""
+    rolls = [{"ts": 1700000000, "user_id": 1, "username": "wawa",
+              "growth": 12.5, "fissure": 340.0, "cascade": 3},
+             {"ts": 1700000100, "user_id": 2, "username": "frost",
+              "growth": -4.0, "fissure": 120.0, "cascade": 1}]
+    html = dota_matches.render_games_page([], tab="rolls", rolls=rolls)
+    body = html.split("</style>", 1)[-1]
+
+    assert body.count('<a class="g-tab') == 3
+    assert 'href="/matches?tab=rolls"' in body
+    assert body.count("g-card g-roll") == 2
+    assert "+12.5" in body and "-4" in body          # прирост и откат
+    assert ">x3<" in body                            # метка каскада
+    assert "Роллов пока нет" in dota_matches.render_games_page([], tab="rolls")
+    # Роллы приходят из bot_utils, а не из OpenDota.
+    src = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
+    assert "from bot_utils import get_recent_rolls" in src
+
+
+def test_sort_js_has_no_literal_escape_and_opens_rows():
+    """Регрессии сортировки и раскрытия строк.
+
+    Стрелки писались как «\\u25BC» и попадали в страницу буквально,
+    а обработчик клика по строке делал return вместо toggle(), поэтому
+    панель «Пати» / «ДотаБаф» не появлялась.
+    """
+    sort_js = dota_matches.RANKS_SORT_JS
+    assert "\\\\u25BC" not in sort_js, "стрелка должна задаваться кодом символа"
+    assert "String.fromCharCode" in sort_js
+    assert "head.contains(h)" in sort_js, "клик должен ловиться только шапкой"
+
+    acts_js = dota_matches.GAME_ACTS_JS
+    assert "if (!act) { toggle(); return; }" in acts_js, \
+        "клик по строке обязан раскрывать карточку"
 
 
 def test_matches_cache_is_shared_across_callers():
