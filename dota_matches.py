@@ -946,14 +946,24 @@ def render_roll(roll: dict) -> str:
     fissure = float(roll.get("fissure") or 0)
     cascade = int(roll.get("cascade") or 1)
 
+    # Аватар приходит из bot_utils без картинки, поэтому берём его по
+    # никнейму из тех же данных, что уже отдаёт страница роллов.
+    avatar = (roll.get("avatar") or "").strip()
+    if avatar:
+        face = (f'<img class="g-face" src="{_esc(avatar)}" alt="" '
+                f'loading="lazy">')
+    else:
+        face = f'<span class="g-face g-hero">{_esc(who[:1].upper())}</span>'
+
     sign = "+" if growth >= 0 else ""
     # Каскад — цепочка фисса, поэтому выделяем её отдельной меткой.
     chain = (f'<span class="g-rc-x">x{cascade}</span>' if cascade > 1 else "")
 
     return (
-        f'<div class="g-card g-roll">'
+        f'<div class="g-card g-roll" data-name="{_esc(who.lower())}" '
+        f'data-growth="{growth:g}">'
         f'<div class="g-line">'
-        f'<span class="g-face g-hero">{_esc(who[:1].upper())}</span>'
+        f'{face}'
         f'<span class="g-who">'
         f'<span class="g-nick">{_esc(who)}</span>'
         f'<span class="g-heron">{time_txt}</span></span>'
@@ -1088,17 +1098,22 @@ body{background:#07080c}
  grid-template-columns:34px 34px 30px minmax(0,1fr) 210px;align-items:center;gap:10px}
 /* Отступ шапки совпадает с .g-line (10px по бокам), иначе заголовки
    стоят левее своих данных на 4px. */
-.g-mmr-head{padding:0 10px 8px}
-/* Заголовок колонки: подпись и стрелка живут в одной кнопке.
-   Обводка рисуется inset-тенью, поэтому не съедает ширину подписи. */
-.g-hp{position:relative;display:inline-flex;align-items:center;gap:6px;
- padding:6px 9px;border-radius:7px;cursor:pointer;user-select:none;
- justify-self:start;font-size:9.5px;font-weight:800;letter-spacing:.11em;
- text-transform:uppercase;color:#7c869c;
+/* Шапка — свой ряд: подписи «Место» и «Статистика» шире своих
+   колонок (34px), в общей сетке они наезжали друг на друга и
+   перехватывали клики друг друга. */
+.g-mmr-head{display:flex;align-items:center;gap:6px;padding:0 10px 8px}
+/* Без курсора-указателя: не все подписи сортируемые. */
+.g-hp:not([data-sort]){cursor:default}
+.g-hp{position:relative;display:inline-flex;align-items:center;gap:5px;
+ padding:6px 9px;border-radius:7px;user-select:none;flex-shrink:0;
+ font-size:10.5px;font-weight:800;letter-spacing:.08em;
+ text-transform:uppercase;color:#7c869c;white-space:nowrap;
  box-shadow:inset 0 0 0 1px transparent;
  transition:color .18s ease,box-shadow .18s ease,background .18s ease}
-.g-hp:hover{color:#dbe3ef;background:rgba(255,255,255,.05);
+.g-hp[data-sort]{cursor:pointer}
+.g-hp[data-sort]:hover{color:#dbe3ef;background:rgba(255,255,255,.05);
  box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.g-hp.right{margin-left:auto}
 /* Все подписи прижаты влево: прижим «Статистики» к правому краю
    отрывал её от своей колонки и ломал ровный ряд. Правый отступ
    добавляет воздуха между заголовками, не сдвигая их колонки. */
@@ -1305,8 +1320,6 @@ def render_games_page(
             '<span class="g-hp">Место</span>'
             '<span class="g-hp on" data-sort="rank_tier">Ранг'
             '<span class="ar">▼</span></span>'
-            '<span class="g-hp"></span>'          # аватар
-            '<span class="g-hp"></span>'          # ник
             '<span class="g-hp right" data-sort="stats">Статистика'
             '<span class="ar">▼</span></span>'
             "</div>"
@@ -1319,9 +1332,16 @@ def render_games_page(
     elif tab == "rolls":
         # История роллов приходит с самой страницы бота, newest first.
         items = list(rolls or [])
-        body = "".join(render_roll(r) for r in items[:limit * 4]) or (
+        head = (
+            '<div class="g-mmr-head">'
+            '<span class="g-hp" data-roll-sort="name">Игрок</span>'
+            '<span class="g-hp right" data-roll-sort="growth">Прирост'
+            '<span class="ar"></span></span>'
+            "</div>"
+        )
+        body = head + ("".join(render_roll(r) for r in items[:limit * 4]) or (
             '<div class="g-empty">Роллов пока нет.<br>'
-            "Крутаните фисс — и он появится здесь.</div>")
+            "Крутаните фисс — и он появится здесь.</div>"))
     else:
         body = "".join(render_game(g) for g in games) or (
             '<div class="g-empty">Пока нет игр.<br>'
@@ -1395,7 +1415,7 @@ f"<script>{GAME_ACTS_JS}</script>\n"
         "<script>document.addEventListener('click',function(e){var p=e.target"
         ".closest('[data-tg]');if(!p)return;e.preventDefault();e.stopPropagation();"
         "open('tg://user?id='+p.dataset.tg);});</script>\n"
-        f"{RANKS_SORT_JS}"
+        f"{(ROLLS_SORT_JS if tab == 'rolls' else RANKS_SORT_JS)}"
         '<script>setTimeout(function(){ location.reload(); }, 60000);</script>\n'
         "</body>\n</html>"
     )
@@ -1605,6 +1625,42 @@ GAME_ACTS_JS = """
 </script>
 """
 
+ROLLS_SORT_JS = """
+<script>
+// Сортировка истории роллов: по игроку и по приросту фисса.
+(function(){
+  var head = document.querySelector('.g-mmr-head [data-roll-sort]')
+             && document.querySelector('.g-mmr-head');
+  if (!head) return;
+  var CARET_DOWN = String.fromCharCode(9660);
+  var CARET_UP = String.fromCharCode(9650);
+  var dir = {};
+  function rows(){
+    return Array.prototype.slice.call(
+      document.querySelectorAll('.g-card.g-roll'));
+  }
+  head.addEventListener('click', function(e){
+    var h = e.target.closest('[data-roll-sort]');
+    if (!h || !head.contains(h)) return;
+    var key = h.dataset.rollSort;
+    dir[key] = dir[key] === 1 ? -1 : 1;
+    var sign = dir[key];
+    rows().sort(function(a, b){
+      if (key === 'name'){
+        return (a.dataset.name > b.dataset.name ? 1 : -1) * sign;
+      }
+      return (parseFloat(a.dataset.growth) - parseFloat(b.dataset.growth)) * sign;
+    }).forEach(function(r){ head.parentNode.appendChild(r); });
+    head.querySelectorAll('[data-roll-sort]').forEach(function(el){
+      var on = el === h;
+      el.classList.toggle('on', on);
+      var ar = el.querySelector('.ar');
+      if (ar) ar.textContent = on ? (sign === 1 ? CARET_DOWN : CARET_UP) : '';
+    });
+  });
+})();
+</script>
+"""
 RANKS_SORT_JS = """
 <script>
 // Сортировка топа по клику на заголовок — как на странице рейтинга.

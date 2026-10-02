@@ -941,6 +941,41 @@ def test_sort_js_has_no_literal_escape_and_opens_rows():
         "клик по строке обязан раскрывать карточку"
 
 
+def test_rolls_have_avatars_and_sorting():
+    """В роллах есть аватар и кликабельная сортировка по приросту."""
+    rolls = [{"ts": 1700000000, "username": "wawa", "growth": 12.5,
+              "fissure": 340.0, "cascade": 3, "avatar": "http://a/1.jpg"},
+             {"ts": 1700000100, "username": "frost", "growth": -4.0,
+              "fissure": 120.0, "cascade": 1, "avatar": None}]
+    html = dota_matches.render_games_page([], tab="rolls", rolls=rolls)
+    body = html.split("</style>", 1)[-1]
+
+    assert 'class="g-face" src="http://a/1.jpg"' in body   # аватар из users
+    assert "g-face g-hero" in body                        # заглушка без него
+    assert 'data-roll-sort="name"' in body
+    assert 'data-roll-sort="growth"' in body
+    assert 'data-name="wawa"' in body and 'data-growth="12.5"' in body
+    assert "data-roll-sort" in dota_matches.ROLLS_SORT_JS
+    # Аватары подставляет обработчик: bot_utils их не хранит.
+    src = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
+    assert "_attach_roll_avatars" in src
+
+
+def test_ranking_header_has_no_empty_cells():
+    """Пустые ячейки в шапке наезжали на подписи и перехватывали клики."""
+    players = [{"username": "a", "steam_nickname": "a", "mmr": 1,
+                "rank_tier": 50, "week_games": 2, "week_wins": 1}]
+    html = dota_matches.render_games_page([], tab="mmr", mmr_players=players)
+    head = re.search(r'<div class="g-mmr-head">(.*?)</div>', html, re.S).group(1)
+
+    assert '<span class="g-hp"></span>' not in head
+    assert head.count("data-sort=") == 2          # Ранг и Статистика
+    assert "Место" in head                        # не сортируется
+    # Подписи не в общей сетке с колонками — иначе снова наезжают.
+    css = dota_matches.GAMES_CSS.replace("\n", "")
+    assert ".g-mmr-head{display:flex" in css
+
+
 def test_history_repairs_its_own_schema():
     """Страница сама добавляет недостающие колонки.
 

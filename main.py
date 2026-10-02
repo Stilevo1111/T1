@@ -2777,6 +2777,42 @@ async def player_games_api_handler(request):
         ))
 
 
+def _attach_roll_avatars(rolls: list[dict]) -> list[dict]:
+    """Дописывает аватар к роллам по никнейму из users.
+
+    bot_utils хранит только user_id и username, а картинки лежат в
+    users — одним запросом достаём их сразу для всех роллов.
+    """
+    if not rolls:
+        return []
+    try:
+        from database import get_connection, release_pg_connection
+        conn = get_connection()
+        cur = conn.cursor()
+        nicks = {r.get("username") for r in rolls if r.get("username")}
+        if not nicks:
+            release_pg_connection(conn)
+            return rolls
+        marks = ", ".join(["%s"] * len(nicks))   # PostgreSQL
+        try:
+            cur.execute(
+                f"SELECT username, avatar FROM users WHERE username IN ({marks})",
+                list(nicks))
+        except Exception:
+            marks = ", ".join(["?"] * len(nicks))   # SQLite
+            cur.execute(
+                f"SELECT username, avatar FROM users WHERE username IN ({marks})",
+                list(nicks))
+        avs = {u: a for u, a in cur.fetchall() if a}
+        release_pg_connection(conn)
+        for r in rolls:
+            r["avatar"] = avs.get(r.get("username"))
+        return rolls
+    except Exception as e:
+        logger.debug(f"_attach_roll_avatars error: {e}")
+        return rolls
+
+
 async def games_page_handler(request):
     """Web page: the game list and the MMR top, in the cup's visual style.
 
@@ -2806,6 +2842,7 @@ async def games_page_handler(request):
         elif tab == 'rolls':
             from bot_utils import get_recent_rolls
             rolls = await asyncio.to_thread(get_recent_rolls, 50) or []
+            rolls = await asyncio.to_thread(_attach_roll_avatars, rolls)
         else:
             games = await get_player_games(limit=limit)
         return web.Response(
