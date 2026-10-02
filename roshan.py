@@ -31,6 +31,7 @@ from constants import (
     ROSHAN_AEGIS_TEXTS,
     ROSHAN_CHEESE_TEXTS,
     ROSHAN_KILL_TEXTS,
+    ROSHAN_RESULT_FOOTERS,
     ROSHAN_SESSION_TTL,
     ROSHAN_STEAL_WINDOW_SEC,
     ROSHAN_TEXTS,
@@ -295,23 +296,45 @@ def build_roshan_text(display_username: str, reward: float, claimers: int = 0) -
     return "\n\n".join(blocks)
 
 
-def build_result_text(killer_name: str, awarded: dict[int, str], usernames: dict[int, str]) -> str:
-    lines = ["🪖 Окно закрыто. Рошан раздаёт добычу:"]
-    if not awarded:
-        lines.append("\nНикто не успел нажать. 💎 и 🧀 остались в яме.")
-        return "\n\n".join(lines)
+def build_result_text(
+    killer_name: str,
+    reward: float,
+    awarded: dict[int, str],
+    winner_names: dict[int, str],
+    loser_names: list[str],
+) -> str:
+    """Closing message for the stealing window.
 
-    for uid, item in awarded.items():
-        name = usernames.get(uid) or f"игрок {uid}"
-        lines.append(
-            f"{ITEM_LABELS[item]} → {name}\n"
-            f"   {random.choice(ITEM_TEXTS[item])}"
+    The item quotes live in a public group message, so they are written in the
+    third person. "Ты забрал АЕГИС" was unreadable there: every reader took it
+    as addressed to them, and each winner got a different random quote, so the
+    same line named a different person to everyone.
+    """
+    blocks = [
+        "🪖 Рошан повержен",
+        f"👑 {killer_name} — добыча за убийство: +{reward:.1f} см",
+    ]
+
+    if awarded:
+        stolen = ["🖐️ Утащили из ямы:"]
+        for uid, item in awarded.items():
+            name = winner_names.get(uid) or f"игрок {uid}"
+            stolen.append(
+                f"{ITEM_LABELS[item]} → {name}\n"
+                f"   {random.choice(ITEM_TEXTS[item])}"
+            )
+        blocks.append("\n".join(stolen))
+    else:
+        blocks.append(
+            "🖐️ Окно закрылось, яма пуста.\n"
+            "Никто не рискнул забрать добычу — 💎 и 🧀 остались на дне."
         )
-    skipped = len(usernames) - len(awarded)
-    if skipped > 0:
-        lines.append(f"👥 Остались ни с чем: {skipped}")
-    lines.append("\n💎 АЕГИС и 🧀 СЫР — в единственном экземпляре, повторно не выдаются.")
-    return "\n\n".join(lines)
+
+    if loser_names:
+        blocks.append("😶 Нажали, но не досталось: " + ", ".join(loser_names))
+
+    blocks.append(random.choice(ROSHAN_RESULT_FOOTERS))
+    return "\n\n".join(blocks)
 
 
 # =====================
@@ -415,25 +438,36 @@ async def resolve_session(bot, session_id: str) -> None:
         return
 
     awarded = await asyncio.to_thread(distribute_items, session_id)
+    claimers = await asyncio.to_thread(load_claimers, session_id)
 
-    usernames: dict[int, str] = {}
-    if awarded:
+    # Names are needed for every presser, not just the winners: the people who
+    # pressed and came away empty-handed are the ones the message used to
+    # reduce to a bare count.
+    winner_names: dict[int, str] = {}
+    if claimers or awarded:
         from database import get_user
 
-        for uid in awarded:
+        for uid in set(claimers) | set(awarded):
             try:
                 u = await asyncio.to_thread(get_user, uid)
             except Exception:
                 u = None
             name = (u or {}).get("username") or f"игрок {uid}"
-            usernames[uid] = make_clickable(name, uid)
+            winner_names[uid] = make_clickable(name, uid)
 
     killer_id = int(session["killer_id"])
-    if killer_id not in awarded:
-        usernames.setdefault(killer_id, session.get("killer_name") or "убийца Рошана")
+    loser_names = [
+        winner_names.get(uid, f"игрок {uid}")
+        for uid in claimers
+        if uid not in awarded and uid != killer_id
+    ]
 
     text = build_result_text(
-        session.get("killer_name") or "убийца Рошана", awarded, usernames
+        session.get("killer_name") or "убийца Рошана",
+        float(session.get("reward") or 0.0),
+        awarded,
+        winner_names,
+        loser_names,
     )
 
     chat_id = int(session["chat_id"])
