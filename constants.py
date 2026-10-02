@@ -99,15 +99,25 @@ ROSHAN_REWARD_MIN = 5.0               # floor награды убийце
 ROSHAN_REWARD_MAX = 20.0              # cap награды убийце ( leaders must not snowball)
 ROSHAN_REWARD_RATIO = 0.08            # доля текущей фиссуры
 ROSHAN_SESSION_TTL = 3600             # через сколько секунд чистим протухшие сессии
+# Roshan has no voice lines in Dota 2 - he is an ancient creep with roars only,
+# so there are no quotes to lift. These lines paraphrase the actual lore instead:
+#   - "Are We Heroes Yet?" comic: Roshan killed the Shopkeeper for the Aegis and
+#     was cursed to have his treasure stolen from him again and again. That curse
+#     is what this event reproduces.
+#   - The Aegis of the Immortal reclaims itself back to Roshan on respawn, no
+#     matter where it is.
+#   - Roshan went down into the Underhollow after Roshefort cheese and brought the
+#     tunnels down with him.
 ROSHAN_TEXTS = [
-    "🪤 Что-то древнее открыло глаз на дне ямы.",
-    "🪤 Яма загудела. Рошан выбирается наверх.",
-    "🪤 Темнота внизу сгустилась и пошла вверх.",
+    "🪤 Рошан встаёт из ямы. Он бессмертен — но его сокровища нет.",
+    "🪤 Рошан убил Торговца ради АЕГИСА. С тех пор у него всё крадут снова и снова.",
+    "🪤 АЕГИС всегда возвращается к Рошану сам. Рошан умеет ждать.",
+    "🪤 Он спускался в Андерхоллоу за Рошефортом и обвалил тоннели. Теперь он здесь.",
 ]
 ROSHAN_KILL_TEXTS = [
-    "🪙 Последний удар твой.",
-    "🪙 Рошан повержен тобой. Фиссура растёт прямо из его ямы.",
-    "🪙 Ты забрал Рошана. Добыча твоя, яма — нет.",
+    "🪙 Рошана убили. Фиссура растёт прямо из его ямы.",
+    "🪙 Проклятие Торговца снова сработало: Рошана убили, а его вещи — нет.",
+    "🪙 Он вернётся через несколько минут, как всегда. Добыча — ваша.",
 ]
 # Что артефакт делает на самом деле, по rolls.py:
 #   apply_aegis   обнуляет отрицательный ролл целиком и НЕ тратится на плюсе;
