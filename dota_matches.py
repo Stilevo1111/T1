@@ -1021,13 +1021,13 @@ body{background:#07080c}
 .g-hp.on{color:#f2d9a0;background:rgba(232,180,92,.1);border-color:rgba(232,180,92,.28)}
 .g-hp.on .ar{opacity:1}
 .g-rank-img{width:26px;height:26px;object-fit:contain;justify-self:center}
-/* Ранг в строке игры — та же плашка, что и в топе рангов. */
-.g-rank-mini{display:inline-flex;align-items:center;gap:4px;padding:2px 7px 2px 5px;
- border-radius:5px;background:rgba(232,180,92,.1);border:1px solid rgba(232,180,92,.26);
- vertical-align:middle;margin-right:5px}
-.g-rank-mini img{width:13px;height:13px;object-fit:contain;flex-shrink:0}
-.g-rank-name{color:#f2d9a0;font-weight:700;font-size:10px;letter-spacing:.01em}
-.g-rank-none{color:#4a5262;font-size:10px}
+/* Ранг в строке игры — та же плашка, что и в топе рангов, но в масштабе подписи. */
+.g-rank-mini{display:inline-flex;align-items:center;gap:3px;padding:1px 5px 1px 3px;
+ border-radius:4px;background:rgba(232,180,92,.09);border:1px solid rgba(232,180,92,.22);
+ vertical-align:middle;margin-right:4px}
+.g-rank-mini img{width:11px;height:11px;object-fit:contain;flex-shrink:0}
+.g-rank-name{color:#f2d9a0;font-weight:700;font-size:9.5px;line-height:1}
+.g-rank-none{color:#4a5262;font-size:9.5px}
 .g-face{width:26px;height:26px;border-radius:50%;flex-shrink:0;object-fit:cover;
  background:#1b212c;display:grid;place-items:center;font-size:10px;color:#5a6478}
 .g-wr{display:flex;align-items:center;gap:8px;justify-content:flex-end}
@@ -1115,8 +1115,6 @@ body{background:#07080c}
  letter-spacing:.06em;min-width:0}                      /* не обрезаются */
  .g-heron,.g-when{display:none}
  .g-kda{font-size:11px}
- .g-top{padding:0 10px}
- .g-slot.m{display:none}
  .g-mmr-head,.g-card.g-mmr .g-line{grid-template-columns:28px 26px 26px minmax(0,1fr) 88px;
  gap:6px}
  .g-rank-img,.g-face{width:22px;height:22px}
@@ -1173,12 +1171,15 @@ def render_games_page(
         # Заголовки кликабельные — сортировка как на странице топа.
         # «Ранг» активен сразу: это сортировка по умолчанию.
         # По нику не сортируем — в топе важнее ранг и результат.
+        # Ячеек столько же, сколько колонок в строке (5), иначе
+        # заголовки съезжают относительно данных.
         head = (
             '<div class="g-mmr-head">'
             '<span class="g-hp">Место</span>'
             '<span class="g-hp on" data-sort="rank_tier">Ранг'
             '<span class="ar">▼</span></span>'
-            '<span class="g-hp"></span>'
+            '<span class="g-hp"></span>'          # аватар
+            '<span class="g-hp"></span>'          # ник
             '<span class="g-hp right" data-sort="stats">Статистика'
             '<span class="ar">▼</span></span>'
             "</div>"
