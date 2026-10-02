@@ -51,8 +51,15 @@ class FakeChat:
 
 
 class FakeMessage:
-    def __init__(self, user, chat):
-        self.from_user = user
+    """Сообщение в чате.
+
+    Важная деталь реальности: у сообщения, которое отправил бот, from_user —
+    сам бот, а не игрок. Поэтому автор сообщения нельзя использовать как
+    зрителя сетки: зрителя нужно брать из нажавшего кнопку.
+    """
+
+    def __init__(self, user, chat, bot_author=True):
+        self.from_user = FakeUser(0, "fissure_bot") if bot_author else user
         self.chat = chat
         self.text = ""
         self.markup = None
@@ -65,11 +72,16 @@ class FakeMessage:
 
 
 class FakeQuery:
-    """callback_query: data разбирает хендлер, текст пишется в сообщение."""
+    """callback_query.
+
+    В реальности query.message — это сообщение САМОГО БОТА с кнопками,
+    поэтому его from_user = бот, а не тот, кто нажал. Именно на этом
+    спотыкалась старая логика выбора зрителя.
+    """
     def __init__(self, data, user, chat):
         self.data = data
         self.from_user = user
-        self.message = FakeMessage(user, chat)
+        self.message = FakeMessage(user, chat, bot_author=True)
         self.alerts = []
 
     async def answer(self, text=None, show_alert=False):
@@ -84,7 +96,8 @@ class FakeUpdate:
     def __init__(self, user, chat, query=None):
         self.effective_user = user
         self.effective_chat = chat
-        self.effective_message = FakeMessage(user, chat)
+        # Сообщение команды принадлежит игроку: from_user — он сам.
+        self.effective_message = FakeMessage(user, chat, bot_author=False)
         self.callback_query = query
 
 
@@ -187,6 +200,18 @@ check("у участника есть кнопка «Мой матч»",
 check("кнопка счёта ведёт на этот турнир",
       any(btn.callback_data == f"{H.CB_SCORE}{tid}"
           for row in kb for btn in row))
+
+# Регресс: сетку по кнопке зритель должен получать персональной. Раньше id
+# зрителя брался из query.message.from_user, а это автор сообщения бота,
+# поэтому значки и кнопка «Мой матч» пропадали.
+cap_probe = [m for m in teams[0]['members'] if m.get('is_captain')][0]['telegram_id']
+qb = press(f"{H.CB_BRACKET}{tid}", cap_probe)
+check("по кнопке сетка приходит тому, кто нажал",
+      "Гранд-финал" in qb.message.text, qb.message.text)
+check("по кнопке у участника есть «Мой матч»",
+      any(btn.callback_data == f"{H.CB_SCORE}{tid}"
+          for row in qb.message.markup.inline_keyboard for btn in row),
+      str([b.callback_data for r in qb.message.markup.inline_keyboard for b in r]))
 
 # --- 6. Кнопка «Мой матч» показывает варианты счёта ---
 q = press(f"{H.CB_SCORE}{tid}", 1)

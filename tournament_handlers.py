@@ -58,10 +58,14 @@ def _current_tournament(chat_id: int):
     return rows[0] if rows else None
 
 
-async def _send_bracket(message, tournament: dict):
-    """Присылает сетку персонально: значки только на пути того, кто смотрит."""
+async def _send_bracket(message, tournament: dict, viewer_id: int):
+    """Присылает сетку персонально: значки только на пути того, кто смотрит.
+
+    `viewer_id` передаётся явно, а не берётся из `message.from_user`: при
+    вызове из колбэка мы отвечаем на сообщение бота, у которого from_user —
+    сам бот. Из-за этого сетка приходила без значков и без кнопки «Мой матч».
+    """
     tid = int(tournament['id'])
-    viewer_id = message.from_user.id if message.from_user else 0
 
     text = (f"{T.tournament_summary(tid)}\n\n"
             f"{T.render_bracket_text(tid, viewer_id)}")
@@ -100,7 +104,7 @@ async def tour_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     tid = int(tournament['id'])
     if tournament.get('status') != 'registration':
-        await _send_bracket(update.effective_message, tournament)
+        await _send_bracket(update.effective_message, tournament, _viewer_id(update))
         return
 
     # Регистрация: ранг берём из профиля, порога нет.
@@ -202,7 +206,8 @@ async def tour_bracket_callback(update: Update, context: ContextTypes.DEFAULT_TY
     if not tournament:
         await query.edit_message_text("Турнир не найден.")
         return
-    await _send_bracket(query.message, tournament)
+    # Зритель — тот, кто нажал кнопку, а не автор сообщения бота.
+    await _send_bracket(query.message, tournament, _viewer_id(update))
 
 
 def _score_keyboard(tid: int) -> InlineKeyboardMarkup:
