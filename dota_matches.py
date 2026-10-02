@@ -698,45 +698,42 @@ def _local_stamp(timestamp: int | None) -> datetime.datetime | None:
 
 
 def render_game(game: dict) -> str:
-    """Строка игры в стиле клиента Dota: аватар, герой, ник, KDA.
+    """Карточка игры в оформлении «Боевого кубока».
 
-    Всё в одну строку: слева аватар с иконкой героя, затем ник, KDA вида
-    «15 / 1 / 8» и герой; справа — результат, дата, время и длительность.
-    Ряд предметов переносится на вторую строку сам, когда данные их дадут.
+    Аватар игрока и иконка героя, ник, KDA вида «15 / 1 / 8», результат и
+    дата с длительностью. Ряд предметов переносится на вторую строку сам,
+    когда данные их дадут.
     """
     win = bool(game.get("win"))
     cls = "win" if win else "loss"
-
     shown_as = game.get("bot_username") or game.get("personaname") or "Игрок"
 
-    # Аватар игрока берётся из БД — дополнительных запросов не делаем.
     avatar_url = (game.get("avatar") or "").strip()
     if avatar_url:
         face = (
-            f'<img class="g-face-img" src="{_esc(avatar_url)}" '
+            f'<img class="g-face" src="{_esc(avatar_url)}" '
             f'alt="{_esc(shown_as)}" loading="lazy">'
         )
     else:
-        face = f'<span class="g-face-img g-face-ph">{_esc(shown_as[:1].upper())}</span>'
+        face = f'<span class="g-face g-hero">{_esc(shown_as[:1].upper())}</span>'
 
-    # Иконка героя — маленьким бейджем на углу аватара.
     if game.get("hero_icon"):
         hero = (
             f'<img class="g-hero" src="{_esc(game["hero_icon"])}" '
             f'alt="{_esc(game["hero_name"])}" loading="lazy">'
         )
     else:
-        hero = '<span class="g-hero g-hero-ph">—</span>'
+        hero = '<span class="g-hero">—</span>'
 
+    name_html = _esc(shown_as)
     if game.get("telegram_id"):
-        who = (
-            f'<span class="g-player" onclick="return false" '
-            f'data-tg="{int(game["telegram_id"])}">{_esc(shown_as)}</span>'
+        name_html = (
+            f'<span class="g-nick" data-tg="{int(game["telegram_id"])}">'
+            f'{name_html}</span>'
         )
     else:
-        who = f'<span class="g-player">{_esc(shown_as)}</span>'
+        name_html = f'<span class="g-nick">{name_html}</span>'
 
-    # Рядом с ником — герой; Dota-ник добавляем, только если он другой.
     subtitle = _esc(game.get("hero_name") or "—")
     if (
         game.get("personaname")
@@ -749,124 +746,246 @@ def render_game(game: dict) -> str:
     deaths = int(game.get("deaths") or 0)
     assists = int(game.get("assists") or 0)
 
-    # Предметы появятся на второй строке, как только появятся в данных.
     items = ""
     for key in ("items", "item_icons"):
         raw = game.get(key)
         if raw:
             icons = "".join(
-                f'<img class="g-item" src="{_esc(i)}" alt="" loading="lazy">'
+                f'<img class="g-hero" src="{_esc(i)}" alt="" loading="lazy">'
                 for i in raw[:6] if i
             )
             if icons:
-                items = f'<span class="g-items">{icons}</span>'
+                items = f'<div class="g-line">{icons}</div>'
             break
 
-    started = int(game.get("start_time") or 0)
-    stamp = _local_stamp(started)
+    stamp = _local_stamp(int(game.get("start_time") or 0))
     date_txt = stamp.strftime("%d.%m") if stamp else "—"
     time_txt = stamp.strftime("%H:%M") if stamp else "—"
 
     return (
-        f'<a class="g-row {cls}" '
-        f'data-when="{date_txt} {time_txt}" '
+        f'<div class="g-card {cls}">'
+        f'<a class="g-line" '
         f'href="https://www.opendota.com/matches/{int(game["match_id"])}" '
         f'target="_blank" rel="noopener">'
-        f'<span class="g-face">{face}{hero}</span>'
-        f'<span class="g-who">{who}</span>'
-        f'<span class="g-kda">'
-        f'<b>{kills}</b><i>/</i><span class="d">{deaths}</span>'
-        f'<i>/</i><span class="a">{assists}</span></span>'
-        f'<span class="g-hero-name">{subtitle}</span>'
-        f'<span class="g-tail">'
-        f'<span class="g-result">{"Победа" if win else "Поражение"}</span>'
-        f'<span class="g-when">{date_txt} · {time_txt}</span>'
-        f'<span class="g-dur">{_fmt_duration(game.get("duration"))}</span>'
-        f"</span>"
-        f"{items}"
-        f"</a>"
+        f"{face}{hero}"
+        f'<span class="g-who">{name_html}'
+        f'<span class="g-heron">{subtitle}</span></span>'
+        f'<span class="g-kda"><b>{kills}</b> / {deaths} / {assists}</span>'
+        f'<span class="g-res">{"Победа" if win else "Поражение"}</span>'
+        f'<span class="g-when">{date_txt} · {time_txt} · '
+        f'{_fmt_duration(game.get("duration"))}</span>'
+        f"</a>{items}</div>"
     )
 
 
+RANKS_BASE = "https://seredin999.onrender.com/images/ranks"
+
+
+def rank_image(tier) -> str:
+    """Иконка ранга — та же, что на странице топа MMR.
+
+    Страницу отдаёт бот, а картинки лежат на сайте, поэтому ссылка абсолютная.
+    """
+    try:
+        rt = int(tier or 0)
+    except (TypeError, ValueError):
+        rt = 0
+    if rt <= 0:
+        return f"{RANKS_BASE}/rank_1_1.webp"
+    tier_no, star = rt // 10, rt % 10
+    if star == 0:          # без звёзд показываем с одной
+        star = 1
+    if 1 <= tier_no <= 8 and 1 <= star <= 5:
+        return f"{RANKS_BASE}/rank_{tier_no}_{star}.webp"
+    return f"{RANKS_BASE}/rank_1_1.webp"
+
+
+def mmr_sort_key(player: dict):
+    """Порядок топа как на сайте: ранг, затем разница побед, затем игры.
+
+    Игроки без игр за неделю всегда внизу — поэтому им ставим 1, а не 0.
+    """
+    tier = int(player.get("rank_tier") or 0)
+    games = int(player.get("week_games") or 0)
+    wins = int(player.get("week_wins") or 0)
+    net = wins - (games - wins)
+    return (1 if games == 0 else 0, -tier, -net, -games)
+
+
+def _wr_color(wr: int) -> str:
+    """Цвет процента — от зелёного к красному, как на сайте."""
+    if wr >= 60:
+        return "#7fd18a"
+    if wr >= 50:
+        return "#c9d16b"
+    if wr >= 40:
+        return "#e8b45c"
+    return "#ef6a5a"
+
+
+def render_mmr_row(player: dict, place: int) -> str:
+    """Строка топа MMR: тот же набор полей, что на странице топа."""
+    nick = (player.get("steam_nickname") or player.get("username") or "Аноним")
+
+    games = int(player.get("week_games") or 0)
+    wins = int(player.get("week_wins") or 0)
+
+    if games > 0:
+        wr = round(wins / games * 100)
+        losses = games - wins
+        color = _wr_color(wr)
+        stats = (
+            f'<span class="g-wr-num" style="color:{color}">{wr}%</span>'
+            f'<span class="g-wr-track">'
+            f'<span class="g-wr-fill" style="width:{wr}%;background:{color}"></span>'
+            f"</span>"
+            f'<span class="g-wr-wl">{wins}W/{losses}L</span>'
+        )
+    else:
+        stats = '<span class="g-wr-none">—</span>'
+
+    top = place <= 3
+    return (
+        f'<div class="g-card g-mmr{" top3" if top else ""}">'
+        f'<div class="g-line">'
+        f'<span class="g-rank{" top" if top else ""}">{place}</span>'
+        f'<img class="g-rank-img" '
+        f'src="{_esc(rank_image(player.get("rank_tier")))}" '
+        f'alt="" loading="lazy">'
+        f'<span class="g-who"><span class="g-nick">{_esc(nick)}</span>'
+        f'<span class="g-heron">{_rank_icon(player.get("rank_tier"))}'
+        f" · {int(player.get('mmr') or 0)} MMR</span></span>"
+        f'<span class="g-wr">{stats}</span>'
+        f"</div></div>"
+    )
+
+
+def _rank_icon(tier) -> str:
+    """Название ранга для подписи в топе."""
+    from tournament import rank_name
+    return rank_name(tier)
+
+
 GAMES_CSS = """
-/* Строка игры: всё в одну линию, аккуратные отступы, плавные анимации. */
-.games{display:flex;flex-direction:column;gap:6px}
-.g-row{position:relative;display:flex;align-items:center;gap:12px;padding:9px 14px;
- background:var(--card);border:1px solid var(--line);border-radius:12px;
- text-decoration:none;color:inherit;overflow:hidden;
- transition:transform .18s cubic-bezier(.2,.7,.3,1),border-color .18s ease,
- box-shadow .18s ease,background .18s ease}
-/* Мягкая подсветка слева направо по наведению. */
-.g-row::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;
- background:linear-gradient(90deg,rgba(255,140,66,.14),rgba(255,140,66,0) 55%);
- transition:opacity .22s ease}
-.g-row:hover{transform:translateX(4px);border-color:rgba(255,140,66,.45);
- box-shadow:0 6px 20px -8px rgba(0,0,0,.6),0 0 0 1px rgba(255,140,66,.12);
- background:#161923}
-.g-row:hover::before{opacity:1}
-.g-row:active{transform:translateX(2px) scale(.995)}
+/* ── Список матчей в оформлении «Боевого кубока» ───────────────────────── */
+body{background:#07080c}
+.g-screen{width:1180px;max-width:100%;margin:0 auto;position:relative;overflow:hidden;
+ border:1px solid #232a38;border-radius:6px;background:linear-gradient(180deg,#12161d,#0a0c12 260px);
+ box-shadow:0 18px 48px -28px #000}
+/* Тёплое свечение сверху — как в сцене кубка. */
+.g-screen::before{content:"";position:absolute;inset:-30% -20% auto;height:340px;
+ background:radial-gradient(60% 100% at 50% 0,rgba(230,98,42,.20),transparent 70%);
+ pointer-events:none}
+.g-top{height:42px;display:flex;align-items:center;gap:10px;padding:0 14px;
+ border-bottom:1px solid #1c222c;position:relative;z-index:2}
+.g-logo{width:26px;height:26px;border-radius:5px;background:linear-gradient(140deg,#e2622a,#b8391a);
+ color:#fff;font:900 14px/26px Inter,sans-serif;text-align:center;flex-shrink:0}
+.g-slot{height:24px;border-radius:3px;border:1px dashed #39445a;background:rgba(255,255,255,.02)}
+.g-slot.s{width:24px}.g-slot.m{width:110px}
+.g-top .g-sp{flex:1}
 
-/* Аватар с иконкой героя в углу. */
-.g-face{position:relative;width:34px;height:34px;flex-shrink:0;z-index:1}
-.g-face-img{width:34px;height:34px;border-radius:50%;object-fit:cover;display:block;
- background:#22252e;transition:transform .18s cubic-bezier(.2,.7,.3,1),box-shadow .18s ease}
-.g-face-ph{display:grid;place-items:center;font-size:14px;font-weight:700;color:var(--txt2);
- background:linear-gradient(145deg,#2a2f3d,#1b1f2a)}
-.g-row.win .g-face-img{box-shadow:0 0 0 2px rgba(74,222,128,.5)}
-.g-row.loss .g-face-img{box-shadow:0 0 0 2px rgba(248,113,113,.45)}
-.g-row:hover .g-face-img{transform:scale(1.08)}
-.g-hero{position:absolute;right:-3px;bottom:-3px;width:17px;height:17px;border-radius:5px;
- object-fit:cover;border:1.5px solid var(--card);background:#22252e;z-index:2;
- transition:transform .18s cubic-bezier(.2,.7,.3,1)}
-.g-hero-ph{display:grid;place-items:center;font-size:9px;color:var(--txt3)}
-.g-row:hover .g-hero{transform:scale(1.15)}
+.g-head{padding:18px 20px 0;position:relative;z-index:2}
+.g-h1{font-size:27px;font-weight:900;text-transform:uppercase;color:#f2f5fa;letter-spacing:.01em;
+ line-height:1.1}
+.g-h1 em{font-style:normal;color:#e8b45c}
+.g-h2{font-size:10.5px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;
+ color:#e8b45c;margin-top:7px}
+.g-sub{font-size:9.5px;color:#8e97aa;margin-top:5px}
 
-.g-who{min-width:0;flex-shrink:0;z-index:1}
-.g-player{font-size:13.5px;font-weight:700;color:var(--txt);white-space:nowrap;
- transition:color .18s ease}
-.g-row:hover .g-player{color:var(--acc)}
+/─ Вкладки
+.g-tabs{display:flex;gap:8px;padding:16px 20px 0;position:relative;z-index:2}
+.g-tab{font-size:10.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;
+ padding:8px 16px;border-radius:3px;border:1px solid #262d3a;background:#12161d;
+ color:#8e97aa;text-decoration:none;transition:all .18s ease}
+.g-tab:hover{border-color:#39445a;color:#dbe1eb}
+.g-tab.on{background:linear-gradient(180deg,rgba(232,171,63,.26),rgba(201,136,31,.10));
+ border-color:rgba(232,180,92,.7);color:#f7e3c0}
 
-/* KDA «15 / 1 / 8» — цифры подравнены по ширине. */
-.g-kda{font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--txt2);
- white-space:nowrap;z-index:1;transition:color .18s ease}
-.g-kda b{color:var(--txt);font-weight:700}
-.g-kda .d{color:#f87171}
-.g-kda .a{color:#7fb069}
-.g-kda i{font-style:normal;opacity:.4;margin:0 3px}
-.g-row:hover .g-kda{color:var(--txt)}
+.g-body{padding:16px 20px 22px;position:relative;z-index:2}
 
-.g-hero-name{font-size:11px;color:var(--txt3);white-space:nowrap;overflow:hidden;
- text-overflow:ellipsis;min-width:0;z-index:1}
+/─ Карточка игры
+/* ── Вкладка «Топ MMR»: те же поля, что на странице топа ─────────────── */
+.g-mmr-head,.g-card.g-mmr .g-line{display:grid;
+ grid-template-columns:34px 34px minmax(0,1fr) 210px;align-items:center;gap:10px}
+.g-mmr-head{padding:2px 10px 8px}
+.g-hp{font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6f7889}
+.g-hp.right{text-align:right}
+.g-rank-img{width:26px;height:26px;object-fit:contain;justify-self:center}
+.g-wr{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.g-wr-num{font-size:11.5px;font-weight:800;min-width:34px;text-align:right;
+ font-variant-numeric:tabular-nums}
+.g-wr-track{flex:1;height:5px;border-radius:3px;background:#1b212c;
+ box-shadow:inset 0 0 0 1px #262d3a;overflow:hidden;max-width:96px}
+.g-wr-fill{display:block;height:100%;border-radius:3px;
+ transition:width .3s cubic-bezier(.2,.7,.3,1)}
+.g-wr-wl{font-size:10.5px;color:#8e97aa;font-variant-numeric:tabular-nums;white-space:nowrap}
+.g-wr-none{font-size:11.5px;color:#5b6478}
+.g-card.g-mmr.top3{border-color:rgba(232,180,92,.35)}
 
-/* Правая группа прижата к краю и не сжимается. */
-.g-tail{margin-left:auto;display:flex;align-items:center;gap:12px;flex-shrink:0;z-index:1}
-.g-result{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;
- white-space:nowrap;transition:background .18s ease,color .18s ease}
-.g-row.win .g-result{color:var(--win);background:rgba(74,222,128,.12)}
-.g-row.loss .g-result{color:var(--loss);background:rgba(248,113,113,.12)}
-.g-row.win:hover .g-result{background:rgba(74,222,128,.22)}
-.g-row.loss:hover .g-result{background:rgba(248,113,113,.22)}
-.g-when,.g-dur{font-size:11.5px;color:var(--txt3);font-variant-numeric:tabular-nums;
- white-space:nowrap}
-
-/* Предметы переносятся на вторую строку сами, когда появятся в данных. */
-.g-items{flex:0 0 100%;display:flex;gap:4px;padding-left:46px;z-index:1}
-.g-item{width:22px;height:22px;border-radius:4px;object-fit:cover;background:#1b1f2a;
- border:1px solid var(--line);transition:transform .18s ease}
-.g-row:hover .g-item{transform:translateY(-2px)}
-
-@media(max-width:720px){
- .g-row{gap:9px;padding:8px 10px}
- .g-hero-name{display:none}
- .g-when{display:none}
- .g-tail{gap:8px}
- .g-face,.g-face-img{width:30px;height:30px}
+@media(max-width:640px){
+ .g-mmr-head,.g-card.g-mmr .g-line{grid-template-columns:28px 26px minmax(0,1fr) 96px;gap:7px}
+ .g-rank-img{width:22px;height:22px}
+ .g-wr-track{display:none}
+ .g-wr-num{min-width:30px;font-size:11px}
+ .g-wr-wl{font-size:9.5px}
 }
-@media(prefers-reduced-motion:reduce){
- .g-row,.g-row::before,.g-face-img,.g-hero,.g-item,.g-player,.g-kda{
- transition:none}
- .g-row:hover{transform:none}
- .g-row:hover .g-face-img,.g-row:hover .g-hero,.g-row:hover .g-item{transform:none}
+
+.g-card{background:#12161d;border:1px solid #262d3a;border-radius:2px;
+ transition:border-color .18s ease,transform .18s cubic-bezier(.2,.7,.3,1),box-shadow .18s ease}
+.g-card:hover{border-color:rgba(232,180,92,.55);transform:translateX(3px);
+ box-shadow:0 6px 18px -10px rgba(0,0,0,.8)}
+.g-card + .g-card{margin-top:6px}
+.g-line{display:flex;align-items:center;gap:10px;padding:7px 10px;text-decoration:none;color:inherit}
+.g-hero{width:26px;height:26px;border-radius:3px;flex-shrink:0;object-fit:cover;
+ background:#1b212c;display:grid;place-items:center;font-size:10px;color:#5a6478}
+.g-who{min-width:0;flex:1;display:flex;flex-direction:column}
+.g-nick{font-size:12px;font-weight:700;color:#dbe1eb;white-space:nowrap;overflow:hidden;
+ text-overflow:ellipsis}
+.g-nick:hover{color:#e8b45c}
+.g-heron{font-size:9.5px;color:#6f7889;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g-kda{font-size:11.5px;color:#8e97aa;font-variant-numeric:tabular-nums;white-space:nowrap;
+ flex-shrink:0}
+.g-kda b{color:#f2f5fa}
+.g-res{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+ padding:3px 8px;border-radius:999px;white-space:nowrap;flex-shrink:0}
+.g-card.win .g-res{color:#7fd18a;background:rgba(127,209,138,.12);
+ box-shadow:inset 0 0 0 1px rgba(127,209,138,.3)}
+.g-card.loss .g-res{color:#ef6a5a;background:rgba(239,106,90,.12);
+ box-shadow:inset 0 0 0 1px rgba(239,106,90,.28)}
+.g-when{font-size:10px;color:#5b6478;font-variant-numeric:tabular-nums;white-space:nowrap;
+ flex-shrink:0}
+.g-bar{display:flex;gap:8px;flex-wrap:wrap;padding:0 0 14px}
+.g-bar a{font-size:10px;padding:5px 11px;border-radius:3px;border:1px solid #262d3a;
+ background:#12161d;color:#8e97aa;text-decoration:none;transition:all .18s ease}
+.g-bar a:hover{border-color:#39445a;color:#dbe1eb}
+.g-bar a.on{border-color:rgba(232,180,92,.7);color:#f7e3c0;
+ background:linear-gradient(180deg,rgba(232,171,63,.26),rgba(201,136,31,.10))}
+.g-empty{font-size:11px;color:#6f7889;text-align:center;padding:26px 10px}
+.g-foot{padding:0 20px 20px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+ color:#3c4454;position:relative;z-index:2}
+
+─ Карточка топа MMR
+.g-rank{width:26px;height:26px;border-radius:3px;flex-shrink:0;display:grid;place-items:center;
+ font-size:10.5px;font-weight:900;color:#8e97aa;background:#1b212c;
+ box-shadow:inset 0 0 0 1px #2a3340;font-variant-numeric:tabular-nums}
+.g-rank.top{color:#f7e3c0;background:linear-gradient(180deg,rgba(232,171,63,.3),rgba(201,136,31,.12));
+ box-shadow:inset 0 0 0 1px rgba(232,180,92,.75)}
+.g-face{width:26px;height:26px;border-radius:50%;flex-shrink:0;object-fit:cover;background:#1b212c}
+.g-mmr{font-size:13px;font-weight:900;color:#e8b45c;font-variant-numeric:tabular-nums;
+ white-space:nowrap;flex-shrink:0}
+.g-wr{font-size:10px;color:#6f7889;font-variant-numeric:tabular-nums;white-space:nowrap;
+ flex-shrink:0}
+.g-card.top3 .g-nick{color:#f7e3c0}
+
+@media(max-width:640px){
+ .g-screen{border-radius:0;border-left:0;border-right:0}
+ .g-head,.g-body{padding-left:14px;padding-right:14px}
+ .g-h1{font-size:20px}
+ .g-h2{font-size:9.5px}
+ .g-heron,.g-when{display:none}
+ .g-kda{font-size:11px}
+ .g-top{padding:0 10px}
+ .g-slot.m{display:none}
 }
 """
 
@@ -875,11 +994,14 @@ def render_games_page(
     limit: int = DEFAULT_LIMIT,
     player: str = "",
     miniapp: bool = False,
+    tab: str = "games",
+    mmr_players: list[dict] | None = None,
 ) -> str:
-    """The Dota 2 style game list page (also used as a Telegram Mini App)."""
+    """Страница матчей и топа MMR в оформлении «Боевого кубока»."""
     suffix = "&miniapp=1" if miniapp else ""
+    tab = "mmr" if tab == "mmr" else "games"
 
-    # Per-player counters drive the filter chips.
+    # Счётчики по игрокам питают чипы фильтра.
     players: dict[str, dict] = {}
     for game in games:
         key = str(game.get("bot_username") or game.get("personaname") or "Игрок")
@@ -892,7 +1014,8 @@ def render_games_page(
         href = f"/games?limit={limit}{suffix}"
         if key:
             href = f"/games?player={_esc(key)}&limit={limit}{suffix}"
-        return f'<a class="{"on" if key == player else ""}" href="{href}">{_esc(label)}</a>'
+        on = " on" if tab == "games" and key == player else ""
+        return f'<a class="{on.strip()}" href="{href}">{_esc(label)}</a>'
 
     chips = [chip("", "Все игроки")]
     for key, stats in sorted(
@@ -907,14 +1030,34 @@ def render_games_page(
             if str(g.get("bot_username") or g.get("personaname") or "Игрок") == player
         ]
 
-    body = (
-        "".join(render_game(g) for g in games)
-        if games
-        else (
-            '<div class="empty">Пока нет игр.<br>'
-            "Привяжите Steam в боте — и последние игры появятся здесь.</div>"
+    if tab == "mmr":
+        rows = sorted(mmr_players or [], key=mmr_sort_key)
+        head = (
+            '<div class="g-mmr-head">'
+            '<span class="g-hp">#</span>'
+            '<span class="g-hp">Ранг</span>'
+            '<span class="g-hp">Игрок</span>'
+            '<span class="g-hp right">Статистика</span>'
+            "</div>"
         )
-    )
+        body = head + ("".join(render_mmr_row(p, i) for i, p in enumerate(rows, 1))
+                       or '<div class="g-empty">Рейтинг пока пуст.</div>')
+    else:
+        body = "".join(render_game(g) for g in games) or (
+            '<div class="g-empty">Пока нет игр.<br>'
+            "Привяжите Steam в боте — и последние игры появятся здесь.</div>")
+
+    def tab_link(key: str, label: str) -> str:
+        href = "/matches" if key == "games" else "/matches?tab=mmr"
+        if miniapp:
+            href += "?miniapp=1" if key == "games" else "&miniapp=1"
+        on = " on" if key == tab else ""
+        return f'<a class="g-tab{on}" href="{href}">{label}</a>'
+
+    title = ("ТОП <em>MMR</em> DOTA 2" if tab == "mmr"
+             else "СПИСОК ИГР <em>DOTA 2</em>")
+    subtitle = ("РАНГИ И РЕЙТИНГ ИГРОКОВ БОТА" if tab == "mmr"
+                else "ИГРОКИ БОТА · ОБНОВЛЯЕТСЯ РАЗ В МИНУТУ")
 
     body_class = ' class="miniapp"' if miniapp else ""
     return (
@@ -922,19 +1065,28 @@ def render_games_page(
         '<html lang="ru">\n<head>\n'
         '<meta charset="UTF-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">\n'
-        "<title>Список игр — Fissure.Bot</title>\n"
-        '<meta name="description" content="Последние игры игроков Fissure.Bot: герой, '
-        'результат, дата, время и длительность.">\n'
+        f"<title>{title.replace('<em>', '').replace('</em>', '')} — Fissure.Bot</title>\n"
+        '<meta name="description" content="Последние игры игроков Fissure.Bot и топ MMR.">\n'
         f'<script src="{TELEGRAM_WEBAPP_JS}"></script>\n'
         f"<style>{PAGE_CSS}{GAMES_CSS}</style>\n"
         f"</head>\n<body{body_class}>\n"
-        '<div class="wrap">\n'
-        "<h1>Список игр</h1>\n"
-        '<p class="sub"><span class="live"></span>Последние игры игроков Fissure.Bot — '
-        "обновляется раз в минуту</p>\n"
-        f'<div class="bar">{"".join(chips)}</div>\n'
-        f'<div class="games">{body}</div>\n'
-        "<footer>Fissure.Bot · данные OpenDota</footer>\n"
+        # Топ-бар с пустыми слотами — как в сцене кубка: место под будущие кнопки.
+        '<div class="g-screen">\n'
+        '<div class="g-top">'
+        '<span class="g-logo">F</span>'
+        '<span class="g-slot s"></span>'
+        '<span class="g-slot m"></span>'
+        '<span class="g-sp"></span>'
+        '<span class="g-slot s"></span>'
+        '<span class="g-slot s"></span>'
+        "</div>\n"
+        '<div class="g-head">'
+        f'<div class="g-h1">{title}</div>'
+        f'<div class="g-h2">{subtitle}</div>'
+        f'<div class="g-sub">Fissure.Bot · данные OpenDota</div>'
+        "</div>\n"
+        f'<div class="g-tabs">{tab_link("games", "Игры")}{tab_link("mmr", "Топ MMR")}</div>\n'
+        f'<div class="g-body"><div class="g-bar">{"".join(chips)}</div>{body}</div>\n'
         "</div>\n"
         f"<script>{TELEGRAM_INIT_JS}</script>\n"
         # Ник открывает профиль в Telegram. Раньше это была вложенная <a>

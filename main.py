@@ -1609,7 +1609,6 @@ from fissure import (
     fissure,
 )
 from party import party_command
-from tournament_handlers import register_tournament_handlers
 
 # All roll data (ROLL_MEMES, CATEGORY_PHRASES), welcome phrases,
 # multicast/zeus defaults, weekend multipliers and digest headers
@@ -2779,11 +2778,10 @@ async def player_games_api_handler(request):
 
 
 async def games_page_handler(request):
-    """Web page: the Dota 2 style game list (one row per game, one player).
+    """Web page: the game list and the MMR top, in the cup's visual style.
 
     Telegram Mini App friendly: the same page is loaded inside the Telegram
-    web view (`?miniapp=1`, which the bot builds with `miniapp_url()`), where
-    it powers /matches, /games and the "📋 Матчи" menu button.
+    web view (`?miniapp=1`), which powers /matches and the matches menu button.
     """
     from dota_matches import get_player_games, render_games_page
 
@@ -2791,9 +2789,19 @@ async def games_page_handler(request):
         limit = _parse_limit(request)
         player = (request.query.get('player') or '').strip()[:64]
         miniapp = request.query.get('miniapp', '0').lower() in ('1', 'true', 'yes')
+        tab = (request.query.get('tab') or 'games').strip().lower()
+        tab = 'mmr' if tab == 'mmr' else 'games'
+
+        mmr_players = []
+        if tab == 'mmr':
+            # Топ нужен только на своей вкладке — иначе лишний запрос в БД.
+            from database import get_dota_mmr_top
+            mmr_players = await asyncio.to_thread(get_dota_mmr_top, 100) or []
+
         games = await get_player_games(limit=limit)
         return web.Response(
-            text=render_games_page(games, limit, player=player, miniapp=miniapp),
+            text=render_games_page(games, limit, player=player, miniapp=miniapp,
+                                   tab=tab, mmr_players=mmr_players),
             content_type='text/html',
         )
     except Exception as e:
@@ -2839,6 +2847,40 @@ async def dota_matches_api_handler(request):
             text=json.dumps({"error": str(e)}), status=500,
             content_type='application/json',
         ))
+
+
+async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mini App entry point: opens the game list inside Telegram.
+
+    Telegram only allows Web App buttons in private chats, so groups get a
+    plain link to the same page instead of a dead button.
+    """
+    from dota_matches import miniapp_url
+
+    chat = update.effective_chat
+    if chat is None:
+        return
+
+    url = miniapp_url()
+    if chat.type == 'private':
+        button = InlineKeyboardButton("📋 Открыть матчи", web_app=WebAppInfo(url=url))
+        hint = "Нажмите кнопку — список откроется прямо в Telegram."
+    else:
+        button = InlineKeyboardButton("📋 Открыть матчи", url=url)
+        hint = "Откройте список матчей по кнопке ниже."
+
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text=(
+            "<b>Матчи Dota 2</b>\n"
+            "Последние игры игроков бота: герой, победа или поражение, "
+            "дата, время и длительность. Плюс топ MMR.\n"
+            f"{hint}"
+        ),
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[button]]),
+        disable_web_page_preview=True,
+    )
 
 
 async def top_mmr_handler(request):
@@ -5122,9 +5164,7 @@ async def main():
         app.add_handler(CommandHandler("analyze", analyze_command))
         app.add_handler(CommandHandler(("party", "party"), party_command))
         app.add_handler(CommandHandler("story", story_command))
-        # Турнирный движок заменил фичу «Список матчей»: /tour показывает
-        # регистрацию и сетку, /newtour создаёт турнир, кнопки ведут запись и счёт.
-        register_tournament_handlers(app)
+        app.add_handler(CommandHandler("matches", matches_command))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.ANY_CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members_message))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
@@ -5156,9 +5196,7 @@ async def main():
             BotCommand("top", "🏆 Топ Фиссур"),
             BotCommand("topmmr", "🏆 Топ MMR"),
             BotCommand("analyze", "🔎 Аналитика"),
-            BotCommand("tour", "🏆 Турнир"),
-            BotCommand("newtour", "➕ Создать турнир"),
-            BotCommand("teamname", "✏️ Название команды"),
+            BotCommand("matches", "📋 Матчи Dota 2"),
             BotCommand("link", "🔑 Привязать Аккаунт"),
             BotCommand("party", "🎮 Поиск пати"),
             BotCommand("about", "ℹ️ О боте"),

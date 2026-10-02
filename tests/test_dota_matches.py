@@ -610,10 +610,10 @@ def test_render_games_page_has_dota_style_columns():
     assert "&lt;script&gt;" in html
 
 
-def test_render_game_is_a_single_line_with_avatar_and_kda():
-    """Строка игры: аватар, бейдж героя, ник, KDA — всё в одну линию."""
+def test_render_game_card_in_cup_style():
+    """Карточка игры: аватар, герой, ник, KDA — в оформлении кубка."""
     game = {
-        "match_id": 42, "start_time": 10, "duration": 60, "win": True,
+        "match_id": 42, "start_time": 100, "duration": 60, "win": True,
         "hero_id": 8, "hero_name": "Juggernaut", "hero_icon": "http://h/jugg.png",
         "personaname": "Wawashik", "bot_username": "Wawashik",
         "kills": 15, "deaths": 1, "assists": 8,
@@ -622,34 +622,64 @@ def test_render_game_is_a_single_line_with_avatar_and_kda():
     html = dota_matches.render_games_page([game], limit=5)
     row = dota_matches.render_game(game)
 
-    assert 'class="g-face-img" src="http://a/ava.jpg"' in html  # аватар
-    assert 'class="g-hero" src="http://h/jugg.png"' in html     # бейдж героя
-    assert 'class="g-kda"' in html                              # блок KDA
-    assert "<b>15</b>" in html and ">1<" in html and ">8<" in html
-    assert html.count('class="g-row win"') == 1
-    # Строка сама является ссылкой на OpenDota, поэтому <a> в ней ровно
-    # один: вложенных ссылок быть не может (это невалидный HTML).
-    assert row.count("<a") == 1
-    assert 'data-tg="777"' in row
-    assert "g-head" not in html          # шапки колонок больше нет
-    assert "g-items" not in row          # предметов пока нет — блок скрыт
-    assert "prefers-reduced-motion" in html  # анимации отключаются настройкой
+    assert 'class="g-face" src="http://a/ava.jpg"' in html   # аватар
+    assert 'class="g-hero" src="http://h/jugg.png"' in html   # иконка героя
+    assert "<b>15</b> / 1 / 8" in html                        # KDA
+    assert 'class="g-card win"' in row                        # победа
+    assert "Победа" in row
+    assert row.count("<a") == 1                               # ссылка одна
+    assert 'data-tg="777"' in row                             # переход в профиль
+    assert "g-items" not in row                               # предметов нет
 
 
 def test_render_game_without_avatar_falls_back_to_initial():
-    """Без аватара показываем цветной круг с первой буквой ника."""
+    """Без аватара показываем круг с первой буквой ника."""
     game = {
-        "match_id": 43, "start_time": 10, "duration": 60, "win": False,
+        "match_id": 43, "start_time": 100, "duration": 60, "win": False,
         "hero_id": 8, "hero_name": "AM", "hero_icon": "",
         "personaname": "seredin", "bot_username": "seredin",
         "kills": 0, "deaths": 0, "assists": 0,
         "steam_id": 1, "telegram_id": None, "avatar": None,
     }
     html = dota_matches.render_games_page([game], limit=5)
-    assert "g-face-ph" in html
+    assert 'class="g-face g-hero"' in html
     assert ">S<" in html
+    assert "Поражение" in html
 
 
+def test_render_mmr_tab_matches_top_page():
+    """Вкладка «Топ MMR» повторяет поля страницы топа: #, ранг, игрок, статистика."""
+    players = [
+        {"username": "low", "steam_nickname": "low", "mmr": 1000,
+         "rank_tier": 30, "week_games": 4, "week_wins": 1},
+        {"username": "high", "steam_nickname": "high", "mmr": 5000,
+         "rank_tier": 80, "week_games": 10, "week_wins": 8},
+        {"username": "idle", "steam_nickname": "idle", "mmr": 4000,
+         "rank_tier": 60, "week_games": 0, "week_wins": 0},
+    ]
+    html = dota_matches.render_games_page([], limit=5, tab="mmr",
+                                          mmr_players=players)
+
+    for title in ("#", "Ранг", "Игрок", "Статистика"):
+        assert title in html
+    assert "seredin999.onrender.com/images/ranks/" in html
+    assert "rank_8_1.webp" in html and "rank_3_1.webp" in html
+    assert "80%" in html and 'class="g-wr-fill"' in html
+    assert "8W/2L" in html and 'class="g-wr-none"' in html
+    assert html.index("high") < html.index("low") < html.index("idle")
+
+
+def test_render_mmr_tab_sorts_no_games_last():
+    """Игрок без игр за неделю всегда в конце топа."""
+    players = [
+        {"username": "a", "steam_nickname": "a", "mmr": 9000, "rank_tier": 80,
+         "week_games": 0, "week_wins": 0},
+        {"username": "b", "steam_nickname": "b", "mmr": 1000, "rank_tier": 20,
+         "week_games": 3, "week_wins": 1},
+    ]
+    html = dota_matches.render_games_page([], limit=5, tab="mmr",
+                                          mmr_players=players)
+    assert html.index(">b<") < html.index(">a<")
 def test_render_games_page_filters_by_player():
     games = [
         {"match_id": 1, "start_time": 10, "duration": 60, "mode": "Ranked", "win": True,
@@ -661,7 +691,7 @@ def test_render_games_page_filters_by_player():
     ]
 
     html = dota_matches.render_games_page(games, limit=10, player="aaa")
-    assert html.count('class="g-row') == 1
+    assert html.count('class="g-card') == 1
     assert "matches/1" in html and "matches/2" not in html
 
     empty = dota_matches.render_games_page([], limit=10)
