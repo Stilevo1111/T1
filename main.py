@@ -19,7 +19,14 @@ import aiohttp
 # Logging setup
 import structlog
 from aiohttp import web
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    MenuButtonWebApp,
+    MessageEntity,
+    Update,
+    WebAppInfo,
+)
 from telegram.ext import (
     ApplicationBuilder,
     CallbackQueryHandler,
@@ -91,6 +98,10 @@ structlog.configure(
 )
 
 logger = structlog.get_logger(__name__)
+
+# Dota 2 match list endpoints (/api/dota-matches, /matches).
+DEFAULT_MATCH_LIMIT = 20
+MAX_MATCH_LIMIT = 50
 
 # Correlation ID support
 import threading
@@ -2711,6 +2722,115 @@ async def api_options_handler(request):
     return resp
 
 
+def _cors(resp):
+    """Attach the CORS headers the website widgets rely on."""
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return resp
+
+
+def _parse_limit(request, default=None):
+    """Read and clamp ?limit= from the query string."""
+    default = default if default is not None else DEFAULT_MATCH_LIMIT
+    try:
+        limit = int(request.query.get('limit', default))
+    except (TypeError, ValueError):
+        limit = default
+    return max(1, min(limit, MAX_MATCH_LIMIT))
+
+
+async def dota_matches_api_handler(request):
+    """Public API: recent real Dota 2 matches of bot players, as JSON.
+
+    Query params:
+        limit  — how many matches to return (1..50, default 20)
+        force  — "true" to bypass the 60s list cache
+    """
+    from dota_matches import get_dota_matches
+
+    try:
+        limit = _parse_limit(request)
+        force = request.query.get('force', 'false').lower() == 'true'
+        matches = await get_dota_matches(limit=limit, force=force)
+        payload = {
+            'matches': matches,
+            'count': len(matches),
+            'generated_at': int(time.time()),
+        }
+        resp = web.Response(
+            text=json.dumps(payload, ensure_ascii=False),
+            content_type='application/json',
+        )
+        resp.headers['Cache-Control'] = 'public, max-age=60, stale-while-revalidate=60'
+        return _cors(resp)
+    except Exception as e:
+        logger.error(f"dota_matches_api_handler error: {e}", exc_info=True)
+        return _cors(web.Response(
+            text=json.dumps({"error": str(e)}), status=500,
+            content_type='application/json',
+        ))
+
+
+async def dota_matches_page_handler(request):
+    """Web page: the Dota 2 match list, rendered server-side like the Dota client.
+
+    Telegram Mini App friendly: the same page is loaded inside the Telegram
+    web view (`?miniapp=1`, which the bot builds with `miniapp_url()`), where
+    it powers /matches and the "📋 Матчи" menu button.
+    """
+    from dota_matches import get_dota_matches, render_page
+
+    try:
+        limit = _parse_limit(request)
+        miniapp = request.query.get('miniapp', '0').lower() in ('1', 'true', 'yes')
+        matches = await get_dota_matches(limit=limit)
+        return web.Response(
+            text=render_page(matches, limit, miniapp=miniapp),
+            content_type='text/html',
+        )
+    except Exception as e:
+        logger.error(f"dota_matches_page_handler error: {e}", exc_info=True)
+        return web.Response(
+            text="<h1>Матчи временно недоступны</h1>",
+            content_type='text/html',
+            status=500,
+        )
+
+
+async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mini App entry point: opens the Dota 2 match list inside Telegram.
+
+    Telegram only allows Web App buttons in private chats, so groups get a
+    plain link to the same page instead of a dead button.
+    """
+    from dota_matches import miniapp_url
+
+    chat = update.effective_chat
+    if chat is None:
+        return
+
+    url = miniapp_url()
+    if chat.type == 'private':
+        button = InlineKeyboardButton("📋 Открыть список матчей", web_app=WebAppInfo(url=url))
+        hint = "Нажмите кнопку — список откроется прямо в Telegram."
+    else:
+        button = InlineKeyboardButton("📋 Открыть список матчей", url=url)
+        hint = "Откройте список матчей по кнопке ниже."
+
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text=(
+            "<b>Матчи Dota 2</b>\n"
+            "Последние реальные игры игроков бота: составы, счёт, режим и длительность.\n"
+            f"{hint}"
+        ),
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[button]]),
+        disable_web_page_preview=True,
+    )
+
+
 async def top_mmr_handler(request):
     """Public API: returns top MMR players as JSON (for the website widget).
     
@@ -4178,9 +4298,20 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     info_banner_url = get_banner_path("info_banner")
 
     # Создаем inline клавиатуру с кнопкой
-    keyboard = [[
+    keyboard = []
+    # Mini App: Telegram allows Web App buttons only in private chats, so in
+    # groups we simply don't show it (there is /matches with a normal link).
+    if chat_type == 'private':
+        from dota_matches import miniapp_url
+        keyboard.append([
+            InlineKeyboardButton(
+                "📋 Матчи Dota 2 (мини-апп)",
+                web_app=WebAppInfo(url=miniapp_url()),
+            )
+        ])
+    keyboard.append([
         InlineKeyboardButton("📄 Информация о боте и патчах", url="https://seredin999.onrender.com/patch-fissure")
-    ]]
+    ])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     # Get resource stats text
@@ -4981,6 +5112,7 @@ async def main():
         app.add_handler(CommandHandler("analyze", analyze_command))
         app.add_handler(CommandHandler(("party", "party"), party_command))
         app.add_handler(CommandHandler("story", story_command))
+        app.add_handler(CommandHandler("matches", matches_command))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.ANY_CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members_message))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
@@ -5012,6 +5144,7 @@ async def main():
             BotCommand("top", "🏆 Топ Фиссур"),
             BotCommand("topmmr", "🏆 Топ MMR"),
             BotCommand("analyze", "🔎 Аналитика"),
+            BotCommand("matches", "📋 Матчи Dota 2"),
             BotCommand("link", "🔑 Привязать Аккаунт"),
             BotCommand("party", "🎮 Поиск пати"),
             BotCommand("about", "ℹ️ О боте"),
@@ -5024,6 +5157,21 @@ async def main():
             await app.bot.set_my_commands(bot_commands)
         except Exception as e:
             logger.warning(f"Could not set bot commands: {e}")
+
+        # Telegram Mini App: the button left of the message field (private chats)
+        # opens the match list inside Telegram instead of an external browser.
+        try:
+            from dota_matches import miniapp_url
+            miniapp_link = miniapp_url()
+            await app.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="📋 Матчи",
+                    web_app=WebAppInfo(url=miniapp_link),
+                )
+            )
+            logger.info(f"Mini App menu button -> {miniapp_link}")
+        except Exception as e:
+            logger.warning(f"Could not set Mini App menu button: {e}")
 
         if use_polling or not webhook_url:
             logger.info("Starting bot in POLLING mode")
@@ -5039,6 +5187,8 @@ async def main():
             web_app.router.add_get('/api/top-mmr', top_mmr_handler)
             web_app.router.add_get('/api/steam-debug', steam_debug)
             web_app.router.add_get('/api/obs-last5', obs_last5_handler)
+            web_app.router.add_get('/api/dota-matches', dota_matches_api_handler)
+            web_app.router.add_get('/matches', dota_matches_page_handler)
             web_app.router.add_route('OPTIONS', '/api/{path:.*}', api_options_handler)
             runner = web.AppRunner(web_app)
             await runner.setup()
@@ -5122,6 +5272,8 @@ async def main():
             web_app.router.add_get('/api/top-mmr', top_mmr_handler)
             web_app.router.add_get('/api/steam-debug', steam_debug)
             web_app.router.add_get('/api/obs-last5', obs_last5_handler)
+            web_app.router.add_get('/api/dota-matches', dota_matches_api_handler)
+            web_app.router.add_get('/matches', dota_matches_page_handler)
             web_app.router.add_route('OPTIONS', '/api/{path:.*}', api_options_handler)
 
             async def reset_circuit(request):
