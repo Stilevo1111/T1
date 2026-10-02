@@ -154,21 +154,40 @@ run(H.newtour_command(FakeUpdate(FakeUser(999), CHAT), CTX))
 check("чужой не может создать турнир", "администратор" in last_text(), last_text())
 
 run(H.newtour_command(FakeUpdate(FakeUser(1), CHAT), CTX))
-check("админ создал турнир", "Боевой кубок" in last_text(), last_text())
-kb = SENT[-1]["markup"].inline_keyboard
-check("в сообщении кнопка участия",
-      kb[0][0].callback_data.startswith(H.CB_JOIN), kb[0][0].callback_data)
+# /newtour отправляет два сообщения: приглашение и подсказку админу.
+invite, hint = SENT[-2], SENT[-1]
+check("админ создал турнир", "Боевой кубок" in invite["text"], invite["text"])
+check("в приглашении кнопка участия",
+      invite["markup"].inline_keyboard[0][0].callback_data.startswith(H.CB_JOIN))
 
 tid = int(T.active_tournament(CHAT.id)['id'])
 check("турнир сохранён", tid > 0, str(tid))
 check("статус = registration", T.get_tournament(tid)['status'] == 'registration')
+check("админу сразу показана кнопка старта",
+      any(b.callback_data == f"{H.CB_START}{tid}"
+          for r in hint["markup"].inline_keyboard for b in r),
+      str([b.callback_data for r in hint["markup"].inline_keyboard for b in r]))
 
 # --- 3. Запись через кнопку ---
-for uid in range(1, 11):
+# Девять игроков пишутся первыми, админ записывается последним — так его
+# сообщение о записи несёт кнопки навигации.
+for uid in range(2, 11):
     press(f"{H.CB_JOIN}{tid}", uid)
 
+q_admin = press(f"{H.CB_JOIN}{tid}", 1)
 check("записались все 10 игроков", T.count_players(tid) == 10, str(T.count_players(tid)))
-check("после записи показан ранг игрока", "Ваш ранг" in last_text(), last_text())
+check("после записи показан ранг игрока", "Ваш ранг" in q_admin.message.text,
+      q_admin.message.text)
+
+# Кнопка старта должна оставаться под рукой: раньше она была только в /tour,
+# и запустить турнир без неё было невозможно.
+kb_admin = q_admin.message.markup.inline_keyboard
+check("админ после записи видит «Начать турнир»",
+      any(btn.callback_data == f"{H.CB_START}{tid}" for row in kb_admin for btn in row),
+      str([b.callback_data for r in kb_admin for b in r]))
+check("админ после записи видит «Сетка»",
+      any(btn.callback_data == f"{H.CB_BRACKET}{tid}"
+          for row in kb_admin for btn in row))
 
 q = press(f"{H.CB_JOIN}{tid}", 1)
 check("повторная запись отклонена", "уже записаны" in q.message.text.lower(),

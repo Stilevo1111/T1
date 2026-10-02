@@ -163,6 +163,24 @@ async def tour_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+def _registration_keyboard(tid: int, viewer_id: int) -> InlineKeyboardMarkup:
+    """Кнопки во время регистрации.
+
+    Кнопка старта доступна только администратору и только когда участников
+    хватает на команды. Раньше она жила исключительно в /tour, поэтому
+    нажать её можно было лишь вручную напечатав команду.
+    """
+    rows = []
+    players = T.count_players(tid)
+    if _is_admin(viewer_id):
+        rows.append([InlineKeyboardButton(
+            f"▶️ Начать турнир ({players} в регистрации)",
+            callback_data=f"{CB_START}{tid}")])
+    rows.append([InlineKeyboardButton(
+        "📊 Сетка", callback_data=f"{CB_BRACKET}{tid}")])
+    return InlineKeyboardMarkup(rows)
+
+
 async def newtour_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/newtour [название] — создать турнир. Только для администратора."""
     chat = update.effective_chat
@@ -191,7 +209,12 @@ async def newtour_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("🎮 Принять участие",
                                  callback_data=f"{CB_JOIN}{tid}"),
-        ]]),
+        ], [InlineKeyboardButton("📊 Сетка", callback_data=f"{CB_BRACKET}{tid}")]]),
+    )
+    # Админу сразу показываем кнопку старта, чтобы не искать её в /tour.
+    await chat.send_message(
+        "Администратору: когда участников хватит, нажмите «▶️ Начать турнир».",
+        reply_markup=_registration_keyboard(tid, user.id),
     )
 
 
@@ -221,6 +244,8 @@ async def tour_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             JOIN_REASONS.get(res.get('reason'), "Не удалось записаться."))
         return
 
+    # После записи оставляем навигацию: раньше edit_message_text убирал все
+    # кнопки, и админ терял возможность запустить турнир без /tour.
     await query.edit_message_text(
         f"✅ <b>Вы записаны</b>\n"
         f"Слот участника закреплён за вами.\n"
@@ -228,6 +253,7 @@ async def tour_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "Когда команды будут собраны, капитаны создадут лобби "
         "(название, сервер и пароль), а игра пойдёт до двух побед.",
         parse_mode="HTML",
+        reply_markup=_registration_keyboard(tid, user.id),
     )
 
 
