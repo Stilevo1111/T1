@@ -2740,6 +2740,74 @@ def _parse_limit(request, default=None):
     return max(1, min(limit, MAX_MATCH_LIMIT))
 
 
+async def player_games_api_handler(request):
+    """Public API: latest games of linked players, one row per game (JSON).
+
+    Query params:
+        limit  — how many rows to return (1..50, default 20)
+        player — optional nickname filter (exact match on the bot nickname)
+    """
+    from dota_matches import get_player_games
+
+    try:
+        limit = _parse_limit(request)
+        player = (request.query.get('player') or '').strip()
+        games = await get_player_games(limit=limit)
+        if player:
+            games = [
+                g for g in games
+                if str(g.get('bot_username') or g.get('personaname') or '') == player
+            ]
+        payload = {
+            'games': games,
+            'count': len(games),
+            'generated_at': int(time.time()),
+        }
+        resp = web.Response(
+            text=json.dumps(payload, ensure_ascii=False),
+            content_type='application/json',
+        )
+        resp.headers['Cache-Control'] = 'public, max-age=60, stale-while-revalidate=60'
+        return _cors(resp)
+    except Exception as e:
+        logger.error(f"player_games_api_handler error: {e}", exc_info=True)
+        return _cors(web.Response(
+            text=json.dumps({"error": str(e)}), status=500,
+            content_type='application/json',
+        ))
+
+
+async def games_page_handler(request):
+    """Web page: the Dota 2 style game list (one row per game, one player).
+
+    Telegram Mini App friendly: the same page is loaded inside the Telegram
+    web view (`?miniapp=1`, which the bot builds with `miniapp_url()`), where
+    it powers /matches, /games and the "📋 Матчи" menu button.
+    """
+    from dota_matches import get_player_games, render_games_page
+
+    try:
+        limit = _parse_limit(request)
+        player = (request.query.get('player') or '').strip()[:64]
+        miniapp = request.query.get('miniapp', '0').lower() in ('1', 'true', 'yes')
+        games = await get_player_games(limit=limit)
+        return web.Response(
+            text=render_games_page(games, limit, player=player, miniapp=miniapp),
+            content_type='text/html',
+        )
+    except Exception as e:
+        logger.error(f"games_page_handler error: {e}", exc_info=True)
+        return web.Response(
+            text="<h1>Список игр временно недоступен</h1>",
+            content_type='text/html',
+            status=500,
+        )
+
+
+# /matches renders the same game list (kept for the existing links/bookmarks).
+dota_matches_page_handler = games_page_handler
+
+
 async def dota_matches_api_handler(request):
     """Public API: recent real Dota 2 matches of bot players, as JSON.
 
@@ -2772,32 +2840,6 @@ async def dota_matches_api_handler(request):
         ))
 
 
-async def dota_matches_page_handler(request):
-    """Web page: the Dota 2 match list, rendered server-side like the Dota client.
-
-    Telegram Mini App friendly: the same page is loaded inside the Telegram
-    web view (`?miniapp=1`, which the bot builds with `miniapp_url()`), where
-    it powers /matches and the "📋 Матчи" menu button.
-    """
-    from dota_matches import get_dota_matches, render_page
-
-    try:
-        limit = _parse_limit(request)
-        miniapp = request.query.get('miniapp', '0').lower() in ('1', 'true', 'yes')
-        matches = await get_dota_matches(limit=limit)
-        return web.Response(
-            text=render_page(matches, limit, miniapp=miniapp),
-            content_type='text/html',
-        )
-    except Exception as e:
-        logger.error(f"dota_matches_page_handler error: {e}", exc_info=True)
-        return web.Response(
-            text="<h1>Матчи временно недоступны</h1>",
-            content_type='text/html',
-            status=500,
-        )
-
-
 async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mini App entry point: opens the Dota 2 match list inside Telegram.
 
@@ -2812,17 +2854,18 @@ async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     url = miniapp_url()
     if chat.type == 'private':
-        button = InlineKeyboardButton("📋 Открыть список матчей", web_app=WebAppInfo(url=url))
+        button = InlineKeyboardButton("🎮 Открыть список игр", web_app=WebAppInfo(url=url))
         hint = "Нажмите кнопку — список откроется прямо в Telegram."
     else:
-        button = InlineKeyboardButton("📋 Открыть список матчей", url=url)
-        hint = "Откройте список матчей по кнопке ниже."
+        button = InlineKeyboardButton("🎮 Открыть список игр", url=url)
+        hint = "Откройте список игр по кнопке ниже."
 
     await context.bot.send_message(
         chat_id=chat.id,
         text=(
-            "<b>Матчи Dota 2</b>\n"
-            "Последние реальные игры игроков бота: составы, счёт, режим и длительность.\n"
+            "<b>Список игр Dota 2</b>\n"
+            "Последние реальные игры игроков бота: герой, победа или поражение, "
+            "дата, время и длительность.\n"
             f"{hint}"
         ),
         parse_mode="HTML",
@@ -5188,7 +5231,9 @@ async def main():
             web_app.router.add_get('/api/steam-debug', steam_debug)
             web_app.router.add_get('/api/obs-last5', obs_last5_handler)
             web_app.router.add_get('/api/dota-matches', dota_matches_api_handler)
-            web_app.router.add_get('/matches', dota_matches_page_handler)
+            web_app.router.add_get('/api/player-games', player_games_api_handler)
+            web_app.router.add_get('/games', games_page_handler)
+            web_app.router.add_get('/matches', games_page_handler)
             web_app.router.add_route('OPTIONS', '/api/{path:.*}', api_options_handler)
             runner = web.AppRunner(web_app)
             await runner.setup()
@@ -5273,7 +5318,9 @@ async def main():
             web_app.router.add_get('/api/steam-debug', steam_debug)
             web_app.router.add_get('/api/obs-last5', obs_last5_handler)
             web_app.router.add_get('/api/dota-matches', dota_matches_api_handler)
-            web_app.router.add_get('/matches', dota_matches_page_handler)
+            web_app.router.add_get('/api/player-games', player_games_api_handler)
+            web_app.router.add_get('/games', games_page_handler)
+            web_app.router.add_get('/matches', games_page_handler)
             web_app.router.add_route('OPTIONS', '/api/{path:.*}', api_options_handler)
 
             async def reset_circuit(request):

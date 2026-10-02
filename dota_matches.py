@@ -22,6 +22,7 @@ is missing, the match is still returned with whatever the bot already knows.
 from __future__ import annotations
 
 import asyncio
+import datetime
 import logging
 import os
 import time
@@ -165,22 +166,32 @@ PLAYER_FALLBACK_MATCHES = 3
 
 
 def _linked_steam_ids(limit: int) -> list[int]:
-    """Steam IDs of players linked to the bot, most active first."""
-    try:
-        rows = _read_all(
-            """
-            SELECT steam_id
-            FROM users
-            WHERE steam_id IS NOT NULL
-            ORDER BY COALESCE(week_games, 0) DESC, COALESCE(mmr, 0) DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
-    except Exception as e:
-        logger.error("dota_matches: failed to list linked players: %s", e)
-        return []
-    return [int(r[0]) for r in rows if r and r[0] is not None]
+    """Steam IDs of players linked to the bot, most active first.
+
+    The ranking columns (`week_games`, `mmr`) are optional: fresh/partial
+    databases may not have them, and an ORDER BY over a missing column would
+    silently produce an empty list. Fall back to a plain scan in that case.
+    """
+    queries = (
+        """
+        SELECT steam_id
+        FROM users
+        WHERE steam_id IS NOT NULL
+        ORDER BY COALESCE(week_games, 0) DESC, COALESCE(mmr, 0) DESC
+        LIMIT ?
+        """,
+        "SELECT steam_id FROM users WHERE steam_id IS NOT NULL LIMIT ?",
+    )
+    for index, sql in enumerate(queries):
+        try:
+            rows = _read_all(sql, (limit,))
+        except Exception as e:
+            logger.error(
+                "dota_matches: failed to list linked players (query %d): %s", index + 1, e
+            )
+            continue
+        return [int(r[0]) for r in rows if r and r[0] is not None]
+    return []
 
 
 async def _index_from_linked_players(limit: int) -> list[dict]:
@@ -222,6 +233,78 @@ async def _index_from_linked_players(limit: int) -> list[dict]:
     return sorted(
         index.values(), key=lambda m: (m["start_time"], m["match_id"]), reverse=True
     )[:limit]
+
+
+# ============================================================
+# PLAYER GAME LIST
+# ============================================================
+# Формат как в профиле Dota 2: строка = одна игра одного игрока
+# (герой, ник, Победа/Поражение, дата, время, длительность).
+
+PLAYER_GAMES_PLAYERS = 12    # сколько игроков бота опрашиваем
+PLAYER_GAMES_PER_PLAYER = 8  # сколько последних игр каждого
+
+
+async def get_player_games(limit: int = DEFAULT_LIMIT) -> list[dict]:
+    """Latest games of the players linked to the bot, newest first."""
+    from dota_mmr import get_recent_matches_async
+
+    limit = max(1, min(int(limit or DEFAULT_LIMIT), MAX_LIMIT))
+    steam_ids = await asyncio.to_thread(_linked_steam_ids, PLAYER_GAMES_PLAYERS)
+    if not steam_ids:
+        return []
+
+    heroes = await asyncio.to_thread(_hero_catalog)
+    bot_index = await asyncio.to_thread(_bot_steam_index)
+
+    results = await asyncio.gather(
+        *(get_recent_matches_async(sid, PLAYER_GAMES_PER_PLAYER) for sid in steam_ids),
+        return_exceptions=True,
+    )
+
+    games: list[dict] = []
+    seen: set[tuple[int, int]] = set()
+    for steam_id, matches in zip(steam_ids, results):
+        if isinstance(matches, BaseException) or not matches:
+            continue
+        linked = bot_index.get(steam_id) or {}
+        for match in matches:
+            match_id = match.get("match_id")
+            if match_id is None:
+                continue
+            key = (steam_id, int(match_id))
+            if key in seen:  # /matches иногда отдаёт дубли игрока
+                continue
+            seen.add(key)
+
+            hero_id = match.get("hero_id")
+            slot = match.get("player_slot")
+            is_radiant = slot < 128 if slot is not None else True
+            radiant_win = bool(match.get("radiant_win"))
+
+            games.append(
+                {
+                    "match_id": int(match_id),
+                    "start_time": int(match.get("start_time") or 0),
+                    "duration": int(match.get("duration") or 0),
+                    "mode": _mode_name(match.get("game_mode")),
+                    # Победа игрока, а не команды: слот < 128 = Свет.
+                    "win": (is_radiant and radiant_win) or (not is_radiant and not radiant_win),
+                    "hero_id": hero_id,
+                    "hero_name": _hero_name(hero_id, heroes) if hero_id is not None else "—",
+                    "hero_icon": _hero_icon(hero_id, heroes) if hero_id is not None else "",
+                    "personaname": match.get("personaname") or linked.get("username") or "Игрок",
+                    "kills": int(match.get("kills") or 0),
+                    "deaths": int(match.get("deaths") or 0),
+                    "assists": int(match.get("assists") or 0),
+                    "steam_id": steam_id,
+                    "telegram_id": linked.get("telegram_id"),
+                    "bot_username": linked.get("username"),
+                }
+            )
+
+    games.sort(key=lambda g: (g["start_time"], g["match_id"]), reverse=True)
+    return games[:limit]
 
 
 # ============================================================
@@ -582,9 +665,192 @@ def render_match(match: dict) -> str:
     )
 
 
+DISPLAY_TZ = "Europe/Moscow"
+_MOSCOW_TZ = datetime.timezone(datetime.timedelta(hours=3))
+
+
+def _local_stamp(timestamp: int | None) -> datetime.datetime | None:
+    """Game start time in the timezone the community actually reads."""
+    if not timestamp:
+        return None
+    try:
+        moment = datetime.datetime.fromtimestamp(int(timestamp), datetime.timezone.utc)
+    except (OverflowError, OSError, ValueError, TypeError):
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+
+        return moment.astimezone(ZoneInfo(DISPLAY_TZ))
+    except Exception:
+        # Windows images may ship without the tzdata package.
+        return moment.astimezone(_MOSCOW_TZ)
+
+
+def render_game(game: dict) -> str:
+    """One row: hero, nickname, result, date, time, duration."""
+    win = bool(game.get("win"))
+    if game.get("hero_icon"):
+        icon = (
+            f'<img class="g-hero" src="{_esc(game["hero_icon"])}" '
+            f'alt="{_esc(game["hero_name"])}" loading="lazy">'
+        )
+    else:
+        icon = '<span class="g-hero ph">?</span>'
+
+    if game.get("telegram_id"):
+        who = (
+            f'<a class="g-player" href="tg://user?id={int(game["telegram_id"])}">'
+            f'{_esc(game.get("bot_username") or game["personaname"])}</a>'
+        )
+    else:
+        who = f'<span class="g-player">{_esc(game["personaname"])}</span>'
+
+    # "Hero · Dota nickname" — the Dota name differs from the Telegram one
+    # often enough to be worth showing.
+    subtitle = _esc(game["hero_name"])
+    shown_as = game.get("bot_username") or game["personaname"]
+    if (
+        game["personaname"]
+        and game["personaname"] != shown_as
+        and game["personaname"] != game["hero_name"]
+    ):
+        subtitle += f' · {_esc(game["personaname"])}'
+
+    started = int(game.get("start_time") or 0)
+    stamp = _local_stamp(started)
+    date_txt = stamp.strftime("%d.%m.%Y") if stamp else "—"
+    time_txt = stamp.strftime("%H:%M") if stamp else "—"
+
+    return (
+        f'<a class="game-row {"win" if win else "loss"}" '
+        f'data-when="{date_txt} {time_txt}" '
+        f'href="https://www.opendota.com/matches/{int(game["match_id"])}" '
+        f'target="_blank" rel="noopener">'
+        f"{icon}"
+        f'<span class="g-names">{who}'
+        f'<span class="g-hero-name">{subtitle}</span></span>'
+        f'<span class="g-result">{"Победа" if win else "Поражение"}</span>'
+        f'<span class="g-date">{date_txt}</span>'
+        f'<span class="g-time">{time_txt}</span>'
+        f'<span class="g-dur">{_fmt_duration(game.get("duration"))}</span>'
+        f"</a>"
+    )
+
+
+GAMES_CSS = """
+.g-head,.game-row{grid-template-columns:minmax(0,1fr) 96px 74px 52px 56px}
+.g-hero{width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;
+background:#22252e;float:left;margin-right:9px}
+span.g-hero{display:inline-grid;place-items:center;font-size:12px;color:var(--txt3)}
+.g-names{min-width:0;display:flex;flex-direction:column;padding-left:35px}
+.g-player{font-size:13px;font-weight:600;color:var(--txt);text-decoration:none;
+white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g-player:hover{color:var(--acc)}
+.g-hero-name{font-size:10.5px;color:var(--txt3);white-space:nowrap;overflow:hidden;
+text-overflow:ellipsis}
+.g-result{text-align:right;font-size:12px;font-weight:700}
+.game-row.win .g-result{color:var(--win)}
+.game-row.loss .g-result{color:var(--loss)}
+.g-date,.g-time,.g-dur{text-align:right;font-size:12px;color:var(--txt3);
+font-variant-numeric:tabular-nums}
+.games{display:flex;flex-direction:column;gap:4px}
+.game-row{display:grid;gap:10px;align-items:center;padding:7px 12px;background:var(--card);
+border:1px solid var(--line);border-left:3px solid var(--loss);border-radius:10px;
+text-decoration:none;color:inherit;transition:transform .15s ease,border-color .15s ease}
+.game-row.win{border-left-color:var(--win)}
+.game-row:hover{border-color:var(--acc);transform:translateX(2px)}
+.g-head{display:grid;gap:10px;padding:0 12px 8px;font-size:10.5px;letter-spacing:.06em;
+text-transform:uppercase;color:var(--txt3)}
+.g-head span:nth-child(n+2){text-align:right}
+@media(max-width:640px){
+.g-head{display:none}
+.game-row{grid-template-columns:minmax(0,1fr) auto auto;
+grid-template-areas:"names result dur" "when when when";row-gap:6px}
+.g-names{grid-area:names}
+.g-result{grid-area:result}
+.g-dur{grid-area:dur}
+.g-date,.g-time{display:none}
+.game-row::after{content:attr(data-when);grid-area:when;font-size:10.5px;color:var(--txt3)}
+}
+"""
+
+def render_games_page(
+    games: list[dict],
+    limit: int = DEFAULT_LIMIT,
+    player: str = "",
+    miniapp: bool = False,
+) -> str:
+    """The Dota 2 style game list page (also used as a Telegram Mini App)."""
+    suffix = "&miniapp=1" if miniapp else ""
+
+    # Per-player counters drive the filter chips.
+    players: dict[str, dict] = {}
+    for game in games:
+        key = str(game.get("bot_username") or game.get("personaname") or "Игрок")
+        entry = players.setdefault(key, {"wins": 0, "games": 0})
+        entry["games"] += 1
+        if game.get("win"):
+            entry["wins"] += 1
+
+    def chip(key: str, label: str) -> str:
+        href = f"/games?limit={limit}{suffix}"
+        if key:
+            href = f"/games?player={_esc(key)}&limit={limit}{suffix}"
+        return f'<a class="{"on" if key == player else ""}" href="{href}">{_esc(label)}</a>'
+
+    chips = [chip("", "Все игроки")]
+    for key, stats in sorted(
+        players.items(), key=lambda kv: (-kv[1]["games"], kv[0].lower())
+    )[:10]:
+        chips.append(chip(key, f"{key} · {stats['wins']}/{stats['games']}"))
+
+    if player:
+        games = [
+            g
+            for g in games
+            if str(g.get("bot_username") or g.get("personaname") or "Игрок") == player
+        ]
+
+    body = (
+        "".join(render_game(g) for g in games)
+        if games
+        else (
+            '<div class="empty">Пока нет игр.<br>'
+            "Привяжите Steam в боте — и последние игры появятся здесь.</div>"
+        )
+    )
+
+    body_class = ' class="miniapp"' if miniapp else ""
+    return (
+        "<!DOCTYPE html>\n"
+        '<html lang="ru">\n<head>\n'
+        '<meta charset="UTF-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">\n'
+        "<title>Список игр — Fissure.Bot</title>\n"
+        '<meta name="description" content="Последние игры игроков Fissure.Bot: герой, '
+        'результат, дата, время и длительность.">\n'
+        f'<script src="{TELEGRAM_WEBAPP_JS}"></script>\n'
+        f"<style>{PAGE_CSS}{GAMES_CSS}</style>\n"
+        f"</head>\n<body{body_class}>\n"
+        '<div class="wrap">\n'
+        "<h1>Список игр</h1>\n"
+        '<p class="sub"><span class="live"></span>Последние игры игроков Fissure.Bot — '
+        "обновляется раз в минуту</p>\n"
+        f'<div class="bar">{"".join(chips)}</div>\n'
+        '<div class="g-head"><span>Игрок</span><span>Результат</span>'
+        "<span>Дата</span><span>Время</span><span>Длит.</span></div>\n"
+        f'<div class="games">{body}</div>\n'
+        "<footer>Fissure.Bot · данные OpenDota</footer>\n"
+        "</div>\n"
+        f"<script>{TELEGRAM_INIT_JS}</script>\n"
+        '<script>setTimeout(function(){ location.reload(); }, 60000);</script>\n'
+        "</body>\n</html>"
+    )
+
+
 PAGE_CSS = """
 :root{--bg:#0a0a0f;--card:#12141c;--line:#23262f;--txt:#e8eaf0;--txt2:#9aa1b1;
---txt3:#6b7280;--acc:#ff8c42;--rad:#4ade80;--dire:#f87171}
+--txt3:#6b7280;--acc:#ff8c42;--rad:#4ade80;--dire:#f87171;--win:#4ade80;--loss:#f87171}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--txt);padding-bottom:env(safe-area-inset-bottom);
 -webkit-tap-highlight-color:transparent;

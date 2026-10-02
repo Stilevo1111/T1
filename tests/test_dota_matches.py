@@ -387,6 +387,21 @@ def test_linked_steam_ids_survives_db_error(monkeypatch):
     assert dota_matches._linked_steam_ids(5) == []
 
 
+def test_linked_steam_ids_falls_back_when_sort_columns_missing(monkeypatch):
+    seen = []
+
+    def fake_read_all(sql, params=()):
+        seen.append(sql)
+        if "week_games" in sql:
+            raise RuntimeError("no such column: week_games")
+        return [(111,)]
+
+    monkeypatch.setattr(dota_matches, "_read_all", fake_read_all)
+
+    assert dota_matches._linked_steam_ids(5) == [111]
+    assert len(seen) == 2
+
+
 def test_player_fallback_index_merges_duplicates(monkeypatch):
     import dota_mmr
 
@@ -441,6 +456,175 @@ def test_get_dota_matches_falls_back_when_db_index_empty(monkeypatch):
 
     assert [m["match_id"] for m in result] == [7]
     assert result[0]["bot_players"] == 1
+
+
+# --- Player game list (Dota 2 style rows) ---
+
+
+def _patch_game_sources(monkeypatch, matches_by_steam):
+    """Wire get_player_games to deterministic OpenDota answers."""
+    import dota_mmr
+
+    monkeypatch.setattr(
+        dota_matches, "_linked_steam_ids", lambda limit: list(matches_by_steam)
+    )
+    monkeypatch.setattr(
+        dota_matches,
+        "_hero_catalog",
+        lambda: {1: {"name": "Anti-Mage", "short_name": "antimage"}},
+    )
+    monkeypatch.setattr(
+        dota_matches,
+        "_bot_steam_index",
+        lambda: {111: {"telegram_id": 777, "username": "zeus"}},
+    )
+
+    async def fake_matches(steam_id, limit):
+        return matches_by_steam[steam_id]
+
+    monkeypatch.setattr(dota_mmr, "get_recent_matches_async", fake_matches)
+
+
+def test_player_games_win_depends_on_player_slot(monkeypatch):
+    _patch_game_sources(
+        monkeypatch,
+        {
+            111: [
+                # Radiant player in a won match -> win.
+                {"match_id": 1, "start_time": 300, "duration": 1800,
+                 "player_slot": 0, "hero_id": 1, "radiant_win": True,
+                 "personaname": "ZeusFan", "game_mode": 2},
+                # Dire player in the same won match -> loss.
+                {"match_id": 2, "start_time": 200, "duration": 1800,
+                 "player_slot": 128, "hero_id": 1, "radiant_win": True,
+                 "personaname": "ZeusFan", "game_mode": 2},
+                # Dire player in a lost match -> win.
+                {"match_id": 3, "start_time": 100, "duration": 900,
+                 "player_slot": 128, "hero_id": 1, "radiant_win": False,
+                 "personaname": "ZeusFan", "game_mode": 2},
+            ]
+        },
+    )
+
+    games = asyncio.run(dota_matches.get_player_games(limit=10))
+
+    assert [g["match_id"] for g in games] == [1, 2, 3]  # newest first
+    assert [g["win"] for g in games] == [True, False, True]
+    assert games[0]["hero_name"] == "Anti-Mage"
+    assert games[0]["hero_icon"].endswith("antimage.png")
+    assert games[0]["telegram_id"] == 777
+    assert games[0]["bot_username"] == "zeus"
+    assert games[0]["mode"] == "Random Draft"  # game_mode 2
+
+
+def test_player_games_skips_duplicates_and_missing_fields(monkeypatch):
+    _patch_game_sources(
+        monkeypatch,
+        {
+            111: [
+                {"match_id": 10, "start_time": 50, "player_slot": 0,
+                 "radiant_win": True, "personaname": "ZeusFan"},
+                # OpenDota sometimes repeats the same game for one player.
+                {"match_id": 10, "start_time": 50, "player_slot": 0,
+                 "radiant_win": True, "personaname": "ZeusFan"},
+                {"start_time": 40, "player_slot": 0, "radiant_win": True},
+            ]
+        },
+    )
+
+    games = asyncio.run(dota_matches.get_player_games(limit=10))
+
+    assert len(games) == 1
+    assert games[0]["match_id"] == 10
+    assert games[0]["duration"] == 0
+    assert games[0]["hero_name"] == "—"
+
+
+def test_player_games_survives_player_failure_and_empty_db(monkeypatch):
+    import dota_mmr
+
+    monkeypatch.setattr(dota_matches, "_linked_steam_ids", lambda limit: [111, 222])
+    monkeypatch.setattr(dota_matches, "_hero_catalog", lambda: {})
+    monkeypatch.setattr(dota_matches, "_bot_steam_index", lambda: {})
+
+    async def fake_matches(steam_id, limit):
+        if steam_id == 111:
+            raise RuntimeError("opendota 500")
+        return [{"match_id": 5, "start_time": 1, "player_slot": 0,
+                 "radiant_win": True, "personaname": "Other"}]
+
+    monkeypatch.setattr(dota_mmr, "get_recent_matches_async", fake_matches)
+
+    games = asyncio.run(dota_matches.get_player_games(limit=10))
+    assert [g["match_id"] for g in games] == [5]
+
+    monkeypatch.setattr(dota_matches, "_linked_steam_ids", lambda limit: [])
+    assert asyncio.run(dota_matches.get_player_games(limit=10)) == []
+
+def test_render_games_page_has_dota_style_columns():
+    games = [
+        {
+            "match_id": 8123456789,
+            "start_time": 1700000000,
+            "duration": 2345,
+            "mode": "Ranked",
+            "win": True,
+            "hero_id": 1,
+            "hero_name": "Anti-Mage",
+            "hero_icon": "/am.webp",
+            "personaname": "ZeusFan",
+            "steam_id": 111,
+            "telegram_id": 777,
+            "bot_username": "zeus",
+        },
+        {
+            "match_id": 5,
+            "start_time": 1699990000,
+            "duration": 0,
+            "mode": "Ranked",
+            "win": False,
+            "hero_id": 2,
+            "hero_name": "<script>alert(1)</script>",
+            "hero_icon": "",
+            "personaname": "Rival",
+            "steam_id": 222,
+            "telegram_id": None,
+            "bot_username": None,
+        },
+    ]
+
+    html = dota_matches.render_games_page(games, limit=10, miniapp=True)
+
+    assert 'class="miniapp"' in html
+    assert "Победа" in html and "Поражение" in html
+    assert 'tg://user?id=777' in html
+    assert "15.11.2023" in html  # date column (Europe/Moscow)
+    assert "39:05" in html  # duration column
+    assert "—" in html  # zero duration
+    assert "opendota.com/matches/8123456789" in html
+    assert "zeus · 1/1" in html  # per-player filter chip
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
+
+
+def test_render_games_page_filters_by_player():
+    games = [
+        {"match_id": 1, "start_time": 10, "duration": 60, "mode": "Ranked", "win": True,
+         "hero_id": 1, "hero_name": "AM", "hero_icon": "", "personaname": "A",
+         "steam_id": 1, "telegram_id": None, "bot_username": "aaa"},
+        {"match_id": 2, "start_time": 9, "duration": 60, "mode": "Ranked", "win": False,
+         "hero_id": 1, "hero_name": "AM", "hero_icon": "", "personaname": "B",
+         "steam_id": 2, "telegram_id": None, "bot_username": "bbb"},
+    ]
+
+    html = dota_matches.render_games_page(games, limit=10, player="aaa")
+    assert html.count('class="game-row') == 1
+    assert "matches/1" in html and "matches/2" not in html
+
+    empty = dota_matches.render_games_page([], limit=10)
+    assert "Пока нет игр" in empty
+
+
 
 
 def test_get_dota_matches_clamps_limit(monkeypatch):
