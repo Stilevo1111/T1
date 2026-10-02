@@ -301,6 +301,7 @@ async def get_player_games(limit: int = DEFAULT_LIMIT) -> list[dict]:
                     "telegram_id": linked.get("telegram_id"),
                     "bot_username": linked.get("username"),
                     "avatar": linked.get("avatar"),
+                    "rank_tier": linked.get("rank_tier"),
                 }
             )
 
@@ -471,6 +472,8 @@ def _bot_steam_index() -> dict:
     # откатываемся на запрос без неё — иначе страница осталась бы совсем пустой,
     # потому что индекс игроков строится целиком из этого SELECT.
     queries = (
+        "SELECT steam_id, telegram_id, username, steam_nickname, avatar, rank_tier"
+        " FROM users WHERE steam_id IS NOT NULL LIMIT 5000",
         "SELECT steam_id, telegram_id, username, steam_nickname, avatar"
         " FROM users WHERE steam_id IS NOT NULL LIMIT 5000",
         "SELECT steam_id, telegram_id, username, steam_nickname"
@@ -494,6 +497,8 @@ def _bot_steam_index() -> dict:
                 # Аватар уже лежит в БД (заполняется при обновлении MMR),
                 # поэтому карточка не требует ни одного дополнительного запроса.
                 "avatar": row[4] if len(row) > 4 else None,
+                # Ранг нужен, чтобы показать его в строке игры.
+                "rank_tier": row[5] if len(row) > 5 else None,
             }
         break
     return index
@@ -725,6 +730,15 @@ def render_game(game: dict) -> str:
     else:
         hero = '<span class="g-hero">—</span>'
 
+    # Ранг игрока — из профиля, чтобы в играх был виден уровень, как в топе.
+    tier = game.get("rank_tier")
+    if tier:
+        rank = (f'<img class="g-rank-mini" src="{_esc(rank_image(tier))}" '
+                f'alt="{_esc(_rank_icon(tier))}" loading="lazy">'
+                f'<span class="g-rank-name">{_esc(_rank_icon(tier))}</span>')
+    else:
+        rank = '<span class="g-rank-none">без ранга</span>'
+
     name_html = _esc(shown_as)
     if game.get("telegram_id"):
         name_html = (
@@ -769,7 +783,7 @@ def render_game(game: dict) -> str:
         f'target="_blank" rel="noopener">'
         f"{face}{hero}"
         f'<span class="g-who">{name_html}'
-        f'<span class="g-heron">{subtitle}</span></span>'
+        f'<span class="g-heron">{rank} · {subtitle}</span></span>'
         f'<span class="g-kda"><b>{kills}</b> / {deaths} / {assists}</span>'
         f'<span class="g-res">{"Победа" if win else "Поражение"}</span>'
         f'<span class="g-when">{date_txt} · {time_txt} · '
@@ -779,6 +793,12 @@ def render_game(game: dict) -> str:
 
 
 RANKS_BASE = "https://seredin999.onrender.com/images/ranks"
+
+# Ранги Dota 2: чем больше номер, тем выше ранг.
+RANK_TIERS = [
+    (10, "Herald"), (20, "Guardian"), (30, "Crusader"), (40, "Archon"),
+    (50, "Legend"), (60, "Ancient"), (70, "Divine"), (80, "Immortal"),
+]
 
 
 def rank_image(tier) -> str:
@@ -823,7 +843,21 @@ def _wr_color(wr: int) -> str:
     return "#ef6a5a"
 
 
-def render_mmr_row(player: dict, place: int) -> str:
+def mmr_sort_keys(player: dict) -> dict:
+    """Значения для клиентской сортировки (те же, что на странице топа)."""
+    games = int(player.get("week_games") or 0)
+    wins = int(player.get("week_wins") or 0)
+    wr = round(wins / games * 100) if games else 0
+    return {
+        "rank_tier": int(player.get("rank_tier") or 0),
+        "stats": wins - (games - wins),
+        "name": (player.get("steam_nickname")
+                 or player.get("username") or "").lower(),
+        "games": games,
+    }
+
+
+def render_mmr_row(player: dict, place: int, sort_keys: dict | None = None) -> str:
     """Строка топа MMR: тот же набор полей, что на странице топа."""
     nick = (player.get("steam_nickname") or player.get("username") or "Аноним")
 
@@ -845,25 +879,41 @@ def render_mmr_row(player: dict, place: int) -> str:
         stats = '<span class="g-wr-none">—</span>'
 
     top = place <= 3
+    avatar = (player.get("avatar") or "").strip()
+    face = (f'<img class="g-face" src="{_esc(avatar)}" alt="" loading="lazy">'
+            if avatar else '<span class="g-face g-hero">—</span>')
+
+    keys = sort_keys or mmr_sort_keys(player)
+    attrs = " ".join(f'data-{k}="{v}"' for k, v in keys.items())
+
     return (
-        f'<div class="g-card g-mmr{" top3" if top else ""}">'
+        f'<div class="g-card g-mmr{" top3" if top else ""}" {attrs}>'
         f'<div class="g-line">'
         f'<span class="g-rank{" top" if top else ""}">{place}</span>'
         f'<img class="g-rank-img" '
         f'src="{_esc(rank_image(player.get("rank_tier")))}" '
         f'alt="" loading="lazy">'
+        f"{face}"
         f'<span class="g-who"><span class="g-nick">{_esc(nick)}</span>'
-        f'<span class="g-heron">{_rank_icon(player.get("rank_tier"))}'
-        f" · {int(player.get('mmr') or 0)} MMR</span></span>"
+        f'<span class="g-heron">{_rank_icon(player.get("rank_tier"))}</span></span>'
         f'<span class="g-wr">{stats}</span>'
         f"</div></div>"
     )
 
 
 def _rank_icon(tier) -> str:
-    """Название ранга для подписи в топе."""
-    from tournament import rank_name
-    return rank_name(tier)
+    """Название ранга для подписи.
+
+    Список держим здесь, а не берём из модуля турнира: страница матчей
+    должна работать независимо от него.
+    """
+    if not tier:
+        return "Без ранга"
+    value = int(tier)
+    for base, name in RANK_TIERS:
+        if base == (value // 10) * 10:
+            return name
+    return f"Ранг {value}"
 
 
 GAMES_CSS = """
@@ -906,11 +956,21 @@ body{background:#07080c}
 /─ Карточка игры
 /* ── Вкладка «Топ MMR»: те же поля, что на странице топа ─────────────── */
 .g-mmr-head,.g-card.g-mmr .g-line{display:grid;
- grid-template-columns:34px 34px minmax(0,1fr) 210px;align-items:center;gap:10px}
+ grid-template-columns:34px 34px 30px minmax(0,1fr) 210px;align-items:center;gap:10px}
 .g-mmr-head{padding:2px 10px 8px}
-.g-hp{font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6f7889}
+.g-hp{font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6f7889;
+ cursor:pointer;user-select:none;transition:color .18s ease;padding:2px 0}
+.g-hp:hover{color:#dbe1eb}
 .g-hp.right{text-align:right}
+.g-hp .ar{color:#e8b45c;margin-left:3px}
 .g-rank-img{width:26px;height:26px;object-fit:contain;justify-self:center}
+/* Мини-ранг в строке игры. */
+.g-rank-mini{width:12px;height:12px;object-fit:contain;vertical-align:-2px;
+ margin-right:3px}
+.g-rank-name{color:#8e97aa}
+.g-rank-none{color:#4a5262}
+.g-face{width:26px;height:26px;border-radius:50%;flex-shrink:0;object-fit:cover;
+ background:#1b212c;display:grid;place-items:center;font-size:10px;color:#5a6478}
 .g-wr{display:flex;align-items:center;gap:8px;justify-content:flex-end}
 .g-wr-num{font-size:11.5px;font-weight:800;min-width:34px;text-align:right;
  font-variant-numeric:tabular-nums}
@@ -999,7 +1059,8 @@ def render_games_page(
 ) -> str:
     """Страница матчей и топа MMR в оформлении «Боевого кубока»."""
     suffix = "&miniapp=1" if miniapp else ""
-    tab = "mmr" if tab == "mmr" else "games"
+    # 'ranks' — понятное имя вкладки, 'mmr' оставлен для старых ссылок.
+    tab = "mmr" if tab in ("ranks", "mmr") else "games"
 
     # Счётчики по игрокам питают чипы фильтра.
     players: dict[str, dict] = {}
@@ -1032,31 +1093,35 @@ def render_games_page(
 
     if tab == "mmr":
         rows = sorted(mmr_players or [], key=mmr_sort_key)
+        # Заголовки кликабельные — сортировка как на странице топа.
         head = (
             '<div class="g-mmr-head">'
             '<span class="g-hp">#</span>'
-            '<span class="g-hp">Ранг</span>'
-            '<span class="g-hp">Игрок</span>'
-            '<span class="g-hp right">Статистика</span>'
+            '<span class="g-hp" data-sort="rank_tier">Ранг<span class="ar">▼</span></span>'
+            '<span class="g-hp" data-sort="name">Игрок</span>'
+            '<span class="g-hp right" data-sort="stats">Статистика</span>'
             "</div>"
         )
-        body = head + ("".join(render_mmr_row(p, i) for i, p in enumerate(rows, 1))
-                       or '<div class="g-empty">Рейтинг пока пуст.</div>')
+        # Данные для клиентской сортировки кладём в data-* самой строки.
+        body = head + (
+            "".join(render_mmr_row(p, i, sort_keys=mmr_sort_keys(p))
+                    for i, p in enumerate(rows, 1))
+            or '<div class="g-empty">Рейтинг пока пуст.</div>')
     else:
         body = "".join(render_game(g) for g in games) or (
             '<div class="g-empty">Пока нет игр.<br>'
             "Привяжите Steam в боте — и последние игры появятся здесь.</div>")
 
     def tab_link(key: str, label: str) -> str:
-        href = "/matches" if key == "games" else "/matches?tab=mmr"
+        href = "/matches" if key == "games" else "/matches?tab=ranks"
         if miniapp:
             href += "?miniapp=1" if key == "games" else "&miniapp=1"
         on = " on" if key == tab else ""
         return f'<a class="g-tab{on}" href="{href}">{label}</a>'
 
-    title = ("ТОП <em>MMR</em> DOTA 2" if tab == "mmr"
+    title = ("ТОП <em>РАНГОВ</em> DOTA 2" if tab == "mmr"
              else "СПИСОК ИГР <em>DOTA 2</em>")
-    subtitle = ("РАНГИ И РЕЙТИНГ ИГРОКОВ БОТА" if tab == "mmr"
+    subtitle = ("РАНГИ ИГРОКОВ БОТА" if tab == "mmr"
                 else "ИГРОКИ БОТА · ОБНОВЛЯЕТСЯ РАЗ В МИНУТУ")
 
     body_class = ' class="miniapp"' if miniapp else ""
@@ -1085,7 +1150,7 @@ def render_games_page(
         f'<div class="g-h2">{subtitle}</div>'
         f'<div class="g-sub">Fissure.Bot · данные OpenDota</div>'
         "</div>\n"
-        f'<div class="g-tabs">{tab_link("games", "Игры")}{tab_link("mmr", "Топ MMR")}</div>\n'
+        f'<div class="g-tabs">{tab_link("games", "Игры")}{tab_link("mmr", "Топ рангов")}</div>\n'
         f'<div class="g-body"><div class="g-bar">{"".join(chips)}</div>{body}</div>\n'
         "</div>\n"
         f"<script>{TELEGRAM_INIT_JS}</script>\n"
@@ -1094,6 +1159,7 @@ def render_games_page(
         "<script>document.addEventListener('click',function(e){var p=e.target"
         ".closest('[data-tg]');if(!p)return;e.preventDefault();e.stopPropagation();"
         "open('tg://user?id='+p.dataset.tg);});</script>\n"
+        f"{RANKS_SORT_JS}"
         '<script>setTimeout(function(){ location.reload(); }, 60000);</script>\n'
         "</body>\n</html>"
     )
@@ -1236,6 +1302,52 @@ def miniapp_url(miniapp: bool = True) -> str:
     """Ready-to-use WebAppInfo URL of the match list page."""
     url = f"{public_base_url()}/matches"
     return f"{url}?miniapp=1" if miniapp else url
+
+
+RANKS_SORT_JS = """
+<script>
+// Сортировка топа по клику на заголовок — как на странице рейтинга.
+(function(){
+  var head = document.querySelector('.g-mmr-head');
+  if (!head) return;
+  var dir = {};                       // колонка -> 1 / -1
+  function rows(){
+    return Array.prototype.slice.call(
+      document.querySelectorAll('.g-card.g-mmr'));
+  }
+  function value(row, key){
+    var v = parseInt(row.dataset[key] || '0', 10);
+    return isNaN(v) ? 0 : v;
+  }
+  function paint(){
+    rows().forEach(function(r, i){
+      r.querySelector('.g-rank').textContent = i + 1;
+      r.classList.toggle('top3', i < 3);
+    });
+  }
+  head.addEventListener('click', function(e){
+    var h = e.target.closest('[data-sort]');
+    if (!h) return;
+    var key = h.dataset.sort;
+    dir[key] = dir[key] === 1 ? -1 : 1;
+    var sign = dir[key];
+    rows().sort(function(a, b){
+      // Без игр всегда внизу — как на сайте.
+      var ga = value(a, 'games'), gb = value(b, 'games');
+      if ((ga === 0) !== (gb === 0)) return ga === 0 ? 1 : -1;
+      if (key === 'name'){
+        return (a.dataset.name > b.dataset.name ? 1 : -1) * sign;
+      }
+      return (value(a, key) - value(b, key)) * sign;
+    }).forEach(function(r){ head.parentNode.appendChild(r); });
+    head.querySelectorAll('.ar').forEach(function(s){ s.remove(); });
+    h.insertAdjacentHTML('beforeend',
+      '<span class="ar">' + (sign === 1 ? '\\u25BC' : '\\u25B2') + '</span>');
+    paint();
+  });
+})();
+</script>
+"""
 
 
 def render_page(matches: list[dict], limit: int = DEFAULT_LIMIT, miniapp: bool = False) -> str:

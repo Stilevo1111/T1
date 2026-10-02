@@ -28,10 +28,17 @@ RANK_ORDER = {name: tier for tier, name in RANK_TIERS}
 
 
 def rank_name(tier: int | None) -> str:
-    """Человеческое имя ранга по его номеру."""
+    """Человеческое имя ранга по его номеру.
+
+    Номер хранит и звёзды (75 — это Divine 5 звёзд), поэтому сначала
+    округляем до десятков: иначе 75 не совпал бы с Divine и показался
+    бы как «Ранг 75».
+    """
     if not tier:
         return "Без ранга"
-    return RANK_BY_TIER.get(int(tier), f"Ранг {tier}")
+    value = int(tier)
+    base = (value // 10) * 10
+    return RANK_BY_TIER.get(base, f"Ранг {value}")
 
 
 def rank_tier(name: str | None) -> int:

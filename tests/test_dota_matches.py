@@ -669,6 +669,96 @@ def test_render_mmr_tab_matches_top_page():
     assert html.index("high") < html.index("low") < html.index("idle")
 
 
+def test_render_mmr_tab_shows_no_mmr_numbers():
+    """В боте только ранги: числовой MMR не показываем нигде."""
+    player = {"username": "a", "steam_nickname": "alpha", "mmr": 6123,
+              "rank_tier": 75, "week_games": 8, "week_wins": 6}
+    row = dota_matches.render_mmr_row(player, 1)
+    html = dota_matches.render_games_page([], limit=5, tab="mmr",
+                                          mmr_players=[player])
+
+    assert "6123" not in row and "MMR" not in row
+    assert "Divine" in row                          # 75 = Divine 5 звёзд
+    assert "alpha" in row and "6W/2L" in row
+    # Числа MMR нет и в самой странице вне блока стилей.
+    body = html.split("</style>", 1)[-1]
+    assert "6123" not in body and "MMR" not in body
+
+
+def test_rank_tier_with_stars_is_named_correctly():
+    """Номер ранга хранит звёзды: 75 — Divine, а не «Ранг 75»."""
+    assert dota_matches._rank_icon(75) == "Divine"
+    assert dota_matches._rank_icon(80) == "Immortal"
+    assert dota_matches._rank_icon(30) == "Crusader"
+    assert dota_matches._rank_icon(None) == "Без ранга"
+
+
+def test_mmr_row_shows_avatar_and_sort_keys():
+    """В топе есть аватар, иконка ранга и данные для сортировки."""
+    player = {"username": "u", "steam_nickname": "Nick", "mmr": 1,
+              "rank_tier": 60, "week_games": 10, "week_wins": 7,
+              "avatar": "http://a/ava.jpg"}
+    row = dota_matches.render_mmr_row(player, 1)
+
+    assert 'class="g-face" src="http://a/ava.jpg"' in row   # аватар
+    assert "rank_6_1.webp" in row                            # иконка ранга
+    assert 'data-rank_tier="60"' in row                     # ключи сортировки
+    assert 'data-name="nick"' in row
+    assert 'data-games="10"' in row
+    assert 'data-stats="4"' in row                           # 7W/3L = +4
+
+
+def test_mmr_row_without_avatar_shows_placeholder():
+    player = {"username": "u", "steam_nickname": "N", "mmr": 0,
+              "rank_tier": 50, "week_games": 0, "week_wins": 0,
+              "avatar": None}
+    row = dota_matches.render_mmr_row(player, 4)
+    assert 'class="g-face g-hero"' in row
+    assert ">" in row
+
+
+def test_game_row_shows_player_rank():
+    """В строке игры виден ранг игрока."""
+    game = {
+        "match_id": 7, "start_time": 100, "duration": 60, "win": True,
+        "hero_id": 8, "hero_name": "AM", "hero_icon": "",
+        "personaname": "p", "bot_username": "p",
+        "kills": 1, "deaths": 0, "assists": 2,
+        "steam_id": 1, "telegram_id": None, "rank_tier": 65,
+    }
+    row = dota_matches.render_game(game)
+    assert "Ancient" in row                      # 65 = Ancient 5 звёзд
+    assert "rank_6_5.webp" in row
+
+    no_rank = dict(game, rank_tier=None)
+    assert "без ранга" in dota_matches.render_game(no_rank)
+
+
+def test_mmr_tab_headers_are_sortable():
+    """Заголовки топра кликабельны, как на странице топа."""
+    players = [{"username": "a", "steam_nickname": "a", "mmr": 0,
+                "rank_tier": 50, "week_games": 1, "week_wins": 1}]
+    html = dota_matches.render_games_page([], limit=5, tab="mmr",
+                                          mmr_players=players)
+    assert 'data-sort="rank_tier"' in html
+    assert 'data-sort="name"' in html
+    assert 'data-sort="stats"' in html
+    assert "RANKS" not in html or "g-mmr-head" in html
+    # Скрипт сортировки подключён.
+    assert "data-sort" in html and "g-card.g-mmr" in html
+
+
+def test_render_mmr_tab_accepts_ranks_alias():
+    """Вкладка открывается и по tab=ranks, и по прежнему tab=mmr."""
+    players = [{"username": "a", "steam_nickname": "a", "mmr": 1,
+                "rank_tier": 50, "week_games": 1, "week_wins": 1}]
+    html = dota_matches.render_games_page([], limit=5, tab="ranks",
+                                          mmr_players=players)
+    assert 'class="g-tab on" href="/matches?tab=ranks"' in html
+    assert "Рейтинг пока пуст." not in html        # это games-пустышка
+    assert "1W/0L" in html
+
+
 def test_render_mmr_tab_sorts_no_games_last():
     """Игрок без игр за неделю всегда в конце топа."""
     players = [

@@ -2790,7 +2790,8 @@ async def games_page_handler(request):
         player = (request.query.get('player') or '').strip()[:64]
         miniapp = request.query.get('miniapp', '0').lower() in ('1', 'true', 'yes')
         tab = (request.query.get('tab') or 'games').strip().lower()
-        tab = 'mmr' if tab == 'mmr' else 'games'
+        # Принимаем и 'ranks', и прежнее 'mmr' — по старым ссылкам.
+        tab = 'mmr' if tab in ('ranks', 'mmr') else 'games'
 
         mmr_players = []
         if tab == 'mmr':
