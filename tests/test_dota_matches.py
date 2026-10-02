@@ -597,14 +597,57 @@ def test_render_games_page_has_dota_style_columns():
 
     assert 'class="miniapp"' in html
     assert "Победа" in html and "Поражение" in html
-    assert 'tg://user?id=777' in html
-    assert "15.11.2023" in html  # date column (Europe/Moscow)
+    # Ник открывает профиль через data-атрибут + обработчик клика:
+    # вложенная <a> внутри <a> невалидна, поэтому ссылки в href нет.
+    assert 'data-tg="777"' in html
+    assert "tg://user?id=" in html
+    assert "15.11" in html  # date column (Europe/Moscow), compact format
     assert "39:05" in html  # duration column
     assert "—" in html  # zero duration
     assert "opendota.com/matches/8123456789" in html
     assert "zeus · 1/1" in html  # per-player filter chip
     assert "<script>alert(1)</script>" not in html
     assert "&lt;script&gt;" in html
+
+
+def test_render_game_is_a_single_line_with_avatar_and_kda():
+    """Строка игры: аватар, бейдж героя, ник, KDA — всё в одну линию."""
+    game = {
+        "match_id": 42, "start_time": 10, "duration": 60, "win": True,
+        "hero_id": 8, "hero_name": "Juggernaut", "hero_icon": "http://h/jugg.png",
+        "personaname": "Wawashik", "bot_username": "Wawashik",
+        "kills": 15, "deaths": 1, "assists": 8,
+        "steam_id": 1, "telegram_id": 777, "avatar": "http://a/ava.jpg",
+    }
+    html = dota_matches.render_games_page([game], limit=5)
+    row = dota_matches.render_game(game)
+
+    assert 'class="g-face-img" src="http://a/ava.jpg"' in html  # аватар
+    assert 'class="g-hero" src="http://h/jugg.png"' in html     # бейдж героя
+    assert 'class="g-kda"' in html                              # блок KDA
+    assert "<b>15</b>" in html and ">1<" in html and ">8<" in html
+    assert html.count('class="g-row win"') == 1
+    # Строка сама является ссылкой на OpenDota, поэтому <a> в ней ровно
+    # один: вложенных ссылок быть не может (это невалидный HTML).
+    assert row.count("<a") == 1
+    assert 'data-tg="777"' in row
+    assert "g-head" not in html          # шапки колонок больше нет
+    assert "g-items" not in row          # предметов пока нет — блок скрыт
+    assert "prefers-reduced-motion" in html  # анимации отключаются настройкой
+
+
+def test_render_game_without_avatar_falls_back_to_initial():
+    """Без аватара показываем цветной круг с первой буквой ника."""
+    game = {
+        "match_id": 43, "start_time": 10, "duration": 60, "win": False,
+        "hero_id": 8, "hero_name": "AM", "hero_icon": "",
+        "personaname": "seredin", "bot_username": "seredin",
+        "kills": 0, "deaths": 0, "assists": 0,
+        "steam_id": 1, "telegram_id": None, "avatar": None,
+    }
+    html = dota_matches.render_games_page([game], limit=5)
+    assert "g-face-ph" in html
+    assert ">S<" in html
 
 
 def test_render_games_page_filters_by_player():
@@ -618,7 +661,7 @@ def test_render_games_page_filters_by_player():
     ]
 
     html = dota_matches.render_games_page(games, limit=10, player="aaa")
-    assert html.count('class="game-row') == 1
+    assert html.count('class="g-row') == 1
     assert "matches/1" in html and "matches/2" not in html
 
     empty = dota_matches.render_games_page([], limit=10)

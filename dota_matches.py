@@ -698,29 +698,28 @@ def _local_stamp(timestamp: int | None) -> datetime.datetime | None:
 
 
 def render_game(game: dict) -> str:
-    """Карточка игры в стиле клиента Dota: аватар, герой, ник, KDA.
+    """Строка игры в стиле клиента Dota: аватар, герой, ник, KDA.
 
-    Слева круглый аватар игрока с иконкой героя в углу, рядом ник и KDA
-    вида «15 / 1 / 8», справа — результат, дата, время и длительность.
-    Строка предметов готова: как только в данных появятся items, она
-    отрисуется автоматически (пока ключа нет — блок не выводится).
+    Всё в одну строку: слева аватар с иконкой героя, затем ник, KDA вида
+    «15 / 1 / 8» и герой; справа — результат, дата, время и длительность.
+    Ряд предметов переносится на вторую строку сам, когда данные их дадут.
     """
     win = bool(game.get("win"))
     cls = "win" if win else "loss"
 
-    # Аватар игрока: из БД, без дополнительных запросов.
-    avatar_url = (game.get("avatar") or "").strip()
     shown_as = game.get("bot_username") or game.get("personaname") or "Игрок"
+
+    # Аватар игрока берётся из БД — дополнительных запросов не делаем.
+    avatar_url = (game.get("avatar") or "").strip()
     if avatar_url:
         face = (
             f'<img class="g-face-img" src="{_esc(avatar_url)}" '
             f'alt="{_esc(shown_as)}" loading="lazy">'
         )
     else:
-        # Заглушка — первая буква ника на цветном круге.
         face = f'<span class="g-face-img g-face-ph">{_esc(shown_as[:1].upper())}</span>'
 
-    # Иконка героя — небольшим бейджем поверх аватара.
+    # Иконка героя — маленьким бейджем на углу аватара.
     if game.get("hero_icon"):
         hero = (
             f'<img class="g-hero" src="{_esc(game["hero_icon"])}" '
@@ -731,13 +730,13 @@ def render_game(game: dict) -> str:
 
     if game.get("telegram_id"):
         who = (
-            f'<a class="g-player" href="tg://user?id={int(game["telegram_id"])}">'
-            f'{_esc(shown_as)}</a>'
+            f'<span class="g-player" onclick="return false" '
+            f'data-tg="{int(game["telegram_id"])}">{_esc(shown_as)}</span>'
         )
     else:
         who = f'<span class="g-player">{_esc(shown_as)}</span>'
 
-    # Под ником — герой; Dota-ник дублирует, если он отличается.
+    # Рядом с ником — герой; Dota-ник добавляем, только если он другой.
     subtitle = _esc(game.get("hero_name") or "—")
     if (
         game.get("personaname")
@@ -750,7 +749,7 @@ def render_game(game: dict) -> str:
     deaths = int(game.get("deaths") or 0)
     assists = int(game.get("assists") or 0)
 
-    # Ряд предметов появится, когда в данных будет ключ items.
+    # Предметы появятся на второй строке, как только появятся в данных.
     items = ""
     for key in ("items", "item_icons"):
         raw = game.get(key)
@@ -765,82 +764,109 @@ def render_game(game: dict) -> str:
 
     started = int(game.get("start_time") or 0)
     stamp = _local_stamp(started)
-    date_txt = stamp.strftime("%d.%m.%Y") if stamp else "—"
+    date_txt = stamp.strftime("%d.%m") if stamp else "—"
     time_txt = stamp.strftime("%H:%M") if stamp else "—"
 
     return (
-        f'<a class="game-row {cls}" '
+        f'<a class="g-row {cls}" '
         f'data-when="{date_txt} {time_txt}" '
         f'href="https://www.opendota.com/matches/{int(game["match_id"])}" '
         f'target="_blank" rel="noopener">'
         f'<span class="g-face">{face}{hero}</span>'
-        f'<span class="g-main">{who}'
+        f'<span class="g-who">{who}</span>'
         f'<span class="g-kda">'
-        f'<b class="k">{kills}</b><span class="sep">/</span>'
-        f'<span class="d">{deaths}</span><span class="sep">/</span>'
-        f'<span class="a">{assists}</span></span>'
-        f'<span class="g-hero-name">{subtitle}</span></span>'
-        f'{items}'
+        f'<b>{kills}</b><i>/</i><span class="d">{deaths}</span>'
+        f'<i>/</i><span class="a">{assists}</span></span>'
+        f'<span class="g-hero-name">{subtitle}</span>'
+        f'<span class="g-tail">'
         f'<span class="g-result">{"Победа" if win else "Поражение"}</span>'
-        f'<span class="g-date">{date_txt}</span>'
-        f'<span class="g-time">{time_txt}</span>'
+        f'<span class="g-when">{date_txt} · {time_txt}</span>'
         f'<span class="g-dur">{_fmt_duration(game.get("duration"))}</span>'
+        f"</span>"
+        f"{items}"
         f"</a>"
     )
 
 
 GAMES_CSS = """
-.g-head,.game-row{grid-template-columns:minmax(0,1fr) 96px 74px 52px 56px}
-/* Аватар игрока с иконкой героя в углу — как в клиенте Dota. */
-.g-face{position:relative;width:40px;height:40px;flex-shrink:0}
-.g-face-img{width:40px;height:40px;border-radius:50%;object-fit:cover;display:block;
- background:#22252e}
-.g-face-ph{display:grid;place-items:center;font-size:15px;font-weight:700;color:var(--txt2);
+/* Строка игры: всё в одну линию, аккуратные отступы, плавные анимации. */
+.games{display:flex;flex-direction:column;gap:6px}
+.g-row{position:relative;display:flex;align-items:center;gap:12px;padding:9px 14px;
+ background:var(--card);border:1px solid var(--line);border-radius:12px;
+ text-decoration:none;color:inherit;overflow:hidden;
+ transition:transform .18s cubic-bezier(.2,.7,.3,1),border-color .18s ease,
+ box-shadow .18s ease,background .18s ease}
+/* Мягкая подсветка слева направо по наведению. */
+.g-row::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;
+ background:linear-gradient(90deg,rgba(255,140,66,.14),rgba(255,140,66,0) 55%);
+ transition:opacity .22s ease}
+.g-row:hover{transform:translateX(4px);border-color:rgba(255,140,66,.45);
+ box-shadow:0 6px 20px -8px rgba(0,0,0,.6),0 0 0 1px rgba(255,140,66,.12);
+ background:#161923}
+.g-row:hover::before{opacity:1}
+.g-row:active{transform:translateX(2px) scale(.995)}
+
+/* Аватар с иконкой героя в углу. */
+.g-face{position:relative;width:34px;height:34px;flex-shrink:0;z-index:1}
+.g-face-img{width:34px;height:34px;border-radius:50%;object-fit:cover;display:block;
+ background:#22252e;transition:transform .18s cubic-bezier(.2,.7,.3,1),box-shadow .18s ease}
+.g-face-ph{display:grid;place-items:center;font-size:14px;font-weight:700;color:var(--txt2);
  background:linear-gradient(145deg,#2a2f3d,#1b1f2a)}
-.game-row.win .g-face-img{box-shadow:0 0 0 2px rgba(74,222,128,.55)}
-.game-row.loss .g-face-img{box-shadow:0 0 0 2px rgba(248,113,113,.5)}
-.g-hero{position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;border-radius:5px;
- object-fit:cover;border:1.5px solid var(--card);background:#22252e}
-.g-hero-ph{display:grid;place-items:center;font-size:10px;color:var(--txt3)}
-.g-main{min-width:0;display:flex;flex-direction:column;gap:2px}
-.g-player{font-size:13.5px;font-weight:700;color:var(--txt);text-decoration:none;
- white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.g-player:hover{color:var(--acc)}
-.g-kda{font-size:12.5px;color:var(--txt2);font-variant-numeric:tabular-nums;line-height:1.1}
-.g-kda .k{color:var(--txt);font-weight:700}
+.g-row.win .g-face-img{box-shadow:0 0 0 2px rgba(74,222,128,.5)}
+.g-row.loss .g-face-img{box-shadow:0 0 0 2px rgba(248,113,113,.45)}
+.g-row:hover .g-face-img{transform:scale(1.08)}
+.g-hero{position:absolute;right:-3px;bottom:-3px;width:17px;height:17px;border-radius:5px;
+ object-fit:cover;border:1.5px solid var(--card);background:#22252e;z-index:2;
+ transition:transform .18s cubic-bezier(.2,.7,.3,1)}
+.g-hero-ph{display:grid;place-items:center;font-size:9px;color:var(--txt3)}
+.g-row:hover .g-hero{transform:scale(1.15)}
+
+.g-who{min-width:0;flex-shrink:0;z-index:1}
+.g-player{font-size:13.5px;font-weight:700;color:var(--txt);white-space:nowrap;
+ transition:color .18s ease}
+.g-row:hover .g-player{color:var(--acc)}
+
+/* KDA «15 / 1 / 8» — цифры подравнены по ширине. */
+.g-kda{font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--txt2);
+ white-space:nowrap;z-index:1;transition:color .18s ease}
+.g-kda b{color:var(--txt);font-weight:700}
 .g-kda .d{color:#f87171}
 .g-kda .a{color:#7fb069}
-.g-kda .sep{opacity:.45;margin:0 2px}
-.g-hero-name{font-size:10.5px;color:var(--txt3);white-space:nowrap;overflow:hidden;
- text-overflow:ellipsis}
-/* Ряд предметов: пуст, пока в данных нет ключа items. */
-.g-items{grid-column:2/4;display:flex;gap:3px;justify-self:start}
+.g-kda i{font-style:normal;opacity:.4;margin:0 3px}
+.g-row:hover .g-kda{color:var(--txt)}
+
+.g-hero-name{font-size:11px;color:var(--txt3);white-space:nowrap;overflow:hidden;
+ text-overflow:ellipsis;min-width:0;z-index:1}
+
+/* Правая группа прижата к краю и не сжимается. */
+.g-tail{margin-left:auto;display:flex;align-items:center;gap:12px;flex-shrink:0;z-index:1}
+.g-result{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;
+ white-space:nowrap;transition:background .18s ease,color .18s ease}
+.g-row.win .g-result{color:var(--win);background:rgba(74,222,128,.12)}
+.g-row.loss .g-result{color:var(--loss);background:rgba(248,113,113,.12)}
+.g-row.win:hover .g-result{background:rgba(74,222,128,.22)}
+.g-row.loss:hover .g-result{background:rgba(248,113,113,.22)}
+.g-when,.g-dur{font-size:11.5px;color:var(--txt3);font-variant-numeric:tabular-nums;
+ white-space:nowrap}
+
+/* Предметы переносятся на вторую строку сами, когда появятся в данных. */
+.g-items{flex:0 0 100%;display:flex;gap:4px;padding-left:46px;z-index:1}
 .g-item{width:22px;height:22px;border-radius:4px;object-fit:cover;background:#1b1f2a;
- border:1px solid var(--line)}
-.g-result{text-align:right;font-size:12px;font-weight:700}
-.game-row.win .g-result{color:var(--win)}
-.game-row.loss .g-result{color:var(--loss)}
-.g-date,.g-time,.g-dur{text-align:right;font-size:12px;color:var(--txt3);
- font-variant-numeric:tabular-nums}
-.games{display:flex;flex-direction:column;gap:4px}
-.game-row{display:grid;gap:10px;align-items:center;padding:7px 12px;background:var(--card);
- border:1px solid var(--line);border-left:3px solid var(--loss);border-radius:10px;
- text-decoration:none;color:inherit;transition:transform .15s ease,border-color .15s ease}
-.game-row.win{border-left-color:var(--win)}
-.game-row:hover{border-color:var(--acc);transform:translateX(2px)}
-.g-head{display:grid;gap:10px;padding:0 12px 8px;font-size:10.5px;letter-spacing:.06em;
- text-transform:uppercase;color:var(--txt3)}
-.g-head span:nth-child(n+2){text-align:right}
-@media(max-width:640px){
- .g-head{display:none}
- .game-row{grid-template-columns:minmax(0,1fr) auto auto;
- grid-template-areas:"face main result" "items items items" "when when when";row-gap:6px}
- .g-face{grid-area:face}
- .g-main{grid-area:main}
- .g-result{grid-area:result}
- .g-items{grid-area:items}
- .g-date,.g-time,.g-dur{display:none}
- .game-row::after{content:attr(data-when);grid-area:when;font-size:10.5px;color:var(--txt3)}
+ border:1px solid var(--line);transition:transform .18s ease}
+.g-row:hover .g-item{transform:translateY(-2px)}
+
+@media(max-width:720px){
+ .g-row{gap:9px;padding:8px 10px}
+ .g-hero-name{display:none}
+ .g-when{display:none}
+ .g-tail{gap:8px}
+ .g-face,.g-face-img{width:30px;height:30px}
+}
+@media(prefers-reduced-motion:reduce){
+ .g-row,.g-row::before,.g-face-img,.g-hero,.g-item,.g-player,.g-kda{
+ transition:none}
+ .g-row:hover{transform:none}
+ .g-row:hover .g-face-img,.g-row:hover .g-hero,.g-row:hover .g-item{transform:none}
 }
 """
 
@@ -907,12 +933,15 @@ def render_games_page(
         '<p class="sub"><span class="live"></span>Последние игры игроков Fissure.Bot — '
         "обновляется раз в минуту</p>\n"
         f'<div class="bar">{"".join(chips)}</div>\n'
-        '<div class="g-head"><span>Игрок</span><span>Результат</span>'
-        "<span>Дата</span><span>Время</span><span>Длит.</span></div>\n"
         f'<div class="games">{body}</div>\n'
         "<footer>Fissure.Bot · данные OpenDota</footer>\n"
         "</div>\n"
         f"<script>{TELEGRAM_INIT_JS}</script>\n"
+        # Ник открывает профиль в Telegram. Раньше это была вложенная <a>
+        # внутри <a>, что невалидно, поэтому вешаем переход на data-атрибут.
+        "<script>document.addEventListener('click',function(e){var p=e.target"
+        ".closest('[data-tg]');if(!p)return;e.preventDefault();e.stopPropagation();"
+        "open('tg://user?id='+p.dataset.tg);});</script>\n"
         '<script>setTimeout(function(){ location.reload(); }, 60000);</script>\n'
         "</body>\n</html>"
     )
