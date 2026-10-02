@@ -101,28 +101,29 @@ ROSHAN_REWARD_RATIO = 0.08            # доля текущей фиссуры
 ROSHAN_SESSION_TTL = 3600             # через сколько секунд чистим протухшие сессии
 # Roshan has no voice lines in Dota 2 - he is an ancient creep with roars only,
 # so there are no quotes to lift. These lines paraphrase the actual lore instead:
-#   - "Are We Heroes Yet?" comic: Roshan killed the Shopkeeper for the Aegis and
-#     was cursed to have his treasure stolen from him again and again. That curse
-#     is what this event reproduces.
-#   - The Aegis of the Immortal reclaims itself back to Roshan on respawn, no
-#     matter where it is.
-#   - Roshan went down into the Underhollow after Roshefort cheese and brought the
-#     tunnels down with him.
+#   - "Are We Heroes Yet?" comic: Roshan killed a Shopkeeper and took the Aegis.
+#     The gods cursed him to be killed repeatedly and to have his treasure stolen
+#     time and time again. Both halves of that curse are this event: the kill
+#     grows the fissure, the artifacts drop off his body.
+#   - "Tarn of Roshan" is the comic's name for the pit he lies in.
+#   - The Aegis cannot be bought, sold or destroyed - only carried off his body,
+#     and it returns to him on respawn.
+#   - Roshan went into the Underhollow after Roshefort cheese himself and brought
+#     the tunnels down, which is why the cheese is under him.
 ROSHAN_TEXTS = [
-    "🪤 Рошан встаёт из ямы. Он бессмертен — но его сокровища нет.",
-    "🪤 Рошан убил Торговца ради АЕГИСА. С тех пор у него всё крадут снова и снова.",
-    "🪤 АЕГИС всегда возвращается к Рошану сам. Рошан умеет ждать.",
-    "🪤 Он спускался в Андерхоллоу за Рошефортом и обвалил тоннели. Теперь он здесь.",
+    "🪤 За Торговца боги наказали Рошана: его убивают по кругу, и добычу с него снимают по кругу.",
+    "🪤 Рошан убил Хранителя и забрал АЕГИС. С тех пор он умирает каждый раз заново, а вещи уходят чужим рукам.",
+    "🪤 Проклятие Торговца не даёт Рошану умереть спокойно — только выронить добычу.",
+    "🪤 Он спускался в Андерхоллоу за Рошефортом и обвалил тоннели. Теперь сыр лежит у него под ногами.",
 ]
-# Приглашение своровать. Каждая строка - проверяемое правило из лора, а не
-# угроза: АЕГИС нельзя купить или продать, его только снимают с тела Рошана, и
-# при воскрешении он возвращается к хозяину сам. Окно подставляется через
-# {window} - иначе рано или поздно появится вариант без срока.
+# Что выпадает из поверженного Рошана и почему это можно только своровать.
+# Окно подставляется через {window} - иначе рано или поздно появится вариант
+# без срока, а тест требует его в каждой строке.
 ROSHAN_STEAL_TEXTS = [
-    "АЕГИС нельзя купить — его только снимают с тела. У тебя {window} секунд, предмет достанется случайно.",
-    "АЕГИС не продаётся и не покупается — только снимается с Рошана. У тебя {window} секунд, предмет достанется случайно.",
-    "Пока Рошан жив, АЕГИС лежит на нём. Теперь он твой — если успеешь. У тебя {window} секунд, предмет достанется случайно.",
-    "Рошан воскреснет и заберёт АЕГИС обратно. У тебя {window} секунд, предмет достанется случайно.",
+    "Из Рошана высыпались 🧿 АЕГИС и 🧀 СЫР. Их нельзя выкупить — только своровать. У тебя {window} секунд, что достанется, то твоё.",
+    "Из Рошана высыпались 🧿 АЕГИС и 🧀 СЫР. Пока не разобрали, они лежат тут. У тебя {window} секунд, предмет выпадет случайно.",
+    "Из Рошана высыпались 🧿 АЕГИС и 🧀 СЫР. АЕГИС нельзя уничтожить и нельзя выбросить — только унести. У тебя {window} секунд, предмет достанется случайно.",
+    "Из Рошана высыпались 🧿 АЕГИС и 🧀 СЫР. Он воскреснет и заберёт всё обратно. У тебя {window} секунд, предмет выпадет случайно.",
 ]
 # Что артефакт делает на самом деле, по rolls.py:
 #   apply_aegis   обнуляет отрицательный ролл целиком и НЕ тратится на плюсе;

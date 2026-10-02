@@ -278,15 +278,17 @@ def build_roshan_keyboard(session_id: str) -> InlineKeyboardMarkup:
 
 
 def build_roshan_text(display_username: str, claimers: int = 0) -> str:
+    """The drop announcement.
+
+    Built as labelled blocks rather than one run of prose: the roll header, the
+    lore beat, the drop, and the window. A player who only wants the window
+    should find it without reading the lore, and a player who only wants the
+    lore should not have to skip past mechanics.
+    """
     blocks = [
-        f"🎲 {display_username}",
+        f"🎲 {display_username} свалил Рошана",
         random.choice(ROSHAN_TEXTS),
-        (
-            f"{ITEM_LABELS[AEGIS]} и {ITEM_LABELS[CHEESE]} выпали из Рошана.\n"
-            + random.choice(ROSHAN_STEAL_TEXTS).format(
-                window=ROSHAN_STEAL_WINDOW_SEC
-            )
-        ),
+        random.choice(ROSHAN_STEAL_TEXTS).format(window=ROSHAN_STEAL_WINDOW_SEC),
     ]
     if claimers:
         blocks.append(f"👥 Нажали: {claimers}")
@@ -305,9 +307,10 @@ def build_result_text(
     One line per artifact. The earlier layout stacked a header and an indented
     sub-line under every item, which turned a five line summary into a wall of
     columns; the reader only ever needed the artifact, its owner and its effect.
+    The header is the lore beat, the second line is the kill and the reward.
     """
     blocks = [
-        "🪤 Рошан повержен",
+        "🪤 Рошан пал. Проклятие Торговца свершилось снова.",
         f"🪙 Рошана убил <b>{killer_name}</b> +{reward:.1f} см",
     ]
 
