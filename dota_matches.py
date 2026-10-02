@@ -1116,6 +1116,10 @@ def render_games_page(
         "История игр — Fissure.Bot"
 
     body_class = ' class="miniapp"' if miniapp else ""
+# Чипы — это фильтр по игрокам, он нужен только в истории игр.
+    # В топе рангов каждая строка уже игрок, фильтр там лишний.
+    chips_bar = (f'<div class="g-bar">{"".join(chips)}</div>'
+                 if tab == "games" else "")
     return (
         "<!DOCTYPE html>\n"
         '<html lang="ru">\n<head>\n'
@@ -1130,7 +1134,7 @@ def render_games_page(
         # и подпись убраны — только список.
         '<div class="g-screen">\n'
         f'<div class="g-tabs">{tab_link("games", "История")}{tab_link("mmr", "Топ рангов")}</div>\n'
-        f'<div class="g-body"><div class="g-bar">{"".join(chips)}</div>{body}</div>\n'
+        f'<div class="g-body">{chips_bar}{body}</div>\n'
         "</div>\n"
         f"<script>{TELEGRAM_INIT_JS}</script>\n"
         # Ник открывает профиль в Telegram. Раньше это была вложенная <a>
