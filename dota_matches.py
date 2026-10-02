@@ -300,6 +300,7 @@ async def get_player_games(limit: int = DEFAULT_LIMIT) -> list[dict]:
                     "steam_id": steam_id,
                     "telegram_id": linked.get("telegram_id"),
                     "bot_username": linked.get("username"),
+                    "avatar": linked.get("avatar"),
                 }
             )
 
@@ -464,27 +465,37 @@ def _link_bot_players(match: dict, bot_steam_ids: dict) -> None:
 
 
 def _bot_steam_index() -> dict:
-    """steam_id -> {telegram_id, username} for every player linked to the bot."""
+    """steam_id -> {telegram_id, username, avatar} for every linked player."""
     index: dict = {}
-    try:
-        # Row layout is positional, so the same query serves both backends.
-        rows = _read_all(
-            """
-            SELECT steam_id, telegram_id, username, steam_nickname
-            FROM users
-            WHERE steam_id IS NOT NULL
-            LIMIT 5000
-            """
-        )
+    # Сначала пробуем запрос с аватаром. Если колонки вдруг нет (старая база),
+    # откатываемся на запрос без неё — иначе страница осталась бы совсем пустой,
+    # потому что индекс игроков строится целиком из этого SELECT.
+    queries = (
+        "SELECT steam_id, telegram_id, username, steam_nickname, avatar"
+        " FROM users WHERE steam_id IS NOT NULL LIMIT 5000",
+        "SELECT steam_id, telegram_id, username, steam_nickname"
+        " FROM users WHERE steam_id IS NOT NULL LIMIT 5000",
+    )
+    for query in queries:
+        try:
+            rows = _read_all(query)
+        except Exception as e:
+            logger.error("dota_matches: failed to build bot steam index: %s", e)
+            continue
+
         for row in rows:
             if not row or row[0] is None:
                 continue
+            # Раскладка колонок позиционная и одинакова для обоих вариантов;
+            # в запасном запросе avatar просто отсутствует.
             index[int(row[0])] = {
                 "telegram_id": row[1],
                 "username": row[2] or row[3] or "Игрок",
+                # Аватар уже лежит в БД (заполняется при обновлении MMR),
+                # поэтому карточка не требует ни одного дополнительного запроса.
+                "avatar": row[4] if len(row) > 4 else None,
             }
-    except Exception as e:
-        logger.error("dota_matches: failed to build bot steam index: %s", e)
+        break
     return index
 
 
@@ -687,34 +698,70 @@ def _local_stamp(timestamp: int | None) -> datetime.datetime | None:
 
 
 def render_game(game: dict) -> str:
-    """One row: hero, nickname, result, date, time, duration."""
+    """Карточка игры в стиле клиента Dota: аватар, герой, ник, KDA.
+
+    Слева круглый аватар игрока с иконкой героя в углу, рядом ник и KDA
+    вида «15 / 1 / 8», справа — результат, дата, время и длительность.
+    Строка предметов готова: как только в данных появятся items, она
+    отрисуется автоматически (пока ключа нет — блок не выводится).
+    """
     win = bool(game.get("win"))
+    cls = "win" if win else "loss"
+
+    # Аватар игрока: из БД, без дополнительных запросов.
+    avatar_url = (game.get("avatar") or "").strip()
+    shown_as = game.get("bot_username") or game.get("personaname") or "Игрок"
+    if avatar_url:
+        face = (
+            f'<img class="g-face-img" src="{_esc(avatar_url)}" '
+            f'alt="{_esc(shown_as)}" loading="lazy">'
+        )
+    else:
+        # Заглушка — первая буква ника на цветном круге.
+        face = f'<span class="g-face-img g-face-ph">{_esc(shown_as[:1].upper())}</span>'
+
+    # Иконка героя — небольшим бейджем поверх аватара.
     if game.get("hero_icon"):
-        icon = (
+        hero = (
             f'<img class="g-hero" src="{_esc(game["hero_icon"])}" '
             f'alt="{_esc(game["hero_name"])}" loading="lazy">'
         )
     else:
-        icon = '<span class="g-hero ph">?</span>'
+        hero = '<span class="g-hero g-hero-ph">—</span>'
 
     if game.get("telegram_id"):
         who = (
             f'<a class="g-player" href="tg://user?id={int(game["telegram_id"])}">'
-            f'{_esc(game.get("bot_username") or game["personaname"])}</a>'
+            f'{_esc(shown_as)}</a>'
         )
     else:
-        who = f'<span class="g-player">{_esc(game["personaname"])}</span>'
+        who = f'<span class="g-player">{_esc(shown_as)}</span>'
 
-    # "Hero · Dota nickname" — the Dota name differs from the Telegram one
-    # often enough to be worth showing.
-    subtitle = _esc(game["hero_name"])
-    shown_as = game.get("bot_username") or game["personaname"]
+    # Под ником — герой; Dota-ник дублирует, если он отличается.
+    subtitle = _esc(game.get("hero_name") or "—")
     if (
-        game["personaname"]
+        game.get("personaname")
         and game["personaname"] != shown_as
-        and game["personaname"] != game["hero_name"]
+        and game["personaname"] != game.get("hero_name")
     ):
         subtitle += f' · {_esc(game["personaname"])}'
+
+    kills = int(game.get("kills") or 0)
+    deaths = int(game.get("deaths") or 0)
+    assists = int(game.get("assists") or 0)
+
+    # Ряд предметов появится, когда в данных будет ключ items.
+    items = ""
+    for key in ("items", "item_icons"):
+        raw = game.get(key)
+        if raw:
+            icons = "".join(
+                f'<img class="g-item" src="{_esc(i)}" alt="" loading="lazy">'
+                for i in raw[:6] if i
+            )
+            if icons:
+                items = f'<span class="g-items">{icons}</span>'
+            break
 
     started = int(game.get("start_time") or 0)
     stamp = _local_stamp(started)
@@ -722,13 +769,18 @@ def render_game(game: dict) -> str:
     time_txt = stamp.strftime("%H:%M") if stamp else "—"
 
     return (
-        f'<a class="game-row {"win" if win else "loss"}" '
+        f'<a class="game-row {cls}" '
         f'data-when="{date_txt} {time_txt}" '
         f'href="https://www.opendota.com/matches/{int(game["match_id"])}" '
         f'target="_blank" rel="noopener">'
-        f"{icon}"
-        f'<span class="g-names">{who}'
+        f'<span class="g-face">{face}{hero}</span>'
+        f'<span class="g-main">{who}'
+        f'<span class="g-kda">'
+        f'<b class="k">{kills}</b><span class="sep">/</span>'
+        f'<span class="d">{deaths}</span><span class="sep">/</span>'
+        f'<span class="a">{assists}</span></span>'
         f'<span class="g-hero-name">{subtitle}</span></span>'
+        f'{items}'
         f'<span class="g-result">{"Победа" if win else "Поражение"}</span>'
         f'<span class="g-date">{date_txt}</span>'
         f'<span class="g-time">{time_txt}</span>'
@@ -739,38 +791,56 @@ def render_game(game: dict) -> str:
 
 GAMES_CSS = """
 .g-head,.game-row{grid-template-columns:minmax(0,1fr) 96px 74px 52px 56px}
-.g-hero{width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;
-background:#22252e;float:left;margin-right:9px}
-span.g-hero{display:inline-grid;place-items:center;font-size:12px;color:var(--txt3)}
-.g-names{min-width:0;display:flex;flex-direction:column;padding-left:35px}
-.g-player{font-size:13px;font-weight:600;color:var(--txt);text-decoration:none;
-white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Аватар игрока с иконкой героя в углу — как в клиенте Dota. */
+.g-face{position:relative;width:40px;height:40px;flex-shrink:0}
+.g-face-img{width:40px;height:40px;border-radius:50%;object-fit:cover;display:block;
+ background:#22252e}
+.g-face-ph{display:grid;place-items:center;font-size:15px;font-weight:700;color:var(--txt2);
+ background:linear-gradient(145deg,#2a2f3d,#1b1f2a)}
+.game-row.win .g-face-img{box-shadow:0 0 0 2px rgba(74,222,128,.55)}
+.game-row.loss .g-face-img{box-shadow:0 0 0 2px rgba(248,113,113,.5)}
+.g-hero{position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;border-radius:5px;
+ object-fit:cover;border:1.5px solid var(--card);background:#22252e}
+.g-hero-ph{display:grid;place-items:center;font-size:10px;color:var(--txt3)}
+.g-main{min-width:0;display:flex;flex-direction:column;gap:2px}
+.g-player{font-size:13.5px;font-weight:700;color:var(--txt);text-decoration:none;
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .g-player:hover{color:var(--acc)}
+.g-kda{font-size:12.5px;color:var(--txt2);font-variant-numeric:tabular-nums;line-height:1.1}
+.g-kda .k{color:var(--txt);font-weight:700}
+.g-kda .d{color:#f87171}
+.g-kda .a{color:#7fb069}
+.g-kda .sep{opacity:.45;margin:0 2px}
 .g-hero-name{font-size:10.5px;color:var(--txt3);white-space:nowrap;overflow:hidden;
-text-overflow:ellipsis}
+ text-overflow:ellipsis}
+/* Ряд предметов: пуст, пока в данных нет ключа items. */
+.g-items{grid-column:2/4;display:flex;gap:3px;justify-self:start}
+.g-item{width:22px;height:22px;border-radius:4px;object-fit:cover;background:#1b1f2a;
+ border:1px solid var(--line)}
 .g-result{text-align:right;font-size:12px;font-weight:700}
 .game-row.win .g-result{color:var(--win)}
 .game-row.loss .g-result{color:var(--loss)}
 .g-date,.g-time,.g-dur{text-align:right;font-size:12px;color:var(--txt3);
-font-variant-numeric:tabular-nums}
+ font-variant-numeric:tabular-nums}
 .games{display:flex;flex-direction:column;gap:4px}
 .game-row{display:grid;gap:10px;align-items:center;padding:7px 12px;background:var(--card);
-border:1px solid var(--line);border-left:3px solid var(--loss);border-radius:10px;
-text-decoration:none;color:inherit;transition:transform .15s ease,border-color .15s ease}
+ border:1px solid var(--line);border-left:3px solid var(--loss);border-radius:10px;
+ text-decoration:none;color:inherit;transition:transform .15s ease,border-color .15s ease}
 .game-row.win{border-left-color:var(--win)}
 .game-row:hover{border-color:var(--acc);transform:translateX(2px)}
 .g-head{display:grid;gap:10px;padding:0 12px 8px;font-size:10.5px;letter-spacing:.06em;
-text-transform:uppercase;color:var(--txt3)}
+ text-transform:uppercase;color:var(--txt3)}
 .g-head span:nth-child(n+2){text-align:right}
 @media(max-width:640px){
-.g-head{display:none}
-.game-row{grid-template-columns:minmax(0,1fr) auto auto;
-grid-template-areas:"names result dur" "when when when";row-gap:6px}
-.g-names{grid-area:names}
-.g-result{grid-area:result}
-.g-dur{grid-area:dur}
-.g-date,.g-time{display:none}
-.game-row::after{content:attr(data-when);grid-area:when;font-size:10.5px;color:var(--txt3)}
+ .g-head{display:none}
+ .game-row{grid-template-columns:minmax(0,1fr) auto auto;
+ grid-template-areas:"face main result" "items items items" "when when when";row-gap:6px}
+ .g-face{grid-area:face}
+ .g-main{grid-area:main}
+ .g-result{grid-area:result}
+ .g-items{grid-area:items}
+ .g-date,.g-time,.g-dur{display:none}
+ .game-row::after{content:attr(data-when);grid-area:when;font-size:10.5px;color:var(--txt3)}
 }
 """
 
