@@ -922,10 +922,11 @@ body{background:#07080c}
 .g-screen{width:1180px;max-width:100%;margin:0 auto;position:relative;overflow:hidden;
  border:1px solid #232a38;border-radius:6px;background:linear-gradient(180deg,#12161d,#0a0c12 260px);
  box-shadow:0 18px 48px -28px #000}
-/* Тёплое свечение сверху — как в сцене кубка. */
-.g-screen::before{content:"";position:absolute;inset:-30% -20% auto;height:340px;
- background:radial-gradient(60% 100% at 50% 0,rgba(230,98,42,.20),transparent 70%);
- pointer-events:none}
+/* Тёплое свечение сверху — как в сцене кубка. Держим его слабым и позади
+   текста, иначе он подсвечивает заголовок и вкладки. */
+.g-screen::before{content:"";position:absolute;left:0;right:0;top:0;height:220px;
+ background:radial-gradient(70% 100% at 50% 0,rgba(230,98,42,.14),transparent 72%);
+ pointer-events:none;z-index:0}
 .g-top{height:42px;display:flex;align-items:center;gap:10px;padding:0 14px;
  border-bottom:1px solid #1c222c;position:relative;z-index:2}
 .g-logo{width:26px;height:26px;border-radius:5px;background:linear-gradient(140deg,#e2622a,#b8391a);
@@ -943,13 +944,19 @@ body{background:#07080c}
 .g-sub{font-size:9.5px;color:#8e97aa;margin-top:5px}
 
 /─ Вкладки
-.g-tabs{display:flex;gap:8px;padding:16px 20px 0;position:relative;z-index:2}
+/* Переключатель вкладок: сегментированный блок, ничего не наезжает. */
+.g-tabs{display:inline-flex;align-items:stretch;gap:4px;margin:18px 20px 0;
+ padding:4px;background:#0d1118;border:1px solid #232a38;border-radius:8px;
+ position:relative;z-index:2;max-width:100%;overflow:hidden}
 .g-tab{font-size:10.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;
- padding:8px 16px;border-radius:3px;border:1px solid #262d3a;background:#12161d;
- color:#8e97aa;text-decoration:none;transition:all .18s ease}
-.g-tab:hover{border-color:#39445a;color:#dbe1eb}
-.g-tab.on{background:linear-gradient(180deg,rgba(232,171,63,.26),rgba(201,136,31,.10));
- border-color:rgba(232,180,92,.7);color:#f7e3c0}
+ padding:9px 18px;border-radius:5px;border:1px solid transparent;background:transparent;
+ color:#8e97aa;text-decoration:none;white-space:nowrap;
+ transition:color .18s ease,background .18s ease,border-color .18s ease,
+ box-shadow .18s ease,transform .18s ease}
+.g-tab:hover{color:#dbe1eb;background:rgba(255,255,255,.04)}
+.g-tab:active{transform:scale(.98)}
+.g-tab.on{color:#f7e3c0;background:linear-gradient(180deg,rgba(232,171,63,.28),rgba(201,136,31,.12));
+ border-color:rgba(232,180,92,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
 
 .g-body{padding:16px 20px 22px;position:relative;z-index:2}
 
@@ -981,14 +988,6 @@ body{background:#07080c}
 .g-wr-wl{font-size:10.5px;color:#8e97aa;font-variant-numeric:tabular-nums;white-space:nowrap}
 .g-wr-none{font-size:11.5px;color:#5b6478}
 .g-card.g-mmr.top3{border-color:rgba(232,180,92,.35)}
-
-@media(max-width:640px){
- .g-mmr-head,.g-card.g-mmr .g-line{grid-template-columns:28px 26px minmax(0,1fr) 96px;gap:7px}
- .g-rank-img{width:22px;height:22px}
- .g-wr-track{display:none}
- .g-wr-num{min-width:30px;font-size:11px}
- .g-wr-wl{font-size:9.5px}
-}
 
 .g-card{background:#12161d;border:1px solid #262d3a;border-radius:2px;
  transition:border-color .18s ease,transform .18s cubic-bezier(.2,.7,.3,1),box-shadow .18s ease}
@@ -1040,12 +1039,21 @@ body{background:#07080c}
 @media(max-width:640px){
  .g-screen{border-radius:0;border-left:0;border-right:0}
  .g-head,.g-body{padding-left:14px;padding-right:14px}
+ .g-tabs{margin:14px 14px 0;width:calc(100% - 28px)}   /* вровень с текстом */
+ .g-tab{flex:1 1 0;padding:9px 10px;text-align:center;font-size:10px;
+ letter-spacing:.06em;min-width:0}                      /* не обрезаются */
  .g-h1{font-size:20px}
  .g-h2{font-size:9.5px}
  .g-heron,.g-when{display:none}
  .g-kda{font-size:11px}
  .g-top{padding:0 10px}
  .g-slot.m{display:none}
+ .g-mmr-head,.g-card.g-mmr .g-line{grid-template-columns:28px 26px 26px minmax(0,1fr) 88px;
+ gap:6px}
+ .g-rank-img,.g-face{width:22px;height:22px}
+ .g-wr-track{display:none}
+ .g-wr-num{min-width:28px;font-size:11px}
+ .g-wr-wl{font-size:9.5px}
 }
 """
 
