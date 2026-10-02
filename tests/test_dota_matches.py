@@ -738,13 +738,14 @@ def test_game_row_shows_player_rank():
     assert "rank_6_5.webp" in row
 
     no_rank = dict(game, rank_tier=None)
-    assert "без ранга" in dota_matches.render_game(no_rank)
+    assert "Без ранга" in dota_matches.render_game(no_rank)
 
 
-def test_game_row_rank_icon_is_wrapped_not_styled_directly():
-    """Рамка и отступы достаются обёртке, а не самой картинке.
+def test_game_row_rank_looks_like_the_ranking_tab():
+    """Ранг в истории подан так же, как в топе: иконка + название под ником.
 
-    Иначе padding растягивает <img> и иконка ранга становится огромной.
+    Раньше здесь была отдельная «плашка», из-за чего вкладки выглядели
+    по-разному; теперь обе используют один и тот же g-rank-img.
     """
     game = {"match_id": 7, "start_time": 100, "duration": 60, "win": True,
             "hero_id": 8, "hero_name": "AM", "hero_icon": "",
@@ -752,12 +753,13 @@ def test_game_row_rank_icon_is_wrapped_not_styled_directly():
             "kills": 1, "deaths": 0, "assists": 2,
             "steam_id": 1, "telegram_id": None, "rank_tier": 65}
     row = dota_matches.render_game(game)
+    top_row = dota_matches.render_mmr_row({"username": "p", "steam_nickname": "p",
+                                           "rank_tier": 65}, 1)
 
-    assert '<img class="g-rank-mini"' not in row      # класс не на картинке
-    assert '<span class="g-rank-mini"><img' in row    # картинка внутри обёртки
-    css = dota_matches.GAMES_CSS
-    assert ".g-rank-mini img{" in css                # размер задан картинке
-    assert "width:11px;height:11px" in css
+    assert 'class="g-rank-img" src=' in row          # та же иконка, что в топе
+    assert "Титан" in row                          # название под ником
+    assert "g-rank-mini" not in row               # отдельной плашки больше нет
+    assert 'class="g-rank-img"' in top_row         # топ не тронут
 
 
 def test_ranking_header_padding_matches_row():
@@ -777,8 +779,12 @@ def test_ranking_header_padding_matches_row():
 def test_sort_header_is_outlined_not_underlined():
     """Активная колонка обведена, а не подчёркнута."""
     css = dota_matches.GAMES_CSS.replace("\n", "")
-    assert "box-shadow:inset 0 0 0 1px rgba(232,180,92,.4)" in css
+    assert ".g-hp.on{" in css
+    assert "box-shadow:inset 0 0 0 1px rgba(232,180,92,.45)" in css
     assert ".g-hp.on{border-bottom" not in css
+    # Стрелки подсказывают, что сортировать можно по любой колонке,
+    # поэтому они видны у всех, а не только у активной.
+    assert ".g-hp .ar{" in css and "opacity:.28" in css
 
 
 def test_mmr_tab_headers_are_sortable():

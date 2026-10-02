@@ -733,14 +733,12 @@ def render_game(game: dict) -> str:
     # Ранг игрока — из профиля, чтобы в играх был виден уровень, как в топе.
     tier = game.get("rank_tier")
     if tier:
-        # Обёртка нужна отдельно от картинки: иначе padding и рамка
-        # применяются к самой иконке и раздувают её.
-        rank = (f'<span class="g-rank-mini">'
-                f'<img src="{_esc(rank_image(tier))}" '
-                f'alt="" loading="lazy">'
-                f'<span class="g-rank-name">{_esc(_rank_icon(tier))}</span></span>')
+        rank = (f'<img class="g-rank-img" src="{_esc(rank_image(tier))}" '
+                f'alt="" loading="lazy">')
+        rank_name = _rank_icon(tier)
     else:
-        rank = '<span class="g-rank-none">без ранга</span>'
+        rank = '<span class="g-rank-img g-rank-blank">—</span>'
+        rank_name = "Без ранга"
 
     name_html = _esc(shown_as)
     if game.get("telegram_id"):
@@ -799,9 +797,9 @@ def render_game(game: dict) -> str:
         f'<div class="g-card {cls}" data-party="{_esc(party_url)}" '
         f'data-dota="{_esc(db_url)}" tabindex="0" role="button">'
         f'<div class="g-line">'
-        f"{face}{hero}"
+        f"{rank}{face}{hero}"
         f'<span class="g-who">{name_html}'
-        f'<span class="g-heron">{rank} · {subtitle}</span></span>'
+        f'<span class="g-heron">{_esc(rank_name)} · {subtitle}</span></span>'
         f'<span class="g-kda"><b>{kills}</b> / {deaths} / {assists}</span>'
         f'<span class="g-res">{"Победа" if win else "Поражение"}</span>'
         f'<span class="g-when">{date_txt} · {time_txt} · '
@@ -1015,21 +1013,27 @@ body{background:#07080c}
 /* Отступ шапки совпадает с .g-line (10px по бокам), иначе заголовки
    стоят левее своих данных на 4px. */
 .g-mmr-head{padding:0 10px 8px}
-/* У заголовка нет бокового padding: он двигает подпись внутри
-   ячейки и ломает выравнивание по колонке. Активная колонка
-   обведена рамкой, которая не влияет на раскладку. */
-.g-hp{position:relative;font-size:9px;font-weight:800;letter-spacing:.12em;
- text-transform:uppercase;color:#79839a;cursor:pointer;user-select:none;
- display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border-radius:6px;
- justify-self:start;box-shadow:inset 0 0 0 1px transparent;
- transition:color .18s ease,box-shadow .18s ease}
-.g-hp:hover{color:#e8edf5;box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)}
-.g-hp.right{justify-self:end;justify-content:flex-end;text-align:right}
-.g-hp .ar{font-size:7px;line-height:1;color:#e8b45c;opacity:0;transition:opacity .18s ease}
-.g-hp.on{color:#f2d9a0;background:rgba(232,180,92,.1);
- box-shadow:inset 0 0 0 1px rgba(232,180,92,.4)}
+/* Заголовок колонки: подпись и стрелка живут в одной кнопке.
+   Обводка рисуется inset-тенью, поэтому не съедает ширину подписи. */
+.g-hp{position:relative;display:inline-flex;align-items:center;gap:6px;
+ padding:6px 9px;border-radius:7px;cursor:pointer;user-select:none;
+ justify-self:start;font-size:9.5px;font-weight:800;letter-spacing:.11em;
+ text-transform:uppercase;color:#7c869c;
+ box-shadow:inset 0 0 0 1px transparent;
+ transition:color .18s ease,box-shadow .18s ease,background .18s ease}
+.g-hp:hover{color:#dbe3ef;background:rgba(255,255,255,.05);
+ box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.g-hp.right{justify-self:end}
+/* Стрелка есть у всех колонок, но у inactive — едва видна: так понятно,
+   что сортировать можно и по ним, а не только по активной. */
+.g-hp .ar{font-size:8px;line-height:1;color:#e8b45c;
+ opacity:.28;transition:opacity .18s ease,transform .18s ease}
+.g-hp:hover .ar{opacity:.6}
+.g-hp.on{color:#f7e3c0;background:rgba(232,180,92,.11);
+ box-shadow:inset 0 0 0 1px rgba(232,180,92,.45)}
 .g-hp.on .ar{opacity:1}
-.g-rank-img{width:26px;height:26px;object-fit:contain;justify-self:center}
+.g-rank-img{width:26px;height:26px;object-fit:contain;flex-shrink:0}
+.g-rank-blank{display:grid;place-items:center;color:#4a5262;font-size:12px}
 /* Ранг в строке игры: иконка в рамке с названием, оба мелкие —
    они живут в строке подписи рядом с именем героя. */
 .g-rank-mini{display:inline-flex;align-items:center;gap:4px;padding:1px 6px 1px 4px;
@@ -1104,7 +1108,7 @@ body{background:#07080c}
 .g-foot{padding:0 20px 20px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;
  color:#3c4454;position:relative;z-index:2}
 
-─ Карточка топа MMR
+/* ── Карточка топа рангов ── */
 .g-rank{width:26px;height:26px;border-radius:3px;flex-shrink:0;display:grid;place-items:center;
  font-size:10.5px;font-weight:900;color:#8e97aa;background:#1b212c;
  box-shadow:inset 0 0 0 1px #2a3340;font-variant-numeric:tabular-nums}
@@ -1128,6 +1132,10 @@ body{background:#07080c}
  .g-mmr-head,.g-card.g-mmr .g-line{grid-template-columns:28px 26px 26px minmax(0,1fr) 88px;
  gap:6px}
  .g-rank-img,.g-face{width:22px;height:22px}
+ .g-mmr-head{padding:0 10px 8px}
+ /* Подписи на телефоне длинные: ужимаем шрифт и отступы, но обводку
+    и стрелки оставляем, иначе сортировка перестаёт читаться. */
+ .g-hp{font-size:8.5px;letter-spacing:.05em;padding:5px 6px;gap:4px}
  .g-wr-track{display:none}
  .g-wr-num{min-width:28px;font-size:11px}
  .g-wr-wl{font-size:9.5px}
