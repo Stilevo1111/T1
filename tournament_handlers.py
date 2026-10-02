@@ -48,8 +48,18 @@ def _user_rank_tier(telegram_id: int) -> int:
 
 
 def _current_tournament(chat_id: int):
-    """Текущий турнир чата: незакрытый, иначе последний завершённый."""
-    active = T.active_tournament(chat_id)
+    """Текущий турнир чата: незакрытый, иначе последний завершённый.
+
+    Схему создаём здесь же: до первого /newtour таблиц ещё нет, а игрок
+    может нажать /tour раньше — без этого чтение падало с UndefinedTable.
+    ensure_schema() идемпотентна, так что лишних запросов не добавляет.
+    """
+    try:
+        active = T.active_tournament(chat_id)
+    except Exception:
+        logger.info("tournament: создаём схему при первом обращении")
+        T.ensure_schema()
+        active = T.active_tournament(chat_id)
     if active:
         return active
     rows = T._read(
@@ -281,6 +291,13 @@ async def tour_score_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 def register_tournament_handlers(app):
     """Подключает команды и кнопки турнира к приложению."""
     from telegram.ext import CommandHandler, CallbackQueryHandler
+
+    # Таблицы создаём на старте, а не по первому /newtour: иначе игрок,
+    # нажавший /tour раньше администратора, получит ошибку в логах.
+    try:
+        T.ensure_schema()
+    except Exception as e:  # pragma: no cover - зависит от реальной БД
+        logger.error("tournament: не удалось создать схему на старте: %s", e)
 
     app.add_handler(CommandHandler("tour", tour_command))
     app.add_handler(CommandHandler("newtour", newtour_command))
