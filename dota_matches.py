@@ -927,25 +927,11 @@ body{background:#07080c}
 .g-screen::before{content:"";position:absolute;left:0;right:0;top:0;height:220px;
  background:radial-gradient(70% 100% at 50% 0,rgba(230,98,42,.14),transparent 72%);
  pointer-events:none;z-index:0}
-.g-top{height:42px;display:flex;align-items:center;gap:10px;padding:0 14px;
- border-bottom:1px solid #1c222c;position:relative;z-index:2}
-.g-logo{width:26px;height:26px;border-radius:5px;background:linear-gradient(140deg,#e2622a,#b8391a);
- color:#fff;font:900 14px/26px Inter,sans-serif;text-align:center;flex-shrink:0}
-.g-slot{height:24px;border-radius:3px;border:1px dashed #39445a;background:rgba(255,255,255,.02)}
-.g-slot.s{width:24px}.g-slot.m{width:110px}
 .g-top .g-sp{flex:1}
-
-.g-head{padding:18px 20px 0;position:relative;z-index:2}
-.g-h1{font-size:27px;font-weight:900;text-transform:uppercase;color:#f2f5fa;letter-spacing:.01em;
- line-height:1.1}
-.g-h1 em{font-style:normal;color:#e8b45c}
-.g-h2{font-size:10.5px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;
- color:#e8b45c;margin-top:7px}
-.g-sub{font-size:9.5px;color:#8e97aa;margin-top:5px}
 
 /─ Вкладки
 /* Переключатель вкладок: сегментированный блок, ничего не наезжает. */
-.g-tabs{display:inline-flex;align-items:stretch;gap:4px;margin:18px 20px 0;
+.g-tabs{display:inline-flex;align-items:stretch;gap:4px;margin:14px 14px 0;
  padding:4px;background:#0d1118;border:1px solid #232a38;border-radius:8px;
  position:relative;z-index:2;max-width:100%;overflow:hidden}
 .g-tab{font-size:10.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;
@@ -1038,12 +1024,10 @@ body{background:#07080c}
 
 @media(max-width:640px){
  .g-screen{border-radius:0;border-left:0;border-right:0}
- .g-head,.g-body{padding-left:14px;padding-right:14px}
- .g-tabs{margin:14px 14px 0;width:calc(100% - 28px)}   /* вровень с текстом */
+ .g-body{padding-left:14px;padding-right:14px}
+ .g-tabs{margin:12px 14px 0;width:calc(100% - 28px)}   /* вровень с текстом */
  .g-tab{flex:1 1 0;padding:9px 10px;text-align:center;font-size:10px;
  letter-spacing:.06em;min-width:0}                      /* не обрезаются */
- .g-h1{font-size:20px}
- .g-h2{font-size:9.5px}
  .g-heron,.g-when{display:none}
  .g-kda{font-size:11px}
  .g-top{padding:0 10px}
@@ -1127,10 +1111,9 @@ def render_games_page(
         on = " on" if key == tab else ""
         return f'<a class="g-tab{on}" href="{href}">{label}</a>'
 
-    title = ("ТОП <em>РАНГОВ</em> DOTA 2" if tab == "mmr"
-             else "СПИСОК ИГР <em>DOTA 2</em>")
-    subtitle = ("РАНГИ ИГРОКОВ БОТА" if tab == "mmr"
-                else "ИГРОКИ БОТА · ОБНОВЛЯЕТСЯ РАЗ В МИНУТУ")
+    # Заголовка на странице нет, но имя вкладки браузера нужно.
+    page_title = "Топ рангов — Fissure.Bot" if tab == "mmr" else \
+        "Список игр — Fissure.Bot"
 
     body_class = ' class="miniapp"' if miniapp else ""
     return (
@@ -1138,26 +1121,14 @@ def render_games_page(
         '<html lang="ru">\n<head>\n'
         '<meta charset="UTF-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">\n'
-        f"<title>{title.replace('<em>', '').replace('</em>', '')} — Fissure.Bot</title>\n"
+        f"<title>{page_title}</title>\n"
         '<meta name="description" content="Последние игры игроков Fissure.Bot и топ MMR.">\n'
         f'<script src="{TELEGRAM_WEBAPP_JS}"></script>\n'
         f"<style>{PAGE_CSS}{GAMES_CSS}</style>\n"
         f"</head>\n<body{body_class}>\n"
-        # Топ-бар с пустыми слотами — как в сцене кубка: место под будущие кнопки.
+        # Страница начинается с переключателя вкладок: логотип, заголовок
+        # и подпись убраны — только список.
         '<div class="g-screen">\n'
-        '<div class="g-top">'
-        '<span class="g-logo">F</span>'
-        '<span class="g-slot s"></span>'
-        '<span class="g-slot m"></span>'
-        '<span class="g-sp"></span>'
-        '<span class="g-slot s"></span>'
-        '<span class="g-slot s"></span>'
-        "</div>\n"
-        '<div class="g-head">'
-        f'<div class="g-h1">{title}</div>'
-        f'<div class="g-h2">{subtitle}</div>'
-        f'<div class="g-sub">Fissure.Bot · данные OpenDota</div>'
-        "</div>\n"
         f'<div class="g-tabs">{tab_link("games", "Игры")}{tab_link("mmr", "Топ рангов")}</div>\n'
         f'<div class="g-body"><div class="g-bar">{"".join(chips)}</div>{body}</div>\n'
         "</div>\n"
