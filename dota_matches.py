@@ -950,12 +950,17 @@ body{background:#07080c}
 /* ── Вкладка «Топ MMR»: те же поля, что на странице топа ─────────────── */
 .g-mmr-head,.g-card.g-mmr .g-line{display:grid;
  grid-template-columns:34px 34px 30px minmax(0,1fr) 210px;align-items:center;gap:10px}
-.g-mmr-head{padding:2px 10px 8px}
-.g-hp{font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6f7889;
- cursor:pointer;user-select:none;transition:color .18s ease;padding:2px 0}
-.g-hp:hover{color:#dbe1eb}
-.g-hp.right{text-align:right}
-.g-hp .ar{color:#e8b45c;margin-left:3px}
+.g-mmr-head{padding:0 6px 8px}
+.g-hp{position:relative;font-size:9px;font-weight:800;letter-spacing:.12em;
+ text-transform:uppercase;color:#79839a;cursor:pointer;user-select:none;
+ display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border-radius:6px;
+ border:1px solid transparent;transition:color .18s ease,background .18s ease,border-color .18s ease}
+.g-hp:hover{color:#e8edf5;background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.06)}
+.g-hp.right{justify-content:flex-end;text-align:right}
+/* Стрелка живёт на своём месте, поэтому при смене колонки вёрстка не прыгает. */
+.g-hp .ar{font-size:7px;line-height:1;color:#e8b45c;opacity:0;transition:opacity .18s ease}
+.g-hp.on{color:#f2d9a0;background:rgba(232,180,92,.1);border-color:rgba(232,180,92,.28)}
+.g-hp.on .ar{opacity:1}
 .g-rank-img{width:26px;height:26px;object-fit:contain;justify-self:center}
 /* Мини-ранг в строке игры. */
 .g-rank-mini{width:12px;height:12px;object-fit:contain;vertical-align:-2px;
@@ -1000,6 +1005,25 @@ body{background:#07080c}
 .g-when{font-size:10px;color:#5b6478;font-variant-numeric:tabular-nums;white-space:nowrap;
  flex-shrink:0}
 .g-bar{display:flex;gap:8px;flex-wrap:wrap;padding:0 0 14px}
+
+/* Выбор игрока: свёрнутая кнопка + выпадающий список ников. */
+.g-pick{position:relative;padding-bottom:14px;margin-bottom:-14px}
+.g-pick-btn{width:100%;display:flex;align-items:center;gap:9px;padding:9px 12px;
+ background:#0e131b;border:1px solid #222a37;border-radius:8px;cursor:pointer;
+ color:#dbe1eb;font:600 11px/1.2 Inter,sans-serif;transition:border-color .18s ease,background .18s ease}
+.g-pick-btn:hover{border-color:#39445a;background:#111823}
+.g-pick-ic{display:inline-flex;color:#7d879b}
+.g-pick-t{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.g-pick-ar{display:inline-flex;color:#7d879b;transition:transform .22s ease}
+.g-pick.open .g-pick-ar{transform:rotate(180deg)}
+.g-pick.open .g-pick-btn{border-color:rgba(232,180,92,.4);color:#f7e3c0}
+.g-pick-menu{display:none;margin-top:8px;padding:8px;background:#0b0f16;
+ border:1px solid #222a37;border-radius:10px;flex-direction:column;gap:5px}
+.g-pick.open .g-pick-menu{display:flex}
+.g-pick-menu a{display:flex;align-items:center;justify-content:space-between;gap:10px;
+ padding:7px 10px;border-radius:6px;font-size:11px;color:#9aa4b7;transition:background .15s ease,color .15s ease}
+.g-pick-menu a:hover{background:rgba(255,255,255,.05);color:#eef2f8}
+.g-pick-menu a.on{background:rgba(232,180,92,.12);color:#f7e3c0;font-weight:700}
 .g-bar a{font-size:10px;padding:5px 11px;border-radius:3px;border:1px solid #262d3a;
  background:#12161d;color:#8e97aa;text-decoration:none;transition:all .18s ease}
 .g-bar a:hover{border-color:#39445a;color:#dbe1eb}
@@ -1086,12 +1110,16 @@ def render_games_page(
     if tab == "mmr":
         rows = sorted(mmr_players or [], key=mmr_sort_key)
         # Заголовки кликабельные — сортировка как на странице топа.
+        # «Ранг» активен сразу: это сортировка по умолчанию.
         head = (
             '<div class="g-mmr-head">'
             '<span class="g-hp">#</span>'
-            '<span class="g-hp" data-sort="rank_tier">Ранг<span class="ar">▼</span></span>'
-            '<span class="g-hp" data-sort="name">Игрок</span>'
-            '<span class="g-hp right" data-sort="stats">Статистика</span>'
+            '<span class="g-hp on" data-sort="rank_tier">Ранг'
+            '<span class="ar">▼</span></span>'
+            '<span class="g-hp" data-sort="name">Игрок'
+            '<span class="ar">▼</span></span>'
+            '<span class="g-hp right" data-sort="stats">Статистика'
+            '<span class="ar">▼</span></span>'
             "</div>"
         )
         # Данные для клиентской сортировки кладём в data-* самой строки.
@@ -1118,8 +1146,32 @@ def render_games_page(
     body_class = ' class="miniapp"' if miniapp else ""
 # Чипы — это фильтр по игрокам, он нужен только в истории игр.
     # В топе рангов каждая строка уже игрок, фильтр там лишний.
-    chips_bar = (f'<div class="g-bar">{"".join(chips)}</div>'
-                 if tab == "games" else "")
+    # Список игроков свёрнут под одну кнопку: на телефоне он занимал
+    # пол-экрана, а нужен редко. Раскрывается по клику, без перезагрузки.
+    chips_bar = ""
+    if tab == "games":
+        sel = player or ""
+        btn_label = _esc(player) if player else "Все игроки"
+        chips_bar = (
+            '<div class="g-pick' + (" open" if player else "") + '">'
+            f'<button type="button" class="g-pick-btn" aria-expanded="'
+            f'{"true" if player else "false"}">'
+            '<span class="g-pick-ic">'
+            '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
+            '<circle cx="6" cy="5" r="2.4" fill="none" stroke="currentColor" '
+            'stroke-width="1.4"/><path d="M2 13c0-2.2 1.8-3.6 4-3.6s4 1.4 4 3.6" '
+            'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>'
+            "</svg></span>"
+            f'<span class="g-pick-t">{btn_label}</span>'
+            '<span class="g-pick-ar">'
+            '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">'
+            '<path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" '
+            'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'
+            "</svg></span>"
+            "</button>"
+            f'<div class="g-pick-menu">{"".join(chips)}</div>'
+            "</div>"
+        )
     return (
         "<!DOCTYPE html>\n"
         '<html lang="ru">\n<head>\n'
@@ -1137,6 +1189,7 @@ def render_games_page(
         f'<div class="g-body">{chips_bar}{body}</div>\n'
         "</div>\n"
         f"<script>{TELEGRAM_INIT_JS}</script>\n"
+f"<script>{PICKER_JS}</script>\n"
         # Ник открывает профиль в Telegram. Раньше это была вложенная <a>
         # внутри <a>, что невалидно, поэтому вешаем переход на data-атрибут.
         "<script>document.addEventListener('click',function(e){var p=e.target"
@@ -1287,6 +1340,30 @@ def miniapp_url(miniapp: bool = True) -> str:
     return f"{url}?miniapp=1" if miniapp else url
 
 
+PICKER_JS = """
+<script>
+// Выбор игрока: список ников свёрнут под кнопку и раскрывается по клику.
+(function(){
+  var pick = document.querySelector('.g-pick');
+  if (!pick) return;
+  var btn = pick.querySelector('.g-pick-btn');
+  function setOpen(on){
+    pick.classList.toggle('open', on);
+    btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+  }
+  btn.addEventListener('click', function(e){
+    e.stopPropagation();
+    setOpen(!pick.classList.contains('open'));
+  });
+  // Клик по нику уводит на страницу с фильтром, клик мимо — закрывает.
+  pick.addEventListener('click', function(e){ e.stopPropagation(); });
+  document.addEventListener('click', function(){ setOpen(false); });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') setOpen(false);
+  });
+})();
+</script>
+"""
 RANKS_SORT_JS = """
 <script>
 // Сортировка топа по клику на заголовок — как на странице рейтинга.
@@ -1323,9 +1400,13 @@ RANKS_SORT_JS = """
       }
       return (value(a, key) - value(b, key)) * sign;
     }).forEach(function(r){ head.parentNode.appendChild(r); });
-    head.querySelectorAll('.ar').forEach(function(s){ s.remove(); });
-    h.insertAdjacentHTML('beforeend',
-      '<span class="ar">' + (sign === 1 ? '\\u25BC' : '\\u25B2') + '</span>');
+    // Подсветку переносим на активную колонку, а не пересоздаём стрелку,
+    // чтобы заголовки не «прыгали» при клике.
+    head.querySelectorAll('[data-sort]').forEach(function(el){
+      el.classList.toggle('on', el === h);
+      var ar = el.querySelector('.ar');
+      if (ar) ar.textContent = sign === 1 ? '\\u25BC' : '\\u25B2';
+    });
     paint();
   });
 })();
