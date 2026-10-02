@@ -733,9 +733,12 @@ def render_game(game: dict) -> str:
     # Ранг игрока — из профиля, чтобы в играх был виден уровень, как в топе.
     tier = game.get("rank_tier")
     if tier:
-        rank = (f'<img class="g-rank-mini" src="{_esc(rank_image(tier))}" '
-                f'alt="{_esc(_rank_icon(tier))}" loading="lazy">'
-                f'<span class="g-rank-name">{_esc(_rank_icon(tier))}</span>')
+        # Обёртка нужна отдельно от картинки: иначе padding и рамка
+        # применяются к самой иконке и раздувают её.
+        rank = (f'<span class="g-rank-mini">'
+                f'<img src="{_esc(rank_image(tier))}" '
+                f'alt="" loading="lazy">'
+                f'<span class="g-rank-name">{_esc(_rank_icon(tier))}</span></span>')
     else:
         rank = '<span class="g-rank-none">без ранга</span>'
 
@@ -1012,27 +1015,28 @@ body{background:#07080c}
 /* Отступ шапки совпадает с .g-line (10px по бокам), иначе заголовки
    стоят левее своих данных на 4px. */
 .g-mmr-head{padding:0 10px 8px}
-/* У заголовка нет собственного padding: он двигает подпись внутри
+/* У заголовка нет бокового padding: он двигает подпись внутри
    ячейки и ломает выравнивание по колонке. Активная колонка
-   подчёркивается, а не обрамляется. */
+   обведена рамкой, которая не влияет на раскладку. */
 .g-hp{position:relative;font-size:9px;font-weight:800;letter-spacing:.12em;
  text-transform:uppercase;color:#79839a;cursor:pointer;user-select:none;
- display:inline-flex;align-items:center;gap:5px;padding:4px 0 6px;
- justify-self:start;border-bottom:1px solid transparent;
- transition:color .18s ease,border-color .18s ease}
-.g-hp:hover{color:#e8edf5}
+ display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border-radius:6px;
+ justify-self:start;box-shadow:inset 0 0 0 1px transparent;
+ transition:color .18s ease,box-shadow .18s ease}
+.g-hp:hover{color:#e8edf5;box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)}
 .g-hp.right{justify-self:end;justify-content:flex-end;text-align:right}
 .g-hp .ar{font-size:7px;line-height:1;color:#e8b45c;opacity:0;transition:opacity .18s ease}
-.g-hp.on{color:#f2d9a0;border-bottom-color:rgba(232,180,92,.65)}
+.g-hp.on{color:#f2d9a0;background:rgba(232,180,92,.1);
+ box-shadow:inset 0 0 0 1px rgba(232,180,92,.4)}
 .g-hp.on .ar{opacity:1}
 .g-rank-img{width:26px;height:26px;object-fit:contain;justify-self:center}
-/* Ранг в строке игры: та же золотая подпись, что и в топе, но мелкая —
-   он живёт в строке подписи рядом с именем героя, а не отдельной колонкой. */
-.g-rank-mini{display:inline-flex;align-items:center;gap:3px;padding:0 4px 0 2px;
- border-radius:3px;background:rgba(232,180,92,.09);border:1px solid rgba(232,180,92,.2);
- vertical-align:-3px;margin-right:4px}
-.g-rank-mini img{width:10px;height:10px;object-fit:contain;flex-shrink:0}
-.g-rank-name{color:#f2d9a0;font-weight:700;font-size:9px;line-height:14px}
+/* Ранг в строке игры: иконка в рамке с названием, оба мелкие —
+   они живут в строке подписи рядом с именем героя. */
+.g-rank-mini{display:inline-flex;align-items:center;gap:4px;padding:1px 6px 1px 4px;
+ border-radius:4px;background:rgba(232,180,92,.09);border:1px solid rgba(232,180,92,.2);
+ vertical-align:-3px;margin-right:5px}
+.g-rank-mini img{width:11px;height:11px;object-fit:contain;flex-shrink:0;display:block}
+.g-rank-name{color:#f2d9a0;font-weight:700;font-size:9px;line-height:1}
 .g-rank-none{color:#4a5262;font-size:9px}
 .g-face{width:26px;height:26px;border-radius:50%;flex-shrink:0;object-fit:cover;
  background:#1b212c;display:grid;place-items:center;font-size:10px;color:#5a6478}
