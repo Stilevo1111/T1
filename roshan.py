@@ -32,6 +32,7 @@ from constants import (
     ROSHAN_CHEESE_EFFECTS,
     ROSHAN_SESSION_TTL,
     ROSHAN_STEAL_WINDOW_SEC,
+    ROSHAN_STEAL_TEXTS,
     ROSHAN_TEXTS,
     get_banner_path,
 )
@@ -282,9 +283,9 @@ def build_roshan_text(display_username: str, claimers: int = 0) -> str:
         random.choice(ROSHAN_TEXTS),
         (
             f"{ITEM_LABELS[AEGIS]} и {ITEM_LABELS[CHEESE]} выпали из Рошана.\n"
-            f"Купить их нельзя — только украсть. "
-            f"На это есть <b>{ROSHAN_STEAL_WINDOW_SEC} секунд</b>, "
-            "предмет выпадет случайно."
+            + random.choice(ROSHAN_STEAL_TEXTS).format(
+                window=ROSHAN_STEAL_WINDOW_SEC
+            )
         ),
     ]
     if claimers:
@@ -307,8 +308,7 @@ def build_result_text(
     """
     blocks = [
         "🪤 Рошан повержен",
-        f"🪙 Рошана убил <b>{killer_name}</b>",
-        f"Фиссура выросла на <b>+{reward:.1f} см</b>",
+        f"🪙 Рошана убил <b>{killer_name}</b> +{reward:.1f} см",
     ]
 
     for uid, item in awarded.items():

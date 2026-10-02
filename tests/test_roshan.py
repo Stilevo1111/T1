@@ -14,6 +14,7 @@ Covers the three things that can silently break this feature:
      from that whitelist in the first place).
 """
 
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -25,6 +26,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import database  # noqa: E402
 import roshan  # noqa: E402
+from constants import ROSHAN_STEAL_TEXTS, ROSHAN_STEAL_WINDOW_SEC  # noqa: E402
 from rolls import apply_aegis, apply_cheese, calculate_roshan_reward  # noqa: E402
 
 BOT_USER_ID = 555000222
@@ -365,6 +367,23 @@ def test_callback_data_fits_telegram_limit():
     data = keyboard.inline_keyboard[0][0].callback_data
     assert data == f"roshan_steal_{session_id}"
     assert len(data.encode("utf-8")) <= 64
+
+
+def test_every_steal_prompt_states_the_window_and_the_lottery():
+    """The flavour rotates, the rules must not.
+
+    A variant that dropped the window or the "random item" part would make
+    players lose a fair press to bad wording, so both are asserted per line.
+    """
+    for text in ROSHAN_STEAL_TEXTS:
+        assert "{window}" in text, text
+        assert re.search(r"случайн|лотере|достанется", text), text
+
+
+def test_announcement_names_the_items_and_the_steal_prompt():
+    text = roshan.build_roshan_text("went_Dr")
+    assert "АЕГИС" in text and "СЫР" in text
+    assert str(ROSHAN_STEAL_WINDOW_SEC) in text
 
 
 def test_steal_button_is_labelled_by_the_action():
