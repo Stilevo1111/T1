@@ -28,12 +28,7 @@ from telegram.ext import ContextTypes
 
 from bot_utils import make_clickable
 from constants import (
-    ROSHAN_AEGIS_TEXTS,
-    ROSHAN_CHEESE_TEXTS,
-    ROSHAN_EMPTY_PIT_TEXTS,
     ROSHAN_KILL_TEXTS,
-    ROSHAN_LOSER_TEXTS,
-    ROSHAN_RESULT_FOOTERS,
     ROSHAN_SESSION_TTL,
     ROSHAN_STEAL_WINDOW_SEC,
     ROSHAN_TEXTS,
@@ -46,11 +41,12 @@ AEGIS = "aegis"
 CHEESE = "cheese"
 ITEM_NAMES = (AEGIS, CHEESE)
 
-ITEM_LABELS = {AEGIS: "🕊 АЕГИС", CHEESE: "🧀 СЫР"}
-ITEM_TEXTS = {AEGIS: ROSHAN_AEGIS_TEXTS, CHEESE: ROSHAN_CHEESE_TEXTS}
+ITEM_LABELS = {AEGIS: "🧿 АЕГИС", CHEESE: "🧀 СЫР"}
+# What the artifact actually does. The closing message states this verbatim:
+# a group announcement needs the effect, not a joke about it.
 ITEM_DESCRIPTIONS = {
     AEGIS: "гасит один минус ролл",
-    CHEESE: "×1.5 к положительному роллу",
+    CHEESE: "×1.5 к следующему плюсу",
 }
 
 # Strong references to pending window timers, otherwise the event loop may
@@ -274,7 +270,7 @@ def distribute_items(session_id: str) -> dict[int, str]:
 def build_roshan_keyboard(session_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(
-            "🥷 В яму за добычей!",
+            "🔓 В яму",
             callback_data=f"roshan_steal_{session_id}",
             api_kwargs={"style": "danger"},
         )]
@@ -285,15 +281,15 @@ def build_roshan_text(display_username: str, reward: float, claimers: int = 0) -
     blocks = [
         f"🎲 {display_username}",
         f"{random.choice(ROSHAN_TEXTS)}\n{random.choice(ROSHAN_KILL_TEXTS)}",
-        f"🎁 Фиссура выросла на <b>+{reward:.1f} см</b>",
+        f"Фиссура выросла на <b>+{reward:.1f} см</b>",
         (
-            f"🕊 АЕГИС и 🧀 СЫР лежат на дне ямы.\n"
-            f"🥷 Вытащить можно <b>{ROSHAN_STEAL_WINDOW_SEC} секунд</b> — "
-            "кто нажал, тот и тащит, но предмет выпадет случайно."
+            f"{ITEM_LABELS[AEGIS]} и {ITEM_LABELS[CHEESE]} лежат на дне.\n"
+            f"🔓 Забрать можно <b>{ROSHAN_STEAL_WINDOW_SEC} секунд</b>, "
+            "предмет выпадет случайно."
         ),
     ]
     if claimers:
-        blocks.append(f"👥 Уже нажали: {claimers}")
+        blocks.append(f"👥 Нажали: {claimers}")
     return "\n\n".join(blocks)
 
 
@@ -304,39 +300,32 @@ def build_result_text(
     winner_names: dict[int, str],
     loser_names: list[str],
 ) -> str:
-    """Closing message for the stealing window.
+    """Closing message: who got what, and what it does.
 
-    The item quotes live in a public group message, so they are written in the
-    third person. "Ты забрал АЕГИС" was unreadable there: every reader took it
-    as addressed to them, and each winner got a different random quote, so the
-    same line named a different person to everyone.
+    States the two facts a player actually needs - who walked off with which
+    artifact, and what that artifact does next - and nothing else. Earlier
+    versions padded this with random flavour quotes and closing lines.
     """
     blocks = [
-        "👹 Рошан повержен",
-        f"⛏ {killer_name} — добыча за убийство: +{reward:.1f} см",
+        "🪤 Рошан повержен",
+        f"🪙 За убийство: <b>{killer_name}</b>, +{reward:.1f} см",
     ]
 
     if awarded:
-        stolen = ["🥷 Утащили из ямы:"]
+        stolen = ["🔓 Утащили из ямы:"]
         for uid, item in awarded.items():
             name = winner_names.get(uid) or f"игрок {uid}"
             stolen.append(
-                f"{ITEM_LABELS[item]} → {name}\n"
-                f"   {random.choice(ITEM_TEXTS[item])}"
+                f"{ITEM_LABELS[item]} → <b>{name}</b>\n"
+                f"   {ITEM_DESCRIPTIONS[item]}"
             )
         blocks.append("\n".join(stolen))
     else:
-        blocks.append(
-            f"{random.choice(ROSHAN_EMPTY_PIT_TEXTS)}\n"
-            "🕊 и 🧀 так и остались лежать на дне."
-        )
+        blocks.append("🔓 В яму никто не полез.")
 
     if loser_names:
-        blocks.append(
-            f"{random.choice(ROSHAN_LOSER_TEXTS)}: " + ", ".join(loser_names)
-        )
+        blocks.append("🕳 Ничего не досталось: " + ", ".join(loser_names))
 
-    blocks.append(random.choice(ROSHAN_RESULT_FOOTERS))
     return "\n\n".join(blocks)
 
 
@@ -502,7 +491,7 @@ async def resolve_session(bot, session_id: str) -> None:
 
 async def handle_roshan_button(update: ContextTypes.DEFAULT_TYPE,
                                context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the '🥷 В яму за добычей!' press."""
+    """Handle the '🔓 В яму' press."""
     query = update.callback_query
     data = query.data or ""
 
@@ -515,21 +504,21 @@ async def handle_roshan_button(update: ContextTypes.DEFAULT_TYPE,
 
     session = await asyncio.to_thread(load_session, session_id)
     if not session:
-        await query.answer("👹 Этот Рошан давно ушёл обратно в яму.", show_alert=True)
+        await query.answer("🪤 Этот Рошан давно ушёл обратно в яму.", show_alert=True)
         return
 
     if int(session["resolved"] or 0):
-        await query.answer("🕳 Окно уже закрыто, добыча разобрана.", show_alert=True)
+        await query.answer("🔓 Окно закрыто, добыча разобрана.", show_alert=True)
         return
 
     if user_id == int(session["killer_id"]):
-        await query.answer("⛏ Ты его и так убил. У себя не покрадушь.", show_alert=True)
+        await query.answer("🪙 Ты его и так убил. У себя не покрадушь.", show_alert=True)
         return
 
     ok = await asyncio.to_thread(add_claimer, session_id, user_id)
     if not ok:
-        await query.answer("🥷 Ты уже в деле. Или окно уже закрылось.", show_alert=True)
+        await query.answer("🔓 Ты уже в деле. Или окно закрылось.", show_alert=True)
         return
 
     count = len(await asyncio.to_thread(load_claimers, session_id))
-    await query.answer(f"🥷 Ты в деле! Сейчас в яме: {count}", show_alert=False)
+    await query.answer(f"🔓 Ты в деле! Нажали: {count}", show_alert=False)

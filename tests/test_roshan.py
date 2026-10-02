@@ -368,15 +368,15 @@ def test_callback_data_fits_telegram_limit():
 
 
 def test_steal_button_uses_agreed_emoji():
-    # 🥷 ninja, because both items are stealable - the old label said
-    # "Украсть АЕГИС" while the button actually took the cheese too.
+    # 🔓, because both items are stealable - the old label said
+    # "Украсть АЕГИС" while the button actually handed out the cheese too.
     keyboard = roshan.build_roshan_keyboard("1_7")
-    assert "🥷" in keyboard.inline_keyboard[0][0].text
-    assert "🖐️" not in keyboard.inline_keyboard[0][0].text
+    assert "🔓" in keyboard.inline_keyboard[0][0].text
+    assert "🧀" not in keyboard.inline_keyboard[0][0].text
 
 
 def test_roshan_emojis_do_not_collide_with_other_mechanics():
-    """Roshan owns its emoji set; ⚡ and 🛡 belong to other events."""
+    """Roshan owns its emoji set; the classics belong to other events."""
     import pathlib
     import re
 
@@ -397,6 +397,7 @@ def test_roshan_emojis_do_not_collide_with_other_mechanics():
     # ⚡ is Zeus and 🛡 is not ours to take.
     assert "⚡" not in own
     assert "🛡" not in own
+    assert "⚔" not in own
 
 
 # =====================
