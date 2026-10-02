@@ -326,6 +326,12 @@ def build_teams(tid: int, names: list[str] | None = None) -> list[dict]:
         return []
 
     buckets = balance_by_rank(players, team_size)
+    # Нужно минимум две команды: с одной матчей не существует, _create_bracket
+    # выйдет раньше, не переведя турнир в active, и кнопку «Начать» можно было
+    # нажимать бесконечно. Лучше не создавать команды вовсе.
+    if len(buckets) < 2:
+        return []
+
     names = names or []
     for index, bucket in enumerate(buckets):
         name = names[index] if index < len(names) else f"Команда {index + 1}"

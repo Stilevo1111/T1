@@ -163,10 +163,14 @@ check("в приглашении кнопка участия",
 tid = int(T.active_tournament(CHAT.id)['id'])
 check("турнир сохранён", tid > 0, str(tid))
 check("статус = registration", T.get_tournament(tid)['status'] == 'registration')
-check("админу сразу показана кнопка старта",
-      any(b.callback_data == f"{H.CB_START}{tid}"
+check("админу показана кнопка сетки",
+      any(b.callback_data == f"{H.CB_BRACKET}{tid}"
           for r in hint["markup"].inline_keyboard for b in r),
       str([b.callback_data for r in hint["markup"].inline_keyboard for b in r]))
+# Сразу после создания участников 0, поэтому кнопки старта ещё нет.
+check("до записи кнопки старта нет",
+      not any(b.callback_data.startswith(H.CB_START)
+              for r in hint["markup"].inline_keyboard for b in r))
 
 # --- 3. Запись через кнопку ---
 # Девять игроков пишутся первыми, админ записывается последним — так его
@@ -210,6 +214,28 @@ run(H.tour_command(FakeUpdate(FakeUser(1), CHAT), CTX))
 check("записанному кнопки участия нет",
       not any(btn.callback_data.startswith(H.CB_JOIN)
               for row in SENT[-1]["markup"].inline_keyboard for btn in row))
+
+# --- 4б. Старт с одним участником не должен «залипать» ---
+# _create_bracket выходит раньше, не переводя турнир в active, из-за чего
+# кнопку «Начать» можно было нажимать бесконечно (видно в прод-логе).
+solo_chat = FakeChat(-100999)
+tid_solo = T.create_tournament("Одинокий", chat_id=solo_chat.id, created_by=1)
+T.join(tid_solo, 1, "solo", 50)          # в турнире только админ
+q_solo = press(f"{H.CB_START}{tid_solo}", 1)
+check("старт с одним игроком отклонён",
+      T.get_tournament(tid_solo)['status'] == 'registration',
+      T.get_tournament(tid_solo)['status'])
+check("команды при одном игроке не созданы",
+      T.list_teams(tid_solo) == [], str(T.list_teams(tid_solo)))
+check("админу объяснили, сколько не хватает",
+      any("минимум 2 участника" in a for a in q_solo.alerts), str(q_solo.alerts))
+
+# Кнопка старта не показывается, пока участников меньше двух.
+SENT.clear()
+run(H.tour_command(FakeUpdate(FakeUser(1), solo_chat), CTX))
+check("при одном игроке кнопки старта нет",
+      not any(b.callback_data.startswith(H.CB_START)
+              for r in SENT[-1]["markup"].inline_keyboard for b in r))
 
 # --- 5. Админ запускает турнир кнопкой (раньше вызывали build_teams вручную) ---
 check("до старта турнир в регистрации",

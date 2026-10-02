@@ -172,7 +172,8 @@ def _registration_keyboard(tid: int, viewer_id: int) -> InlineKeyboardMarkup:
     """
     rows = []
     players = T.count_players(tid)
-    if _is_admin(viewer_id):
+    # Кнопка имеет смысл только когда матч вообще возможен (две команды).
+    if _is_admin(viewer_id) and players >= 2:
         rows.append([InlineKeyboardButton(
             f"▶️ Начать турнир ({players} в регистрации)",
             callback_data=f"{CB_START}{tid}")])
@@ -361,7 +362,11 @@ async def tour_start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     teams = T.build_teams(tid)
     if not teams:
-        await query.answer("Недостаточно участников.", show_alert=True)
+        # build_teams отказывается собирать меньше двух команд: матча не будет.
+        players = T.count_players(tid)
+        await query.answer(
+            f"Нужно минимум 2 участника, сейчас {players}. Позовите ещё игроков.",
+            show_alert=True)
         return
 
     logger.info("tournament: старт %s, команд %s", tid, len(teams))
