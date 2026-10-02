@@ -2,8 +2,23 @@
 from unittest.mock import patch, MagicMock, AsyncMock
 import asyncio
 
+import pytest
+
+import fissure as fissure_module
 from fissure import fissure
 from database import user_cache
+
+
+@pytest.fixture(autouse=True)
+def _pin_roshan_chance(monkeypatch):
+    """Keep Roshan out of these tests.
+
+    fissure() draws Roshan on its own independent 20% roll (ROSHAN_DEFAULT_CHANCE)
+    before it looks at multicast/zeus/techies, and returns immediately when it
+    hits. The tests here only stub calculate_fissure_roll, so without this they
+    ran against a real random number and failed roughly one run in five.
+    """
+    monkeypatch.setattr(fissure_module, "get_roshan_chance", lambda: 0.0)
 
 
 def _setup_user(user_id, last_fissure=0.0, fissure=10.0):

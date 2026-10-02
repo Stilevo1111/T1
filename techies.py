@@ -15,10 +15,10 @@ TECHIES_SUCCESS_URL = Path(__file__).resolve().parent / "assets" / "techies" / "
 TECHIES_EXPLOSION_URL = Path(__file__).resolve().parent / "assets" / "techies" / "explosion.jpg"
 TECHIES_TIMEOUT_SEC = 20
 # Techies should be a meaningful risk, not a balance reset.  Four mines at
-# 1–5 cm produce a 4–20 cm loss (10 cm average), instead of 4–40 cm (22 cm
-# average) from the old 1–10 range.
+# 1-3 cm produce a 4-12 cm loss (8 cm average): still a real hit at 27 cm of
+# fissure, but no longer able to take half of it in a single event.
 TECHIES_MINE_MIN_DAMAGE = 1
-TECHIES_MINE_MAX_DAMAGE = 5
+TECHIES_MINE_MAX_DAMAGE = 3
 
 BUTTONS = [
     ("🟢", "green"),
@@ -350,8 +350,13 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
     username = query.from_user.username
     display_username = make_clickable(username or query.from_user.first_name or "Гость", user_id)
 
-    if elapsed > TECHIES_TIMEOUT_SEC or button_pressed == explosive_button:
-        mines = generate_mines()
+    # Timeout and wrong button are the same outcome: the mine detonates.
+    exploded = elapsed > TECHIES_TIMEOUT_SEC or button_pressed == explosive_button
+
+    if exploded:
+        # Use the mines planted when the session started, not a fresh roll, so
+        # this path agrees with _apply_techies_explosion on the same game.
+        mines = session.get("mines") or generate_mines()
         total_damage = sum(mines)
         new_fissure = max(0.1, current_fissure - total_damage)
         await asyncio.to_thread(update_user_field, user_id, "fissure", new_fissure)
@@ -388,11 +393,11 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         except Exception as e:
             logger.warning(f"techies: failed to award free_roll: {e}")
 
-    image_path = TECHIES_SUCCESS_URL if button_pressed != explosive_button else TECHIES_EXPLOSION_URL
+    image_path = TECHIES_EXPLOSION_URL if exploded else TECHIES_SUCCESS_URL
 
     # Add "roll again" button on success
     reply_markup = None
-    if button_pressed != explosive_button:
+    if not exploded:
         reply_markup = InlineKeyboardMarkup([[
             InlineKeyboardButton("🎲 Ещё один ролл!", callback_data=f"techies_again_{user_id}", api_kwargs={"style": "success"})
         ]])
