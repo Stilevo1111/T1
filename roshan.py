@@ -28,6 +28,8 @@ from telegram.ext import ContextTypes
 
 from bot_utils import make_clickable
 from constants import (
+    ROSHAN_AEGIS_EFFECTS,
+    ROSHAN_CHEESE_EFFECTS,
     ROSHAN_KILL_TEXTS,
     ROSHAN_SESSION_TTL,
     ROSHAN_STEAL_WINDOW_SEC,
@@ -42,12 +44,10 @@ CHEESE = "cheese"
 ITEM_NAMES = (AEGIS, CHEESE)
 
 ITEM_LABELS = {AEGIS: "🧿 АЕГИС", CHEESE: "🧀 СЫР"}
-# What the artifact actually does. The closing message states this verbatim:
-# a group announcement needs the effect, not a joke about it.
-ITEM_DESCRIPTIONS = {
-    AEGIS: "гасит один минус ролл",
-    CHEESE: "×1.5 к следующему плюсу",
-}
+# What the artifact actually does, per rolls.py. The closing message reads one
+# of these straight after the name: a group announcement needs the real effect,
+# and the interesting part of the Aegis is that a positive roll keeps it.
+ITEM_EFFECTS = {AEGIS: ROSHAN_AEGIS_EFFECTS, CHEESE: ROSHAN_CHEESE_EFFECTS}
 
 # Strong references to pending window timers, otherwise the event loop may
 # garbage-collect a sleeping task before it fires.
@@ -300,27 +300,25 @@ def build_result_text(
     winner_names: dict[int, str],
     loser_names: list[str],
 ) -> str:
-    """Closing message: who got what, and what it does.
+    """Closing message: who got what, and what it does to their next roll.
 
-    States the two facts a player actually needs - who walked off with which
-    artifact, and what that artifact does next - and nothing else. Earlier
-    versions padded this with random flavour quotes and closing lines.
+    One line per artifact. The earlier layout stacked a header and an indented
+    sub-line under every item, which turned a five line summary into a wall of
+    columns; the reader only ever needed the artifact, its owner and its effect.
     """
     blocks = [
         "🪤 Рошан повержен",
-        f"🪙 За убийство: <b>{killer_name}</b>, +{reward:.1f} см",
+        f"🪙 Рошана убил <b>{killer_name}</b> — фиссура выросла на +{reward:.1f} см",
     ]
 
-    if awarded:
-        stolen = ["🔓 Утащили из ямы:"]
-        for uid, item in awarded.items():
-            name = winner_names.get(uid) or f"игрок {uid}"
-            stolen.append(
-                f"{ITEM_LABELS[item]} → <b>{name}</b>\n"
-                f"   {ITEM_DESCRIPTIONS[item]}"
-            )
-        blocks.append("\n".join(stolen))
-    else:
+    for uid, item in awarded.items():
+        name = winner_names.get(uid) or f"игрок {uid}"
+        blocks.append(
+            f"{ITEM_LABELS[item]} достался <b>{name}</b> — "
+            f"{random.choice(ITEM_EFFECTS[item])}"
+        )
+
+    if not awarded:
         blocks.append("🔓 В яму никто не полез.")
 
     if loser_names:

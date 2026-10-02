@@ -9,7 +9,8 @@ were reduced to a bare count.
 
 import re
 
-from roshan import ITEM_DESCRIPTIONS, ITEM_LABELS, build_result_text
+from constants import ROSHAN_AEGIS_EFFECTS, ROSHAN_CHEESE_EFFECTS
+from roshan import ITEM_EFFECTS, ITEM_LABELS, build_result_text
 
 EMOJI = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]")
 
@@ -41,12 +42,48 @@ def test_names_every_recipient():
 
 
 def test_states_what_each_artifact_does():
-    """The point of the message: the effect, not a joke about it."""
+    """The point of the message: the real effect, drawn from the pool."""
     text = _render(
         {1: "aegis", 2: "cheese"}, {1: "went_Dr", 2: "mikhessssha"}, [],
     )
     for item in ("aegis", "cheese"):
-        assert ITEM_DESCRIPTIONS[item] in text
+        assert any(effect in text for effect in ITEM_EFFECTS[item])
+
+
+def test_aegis_effect_mentions_that_a_won_roll_keeps_it():
+    """apply_aegis returns early on roll >= 0 without consuming the item.
+
+    The Aegis used to be described as "гасит один минус ролл", which left out
+    the part players actually care about: a positive roll does not burn it.
+    """
+    for effect in ROSHAN_AEGIS_EFFECTS:
+        assert re.search(r"плюс|положительн", effect), effect
+
+
+def test_cheese_pool_says_it_does_not_touch_a_negative_roll():
+    """apply_cheese returns early on roll <= 0.
+
+    "Next plus is x1.5" is complete truth on its own, so the pool only has to
+    state the counter-case somewhere - unlike the Aegis, where the missing
+    detail was what made the old wording wrong.
+    """
+    assert any(re.search(r"минус", effect) for effect in ROSHAN_CHEESE_EFFECTS)
+    assert any(re.search(r"1[.,]5|полтора", effect) for effect in ROSHAN_CHEESE_EFFECTS)
+
+
+def test_one_line_per_artifact():
+    """No stacked header/indent columns - that was the overloaded layout."""
+    text = _render(
+        {1: "aegis", 2: "cheese"}, {1: "went_Dr", 2: "mikhessssha"}, ["vasya"],
+    )
+    artifact_lines = [
+        line for line in text.splitlines()
+        if any(label in line for label in ITEM_LABELS.values())
+    ]
+    assert len(artifact_lines) == 2
+    for line in artifact_lines:
+        assert line.startswith(tuple(EMOJI.findall("".join(ITEM_LABELS.values()))))
+        assert not line.startswith(" "), "no indentation under an artifact"
 
 
 def test_players_who_got_nothing_are_named():
