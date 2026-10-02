@@ -134,6 +134,12 @@ def press(data, uid):
         run(H.tour_join_callback(update, CTX))
     elif data.startswith(H.CB_SCORE):
         run(H.tour_score_callback(update, CTX))
+    elif data.startswith(H.CB_START):
+        run(H.tour_start_callback(update, CTX))
+    elif data.startswith(H.CB_SERVER):
+        run(H.tour_server_callback(update, CTX))
+    elif data.startswith(H.CB_LOBBY):
+        run(H.tour_lobby_callback(update, CTX))
     else:
         run(H.tour_bracket_callback(update, CTX))
     return query
@@ -186,11 +192,33 @@ check("записанному кнопки участия нет",
       not any(btn.callback_data.startswith(H.CB_JOIN)
               for row in SENT[-1]["markup"].inline_keyboard for btn in row))
 
-# --- 5. Бот собирает команды и рисует сетку ---
-teams = T.build_teams(tid, names=["Team Zeus", "Team Nova"])
+# --- 5. Админ запускает турнир кнопкой (раньше вызывали build_teams вручную) ---
+check("до старта турнир в регистрации",
+      T.get_tournament(tid)['status'] == 'registration')
+check("до старта матчей нет", T.current_match(tid, 1) is None)
+
+# Кнопку «Начать» видит только админ.
+run(H.tour_command(FakeUpdate(FakeUser(2), CHAT), CTX))
+check("у обычного игрока нет кнопки «Начать»",
+      not any(btn.callback_data.startswith(H.CB_START)
+              for row in SENT[-1]["markup"].inline_keyboard for btn in row))
+
+run(H.tour_command(FakeUpdate(FakeUser(1), CHAT), CTX))
+check("у админа есть кнопка «Начать»",
+      any(btn.callback_data == f"{H.CB_START}{tid}"
+          for row in SENT[-1]["markup"].inline_keyboard for btn in row))
+
+qs = press(f"{H.CB_START}{tid}", 1)
+check("турнир запущен", T.get_tournament(tid)['status'] == 'active',
+      T.get_tournament(tid)['status'])
+
+teams = T.list_teams(tid)
 check("бот собрал 2 команды по 5 человек",
       len(teams) == 2 and all(len(t['members']) == 5 for t in teams),
       str([len(t['members']) for t in teams]))
+check("состав опубликован со Steam ID",
+      any("Команды собраны" in s["text"] for s in SENT))
+check("после старта матч появился", T.current_match(tid, 1) is not None)
 
 run(H.tour_command(FakeUpdate(FakeUser(1), CHAT), CTX))
 check("после старта бот показывает сетку", "Гранд-финал" in last_text(), last_text())
@@ -225,6 +253,72 @@ check("есть все четыре варианта счёта",
 # --- 7. Капитан сдаёт счёт 2:1 ---
 cap1 = [m for m in teams[0]['members'] if m.get('is_captain')][0]['telegram_id']
 cap2 = [m for m in teams[1]['members'] if m.get('is_captain')][0]['telegram_id']
+
+# --- 6б. Капитан создаёт лобби: название, сервер, пароль ---
+run(H.tour_command(FakeUpdate(FakeUser(cap1), CHAT), CTX))
+kb_cap = SENT[-1]["markup"].inline_keyboard
+check("капитану показана кнопка «Создать лобби»",
+      any(btn.callback_data == f"{H.CB_LOBBY}{tid}"
+          for row in kb_cap for btn in row),
+      str([b.callback_data for r in kb_cap for b in r]))
+
+# cap2 тоже капитан (своей команды), поэтому проверяем обычного участника.
+plain = [m['telegram_id'] for m in teams[1]['members']
+         if not m.get('is_captain')][0]
+run(H.tour_command(FakeUpdate(FakeUser(plain), CHAT), CTX))
+kb_play = SENT[-1]["markup"].inline_keyboard
+check("обычному участнику кнопки лобби нет",
+      not any(btn.callback_data.startswith(H.CB_LOBBY)
+              for row in kb_play for btn in row))
+check("обычному участнику виден счёт своего матча",
+      any(btn.callback_data.startswith(H.CB_SCORE)
+          for row in kb_play for btn in row))
+
+press(f"{H.CB_LOBBY}{tid}", cap1)
+srv_btns = [b for row in SENT[-1]["markup"].inline_keyboard for b in row]
+check("бот предложил выбрать сервер",
+      any(b.callback_data.startswith(f"{H.CB_SERVER}{tid}:") for b in srv_btns),
+      str([b.callback_data for b in srv_btns]))
+
+# Чужой капитан лобби создать не может.
+press(f"{H.CB_SERVER}{tid}:EU East", plain)
+check("чужой не создаёт лобби",
+      T.current_match(tid, cap1).get('lobby_server') != "EU East",
+      str(T.current_match(tid, cap1).get('lobby_server')))
+
+press(f"{H.CB_SERVER}{tid}:EU East", cap1)
+saved = T.current_match(tid, cap1)
+check("сервер сохранён", saved['lobby_server'] == "EU East", str(saved.get('lobby_server')))
+check("пароль сохранён", bool(saved['lobby_password']), str(saved.get('lobby_password')))
+check("название содержит турнир, команду и раунд",
+      "Боевой кубок Fissure" in saved['lobby_name']
+      and teams[0]['name'] in saved['lobby_name']
+      and "Гранд-финал" in saved['lobby_name'],
+      saved['lobby_name'])
+check("код лобби сохранён", bool(saved['lobby_code']), str(saved.get('lobby_code')))
+check("лобби опубликовано в чат", "Лобби к матчу" in last_text(), last_text())
+check("в лобби указан соперник",
+      any(t['name'] in last_text() for t in teams if t['id'] != teams[0]['id']))
+
+# --- 6в. Капитан переименовывает команду ---
+ctx_args = type("A", (), {"args": ["Team", "Zeus"]})()
+run(H.teamname_command(FakeUpdate(FakeUser(cap1), CHAT), ctx_args))
+name1 = [t['name'] for t in T.list_teams(tid) if t['id'] == teams[0]['id']][0]
+name2_before = [t['name'] for t in T.list_teams(tid) if t['id'] == teams[1]['id']][0]
+check("команда переименована капитаном", name1 == "Team Zeus", name1)
+
+# Капитан другой команды переименовывает только свою — команду №1 не трогает.
+run(H.teamname_command(FakeUpdate(FakeUser(cap2), CHAT),
+                       type("A", (), {"args": ["Hacked"]})()))
+name1_after = [t['name'] for t in T.list_teams(tid) if t['id'] == teams[0]['id']][0]
+check("название чужой команды не изменилось", name1_after == "Team Zeus",
+      f"{name1} -> {name1_after}")
+
+# Обычный участник не переименовывает ничего.
+run(H.teamname_command(FakeUpdate(FakeUser(plain), CHAT),
+                       type("A", (), {"args": ["Hacked2"]})()))
+check("участник не переименовывает команду",
+      [t['name'] for t in T.list_teams(tid) if t['id'] == teams[0]['id']][0] == "Team Zeus")
 
 press(f"{H.CB_SCORE}{tid}", cap2)
 press(f"{H.CB_SCORE}{tid}:2:1", cap1)

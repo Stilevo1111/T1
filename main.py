@@ -5158,6 +5158,7 @@ async def main():
             BotCommand("analyze", "🔎 Аналитика"),
             BotCommand("tour", "🏆 Турнир"),
             BotCommand("newtour", "➕ Создать турнир"),
+            BotCommand("teamname", "✏️ Название команды"),
             BotCommand("link", "🔑 Привязать Аккаунт"),
             BotCommand("party", "🎮 Поиск пати"),
             BotCommand("about", "ℹ️ О боте"),

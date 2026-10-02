@@ -574,6 +574,17 @@ def set_lobby(match_id: int, code: str, server: str,
         (code, server, name, password, 'lobby', match_id))
 
 
+def rename_team(team_id: int, name: str) -> bool:
+    """Переименовать команду (капитан задаёт название)."""
+    name = (name or "").strip()
+    if not name:
+        return False
+    q = _q()
+    _write(f"UPDATE tournament_teams SET name = {q} WHERE id = {q}",
+           (name[:100], team_id))
+    return True
+
+
 # -------------------------------------------------------------------
 # Текстовая сетка для чата
 # -------------------------------------------------------------------
