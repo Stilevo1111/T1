@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 TYPED_LABEL = "Хукаю..."
 LOADING_ICON = "🪝 "
 SPINNER_FRAMES = ["🪝", "🔄", "⏳", "🔄"]
-SPINNER_INTERVAL = 2.0
+SPINNER_INTERVAL = 5.0
 MAX_FAILED_EDITS = 10
 RATE_LIMIT_BACKOFF = 3
 
