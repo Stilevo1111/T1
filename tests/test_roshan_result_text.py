@@ -50,25 +50,28 @@ def test_states_what_each_artifact_does():
         assert any(effect in text for effect in ITEM_EFFECTS[item])
 
 
-def test_aegis_effect_mentions_that_a_won_roll_keeps_it():
-    """apply_aegis returns early on roll >= 0 without consuming the item.
+def test_aegis_label_says_it_protects_against_a_negative_roll():
+    """apply_aegis zeroes a negative roll; the label has to say which sign it eats.
 
-    The Aegis used to be described as "гасит один минус ролл", which left out
-    the part players actually care about: a positive roll does not burn it.
+    The pool was once full of sentences ("минус обнулится полностью; плюс
+    АЕГИС не потратит"). Short labels were requested instead, so the requirement
+    is the sign being named, not the positive-roll caveat spelled out.
     """
     for effect in ROSHAN_AEGIS_EFFECTS:
-        assert re.search(r"плюс|положительн", effect), effect
+        assert re.search(r"минус", effect), effect
 
 
-def test_cheese_pool_says_it_does_not_touch_a_negative_roll():
-    """apply_cheese returns early on roll <= 0.
-
-    "Next plus is x1.5" is complete truth on its own, so the pool only has to
-    state the counter-case somewhere - unlike the Aegis, where the missing
-    detail was what made the old wording wrong.
-    """
-    assert any(re.search(r"минус", effect) for effect in ROSHAN_CHEESE_EFFECTS)
+def test_cheese_label_says_it_scales_a_positive_roll():
+    """apply_cheese multiplies a positive roll by 1.5 and leaves a minus alone."""
     assert any(re.search(r"1[.,]5|полтора", effect) for effect in ROSHAN_CHEESE_EFFECTS)
+    assert any(re.search(r"плюс|умножение|усиление|жирн", effect)
+               for effect in ROSHAN_CHEESE_EFFECTS)
+
+
+def test_effect_labels_stay_short():
+    """These are inline labels on one line each, not paragraphs."""
+    for effect in ROSHAN_AEGIS_EFFECTS + ROSHAN_CHEESE_EFFECTS:
+        assert len(effect) <= 30, effect
 
 
 def test_one_line_per_artifact():
