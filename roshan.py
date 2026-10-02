@@ -30,7 +30,6 @@ from bot_utils import make_clickable
 from constants import (
     ROSHAN_AEGIS_EFFECTS,
     ROSHAN_CHEESE_EFFECTS,
-    ROSHAN_KILL_TEXTS,
     ROSHAN_SESSION_TTL,
     ROSHAN_STEAL_WINDOW_SEC,
     ROSHAN_TEXTS,
@@ -280,11 +279,12 @@ def build_roshan_keyboard(session_id: str) -> InlineKeyboardMarkup:
 def build_roshan_text(display_username: str, reward: float, claimers: int = 0) -> str:
     blocks = [
         f"🎲 {display_username}",
-        f"{random.choice(ROSHAN_TEXTS)}\n{random.choice(ROSHAN_KILL_TEXTS)}",
+        random.choice(ROSHAN_TEXTS),
         f"Фиссура выросла на <b>+{reward:.1f} см</b>",
         (
-            f"{ITEM_LABELS[AEGIS]} и {ITEM_LABELS[CHEESE]} лежат на дне.\n"
-            f"🔓 Забрать можно <b>{ROSHAN_STEAL_WINDOW_SEC} секунд</b>, "
+            f"{ITEM_LABELS[AEGIS]} и {ITEM_LABELS[CHEESE]} выпали из Рошана.\n"
+            f"🔓 Купить их нельзя — только украсть. "
+            f"На это есть <b>{ROSHAN_STEAL_WINDOW_SEC} секунд</b>, "
             "предмет выпадет случайно."
         ),
     ]
