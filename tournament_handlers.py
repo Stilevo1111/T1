@@ -11,6 +11,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 import tournament as T
+from tournament import TEAM_SIZE
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -145,22 +146,30 @@ async def tour_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🎮 Принять участие", callback_data=f"{CB_JOIN}{tid}")])
     # Стартовать турнир может только администратор: до этого момента
     # команды не собраны, сетки нет и матчи невозможны.
-    if _is_admin(_viewer_id(update)):
-        if T.count_players(tid) >= 2:
-            rows.append([InlineKeyboardButton(
-                "▶️ Начать турнир", callback_data=f"{CB_START}{tid}")])
+    reg_players = T.count_players(tid)
+    reg_needed = _players_needed_for_two_teams(tid)
+    if _is_admin(_viewer_id(update)) and reg_players >= reg_needed:
+        rows.append([InlineKeyboardButton(
+            "▶️ Начать турнир", callback_data=f"{CB_START}{tid}")])
     rows.append([InlineKeyboardButton(
         "📊 Сетка", callback_data=f"{CB_BRACKET}{tid}")])
 
     hint = ("Вы уже записаны." if already else
             f"Ваш ранг: {T.rank_name(tier)}. Порога нет — играют все.")
-    if _is_admin(_viewer_id(update)) and T.count_players(tid) < 2:
-        hint += "\nНужно минимум 2 участника, чтобы собрать команды."
+    if _is_admin(_viewer_id(update)) and reg_players < reg_needed:
+        hint += f"\nДля старта нужно {reg_needed} участников, сейчас {reg_players}."
     await chat.send_message(
         f"{T.tournament_summary(tid)}\n\n{hint}",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(rows),
     )
+
+
+def _players_needed_for_two_teams(tid: int) -> int:
+    """Сколько игроков нужно, чтобы получить две команды турнира."""
+    tournament = T.get_tournament(tid) or {}
+    size = int(tournament.get('team_size') or TEAM_SIZE)
+    return max(2, size * 2)
 
 
 def _registration_keyboard(tid: int, viewer_id: int) -> InlineKeyboardMarkup:
@@ -172,8 +181,9 @@ def _registration_keyboard(tid: int, viewer_id: int) -> InlineKeyboardMarkup:
     """
     rows = []
     players = T.count_players(tid)
-    # Кнопка имеет смысл только когда матч вообще возможен (две команды).
-    if _is_admin(viewer_id) and players >= 2:
+    # Матч возможен, когда участников хватает на ДВЕ полные команды.
+    needed = _players_needed_for_two_teams(tid)
+    if _is_admin(viewer_id) and players >= needed:
         rows.append([InlineKeyboardButton(
             f"▶️ Начать турнир ({players} в регистрации)",
             callback_data=f"{CB_START}{tid}")])
@@ -182,8 +192,25 @@ def _registration_keyboard(tid: int, viewer_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
+def _parse_newtour_args(args) -> tuple[str, int]:
+    """Разбирает /newtour [название] [размер].
+
+    Последний числовой аргумент считается размером команды — так можно
+    сделать тестовый турнир вдвоём: /newtour Тест 1.
+    """
+    title_parts = []
+    team_size = TEAM_SIZE
+    for raw in args:
+        text = raw.strip()
+        if text.isdigit() and 1 <= int(text) <= 10:
+            team_size = int(text)
+        elif text:
+            title_parts.append(text)
+    return " ".join(title_parts) or "Боевой кубок Fissure", team_size
+
+
 async def newtour_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/newtour [название] — создать турнир. Только для администратора."""
+    """/newtour [название] [размер] — создать турнир. Только для администратора."""
     chat = update.effective_chat
     user = update.effective_user
     if chat is None or user is None:
@@ -194,8 +221,8 @@ async def newtour_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await chat.send_message("⛔ Создавать турниры может только администратор.")
         return
 
-    title = " ".join(context.args).strip() or "Боевой кубок Fissure"
-    tid = T.create_tournament(title, chat.id, user.id)
+    title, team_size = _parse_newtour_args(context.args)
+    tid = T.create_tournament(title, chat.id, user.id, team_size=team_size)
     if not tid:
         await chat.send_message("❌ Не удалось создать турнир.")
         return
@@ -205,7 +232,9 @@ async def newtour_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🏆 <b>{_escape(title)}</b>\n"
         "Регистрация открыта. Участие у любого ранга, "
         "баланс команд — по рангам.\n"
-        "Нажмите кнопку, чтобы записаться.",
+        f"В команде {team_size} человек. "
+        f"Нужно минимум {team_size * 2}, чтобы собрать две команды."
+        "\nНажмите кнопку, чтобы записаться.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("🎮 Принять участие",
@@ -362,10 +391,12 @@ async def tour_start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     teams = T.build_teams(tid)
     if not teams:
-        # build_teams отказывается собирать меньше двух команд: матча не будет.
+        # build_teams отказывается собирать меньше двух полных команд.
         players = T.count_players(tid)
+        needed = _players_needed_for_two_teams(tid)
         await query.answer(
-            f"Нужно минимум 2 участника, сейчас {players}. Позовите ещё игроков.",
+            f"Для старта нужно {needed} участников, сейчас {players}. "
+            "Позовите ещё игроков.",
             show_alert=True)
         return
 

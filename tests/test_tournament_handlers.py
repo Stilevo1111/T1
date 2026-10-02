@@ -228,7 +228,8 @@ check("старт с одним игроком отклонён",
 check("команды при одном игроке не созданы",
       T.list_teams(tid_solo) == [], str(T.list_teams(tid_solo)))
 check("админу объяснили, сколько не хватает",
-      any("минимум 2 участника" in a for a in q_solo.alerts), str(q_solo.alerts))
+      any("Для старта нужно 10 участников, сейчас 1" in a for a in q_solo.alerts),
+      str(q_solo.alerts))
 
 # Кнопка старта не показывается, пока участников меньше двух.
 SENT.clear()
@@ -398,6 +399,54 @@ before = T.get_tournament(tid)['status']
 press(f"{H.CB_SCORE}{tid}:2:0", 424242)
 check("счёт от постороннего не изменил турнир",
       T.get_tournament(tid)['status'] == before)
+
+# --- 12. Тестовый турнир вдвоём: /newtour Дуэль 1 ---
+# Размер команды задаётся последним числом, чтобы можно было прогнать весь
+# сценарий, не собирая две команды по пять человек.
+title_a, size_a = H._parse_newtour_args(["Тест", "кубок"])
+check("название без числа", title_a == "Тест кубок" and size_a == 5, f"{title_a}/{size_a}")
+title_b, size_b = H._parse_newtour_args(["Тест", "1"])
+check("размер 1 распознан", title_b == "Тест" and size_b == 1, f"{title_b}/{size_b}")
+title_c, size_c = H._parse_newtour_args(["5"])
+check("только число — это размер, не название", bool(title_c) and size_c == 5,
+      f"{title_c}/{size_c}")
+_, size_d = H._parse_newtour_args(["Тест", "99"])
+check("неправдоподобный размер игнорируется", size_d == 5, str(size_d))
+
+duel_chat = FakeChat(-100777)
+SENT.clear()
+run(H.newtour_command(FakeUpdate(FakeUser(1), duel_chat),
+                      type("C", (), {"args": ["Дуэль", "1"]})()))
+check("турнир вдвоём создан", "Дуэль" in SENT[-2]["text"], SENT[-2]["text"])
+tid_duel = int(T.active_tournament(duel_chat.id)['id'])
+check("размер команды = 1", T.get_tournament(tid_duel)['team_size'] == 1,
+      str(T.get_tournament(tid_duel)['team_size']))
+
+press(f"{H.CB_JOIN}{tid_duel}", 1)
+press(f"{H.CB_JOIN}{tid_duel}", 2)
+check("двое записались", T.count_players(tid_duel) == 2, str(T.count_players(tid_duel)))
+
+press(f"{H.CB_START}{tid_duel}", 1)
+check("турнир вдвоём стартовал", T.get_tournament(tid_duel)['status'] == 'active',
+      T.get_tournament(tid_duel)['status'])
+teams_duel = T.list_teams(tid_duel)
+check("получилось 2 команды по 1 игроку",
+      len(teams_duel) == 2 and all(len(t['members']) == 1 for t in teams_duel),
+      str([len(t['members']) for t in teams_duel]))
+
+run(H.tour_command(FakeUpdate(FakeUser(1), duel_chat), CTX))
+check("видна сетка с матчем", "Гранд-финал" in last_text(), last_text())
+
+cap_d = [m for m in teams_duel[0]['members'] if m.get('is_captain')][0]['telegram_id']
+press(f"{H.CB_LOBBY}{tid_duel}", cap_d)
+press(f"{H.CB_SERVER}{tid_duel}:EU East", cap_d)
+check("лобби создано и в дуэли", bool(T.current_match(tid_duel, cap_d)['lobby_code']))
+
+press(f"{H.CB_SCORE}{tid_duel}:2:0", cap_d)
+check("победитель дуэли определён", T.champion(tid_duel) is not None,
+      str(T.champion(tid_duel)))
+check("турнир вдвоём завершён", T.get_tournament(tid_duel)['status'] == 'finished',
+      T.get_tournament(tid_duel)['status'])
 
 DB.unlink(missing_ok=True)
 print()
