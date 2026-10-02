@@ -367,12 +367,15 @@ def test_callback_data_fits_telegram_limit():
     assert len(data.encode("utf-8")) <= 64
 
 
-def test_steal_button_uses_agreed_emoji():
-    # 🔓, because both items are stealable - the old label said
+def test_steal_button_is_labelled_by_the_action():
+    # "Своровать", because both items are stealable - the old label said
     # "Украсть АЕГИС" while the button actually handed out the cheese too.
+    # It also read "🔓 В яму", naming the place rather than the action.
     keyboard = roshan.build_roshan_keyboard("1_7")
-    assert "🔓" in keyboard.inline_keyboard[0][0].text
-    assert "🧀" not in keyboard.inline_keyboard[0][0].text
+    label = keyboard.inline_keyboard[0][0].text
+    assert "Своровать" in label
+    assert "🧀" not in label
+    assert "🧿" not in label
 
 
 def test_roshan_emojis_do_not_collide_with_other_mechanics():

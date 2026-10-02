@@ -269,21 +269,20 @@ def distribute_items(session_id: str) -> dict[int, str]:
 def build_roshan_keyboard(session_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(
-            "🔓 В яму",
+            "Своровать",
             callback_data=f"roshan_steal_{session_id}",
             api_kwargs={"style": "danger"},
         )]
     ])
 
 
-def build_roshan_text(display_username: str, reward: float, claimers: int = 0) -> str:
+def build_roshan_text(display_username: str, claimers: int = 0) -> str:
     blocks = [
         f"🎲 {display_username}",
         random.choice(ROSHAN_TEXTS),
-        f"Фиссура выросла на <b>+{reward:.1f} см</b>",
         (
             f"{ITEM_LABELS[AEGIS]} и {ITEM_LABELS[CHEESE]} выпали из Рошана.\n"
-            f"🔓 Купить их нельзя — только украсть. "
+            f"Купить их нельзя — только украсть. "
             f"На это есть <b>{ROSHAN_STEAL_WINDOW_SEC} секунд</b>, "
             "предмет выпадет случайно."
         ),
@@ -308,7 +307,8 @@ def build_result_text(
     """
     blocks = [
         "🪤 Рошан повержен",
-        f"🪙 Рошана убил <b>{killer_name}</b> +{reward:.1f} см",
+        f"🪙 Рошана убил <b>{killer_name}</b>",
+        f"Фиссура выросла на <b>+{reward:.1f} см</b>",
     ]
 
     for uid, item in awarded.items():
@@ -352,7 +352,7 @@ async def handle_roshan_event(
     new_fissure = max(0.1, current_fissure + reward)
 
     session_id = f"{chat_id}_{int(now)}"
-    text = build_roshan_text(display_username, reward)
+    text = build_roshan_text(display_username)
     keyboard = build_roshan_keyboard(session_id)
 
     banner = get_banner_path("roshan")
