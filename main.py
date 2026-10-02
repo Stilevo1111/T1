@@ -3742,7 +3742,19 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 top_text += f"\n{user_pos_emoji} <b>{user_display}</b> - {user_rank_str}\n"
                 top_text += "└ Нет игр за неделю"
 
-            top_text += "\n\n<b><a href=\"https://seredin999.onrender.com/top-mmr\">🏆 Топ рангов на сайте</a></b>"
+            # Две кнопки: полный список на сайте и прямо в Mini App
+            # на вкладке «Топ рангов». Ссылку на сайт оставляем, потому
+            # что в Mini App видно только первых игроков.
+            from dota_matches import public_base_url
+
+            top_text += (
+                "\n\n"
+                f'🏆 <a href="https://seredin999.onrender.com/top-mmr">'
+                f"Топ рангов на сайте</a>"
+                '\n'
+                f'<a href="{public_base_url()}/matches?tab=ranks&miniapp=1">'
+                "📋 Весь список</a>"
+            )
 
             # Delete previous bot message before sending new one
             try:

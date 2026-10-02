@@ -887,6 +887,15 @@ def test_upstream_outage_is_logged_once():
     assert "set_opendota_rate_limited(120)" in src
 
 
+def test_topmmr_caption_offers_the_full_list():
+    """Подпись /topmmr ведёт и на сайт, и в Mini App на вкладку рангов."""
+    src = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
+    assert "seredin999.onrender.com/top-mmr" in src      # сайт не убираем
+    assert "Весь список" in src
+    # В Mini App открывается именно вкладка рангов, а не история игр.
+    assert "/matches?tab=ranks&miniapp=1" in src
+
+
 def test_matches_cache_is_shared_across_callers():
     """Разные вызовы делят один кеш: восемь матчей покрывают запрос на три.
 
