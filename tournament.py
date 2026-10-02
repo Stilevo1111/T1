@@ -572,3 +572,96 @@ def set_lobby(match_id: int, code: str, server: str,
         f" lobby_name = {q}, lobby_password = {q}, status = {q},"
         f" updated_at = CURRENT_TIMESTAMP WHERE id = {q}",
         (code, server, name, password, 'lobby', match_id))
+
+
+# -------------------------------------------------------------------
+# Текстовая сетка для чата
+# -------------------------------------------------------------------
+# Правила отображения (их утвердил пользователь):
+#  * золотая рамка / выделение — только у команды, выигравшей этот матч;
+#  * значок (✔ выиграли / ✘ проиграли) — только на пути самого игрока,
+#    у соперника значка нет, поэтому обе галки рядом невозможны;
+#  * у чужого матча значков нет вообще, только счёт;
+#  * пустой слот — тихая рамка без знаков вопроса и тире.
+MARK_WIN = "✔"
+MARK_LOSS = "✘"
+
+
+def _cell_text(name, score, mark, winner) -> str:
+    """Одна строка команды в сетке.
+
+    Пустой слот показывается как «—» без счёта и без знаков, чтобы
+    неотобранные места не выглядели как результат.
+    """
+    label = name or "—"
+    if name is None:
+        return label
+    parts = [f"{label} {score}".strip()] if score else [label]
+    if mark:
+        parts.append(f" {mark}")
+    elif winner:
+        # Победитель чужого матча: в HTML это золотая обводка, здесь —
+        # пометка, чтобы сетка оставалась читаемой в простом тексте.
+        parts.append(" (победитель)")
+    return "".join(parts)
+
+
+def render_bracket_text(tid: int, viewer_id: int | None = None) -> str:
+    """Сетка турнира текстом для Telegram.
+
+    `viewer_id` — id игрока: только на его пути показываются значки ✔/✘.
+    """
+    groups = bracket(tid)
+    if not groups:
+        return "Сетка пока пуста."
+
+    my_team = None
+    if viewer_id:
+        team = player_team(tid, viewer_id)
+        my_team = team['id'] if team else None
+
+    lines = []
+    for group in groups:
+        lines.append("")
+        lines.append(label_round(group['round']))
+        for m in group['matches']:
+            finished = m.get('status') == 'completed'
+            winner = m.get('winner_team_id')
+            t1, t2 = m.get('team1_id'), m.get('team2_id')
+            s1 = m.get('score1') or 0
+            s2 = m.get('score2') or 0
+
+            marks = {}
+            if my_team and finished:
+                if my_team == t1:
+                    marks[t1] = MARK_LOSS if winner != t1 else MARK_WIN
+                elif my_team == t2:
+                    marks[t2] = MARK_LOSS if winner != t2 else MARK_WIN
+
+            left = _cell_text(m.get('name1'), s1, marks.get(t1), finished and winner == t1)
+            right = _cell_text(m.get('name2'), s2, marks.get(t2), finished and winner == t2)
+            lines.append(f"  {left}  |  {right}")
+
+    return "\n".join(lines)
+
+
+def tournament_summary(tid: int) -> str:
+    """Короткая сводка: заголовок, статус и счётчик участников."""
+    t = get_tournament(tid)
+    if not t:
+        return "Турнир не найден."
+    status = t.get('status')
+    players = count_players(tid)
+    title = t.get('title') or "Боевой кубок"
+
+    if status == 'registration':
+        left = teams_needed(players, int(t.get('team_size') or TEAM_SIZE))
+        return (f"<b>{title}</b>\n"
+                f"Регистрация открыта. Участников: {players}\n"
+                f"До старта нужно ещё команд: {left}")
+    if status == 'finished':
+        champ = champion(tid)
+        who = f"Чемпион: {champ['team_name']}" if champ else "Турнир завершён"
+        return f"<b>{title}</b>\n{who}"
+    return f"<b>{title}</b>\nСетка идёт. Участников: {players}"
+

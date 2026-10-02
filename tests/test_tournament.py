@@ -251,7 +251,59 @@ check("турнир на 4 команды завершён",
 check("после финала матчей нет ни у кого",
       T.current_match(tid4, final_cap) is None)
 
-# --- 11. MMR не используется ---
+# --- 11. Текстовая сетка для чата ---
+# Правила: значок только на пути игрока, у соперника значка нет,
+# в чужом матче значков нет вовсе, пустые слоты без знаков вопроса.
+# Турнир `tid` — две команды, победитель Zeus играл один матч и выиграл его,
+# поэтому у него есть только галка и ни одного крестика.
+text_z = T.render_bracket_text(tid, cap1)
+check("в сетке есть название раунда", "Гранд-финал" in text_z)
+check("своя победа помечена галкой", T.MARK_WIN in text_z)
+check("у своей команды ровно одна галка", text_z.count(T.MARK_WIN) == 1,
+      str(text_z.count(T.MARK_WIN)))
+check("победитель без поражений не видит крестиков", T.MARK_LOSS not in text_z)
+check("у соперника значков нет", text_z.count(T.MARK_WIN) + text_z.count(T.MARK_LOSS) == 1)
+check("в строке матча обе галки невозможны",
+      not any(line.count(T.MARK_WIN) > 1 for line in text_z.splitlines()))
+check("в тексте сетки нет знаков вопроса", "?" not in text_z)
+check("названия раундов без html-тегов", "<b>" not in text_z and "</b>" not in text_z)
+
+# Проигравший капитан видит ровно один крестик и ни одной галки.
+text_lose = T.render_bracket_text(tid, cap2)
+check("проигравший видит свой крестик", T.MARK_LOSS in text_lose)
+check("проигравший не видит галок", T.MARK_WIN not in text_lose)
+check("у проигравшего ровно один значок",
+      text_lose.count(T.MARK_WIN) + text_lose.count(T.MARK_LOSS) == 1)
+check("победитель матча виден и проигравшему", "(победитель)" in text_lose)
+
+# Посторонний зритель не видит ни одного значка.
+text_guest = T.render_bracket_text(tid, 999)
+check("чужой зритель не видит значков",
+      T.MARK_WIN not in text_guest and T.MARK_LOSS not in text_guest)
+check("у чужого зрителя виден победитель матча", "(победитель)" in text_guest)
+
+# Свежий незакрытый турнир: проверяем пустые слоты будущих раундов.
+tid5 = T.create_tournament("Кубок впереди", chat_id=-100125, created_by=1)
+for i, tier in enumerate(ranks4, start=2001):
+    T.join(tid5, i, f"q{i}", tier)
+T.build_teams(tid5, names=["Alpha", "Bravo", "Charlie", "Delta"])
+text5 = T.render_bracket_text(tid5)
+check("в незакрытом турнире видны оба раунда",
+      "Полуфинал" in text5 and "Гранд-финал" in text5, repr(text5[-80:]))
+empty_final = text5.split("Гранд-финал")[-1]
+check("пустой финал без счёта и без знаков",
+      not any(ch.isdigit() for ch in empty_final)
+      and T.MARK_WIN not in empty_final and T.MARK_LOSS not in empty_final,
+      repr(empty_final.strip()))
+check("в незакрытом турнире счёт не выдумывается", "0" not in text5)
+
+check("сводка турнира содержит название", "Ночной кубок" in T.tournament_summary(tid))
+check("сводка показывает победителя", "Team Zeus" in T.tournament_summary(tid))
+check("сводка незакрытого турнира зовёт играть",
+      "Регистрация" in T.tournament_summary(tid5)
+      or "Участников" in T.tournament_summary(tid5), T.tournament_summary(tid5))
+
+# --- 12. MMR не используется ---
 # Проверяем не текст файла (MMR законно упоминается в докстрингах как
 # объяснение решения), а схему и обращения к данным. Комментарии и
 # докстринги вырезаем, чтобы мешать не могли.

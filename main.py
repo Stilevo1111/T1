@@ -1609,6 +1609,7 @@ from fissure import (
     fissure,
 )
 from party import party_command
+from tournament_handlers import register_tournament_handlers
 
 # All roll data (ROLL_MEMES, CATEGORY_PHRASES), welcome phrases,
 # multicast/zeus defaults, weekend multipliers and digest headers
@@ -2838,40 +2839,6 @@ async def dota_matches_api_handler(request):
             text=json.dumps({"error": str(e)}), status=500,
             content_type='application/json',
         ))
-
-
-async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mini App entry point: opens the Dota 2 match list inside Telegram.
-
-    Telegram only allows Web App buttons in private chats, so groups get a
-    plain link to the same page instead of a dead button.
-    """
-    from dota_matches import miniapp_url
-
-    chat = update.effective_chat
-    if chat is None:
-        return
-
-    url = miniapp_url()
-    if chat.type == 'private':
-        button = InlineKeyboardButton("🎮 Открыть список игр", web_app=WebAppInfo(url=url))
-        hint = "Нажмите кнопку — список откроется прямо в Telegram."
-    else:
-        button = InlineKeyboardButton("🎮 Открыть список игр", url=url)
-        hint = "Откройте список игр по кнопке ниже."
-
-    await context.bot.send_message(
-        chat_id=chat.id,
-        text=(
-            "<b>Список игр Dota 2</b>\n"
-            "Последние реальные игры игроков бота: герой, победа или поражение, "
-            "дата, время и длительность.\n"
-            f"{hint}"
-        ),
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([[button]]),
-        disable_web_page_preview=True,
-    )
 
 
 async def top_mmr_handler(request):
@@ -5155,7 +5122,9 @@ async def main():
         app.add_handler(CommandHandler("analyze", analyze_command))
         app.add_handler(CommandHandler(("party", "party"), party_command))
         app.add_handler(CommandHandler("story", story_command))
-        app.add_handler(CommandHandler("matches", matches_command))
+        # Турнирный движок заменил фичу «Список матчей»: /tour показывает
+        # регистрацию и сетку, /newtour создаёт турнир, кнопки ведут запись и счёт.
+        register_tournament_handlers(app)
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.ANY_CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members_message))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
@@ -5187,7 +5156,8 @@ async def main():
             BotCommand("top", "🏆 Топ Фиссур"),
             BotCommand("topmmr", "🏆 Топ MMR"),
             BotCommand("analyze", "🔎 Аналитика"),
-            BotCommand("matches", "📋 Матчи Dota 2"),
+            BotCommand("tour", "🏆 Турнир"),
+            BotCommand("newtour", "➕ Создать турнир"),
             BotCommand("link", "🔑 Привязать Аккаунт"),
             BotCommand("party", "🎮 Поиск пати"),
             BotCommand("about", "ℹ️ О боте"),
@@ -5201,20 +5171,8 @@ async def main():
         except Exception as e:
             logger.warning(f"Could not set bot commands: {e}")
 
-        # Telegram Mini App: the button left of the message field (private chats)
-        # opens the match list inside Telegram instead of an external browser.
-        try:
-            from dota_matches import miniapp_url
-            miniapp_link = miniapp_url()
-            await app.bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(
-                    text="📋 Матчи",
-                    web_app=WebAppInfo(url=miniapp_link),
-                )
-            )
-            logger.info(f"Mini App menu button -> {miniapp_link}")
-        except Exception as e:
-            logger.warning(f"Could not set Mini App menu button: {e}")
+        # Кнопку меню убрали вместе с фичей «Список матчей»: она вела на
+        # удалённую страницу. Турнир живёт в чате, поэтому /tour достаточно.
 
         if use_polling or not webhook_url:
             logger.info("Starting bot in POLLING mode")
