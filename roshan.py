@@ -319,10 +319,7 @@ def build_result_text(
         )
 
     if not awarded:
-        blocks.append("🔓 В яму никто не полез.")
-
-    if loser_names:
-        blocks.append("🕳 Ничего не досталось: " + ", ".join(loser_names))
+        blocks.append("Ничего не своровали.")
 
     return "\n\n".join(blocks)
 

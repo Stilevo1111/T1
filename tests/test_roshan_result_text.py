@@ -89,12 +89,17 @@ def test_one_line_per_artifact():
         assert not line.startswith(" "), "no indentation under an artifact"
 
 
-def test_players_who_got_nothing_are_named():
+def test_players_who_got_nothing_are_not_listed():
+    """The closing card reports winners only.
+
+    It used to end with "🕳 Ничего не досталось: vasya, petya", which spelled
+    out who came away empty-handed in a public group announcement. The losers
+    are still tracked in the database, they just do not belong in the message.
+    """
     text = _render({1: "aegis"}, {1: "mikhessssha"}, ["vasya", "petya"])
-    assert "vasya" in text
-    assert "petya" in text
-    # The old wording gave a number with no names.
-    assert not re.search(r"Остались ни с чем:\s*\d", text)
+    assert "vasya" not in text
+    assert "petya" not in text
+    assert "Ничего не досталось" not in text
 
 
 def test_no_flavour_quotes_survive_in_the_result():
@@ -115,7 +120,7 @@ def test_artifact_line_carries_one_emoji():
 
 def test_empty_window_is_stated_plainly():
     text = _render({}, {}, [])
-    assert "никто" in text.lower()
+    assert "Ничего не своровали" in text
 
 
 def test_no_loser_line_when_everyone_got_something():
