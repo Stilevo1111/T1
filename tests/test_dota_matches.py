@@ -259,8 +259,8 @@ class _FakeCursor:
         self._rows = rows
         self.executed = None
 
-    def execute(self, sql):
-        self.executed = sql
+    def execute(self, sql, params=()):
+        self.executed = (sql, params)
 
     def fetchall(self):
         return self._rows
@@ -362,6 +362,85 @@ def test_load_match_index_survives_db_failure(monkeypatch):
 
     monkeypatch.setattr(dota_matches, "_read_all", boom)
     assert dota_matches._load_match_index(limit=5) == []
+
+
+def test_linked_steam_ids_reads_users(monkeypatch):
+    captured = {}
+
+    def fake_read_all(sql, params=()):
+        captured["sql"] = sql
+        captured["params"] = params
+        return [(111,), (222,)]
+
+    monkeypatch.setattr(dota_matches, "_read_all", fake_read_all)
+
+    assert dota_matches._linked_steam_ids(5) == [111, 222]
+    assert captured["params"] == (5,)
+    assert "steam_id" in captured["sql"]
+
+
+def test_linked_steam_ids_survives_db_error(monkeypatch):
+    def boom(sql, params=()):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(dota_matches, "_read_all", boom)
+    assert dota_matches._linked_steam_ids(5) == []
+
+
+def test_player_fallback_index_merges_duplicates(monkeypatch):
+    import dota_mmr
+
+    monkeypatch.setattr(dota_matches, "_linked_steam_ids", lambda limit: [1, 2])
+
+    async def fake_matches(steam_id, limit):
+        if steam_id == 1:
+            return [
+                {"match_id": 100, "start_time": 500, "radiant_win": True},
+                {"match_id": 200, "start_time": 400, "radiant_win": False},
+            ]
+        # Same game as player 1 (both linked) plus a newer one.
+        return [
+            {"match_id": 100, "start_time": 500, "radiant_win": True},
+            {"match_id": 300, "start_time": 900, "radiant_win": True},
+        ]
+
+    monkeypatch.setattr(dota_mmr, "get_recent_matches_async", fake_matches)
+
+    index = asyncio.run(dota_matches._index_from_linked_players(10))
+
+    assert [m["match_id"] for m in index] == [300, 100, 200]
+    assert index[1]["bot_players"] == 2
+
+
+def test_get_dota_matches_falls_back_when_db_index_empty(monkeypatch):
+    monkeypatch.setattr(dota_matches, "_load_match_index", lambda limit: [])
+
+    async def fake_fallback(limit):
+        return [{"match_id": 7, "start_time": 10, "radiant_win": True, "bot_players": 1}]
+
+    monkeypatch.setattr(dota_matches, "_index_from_linked_players", fake_fallback)
+    monkeypatch.setattr(dota_matches, "_hero_catalog", lambda: {})
+    monkeypatch.setattr(dota_matches, "_bot_steam_index", lambda: {})
+
+    async def fake_detail(match_id):
+        return {
+            "start_time": 10,
+            "duration": 900,
+            "radiant_win": True,
+            "game_mode": 2,
+            "radiant_score": 20,
+            "dire_score": 10,
+            "players": [],
+        }
+
+    monkeypatch.setattr(dota_matches, "_fetch_match_detail", fake_detail)
+    dota_matches._list_cache = None
+    dota_matches._detail_cache.clear()
+
+    result = asyncio.run(dota_matches.get_dota_matches(limit=5, force=True))
+
+    assert [m["match_id"] for m in result] == [7]
+    assert result[0]["bot_players"] == 1
 
 
 def test_get_dota_matches_clamps_limit(monkeypatch):

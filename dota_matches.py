@@ -58,7 +58,7 @@ DEFAULT_PUBLIC_BASE = "https://fissure-bot.onrender.com"
 # ============================================================
 
 
-def _read_all(sql: str) -> list:
+def _read_all(sql: str, params: tuple = ()) -> list:
     """Run a read-only query in the calling thread and return all rows.
 
     Every caller runs inside `asyncio.to_thread`, and the executor may hand each
@@ -90,16 +90,19 @@ def _read_all(sql: str) -> list:
         conn = sqlite3.connect(path, timeout=10)
         try:
             cursor = conn.cursor()
-            cursor.execute(sql)
+            cursor.execute(sql, params)
             return list(cursor.fetchall() or [])
         finally:
             conn.close()
 
+    if params:
+        # Postgres uses %s placeholders, SQLite uses ?
+        sql = sql.replace("?", "%s")
     conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute(sql)
+        cursor.execute(sql, params)
         return list(cursor.fetchall() or [])
     finally:
         if conn is not None:
@@ -152,6 +155,73 @@ def _load_match_index(limit: int) -> list[dict]:
 
     matches.sort(key=lambda m: (m["start_time"], m["match_id"]), reverse=True)
     return matches[:limit]
+
+
+# Fallback index. public_player_matches is only filled by /topmmr and the MMR
+# refresh, so right after linking a Steam account it can be empty; asking
+# OpenDota for the players' latest games keeps the list alive from the start.
+PLAYER_FALLBACK_COUNT = 8
+PLAYER_FALLBACK_MATCHES = 3
+
+
+def _linked_steam_ids(limit: int) -> list[int]:
+    """Steam IDs of players linked to the bot, most active first."""
+    try:
+        rows = _read_all(
+            """
+            SELECT steam_id
+            FROM users
+            WHERE steam_id IS NOT NULL
+            ORDER BY COALESCE(week_games, 0) DESC, COALESCE(mmr, 0) DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+    except Exception as e:
+        logger.error("dota_matches: failed to list linked players: %s", e)
+        return []
+    return [int(r[0]) for r in rows if r and r[0] is not None]
+
+
+async def _index_from_linked_players(limit: int) -> list[dict]:
+    """Build the match index straight from OpenDota when the DB index is empty."""
+    from dota_mmr import get_recent_matches_async
+
+    steam_ids = await asyncio.to_thread(_linked_steam_ids, PLAYER_FALLBACK_COUNT)
+    if not steam_ids:
+        return []
+
+    results = await asyncio.gather(
+        *(get_recent_matches_async(sid, PLAYER_FALLBACK_MATCHES) for sid in steam_ids),
+        return_exceptions=True,
+    )
+
+    index: dict[int, dict] = {}
+    for matches in results:
+        if isinstance(matches, BaseException) or not matches:
+            continue
+        for match in matches:
+            match_id = match.get("match_id")
+            if match_id is None:
+                continue
+            entry = index.get(match_id)
+            if entry is None:
+                index[match_id] = {
+                    "match_id": int(match_id),
+                    "start_time": int(match.get("start_time") or 0),
+                    "radiant_win": bool(match.get("radiant_win")),
+                    "bot_players": 1,
+                }
+            else:
+                # Several linked players in one match.
+                entry["bot_players"] += 1
+                entry["start_time"] = max(
+                    entry["start_time"], int(match.get("start_time") or 0)
+                )
+
+    return sorted(
+        index.values(), key=lambda m: (m["start_time"], m["match_id"]), reverse=True
+    )[:limit]
 
 
 # ============================================================
@@ -353,6 +423,10 @@ async def get_dota_matches(limit: int = DEFAULT_LIMIT, force: bool = False) -> l
         return _list_cache[1][:limit]
 
     index = await asyncio.to_thread(_load_match_index, limit)
+    if not index:
+        # Таблица заполняется только /topmmr, поэтому при пустой БД спрашиваем
+        # OpenDota напрямую по игрокам, привязавшим аккаунт.
+        index = await _index_from_linked_players(limit)
     if not index:
         return []
 
