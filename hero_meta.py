@@ -28,6 +28,52 @@ logger = logging.getLogger(__name__)
 _explorer_cache = {"data": None, "timestamp": 0, "fallback_used": False}
 
 
+# OpenDota needs this only to hand back an avatar URL, but it answers slowly once
+# rate limited, and the avatar is the last fallback for players who never linked a
+# Telegram account. A 5s budget timed out on roughly half the hero-meta avatars.
+AVATAR_OPENDOTA_TIMEOUT = 12
+
+AVATAR_DOWNLOAD_TIMEOUT = 10
+AVATAR_USER_AGENT = "fissure-bot/1.0"
+
+
+async def _download_image_async(url, session=None):
+    """Download a remote image as RGBA.
+
+    Avatar URLs (Steam CDN, OpenDota) are plain images, not hero icons, so they
+    cannot go through fetch_hero_icon, which only resolves local hero assets.
+    """
+    if not url or not isinstance(url, str):
+        return None
+    if not url.startswith(("http://", "https://")):
+        return None
+
+    if session is None:
+        try:
+            from database import get_aiohttp_session
+            session = await get_aiohttp_session()
+        except Exception as e:
+            logger.debug(f"Could not obtain aiohttp session for {url}: {e}")
+            return None
+
+    try:
+        async with session.get(
+            url,
+            timeout=aiohttp.ClientTimeout(total=AVATAR_DOWNLOAD_TIMEOUT),
+            headers={"User-Agent": AVATAR_USER_AGENT},
+        ) as resp:
+            if resp.status != 200:
+                logger.debug(f"Avatar download returned HTTP {resp.status}: {url}")
+                return None
+            data = await resp.read()
+        if not data:
+            return None
+        return Image.open(io.BytesIO(data)).convert("RGBA")
+    except Exception as e:
+        logger.debug(f"Avatar download failed for {url}: {e}")
+        return None
+
+
 async def fetch_avatar_by_steam_id(steam_id: int) -> Image.Image | None:
     """Fetch player avatar directly from OpenDota API by Steam ID.
     
@@ -36,11 +82,11 @@ async def fetch_avatar_by_steam_id(steam_id: int) -> Image.Image | None:
     if not steam_id:
         return None
     try:
-        stats = await get_player_stats_async(steam_id, use_cache=True, timeout=5)
+        stats = await get_player_stats_async(steam_id, use_cache=True, timeout=AVATAR_OPENDOTA_TIMEOUT)
         if stats:
             avatar_url = stats.get("avatar") or stats.get("avatarfull")
             if avatar_url:
-                img = await fetch_hero_icon(None, avatar_url)
+                img = await _download_image_async(avatar_url)
                 if img:
                     return img
         return None
@@ -723,7 +769,6 @@ async def create_infographic(hero_stats, bot=None):
         if not img:
             avatar_url = player.get('avatar')
             telegram_id = player.get('telegram_id')
-            resolved_from_cache = False
 
             # Try Telegram profile photo first (via bot instance if available)
             if telegram_id and bot:
@@ -767,7 +812,7 @@ async def create_infographic(hero_stats, bot=None):
 
             # Persist avatars resolved without OpenDota, so a later rate limit
             # does not turn a known avatar into the gray Steam placeholder.
-            if img and steam_id and not resolved_from_cache:
+            if img and steam_id:
                 try:
                     buf = io.BytesIO()
                     img.save(buf, format="PNG")
