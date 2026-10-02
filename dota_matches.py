@@ -839,10 +839,11 @@ def _tg_share_text(game: dict, match_id: int) -> str:
 
 RANKS_BASE = "https://seredin999.onrender.com/images/ranks"
 
-# Ранги Dota 2: чем больше номер, тем выше ранг.
+# Ранги Dota 2 по-русски: чем больше номер, тем выше ранг.
 RANK_TIERS = [
-    (10, "Herald"), (20, "Guardian"), (30, "Crusader"), (40, "Archon"),
-    (50, "Legend"), (60, "Ancient"), (70, "Divine"), (80, "Immortal"),
+    (10, "Герой"), (20, "Страж"), (30, "Рыцарь"),
+    (40, "Героиня"), (50, "Легенда"), (60, "Титан"),
+    (70, "Божество"), (80, "Бессмертный"),
 ]
 
 
@@ -1020,11 +1021,13 @@ body{background:#07080c}
 .g-hp.on{color:#f2d9a0;background:rgba(232,180,92,.1);border-color:rgba(232,180,92,.28)}
 .g-hp.on .ar{opacity:1}
 .g-rank-img{width:26px;height:26px;object-fit:contain;justify-self:center}
-/* Мини-ранг в строке игры. */
-.g-rank-mini{width:12px;height:12px;object-fit:contain;vertical-align:-2px;
- margin-right:3px}
-.g-rank-name{color:#8e97aa}
-.g-rank-none{color:#4a5262}
+/* Ранг в строке игры — та же плашка, что и в топе рангов. */
+.g-rank-mini{display:inline-flex;align-items:center;gap:4px;padding:2px 7px 2px 5px;
+ border-radius:5px;background:rgba(232,180,92,.1);border:1px solid rgba(232,180,92,.26);
+ vertical-align:middle;margin-right:5px}
+.g-rank-mini img{width:13px;height:13px;object-fit:contain;flex-shrink:0}
+.g-rank-name{color:#f2d9a0;font-weight:700;font-size:10px;letter-spacing:.01em}
+.g-rank-none{color:#4a5262;font-size:10px}
 .g-face{width:26px;height:26px;border-radius:50%;flex-shrink:0;object-fit:cover;
  background:#1b212c;display:grid;place-items:center;font-size:10px;color:#5a6478}
 .g-wr{display:flex;align-items:center;gap:8px;justify-content:flex-end}

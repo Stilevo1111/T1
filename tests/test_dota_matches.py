@@ -684,7 +684,7 @@ def test_render_mmr_tab_shows_no_mmr_numbers():
                                           mmr_players=[player])
 
     assert "6123" not in row and "MMR" not in row
-    assert "Divine" in row                          # 75 = Divine 5 звёзд
+    assert "Божество" in row                      # 75 = Божество 5 звёзд
     assert "alpha" in row and "6W/2L" in row
     # Числа MMR нет и в самой странице вне блока стилей.
     body = html.split("</style>", 1)[-1]
@@ -692,10 +692,10 @@ def test_render_mmr_tab_shows_no_mmr_numbers():
 
 
 def test_rank_tier_with_stars_is_named_correctly():
-    """Номер ранга хранит звёзды: 75 — Divine, а не «Ранг 75»."""
-    assert dota_matches._rank_icon(75) == "Divine"
-    assert dota_matches._rank_icon(80) == "Immortal"
-    assert dota_matches._rank_icon(30) == "Crusader"
+    """Номер ранга хранит звёзды: 75 — Божество, а не «Ранг 75»."""
+    assert dota_matches._rank_icon(75) == "Божество"
+    assert dota_matches._rank_icon(80) == "Бессмертный"
+    assert dota_matches._rank_icon(30) == "Рыцарь"
     assert dota_matches._rank_icon(None) == "Без ранга"
 
 
@@ -733,7 +733,7 @@ def test_game_row_shows_player_rank():
         "steam_id": 1, "telegram_id": None, "rank_tier": 65,
     }
     row = dota_matches.render_game(game)
-    assert "Ancient" in row                      # 65 = Ancient 5 звёзд
+    assert "Титан" in row                        # 65 = Титан 5 звёзд
     assert "rank_6_5.webp" in row
 
     no_rank = dict(game, rank_tier=None)
