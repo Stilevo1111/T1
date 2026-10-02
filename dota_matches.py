@@ -243,6 +243,10 @@ async def _index_from_linked_players(limit: int) -> list[dict]:
 
 PLAYER_GAMES_PLAYERS = 12    # сколько игроков бота опрашиваем
 PLAYER_GAMES_PER_PLAYER = 8  # сколько последних игр каждого
+# Сколько страница ждёт OpenDota, прежде чем отдать пустую историю.
+# Раньше ожидание не ограничивалось (до 25с на игрока) и Mini App
+# выглядел зависшим на белом экране.
+GAMES_NET_TIMEOUT = 4
 
 
 def _decorate_games(games: list[dict], heroes: dict) -> list[dict]:
@@ -278,7 +282,45 @@ async def get_player_games(limit: int = DEFAULT_LIMIT) -> list[dict]:
     if games:
         return _decorate_games(games, heroes)
 
+    # БД пуста (или ещё без KDA) — идём в OpenDota, но только коротко.
+    # Раньше здесь страница ждала до 25 секунд на игрока, и Mini App
+    # выглядел зависшим. Лучше пустая история, чем белый экран.
     from dota_mmr import get_recent_matches_async
+
+    try:
+        games = await asyncio.wait_for(_games_from_opendota(heroes, limit),
+                                        timeout=GAMES_NET_TIMEOUT)
+    except asyncio.TimeoutError:
+        logger.warning(
+            "История: OpenDota не ответил за %sс, показываем пусто",
+            GAMES_NET_TIMEOUT)
+        _warm_games_in_background()
+        return []
+    return games
+
+
+def _warm_games_in_background():
+    """Прогревает кеш матчей, не блокируя открытие страницы.
+
+    Идея пользователя: приложение открывается сразу, а данные
+    подтягиваются следом. Следующий заход уже отдаст историю.
+    """
+    async def _warm():
+        try:
+            await _games_from_opendota({}, DEFAULT_LIMIT)
+        except Exception as e:
+            logger.debug(f"Фоновое обновление истории не удалось: {e}")
+
+    try:
+        asyncio.get_running_loop().create_task(_warm())
+    except RuntimeError:
+        pass
+
+
+async def _games_from_opendota(heroes: dict, limit: int) -> list[dict]:
+    """Старый путь: матчи из OpenDota для привязанных игроков."""
+    from dota_mmr import get_recent_matches_async
+
     steam_ids = await asyncio.to_thread(_linked_steam_ids, PLAYER_GAMES_PLAYERS)
     if not steam_ids:
         return []
