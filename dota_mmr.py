@@ -243,7 +243,12 @@ def _clear_not_found(url: str):
     """Удалить запись о 404 из кеша."""
     negative_cache.delete(url)
 
-# Кеш матчей пользователей (30 минут - экономим API)
+# Кеш матчей пользователей (30 минут - экономим API).
+#
+# Ключ — только steam_id, а не (steam_id, limit): страница матчей
+# просит 8 матчей, апдейт профиля и OBS — другие числа, и при старом
+# ключе они каждый раз качали одно и то же заново. Теперь в кеш
+# лежит максимум уже скачанного, а лимит режется по месту.
 _user_matches_cache = {}
 USER_MATCHES_CACHE_TTL = 1800  # 30 минут
 
@@ -1285,11 +1290,14 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
     if steam_id is None:
         return []
 
-    cache_key = (steam_id, limit)
-    if cache_key in _user_matches_cache:
-        cached_data, cached_time = _user_matches_cache[cache_key]
-        if time.time() - cached_time < USER_MATCHES_CACHE_TTL:
-            return cached_data
+    cached = _user_matches_cache.get(steam_id)
+    if cached:
+        cached_data, cached_time = cached
+        # Отдаём срезу кэша, только если в нём не меньше матчей,
+        # чем просят: иначе пришлось бы качать заново.
+        if (time.time() - cached_time < USER_MATCHES_CACHE_TTL
+                and len(cached_data) >= limit):
+            return cached_data[:limit]
 
     try:
         account_id = steam64_to_account_id(steam_id)
@@ -1327,9 +1335,12 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
                 f"non-ranked matches out of {len(matches)}"
             )
 
-        # Cache only non-None results (both empty list and actual matches)
-        _user_matches_cache[cache_key] = (ranked, time.time())
-
+        # В кеш кладём максимум из нового и уже лежавшего: запрос с
+        # маленьким лимитом не должен вытеснять выкачанное раньше.
+        prev = _user_matches_cache.get(steam_id)
+        if prev and len(prev[0]) > len(ranked):
+            return prev[0][:limit]
+        _user_matches_cache[steam_id] = (ranked, time.time())
         return ranked
     except Exception as e:
         logger.error(f"get_recent_matches_async error: {e}", exc_info=True)

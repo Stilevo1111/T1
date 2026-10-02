@@ -856,6 +856,59 @@ def test_render_games_page_filters_by_player():
     assert "Пока нет игр" in empty
 
 
+def test_matches_cache_is_shared_across_callers():
+    """Разные вызовы делят один кеш: восемь матчей покрывают запрос на три.
+
+    Раньше ключ был (steam_id, limit), поэтому страница матчей, апдейт
+    профиля и OBS качали одно и то же заново, не видя чужой кеш.
+    """
+    import dota_mmr
+
+    calls: list[int] = []
+
+    async def fake_api(url, params):
+        calls.append(params.get("limit", 5))
+        return [{"match_id": i, "lobby_type": 7, "game_mode": 22}
+                for i in range(params.get("limit", 5))]
+
+    saved = (dota_mmr._api_get_async, dota_mmr._is_not_found,
+             dota_mmr._mark_not_found, dict(dota_mmr._user_matches_cache))
+    dota_mmr._api_get_async = fake_api
+    dota_mmr._is_not_found = lambda url: False
+    dota_mmr._mark_not_found = lambda url: None
+    dota_mmr._user_matches_cache.clear()
+    try:
+        async def run():
+            eight = await dota_mmr.get_recent_matches_async(111, 8)
+            three = await dota_mmr.get_recent_matches_async(111, 3)
+            eight_again = await dota_mmr.get_recent_matches_async(111, 8)
+            return eight, three, eight_again
+
+        eight, three, eight_again = asyncio.run(run())
+    finally:
+        (dota_mmr._api_get_async, dota_mmr._is_not_found,
+         dota_mmr._mark_not_found) = saved[:3]
+        dota_mmr._user_matches_cache.clear()
+        dota_mmr._user_matches_cache.update(saved[3])
+
+    assert len(eight) == 8 and len(three) == 3 and len(eight_again) == 8
+    assert calls == [8], f"OpenDota должен быть дёрнут один раз, было {calls}"
+
+
+def test_ranks_tab_does_not_fetch_games():
+    """Вкладка «Топ рангов» не ходит в OpenDota — она берёт топ из БД."""
+    source = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
+    # get_player_games живёт только в ветке else, а не общим вызовом.
+    body = source.split("async def games_page_handler", 1)[1]
+    body = body.split("\nasync def ", 1)[0]
+    # Ищем именно вызов, а не импорт в шапке функции.
+    call = "games = await get_player_games"
+    assert call in body
+    assert body.index("if tab == 'mmr':") < body.index(call)
+    # Вызов живёт в ветке else, то есть только для истории игр.
+    assert "\n        else:\n            games = await get_player_games" in body
+
+
 
 
 def test_get_dota_matches_clamps_limit(monkeypatch):

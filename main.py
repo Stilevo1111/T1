@@ -2794,12 +2794,15 @@ async def games_page_handler(request):
         tab = 'mmr' if tab in ('ranks', 'mmr') else 'games'
 
         mmr_players = []
+        games = []
+        # Каждая вкладка тянет только свои данные: топ — из БД, история —
+        # из OpenDota. Раньше игры запрашивались всегда, и переход на
+        # «Топ рангов» ждал внешний API вхолостую.
         if tab == 'mmr':
-            # Топ нужен только на своей вкладке — иначе лишний запрос в БД.
             from database import get_dota_mmr_top
             mmr_players = await asyncio.to_thread(get_dota_mmr_top, 100) or []
-
-        games = await get_player_games(limit=limit)
+        else:
+            games = await get_player_games(limit=limit)
         return web.Response(
             text=render_games_page(games, limit, player=player, miniapp=miniapp,
                                    tab=tab, mmr_players=mmr_players),
