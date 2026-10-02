@@ -373,21 +373,23 @@ async def tour_start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 def _roster_text(tid: int, teams: list[dict]) -> str:
-    """Составы команд с настоящими Steam ID — их видно, чтобы не искать ники."""
+    """Составы команд.
+
+    Steam ID намеренно не публикуем: зайти в лобби можно по коду из
+    сообщения о лобби, а ID в общем чате — личные данные, которые ещё и
+    ведут на профиль в Steam.
+    """
     lines = ["<b>Команды собраны</b>",
-             "Баланс — по рангам. Steam ID нужен, чтобы быстро позвать друг друга.",
+             "Баланс — по рангам. Капитаны создают лобби кнопкой в своей сетке.",
              ""]
     for team in teams:
         lines.append(f"<b>{_escape(team['name'])}</b>")
         for m in team.get('members', []):
             nick = m.get('username') or f"Игрок {m.get('telegram_id')}"
             mark = "👑 " if m.get('is_captain') else ""
-            steam = m.get('steam_id')
-            tail = f" · <code>{steam}</code>" if steam else ""
-            lines.append(f"  • {mark}{_escape(nick)}{tail}")
+            lines.append(f"  • {mark}{_escape(nick)}")
         lines.append("")
     lines.append("Переименовать команду: /teamname <название> (капитан).")
-    lines.append("Создать лобби: кнопка «🎮 Создать лобби» в вашей сетке.")
     return "\n".join(lines)
 
 

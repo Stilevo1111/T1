@@ -235,8 +235,11 @@ teams = T.list_teams(tid)
 check("бот собрал 2 команды по 5 человек",
       len(teams) == 2 and all(len(t['members']) == 5 for t in teams),
       str([len(t['members']) for t in teams]))
-check("состав опубликован со Steam ID",
-      any("Команды собраны" in s["text"] for s in SENT))
+check("состав опубликован", any("Команды собраны" in s["text"] for s in SENT))
+roster = next(s["text"] for s in SENT if "Команды собраны" in s["text"])
+# Steam ID в общий чат не выводим: вход в лобби идёт по коду, а ID — личные данные.
+check("в составе нет Steam ID", "7656119" not in roster and "steam_id" not in roster,
+      roster[:120])
 check("после старта матч появился", T.current_match(tid, 1) is not None)
 
 run(H.tour_command(FakeUpdate(FakeUser(1), CHAT), CTX))
