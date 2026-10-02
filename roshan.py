@@ -308,7 +308,7 @@ def build_result_text(
     """
     blocks = [
         "🪤 Рошан повержен",
-        f"🪙 Рошана убил <b>{killer_name}</b> — фиссура выросла на +{reward:.1f} см",
+        f"🪙 Рошана убил <b>{killer_name}</b> +{reward:.1f} см",
     ]
 
     for uid, item in awarded.items():
