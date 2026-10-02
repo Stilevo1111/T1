@@ -604,7 +604,7 @@ def test_render_games_page_has_dota_style_columns():
     assert "15.11" in html  # date column (Europe/Moscow), compact format
     assert "39:05" in html  # duration column
     assert "—" in html  # zero duration
-    assert "opendota.com/matches/8123456789" in html
+    assert "dotabuff.com/matches/8123456789" in html
     assert "zeus · 1/1" in html  # per-player filter chip
     assert "<script>alert(1)</script>" not in html
     assert "&lt;script&gt;" in html
@@ -627,7 +627,11 @@ def test_render_game_card_in_cup_style():
     assert "<b>15</b> / 1 / 8" in html                        # KDA
     assert 'class="g-card win"' in row                        # победа
     assert "Победа" in row
-    assert row.count("<a") == 1                               # ссылка одна
+    # Строка больше не ссылка: клик открывает панель с «Пати» и «ДотаБаф».
+    assert "<a" not in row
+    assert 'data-act="party"' in row and 'data-act="dota"' in row
+    assert "dotabuff.com/matches/42" in row
+    assert "t.me/share/url" in row
     assert 'data-tg="777"' in row                             # переход в профиль
     assert "g-items" not in row                               # предметов нет
 
@@ -660,8 +664,10 @@ def test_render_mmr_tab_matches_top_page():
     html = dota_matches.render_games_page([], limit=5, tab="mmr",
                                           mmr_players=players)
 
-    for title in ("#", "Ранг", "Игрок", "Статистика"):
+    for title in ("Место", "Ранг", "Статистика"):
         assert title in html
+    assert "#" not in html.split("</style>", 1)[-1].split("</head>")[0]
+    assert 'data-sort="name"' not in html            # по нику больше не сортируем
     assert "seredin999.onrender.com/images/ranks/" in html
     assert "rank_8_1.webp" in html and "rank_3_1.webp" in html
     assert "80%" in html and 'class="g-wr-fill"' in html
@@ -741,7 +747,8 @@ def test_mmr_tab_headers_are_sortable():
     html = dota_matches.render_games_page([], limit=5, tab="mmr",
                                           mmr_players=players)
     assert 'data-sort="rank_tier"' in html
-    assert 'data-sort="name"' in html
+    # По нику не сортируем: заголовок «Игрок» стал пустой подписью колонки.
+    assert 'data-sort="name"' not in html
     assert 'data-sort="stats"' in html
     assert "RANKS" not in html or "g-mmr-head" in html
     # Скрипт сортировки подключён.

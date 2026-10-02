@@ -776,11 +776,26 @@ def render_game(game: dict) -> str:
     date_txt = stamp.strftime("%d.%m") if stamp else "—"
     time_txt = stamp.strftime("%H:%M") if stamp else "—"
 
+    match_id = int(game.get("match_id") or 0)
+    account_id = int(game.get("account_id") or 0)
+
+    # Две ссылки на эту игру: пригласить в пати и посмотреть на Dotabuff.
+    party_url = ("https://t.me/share/url?url="
+                 + "https://www.dotabuff.com/matches/"
+                 + str(match_id)
+                 + "&text="
+                 + _tg_share_text(game, match_id))
+    db_url = (f"https://www.dotabuff.com/matches/{match_id}"
+              if match_id else
+              (f"https://www.dotabuff.com/players/{account_id}"
+               if account_id else "https://www.dotabuff.com"))
+
+    # Строка кликается и открывает панель, поэтому это div, а не ссылка:
+    # ссылка раньше уводила на OpenDota и открывала новую вкладку.
     return (
-        f'<div class="g-card {cls}">'
-        f'<a class="g-line" '
-        f'href="https://www.opendota.com/matches/{int(game["match_id"])}" '
-        f'target="_blank" rel="noopener">'
+        f'<div class="g-card {cls}" data-party="{_esc(party_url)}" '
+        f'data-dota="{_esc(db_url)}" tabindex="0" role="button">'
+        f'<div class="g-line">'
         f"{face}{hero}"
         f'<span class="g-who">{name_html}'
         f'<span class="g-heron">{rank} · {subtitle}</span></span>'
@@ -788,8 +803,38 @@ def render_game(game: dict) -> str:
         f'<span class="g-res">{"Победа" if win else "Поражение"}</span>'
         f'<span class="g-when">{date_txt} · {time_txt} · '
         f'{_fmt_duration(game.get("duration"))}</span>'
-        f"</a>{items}</div>"
+        f'<span class="g-more" aria-hidden="true">'
+        f'<svg viewBox="0 0 16 16" width="12" height="12">'
+        f'<path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" '
+        f'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'
+        f"</svg></span>"
+        f"</div>"
+        f'<div class="g-acts">'
+        f'<span class="g-act" data-act="party">'
+        f'<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
+        f'<circle cx="6" cy="5" r="2.4" fill="none" stroke="currentColor" '
+        f'stroke-width="1.4"/><path d="M2 13c0-2.2 1.8-3.6 4-3.6s4 1.4 4 3.6" '
+        f'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>'
+        f'<path d="M11 6.6h4M11 9.4h4" fill="none" stroke="currentColor" '
+        f'stroke-width="1.4" stroke-linecap="round"/></svg>'
+        f"Пати</span>"
+        f'<span class="g-act dotabuff" data-act="dota">'
+        f'<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
+        f'<circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" '
+        f'stroke-width="1.4"/><path d="M1.9 8h12.2M8 1.8c1.7 1.8 2.5 3.9 2.5 6.2S9.7 '
+        f'12.4 8 14.2C6.3 12.4 5.5 10.3 5.5 8S6.3 3.6 8 1.8Z" fill="none" '
+        f'stroke="currentColor" stroke-width="1.4"/></svg>'
+        f"ДотаБаф</span>"
+        f"</div>"
+        f"{items}</div>"
     )
+
+
+def _tg_share_text(game: dict, match_id: int) -> str:
+    """Текст приглашения в пати, который уходит через «Поделиться»."""
+    who = game.get("bot_username") or game.get("personaname") or "игрок"
+    hero = game.get("hero_name") or "герой"
+    return f"Позову тебя в пати на Dota 2! Погнали играть 💪 ({who}, {hero})"
 
 
 RANKS_BASE = "https://seredin999.onrender.com/images/ranks"
@@ -946,8 +991,21 @@ body{background:#07080c}
 
 .g-body{padding:16px 20px 22px;position:relative;z-index:2}
 
-/─ Карточка игры
-/* ── Вкладка «Топ MMR»: те же поля, что на странице топа ─────────────── */
+/* ── Карточка игры: при клике справа выезжают действия ── */
+.g-card{cursor:pointer}
+.g-card .g-more{margin-left:auto;display:inline-flex;color:#5b6478;
+ transition:transform .2s ease,color .2s ease}
+.g-card.open .g-more{transform:rotate(90deg);color:#e8b45c}
+.g-acts{display:flex;gap:6px;max-height:0;overflow:hidden;opacity:0;
+ transition:max-height .24s ease,opacity .2s ease,padding .24s ease}
+.g-card.open .g-acts{max-height:60px;opacity:1;padding:0 10px 9px}
+.g-act{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:6px;
+ background:#171d26;border:1px solid #262d3a;color:#b7c0d0;font:700 10px/1 Inter,sans-serif;
+ cursor:pointer;transition:border-color .16s ease,color .16s ease,background .16s ease}
+.g-act:hover{border-color:rgba(232,180,92,.5);color:#f7e3c0;background:#1c232e}
+.g-act.dotabuff:hover{border-color:rgba(214,69,69,.55);color:#f0a5a5}
+
+/* ── Вкладка «Топ рангов»: те же поля, что на странице топа ─────────────── */
 .g-mmr-head,.g-card.g-mmr .g-line{display:grid;
  grid-template-columns:34px 34px 30px minmax(0,1fr) 210px;align-items:center;gap:10px}
 .g-mmr-head{padding:0 6px 8px}
@@ -1111,13 +1169,13 @@ def render_games_page(
         rows = sorted(mmr_players or [], key=mmr_sort_key)
         # Заголовки кликабельные — сортировка как на странице топа.
         # «Ранг» активен сразу: это сортировка по умолчанию.
+        # По нику не сортируем — в топе важнее ранг и результат.
         head = (
             '<div class="g-mmr-head">'
-            '<span class="g-hp">#</span>'
+            '<span class="g-hp">Место</span>'
             '<span class="g-hp on" data-sort="rank_tier">Ранг'
             '<span class="ar">▼</span></span>'
-            '<span class="g-hp" data-sort="name">Игрок'
-            '<span class="ar">▼</span></span>'
+            '<span class="g-hp"></span>'
             '<span class="g-hp right" data-sort="stats">Статистика'
             '<span class="ar">▼</span></span>'
             "</div>"
@@ -1189,7 +1247,8 @@ def render_games_page(
         f'<div class="g-body">{chips_bar}{body}</div>\n'
         "</div>\n"
         f"<script>{TELEGRAM_INIT_JS}</script>\n"
-f"<script>{PICKER_JS}</script>\n"
+f"<script>{GAME_ACTS_JS}</script>\n"
+        f"<script>{PICKER_JS}</script>\n"
         # Ник открывает профиль в Telegram. Раньше это была вложенная <a>
         # внутри <a>, что невалидно, поэтому вешаем переход на data-атрибут.
         "<script>document.addEventListener('click',function(e){var p=e.target"
@@ -1364,6 +1423,37 @@ PICKER_JS = """
 })();
 </script>
 """
+GAME_ACTS_JS = """
+<script>
+// Клик по строке игры раскрывает действия справа: пати и Dotabuff.
+(function(){
+  document.querySelectorAll('.g-card[data-party]').forEach(function(card){
+    function toggle(){
+      var open = card.classList.contains('open');
+      document.querySelectorAll('.g-card.open').forEach(function(c){
+        if (c !== card) c.classList.remove('open');
+      });
+      card.classList.toggle('open', !open);
+    }
+    card.addEventListener('click', function(e){
+      var act = e.target.closest('[data-act]');
+      if (!act) return;                       // обычный клик — раскрыть
+      e.stopPropagation();
+      if (act.dataset.act === 'party') {
+        // Открывает окно «Поделиться» с текстом приглашения.
+        window.open(card.dataset.party, '_blank');
+      } else {
+        window.open(card.dataset.dota, '_blank');
+      }
+    });
+    card.addEventListener('keydown', function(e){
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+})();
+</script>
+"""
+
 RANKS_SORT_JS = """
 <script>
 // Сортировка топа по клику на заголовок — как на странице рейтинга.
