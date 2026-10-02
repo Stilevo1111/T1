@@ -1262,8 +1262,26 @@ def get_recent_matches(steam_id: int, limit: int = 5) -> list:
         return []
 
 
+RANKED_LOBBY_TYPE = 7
+TURBO_GAME_MODE = 23
+
+
+def is_ranked_match(match: dict) -> bool:
+    """True for ranked All Pick / Turbo-excluded matchmaking games.
+
+    Turbo is matched inside the ranked lobby (lobby_type 7) but is not ranked
+    play, so it has to be dropped separately or it pollutes hero meta and the
+    weekly top-MMR win rate. A missing lobby_type is treated as ranked: the
+    OpenDota query already asked for lobby_type=7, so such a row still came
+    back from the ranked pool.
+    """
+    if match.get("game_mode") == TURBO_GAME_MODE:
+        return False
+    return match.get("lobby_type") in (None, RANKED_LOBBY_TYPE)
+
+
 async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
-    """Асинхронно получить последние матчи игрока"""
+    """Асинхронно получить последние РЕЙТИНГОВЫЕ матчи игрока."""
     if steam_id is None:
         return []
 
@@ -1286,7 +1304,13 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
         max_wait = 25
         matches = None
         while matches is None and (time.time() - start_time) < max_wait:
-            matches = await _api_get_async(url, {"limit": limit, "sort": "-start_time"})
+            # lobby_type=7 restricts the response to ranked games server-side;
+            # is_ranked_match then drops Turbo, which shares that lobby type.
+            matches = await _api_get_async(url, {
+                "limit": limit,
+                "sort": "-start_time",
+                "lobby_type": RANKED_LOBBY_TYPE,
+            })
             if matches is None:
                 await asyncio.sleep(5)
 
@@ -1295,10 +1319,18 @@ async def get_recent_matches_async(steam_id: int, limit: int = 5) -> list:
             _mark_not_found(url)
             return []
 
-        # Cache only non-None results (both empty list and actual matches)
-        _user_matches_cache[cache_key] = (matches, time.time())
+        ranked = [m for m in matches if is_ranked_match(m)]
+        dropped = len(matches) - len(ranked)
+        if dropped:
+            logger.info(
+                f"get_recent_matches_async: steam_id={steam_id} dropped {dropped} "
+                f"non-ranked matches out of {len(matches)}"
+            )
 
-        return matches
+        # Cache only non-None results (both empty list and actual matches)
+        _user_matches_cache[cache_key] = (ranked, time.time())
+
+        return ranked
     except Exception as e:
         logger.error(f"get_recent_matches_async error: {e}", exc_info=True)
         return []
