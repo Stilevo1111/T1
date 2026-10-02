@@ -1113,7 +1113,7 @@ def render_games_page(
 
     # Заголовка на странице нет, но имя вкладки браузера нужно.
     page_title = "Топ рангов — Fissure.Bot" if tab == "mmr" else \
-        "Список игр — Fissure.Bot"
+        "История игр — Fissure.Bot"
 
     body_class = ' class="miniapp"' if miniapp else ""
     return (
@@ -1129,7 +1129,7 @@ def render_games_page(
         # Страница начинается с переключателя вкладок: логотип, заголовок
         # и подпись убраны — только список.
         '<div class="g-screen">\n'
-        f'<div class="g-tabs">{tab_link("games", "Игры")}{tab_link("mmr", "Топ рангов")}</div>\n'
+        f'<div class="g-tabs">{tab_link("games", "История")}{tab_link("mmr", "Топ рангов")}</div>\n'
         f'<div class="g-body"><div class="g-bar">{"".join(chips)}</div>{body}</div>\n'
         "</div>\n"
         f"<script>{TELEGRAM_INIT_JS}</script>\n"
