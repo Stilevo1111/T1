@@ -2045,6 +2045,24 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         ALTER TABLE public_player_matches
                             ADD COLUMN IF NOT EXISTS lane_role SMALLINT
                         """)
+                    # KDA и длительность нужны странице истории игр: она читает эту же
+                    # таблицу вместо повторного запроса в OpenDota.
+                    cursor.execute("""
+                        ALTER TABLE public_player_matches
+                            ADD COLUMN IF NOT EXISTS kills INTEGER
+                    """)
+                    cursor.execute("""
+                        ALTER TABLE public_player_matches
+                            ADD COLUMN IF NOT EXISTS deaths INTEGER
+                    """)
+                    cursor.execute("""
+                        ALTER TABLE public_player_matches
+                            ADD COLUMN IF NOT EXISTS assists INTEGER
+                    """)
+                    cursor.execute("""
+                        ALTER TABLE public_player_matches
+                            ADD COLUMN IF NOT EXISTS duration INTEGER
+                    """)
                     for match in matches:
                         match_id = match.get("match_id")
                         hero_id = match.get("hero_id", 0)
@@ -2057,12 +2075,25 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         steam_id = user.get("steam_id")
                         logger.info(f"topmmr: Hero meta saving - match_id={match_id}, hero_id={hero_id}, radiant_win={radiant_win_int} (api_radiant_win={radiant_win_api}, player_slot={player_slot}), steam_id={steam_id}")
                         lane_role = match.get("lane_role")
+                        kda = (match.get("kills"), match.get("deaths"),
+                               match.get("assists"), match.get("duration"))
                         if match_id and hero_id is not None and player_slot is not None:
+                            # ON CONFLICT DO NOTHING оставлял бы старые строки
+                            # без KDA, поэтому обновляем по match_id.
                             cursor.execute("""
-                                INSERT INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id, lane_role)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                                ON CONFLICT DO NOTHING
-                            """, (match_id, hero_id, player_slot, radiant_win_int, start_time, steam_id, lane_role))
+                                INSERT INTO public_player_matches
+                                    (match_id, hero_id, player_slot, radiant_win,
+                                     start_time, steam_id, lane_role,
+                                     kills, deaths, assists, duration)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                ON CONFLICT (match_id) DO UPDATE SET
+                                    kills = EXCLUDED.kills,
+                                    deaths = EXCLUDED.deaths,
+                                    assists = EXCLUDED.assists,
+                                    duration = EXCLUDED.duration,
+                                    lane_role = EXCLUDED.lane_role
+                            """, (match_id, hero_id, player_slot, radiant_win_int,
+                                  start_time, steam_id, lane_role, *kda))
                 else:
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS public_player_matches (
@@ -2085,6 +2116,13 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         cursor.execute(
                             "ALTER TABLE public_player_matches ADD COLUMN lane_role INTEGER"
                         )
+                    # KDA и длительность нужны странице истории игр.
+                    for _col in ("kills", "deaths", "assists", "duration"):
+                        if ppm_columns and _col not in ppm_columns:
+                            cursor.execute(
+                                f"ALTER TABLE public_player_matches "
+                                f"ADD COLUMN {_col} INTEGER"
+                            )
                     for match in matches:
                         match_id = match.get("match_id")
                         hero_id = match.get("hero_id", 0)
@@ -2095,11 +2133,25 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                         steam_id = user.get("steam_id")
                         lane_role = match.get("lane_role")
                         logger.info(f"topmmr: Hero meta saving (SQLite) - match_id={match_id}, hero_id={hero_id}, lane_role={lane_role}, steam_id={steam_id}")
+                        kda = (match.get("kills"), match.get("deaths"),
+                               match.get("assists"), match.get("duration"))
                         if match_id and hero_id is not None and player_slot is not None:
+                            # INSERT OR IGNORE оставлял бы старые строки без KDA,
+                            # поэтому дополняем уже записанные.
                             cursor.execute("""
-                                INSERT OR IGNORE INTO public_player_matches (match_id, hero_id, player_slot, radiant_win, start_time, steam_id, lane_role)
-                                VALUES (?, ?, ?, ?, ?, ?, ?)
-                            """, (match_id, hero_id, player_slot, radiant_win_int, start_time, steam_id, lane_role))
+                                INSERT OR IGNORE INTO public_player_matches
+                                    (match_id, hero_id, player_slot, radiant_win,
+                                     start_time, steam_id, lane_role,
+                                     kills, deaths, assists, duration)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (match_id, hero_id, player_slot, radiant_win_int,
+                                  start_time, steam_id, lane_role, *kda))
+                            cursor.execute("""
+                                UPDATE public_player_matches SET
+                                    kills = ?, deaths = ?, assists = ?,
+                                    duration = ?, lane_role = ?
+                                WHERE match_id = ?
+                            """, (*kda, lane_role, match_id))
                 conn.commit()
             except Exception as e:
                 logger.warning(f"Failed to save matches to public_player_matches: {e}")

@@ -3762,6 +3762,93 @@ def _derive_mmr_rank_tier(rank_tier: int | None, mmr: int | None) -> int:
         return 0
 
 
+def get_recent_player_matches(limit=50, days=7, steam_ids=None):
+    """Последние матчи игроков бота из public_player_matches.
+
+    Та же таблица, что кормит баннер героев: при обновлении MMR бот
+    уже положил сюда матчи с OpenDota вместе с KDA, поэтому странице
+    истории незачем ходить в сеть ещё раз. Ник и ранг добираются
+    join-ом по users.
+    """
+    from database import (get_connection, urlparse, DATABASE_URL,
+                          release_pg_connection)
+    conn = None
+    try:
+        conn = get_connection()
+        url = urlparse.urlparse(DATABASE_URL)
+        is_pg = "postgres" in url.scheme
+        ph = "%s" if is_pg else "?"
+        since = int(time.time()) - days * 24 * 3600
+
+        # Список ограничиваем теми же игроками, что и сама страница.
+        if steam_ids is None:
+            steam_ids = []
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT steam_id FROM users
+                WHERE steam_id IS NOT NULL
+                  AND (in_chat = TRUE OR in_chat IS NULL)
+                ORDER BY week_games DESC
+                LIMIT 12
+            """)
+            steam_ids = [r[0] for r in cur.fetchall()]
+
+        cursor = conn.cursor()
+        if not steam_ids:
+            return []
+        marks = ", ".join([ph] * len(steam_ids))
+        cursor.execute(f"""
+            SELECT m.match_id, m.hero_id, m.player_slot, m.radiant_win,
+                   m.start_time, m.duration, m.steam_id,
+                   m.kills, m.deaths, m.assists,
+                   u.steam_nickname, u.username, u.rank_tier, u.avatar,
+                   u.telegram_id
+            FROM public_player_matches m
+            LEFT JOIN users u ON u.steam_id = m.steam_id
+            WHERE m.start_time >= {ph} AND m.steam_id IN ({marks})
+            ORDER BY m.start_time DESC
+            LIMIT {ph}
+        """, [since, *steam_ids, limit])
+
+        rows = cursor.fetchall()
+        games = []
+        for r in rows:
+            (match_id, hero_id, slot, radiant_win, start_time, duration,
+             steam_id, kills, deaths, assists, nick, username, rank_tier,
+             avatar, telegram_id) = r
+            radiant = int(radiant_win or 0) == 1
+            # Слот < 128 = Свет: его победа совпадает с radiant_win.
+            is_radiant = (slot < 128) if slot is not None else True
+            games.append({
+                "match_id": int(match_id),
+                "hero_id": hero_id,
+                "hero_name": None,          # добирается в dota_matches
+                "hero_icon": "",
+                "player_slot": slot,
+                "radiant_win": radiant,
+                "start_time": int(start_time or 0),
+                "duration": int(duration or 0),
+                "steam_id": steam_id,
+                "kills": int(kills or 0),
+                "deaths": int(deaths or 0),
+                "assists": int(assists or 0),
+                "personaname": nick or username or "Игрок",
+                "bot_username": username or nick or "Игрок",
+                "steam_nickname": nick,
+                "rank_tier": rank_tier,
+                "avatar": avatar,
+                "telegram_id": telegram_id,
+                "win": (is_radiant and radiant) or (not is_radiant and not radiant),
+            })
+        return games
+    except Exception as e:
+        logger.warning(f"get_recent_player_matches error: {e}")
+        return []
+    finally:
+        if conn is not None:
+            release_pg_connection(conn)
+
+
 def get_dota_mmr_top(limit=50):
     """Получение топа игроков Dota 2 по MMR с кешем (limit-aware)"""
     from main import get_config, set_config

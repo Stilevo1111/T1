@@ -935,6 +935,60 @@ def test_sort_js_has_no_literal_escape_and_opens_rows():
         "клик по строке обязан раскрывать карточку"
 
 
+def test_history_reads_from_the_shared_match_table():
+    """История берётся из public_player_matches, а не из повторного OpenDota."""
+    src = (PROJECT_ROOT / "database.py").read_text(encoding="utf-8")
+    assert "def get_recent_player_matches" in src
+    # Колонки KDA и длительности нужны и записываются джобом MMR.
+    mmr = (PROJECT_ROOT / "dota_mmr.py").read_text(encoding="utf-8")
+    for col in ("kills", "deaths", "assists", "duration"):
+        # Postgres добавляет колонку явным ALTER, SQLite — в цикле.
+        assert f"ADD COLUMN IF NOT EXISTS {col} INTEGER" in mmr, col
+    assert 'for _col in ("kills", "deaths", "assists", "duration")' in mmr
+    assert "kills, deaths, assists, duration" in mmr
+    # Страница идёт в БД, но при старой схеме откатывается в сеть.
+    dm = (PROJECT_ROOT / "dota_matches.py").read_text(encoding="utf-8")
+    assert "get_recent_player_matches" in dm
+    assert "return _decorate_games" in dm
+    assert "get_recent_matches_async" in dm      # запасной путь сохранён
+
+
+def test_history_falls_back_to_opendota_when_db_is_empty():
+    """Пустая или старая таблица не оставляет страницу без игр."""
+    import dota_mmr
+    from dota_matches import get_player_games
+
+    saved_api = dota_mmr.get_recent_matches_async
+    saved_cache = dict(dota_mmr._user_matches_cache)
+    dota_mmr._user_matches_cache.clear()
+
+    async def fake(sid, limit):
+        return [{"match_id": 5, "hero_id": 8, "player_slot": 0,
+                 "radiant_win": True, "start_time": 1700000000,
+                 "duration": 2000, "kills": 3, "deaths": 1, "assists": 5,
+                 "personaname": "p", "steam_id": sid}]
+
+    dota_mmr.get_recent_matches_async = fake
+    old_linked = dota_matches._linked_steam_ids
+    old_index = dota_matches._bot_steam_index
+    old_heroes = dota_matches._hero_catalog
+    dota_matches._linked_steam_ids = lambda n: [111]
+    dota_matches._bot_steam_index = lambda: {111: {}}
+    dota_matches._hero_catalog = lambda: {}
+    try:
+        games = asyncio.run(get_player_games(limit=5))
+    finally:
+        dota_mmr.get_recent_matches_async = saved_api
+        dota_mmr._user_matches_cache.clear()
+        dota_mmr._user_matches_cache.update(saved_cache)
+        dota_matches._linked_steam_ids = old_linked
+        dota_matches._bot_steam_index = old_index
+        dota_matches._hero_catalog = old_heroes
+
+    assert len(games) == 1
+    assert games[0]["match_id"] == 5
+
+
 def test_matches_cache_is_shared_across_callers():
     """Разные вызовы делят один кеш: восемь матчей покрывают запрос на три.
 

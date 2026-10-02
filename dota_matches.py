@@ -245,16 +245,43 @@ PLAYER_GAMES_PLAYERS = 12    # сколько игроков бота опраш
 PLAYER_GAMES_PER_PLAYER = 8  # сколько последних игр каждого
 
 
-async def get_player_games(limit: int = DEFAULT_LIMIT) -> list[dict]:
-    """Latest games of the players linked to the bot, newest first."""
-    from dota_mmr import get_recent_matches_async
+def _decorate_games(games: list[dict], heroes: dict) -> list[dict]:
+    """Дописывает имя и иконку героя к строкам, прочитанным из БД."""
+    out = []
+    for g in games:
+        hero_id = g.get("hero_id")
+        g = dict(g)
+        g["hero_name"] = _hero_name(hero_id, heroes) if hero_id is not None else "—"
+        g["hero_icon"] = _hero_icon(hero_id, heroes) if hero_id is not None else ""
+        out.append(g)
+    return out
 
+
+async def get_player_games(limit: int = DEFAULT_LIMIT) -> list[dict]:
+    """Latest games of the players linked to the bot, newest first.
+
+    Сначала берём из public_player_matches — туда кладёт матчи джоб
+    обновления MMR, вместе с KDA и рангом. OpenDota остаётся запасным
+    путём: если таблица пуста (первый запуск после деплоя или в ней
+    ещё нет KDA), идём в сеть как раньше.
+    """
     limit = max(1, min(int(limit or DEFAULT_LIMIT), MAX_LIMIT))
+    heroes = await asyncio.to_thread(_hero_catalog)
+
+    def _read():
+        from database import get_recent_player_matches
+        return get_recent_player_matches(limit=limit * 3)
+
+    games = await asyncio.to_thread(_read)
+    # Строки без KDA — наследие старой схемы: берём их из сети.
+    games = [g for g in games if g.get("kills") or g.get("duration")]
+    if games:
+        return _decorate_games(games, heroes)
+
+    from dota_mmr import get_recent_matches_async
     steam_ids = await asyncio.to_thread(_linked_steam_ids, PLAYER_GAMES_PLAYERS)
     if not steam_ids:
         return []
-
-    heroes = await asyncio.to_thread(_hero_catalog)
     bot_index = await asyncio.to_thread(_bot_steam_index)
 
     results = await asyncio.gather(
