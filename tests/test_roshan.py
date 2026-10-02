@@ -475,5 +475,61 @@ def test_multicast_chance_was_rebalanced():
     assert plain_roll > 0.50, f"plain rolls must stay the majority, got {plain_roll:.3f}"
 
 
+class _DeadMessageBot:
+    """A bot whose message is already gone: every edit raises, as Telegram does.
+
+    Reproduces the reported bug: a second /fissure inside the 45s window used
+    to delete the drop message, so the window worker could not edit it and the
+    result was swallowed. The result must still reach the group.
+    """
+
+    def __init__(self):
+        self.sent = []
+
+    async def edit_message_caption(self, **kwargs):
+        raise RuntimeError("message to edit not found")
+
+    async def edit_message_text(self, **kwargs):
+        raise RuntimeError("message to edit not found")
+
+    async def send_message(self, **kwargs):
+        self.sent.append(kwargs)
+
+
+def test_result_is_sent_as_a_new_message_when_the_drop_is_gone(monkeypatch):
+    """The result is not lost just because the original message vanished."""
+    import asyncio
+
+    # The DB is reached through asyncio.to_thread, and a SQLite connection
+    # cannot cross threads, so the session is stubbed out instead. What is under
+    # test is the edit-then-send fallback, not the storage.
+    monkeypatch.setattr(roshan, "load_session", lambda sid: {
+        "session_id": sid, "chat_id": -100, "msg_id": 4242,
+        "killer_id": BOT_USER_ID, "killer_name": "went_Dr", "reward": 12.3,
+        "resolved": 0,
+    })
+    monkeypatch.setattr(roshan, "claim_resolution", lambda sid: True)
+    monkeypatch.setattr(roshan, "distribute_items", lambda sid: {OTHER_USER_ID: "aegis"})
+    monkeypatch.setattr(roshan, "load_claimers", lambda sid: [OTHER_USER_ID])
+
+    bot = _DeadMessageBot()
+    asyncio.run(roshan.resolve_session(bot, "dead_1"))
+
+    assert len(bot.sent) == 1, "result must be posted even if the edit fails"
+    assert "went_Dr" in bot.sent[0]["text"]
+
+
+def test_drop_message_is_not_registered_as_deletable():
+    """A roll during the window must not delete the drop.
+
+    set_last_bot_message is a "delete this before the next roll" slot, and
+    fissure.py wipes it via delete_last_bot_message. Registering the Roshan
+    drop there took the button away mid-window, so nobody could register.
+    """
+    source = (PROJECT_ROOT / "roshan.py").read_text(encoding="utf-8-sig")
+    body = source[source.index("async def handle_roshan_event"):]
+    assert "set_last_bot_message(chat_id" not in body
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

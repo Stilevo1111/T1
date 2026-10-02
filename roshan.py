@@ -1,4 +1,4 @@
-"""Roshan event: interactive Aegis/Cheese stealing.
+﻿"""Roshan event: interactive Aegis/Cheese stealing.
 
 The event fires on a /fissure roll. The player "kills Roshan", gets a fissure
 reward, and an inline button opens a short window in which every other player
@@ -380,7 +380,13 @@ async def handle_roshan_event(
         update_fissure, user_obj.id, new_fissure, now, reward,
         last_message_id=msg.message_id,
     )
-    set_last_bot_message(chat_id, user_obj.id, msg.message_id)
+    # Deliberately NOT set_last_bot_message: that key is a "delete this before
+    # the next roll" slot, and the next /fissure wipes it via
+    # delete_last_bot_message. Registering the Roshan drop there meant any roll
+    # during the 45s window deleted the button out from under the players, and
+    # the window worker then failed to edit a message that no longer existed,
+    # so the result was never posted. The drop is edited in place instead, and
+    # it must survive until the window closes.
 
     if record_recent_fissure_roll:
         record_recent_fissure_roll(
@@ -462,25 +468,36 @@ async def resolve_session(bot, session_id: str) -> None:
 
     chat_id = int(session["chat_id"])
     msg_id = session.get("msg_id")
+    edited = False
     if msg_id:
         try:
             await bot.edit_message_caption(
                 chat_id=chat_id, message_id=int(msg_id),
                 caption=text, parse_mode="HTML", reply_markup=None,
             )
+            edited = True
         except Exception:
             try:
                 await bot.edit_message_text(
                     chat_id=chat_id, message_id=int(msg_id),
                     text=text, parse_mode="HTML", reply_markup=None,
                 )
+                edited = True
             except Exception as e:
-                logger.debug(f"roshan: could not edit result message: {e}")
-    else:
+                # The message can be gone (deleted by a moderator or by a
+                # client-side cleanup) or too old to edit. That is not a reason
+                # to drop the result: the players still have to learn who got
+                # what, so fall through and post it as a new message.
+                logger.info(
+                    f"roshan: could not edit result message {msg_id}, "
+                    f"sending a new one instead: {e}"
+                )
+
+    if not edited:
         try:
             await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
         except Exception as e:
-            logger.debug(f"roshan: could not send result message: {e}")
+            logger.error(f"roshan: could not send result message: {e}", exc_info=True)
 
 
 # =====================
