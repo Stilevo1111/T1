@@ -1947,8 +1947,17 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                             radiant_win INTEGER,
                             start_time INTEGER,
                             steam_id BIGINT,
-                lane_role SMALLINT
+                            lane_role SMALLINT
                         )
+                        """)
+                    # CREATE TABLE IF NOT EXISTS is a no-op on a table that
+                    # already exists, so lane_role never reaches databases
+                    # created before the column was added - which is every
+                    # deployed one. Without this ALTER every hero-meta INSERT
+                    # fails with: column "lane_role" does not exist.
+                    cursor.execute("""
+                        ALTER TABLE public_player_matches
+                            ADD COLUMN IF NOT EXISTS lane_role SMALLINT
                         """)
                     for match in matches:
                         match_id = match.get("match_id")
@@ -1976,9 +1985,20 @@ def update_user_mmr(telegram_id: int, update_top_cache: bool = True) -> dict:
                             player_slot INTEGER,
                             radiant_win INTEGER,
                             start_time INTEGER,
-                            steam_id INTEGER
+                            steam_id INTEGER,
+                            lane_role INTEGER
                         )
                         """)
+                    # SQLite has no ADD COLUMN IF NOT EXISTS, and CREATE TABLE
+                    # IF NOT EXISTS skips an existing table entirely - so both
+                    # the fresh-file and the legacy-file case need a guarded
+                    # ALTER, otherwise the INSERT below names a missing column.
+                    cursor.execute("PRAGMA table_info(public_player_matches)")
+                    ppm_columns = [c[1] for c in cursor.fetchall()]
+                    if ppm_columns and 'lane_role' not in ppm_columns:
+                        cursor.execute(
+                            "ALTER TABLE public_player_matches ADD COLUMN lane_role INTEGER"
+                        )
                     for match in matches:
                         match_id = match.get("match_id")
                         hero_id = match.get("hero_id", 0)
