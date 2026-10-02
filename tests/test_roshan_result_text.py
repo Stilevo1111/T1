@@ -10,7 +10,13 @@ bare count.
 
 import re
 
-from constants import ROSHAN_AEGIS_TEXTS, ROSHAN_CHEESE_TEXTS, ROSHAN_RESULT_FOOTERS
+from constants import (
+    ROSHAN_AEGIS_TEXTS,
+    ROSHAN_CHEESE_TEXTS,
+    ROSHAN_EMPTY_PIT_TEXTS,
+    ROSHAN_LOSER_TEXTS,
+    ROSHAN_RESULT_FOOTERS,
+)
 from roshan import ITEM_LABELS, build_result_text
 
 
@@ -60,14 +66,22 @@ def test_item_lines_do_not_repeat_the_item_emoji():
         assert text.count(label) >= 1
 
 
+def test_losers_get_a_pool_line():
+    text = _render({1: "aegis"}, {1: "mikhessssha"}, ["vasya", "petya"])
+    assert any(line in text for line in ROSHAN_LOSER_TEXTS)
+    assert "vasya" in text and "petya" in text
+
+
 def test_no_loser_line_when_everyone_got_something():
     text = _render({1: "aegis"}, {1: "mikhessssha"}, [])
     assert "не досталось" not in text
 
 
 def test_empty_window_says_the_pit_is_empty():
+    """The wording varies, so assert one of the pool lines, not a fixed phrase."""
     text = _render({}, {}, [])
-    assert "яма пуста" in text.lower()
+    assert any(line in text for line in ROSHAN_EMPTY_PIT_TEXTS)
+    assert "на дне" in text
 
 
 def test_footer_is_present():

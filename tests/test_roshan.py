@@ -368,8 +368,35 @@ def test_callback_data_fits_telegram_limit():
 
 
 def test_steal_button_uses_agreed_emoji():
+    # 🥷 ninja, because both items are stealable - the old label said
+    # "Украсть АЕГИС" while the button actually took the cheese too.
     keyboard = roshan.build_roshan_keyboard("1_7")
-    assert "🖐️" in keyboard.inline_keyboard[0][0].text
+    assert "🥷" in keyboard.inline_keyboard[0][0].text
+    assert "🖐️" not in keyboard.inline_keyboard[0][0].text
+
+
+def test_roshan_emojis_do_not_collide_with_other_mechanics():
+    """Roshan owns its emoji set; ⚡ and 🛡 belong to other events."""
+    import pathlib
+    import re
+
+    emoji = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]")
+    src = pathlib.Path(roshan.__file__).parent
+    own = set()
+    for name in ("roshan.py", "constants.py"):
+        text = pathlib.Path(src / name).read_text(encoding="utf-8-sig")
+        if name == "constants.py":
+            start = text.index("ROSHAN_TEXTS = [")
+            end = text.index("# Texts", start)
+            text = text[start:end]
+        else:
+            text = text[text.index("logger = logging"):]
+        own |= set(emoji.findall(text))
+
+    assert "🧀" in own, "cheese keeps its emoji by request"
+    # ⚡ is Zeus and 🛡 is not ours to take.
+    assert "⚡" not in own
+    assert "🛡" not in own
 
 
 # =====================

@@ -30,7 +30,9 @@ from bot_utils import make_clickable
 from constants import (
     ROSHAN_AEGIS_TEXTS,
     ROSHAN_CHEESE_TEXTS,
+    ROSHAN_EMPTY_PIT_TEXTS,
     ROSHAN_KILL_TEXTS,
+    ROSHAN_LOSER_TEXTS,
     ROSHAN_RESULT_FOOTERS,
     ROSHAN_SESSION_TTL,
     ROSHAN_STEAL_WINDOW_SEC,
@@ -44,7 +46,7 @@ AEGIS = "aegis"
 CHEESE = "cheese"
 ITEM_NAMES = (AEGIS, CHEESE)
 
-ITEM_LABELS = {AEGIS: "💎 АЕГИС", CHEESE: "🧀 СЫР"}
+ITEM_LABELS = {AEGIS: "🕊 АЕГИС", CHEESE: "🧀 СЫР"}
 ITEM_TEXTS = {AEGIS: ROSHAN_AEGIS_TEXTS, CHEESE: ROSHAN_CHEESE_TEXTS}
 ITEM_DESCRIPTIONS = {
     AEGIS: "гасит один минус ролл",
@@ -272,7 +274,7 @@ def distribute_items(session_id: str) -> dict[int, str]:
 def build_roshan_keyboard(session_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(
-            "🖐️ Украсть АЕГИС",
+            "🥷 В яму за добычей!",
             callback_data=f"roshan_steal_{session_id}",
             api_kwargs={"style": "danger"},
         )]
@@ -282,13 +284,12 @@ def build_roshan_keyboard(session_id: str) -> InlineKeyboardMarkup:
 def build_roshan_text(display_username: str, reward: float, claimers: int = 0) -> str:
     blocks = [
         f"🎲 {display_username}",
-        random.choice(ROSHAN_TEXTS),
-        random.choice(ROSHAN_KILL_TEXTS),
+        f"{random.choice(ROSHAN_TEXTS)}\n{random.choice(ROSHAN_KILL_TEXTS)}",
         f"🎁 Фиссура выросла на <b>+{reward:.1f} см</b>",
         (
-            "💎 АЕГИС и 🧀 СЫР выпали с Рошана!\n"
-            f"🖐️ Забрать можно <b>{ROSHAN_STEAL_WINDOW_SEC} секунд</b>.\n"
-            "Каждый нажавший получит один предмет случайно."
+            f"🕊 АЕГИС и 🧀 СЫР лежат на дне ямы.\n"
+            f"🥷 Вытащить можно <b>{ROSHAN_STEAL_WINDOW_SEC} секунд</b> — "
+            "кто нажал, тот и тащит, но предмет выпадет случайно."
         ),
     ]
     if claimers:
@@ -311,12 +312,12 @@ def build_result_text(
     same line named a different person to everyone.
     """
     blocks = [
-        "🪖 Рошан повержен",
-        f"👑 {killer_name} — добыча за убийство: +{reward:.1f} см",
+        "👹 Рошан повержен",
+        f"⛏ {killer_name} — добыча за убийство: +{reward:.1f} см",
     ]
 
     if awarded:
-        stolen = ["🖐️ Утащили из ямы:"]
+        stolen = ["🥷 Утащили из ямы:"]
         for uid, item in awarded.items():
             name = winner_names.get(uid) or f"игрок {uid}"
             stolen.append(
@@ -326,12 +327,14 @@ def build_result_text(
         blocks.append("\n".join(stolen))
     else:
         blocks.append(
-            "🖐️ Окно закрылось, яма пуста.\n"
-            "Никто не рискнул забрать добычу — 💎 и 🧀 остались на дне."
+            f"{random.choice(ROSHAN_EMPTY_PIT_TEXTS)}\n"
+            "🕊 и 🧀 так и остались лежать на дне."
         )
 
     if loser_names:
-        blocks.append("😶 Нажали, но не досталось: " + ", ".join(loser_names))
+        blocks.append(
+            f"{random.choice(ROSHAN_LOSER_TEXTS)}: " + ", ".join(loser_names)
+        )
 
     blocks.append(random.choice(ROSHAN_RESULT_FOOTERS))
     return "\n\n".join(blocks)
@@ -499,7 +502,7 @@ async def resolve_session(bot, session_id: str) -> None:
 
 async def handle_roshan_button(update: ContextTypes.DEFAULT_TYPE,
                                context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the '🖐️ Украсть АЕГИС' press."""
+    """Handle the '🥷 В яму за добычей!' press."""
     query = update.callback_query
     data = query.data or ""
 
@@ -512,21 +515,21 @@ async def handle_roshan_button(update: ContextTypes.DEFAULT_TYPE,
 
     session = await asyncio.to_thread(load_session, session_id)
     if not session:
-        await query.answer("🪖 Этот Рошан давно ушёл в яму.", show_alert=True)
+        await query.answer("👹 Этот Рошан давно ушёл обратно в яму.", show_alert=True)
         return
 
     if int(session["resolved"] or 0):
-        await query.answer("🪖 Окно уже закрыто, добыча раздана.", show_alert=True)
+        await query.answer("🕳 Окно уже закрыто, добыча разобрана.", show_alert=True)
         return
 
     if user_id == int(session["killer_id"]):
-        await query.answer("🪖 Ты и так убил Рошана, украсть у себя не выйдет.", show_alert=True)
+        await query.answer("⛏ Ты его и так убил. У себя не покрадушь.", show_alert=True)
         return
 
     ok = await asyncio.to_thread(add_claimer, session_id, user_id)
     if not ok:
-        await query.answer("🖐️ Ты уже в деле, или окно закрылось.", show_alert=True)
+        await query.answer("🥷 Ты уже в деле. Или окно уже закрылось.", show_alert=True)
         return
 
     count = len(await asyncio.to_thread(load_claimers, session_id))
-    await query.answer(f"🖐️ Ты в деле! Охота за предметами: {count}", show_alert=False)
+    await query.answer(f"🥷 Ты в деле! Сейчас в яме: {count}", show_alert=False)
