@@ -127,7 +127,7 @@ ROSHAN_AEGIS_EFFECTS = [
     "страховка от минуса",
 ]
 ROSHAN_CHEESE_EFFECTS = [
-    "усиление плюса",
+    "усиление плюса ×1.5",
 ]
 
 # Texts
