@@ -1540,6 +1540,16 @@ def miniapp_url(miniapp: bool = True) -> str:
     return f"{url}?miniapp=1" if miniapp else url
 
 
+def ranks_url(miniapp: bool = True) -> str:
+    """WebAppInfo URL of the ranking tab of the match list page.
+
+    Отдельная от miniapp_url(): кнопка «Весь список» должна открывать
+    именно топ рангов, а не историю игр.
+    """
+    url = f"{public_base_url()}/matches?tab=ranks"
+    return f"{url}&miniapp=1" if miniapp else url
+
+
 PICKER_JS = """
 <script>
 // Выбор игрока: список ников свёрнут под кнопку и раскрывается по клику.

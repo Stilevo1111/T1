@@ -890,12 +890,18 @@ def test_upstream_outage_is_logged_once():
 
 
 def test_topmmr_caption_offers_the_full_list():
-    """Подпись /topmmr ведёт и на сайт, и в Mini App на вкладку рангов."""
+    """/topmmr ведёт и на сайт, и в Mini App кнопкой, а не ссылкой.
+
+    Обычный <a href> открывает встроенный браузер Telegram, поэтому
+    приложение цепляется инлайн-кнопкой с web_app.
+    """
     src = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
     assert "seredin999.onrender.com/top-mmr" in src      # сайт не убираем
     assert "Весь список" in src
-    # В Mini App открывается именно вкладка рангов, а не история игр.
-    assert "/matches?tab=ranks&miniapp=1" in src
+    assert "web_app=WebAppInfo(url=ranks_url())" in src  # кнопка в приложение
+    # Отдельный хелпер: кнопка должна открывать вкладку рангов, а не историю.
+    assert dota_matches.ranks_url().endswith("tab=ranks&miniapp=1")
+    assert dota_matches.ranks_url() != dota_matches.miniapp_url()
 
 
 def test_rolls_tab_is_a_third_tab():

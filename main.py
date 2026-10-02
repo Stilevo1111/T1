@@ -3748,19 +3748,11 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 top_text += f"\n{user_pos_emoji} <b>{user_display}</b> - {user_rank_str}\n"
                 top_text += "└ Нет игр за неделю"
 
-            # Две кнопки: полный список на сайте и прямо в Mini App
-            # на вкладке «Топ рангов». Ссылку на сайт оставляем, потому
-            # что в Mini App видно только первых игроков.
-            from dota_matches import public_base_url
-
-            top_text += (
-                "\n\n"
-                f'🏆 <a href="https://seredin999.onrender.com/top-mmr">'
-                f"Топ рангов на сайте</a>"
-                '\n'
-                f'<a href="{public_base_url()}/matches?tab=ranks&miniapp=1">'
-                "📋 Весь список</a>"
-            )
+            # Ссылка на сайт в подписи: в Mini App она всё равно открыла
+            # бы встроенный браузер, поэтому кнопку приложения вешаем
+            # инлайном под сообщением (см. reply_markup ниже).
+            top_text += ('\n\n<a href="https://seredin999.onrender.com/top-mmr">'
+                         "🏆 Топ рангов на сайте</a>")
 
             # Delete previous bot message before sending new one
             try:
@@ -3768,12 +3760,27 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             except Exception as e:
                 logger.debug(f"Could not delete last bot message: {e}")
 
+            # Кнопка «Весь список» открывает Mini App, а обычная ссылка в
+            # подписи открыла бы встроенный браузер Telegram. Web App
+            # кнопки Telegram разрешает только в личных чатах.
+            from dota_matches import ranks_url
+
+            ranks_keyboard = [[
+                InlineKeyboardButton("📋 Весь список",
+                                     web_app=WebAppInfo(url=ranks_url())),
+                InlineKeyboardButton("🌐 Сайт",
+                                     url="https://seredin999.onrender.com/top-mmr"),
+            ]]
+            reply_markup = (InlineKeyboardMarkup(ranks_keyboard)
+                            if update.effective_chat.type == "private"
+                            else main_menu())
+
             result_msg = await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=topmmr_banner_url,
                 caption=top_text,
                 parse_mode="HTML",
-                reply_markup=main_menu()
+                reply_markup=reply_markup
             )
             add_bot_message(chat_id, user_obj.id, result_msg.message_id)
             set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
