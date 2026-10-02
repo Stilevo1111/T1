@@ -941,6 +941,36 @@ def test_sort_js_has_no_literal_escape_and_opens_rows():
         "клик по строке обязан раскрывать карточку"
 
 
+def test_history_repairs_its_own_schema():
+    """Страница сама добавляет недостающие колонки.
+
+    ALTER жил только в MMR-джобе, который после деплоя ещё не успевал
+    отработать, и каждый запрос в лог падал с «column m.duration does
+    not exist».
+    """
+    import sqlite3
+
+    from database import ensure_match_history_columns
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE public_player_matches ("
+        " match_id INTEGER UNIQUE, hero_id INTEGER, player_slot INTEGER,"
+        " radiant_win INTEGER, start_time INTEGER, steam_id INTEGER)"
+    )
+    assert ensure_match_history_columns(conn, False) is True
+    cols = {c[1] for c in conn.execute("PRAGMA table_info(public_player_matches)")}
+    assert {"kills", "deaths", "assists", "duration"} <= cols
+    # Повторный вызов ничего не меняет.
+    assert ensure_match_history_columns(conn, False) is False
+    conn.close()
+
+    # Таблицы ещё нет — ждём джоб, но не падаем.
+    fresh = sqlite3.connect(":memory:")
+    assert ensure_match_history_columns(fresh, False) is False
+    fresh.close()
+
+
 def test_history_reads_from_the_shared_match_table():
     """История берётся из public_player_matches, а не из повторного OpenDota."""
     src = (PROJECT_ROOT / "database.py").read_text(encoding="utf-8")

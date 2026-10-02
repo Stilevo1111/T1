@@ -3762,6 +3762,42 @@ def _derive_mmr_rank_tier(rank_tier: int | None, mmr: int | None) -> int:
         return 0
 
 
+def ensure_match_history_columns(conn, is_pg: bool):
+    """Добавляет колонки истории, если их ещё нет, и говорит, что добавил.
+
+    Раньше ALTER жил только в коде MMR-джоба, поэтому страница падала
+    с «column m.duration does not exist», пока джоб ни разу не
+    отработал. Теперь схему чинит тот, кто читает.
+    """
+    needed = ("kills", "deaths", "assists", "duration")
+    cur = conn.cursor()
+    if is_pg:
+        cur.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'public_player_matches'
+        """)
+        existing = {r[0] for r in cur.fetchall()}
+        if not existing:
+            return False            # таблицы ещё нет — её создаст джоб
+        missing = [c for c in needed if c not in existing]
+        for col in missing:
+            cur.execute("ALTER TABLE public_player_matches "
+                        f"ADD COLUMN IF NOT EXISTS {col} INTEGER")
+    else:
+        cur.execute("PRAGMA table_info(public_player_matches)")
+        existing = {c[1] for c in cur.fetchall()}
+        if not existing:
+            return False
+        missing = [c for c in needed if c not in existing]
+        for col in missing:
+            cur.execute(f"ALTER TABLE public_player_matches ADD COLUMN {col} INTEGER")
+
+    if missing:
+        logger.info("ensure_match_history_columns: добавлены колонки %s", missing)
+        conn.commit()
+    return bool(missing)
+
+
 def get_recent_player_matches(limit=50, days=7, steam_ids=None):
     """Последние матчи игроков бота из public_player_matches.
 
@@ -3777,6 +3813,9 @@ def get_recent_player_matches(limit=50, days=7, steam_ids=None):
         conn = get_connection()
         url = urlparse.urlparse(DATABASE_URL)
         is_pg = "postgres" in url.scheme
+        # Колонки могли ещё не появиться: чиним схему на месте, иначе
+        # каждый запрос в страницу сыпал бы ошибкой в лог.
+        ensure_match_history_columns(conn, is_pg)
         ph = "%s" if is_pg else "?"
         since = int(time.time()) - days * 24 * 3600
 
