@@ -28,6 +28,7 @@ import database  # noqa: E402
 import roshan  # noqa: E402
 from constants import ROSHAN_STEAL_TEXTS, ROSHAN_STEAL_WINDOW_SEC  # noqa: E402
 from rolls import apply_aegis, apply_cheese, calculate_roshan_reward  # noqa: E402
+from stats import get_event_chances, get_roshan_chance  # noqa: E402
 
 BOT_USER_ID = 555000222
 OTHER_USER_ID = 555000333
@@ -105,6 +106,31 @@ def test_apply_cheese_never_boosts_a_negative_roll():
     roll, consumed, _ = apply_cheese(-12.0)
     assert consumed is False
     assert roll == -12.0, "Cheese must not amplify a negative (possibly fatal) roll"
+
+
+def test_roshan_shares_one_scale_with_the_other_unique_rolls():
+    """Рошан — первое звено общей шкалы, а не отдельный бросок.
+
+    Порядок и вероятности прежние, но теперь все уникальные роллы
+    выбираются одним броском: иначе шансы событий не складывались
+    в одну таблицу и каждый жил своим random().
+    """
+    import inspect
+
+    import fissure as fissure_module
+
+    source = inspect.getsource(fissure_module.fissure)
+    assert "roshan_end = get_roshan_chance()" in source
+    assert "zeus_end = roshan_end + zeus_chance" in source
+    assert "techies_end = zeus_end + techies_chance" in source
+    assert "multicast_end = techies_end + multicast_chance" in source
+    # Один бросок на всю шкалу: лишнего random() быть не должно.
+    assert source.count("event_roll = random.random()") == 1
+
+    roshan = get_roshan_chance()
+    multicast, zeus, techies = get_event_chances()
+    assert roshan + multicast + zeus + techies == pytest.approx(0.48)
+    assert 0.48 < 1.0, "обычный ролл должен остаться самой частой долей"
 
 
 def test_roshan_reward_has_floor_and_cap():

@@ -1022,6 +1022,8 @@ def render_roll(roll: dict) -> str:
 
     return (
         f'<div class="g-card g-roll" data-name="{_esc(who.lower())}" '
+        # Время целым: %g печатал бы 1.7e+09, а по нему ещё и сортировать.
+        f'data-ts="{int(ts)}" '
         f'data-growth="{growth:g}" data-fissure="{fissure:g}">'
         f'<div class="g-line">'
         f'{face}'
@@ -1465,8 +1467,11 @@ def render_games_page(
     elif tab == "rolls":
         # История роллов приходит с самой страницы бота, newest first.
         items = list(rolls or [])
+        # Первым идёт «Последние»: лог роллов читают сверху вниз по времени,
+        # и по нику он с первого взгляда терял смысл.
         head = sort_bar(
-            [("name", "Игрок"), ("growth", "Прирост"), ("fissure", "Максимум")],
+            [("ts", "Последние"), ("name", "Игрок"),
+             ("growth", "Прирост"), ("fissure", "Максимум")],
             ".g-card.g-roll",
         )
         body = head + ("".join(render_roll(r) for r in items[:limit * 4]) or (

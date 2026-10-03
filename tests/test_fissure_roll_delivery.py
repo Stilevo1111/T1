@@ -165,9 +165,9 @@ def _stub(monkeypatch, *, roll=12.0, chances=(0.0, 0.0, 0.0), fissure_value=100.
 
     monkeypatch.setattr(fissure, "delete_fissure_user_and_last_messages", _noop_async)
     monkeypatch.setattr(fissure, "handle_techies_event", _noop_async)
-    # Roshan rolls on its own chance, independent of get_event_chances(). A
-    # stub with all-zero chances means "no events", so it must disable Roshan
-    # too, otherwise runs became flaky.
+    # Roshan takes the head of the same scale as the other events. A stub with
+    # all-zero chances means "no events", so it must disable Roshan too,
+    # otherwise runs became flaky.
     monkeypatch.setattr(fissure, "get_roshan_chance", lambda: 0.0)
     monkeypatch.setattr(fissure, "handle_roshan_event", _noop_async)
     # The anti-spam window is module state; give every run a clean one.

@@ -345,13 +345,20 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         zeus_text = ""
         cascade_count = 1
 
-        # Один рандом: что выпало?
+        # Один бросок на все уникальные роллы: Рошан, Зевс, Техиес, мультикаст
+        # стоят в одной шкале друг за другом. Раньше Рошан катался отдельным
+        # броском и выходил раньше всех, из-за чего шансы остальных событий
+        # нельзя было прочитать по одному числу — каждый жил своим броском.
+        # Порядок и вероятности прежние: Рошан 20% | Зевс 10% | Техиес 10% |
+        # мультикаст 8% | обычный ролл 52%.
         event_roll = random.random()
         multicast_chance, zeus_chance, techies_chance = get_event_chances()
+        roshan_end = get_roshan_chance()
+        zeus_end = roshan_end + zeus_chance
+        techies_end = zeus_end + techies_chance
+        multicast_end = techies_end + multicast_chance
 
-        # Рошан катается отдельным броском: get_event_chances() отдаёт тройку,
-        # которую распаковывают здесь и которую подменяют литералом в тестах.
-        if random.random() < get_roshan_chance():
+        if event_roll < roshan_end:
             await handle_roshan_event(
                 context.bot,
                 chat_id,
@@ -367,7 +374,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        if event_roll < zeus_chance:
+        if event_roll < zeus_end:
             zeus_triggered = True
             await handle_zeus_event(
                 context.bot,
@@ -387,7 +394,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        if event_roll < zeus_chance + techies_chance:
+        if event_roll < techies_end:
             await handle_techies_event(
                 context.bot,
                 chat_id,
@@ -409,7 +416,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         original_roll = None
         base_roll_before_streak = None  # Сохраняем ролл ДО стрика для вывода
 
-        is_multicast = event_roll < zeus_chance + techies_chance + multicast_chance
+        is_multicast = event_roll < multicast_end
 
         if is_multicast:
             # 🎰 МУЛЬТИКАСТ — счётчик множителя, без сообщений со слотами

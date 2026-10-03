@@ -1248,6 +1248,26 @@ def test_mmr_row_links_to_the_player_game_history():
     assert "g-igames" not in dota_matches.render_mmr_row(player, 2)
 
 
+def test_rolls_tab_sorts_by_recency_first():
+    """Лог роллов открывается по времени: сверху последние.
+
+    Первым вариантом раньше стоял «Игрок», и список сразу переставлялся по
+    алфавиту — свежие роллы оказывались внизу и терялись.
+    """
+    rolls = [{"ts": 1700000000, "user_id": 1, "username": "wawa",
+              "growth": 12.5, "fissure": 340.0, "cascade": 3},
+             {"ts": 1700000300, "user_id": 2, "username": "frost",
+              "growth": -4.0, "fissure": 120.0, "cascade": 1}]
+    html = dota_matches.render_games_page([], tab="rolls", rolls=rolls)
+
+    assert 'data-ts="1700000300"' in html and 'data-ts="1700000000"' in html
+    assert '<button type="button" class="g-sort-b on" data-sort="ts" ' in html
+    assert '<span class="g-sort-t">Последние ↓</span>' in html
+    # Остальные признаки на месте — их просто выбирают вручную.
+    for key in ("name", "growth", "fissure"):
+        assert f'data-sort="{key}"' in html
+
+
 def test_rolls_tab_is_a_third_tab():
     """Роллы — третья вкладка рядом с историей и топом рангов."""
     rolls = [{"ts": 1700000000, "user_id": 1, "username": "wawa",

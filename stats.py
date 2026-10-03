@@ -35,11 +35,12 @@ def get_event_chances():
 
 
 def get_roshan_chance():
-    """Roshan is rolled separately from get_event_chances().
+    """Roshan is the first slice of the shared event scale.
 
-    It is kept out of that tuple on purpose: the returned triple is unpacked
-    in fissure.py and monkeypatched with a literal triple in
+    It is kept out of get_event_chances() on purpose: the returned triple is
+    unpacked in fissure.py and monkeypatched with a literal triple in
     tests/test_fissure_roll_delivery.py, so widening it would break every
-    existing test for no runtime benefit.
+    existing test for no runtime benefit. Roshan takes the head of the scale,
+    Zeus follows it, then Techies and multicast.
     """
     return ROSHAN_DEFAULT_CHANCE
