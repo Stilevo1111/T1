@@ -892,22 +892,11 @@ def render_game(game: dict) -> str:
         f'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'
         f"</svg></span>"
         f"</div>"
+        # Кнопки только со словами: иконки из линейных SVG на 13px читались
+        # как каракули и ничего не добавляли — «Пати» и «Dotabuff» говорят сами.
         f'<div class="g-acts">'
-        f'<span class="g-act" data-act="party">'
-        f'<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
-        f'<circle cx="6" cy="5" r="2.4" fill="none" stroke="currentColor" '
-        f'stroke-width="1.4"/><path d="M2 13c0-2.2 1.8-3.6 4-3.6s4 1.4 4 3.6" '
-        f'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>'
-        f'<path d="M11 6.6h4M11 9.4h4" fill="none" stroke="currentColor" '
-        f'stroke-width="1.4" stroke-linecap="round"/></svg>'
-        f"Пати</span>"
-        f'<span class="g-act dotabuff" data-act="dota">'
-        f'<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
-        f'<circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" '
-        f'stroke-width="1.4"/><path d="M1.9 8h12.2M8 1.8c1.7 1.8 2.5 3.9 2.5 6.2S9.7 '
-        f'12.4 8 14.2C6.3 12.4 5.5 10.3 5.5 8S6.3 3.6 8 1.8Z" fill="none" '
-        f'stroke="currentColor" stroke-width="1.4"/></svg>'
-        f"Dotabuff</span>"
+        f'<span class="g-act" data-act="party">Пати</span>'
+        f'<span class="g-act dotabuff" data-act="dota">Dotabuff</span>'
         f"</div>"
         f"{items}</div>"
     )
@@ -1149,13 +1138,19 @@ body{background:#07080c}
 .g-card.open{display:flex;align-items:center;gap:8px}
 .g-card.open .g-line{flex:1 1 auto;min-width:0}
 .g-acts{display:flex;gap:6px;flex-shrink:0;max-height:0;overflow:hidden;opacity:0;
- transition:max-height .24s ease,opacity .2s ease}
+  flex-direction:column;transition:max-height .24s ease,opacity .2s ease}
 .g-card.open .g-acts{max-height:none;opacity:1}
-.g-act{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:6px;
- background:#171d26;border:1px solid #262d3a;color:#b7c0d0;font:700 10px/1 Inter,sans-serif;
- cursor:pointer;transition:border-color .16s ease,color .16s ease,background .16s ease}
-.g-act:hover{border-color:rgba(232,180,92,.5);color:#f7e3c0;background:#1c232e}
-.g-act.dotabuff:hover{border-color:rgba(214,69,69,.55);color:#f0a5a5}
+.g-act{display:inline-flex;align-items:center;justify-content:center;
+  padding:7px 14px;border-radius:8px;background:linear-gradient(180deg,#1d2431,#171d26);
+  border:1px solid #2c3444;color:#ccd5e4;font:700 10px/1 Inter,sans-serif;
+  letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;
+  cursor:pointer;transition:border-color .16s ease,color .16s ease,
+  background .16s ease,transform .12s ease}
+.g-act:hover{border-color:rgba(232,180,92,.55);color:#f7e3c0;
+  background:linear-gradient(180deg,#232b3a,#1b222d);transform:translateY(-1px)}
+.g-act:active{transform:translateY(0)}
+.g-act.dotabuff:hover{border-color:rgba(214,69,69,.6);color:#f0a5a5;
+  background:linear-gradient(180deg,#2a1e21,#1e171a)}
 
 /* ── История роллов ── */
 .g-card.g-roll .g-line{display:flex;align-items:center;gap:10px;padding:9px 11px}
@@ -1306,7 +1301,7 @@ body{background:#07080c}
  .g-more{width:16px;height:16px}
  .g-acts{max-height:0}
  .g-card.open .g-acts{max-height:none;opacity:1}
- .g-act{font-size:12px;padding:9px 13px;flex-shrink:0}
+ .g-act{font-size:11px;padding:10px 14px;flex-shrink:0;letter-spacing:.05em}
 
  /* Топ рангов: колонки шире, подписи и проценты крупнее. */
  .g-card.g-mmr .g-line{grid-template-columns:30px 28px 28px minmax(0,1fr) 96px;
