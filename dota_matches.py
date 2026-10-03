@@ -780,6 +780,10 @@ def render_game(game: dict) -> str:
     """
     win = bool(game.get("win"))
     cls = "win" if win else "loss"
+    # Буква вместо слова: «Победа»/«Поражение» съедали половину строки,
+    # а W/L читаются с одного взгляда. Полное слово осталось в подсказке.
+    res_word = "Победа" if win else "Поражение"
+    res_letter = "W" if win else "L"
     shown_as = game.get("bot_username") or game.get("personaname") or "Игрок"
 
     avatar_url = (game.get("avatar") or "").strip()
@@ -870,7 +874,8 @@ def render_game(game: dict) -> str:
         f'<span class="g-who">{name_html}'
         f'<span class="g-heron">{_esc(rank_name)} · {subtitle}</span></span>'
         f'<span class="g-kda"><b>{kills}</b> / {deaths} / {assists}</span>'
-        f'<span class="g-res">{"Победа" if win else "Поражение"}</span>'
+        f'<span class="g-res" title="{res_word}" aria-label="{res_word}">'
+        f"{res_letter}</span>"
         f'<span class="g-when">{date_txt} · {time_txt} · '
         f'{_fmt_duration(game.get("duration"))}</span>'
         f'<span class="g-more" aria-hidden="true">'
@@ -1097,7 +1102,7 @@ body{background:#07080c}
  pointer-events:none;z-index:0}
 .g-top .g-sp{flex:1}
 
-/─ Вкладки
+/* ── Вкладки ───────────────────────────────────────────────────────────── */
 /* Переключатель вкладок: сегментированный блок, ничего не наезжает. */
 .g-tabs{display:inline-flex;align-items:stretch;gap:4px;margin:14px 14px 0;
  padding:4px;background:#0d1118;border:1px solid #232a38;border-radius:8px;
@@ -1149,12 +1154,10 @@ body{background:#07080c}
    одна плашка с кнопками, активная подсвечена, стрелка показывает
    направление. Вёрстка строк от него не зависит — кнопки лежат
    отдельным рядом сверху и не наезжают на колонки. */
-.g-sort{display:flex;align-items:center;flex-wrap:wrap;gap:6px;
+.g-sort{display:flex;align-items:center;flex-wrap:wrap;gap:5px;
  padding:0 10px 8px;user-select:none}
-.g-sort-l{font-size:10.5px;font-weight:800;letter-spacing:.08em;
- text-transform:uppercase;color:#5c6580;flex-shrink:0}
 .g-sort-b{position:relative;display:inline-flex;align-items:center;gap:5px;
- padding:6px 9px;border:0;border-radius:7px;background:transparent;
+ padding:5px 8px;border:0;border-radius:7px;background:transparent;
  font:inherit;font-size:10.5px;font-weight:800;letter-spacing:.08em;
  text-transform:uppercase;color:#7c869c;white-space:nowrap;cursor:pointer;
  box-shadow:inset 0 0 0 1px transparent;
@@ -1209,8 +1212,9 @@ body{background:#07080c}
 .g-kda{font-size:11.5px;color:#8e97aa;font-variant-numeric:tabular-nums;white-space:nowrap;
  flex-shrink:0}
 .g-kda b{color:#f2f5fa}
-.g-res{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
- padding:3px 8px;border-radius:999px;white-space:nowrap;flex-shrink:0}
+.g-res{width:19px;height:19px;display:grid;place-items:center;border-radius:5px;
+ font-size:10px;font-weight:800;line-height:1;text-transform:uppercase;
+ flex-shrink:0}
 .g-card.win .g-res{color:#7fd18a;background:rgba(127,209,138,.12);
  box-shadow:inset 0 0 0 1px rgba(127,209,138,.3)}
 .g-card.loss .g-res{color:#ef6a5a;background:rgba(239,106,90,.12);
@@ -1275,7 +1279,7 @@ body{background:#07080c}
  .g-heron{display:block;font-size:12px;color:#7c869c;margin-top:3px}
  .g-when{display:none}
  .g-kda{font-size:13px}
- .g-res{font-size:11px;padding:4px 8px}
+ .g-res{width:22px;height:22px;font-size:12px}
  .g-rank-img{width:26px;height:26px}
  .g-face,.g-hero{width:30px;height:30px}
  .g-hero{font-size:12px}
@@ -1292,7 +1296,6 @@ body{background:#07080c}
  .g-nick{font-size:14px}
  .g-heron{font-size:11.5px}
  .g-sort{padding:0 10px 8px;gap:5px}
- .g-sort-l{display:none}
  .g-sort-b{font-size:11px;letter-spacing:.03em;padding:7px 8px;gap:5px}
  .g-wr{font-size:12px}
  .g-wr-track{display:none}
@@ -1369,8 +1372,8 @@ def render_games_page(
         # Сортировка одна на обе вкладки: набор кнопок в .g-sort,
         # строки переставляет общий скрипт SORT_JS.
         head = (
-            '<div class="g-sort" data-rows=".g-card.g-mmr">'
-            '<span class="g-sort-l">Сортировка:</span>'
+            '<div class="g-sort" data-rows=".g-card.g-mmr" role="group" '
+            'aria-label="Сортировка">'
             f'{sort_btn("rank_tier", "Ранг", True)}'
             f'{sort_btn("stats", "Статистика")}'
             "</div>"
@@ -1384,8 +1387,8 @@ def render_games_page(
         # История роллов приходит с самой страницы бота, newest first.
         items = list(rolls or [])
         head = (
-            '<div class="g-sort" data-rows=".g-card.g-roll">'
-            '<span class="g-sort-l">Сортировка:</span>'
+            '<div class="g-sort" data-rows=".g-card.g-roll" role="group" '
+            'aria-label="Сортировка">'
             f'{sort_btn("name", "Игрок")}'
             f'{sort_btn("growth", "Прирост")}'
             f'{sort_btn("fissure", "Максимум")}'
@@ -1460,7 +1463,7 @@ def render_games_page(
         f'<div class="g-body">{chips_bar}{body}</div>\n'
         "</div>\n"
         f"<script>{TELEGRAM_INIT_JS}</script>\n"
-f"<script>{GAME_ACTS_JS}</script>\n"
+        f"<script>{GAME_ACTS_JS}</script>\n"
         f"<script>{PICKER_JS}</script>\n"
         # Ник открывает профиль в Telegram. Раньше это была вложенная <a>
         # внутри <a>, что невалидно, поэтому вешаем переход на data-атрибут.
@@ -1623,8 +1626,9 @@ def ranks_url(miniapp: bool = True) -> str:
 
 
 PICKER_JS = """
-<script>
 // Выбор игрока: список ников свёрнут под кнопку и раскрывается по клику.
+// Разметки тегов здесь быть не должно: страница оборачивает константу сама,
+// а лишняя пара тегов делает блок синтаксически невалидным.
 (function(){
   var pick = document.querySelector('.g-pick');
   if (!pick) return;
@@ -1644,10 +1648,8 @@ PICKER_JS = """
     if (e.key === 'Escape') setOpen(false);
   });
 })();
-</script>
 """
 GAME_ACTS_JS = """
-<script>
 // Клик по строке игры раскрывает действия справа: пати и Dotabuff.
 (function(){
   document.querySelectorAll('.g-card[data-party]').forEach(function(card){
@@ -1674,11 +1676,9 @@ GAME_ACTS_JS = """
     });
   });
 })();
-</script>
 """
 
 SORT_JS = """
-<script>
 // Одна сортировка на обе вкладки.
 // Разметка лишь говорит, какой колонкой сортировать (data-sort) и где
 // лежат строки (data-rows) — порядок, переключение направления и
@@ -1739,8 +1739,9 @@ SORT_JS = """
     paint();
   });
 })();
-</script>
 """
+
+
 def render_page(matches: list[dict], limit: int = DEFAULT_LIMIT, miniapp: bool = False) -> str:
     """Full HTML page with the match list rendered server-side.
 

@@ -597,7 +597,10 @@ def test_render_games_page_has_dota_style_columns():
     html = dota_matches.render_games_page(games, limit=10, miniapp=True)
 
     assert 'class="miniapp"' in html
-    assert "Победа" in html and "Поражение" in html
+    # Результат — буква W/L в компактном квадрате, слово ушло в подсказку.
+    assert 'class="g-res" title="Победа" aria-label="Победа">W</span>' in html
+    assert ('class="g-res" title="Поражение" aria-label="Поражение">L</span>'
+            in html)
     # Ник открывает профиль через data-атрибут + обработчик клика:
     # вложенная <a> внутри <a> невалидна, поэтому ссылки в href нет.
     assert 'data-tg="777"' in html
@@ -627,7 +630,9 @@ def test_render_game_card_in_cup_style():
     assert 'class="g-hero" src="http://h/jugg.png"' in html   # иконка героя
     assert "<b>15</b> / 1 / 8" in html                        # KDA
     assert 'class="g-card win"' in row                        # победа
-    assert "Победа" in row
+    # Слово «Победа» больше не растягивает строку: только буква W.
+    assert 'class="g-res" title="Победа" aria-label="Победа">W</span>' in row
+    assert "Поражение" not in row
     # Строка больше не ссылка: клик открывает панель с «Пати» и «ДотаБаф».
     assert "<a" not in row
     assert 'data-act="party"' in row and 'data-act="dota"' in row
@@ -649,7 +654,8 @@ def test_render_game_without_avatar_falls_back_to_initial():
     html = dota_matches.render_games_page([game], limit=5)
     assert 'class="g-face g-hero"' in html
     assert ">S<" in html
-    assert "Поражение" in html
+    assert 'title="Поражение" aria-label="Поражение">L</span>' in html
+    assert "Поражение<" not in html          # слова в строке больше нет
 
 
 def test_render_mmr_tab_matches_top_page():
@@ -950,6 +956,28 @@ def test_sort_js_has_no_literal_escape_and_opens_rows():
         "клик по строке обязан раскрывать карточку"
 
 
+def test_js_constants_carry_no_script_tags_of_their_own():
+    """Константы не должны приносить свои теги <script>.
+
+    Страница оборачивает каждую из них в <script>…</script> сама, поэтому
+    лишняя пара внутри давала вложенный тег: браузер закрывал блок на
+    первой обёртке и весь JS страницы падал. Кнопки сортировки переставали
+    нажиматься, а строки — раскрываться.
+    """
+    for name in ("TELEGRAM_INIT_JS", "GAME_ACTS_JS", "PICKER_JS", "SORT_JS"):
+        src = getattr(dota_matches, name)
+        assert "script>" not in src, f"{name} содержит тег script"
+
+    players = [{"username": "a", "steam_nickname": "a", "mmr": 1,
+                "rank_tier": 50, "week_games": 1, "week_wins": 1}]
+    for tab in ("games", "mmr", "rolls"):
+        html = dota_matches.render_games_page([], limit=5, tab=tab,
+                                              mmr_players=players, miniapp=True)
+        body = html.split("</style>", 1)[-1]
+        assert body.count("<script") == body.count("</script>"), tab
+        assert "<script><script" not in body, tab
+
+
 def test_rolls_have_avatars_and_sorting():
     """В роллах есть аватар и те же кнопки сортировки, что и в топе."""
     rolls = [{"ts": 1700000000, "username": "wawa", "growth": 12.5,
@@ -1145,3 +1173,17 @@ def test_get_dota_matches_clamps_limit(monkeypatch):
 
     asyncio.run(dota_matches.get_dota_matches(limit=9999, force=True))
     assert seen["limit"] == dota_matches.MAX_LIMIT
+
+
+def test_css_has_no_broken_comments():
+    """В стилях нет оборванных CSS-комментариев.
+
+    Строка вида «/─ Вкладки» без открывающей звёздочки — не комментарий,
+    а мусор в селекторе. Браузер выбрасывал вместе с ней следующее правило
+    (.g-tabs), и сегментированная рамка вкладок пропадала.
+    """
+    for name in ("GAMES_CSS", "PAGE_CSS"):
+        css = getattr(dota_matches, name)
+        assert css.count("/*") == css.count("*/"), f"{name}: незакрытый комментарий"
+        broken = re.findall(r"(?m)^[ \t]*/(?![/*])", css)
+        assert not broken, f"{name}: комментарий без «/*» — {len(broken)} шт."
