@@ -78,6 +78,24 @@ HEIGHT = 800
 # Overall timeout for the full analytics pipeline (matches + details + chart)
 ANALYTICS_TIMEOUT_SECONDS = 45
 
+
+# =========================================================
+# MATCH FIELD NORMALIZATION
+# =========================================================
+
+def _num(value: Any, default: float = 0) -> float:
+    """Read a match field as a number.
+
+    OpenDota and the analytics_cache JSON both carry explicit nulls, so
+    dict.get(key, default) hands back None whenever the key exists. Every
+    comparison in this module goes through here so a null field reads as a
+    missing measurement instead of raising on `None > 0`.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return default
+    return value
+
+
 # =========================================================
 # MARKDOWN ESCAPE
 # =========================================================
@@ -611,20 +629,20 @@ async def detect_role_from_history(matches: list[dict[str, Any]]) -> str:
     total_gpm = 0
     total_lh = 0
     for m in matches[:10]:
-        duration = m.get("duration", 0)
-        gold = m.get("gold", 0)
-        gold_spent = m.get("gold_spent", 0)
+        duration = _num(m.get("duration"))
+        gold = _num(m.get("gold"))
+        gold_spent = _num(m.get("gold_spent"))
         if duration > 0:
             gpm_val = (gold + gold_spent) * 60 / duration
         else:
             gpm_val = 0
         total_gpm += gpm_val
-        total_lh += m.get("last_hits", 0)
+        total_lh += _num(m.get("last_hits"))
     if total_gpm == 0 and total_lh > 0:
         total_gpm = total_lh * 60
-    total_kills = sum(m.get("kills", 0) for m in matches[:10])
-    total_deaths = sum(m.get("deaths", 0) for m in matches[:10])
-    total_assists = sum(m.get("assists", 0) for m in matches[:10])
+    total_kills = sum(_num(m.get("kills")) for m in matches[:10])
+    total_deaths = sum(_num(m.get("deaths")) for m in matches[:10])
+    total_assists = sum(_num(m.get("assists")) for m in matches[:10])
     avg_gpm = total_gpm / max(len(matches[:10]), 1)
     avg_kda = (total_kills + total_assists) / max(total_deaths, 1)
 
@@ -664,31 +682,31 @@ def calculate_player_stats(matches: list[dict[str, Any]]) -> dict[str, Any]:
     # never with actions_per_min, stuns or creeps_stacked. Anything measured
     # from a field the API did not send is reported as None rather than
     # estimated, so the table can never show an invented number.
-    raw_lh_per_10min = [m.get("last_hits", 0) / max(m.get("duration", 600) / 600, 0.33) for m in matches]  # normalize to 10min
-    raw_lh_per_min = [m.get("last_hits", 0) / max(m.get("duration", 600) / 60, 1) for m in matches]
-    raw_kills = [m.get("kills", 0) for m in matches]
-    raw_deaths = [m.get("deaths", 0) for m in matches]
-    raw_assists = [m.get("assists", 0) for m in matches]
+    raw_lh_per_10min = [_num(m.get("last_hits")) / max(_num(m.get("duration"), 600) / 600, 0.33) for m in matches]  # normalize to 10min
+    raw_lh_per_min = [_num(m.get("last_hits")) / max(_num(m.get("duration"), 600) / 60, 1) for m in matches]
+    raw_kills = [_num(m.get("kills")) for m in matches]
+    raw_deaths = [_num(m.get("deaths")) for m in matches]
+    raw_assists = [_num(m.get("assists")) for m in matches]
     raw_wins = [1 if m.get("win", False) else 0 for m in matches]
-    raw_denies = [m.get("denies", 0) for m in matches]
-    raw_xpm = [m.get("xp_per_min", 0) for m in matches]
+    raw_denies = [_num(m.get("denies")) for m in matches]
+    raw_xpm = [_num(m.get("xp_per_min")) for m in matches]
 
     # Damage is averaged only over the matches that actually reported it, so a
     # partially parsed history is never mixed with fabricated values.
-    h_dmg_matches = [m["hero_damage"] for m in matches if m.get("hero_damage")]
-    t_dmg_matches = [m["tower_damage"] for m in matches if m.get("tower_damage")]
+    h_dmg_matches = [_num(m.get("hero_damage")) for m in matches if m.get("hero_damage")]
+    t_dmg_matches = [_num(m.get("tower_damage")) for m in matches if m.get("tower_damage")]
 
     # Compute GPM per match from gold and gold_spent (more reliable than gold_per_min)
     raw_gpm = []
     for m in matches:
-        duration = m.get("duration", 0)
-        gold = m.get("gold", 0)
-        gold_spent = m.get("gold_spent", 0)
+        duration = _num(m.get("duration"))
+        gold = _num(m.get("gold"))
+        gold_spent = _num(m.get("gold_spent"))
         if duration > 0 and (gold + gold_spent) > 0:
             total_gold = gold + gold_spent
             gpm_val = total_gold * 60 / duration
         else:
-            gpm_val = m.get("gold_per_min", 0)
+            gpm_val = _num(m.get("gold_per_min"))
         raw_gpm.append(gpm_val)
 
     total_gpm = sum(raw_gpm)
@@ -755,7 +773,7 @@ async def fetch_match_details(matches: list[dict[str, Any]], steam_id: str) -> l
 
     async def fetch_one(m):
         # If match already has all needed data, keep it
-        if m.get("gold_per_min", 0) > 0 and m.get("last_hits", 0) > 0:
+        if _num(m.get("gold_per_min")) > 0 and _num(m.get("last_hits")) > 0:
             return m
         match_id = m.get("match_id")
         if not match_id:
@@ -845,12 +863,12 @@ async def get_last_matches(telegram_id: int, limit: int = 10) -> list[dict[str, 
     for m in matches[:limit]:
         match_id = m.get("match_id")
         hero_id = m.get("hero_id", 0)
-        duration = m.get("duration", 0)
-        player_slot = m.get("player_slot", 0)
+        duration = _num(m.get("duration"))
+        player_slot = _num(m.get("player_slot"))
 
-        kills = m.get("kills", 0)
-        deaths = m.get("deaths", 0)
-        assists = m.get("assists", 0)
+        kills = _num(m.get("kills"))
+        deaths = _num(m.get("deaths"))
+        assists = _num(m.get("assists"))
         radiant_win = m.get("radiant_win", False)
 
         is_radiant = player_slot < 128 if player_slot else True
@@ -898,20 +916,37 @@ def _generate_report_text(role: str, user_stats: dict[str, Any]) -> dict[str, An
             return ""
         return "🟢" if better else "🔴"
 
+    def _fmt(value: Any, digits: int = 0) -> str:
+        """Число в колонке, "—" если метрика не измерима.
+
+        Метрика, которую OpenDota не прислала, приходит как None, а не как 0,
+        поэтому рендер обязан отличать "нет данных" от настоящего нуля.
+        """
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return "—"
+        return f"{round(value, digits):.{digits}f}"
+
+    def _pct(value: Any) -> str:
+        """Винрейт в процентах, "—" если API его не прислал."""
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return "—"
+        return f"{round(value)}%"
+
     # Table 1: PRO comparison — <pre> with tight columns for mobile
     t1 = "<pre>"
     t1 += f"{'Player':<8} {'WR':>3} {'GPM':>4} {'KDA':>11}\n"
     t1 += "────────────────────────\n"
     for name, s in db["players"].items():
         clean_name = _clean_name(name)[:8]
-        wr = f"{int(round(s['wr']))}%" if s.get('wr') is not None else "—"
-        gpm = f"{int(round(s['gpm']))}" if s.get('gpm') is not None else "—"
+        wr = _pct(s.get('wr'))
+        gpm = _fmt(s.get('gpm'))
         kda = s.get('kda', '—') or "—"
         t1 += f"{clean_name:<8} {wr:>3} {gpm:>4} {kda:>11}\n"
     t1 += "────────────────────────\n"
-    gpm_val = int(user_stats['gpm']) if user_stats.get('gpm', 0) > 0 else 0
-    wr_val = f"{int(round(user_stats['wr']))}%" if user_stats.get('wr') is not None else "—"
-    t1 += f"{'YOU':<8} {wr_val:>3} {gpm_val:>4} {user_stats['kda']:>11}\n"
+    gpm_val = _fmt(user_stats.get('gpm'))
+    wr_val = _pct(user_stats.get('wr'))
+    kda_val = user_stats.get('kda') or "—"
+    t1 += f"{'YOU':<8} {wr_val:>3} {gpm_val:>4} {kda_val:>11}\n"
     t1 += "</pre>"
 
     # Table 2: Detailed comparison — <pre> with squares, tight columns
@@ -1109,17 +1144,17 @@ async def _generate_chart_only_impl(telegram_id: int) -> dict[str, Any] | None:
     # Calculate only what's needed for chart - minimal data
     game_history = []
     for m in matches[:10]:
-        kills = m.get("kills", 0)
-        deaths = m.get("deaths", 0)
-        assists = m.get("assists", 0)
+        kills = _num(m.get("kills"))
+        deaths = _num(m.get("deaths"))
+        assists = _num(m.get("assists"))
         kda = (kills + assists) / max(deaths, 1)
 
-        duration = m.get("duration", 600)
+        duration = _num(m.get("duration"), 600)
         # Real GPM when available, otherwise derived from gold + gold_spent.
         # The previous "last_hits * 60" guess is not GPM.
-        gpm = m.get("gold_per_min", 0)
+        gpm = _num(m.get("gold_per_min"))
         if gpm == 0:
-            gold = m.get("gold", 0) + m.get("gold_spent", 0)
+            gold = _num(m.get("gold")) + _num(m.get("gold_spent"))
             gpm = gold * 60 / duration if gold > 0 and duration > 0 else 0
 
         # utility and apm cannot be measured from this endpoint; _calculate_imp
@@ -1205,7 +1240,7 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
 
     # Enrich matches with detailed stats (GPM, XPM, last_hits, etc.)
     matches = await fetch_match_details(matches, user["steam_id"])
-    if all(m.get("gold_per_min", 0) == 0 for m in matches) and len(matches) > 0:
+    if all(_num(m.get("gold_per_min")) == 0 for m in matches) and len(matches) > 0:
         logger.warning("API returned no stats data - falling back to cached or error")
         if user.get('analytics_cache'):
             cached = json.loads(user['analytics_cache'])
@@ -1224,7 +1259,7 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
                     "error": "opendota_rate_limit",
                     "message": "⚠️ OpenDota API временно недоступен. Вернётся, когда кто-то купит варды 👁️"
                 }
-    logger.info(f"generate_weekly_analytics: after fetch_match_details, gpm={sum(m.get('gold_per_min', 0) for m in matches)}")
+    logger.info(f"generate_weekly_analytics: after fetch_match_details, gpm={sum(_num(m.get('gold_per_min')) for m in matches)}")
 
     # Matches are already sorted newest-first from API, keep this order
     # Role detection using OpenDota hero roles + match stats
@@ -1253,21 +1288,21 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
         # GPM: gold_per_min when the API sent it, otherwise derived from the
         # real gold + gold_spent fields. The previous fallback multiplied last
         # hits by 60, which is not GPM in any definition.
-        gpm = m.get("gold_per_min", 0)
+        gpm = _num(m.get("gold_per_min"))
         if gpm == 0:
-            gold = m.get("gold", 0) + m.get("gold_spent", 0)
-            duration = m.get("duration", 0)
+            gold = _num(m.get("gold")) + _num(m.get("gold_spent"))
+            duration = _num(m.get("duration"))
             if gold > 0 and duration > 0:
                 gpm = gold * 60 / duration
         # XPM is reported as-is. It used to be filled in as gpm * 0.8, an
         # invented number that then flowed into the chart.
-        xpm = m.get("xp_per_min", 0)
-        duration = m.get("duration", 600)
+        xpm = _num(m.get("xp_per_min"))
+        duration = _num(m.get("duration"), 600)
         win = m.get("win", False)
 
-        kills = m.get("kills", 0)
-        deaths = m.get("deaths", 0)
-        assists = m.get("assists", 0)
+        kills = _num(m.get("kills"))
+        deaths = _num(m.get("deaths"))
+        assists = _num(m.get("assists"))
 
         kda = (kills + assists) / max(deaths, 1)
 
@@ -1296,23 +1331,23 @@ async def _generate_weekly_analytics_impl(telegram_id: int) -> dict[str, Any] | 
         total_kills += kills
         total_deaths += deaths
         total_assists += assists
-        total_lh += m.get("last_hits", 0)
+        total_lh += _num(m.get("last_hits"))
         # LH@10: normalize last_hits to 10 minutes (duration in seconds)
-        duration = m.get("duration", 600)
-        lh_per_10min = m.get("last_hits", 0) / max(duration / 600, 0.33) if duration > 0 else 0
+        duration = _num(m.get("duration"), 600)
+        lh_per_10min = _num(m.get("last_hits")) / max(duration / 600, 0.33) if duration > 0 else 0
         total_lh_10min += lh_per_10min
-        total_denies += m.get("denies", 0)
+        total_denies += _num(m.get("denies"))
         total_xpm += xpm
-        total_lh_per_min += m.get("last_hits", 0) / max(duration / 60, 1)
+        total_lh_per_min += _num(m.get("last_hits")) / max(duration / 60, 1)
 
         # Damage is accumulated only from matches that reported it. The old
         # kills * 200 / kills * 50 fallbacks turned a missing field into a
         # plausible number and it was then compared against a real benchmark.
         if m.get("hero_damage"):
-            total_h_dmg += m["hero_damage"]
+            total_h_dmg += _num(m.get("hero_damage"))
             h_dmg_count += 1
         if m.get("tower_damage"):
-            total_t_dmg += m["tower_damage"]
+            total_t_dmg += _num(m.get("tower_damage"))
             t_dmg_count += 1
 
         if m.get("win", False):

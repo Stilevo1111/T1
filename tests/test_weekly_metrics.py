@@ -18,6 +18,7 @@ from weekly_analytics import (  # noqa: E402
     _generate_report_text,
     _imp_available_keys,
     calculate_player_stats,
+    get_analytics_pages,
 )
 
 ROLES = ["CARRY", "MID", "OFFLANE", "SUPPORT"]
@@ -82,6 +83,42 @@ def test_table_renders_dash_for_unmeasured_damage():
     table = _generate_report_text("CARRY", calculate_player_stats(matches))["detailed"]
     assert "H DMG        —" in table
     assert "T DMG        —" in table
+
+
+def test_empty_history_table_renders_dashes_instead_of_raising():
+    """/analyze died with "'>' not supported between NoneType and int".
+
+    An empty history reports every metric as None, and the table used to run
+    `user_stats.get('gpm', 0) > 0` on that None. Nothing is measurable here, so
+    every player cell must render as "—" rather than crash the whole command.
+    """
+    stats = calculate_player_stats([])
+    pro_table = _generate_report_text("CARRY", stats)["pro"]
+    assert "YOU" in pro_table
+    assert "—" in pro_table
+    for page in get_analytics_pages("CARRY", stats):
+        assert page["text"]
+
+
+def test_null_match_fields_do_not_break_aggregation():
+    """OpenDota and the cache JSON carry explicit nulls; treat them as missing."""
+    matches = [_match(gold_per_min=None, duration=None, last_hits=None,
+                      kills=None, deaths=None, xp_per_min=None) for _ in range(4)]
+    stats = calculate_player_stats(matches)
+    assert stats["gpm"] is None
+    assert stats["wr"] == 100.0
+    assert _generate_report_text("MID", stats)["detailed"]
+
+
+def test_zero_gpm_is_reported_as_zero_not_as_a_dash():
+    """A real zero is a measurement; only a missing field becomes "—"."""
+    stats = {
+        "wr": 50.0, "gpm": 0, "xpm": 0, "lh": 0, "lh_per_min": 0,
+        "deny": 0, "deaths": 0, "h_dmg": 0, "t_dmg": 0,
+        "kda_number": 0, "kda": "0/0/0",
+    }
+    you_row = _generate_report_text("CARRY", stats)["pro"].split("YOU")[1]
+    assert "—" not in you_row
 
 
 def test_table_never_prints_the_removed_rows():
