@@ -80,17 +80,15 @@ WEEKLY_JOB_COOLDOWN = 60          # seconds between weekly jobs
 WEEKEND_BONUS_MULTIPLIERS = [1.5, 2, 2.5]
 
 # Default event chances
-# All unique rolls share ONE draw in fissure.py: Roshan → Zeus → Techies →
-# multicast, each one taking the next slice of the same scale. At 20% Roshan
-# is deliberately the most frequent event: it is the only one that pulls the
-# whole chat into an interactive round, so it needs the volume to stay active.
-# Resulting split (unchanged by the move onto the shared scale):
-#   Roshan 20% | Zeus 10% | Techies 10% | Multicast 8% | Plain roll 52%
-# The multicast cut (10% -> 8%) exists to keep that plain-roll share above ~50%.
-MULTICAST_DEFAULT_CHANCE = 0.08
+# Every unique roll has the SAME 10% chance: Roshan is no more and no less
+# likely than Zeus, Techies or multicast. All four sit on one scale in
+# fissure.py (Roshan → Zeus → Techies → multicast), so they are read off one
+# number instead of four.
+# Resulting split: any unique event 10% | plain roll 60%.
+MULTICAST_DEFAULT_CHANCE = 0.10
 ZEUS_DEFAULT_CHANCE = 0.10
 TECHIES_DEFAULT_CHANCE = 0.10
-ROSHAN_DEFAULT_CHANCE = 0.20
+ROSHAN_DEFAULT_CHANCE = 0.10
 
 # Roshan event
 ROSHAN_STEAL_WINDOW_SEC = 45          # окно, в котором можно нажать кнопку

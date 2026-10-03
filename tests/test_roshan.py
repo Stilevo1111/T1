@@ -111,9 +111,9 @@ def test_apply_cheese_never_boosts_a_negative_roll():
 def test_roshan_shares_one_scale_with_the_other_unique_rolls():
     """Рошан — первое звено общей шкалы, а не отдельный бросок.
 
-    Порядок и вероятности прежние, но теперь все уникальные роллы
-    выбираются одним броском: иначе шансы событий не складывались
-    в одну таблицу и каждый жил своим random().
+    Порядок прежний, но теперь все уникальные роллы выбираются одним
+    броском: иначе шансы событий не складывались в одну таблицу и каждый
+    жил своим random().
     """
     import inspect
 
@@ -127,10 +127,19 @@ def test_roshan_shares_one_scale_with_the_other_unique_rolls():
     # Один бросок на всю шкалу: лишнего random() быть не должно.
     assert source.count("event_roll = random.random()") == 1
 
+
+def test_every_unique_roll_has_the_same_chance():
+    """Рошан, Зевс, Техиес и мультикаст выпадают одинаково часто.
+
+    Рошан раньше стоял на отдельном броске с 20% и выпадал вдвое чаще
+    остальных — из-за этого события нельзя было сравнить по одному числу.
+    """
     roshan = get_roshan_chance()
     multicast, zeus, techies = get_event_chances()
-    assert roshan + multicast + zeus + techies == pytest.approx(0.48)
-    assert 0.48 < 1.0, "обычный ролл должен остаться самой частой долей"
+    assert roshan == zeus == techies == multicast, "уникальные роллы должны совпадать"
+    assert roshan == pytest.approx(0.10)
+    # Обычный ролл остаётся самой частой долей.
+    assert 4 * roshan < 1.0
 
 
 def test_roshan_reward_has_floor_and_cap():
@@ -482,9 +491,8 @@ def test_used_items_appear_in_the_roll_message():
 def test_multicast_chance_was_rebalanced():
     """Roshan has to be paid for somewhere, otherwise plain rolls shrink.
 
-    Roshan is rolled independently, so it does not take probability away from
-    the other three directly. The multicast cut is what keeps the plain-roll
-    share above ~50% now that Roshan runs at 20%.
+    All four unique rolls sit on one scale at the same 10%, so together they
+    take 40% and the plain roll keeps the remaining 60%.
     """
     from constants import (
         MULTICAST_DEFAULT_CHANCE,
@@ -494,10 +502,10 @@ def test_multicast_chance_was_rebalanced():
     )
     from stats import get_roshan_chance
 
-    assert get_roshan_chance() == 0.20
+    assert get_roshan_chance() == 0.10
 
     ladder = ZEUS_DEFAULT_CHANCE + TECHIES_DEFAULT_CHANCE + MULTICAST_DEFAULT_CHANCE
-    plain_roll = (1 - ROSHAN_DEFAULT_CHANCE) * (1 - ladder)
+    plain_roll = 1 - ROSHAN_DEFAULT_CHANCE - ladder
     assert plain_roll > 0.50, f"plain rolls must stay the majority, got {plain_roll:.3f}"
 
 
