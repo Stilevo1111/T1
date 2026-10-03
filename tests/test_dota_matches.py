@@ -1056,18 +1056,52 @@ def test_upstream_outage_is_logged_once():
 
 
 def test_topmmr_caption_offers_the_full_list():
-    """/topmmr ведёт и на сайт, и в Mini App кнопкой, а не ссылкой.
+    """/topmmr ведёт в Mini App кнопкой, а не ссылкой на сайт.
 
     Обычный <a href> открывает встроенный браузер Telegram, поэтому
-    приложение цепляется инлайн-кнопкой с web_app.
+    приложение цепляется инлайн-кнопкой с web_app, а сайт убран.
     """
     src = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
-    assert "seredin999.onrender.com/top-mmr" in src      # сайт не убираем
+    assert "seredin999.onrender.com/top-mmr" not in src   # ссылка на сайт убрана
     assert "Весь список" in src
     assert "web_app=WebAppInfo(url=ranks_url())" in src  # кнопка в приложение
     # Отдельный хелпер: кнопка должна открывать вкладку рангов, а не историю.
     assert dota_matches.ranks_url().endswith("tab=ranks&miniapp=1")
     assert dota_matches.ranks_url() != dota_matches.miniapp_url()
+
+
+def test_top_fissure_opens_the_roll_history_in_the_app():
+    """Топ фиссур ведёт в приложение кнопкой «ИСТОРИЯ РОЛЛОВ».
+
+    Ссылка на /fissure-logs открывала встроенный браузер Telegram,
+    поэтому её заменили Web App-кнопкой на вкладку роллов.
+    """
+    src = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
+    assert "seredin999.onrender.com/fissure-logs" not in src
+    assert "ИСТОРИЯ РОЛЛОВ" in src
+    assert "web_app=WebAppInfo(url=rolls_url())" in src
+    assert dota_matches.rolls_url().endswith("tab=rolls&miniapp=1")
+    assert dota_matches.rolls_url() != dota_matches.miniapp_url()
+
+
+def test_mmr_row_links_to_the_player_game_history():
+    """Под героем в топе рангов — кнопка на историю игр этого игрока."""
+    player = {"username": "wawa", "steam_nickname": "ZeusFan",
+              "week_games": 10, "week_wins": 7, "mmr": 5000,
+              "rank_tier": 60, "wins": 12, "losses": 8}
+    href = dota_matches.games_href_for(player)
+    # Ключ вкладки игр — bot_username, а он равен username, иначе steam_nickname.
+    assert "player=wawa" in href and "miniapp=1" in href
+    assert dota_matches.games_href_for({"steam_nickname": "ZeusFan"}).count("player=ZeusFan") == 1
+    assert dota_matches.games_href_for({}) == ""      # без ключа кнопки нет
+
+    row = dota_matches.render_mmr_row(player, 1, games_href=href)
+    assert '<a class="g-igames" ' in row and f'href="{href}"' in row
+    # Под героем, внутри блока с ником, а не отдельной строкой.
+    assert row.index("g-igames") > row.index("g-who")
+    assert row.index("g-igames") < row.index("g-wr")
+    # Без ссылки строка остаётся без кнопки.
+    assert "g-igames" not in dota_matches.render_mmr_row(player, 2)
 
 
 def test_rolls_tab_is_a_third_tab():

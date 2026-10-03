@@ -3607,14 +3607,27 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         else:
             text += f"\n<b>{clickable_username} - {user_fissure:.1f} см</b>"
 
-        text += "\n\n<b><a href=\"https://seredin999.onrender.com/fissure-logs\">📜 История бросков</a></b>"
+        # Ссылку на сайт из подписи убрали: в Mini App она всё равно
+        # открыла бы встроенный браузер, поэтому история роллов вынесена
+        # в кнопку приложения (см. reply_markup ниже).
+        from dota_matches import rolls_url
+
+        # Web App-кнопки Telegram разрешает только в личных чатах,
+        # в группах остаётся обычное меню.
+        if update.effective_chat.type == "private":
+            rolls_markup = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📜 ИСТОРИЯ РОЛЛОВ",
+                                      web_app=WebAppInfo(url=rolls_url()))]
+            ])
+        else:
+            rolls_markup = main_menu()
 
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
             photo=banner_url,
             caption=text,
             parse_mode="HTML",
-            reply_markup=main_menu()
+            reply_markup=rolls_markup
         )
         set_last_bot_message(chat_id, update.effective_user.id, result_msg.message_id)
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
@@ -3895,11 +3908,9 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 top_text += f"\n{user_pos_emoji} <b>{user_display}</b> - {user_rank_str}\n"
                 top_text += "└ Нет игр за неделю"
 
-            # Ссылка на сайт в подписи: в Mini App она всё равно открыла
-            # бы встроенный браузер, поэтому кнопку приложения вешаем
-            # инлайном под сообщением (см. reply_markup ниже).
-            top_text += ('\n\n<a href="https://seredin999.onrender.com/top-mmr">'
-                         "🏆 Топ рангов на сайте</a>")
+            # Ссылку на сайт из подписи убрали: в Mini App она всё равно
+            # открыла бы встроенный браузер, поэтому кнопку приложения
+            # вешаем инлайном под сообщением (см. reply_markup ниже).
 
             # Delete previous bot message before sending new one
             try:
@@ -3915,8 +3926,6 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             ranks_keyboard = [[
                 InlineKeyboardButton("📋 Весь список",
                                      web_app=WebAppInfo(url=ranks_url())),
-                InlineKeyboardButton("🌐 Сайт",
-                                     url="https://seredin999.onrender.com/top-mmr"),
             ]]
             reply_markup = (InlineKeyboardMarkup(ranks_keyboard)
                             if update.effective_chat.type == "private"

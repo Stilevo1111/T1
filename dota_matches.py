@@ -1039,7 +1039,8 @@ def _fmt_num(value: float) -> str:
     return f"{value:,.1f}".replace(",", " ")
 
 
-def render_mmr_row(player: dict, place: int, sort_keys: dict | None = None) -> str:
+def render_mmr_row(player: dict, place: int, sort_keys: dict | None = None,
+                   games_href: str = "") -> str:
     """Строка топа MMR: тот же набор полей, что на странице топа."""
     nick = (player.get("steam_nickname") or player.get("username") or "Аноним")
 
@@ -1068,6 +1069,12 @@ def render_mmr_row(player: dict, place: int, sort_keys: dict | None = None) -> s
     keys = sort_keys or mmr_sort_keys(player)
     attrs = " ".join(f'data-{k}="{v}"' for k, v in keys.items())
 
+    # Под героем — кнопка на историю игр этого игрока: из топа за ним
+    # и смотрели бы, но раньше приходилось сначала открывать фильтр.
+    history = ""
+    if games_href:
+        history = (f'<a class="g-igames" href="{games_href}">История игр</a>')
+
     return (
         f'<div class="g-card g-mmr{" top3" if top else ""}" {attrs}>'
         f'<div class="g-line">'
@@ -1077,6 +1084,7 @@ def render_mmr_row(player: dict, place: int, sort_keys: dict | None = None) -> s
         f'alt="" loading="lazy">'
         f"{face}"
         f'<span class="g-who"><span class="g-nick">{_esc(nick)}</span>'
+        f"{history}"
         f"</span>"
         f'<span class="g-wr">{stats}</span>'
         f"</div></div>"
@@ -1151,6 +1159,13 @@ body{background:#07080c}
 .g-act:active{transform:translateY(0)}
 .g-act.dotabuff:hover{border-color:rgba(214,69,69,.6);color:#f0a5a5;
   background:linear-gradient(180deg,#2a1e21,#1e171a)}
+
+/* Под героем в топе рангов: тихая ссылка на историю игр игрока. */
+.g-igames{display:inline-block;margin-top:3px;font-size:9.5px;font-weight:800;
+  letter-spacing:.1em;text-transform:uppercase;color:#6f7a90;text-decoration:none;
+  border-bottom:1px solid rgba(232,180,92,.3);padding-bottom:1px;
+  transition:color .16s ease,border-color .16s ease}
+.g-igames:hover{color:#e8b45c;border-color:rgba(232,180,92,.75)}
 
 /* ── История роллов ── */
 .g-card.g-roll .g-line{display:flex;align-items:center;gap:10px;padding:9px 11px}
@@ -1308,8 +1323,10 @@ body{background:#07080c}
  gap:7px}
  .g-rank{width:30px;height:30px;font-size:12.5px}
  .g-rank-img,.g-face{width:26px;height:26px}
- .g-nick{font-size:14px}
- .g-heron{font-size:11.5px}
+.g-nick{font-size:14px}
+  .g-heron{font-size:11.5px}
+  /* Кнопку истории игр на телефоне тоже не мельчим. */
+  .g-igames{font-size:11.5px;margin-top:5px;padding:4px 0}
  .g-sort{padding:0 10px 8px;gap:5px}
  .g-sort-b{font-size:11px;letter-spacing:.03em;padding:7px 8px;gap:5px}
  .g-wr{font-size:12px}
@@ -1395,7 +1412,10 @@ def render_games_page(
         )
         # Данные для клиентской сортировки кладём в data-* самой строки.
         body = head + (
-            "".join(render_mmr_row(p, i, sort_keys=mmr_sort_keys(p))
+            "".join(render_mmr_row(
+                p, i, sort_keys=mmr_sort_keys(p),
+                games_href=games_href_for(p),
+            )
                     for i, p in enumerate(rows, 1))
             or '<div class="g-empty">Рейтинг пока пуст.</div>')
     elif tab == "rolls":
@@ -1638,6 +1658,25 @@ def ranks_url(miniapp: bool = True) -> str:
     """
     url = f"{public_base_url()}/matches?tab=ranks"
     return f"{url}&miniapp=1" if miniapp else url
+
+
+def rolls_url(miniapp: bool = True) -> str:
+    """WebAppInfo URL вкладки с историей роллов."""
+    url = f"{public_base_url()}/matches?tab=rolls"
+    return f"{url}&miniapp=1" if miniapp else url
+
+
+def games_href_for(player: dict, limit: int = DEFAULT_LIMIT) -> str:
+    """Ссылка на историю игр игрока из топа рангов.
+
+    Ключ вкладки игр — это bot_username, а он пишется в БД как username,
+    а если тот пуст, как steam_nickname, поэтому берём их в том же порядке.
+    Без ключа возвращаем пустую строку: строка останется без кнопки.
+    """
+    key = str(player.get("username") or player.get("steam_nickname") or "").strip()
+    if not key:
+        return ""
+    return f"/matches?player={_esc(key)}&limit={limit}&miniapp=1"
 
 
 PICKER_JS = """
