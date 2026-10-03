@@ -699,6 +699,79 @@ def test_party_button_uses_the_api_and_not_senddata():
     assert "initData" in dota_matches.GAME_ACTS_JS
 
 
+def test_party_button_invites_the_owner_of_the_card():
+    """Кнопка зовёт игрока этой карточки, а не запускает общий подбор.
+
+    Владелец матча известен странице, поэтому вместо списка из восьми
+    ников в чат уходит адресное приглашение.
+    """
+    game = {
+        "match_id": 42, "start_time": 100, "duration": 60, "win": True,
+        "hero_id": 8, "hero_name": "Juggernaut", "hero_icon": "",
+        "personaname": "Wawashik", "bot_username": "Wawashik",
+        "kills": 1, "deaths": 0, "assists": 1, "steam_id": 1,
+    }
+    row = dota_matches.render_game(dict(game, telegram_id=4242))
+    assert 'data-party-tg="4242"' in row
+    # Страница шлёт id игрока вместе с initData.
+    assert "tg: parseInt(card.dataset.partyTg, 10) || 0" in dota_matches.GAME_ACTS_JS
+    # Запись без игрока остаётся с пустым id — тогда бот откатится на подбор.
+    assert 'data-party-tg="0"' in dota_matches.render_game(game)
+
+
+def test_party_endpoint_invites_the_named_player():
+    """Эндпоинт зовёт указанного игрока, а подбор оставляет запасным путём."""
+    import inspect
+
+    import main as main_module
+
+    source = inspect.getsource(main_module.party_api_handler)
+    assert "invite_to_party" in source
+    assert 'payload or {}).get("tg")' in source
+    # Себя пригласить нельзя, и неизвестный игрок не должен ломать кнопку.
+    assert "target_tg != tg_id" in source
+    assert "party_for_user" in source
+
+
+def test_invite_message_asks_the_player_by_name():
+    """Текст приглашения адресный: игрок, пригласивший и его ранг с WR."""
+    import asyncio
+    from types import SimpleNamespace
+
+    import party
+
+    sent = {}
+
+    class Bot:
+        async def send_message(self, chat_id, text, parse_mode=None, **kwargs):
+            sent["chat_id"] = chat_id
+            sent["text"] = text
+            return SimpleNamespace(message_id=1)
+
+    context = SimpleNamespace(bot=Bot())
+    inviter = {"telegram_id": 1, "username": "Stilevo", "rank_tier": 20,
+               "week_games": 10, "week_wins": 4}
+    target = {"telegram_id": 2, "username": "nasteni4", "rank_tier": 0,
+              "week_games": 0, "week_wins": 0}
+
+    asyncio.run(party.invite_to_party(-100123, inviter, target, context))
+
+    assert sent["chat_id"] == -100123
+    assert "Готов к игре?" in sent["text"]
+    assert "приглашает тебя в пати!" in sent["text"]
+    assert "nasteni4" in sent["text"] and "Stilevo" in sent["text"]
+    assert "WR: 40% за неделю." in sent["text"]
+    # Без игр за неделю процент выдумывать нельзя.
+    sent.clear()
+    asyncio.run(party.invite_to_party(
+        -100123,
+        {"telegram_id": 1, "username": "a", "rank_tier": 0, "week_games": 0},
+        target, context,
+    ))
+    assert "WR: 0%" not in sent["text"]
+    assert "Нет игр за неделю." in sent["text"]
+
+
 def test_party_endpoint_validates_init_data():
     """Эндпоинт проверяет подпись initData и берёт официальный чат."""
     import inspect

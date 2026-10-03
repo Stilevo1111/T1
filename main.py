@@ -2931,13 +2931,14 @@ def _validate_telegram_init_data(init_data: str, bot_token: str) -> dict | None:
 
 
 async def party_api_handler(request):
-    """Кнопка «Пати» на странице матчей просит подбор игроков.
+    """Кнопка «Пати» на странице матчей зовёт игрока этой карточки.
 
     Раньше страница звала Telegram.WebApp.sendData, но этот метод работает
     только если Mini App открыта кнопкой клавиатуры. Страницу открывают
     инлайн-кнопкой web_app=, и сигнал молча терялся — в чате ничего не
     появлялось. Здесь страница шлёт HTTP-запрос с initData, а бот проверяет
-    подпись токеном и сам пишет подбор в официальный чат.
+    подпись токеном и сам пишет приглашение в официальный чат. Если игрок
+    карточки неизвестен, срабатывает общий подбор party_for_user.
     """
     if not TOKEN:
         return web.json_response({"ok": False, "error": "bot token missing"}, status=503)
@@ -2963,7 +2964,7 @@ async def party_api_handler(request):
                                      status=503)
 
         from database import get_user
-        from party import party_for_user
+        from party import invite_to_party, party_for_user
 
         tg_id = int(telegram_user.get("id") or 0)
         username = telegram_user.get("username") or telegram_user.get("first_name") \
@@ -2983,9 +2984,21 @@ async def party_api_handler(request):
                 {"ok": False, "error": "game chat is not configured"}, status=503,
             )
 
+        # Карточка игры принадлежит конкретному игроку, поэтому зовём его
+        # адресно. Общий подбор остаётся на случай, когда игрока у карточки
+        # нет (старая запись без telegram_id) или это он сам.
+        target_tg = int((payload or {}).get("tg") or 0)
+        if target_tg and target_tg != tg_id:
+            target = await asyncio.to_thread(get_user, target_tg)
+            if target:
+                await invite_to_party(int(official), requester, target,
+                                      SimpleNamespace(bot=app.bot))
+                return web.json_response({"ok": True, "invited": True})
+            logger.info(f"party_api: target {target_tg} not found, falling back")
+
         await party_for_user(int(official), "supergroup", requester,
                              SimpleNamespace(bot=app.bot))
-        return web.json_response({"ok": True})
+        return web.json_response({"ok": True, "invited": False})
     except Exception as e:
         logger.error(f"party_api_handler error: {e}", exc_info=True)
         return web.json_response({"ok": False, "error": "internal"}, status=500)

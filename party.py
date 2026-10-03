@@ -37,7 +37,7 @@ import html
 import logging
 import os
 
-from bot_utils import clickable_name, make_clickable
+from bot_utils import clickable_name
 from rate_limiter import rate_limit
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -94,6 +94,35 @@ def build_inline_keyboard(players: list) -> InlineKeyboardMarkup:
         btn = InlineKeyboardButton(str(i), switch_inline_query_current_chat=f"@{username}")
         buttons.append(btn)
     return InlineKeyboardMarkup([buttons[:4], buttons[4:8]])
+
+
+async def invite_to_party(chat_id, inviter: dict, target: dict, context):
+    """Пригласить конкретного игрока, а не запустить общий подбор.
+
+    Кнопка «Пати» в приложении знает, кому принадлежит карточка, поэтому
+    в чат уходит адресное приглашение, а не список из восьми ников.
+    """
+    from dota_mmr import rank_to_string
+
+    def who(user: dict) -> str:
+        return clickable_name(
+            user.get("username") or user.get("steam_nickname") or "Игрок",
+            user.get("telegram_id"), user.get("steam_id"),
+        )
+
+    rank = rank_to_string(inviter.get("rank_tier") or 0)
+    if (inviter.get("week_games") or 0) > 0:
+        about = f"└  {rank} • WR: {get_week_wr(inviter)}% за неделю. "
+    else:
+        about = f"└  {rank} • Нет игр за неделю. "
+
+    text = (
+        f"👤 {who(target)},  Готов к игре?\n"
+        f"\n"
+        f"👤 {who(inviter)},  приглашает тебя в пати!\n"
+        f"{about}"
+    )
+    await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
 
 
 async def party_for_user(chat_id, chat_type, requester, context):

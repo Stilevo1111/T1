@@ -856,13 +856,15 @@ def render_game(game: dict) -> str:
     account_id = int(game.get("account_id") or 0)
 
     # «Пати» больше не открывает «Поделиться»: приглашение уходило в диалог
-    # контакта мимо чата, в котором играют. Кнопка отправляет Mini App-сигнал,
-    # по нему бот зовёт party_for_user — тот же подбор, что и у команды
-    # /party. Ссылка на «Поделиться» осталась для обычного браузера, где
+    # контакта мимо чата, в котором играют. Кнопка шлёт HTTP-запрос с
+    # initData, и бот зовёт того, кому эта игра принадлежит, — общий
+    # подбор запускается только когда игрока определить нечем.
+    # Ссылка на «Поделиться» осталась для обычного браузера, где
     # отправлять сигнал некуда.
     party_share = ("https://t.me/share/url?url="
                    + match_url(match_id)
                    + "&text=" + _tg_share_text(game, match_id))
+    party_tg = int(game.get("telegram_id") or 0)
     # Dotabuff ведёт на профиль игрока этой игры, а не на матч: по кнопке
     # ищут историю конкретного человека. Надпись латиницей — как в самом
     # Dotabuff, чтобы читалось по-английски.
@@ -876,6 +878,7 @@ def render_game(game: dict) -> str:
     return (
         f'<div class="g-card {cls}" data-party="1" '
         f'data-party-share="{_esc(party_share)}" '
+        f'data-party-tg="{party_tg}" '
         f'data-dota="{_esc(db_url)}" tabindex="0" role="button">'
         f'<div class="g-line">'
         f"{rank}{face}{hero}"
@@ -1746,24 +1749,30 @@ GAME_ACTS_JS = """
   var tg = window.Telegram && window.Telegram.WebApp;
 
   function askParty(card){
-    // Подбор игроков уже есть в боте (/party), кнопка только его зовёт.
-    // Раньше здесь открывалось «Поделиться», и приглашение уходило в
-    // диалог контакта вместо чата, где все играют.
+    // Подбор по кнопке «Пати» больше не запускается: игрок, которому
+    // принадлежит карточка, известен, поэтому зовём его сразу. Общий
+    // подбор остаётся только там, где игрока определить нечем.
     //
     // Telegram.WebApp.sendData не годится: он работает только если Mini App
     // открыта кнопкой клавиатуры, а страницу открывают инлайн-кнопкой, и
     // сигнал молча терялся. Поэтому шлём HTTP-запрос с initData — бот
-    // проверяет подпись и сам пишет подбор в игровой чат.
+    // проверяет подпись и сам пишет приглашение в игровой чат.
     if (tg && tg.initData) {
       fetch('/api/party', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({initData: tg.initData})
+        body: JSON.stringify({
+          initData: tg.initData,
+          tg: parseInt(card.dataset.partyTg, 10) || 0
+        })
       }).then(function(r){
         return r.json().then(function(d){ return {ok: r.ok && d.ok, d: d}; });
       }).then(function(res){
         if (res.ok) {
-          if (tg.showAlert) tg.showAlert('Подбор отправлен в игровой чат');
+          if (tg.showAlert) {
+            tg.showAlert((res.d && res.d.invited) ? 'Приглашение отправлено'
+                                                  : 'Подбор отправлен в игровой чат');
+          }
         } else {
           var why = (res.d && res.d.error) || 'ошибка';
           if (tg.showAlert) tg.showAlert('Не получилось: ' + why);
