@@ -926,16 +926,20 @@ def match_url(match_id: int) -> str:
 
 
 async def handle_party_from_page(update, context) -> None:
-    """Кнопка «Пати» на странице матчей → подбор игроков в чат.
+    """Кнопка «Пати» на странице матчей → подбор игроков в официальный чат.
 
     Отдельной системы приглашений не нужно: подбор уже есть в party.py
     (party_for_user ищет игроков рядом по rank_tier). Кнопка на странице
     раньше открывала «Поделиться» Telegram, из-за чего приглашение уходило
-    в диалог контакта мимо чата. Здесь бот получает сигнал от Mini App и
-    зовёт тот самый party_for_user, поэтому в чат приходит общий список
-    с кнопками-упоминаниями.
+    в диалог контакта мимо чата.
+
+    Куда писать — отдельная тонкость. Mini App открывают кнопкой клавиатуры,
+    и сигнал приходит в личный чат с ботом; если писать в message.chat_id,
+    подбор уходит в личку, и в игровом чате ничего не появляется. Поэтому
+    берём официальный чат из конфига (digest_chat_id), а если он не
+    настроен — отвечаем туда, где пришёл сигнал.
     """
-    from database import get_user
+    from database import get_config, get_user
     from party import party_for_user
 
     message = update.effective_message
@@ -962,8 +966,18 @@ async def handle_party_from_page(update, context) -> None:
             "week_wins": 0,
         }
 
+    target_chat_id = message.chat_id
+    target_chat_type = message.chat.type
     try:
-        await party_for_user(message.chat_id, message.chat.type,
+        official = await asyncio.to_thread(get_config, "digest_chat_id")
+        if official:
+            target_chat_id = int(official)
+            target_chat_type = "supergroup"
+    except Exception as e:
+        logger.warning("dota_matches: could not read digest_chat_id: %s", e)
+
+    try:
+        await party_for_user(target_chat_id, target_chat_type,
                              requester, context)
     except Exception as e:
         logger.error("dota_matches: party from page failed: %s", e, exc_info=True)
@@ -1720,16 +1734,17 @@ GAME_ACTS_JS = """
 
   function askParty(card){
     // Подбор игроков уже есть в боте (/party). Кнопка на странице только
-    // сигналит ему: бот зовёт party_for_user и пишет список в этот чат.
+    // сигналит ему: бот зовёт party_for_user и пишет список в чат.
     // Раньше здесь открывалось «Поделиться», и приглашение уходило в
     // диалог контакта вместо чата, где все играют.
-    // Вне Telegram сигнал отправить некуда — там остаётся «Поделиться».
     if (tg && tg.sendData && tg.initData) {
       try {
         tg.sendData('party');
+        if (tg.showAlert) tg.showAlert('Отправляю подбор в игровой чат');
         return;
       } catch (e) { /* падаем ниже на ссылку */ }
     }
+    // Вне Telegram (обычный браузер) сигнал отправить некуда.
     window.open(card.dataset.partyShare || '', '_blank');
   }
 

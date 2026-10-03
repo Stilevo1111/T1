@@ -666,17 +666,34 @@ def test_party_button_signals_the_bot_to_run_the_existing_matcher():
 
 
 def test_party_from_page_reuses_the_existing_matcher():
-    """Обработчик Mini App зовёт party_for_user, а не пишет свой текст."""
+    """Обработчик Mini App зовёт party_for_user и пишет в игровой чат."""
     import inspect
 
     from party import party_for_user
 
     source = inspect.getsource(dota_matches.handle_party_from_page)
     assert "party_for_user" in source
-    # Подбор остаётся один — тот же, что у /party.
-    assert source.count("def handle_party_from_page") == 1
     assert callable(party_for_user)
     assert "party_message" not in dir(dota_matches)
+
+
+def test_party_from_page_targets_the_official_chat_not_the_signal_chat():
+    """Подбор уходит в официальный чат, а не в личный чат с ботом.
+
+    Mini App открывают кнопкой клавиатуры, поэтому сигнал приходит в личку.
+    Если писать в message.chat_id, список появляется в личке, и в игровом
+    чате ничего не видно — это и было причиной жалобы.
+    """
+    import inspect
+
+    source = inspect.getsource(dota_matches.handle_party_from_page)
+    # Официальный чат берётся из конфига и заменяет место прихода сигнала.
+    assert "digest_chat_id" in source
+    assert "target_chat_id = int(official)" in source
+    # В party_for_user уходит target_chat_id, а не chat_id самого сигнала.
+    call = source.split("await party_for_user(")[1]
+    assert "target_chat_id" in call
+    assert "message.chat_id" not in call
 
 
 def test_dotabuff_button_leads_to_the_player_not_the_match():
