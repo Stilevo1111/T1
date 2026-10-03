@@ -3800,7 +3800,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             # Кнопка «Весь список» открывает Mini App, а обычная ссылка в
             # подписи открыла бы встроенный браузер Telegram. Web App
             # кнопки Telegram разрешает только в личных чатах.
-            from dota_matches import ranks_url
+            from dota_matches import party_command, ranks_url
 
             ranks_keyboard = [[
                 InlineKeyboardButton("📋 Весь список",
@@ -5215,6 +5215,7 @@ async def main():
         app.add_handler(CommandHandler("info", info))
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
+        app.add_handler(CommandHandler("party", party_command))
         app.add_handler(CommandHandler("refreshmmr", refreshmmr))
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler("admin_unlink", admin_unlink))

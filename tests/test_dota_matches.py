@@ -642,6 +642,86 @@ def test_render_game_card_in_cup_style():
     assert "g-items" not in row                               # предметов нет
 
 
+def test_party_button_asks_the_bot_to_post_in_the_chat():
+    """Кнопка «Пати» зовёт бота, а не открывает «Поделиться».
+
+    Окно «Поделиться» Telegram отправляло приглашение в диалог контакта,
+    минуя чат, в котором все играют. Теперь кнопка отдаёт команду /party,
+    и приглашение приходит в этот чат от бота.
+    """
+    game = {
+        "match_id": 42, "start_time": 100, "duration": 60, "win": True,
+        "hero_id": 8, "hero_name": "Juggernaut", "hero_icon": "",
+        "personaname": "Wawashik", "bot_username": "Wawashik",
+        "kills": 1, "deaths": 0, "assists": 1,
+        "steam_id": 1, "telegram_id": 777,
+    }
+    row = dota_matches.render_game(game)
+    assert 'data-party="/party Wawashik Juggernaut 42"' in row
+    # Ссылка на «Поделиться» осталась запасным путём для обычного браузера.
+    assert 'data-party-share="' in row and "t.me/share/url" in row
+
+
+def test_party_message_is_a_chat_invitation():
+    """Текст /party зовёт в пати и называет игру, героя и матч."""
+    text = dota_matches.party_message(hero="Juggernaut", nick="went_Dr",
+                                      match_id=8123456789)
+    assert "went_Dr" in text and "Juggernaut" in text
+    assert "dotabuff.com/matches/8123456789" in text
+    # HTML сбалансирован, иначе Telegram отклонит сообщение.
+    assert text.count("<b>") == text.count("</b>")
+
+
+def test_dotabuff_button_leads_to_the_player_not_the_match():
+    """По кнопке ищут историю человека, а не конкретный матч."""
+    game = {
+        "match_id": 42, "start_time": 100, "duration": 60, "win": True,
+        "hero_id": 8, "hero_name": "AM", "hero_icon": "",
+        "personaname": "p", "bot_username": "p",
+        "kills": 1, "deaths": 0, "assists": 2,
+        "steam_id": 1, "telegram_id": 777, "account_id": 999888777,
+    }
+    row = dota_matches.render_game(game)
+    assert 'data-dota="https://www.dotabuff.com/players/999888777"' in row
+    # Подпись латиницей — как в самом Dotabuff.
+    assert "Dotabuff</span>" in row and "ДотаБаф" not in row
+
+    no_account = dict(game, account_id=None)
+    # Без account_id остаётся матч, а не пустая ссылка на профиль.
+    assert "dotabuff.com/matches/42" in dota_matches.render_game(no_account)
+
+
+def test_top_ranks_tab_is_ordered_like_the_top_mmr_page():
+    """Порядок вкладки «Топ рангов» повторяет ORDER BY страницы топа.
+
+    Раньше mmr_sort_key начинал с ранга, а get_dota_week_top — со статистики,
+    из-за чего одна и та же таблица показывалась в боте и на странице
+    в разном порядке. Сверяем оба ключа на одной и той же выборке.
+    """
+    high_tier_no_games = {"username": "a", "steam_nickname": "a", "mmr": 9000,
+                          "rank_tier": 80, "week_games": 0, "week_wins": 0}
+    # Ранг выше, а результат хуже: именно такие игроки различают «сначала
+    # ранг» и «сначала статистика». На странице топа такой игрок ниже.
+    lucky_high_tier = {"username": "b", "steam_nickname": "b", "mmr": 1000,
+                       "rank_tier": 75, "week_games": 10, "week_wins": 4}
+    strong_active = {"username": "c", "steam_nickname": "c", "mmr": 2000,
+                     "rank_tier": 20, "week_games": 10, "week_wins": 10}
+
+    ordered = sorted([high_tier_no_games, lucky_high_tier, strong_active],
+                     key=dota_matches.mmr_sort_key)
+    # Активные игроки выше безыгравших, даже с высшим рангом.
+    assert [p["username"] for p in ordered] == ["c", "b", "a"]
+    # Внутри активных главная метрика — разница побед, а не ранг: у b ранг
+    # выше, но 4W/6L против 10W/0L, поэтому b ниже.
+    assert dota_matches.mmr_sort_key(strong_active) < \
+           dota_matches.mmr_sort_key(lucky_high_tier)
+    html = dota_matches.render_games_page(
+        [], limit=5, tab="mmr",
+        mmr_players=[lucky_high_tier, strong_active, high_tier_no_games],
+    )
+    assert 'class="g-sort-b on" data-sort="stats"' in html
+
+
 def test_render_game_without_avatar_falls_back_to_initial():
     """Без аватара показываем круг с первой буквой ника."""
     game = {
@@ -693,7 +773,8 @@ def test_render_mmr_tab_shows_no_mmr_numbers():
                                           mmr_players=[player])
 
     assert "6123" not in row and "MMR" not in row
-    assert "Божество" in row                      # 75 = Божество 5 звёзд
+    assert "rank_7_5.webp" in row                # 75 = Божество 5 звёзд
+    assert "Божество" not in row                  # иконка уже говорит сама
     assert "alpha" in row and "6W/2L" in row
     # Числа MMR нет и в самой странице вне блока стилей.
     body = html.split("</style>", 1)[-1]
@@ -733,7 +814,7 @@ def test_mmr_row_without_avatar_shows_placeholder():
 
 
 def test_game_row_shows_player_rank():
-    """В строке игры виден ранг игрока."""
+    """В строке игры видна иконка ранга игрока."""
     game = {
         "match_id": 7, "start_time": 100, "duration": 60, "win": True,
         "hero_id": 8, "hero_name": "AM", "hero_icon": "",
@@ -742,15 +823,37 @@ def test_game_row_shows_player_rank():
         "steam_id": 1, "telegram_id": None, "rank_tier": 65,
     }
     row = dota_matches.render_game(game)
-    assert "Титан" in row                        # 65 = Титан 5 звёзд
-    assert "rank_6_5.webp" in row
+    assert "rank_6_5.webp" in row          # 65 = Титан 5 звёзд
 
     no_rank = dict(game, rank_tier=None)
-    assert "Без ранга" in dota_matches.render_game(no_rank)
+    assert 'class="g-rank-img g-rank-blank"' in dota_matches.render_game(no_rank)
+
+
+def test_rank_name_in_words_is_not_duplicated_next_to_the_icon():
+    """Иконка ранга говорит о ранге сама — название под ником лишнее.
+
+    Раньше в строке игры было «Титан · AM», а в топе «Божество» под ником,
+    хотя иконка ранга уже стояла рядом в обоих местах.
+    """
+    game = {"match_id": 7, "start_time": 100, "duration": 60, "win": True,
+            "hero_id": 8, "hero_name": "AM", "hero_icon": "",
+            "personaname": "p", "bot_username": "p",
+            "kills": 1, "deaths": 0, "assists": 2,
+            "steam_id": 1, "telegram_id": None, "rank_tier": 65}
+    row = dota_matches.render_game(game)
+    assert "Титан" not in row
+    assert "Без ранга" not in row
+    assert "g-heron" in row and ">AM</span>" in row   # остался только герой
+
+    top_row = dota_matches.render_mmr_row(
+        {"username": "p", "steam_nickname": "p", "rank_tier": 65}, 1,
+    )
+    assert "Титан" not in top_row
+    assert "g-heron" not in top_row
 
 
 def test_game_row_rank_looks_like_the_ranking_tab():
-    """Ранг в истории подан так же, как в топе: иконка + название под ником.
+    """Ранг в истории подан так же, как в топе: та же иконка g-rank-img.
 
     Раньше здесь была отдельная «плашка», из-за чего вкладки выглядели
     по-разному; теперь обе используют один и тот же g-rank-img.
@@ -765,7 +868,6 @@ def test_game_row_rank_looks_like_the_ranking_tab():
                                            "rank_tier": 65}, 1)
 
     assert 'class="g-rank-img" src=' in row          # та же иконка, что в топе
-    assert "Титан" in row                          # название под ником
     assert "g-rank-mini" not in row               # отдельной плашки больше нет
     assert 'class="g-rank-img"' in top_row         # топ не тронут
 

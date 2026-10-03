@@ -1,4 +1,4 @@
-"""
+﻿"""
 Dota 2 match list for the bot's web version.
 
 Endpoint: /api/dota-matches
@@ -26,6 +26,9 @@ import datetime
 import logging
 import os
 import time
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.ext import ContextTypes
 
 logger = logging.getLogger(__name__)
 
@@ -804,14 +807,13 @@ def render_game(game: dict) -> str:
         hero = '<span class="g-hero">—</span>'
 
     # Ранг игрока — из профиля, чтобы в играх был виден уровень, как в топе.
+    # Иконка говорит о ранге сама, поэтому название под ником не дублируем.
     tier = game.get("rank_tier")
     if tier:
         rank = (f'<img class="g-rank-img" src="{_esc(rank_image(tier))}" '
                 f'alt="" loading="lazy">')
-        rank_name = _rank_icon(tier)
     else:
         rank = '<span class="g-rank-img g-rank-blank">—</span>'
-        rank_name = "Без ранга"
 
     name_html = _esc(shown_as)
     if game.get("telegram_id"):
@@ -853,26 +855,32 @@ def render_game(game: dict) -> str:
     match_id = int(game.get("match_id") or 0)
     account_id = int(game.get("account_id") or 0)
 
-    # Две ссылки на эту игру: пригласить в пати и посмотреть на Dotabuff.
-    party_url = ("https://t.me/share/url?url="
-                 + "https://www.dotabuff.com/matches/"
-                 + str(match_id)
-                 + "&text="
-                 + _tg_share_text(game, match_id))
-    db_url = (f"https://www.dotabuff.com/matches/{match_id}"
-              if match_id else
-              (f"https://www.dotabuff.com/players/{account_id}"
-               if account_id else "https://www.dotabuff.com"))
+    # «Пати» отправляет команду /party боту, и он пишет приглашение прямо в чат.
+    # Раньше здесь открывалось окно «Поделиться» Telegram: сообщение уходило
+    # выбранному контакту, а не игрокам в этом чате.
+    party_cmd = f"/party {game.get('bot_username') or shown_as} " \
+                f"{game.get('hero_name') or ''} {match_id}".strip()
+    party_share = ("https://t.me/share/url?url="
+                   + match_url(match_id)
+                   + "&text=" + _tg_share_text(game, match_id))
+    # Dotabuff ведёт на профиль игрока этой игры, а не на матч: по кнопке
+    # ищут историю конкретного человека. Надпись латиницей — как в самом
+    # Dotabuff, чтобы читалось по-английски.
+    db_url = (f"https://www.dotabuff.com/players/{account_id}"
+              if account_id else
+              (f"https://www.dotabuff.com/matches/{match_id}"
+               if match_id else "https://www.dotabuff.com"))
 
     # Строка кликается и открывает панель, поэтому это div, а не ссылка:
     # ссылка раньше уводила на OpenDota и открывала новую вкладку.
     return (
-        f'<div class="g-card {cls}" data-party="{_esc(party_url)}" '
+        f'<div class="g-card {cls}" data-party="{_esc(party_cmd)}" '
+        f'data-party-share="{_esc(party_share)}" '
         f'data-dota="{_esc(db_url)}" tabindex="0" role="button">'
         f'<div class="g-line">'
         f"{rank}{face}{hero}"
         f'<span class="g-who">{name_html}'
-        f'<span class="g-heron">{_esc(rank_name)} · {subtitle}</span></span>'
+        f'<span class="g-heron">{_esc(subtitle)}</span></span>'
         f'<span class="g-kda"><b>{kills}</b> / {deaths} / {assists}</span>'
         f'<span class="g-res" title="{res_word}" aria-label="{res_word}">'
         f"{res_letter}</span>"
@@ -899,7 +907,7 @@ def render_game(game: dict) -> str:
         f'stroke-width="1.4"/><path d="M1.9 8h12.2M8 1.8c1.7 1.8 2.5 3.9 2.5 6.2S9.7 '
         f'12.4 8 14.2C6.3 12.4 5.5 10.3 5.5 8S6.3 3.6 8 1.8Z" fill="none" '
         f'stroke="currentColor" stroke-width="1.4"/></svg>'
-        f"ДотаБаф</span>"
+        f"Dotabuff</span>"
         f"</div>"
         f"{items}</div>"
     )
@@ -910,6 +918,58 @@ def _tg_share_text(game: dict, match_id: int) -> str:
     who = game.get("bot_username") or game.get("personaname") or "игрок"
     hero = game.get("hero_name") or "герой"
     return f"Позову тебя в пати на Dota 2! Погнали играть 💪 ({who}, {hero})"
+
+
+def match_url(match_id: int) -> str:
+    """Ссылка на матч на Dotabuff."""
+    return f"https://www.dotabuff.com/matches/{match_id}"
+
+
+def party_message(hero: str = "", nick: str = "", match_id: int = 0) -> str:
+    """Приглашение в пати, которое бот кладёт в чат по /party.
+
+    Раньше кнопка «Пати» на странице матчей открывала окно «Поделиться»
+    Telegram: сообщение уходило в диалог выбранного контакта, а не в чат,
+    где играют. Теперь по кнопке приходит сообщение от бота в тот же чат.
+    """
+    who = nick or "кто-то"
+    line = f"🎮 <b>{_esc(who)}</b> зовёт в пати на Dota 2"
+    if hero:
+        line += f" — герой <b>{_esc(hero)}</b>"
+    line += "!"
+    if match_id:
+        line += f"\n\nМатч: {match_url(match_id)}"
+    return line + "\n\nОтветьте в этом чате, если готовы — соберём лобби."
+
+
+async def party_command(update: ContextTypes.DEFAULT_TYPE,
+                         context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Команда /party: бот пишет приглашение в чат.
+
+    Аргументы приходят с кнопки страницы матчей: ник, герой и id матча.
+    Введённые вручную игнорируем — приглашение всё равно остаётся общим.
+    """
+    chat = update.effective_chat
+    parts = (update.message.text or "").split()
+    nick = parts[1][:64] if len(parts) > 1 else ""
+    hero = parts[2][:64] if len(parts) > 2 else ""
+    try:
+        match_id = int(parts[3]) if len(parts) > 3 else 0
+    except ValueError:
+        match_id = 0
+
+    text = party_message(hero=hero, nick=nick, match_id=match_id)
+
+    markup = None
+    if chat.type == "private":
+        markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🎮 Открыть матчи", web_app=WebAppInfo(url=miniapp_url())),
+        ]])
+
+    await update.effective_message.reply_text(
+        text, parse_mode="HTML", reply_markup=markup,
+        disable_web_page_preview=True,
+    )
 
 
 RANKS_BASE = "https://seredin999.onrender.com/images/ranks"
@@ -942,15 +1002,22 @@ def rank_image(tier) -> str:
 
 
 def mmr_sort_key(player: dict):
-    """Порядок топа как на сайте: ранг, затем разница побед, затем игры.
+    """Порядок ровно как в get_dota_week_top: сначала статистика, потом ранг.
 
-    Игроки без игр за неделю всегда внизу — поэтому им ставим 1, а не 0.
+    Ключи повторяют ORDER BY страницы топа (database.py): игроки без игр за
+    неделю всегда внизу и между собой упорядочены по рангу, а у играющих
+    главная метрика — разница побед, затем игры, MMR и ранг. Раньше здесь
+    ранг стоял первым, и вкладка «Топ рангов» показывала другой порядок,
+    чем /topmmr в боте.
     """
     tier = int(player.get("rank_tier") or 0)
     games = int(player.get("week_games") or 0)
+    if games == 0:
+        return (1, -tier)
     wins = int(player.get("week_wins") or 0)
     net = wins - (games - wins)
-    return (1 if games == 0 else 0, -tier, -net, -games)
+    mmr = int(player.get("mmr") or 0)
+    return (0, -net, -games, -mmr, -tier)
 
 
 def _wr_color(wr: int) -> str:
@@ -1068,7 +1135,7 @@ def render_mmr_row(player: dict, place: int, sort_keys: dict | None = None) -> s
         f'alt="" loading="lazy">'
         f"{face}"
         f'<span class="g-who"><span class="g-nick">{_esc(nick)}</span>'
-        f'<span class="g-heron">{_rank_icon(player.get("rank_tier"))}</span></span>'
+        f"</span>"
         f'<span class="g-wr">{stats}</span>'
         f"</div></div>"
     )
@@ -1374,8 +1441,8 @@ def render_games_page(
         head = (
             '<div class="g-sort" data-rows=".g-card.g-mmr" role="group" '
             'aria-label="Сортировка">'
-            f'{sort_btn("rank_tier", "Ранг", True)}'
-            f'{sort_btn("stats", "Статистика")}'
+            f'{sort_btn("stats", "Статистика", True)}'
+            f'{sort_btn("rank_tier", "Ранг")}'
             "</div>"
         )
         # Данные для клиентской сортировки кладём в data-* самой строки.
@@ -1652,6 +1719,22 @@ PICKER_JS = """
 GAME_ACTS_JS = """
 // Клик по строке игры раскрывает действия справа: пати и Dotabuff.
 (function(){
+  var tg = window.Telegram && window.Telegram.WebApp;
+
+  function askParty(card){
+    // Приглашение должно прийти в чат от бота, а не в диалог контакта,
+    // поэтому отдаём команду боту через Mini App, и он пишет в этот чат.
+    // Вне Telegram (страница открыта в браузере) данных отправлять некуда,
+    // поэтому там остаётся старый путь через «Поделиться».
+    if (tg && tg.sendData && tg.initData) {
+      try {
+        tg.sendData(card.dataset.party || '');
+        return;
+      } catch (e) { /* падаем ниже на ссылку */ }
+    }
+    window.open(card.dataset.partyShare || '', '_blank');
+  }
+
   document.querySelectorAll('.g-card[data-party]').forEach(function(card){
     function toggle(){
       var open = card.classList.contains('open');
@@ -1665,8 +1748,7 @@ GAME_ACTS_JS = """
       if (!act) { toggle(); return; }   // клик по строке — раскрыть
       e.stopPropagation();
       if (act.dataset.act === 'party') {
-        // Открывает окно «Поделиться» с текстом приглашения.
-        window.open(card.dataset.party, '_blank');
+        askParty(card);
       } else {
         window.open(card.dataset.dota, '_blank');
       }
