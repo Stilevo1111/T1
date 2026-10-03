@@ -932,8 +932,7 @@ def test_ranking_header_padding_matches_row():
     html = dota_matches.render_games_page([], limit=5, tab="mmr",
                                           mmr_players=players)
     css = html.split("</style>", 1)[0].replace("\n", "")
-    head_pad = re.search(r"\.g-sort\{display:flex[^}]*padding:0 (\d+)px 8px;",
-                         css)
+    head_pad = re.search(r"\.g-sort\{[^}]*padding:0 (\d+)px", css)
     # Именно строка топра: у строки роллов свой .g-line с другими
     # отступами, и раньше регулярка цеплялась к ней.
     row_pad = re.search(r"\.g-line\{display:flex;align-items:center;gap:10px;"
@@ -943,10 +942,10 @@ def test_ranking_header_padding_matches_row():
 
 
 def test_sort_header_is_outlined_not_underlined():
-    """Активная кнопка обведена, а не подчёркнута."""
+    """Активный пункт списка обведен, а не подчёркнут."""
     css = dota_matches.GAMES_CSS.replace("\n", "")
     assert ".g-sort-b.on{" in css
-    assert "box-shadow:inset 0 0 0 1px rgba(232,180,92,.45)" in css
+    assert "background:rgba(232,180,92,.12)" in css
     assert ".g-sort-b.on{border-bottom" not in css
     # Стрелка — только у активной: у неактивных она пряталась через
     # opacity, из-за чего ряд получал разную ширину по вкладкам.
@@ -954,19 +953,42 @@ def test_sort_header_is_outlined_not_underlined():
     assert ".g-sort-ar{" in css
 
 
-def test_sort_bar_is_a_single_flex_row():
-    """Кнопки лежат одним рядом и не привязаны к колонкам строк.
+def test_sort_control_is_a_collapsed_button_like_the_player_picker():
+    """Сортировка свёрнута в одну кнопку и раскрывается по клику.
 
-    Раньше подписи жили в общей сетке с данными, были шире своих
-    колонок и перехватывали клики друг у друга.
+    Вариантов всего два-три, но лежали они рядом всегда и на телефоне
+    съедали строку целиком. Теперь это тот же приём, что у выбора
+    игрока: кнопка с текущим признаком и список внутри.
     """
     css = dota_matches.GAMES_CSS.replace("\n", "")
-    assert ".g-sort{display:flex;align-items:center;flex-wrap:wrap" in css
+    assert ".g-sort-btn{" in css and ".g-sort-menu{display:none" in css
+    assert ".g-sort.open .g-sort-menu{display:flex}" in css
+    assert ".g-sort.open .g-sort-chev{transform:rotate(180deg)}" in css
+    assert ".g-sort.open .g-sort-btn{" in css
+    # Ряд с кнопками больше не рисуется — вместо него одна кнопка.
+    assert ".g-sort{display:flex" not in css
     # Ни одного правила, которое ставит кнопку в колонку сетки.
     assert "justify-self:end" not in css
     assert ".g-card.g-mmr .g-sort-b{" not in css
     # Старого общего заголовка больше нет — он и был источником наездов.
     assert ".g-mmr-head" not in css
+
+
+def test_sort_menu_shows_the_active_option_and_the_script_opens_it():
+    """На кнопке подписан текущий признак, список открыт по клику."""
+    html = dota_matches.render_games_page([], tab="mmr", mmr_players=[
+        {"username": "a", "steam_nickname": "a", "mmr": 0,
+         "rank_tier": 50, "week_games": 1, "week_wins": 1},
+    ])
+    assert '<div class="g-sort" data-rows=".g-card.g-mmr">' in html
+    assert '<button type="button" class="g-sort-btn" aria-expanded="false">' in html
+    # Активный вариант отмечен в списке и подписан на кнопке.
+    assert '<button type="button" class="g-sort-b on" data-sort="stats"' in html
+    assert '<span class="g-sort-t">Статистика ↓</span>' in html
+    # Скрипт умеет открывать список и переносит выбор на кнопку.
+    assert "setOpen(!bar.classList.contains('open'))" in html
+    assert "cap.textContent" in html
+    assert "setOpen(false);" in html
 
 
 def test_mmr_tab_headers_are_sortable():
@@ -1056,32 +1078,81 @@ def test_upstream_outage_is_logged_once():
 
 
 def test_topmmr_caption_offers_the_full_list():
-    """/topmmr ведёт в Mini App кнопкой, а не ссылкой на сайт.
+    """/topmmr ведёт кнопкой на страницу приложения, а не ссылкой в тексте.
 
     Обычный <a href> открывает встроенный браузер Telegram, поэтому
-    приложение цепляется инлайн-кнопкой с web_app, а сайт убран.
+    приложение цепляется кнопкой под сообщением.
     """
+    import main
+
     src = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
     assert "seredin999.onrender.com/top-mmr" not in src   # ссылка на сайт убрана
     assert "Весь список" in src
-    assert "web_app=WebAppInfo(url=ranks_url())" in src  # кнопка в приложение
     # Отдельный хелпер: кнопка должна открывать вкладку рангов, а не историю.
     assert dota_matches.ranks_url().endswith("tab=ranks&miniapp=1")
     assert dota_matches.ranks_url() != dota_matches.miniapp_url()
 
+    button = main.app_link_markup(
+        [("📋 Весь список", dota_matches.ranks_url())], "private"
+    ).inline_keyboard[0][0]
+    assert button.text == "📋 Весь список"
+    assert button.web_app.url == dota_matches.ranks_url()
+
 
 def test_top_fissure_opens_the_roll_history_in_the_app():
-    """Топ фиссур ведёт в приложение кнопкой «ИСТОРИЯ РОЛЛОВ».
+    """Топ фиссур ведёт кнопкой «ИСТОРИЯ РОЛЛОВ», а не ссылкой на сайт."""
+    import main
 
-    Ссылка на /fissure-logs открывала встроенный браузер Telegram,
-    поэтому её заменили Web App-кнопкой на вкладку роллов.
-    """
     src = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
     assert "seredin999.onrender.com/fissure-logs" not in src
     assert "ИСТОРИЯ РОЛЛОВ" in src
-    assert "web_app=WebAppInfo(url=rolls_url())" in src
     assert dota_matches.rolls_url().endswith("tab=rolls&miniapp=1")
     assert dota_matches.rolls_url() != dota_matches.miniapp_url()
+
+    button = main.app_link_markup(
+        [("📜 ИСТОРИЯ РОЛЛОВ", dota_matches.rolls_url())], "private"
+    ).inline_keyboard[0][0]
+    assert button.web_app.url == dota_matches.rolls_url()
+
+
+def test_app_buttons_fall_back_to_links_in_groups():
+    """В группе web_app-кнопку Telegram не примет — там нужна обычная ссылка.
+
+    Топы зовут в групповом чате, поэтому кнопка под ними обязана быть
+    url-кнопкой: иначе в группе её просто не будет.
+    """
+    import main
+
+    for chat_type in ("group", "supergroup", "channel"):
+        button = main.app_link_markup(
+            [("📋 Весь список", dota_matches.ranks_url())], chat_type
+        ).inline_keyboard[0][0]
+        assert button.web_app is None
+        assert button.url == dota_matches.ranks_url()
+    # В личке — наоборот, полноценная кнопка приложения.
+    private = main.app_link_markup(
+        [("📋 Весь список", dota_matches.ranks_url())], "private"
+    ).inline_keyboard[0][0]
+    assert private.url is None and private.web_app is not None
+
+
+def test_digest_post_has_the_roll_button_instead_of_a_site_link():
+    """Под постом дайджеста — кнопка, а ссылка в тексте убрана.
+
+    Дайджест закрепляется в группе, где web_app запрещён, поэтому кнопка
+    всегда url: страница приложения открывается во встроенном браузере.
+    """
+    import digest
+
+    src = (PROJECT_ROOT / "digest.py").read_text(encoding="utf-8")
+    assert "seredin999.onrender.com/fissure-bot" not in src
+    assert "Подробнее на сайте" not in src
+    # Клавиатура вешается при создании поста; правки её не снимают.
+    assert src.count("reply_markup=digest_keyboard()") == 2
+
+    button = digest.digest_keyboard().inline_keyboard[0][0]
+    assert button.text == "📜 ИСТОРИЯ РОЛЛОВ"
+    assert button.web_app is None and button.url == dota_matches.rolls_url()
 
 
 def test_mmr_row_links_to_the_player_game_history():
@@ -1208,7 +1279,7 @@ def test_ranking_header_has_no_empty_cells():
     assert 'data-sort="rank_tier"' in head
     # Подписи не в общей сетке с колонками — иначе снова наезжают.
     css = dota_matches.GAMES_CSS.replace("\n", "")
-    assert ".g-sort{display:flex" in css
+    assert ".g-sort-btn{" in css
 
 
 def test_history_repairs_its_own_schema():

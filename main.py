@@ -1660,6 +1660,23 @@ async def fetch_hero_icon(url, session=None, size=96):
 
 DEFAULT_AVATAR_URL = str(get_banner_path("default_avatar"))
 
+
+def app_link_markup(pairs, chat_type: str | None) -> InlineKeyboardMarkup:
+    """Кнопки-ссылки на страницы приложения под сообщением.
+
+    Web App-кнопки Telegram принимает только в личных чатах, поэтому в
+    группах и каналах та же кнопка отправляется обычной ссылкой: страница
+    приложения открывается во встроенном браузере, зато кнопка видна всем,
+    а не только в личке.  Без разницы браузер или приложение — адрес один.
+    """
+    row = [
+        (InlineKeyboardButton(label, web_app=WebAppInfo(url=url))
+         if chat_type == "private"
+         else InlineKeyboardButton(label, url=url))
+        for label, url in pairs
+    ]
+    return InlineKeyboardMarkup([row])
+
 _TOP_CARD_CACHE: OrderedDict[tuple, bytes] = OrderedDict()
 _TOP_CARD_CACHE_MAX_SIZE = 20
 
@@ -3612,15 +3629,10 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # в кнопку приложения (см. reply_markup ниже).
         from dota_matches import rolls_url
 
-        # Web App-кнопки Telegram разрешает только в личных чатах,
-        # в группах остаётся обычное меню.
-        if update.effective_chat.type == "private":
-            rolls_markup = InlineKeyboardMarkup([
-                [InlineKeyboardButton("📜 ИСТОРИЯ РОЛЛОВ",
-                                      web_app=WebAppInfo(url=rolls_url()))]
-            ])
-        else:
-            rolls_markup = main_menu()
+        rolls_markup = app_link_markup(
+            [("📜 ИСТОРИЯ РОЛЛОВ", rolls_url())],
+            update.effective_chat.type,
+        )
 
         result_msg = await context.bot.send_photo(
             chat_id=chat_id,
@@ -3918,18 +3930,14 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             except Exception as e:
                 logger.debug(f"Could not delete last bot message: {e}")
 
-            # Кнопка «Весь список» открывает Mini App, а обычная ссылка в
-            # подписи открыла бы встроенный браузер Telegram. Web App
-            # кнопки Telegram разрешает только в личных чатах.
+            # Кнопка «Весь список» открывает страницу приложения: в личке как
+            # Web App, в группе обычной ссылкой (см. app_link_markup).
             from dota_matches import ranks_url
 
-            ranks_keyboard = [[
-                InlineKeyboardButton("📋 Весь список",
-                                     web_app=WebAppInfo(url=ranks_url())),
-            ]]
-            reply_markup = (InlineKeyboardMarkup(ranks_keyboard)
-                            if update.effective_chat.type == "private"
-                            else main_menu())
+            reply_markup = app_link_markup(
+                [("📋 Весь список", ranks_url())],
+                update.effective_chat.type,
+            )
 
             result_msg = await context.bot.send_photo(
                 chat_id=update.effective_chat.id,

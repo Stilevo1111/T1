@@ -417,9 +417,26 @@ def _build_digest_text_for_type(digest_type: str) -> str | None:
         parts.append("🔻—\n")
         parts.append("🍀—\n")
 
-    # Keep the link directly below the last statistic line: no extra blank row.
-    parts.append("🔷<a href=\"https://seredin999.onrender.com/fissure-bot\">Подробнее на сайте</a>")
+    # Ссылка на сайт в тексте больше не нужна: под постом висит кнопка
+    # на приложение (см. digest_keyboard), она видна сразу и не теряется
+    # среди строк статистики.
     return "".join(parts)
+
+
+def digest_keyboard() -> "InlineKeyboardMarkup":
+    """Кнопка под постом дайджеста.
+
+    Дайджест закрепляется в группе или канале, а Web App-кнопки Telegram
+    там запрещены, поэтому кнопка всегда обычная ссылка — страница
+    приложения открывается во встроенном браузере.
+    """
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from dota_matches import rolls_url
+
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📜 ИСТОРИЯ РОЛЛОВ", url=rolls_url())]
+    ])
 
 
 # =====================================================
@@ -970,7 +987,8 @@ async def alternate_digest_job(context):
                                     chat_id=int(digest_chat_id),
                                     photo=photo_buf,
                                     caption=text,
-                                    parse_mode="HTML"
+                                    parse_mode="HTML",
+                                    reply_markup=digest_keyboard()
                                 )
                                 logger.info(f"Создан новый дайджест с фото {msg.message_id}")
                                 _set_digest_is_photo(True)
@@ -987,7 +1005,8 @@ async def alternate_digest_job(context):
                             chat_id=int(digest_chat_id),
                             text=text,
                             parse_mode="HTML",
-                            disable_web_page_preview=True
+                            disable_web_page_preview=True,
+                            reply_markup=digest_keyboard()
                         )
                         logger.info(f"Создан новый дайджест (текст) {msg.message_id}")
                         _set_digest_is_photo(False)

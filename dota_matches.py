@@ -1180,27 +1180,35 @@ body{background:#07080c}
 /* ── Вкладка «Топ рангов»: те же поля, что на странице топа ─────────────── */
 .g-card.g-mmr .g-line{display:grid;
  grid-template-columns:34px 34px 30px minmax(0,1fr) 210px;align-items:center;gap:10px}
-/* Единый селектор сортировки. Один блок на обе вкладки:
-   одна плашка с кнопками, активная подсвечена, стрелка показывает
-   направление. Вёрстка строк от него не зависит — кнопки лежат
-   отдельным рядом сверху и не наезжают на колонки. */
-.g-sort{display:flex;align-items:center;flex-wrap:wrap;gap:5px;
- padding:0 10px 8px;user-select:none}
-.g-sort-b{position:relative;display:inline-flex;align-items:center;gap:5px;
- padding:5px 8px;border:0;border-radius:7px;background:transparent;
- font:inherit;font-size:10.5px;font-weight:800;letter-spacing:.08em;
- text-transform:uppercase;color:#7c869c;white-space:nowrap;cursor:pointer;
- box-shadow:inset 0 0 0 1px transparent;
- transition:color .18s ease,box-shadow .18s ease,background .18s ease}
-.g-sort-b:hover{color:#dbe3ef;background:rgba(255,255,255,.05);
- box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
-.g-sort-b.on{color:#f7e3c0;background:rgba(232,180,92,.11);
- box-shadow:inset 0 0 0 1px rgba(232,180,92,.45)}
+/* Сортировка повторяет выбор игрока: свёрнутая кнопка с текущим
+   признаком сортировки, а список вариантов раскрывается по клику.
+   Вариантов два-три, держать их на виду незачем — они занимали ряд
+   целиком и сдвигали список вниз на телефоне. */
+.g-sort{position:relative;padding:0 10px 10px;user-select:none}
+.g-sort-btn{width:100%;display:flex;align-items:center;gap:9px;padding:9px 12px;
+  background:#0e131b;border:1px solid #222a37;border-radius:8px;cursor:pointer;
+  color:#dbe1eb;font:600 11px/1.2 Inter,sans-serif;transition:border-color .18s ease,background .18s ease}
+.g-sort-btn:hover{border-color:#39445a;background:#111823}
+.g-sort-ic{display:inline-flex;color:#7d879b}
+.g-sort-t{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.g-sort-chev{display:inline-flex;color:#7d879b;transition:transform .22s ease}
+.g-sort.open .g-sort-chev{transform:rotate(180deg)}
+.g-sort.open .g-sort-btn{border-color:rgba(232,180,92,.4);color:#f7e3c0}
+.g-sort-menu{display:none;margin-top:8px;padding:8px;background:#0b0f16;
+  border:1px solid #222a37;border-radius:10px;flex-direction:column;gap:5px}
+.g-sort.open .g-sort-menu{display:flex}
+.g-sort-b{position:relative;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:7px 10px;border:0;border-radius:6px;background:transparent;
+  font:inherit;font-size:11px;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;color:#9aa4b7;white-space:nowrap;cursor:pointer;text-align:left;
+  transition:color .15s ease,background .15s ease}
+.g-sort-b:hover{background:rgba(255,255,255,.05);color:#eef2f8}
+.g-sort-b.on{background:rgba(232,180,92,.12);color:#f7e3c0}
 /* Стрелка — только у активной. У неактивных места нет, чтобы ряд
    не рвался при смене колонки. */
 .g-sort-ar{width:0;height:0;border-left:3.5px solid transparent;
- border-right:3.5px solid transparent;border-top:4px solid #e8b45c;
- opacity:0;transition:opacity .18s ease,transform .18s ease}
+  border-right:3.5px solid transparent;border-top:4px solid #e8b45c;
+  opacity:0;transition:opacity .18s ease,transform .18s ease}
 .g-sort-b.on .g-sort-ar{opacity:1}
 .g-sort-b.on:not([data-dir="up"]) .g-sort-ar{transform:rotate(180deg)}
 .g-rank-img{width:26px;height:26px;object-fit:contain;flex-shrink:0}
@@ -1327,8 +1335,9 @@ body{background:#07080c}
   .g-heron{font-size:11.5px}
   /* Кнопку истории игр на телефоне тоже не мельчим. */
   .g-igames{font-size:11.5px;margin-top:5px;padding:4px 0}
- .g-sort{padding:0 10px 8px;gap:5px}
- .g-sort-b{font-size:11px;letter-spacing:.03em;padding:7px 8px;gap:5px}
+  .g-sort{padding:0 10px 10px}
+  .g-sort-btn{padding:12px;font-size:13.5px}
+  .g-sort-b{font-size:13px;padding:11px 10px;letter-spacing:.04em}
  .g-wr{font-size:12px}
  .g-wr-track{display:none}
  .g-wr-num{min-width:30px;font-size:13px}
@@ -1343,7 +1352,7 @@ body{background:#07080c}
 """
 
 def sort_btn(key: str, label: str, default: bool = False) -> str:
-    """Кнопка сортировки. Один вид для всех вкладок.
+    """Пункт выпадающего списка сортировки.
 
     Ключ — имя data-атрибута в строке (rank_tier, stats, growth,
     fissure, name). Переставляет строки общий SORT_JS, поэтому
@@ -1351,8 +1360,43 @@ def sort_btn(key: str, label: str, default: bool = False) -> str:
     """
     on = " on" if default else ""
     return (f'<button type="button" class="g-sort-b{on}" '
-            f'data-sort="{key}">{_esc(label)}'
+            f'data-sort="{key}" data-label="{_esc(label)}">{_esc(label)}'
             f'<span class="g-sort-ar"></span></button>')
+
+
+SORT_ICON = ('<span class="g-sort-ic" aria-hidden="true">'
+             '<svg viewBox="0 0 16 16" width="13" height="13">'
+             '<path d="M4 3v10M4 13l-2.2-2.6M4 13l2.2-2.6M12 13V3M12 3L9.8 5.6'
+             'M12 3l2.2 2.6" fill="none" stroke="currentColor" stroke-width="1.4" '
+             'stroke-linecap="round" stroke-linejoin="round"/></svg></span>')
+SORT_CHEVRON = ('<span class="g-sort-chev" aria-hidden="true">'
+                '<svg viewBox="0 0 16 16" width="11" height="11">'
+                '<path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" '
+                'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'
+                '</svg></span>')
+
+
+def sort_bar(options: list[tuple[str, str]], rows: str) -> str:
+    """Свёрнутая кнопка сортировки и её раскрывающийся список.
+
+    Устроена как панель выбора игрока: на кнопке только текущий признак,
+    варианты лежат внутри и раскрываются по клику. Первым в options идёт
+    активный вариант — он же подписан на кнопке и отмечен в списке.
+    """
+    default_key, default_label = options[0]
+    menu = "".join(
+        sort_btn(key, label, default=key == default_key) for key, label in options
+    )
+    return (
+        f'<div class="g-sort" data-rows="{rows}">'
+        f'<button type="button" class="g-sort-btn" aria-expanded="false">'
+        f'{SORT_ICON}'
+        f'<span class="g-sort-t">{_esc(default_label)} ↓</span>'
+        f'{SORT_CHEVRON}'
+        f"</button>"
+        f'<div class="g-sort-menu">{menu}</div>'
+        f"</div>"
+    )
 
 
 def render_games_page(
@@ -1401,14 +1445,11 @@ def render_games_page(
 
     if tab == "mmr":
         rows = sorted(mmr_players or [], key=mmr_sort_key)
-        # Сортировка одна на обе вкладки: набор кнопок в .g-sort,
+        # Сортировка одна на обе вкладки: свёрнутая кнопка .g-sort,
         # строки переставляет общий скрипт SORT_JS.
-        head = (
-            '<div class="g-sort" data-rows=".g-card.g-mmr" role="group" '
-            'aria-label="Сортировка">'
-            f'{sort_btn("stats", "Статистика", True)}'
-            f'{sort_btn("rank_tier", "Ранг")}'
-            "</div>"
+        head = sort_bar(
+            [("stats", "Статистика"), ("rank_tier", "Ранг")],
+            ".g-card.g-mmr",
         )
         # Данные для клиентской сортировки кладём в data-* самой строки.
         body = head + (
@@ -1421,13 +1462,9 @@ def render_games_page(
     elif tab == "rolls":
         # История роллов приходит с самой страницы бота, newest first.
         items = list(rolls or [])
-        head = (
-            '<div class="g-sort" data-rows=".g-card.g-roll" role="group" '
-            'aria-label="Сортировка">'
-            f'{sort_btn("name", "Игрок")}'
-            f'{sort_btn("growth", "Прирост")}'
-            f'{sort_btn("fissure", "Максимум")}'
-            "</div>"
+        head = sort_bar(
+            [("name", "Игрок"), ("growth", "Прирост"), ("fissure", "Максимум")],
+            ".g-card.g-roll",
         )
         body = head + ("".join(render_roll(r) for r in items[:limit * 4]) or (
             '<div class="g-empty">Роллов пока нет.<br>'
@@ -1777,6 +1814,26 @@ SORT_JS = """
   var sel = bar.dataset.rows;
   if (!sel) return;
   var sign = {};                     // колонка -> 1 (↑) / -1 (↓)
+  var cap = bar.querySelector('.g-sort-t');
+  var trigger = bar.querySelector('.g-sort-btn');
+
+  // Список свёрнут, как панель выбора игрока: открыт по клику, закрыт
+  // кликом мимо и Escape.
+  function setOpen(on){
+    bar.classList.toggle('open', on);
+    if (trigger) trigger.setAttribute('aria-expanded', on ? 'true' : 'false');
+  }
+  if (trigger){
+    trigger.addEventListener('click', function(e){
+      e.stopPropagation();
+      setOpen(!bar.classList.contains('open'));
+    });
+  }
+  bar.addEventListener('click', function(e){ e.stopPropagation(); });
+  document.addEventListener('click', function(){ setOpen(false); });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') setOpen(false);
+  });
 
   // Колонка, активная на старте, уже отсортирована по убыванию.
   var first = bar.querySelector('[data-sort].on');
@@ -1796,6 +1853,12 @@ SORT_JS = """
       if (n) n.textContent = i + 1;
       r.classList.toggle('top3', i < 3);
     });
+  }
+  // Выбранный вариант едет на кнопку — на ней видно, чем сейчас
+  // отсортировано, даже когда список свёрнут.
+  function caption(b, s){
+    if (!cap) return;
+    cap.textContent = (b.dataset.label || '') + (s === 1 ? ' ↑' : ' ↓');
   }
   bar.addEventListener('click', function(e){
     var b = e.target.closest('[data-sort]');
@@ -1823,7 +1886,9 @@ SORT_JS = """
       if (on) el.dataset.dir = s === 1 ? 'up' : 'down';
       else delete el.dataset.dir;
     });
+    caption(b, s);
     paint();
+    setOpen(false);
   });
 })();
 """
