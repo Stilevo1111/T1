@@ -1610,6 +1610,10 @@ from fissure import (
 )
 from party import party_command
 
+# Кнопка «Пати» на странице матчей: Mini App шлёт сигнал, и бот запускает тот
+# же подбор party_for_user, что и команда /party.
+from dota_matches import handle_party_from_page
+
 # All roll data (ROLL_MEMES, CATEGORY_PHRASES), welcome phrases,
 # multicast/zeus defaults, weekend multipliers and digest headers
 # have been moved to rolls.py and constants.py.
@@ -3800,7 +3804,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             # Кнопка «Весь список» открывает Mini App, а обычная ссылка в
             # подписи открыла бы встроенный браузер Telegram. Web App
             # кнопки Telegram разрешает только в личных чатах.
-            from dota_matches import party_command, ranks_url
+            from dota_matches import ranks_url
 
             ranks_keyboard = [[
                 InlineKeyboardButton("📋 Весь список",
@@ -5215,7 +5219,6 @@ async def main():
         app.add_handler(CommandHandler("info", info))
         app.add_handler(CommandHandler("top", top))
         app.add_handler(CommandHandler("topmmr", topmmr))
-        app.add_handler(CommandHandler("party", party_command))
         app.add_handler(CommandHandler("refreshmmr", refreshmmr))
         app.add_handler(CommandHandler("link", link))
         app.add_handler(CommandHandler("admin_unlink", admin_unlink))
@@ -5233,6 +5236,10 @@ async def main():
         app.add_handler(CommandHandler("story", story_command))
         app.add_handler(CommandHandler("matches", matches_command))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.ANY_CHAT_MEMBER))
+        # Кнопка «Пати» на странице матчей: Mini App отправляет сигнал, и бот
+        # запускает тот же подбор party_for_user, что и команда /party.
+        app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA,
+                                       handle_party_from_page))
         app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members_message))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 

@@ -27,9 +27,6 @@ import logging
 import os
 import time
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from telegram.ext import ContextTypes
-
 logger = logging.getLogger(__name__)
 
 # How many matches the DB index scan fetches before we stop.
@@ -544,6 +541,9 @@ def _bot_steam_index() -> dict:
     # откатываемся на запрос без неё — иначе страница осталась бы совсем пустой,
     # потому что индекс игроков строится целиком из этого SELECT.
     queries = (
+        "SELECT steam_id, telegram_id, username, steam_nickname, avatar, rank_tier,"
+        " week_games, week_wins"
+        " FROM users WHERE steam_id IS NOT NULL LIMIT 5000",
         "SELECT steam_id, telegram_id, username, steam_nickname, avatar, rank_tier"
         " FROM users WHERE steam_id IS NOT NULL LIMIT 5000",
         "SELECT steam_id, telegram_id, username, steam_nickname, avatar"
@@ -855,11 +855,11 @@ def render_game(game: dict) -> str:
     match_id = int(game.get("match_id") or 0)
     account_id = int(game.get("account_id") or 0)
 
-    # «Пати» отправляет команду /party боту, и он пишет приглашение прямо в чат.
-    # Раньше здесь открывалось окно «Поделиться» Telegram: сообщение уходило
-    # выбранному контакту, а не игрокам в этом чате.
-    party_cmd = f"/party {game.get('bot_username') or shown_as} " \
-                f"{game.get('hero_name') or ''} {match_id}".strip()
+    # «Пати» больше не открывает «Поделиться»: приглашение уходило в диалог
+    # контакта мимо чата, в котором играют. Кнопка отправляет Mini App-сигнал,
+    # по нему бот зовёт party_for_user — тот же подбор, что и у команды
+    # /party. Ссылка на «Поделиться» осталась для обычного браузера, где
+    # отправлять сигнал некуда.
     party_share = ("https://t.me/share/url?url="
                    + match_url(match_id)
                    + "&text=" + _tg_share_text(game, match_id))
@@ -874,7 +874,7 @@ def render_game(game: dict) -> str:
     # Строка кликается и открывает панель, поэтому это div, а не ссылка:
     # ссылка раньше уводила на OpenDota и открывала новую вкладку.
     return (
-        f'<div class="g-card {cls}" data-party="{_esc(party_cmd)}" '
+        f'<div class="g-card {cls}" data-party="1" '
         f'data-party-share="{_esc(party_share)}" '
         f'data-dota="{_esc(db_url)}" tabindex="0" role="button">'
         f'<div class="g-line">'
@@ -925,51 +925,48 @@ def match_url(match_id: int) -> str:
     return f"https://www.dotabuff.com/matches/{match_id}"
 
 
-def party_message(hero: str = "", nick: str = "", match_id: int = 0) -> str:
-    """Приглашение в пати, которое бот кладёт в чат по /party.
+async def handle_party_from_page(update, context) -> None:
+    """Кнопка «Пати» на странице матчей → подбор игроков в чат.
 
-    Раньше кнопка «Пати» на странице матчей открывала окно «Поделиться»
-    Telegram: сообщение уходило в диалог выбранного контакта, а не в чат,
-    где играют. Теперь по кнопке приходит сообщение от бота в тот же чат.
+    Отдельной системы приглашений не нужно: подбор уже есть в party.py
+    (party_for_user ищет игроков рядом по rank_tier). Кнопка на странице
+    раньше открывала «Поделиться» Telegram, из-за чего приглашение уходило
+    в диалог контакта мимо чата. Здесь бот получает сигнал от Mini App и
+    зовёт тот самый party_for_user, поэтому в чат приходит общий список
+    с кнопками-упоминаниями.
     """
-    who = nick or "кто-то"
-    line = f"🎮 <b>{_esc(who)}</b> зовёт в пати на Dota 2"
-    if hero:
-        line += f" — герой <b>{_esc(hero)}</b>"
-    line += "!"
-    if match_id:
-        line += f"\n\nМатч: {match_url(match_id)}"
-    return line + "\n\nОтветьте в этом чате, если готовы — соберём лобби."
+    from database import get_user
+    from party import party_for_user
 
+    message = update.effective_message
+    user = update.effective_user
+    if not message or not user:
+        return
 
-async def party_command(update: ContextTypes.DEFAULT_TYPE,
-                         context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда /party: бот пишет приглашение в чат.
-
-    Аргументы приходят с кнопки страницы матчей: ник, герой и id матча.
-    Введённые вручную игнорируем — приглашение всё равно остаётся общим.
-    """
-    chat = update.effective_chat
-    parts = (update.message.text or "").split()
-    nick = parts[1][:64] if len(parts) > 1 else ""
-    hero = parts[2][:64] if len(parts) > 2 else ""
     try:
-        match_id = int(parts[3]) if len(parts) > 3 else 0
-    except ValueError:
-        match_id = 0
+        requester = await asyncio.to_thread(
+            get_user, user.id,
+            user.username or user.first_name or f"Player{user.id}",
+        )
+    except Exception as e:
+        logger.error("dota_matches: party lookup failed: %s", e)
+        requester = None
 
-    text = party_message(hero=hero, nick=nick, match_id=match_id)
+    if not requester:
+        requester = {
+            "telegram_id": user.id,
+            "username": user.username or user.first_name or f"Player{user.id}",
+            "steam_id": None,
+            "rank_tier": 0,
+            "week_games": 0,
+            "week_wins": 0,
+        }
 
-    markup = None
-    if chat.type == "private":
-        markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🎮 Открыть матчи", web_app=WebAppInfo(url=miniapp_url())),
-        ]])
-
-    await update.effective_message.reply_text(
-        text, parse_mode="HTML", reply_markup=markup,
-        disable_web_page_preview=True,
-    )
+    try:
+        await party_for_user(message.chat_id, message.chat.type,
+                             requester, context)
+    except Exception as e:
+        logger.error("dota_matches: party from page failed: %s", e, exc_info=True)
 
 
 RANKS_BASE = "https://seredin999.onrender.com/images/ranks"
@@ -1722,13 +1719,14 @@ GAME_ACTS_JS = """
   var tg = window.Telegram && window.Telegram.WebApp;
 
   function askParty(card){
-    // Приглашение должно прийти в чат от бота, а не в диалог контакта,
-    // поэтому отдаём команду боту через Mini App, и он пишет в этот чат.
-    // Вне Telegram (страница открыта в браузере) данных отправлять некуда,
-    // поэтому там остаётся старый путь через «Поделиться».
+    // Подбор игроков уже есть в боте (/party). Кнопка на странице только
+    // сигналит ему: бот зовёт party_for_user и пишет список в этот чат.
+    // Раньше здесь открывалось «Поделиться», и приглашение уходило в
+    // диалог контакта вместо чата, где все играют.
+    // Вне Telegram сигнал отправить некуда — там остаётся «Поделиться».
     if (tg && tg.sendData && tg.initData) {
       try {
-        tg.sendData(card.dataset.party || '');
+        tg.sendData('party');
         return;
       } catch (e) { /* падаем ниже на ссылку */ }
     }

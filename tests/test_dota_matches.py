@@ -642,12 +642,12 @@ def test_render_game_card_in_cup_style():
     assert "g-items" not in row                               # предметов нет
 
 
-def test_party_button_asks_the_bot_to_post_in_the_chat():
-    """Кнопка «Пати» зовёт бота, а не открывает «Поделиться».
+def test_party_button_signals_the_bot_to_run_the_existing_matcher():
+    """Кнопка «Пати» зовёт готовый подбор, а не пишет своё приглашение.
 
     Окно «Поделиться» Telegram отправляло приглашение в диалог контакта,
-    минуя чат, в котором все играют. Теперь кнопка отдаёт команду /party,
-    и приглашение приходит в этот чат от бота.
+    минуя чат, в котором все играют. Теперь кнопка отправляет Mini App-сигнал,
+    и бот запускает party_for_user — тот же подбор, что у команды /party.
     """
     game = {
         "match_id": 42, "start_time": 100, "duration": 60, "win": True,
@@ -657,19 +657,26 @@ def test_party_button_asks_the_bot_to_post_in_the_chat():
         "steam_id": 1, "telegram_id": 777,
     }
     row = dota_matches.render_game(game)
-    assert 'data-party="/party Wawashik Juggernaut 42"' in row
+    assert 'data-party="1"' in row
     # Ссылка на «Поделиться» осталась запасным путём для обычного браузера.
     assert 'data-party-share="' in row and "t.me/share/url" in row
+    # Сигнал уходит в бот, а не текстом команды: /party не должен вклиниться
+    # в разбор аргументов существующей команды party.py.
+    assert "/party" not in row
 
 
-def test_party_message_is_a_chat_invitation():
-    """Текст /party зовёт в пати и называет игру, героя и матч."""
-    text = dota_matches.party_message(hero="Juggernaut", nick="went_Dr",
-                                      match_id=8123456789)
-    assert "went_Dr" in text and "Juggernaut" in text
-    assert "dotabuff.com/matches/8123456789" in text
-    # HTML сбалансирован, иначе Telegram отклонит сообщение.
-    assert text.count("<b>") == text.count("</b>")
+def test_party_from_page_reuses_the_existing_matcher():
+    """Обработчик Mini App зовёт party_for_user, а не пишет свой текст."""
+    import inspect
+
+    from party import party_for_user
+
+    source = inspect.getsource(dota_matches.handle_party_from_page)
+    assert "party_for_user" in source
+    # Подбор остаётся один — тот же, что у /party.
+    assert source.count("def handle_party_from_page") == 1
+    assert callable(party_for_user)
+    assert "party_message" not in dir(dota_matches)
 
 
 def test_dotabuff_button_leads_to_the_player_not_the_match():
