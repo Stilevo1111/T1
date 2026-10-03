@@ -1610,10 +1610,6 @@ from fissure import (
 )
 from party import party_command
 
-# Кнопка «Пати» на странице матчей: Mini App шлёт сигнал, и бот запускает тот
-# же подбор party_for_user, что и команда /party.
-from dota_matches import handle_party_from_page
-
 # All roll data (ROLL_MEMES, CATEGORY_PHRASES), welcome phrases,
 # multicast/zeus defaults, weekend multipliers and digest headers
 # have been moved to rolls.py and constants.py.
@@ -2866,6 +2862,116 @@ async def games_page_handler(request):
 
 # /matches renders the same game list (kept for the existing links/bookmarks).
 dota_matches_page_handler = games_page_handler
+
+
+def _validate_telegram_init_data(init_data: str, bot_token: str) -> dict | None:
+    """Проверить подпись initData от Telegram Mini App.
+
+    Возвращает данные пользователя или None, если подпись не сошлась или
+    протухла. Алгоритм описан в документации Telegram: data_check_string из
+    всех полей кроме hash, сверка HMAC-SHA256 с ключом из токена бота.
+    """
+    import hashlib
+    import hmac
+    from urllib.parse import parse_qsl
+
+    if not init_data or not bot_token:
+        return None
+
+    pairs = dict(parse_qsl(init_data, keep_blank_values=True))
+    received_hash = pairs.pop("hash", None)
+    if not received_hash:
+        return None
+
+    data_check_string = "\n".join(
+        f"{k}={pairs[k]}" for k in sorted(pairs)
+    )
+    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256)
+    expected = hmac.new(secret_key.digest(),
+                        data_check_string.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, received_hash):
+        return None
+
+    # Защита от повторной отправки: старый initData можно переиспользовать.
+    auth_date = pairs.get("auth_date")
+    if auth_date:
+        import time as _time
+        try:
+            if _time.time() - int(auth_date) > 86400:
+                logger.warning("party_api: stale initData rejected")
+                return None
+        except (TypeError, ValueError):
+            return None
+
+    user_json = pairs.get("user")
+    if not user_json:
+        return None
+    try:
+        import json
+        return json.loads(user_json)
+    except (TypeError, ValueError):
+        return None
+
+
+async def party_api_handler(request):
+    """Кнопка «Пати» на странице матчей просит подбор игроков.
+
+    Раньше страница звала Telegram.WebApp.sendData, но этот метод работает
+    только если Mini App открыта кнопкой клавиатуры. Страницу открывают
+    инлайн-кнопкой web_app=, и сигнал молча терялся — в чате ничего не
+    появлялось. Здесь страница шлёт HTTP-запрос с initData, а бот проверяет
+    подпись токеном и сам пишет подбор в официальный чат.
+    """
+    if not TOKEN:
+        return web.json_response({"ok": False, "error": "bot token missing"}, status=503)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "bad json"}, status=400)
+
+    telegram_user = _validate_telegram_init_data(
+        (payload or {}).get("initData") or "", TOKEN,
+    )
+    if not telegram_user:
+        logger.warning("party_api: rejected request with invalid initData")
+        return web.json_response({"ok": False, "error": "unauthorized"}, status=403)
+
+    try:
+        from types import SimpleNamespace
+
+        app = request.app.get("bot_app")
+        if app is None:
+            return web.json_response({"ok": False, "error": "bot unavailable"},
+                                     status=503)
+
+        from database import get_user
+        from party import party_for_user
+
+        tg_id = int(telegram_user.get("id") or 0)
+        username = telegram_user.get("username") or telegram_user.get("first_name") \
+            or f"Player{tg_id}"
+
+        requester = await asyncio.to_thread(get_user, tg_id, username)
+        if not requester:
+            requester = {
+                "telegram_id": tg_id, "username": username,
+                "steam_id": None, "rank_tier": 0,
+                "week_games": 0, "week_wins": 0,
+            }
+
+        official = await asyncio.to_thread(get_config, "digest_chat_id")
+        if not official:
+            return web.json_response(
+                {"ok": False, "error": "game chat is not configured"}, status=503,
+            )
+
+        await party_for_user(int(official), "supergroup", requester,
+                             SimpleNamespace(bot=app.bot))
+        return web.json_response({"ok": True})
+    except Exception as e:
+        logger.error(f"party_api_handler error: {e}", exc_info=True)
+        return web.json_response({"ok": False, "error": "internal"}, status=500)
 
 
 async def dota_matches_api_handler(request):
@@ -5236,10 +5342,6 @@ async def main():
         app.add_handler(CommandHandler("story", story_command))
         app.add_handler(CommandHandler("matches", matches_command))
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.ANY_CHAT_MEMBER))
-        # Кнопка «Пати» на странице матчей: Mini App отправляет сигнал, и бот
-        # запускает тот же подбор party_for_user, что и команда /party.
-        app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA,
-                                       handle_party_from_page))
         app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members_message))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
@@ -5303,6 +5405,7 @@ async def main():
             web_app.router.add_get('/api/obs-last5', obs_last5_handler)
             web_app.router.add_get('/api/dota-matches', dota_matches_api_handler)
             web_app.router.add_get('/api/player-games', player_games_api_handler)
+            web_app.router.add_post('/api/party', party_api_handler)
             web_app.router.add_get('/games', games_page_handler)
             web_app.router.add_get('/matches', games_page_handler)
             web_app.router.add_route('OPTIONS', '/api/{path:.*}', api_options_handler)
@@ -5390,6 +5493,7 @@ async def main():
             web_app.router.add_get('/api/obs-last5', obs_last5_handler)
             web_app.router.add_get('/api/dota-matches', dota_matches_api_handler)
             web_app.router.add_get('/api/player-games', player_games_api_handler)
+            web_app.router.add_post('/api/party', party_api_handler)
             web_app.router.add_get('/games', games_page_handler)
             web_app.router.add_get('/matches', games_page_handler)
             web_app.router.add_route('OPTIONS', '/api/{path:.*}', api_options_handler)

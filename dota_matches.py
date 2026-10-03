@@ -925,64 +925,6 @@ def match_url(match_id: int) -> str:
     return f"https://www.dotabuff.com/matches/{match_id}"
 
 
-async def handle_party_from_page(update, context) -> None:
-    """Кнопка «Пати» на странице матчей → подбор игроков в официальный чат.
-
-    Отдельной системы приглашений не нужно: подбор уже есть в party.py
-    (party_for_user ищет игроков рядом по rank_tier). Кнопка на странице
-    раньше открывала «Поделиться» Telegram, из-за чего приглашение уходило
-    в диалог контакта мимо чата.
-
-    Куда писать — отдельная тонкость. Mini App открывают кнопкой клавиатуры,
-    и сигнал приходит в личный чат с ботом; если писать в message.chat_id,
-    подбор уходит в личку, и в игровом чате ничего не появляется. Поэтому
-    берём официальный чат из конфига (digest_chat_id), а если он не
-    настроен — отвечаем туда, где пришёл сигнал.
-    """
-    from database import get_config, get_user
-    from party import party_for_user
-
-    message = update.effective_message
-    user = update.effective_user
-    if not message or not user:
-        return
-
-    try:
-        requester = await asyncio.to_thread(
-            get_user, user.id,
-            user.username or user.first_name or f"Player{user.id}",
-        )
-    except Exception as e:
-        logger.error("dota_matches: party lookup failed: %s", e)
-        requester = None
-
-    if not requester:
-        requester = {
-            "telegram_id": user.id,
-            "username": user.username or user.first_name or f"Player{user.id}",
-            "steam_id": None,
-            "rank_tier": 0,
-            "week_games": 0,
-            "week_wins": 0,
-        }
-
-    target_chat_id = message.chat_id
-    target_chat_type = message.chat.type
-    try:
-        official = await asyncio.to_thread(get_config, "digest_chat_id")
-        if official:
-            target_chat_id = int(official)
-            target_chat_type = "supergroup"
-    except Exception as e:
-        logger.warning("dota_matches: could not read digest_chat_id: %s", e)
-
-    try:
-        await party_for_user(target_chat_id, target_chat_type,
-                             requester, context)
-    except Exception as e:
-        logger.error("dota_matches: party from page failed: %s", e, exc_info=True)
-
-
 RANKS_BASE = "https://seredin999.onrender.com/images/ranks"
 
 # Ранги Dota 2 по-русски: чем больше номер, тем выше ранг.
@@ -1733,18 +1675,34 @@ GAME_ACTS_JS = """
   var tg = window.Telegram && window.Telegram.WebApp;
 
   function askParty(card){
-    // Подбор игроков уже есть в боте (/party). Кнопка на странице только
-    // сигналит ему: бот зовёт party_for_user и пишет список в чат.
+    // Подбор игроков уже есть в боте (/party), кнопка только его зовёт.
     // Раньше здесь открывалось «Поделиться», и приглашение уходило в
     // диалог контакта вместо чата, где все играют.
-    if (tg && tg.sendData && tg.initData) {
-      try {
-        tg.sendData('party');
-        if (tg.showAlert) tg.showAlert('Отправляю подбор в игровой чат');
-        return;
-      } catch (e) { /* падаем ниже на ссылку */ }
+    //
+    // Telegram.WebApp.sendData не годится: он работает только если Mini App
+    // открыта кнопкой клавиатуры, а страницу открывают инлайн-кнопкой, и
+    // сигнал молча терялся. Поэтому шлём HTTP-запрос с initData — бот
+    // проверяет подпись и сам пишет подбор в игровой чат.
+    if (tg && tg.initData) {
+      fetch('/api/party', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({initData: tg.initData})
+      }).then(function(r){
+        return r.json().then(function(d){ return {ok: r.ok && d.ok, d: d}; });
+      }).then(function(res){
+        if (res.ok) {
+          if (tg.showAlert) tg.showAlert('Подбор отправлен в игровой чат');
+        } else {
+          var why = (res.d && res.d.error) || 'ошибка';
+          if (tg.showAlert) tg.showAlert('Не получилось: ' + why);
+        }
+      }).catch(function(){
+        if (tg.showAlert) tg.showAlert('Нет связи с ботом');
+      });
+      return;
     }
-    // Вне Telegram (обычный браузер) сигнал отправить некуда.
+    // Вне Telegram подпись получить нечем — остаётся ссылка на «Поделиться».
     window.open(card.dataset.partyShare || '', '_blank');
   }
 

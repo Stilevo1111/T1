@@ -665,35 +665,64 @@ def test_party_button_signals_the_bot_to_run_the_existing_matcher():
     assert "/party" not in row
 
 
-def test_party_from_page_reuses_the_existing_matcher():
-    """Обработчик Mini App зовёт party_for_user и пишет в игровой чат."""
-    import inspect
+def test_party_button_posts_to_the_api_not_to_a_chat_dialog():
+    """Кнопка «Пати» шлёт HTTP-запрос, а не открывает «Поделиться».
 
-    from party import party_for_user
-
-    source = inspect.getsource(dota_matches.handle_party_from_page)
-    assert "party_for_user" in source
-    assert callable(party_for_user)
-    assert "party_message" not in dir(dota_matches)
-
-
-def test_party_from_page_targets_the_official_chat_not_the_signal_chat():
-    """Подбор уходит в официальный чат, а не в личный чат с ботом.
-
-    Mini App открывают кнопкой клавиатуры, поэтому сигнал приходит в личку.
-    Если писать в message.chat_id, список появляется в личке, и в игровом
-    чате ничего не видно — это и было причиной жалобы.
+    Окно «Поделиться» Telegram отправляло приглашение в диалог контакта,
+    минуя чат, в котором все играют.
     """
+    game = {
+        "match_id": 42, "start_time": 100, "duration": 60, "win": True,
+        "hero_id": 8, "hero_name": "Juggernaut", "hero_icon": "",
+        "personaname": "Wawashik", "bot_username": "Wawashik",
+        "kills": 1, "deaths": 0, "assists": 1,
+        "steam_id": 1, "telegram_id": 777,
+    }
+    row = dota_matches.render_game(game)
+    assert 'data-party="1"' in row
+    # Ссылка на «Поделиться» осталась запасным путём для обычного браузера.
+    assert 'data-party-share="' in row and "t.me/share/url" in row
+    # Никакой команды /party в разметке: она живёт в party.py.
+    assert "/party" not in row
+
+
+def test_party_button_uses_the_api_and_not_senddata():
+    """sendData здесь не работает — страница открыта инлайн-кнопкой.
+
+    Telegram.WebApp.sendData работает только при запуске Mini App с кнопки
+    клавиатуры. Матчи открывают инлайн-кнопкой web_app=, поэтому сигнал
+    молча терялся и в чат ничего не приходило. Страница шлёт HTTP-запрос
+    с initData вместо sendData.
+    """
+    assert ".sendData(" not in dota_matches.GAME_ACTS_JS
+    assert "/api/party" in dota_matches.GAME_ACTS_JS
+    assert "initData" in dota_matches.GAME_ACTS_JS
+
+
+def test_party_endpoint_validates_init_data():
+    """Эндпоинт проверяет подпись initData и берёт официальный чат."""
     import inspect
 
-    source = inspect.getsource(dota_matches.handle_party_from_page)
-    # Официальный чат берётся из конфига и заменяет место прихода сигнала.
+    import main as main_module
+
+    source = inspect.getsource(main_module.party_api_handler)
+    assert "_validate_telegram_init_data" in source
+    # Без валидной подписи эндпоинт не вызывает подбор.
+    assert "unauthorized" in source
+    assert "party_for_user" in source
     assert "digest_chat_id" in source
-    assert "target_chat_id = int(official)" in source
-    # В party_for_user уходит target_chat_id, а не chat_id самого сигнала.
-    call = source.split("await party_for_user(")[1]
-    assert "target_chat_id" in call
-    assert "message.chat_id" not in call
+
+
+def test_init_data_signature_check_rejects_forged_data():
+    """Подпись сверяется по алгоритму Telegram, подделка не проходит."""
+    import main as main_module
+
+    assert main_module._validate_telegram_init_data("", "token") is None
+    assert main_module._validate_telegram_init_data("hash=abc", "") is None
+    # Подпись из правильных полей, но чужой хеш.
+    assert main_module._validate_telegram_init_data(
+        "user=%7B%22id%22%3A1%7D&hash=deadbeef", "123:ABC",
+    ) is None
 
 
 def test_dotabuff_button_leads_to_the_player_not_the_match():
