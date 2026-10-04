@@ -1209,23 +1209,63 @@ def test_app_buttons_fall_back_to_links_in_groups():
     assert private.url is None and private.web_app is not None
 
 
-def test_digest_post_has_the_roll_button_instead_of_a_site_link():
-    """Под постом дайджеста — кнопка, а ссылка в тексте убрана.
+def test_digest_post_has_the_match_history_button_instead_of_a_site_link():
+    """Под постом дайджеста — кнопка на историю матчей, а ссылка в тексте убрана.
 
     Дайджест закрепляется в группе, где web_app запрещён, поэтому кнопка
-    всегда url: страница приложения открывается во встроенном браузере.
+    всегда url: страница открывается во встроенном браузере. Кнопка ведёт
+    на историю матчей, а не на историю роллов: роллы и так видны в чате.
     """
     import digest
 
     src = (PROJECT_ROOT / "digest.py").read_text(encoding="utf-8")
     assert "seredin999.onrender.com/fissure-bot" not in src
     assert "Подробнее на сайте" not in src
-    # Клавиатура вешается при создании поста; правки её не снимают.
-    assert src.count("reply_markup=digest_keyboard()") == 2
 
     button = digest.digest_keyboard().inline_keyboard[0][0]
-    assert button.text == "📜 ИСТОРИЯ РОЛЛОВ"
-    assert button.web_app is None and button.url == dota_matches.rolls_url()
+    assert button.text == "📜 ИСТОРИЯ МАТЧЕЙ"
+    assert button.web_app is None
+    assert button.url == dota_matches.miniapp_url()
+    assert button.url != dota_matches.rolls_url()
+
+
+def test_every_digest_edit_reattaches_the_match_history_button():
+    """Правка дайджеста не должна снимать кнопку.
+
+    Telegram удаляет инлайн-клавиатуру у сообщения, которое редактируют без
+    reply_markup. Значит дайджест, созданный в 9:00 с кнопкой, терял её на
+    первом же обновлении текста и до следующей ротации висел без неё.
+    Проверяем структурно: каждый вызов edit_message_* обязан нести
+    reply_markup=digest_keyboard().
+    """
+    import ast
+
+    source = (PROJECT_ROOT / "digest.py").read_text(encoding="utf-8")
+    edits = [
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in ("edit_message_text", "edit_message_caption")
+    ]
+    assert edits, "digest.py должен редактировать сообщение дайджеста"
+
+    without_button = []
+    for call in edits:
+        has_button = any(
+            kw.arg == "reply_markup"
+            and isinstance(kw.value, ast.Call)
+            and isinstance(kw.value.func, ast.Name)
+            and kw.value.func.id == "digest_keyboard"
+            for kw in call.keywords
+        )
+        if not has_button:
+            without_button.append(call.lineno)
+
+    assert not without_button, (
+        "эти правки дайджеста снимают кнопку ИСТОРИЯ МАТЧЕЙ: "
+        f"digest.py:{without_button}"
+    )
 
 
 def test_mmr_row_links_to_the_player_game_history():

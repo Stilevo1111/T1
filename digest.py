@@ -249,12 +249,12 @@ async def _instant_digest_refresh_job(context):
         if is_photo:
             await bot.edit_message_caption(
                 chat_id=int(digest_chat_id), message_id=int(msg_id),
-                caption=text, parse_mode="HTML"
+                caption=text, parse_mode="HTML", reply_markup=digest_keyboard()
             )
         else:
             await bot.edit_message_text(
                 chat_id=int(digest_chat_id), message_id=int(msg_id),
-                text=text, parse_mode="HTML"
+                text=text, parse_mode="HTML", reply_markup=digest_keyboard()
             )
         _digest_state_container.set_last_text(text)
         set_config('alternate_digest_last_text', text)
@@ -429,13 +429,16 @@ def digest_keyboard() -> "InlineKeyboardMarkup":
     Дайджест закрепляется в группе или канале, а Web App-кнопки Telegram
     там запрещены, поэтому кнопка всегда обычная ссылка — страница
     приложения открывается во встроенном браузере.
+
+    Открывает историю матчей (вкладка по умолчанию), а не историю роллов:
+    под дайджестом ищут последние игры, а роллы и так видны в чате.
     """
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-    from dota_matches import rolls_url
+    from dota_matches import miniapp_url
 
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📜 ИСТОРИЯ РОЛЛОВ", url=rolls_url())]
+        [InlineKeyboardButton("📜 ИСТОРИЯ МАТЧЕЙ", url=miniapp_url())]
     ])
 
 
@@ -676,14 +679,16 @@ async def alternate_digest_job(context):
                             chat_id=int(digest_chat_id),
                             message_id=int(existing_msg_id),
                             caption=text,
-                            parse_mode="HTML"
+                            parse_mode="HTML",
+                            reply_markup=digest_keyboard()
                         )
                     else:
                         await bot.edit_message_text(
                             chat_id=int(digest_chat_id),
                             message_id=int(existing_msg_id),
                             text=text,
-                            parse_mode="HTML"
+                            parse_mode="HTML",
+                            reply_markup=digest_keyboard()
                         )
                     logger.info(f"Updated cached digest message {existing_msg_id}")
                     return
@@ -805,14 +810,16 @@ async def alternate_digest_job(context):
                             chat_id=int(digest_chat_id),
                             message_id=msg_id_int,
                             caption=text,
-                            parse_mode="HTML"
+                            parse_mode="HTML",
+                            reply_markup=digest_keyboard()
                         )
                     else:
                         await bot.edit_message_text(
                             chat_id=int(digest_chat_id),
                             message_id=msg_id_int,
                             text=text,
-                            parse_mode="HTML"
+                            parse_mode="HTML",
+                            reply_markup=digest_keyboard()
                         )
                     logger.info(f"Обновлён alternate дайджест {last_message_id}")
                     edited = True
@@ -854,7 +861,8 @@ async def alternate_digest_job(context):
                                     chat_id=int(digest_chat_id),
                                     message_id=msg_id_int,
                                     text=text,
-                                    parse_mode="HTML"
+                                    parse_mode="HTML",
+                                    reply_markup=digest_keyboard()
                                 )
                                 _set_digest_is_photo(False)
                             else:
@@ -863,7 +871,8 @@ async def alternate_digest_job(context):
                                     chat_id=int(digest_chat_id),
                                     message_id=msg_id_int,
                                     caption=text,
-                                    parse_mode="HTML"
+                                    parse_mode="HTML",
+                                    reply_markup=digest_keyboard()
                                 )
                                 _set_digest_is_photo(True)
                             logger.info(f"Retry with alternate edit method succeeded for {last_message_id}")
@@ -904,7 +913,8 @@ async def alternate_digest_job(context):
                             chat_id=int(digest_chat_id),
                             message_id=msg_id_int,
                             caption=text,
-                            parse_mode="HTML"
+                            parse_mode="HTML",
+                            reply_markup=digest_keyboard()
                         )
                         logger.info(f"Обновлён alternate дайджест (caption) {last_message_id}")
                         edited = True
