@@ -28,6 +28,7 @@ __all__ = [
     "calculate_streak_bonus",
     "apply_aegis",
     "apply_cheese",
+    "apply_refresher",
     "calculate_roshan_reward",
     "get_roll_text",
     "get_hero_quote",
@@ -628,6 +629,24 @@ def apply_cheese(roll: float) -> tuple[float, bool, str]:
         return roll, False, ""
     boosted = roll * 1.5
     return boosted, True, f"🧀 СЫР ×1.5 = +{boosted:.1f} см (было +{roll:.1f})"
+
+
+def apply_refresher(roll: float) -> tuple[float, bool, str]:
+    """РЕФРЕШЕР даёт второй шанс: если ролл отрицательный, сразу перекидывает
+    и бросает его снова. Если и после рефреша минус — АЕГИС погашает, иначе
+    СЫР умножает на 1.5.
+
+    Возвращает (roll, consumed, text). Рефрешер потребляется только при
+    действии (отрицательный ролл). Положительный ролл после рефреша не
+    умножается — это чистый ролл.
+    """
+    if roll >= 0:
+        return roll, False, ""
+    new_roll = random.randint(-25, 25)
+    if new_roll == 0:
+        new_roll = 1
+    text = f"🔄 РЕФРЕШЕР: первый ролл {roll:.1f} см → новый ролл +{new_roll:.1f} см"
+    return new_roll, True, text
 
 
 def calculate_roshan_reward(current_fissure: float) -> float:

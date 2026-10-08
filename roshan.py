@@ -30,6 +30,7 @@ from bot_utils import make_clickable
 from constants import (
     ROSHAN_AEGIS_EFFECTS,
     ROSHAN_CHEESE_EFFECTS,
+    ROSHAN_REFRESHER_EFFECTS,
     ROSHAN_SESSION_TTL,
     ROSHAN_STEAL_WINDOW_SEC,
     ROSHAN_STEAL_TEXTS,
@@ -41,13 +42,18 @@ logger = logging.getLogger(__name__)
 
 AEGIS = "aegis"
 CHEESE = "cheese"
-ITEM_NAMES = (AEGIS, CHEESE)
+REFRESHER = "refresher"
+ITEM_NAMES = (AEGIS, CHEESE, REFRESHER)
 
-ITEM_LABELS = {AEGIS: "🧿 АЕГИС", CHEESE: "🧀 СЫР"}
+ITEM_LABELS = {AEGIS: "🧿 АЕГИС", CHEESE: "🧀 СЫР", REFRESHER: "🔄 РЕФРЕШЕР"}
 # What the artifact actually does, per rolls.py. The closing message reads one
 # of these straight after the name: a group announcement needs the real effect,
 # and the interesting part of the Aegis is that a positive roll keeps it.
-ITEM_EFFECTS = {AEGIS: ROSHAN_AEGIS_EFFECTS, CHEESE: ROSHAN_CHEESE_EFFECTS}
+ITEM_EFFECTS = {
+    AEGIS: ROSHAN_AEGIS_EFFECTS, 
+    CHEESE: ROSHAN_CHEESE_EFFECTS,
+    REFRESHER: ROSHAN_REFRESHER_EFFECTS,
+}
 
 # Strong references to pending window timers, otherwise the event loop may
 # garbage-collect a sleeping task before it fires.
@@ -185,9 +191,21 @@ def load_session(session_id: str) -> dict | None:
         (session_id,),
         fetch="one",
     )
-    if not row or not isinstance(row, dict):
+    if not row:
         return None
-    return row
+    # Normalize to dict (PostgreSQL returns dict, SQLite returns tuple)
+    if isinstance(row, dict):
+        return row
+    # SQLite tuple: (session_id, chat_id, msg_id, killer_id, killer_name, reward, resolved)
+    return {
+        "session_id": row[0],
+        "chat_id": row[1],
+        "msg_id": row[2],
+        "killer_id": row[3],
+        "killer_name": row[4],
+        "reward": row[5],
+        "resolved": row[6],
+    }
 
 
 def load_claimers(session_id: str) -> list[int]:
@@ -239,27 +257,66 @@ def purge_expired_sessions() -> None:
 # DISTRIBUTION
 # =====================
 
-def distribute_items(session_id: str) -> dict[int, str]:
-    """Hand one item to every claimer, in random order.
+def distribute_items(session_id: str) -> dict[int, list[str]]:
+    """Hand out items based on claimers.
 
-    Each claimer draws a random item; if they already hold it we try the other
-    one. Both grants go through the atomic grant_item, so someone who somehow
-    holds both items simply receives nothing.
+    Distribution rules:
+    - If NO claimers: killer gets ALL 3 items (Aegis, Cheese, Refresher).
+    - If claimers EXIST: distribute ALL 3 items randomly among claimers.
+      Each claimer can receive at most one item (random selection).
+      Killer only gets items if they pressed the button (in claimers list).
+
+    Returns a dict mapping telegram_id -> list of item names.
     """
     from database import grant_item
 
-    claimers = load_claimers(session_id)
-    random.shuffle(claimers)
+    session = load_session(session_id)
+    if not session:
+        return {}
 
-    awarded: dict[int, str] = {}
-    for uid in claimers:
-        for item in random.sample(ITEM_NAMES, 2):
+    claimers = load_claimers(session_id)
+    killer_id = int(session.get("killer_id", 0))
+
+    awarded: dict[int, list[str]] = {}
+
+    if not claimers:
+        # No claimers - killer gets all 3 items
+        awarded[killer_id] = []
+        for item in list(ITEM_NAMES):
+            try:
+                if grant_item(killer_id, item):
+                    awarded[killer_id].append(item)
+            except Exception as e:
+                logger.warning(f"roshan: grant_item failed for killer/{killer_id}/{item}: {e}")
+        return awarded
+
+    # Claimers exist - distribute 3 items among claimers
+    # Create a list of potential recipients (claimers + killer if they claimed)
+    potential_recipients = list(claimers)
+    if killer_id not in potential_recipients:
+        potential_recipients.append(killer_id)
+
+    items_list = list(ITEM_NAMES)
+    random.shuffle(items_list)
+    random.shuffle(potential_recipients)
+
+    # Track recipients who already got an item (each gets at most one)
+    recipients_with_items = set()
+
+    for item in items_list:
+        for uid in potential_recipients:
+            if uid in recipients_with_items:
+                continue
             try:
                 if grant_item(uid, item):
-                    awarded[uid] = item
+                    if uid not in awarded:
+                        awarded[uid] = []
+                    awarded[uid].append(item)
+                    recipients_with_items.add(uid)
                     break
             except Exception as e:
                 logger.warning(f"roshan: grant_item failed for {uid}/{item}: {e}")
+
     return awarded
 
 
@@ -298,7 +355,7 @@ def build_roshan_text(display_username: str, claimers: int = 0) -> str:
 def build_result_text(
     killer_name: str,
     reward: float,
-    awarded: dict[int, str],
+    awarded: dict[int, list[str] | str],
     winner_names: dict[int, str],
     loser_names: list[str],
 ) -> str:
@@ -308,17 +365,26 @@ def build_result_text(
     sub-line under every item, which turned a five line summary into a wall of
     columns; the reader only ever needed the artifact, its owner and its effect.
     The header is the lore beat, the second line is the kill and the reward.
+    
+    Accepts both dict[int, list[str]] (new format) and dict[int, str] (legacy).
     """
     blocks = [
         "🪤 Рошан пал. Проклятие Торговца свершилось снова.",
         f"🪙 Рошана убил <b>{killer_name}</b> +{reward:.1f} см",
     ]
 
-    for uid, item in awarded.items():
+    for uid, items in awarded.items():
+        # Normalize to list for backward compatibility
+        if isinstance(items, str):
+            items = [items]
+        if not items:
+            continue
         name = winner_names.get(uid) or f"игрок {uid}"
+        items_text = " и ".join([ITEM_LABELS[item] for item in items])
+        effects = [random.choice(ITEM_EFFECTS[item]) for item in items]
+        effects_text = ", ".join(effects)
         blocks.append(
-            f"{ITEM_LABELS[item]} достался <b>{name}</b> — "
-            f"{random.choice(ITEM_EFFECTS[item])}"
+            f"{items_text} достался <b>{name}</b> — {effects_text}"
         )
 
     if not awarded:

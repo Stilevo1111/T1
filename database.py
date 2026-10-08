@@ -772,6 +772,7 @@ _PG_ENSURE_COLUMNS = (
     # из-за которого achievements исключена из whitelist.
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS aegis INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS cheese INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS refresher INTEGER DEFAULT 0",
     "UPDATE users SET in_chat = TRUE WHERE in_chat IS NULL OR in_chat = FALSE",
 )
 
@@ -798,6 +799,8 @@ def _ensure_sqlite_columns(cursor):
         cursor.execute("ALTER TABLE users ADD COLUMN aegis INTEGER DEFAULT 0")
     if 'cheese' not in columns:
         cursor.execute("ALTER TABLE users ADD COLUMN cheese INTEGER DEFAULT 0")
+    if 'refresher' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN refresher INTEGER DEFAULT 0")
 
 
 def _reset_persistent_pg_conn(reason: str = ""):
@@ -1225,10 +1228,11 @@ wins INTEGER DEFAULT 0,
                      free_rolls INTEGER DEFAULT 0,
                      achievements TEXT DEFAULT '{}',
                      user_tags TEXT DEFAULT '[]',
-                     avatar TEXT,
-                     aegis INTEGER DEFAULT 0,
-                     cheese INTEGER DEFAULT 0
-                 )
+avatar TEXT,
+                      aegis INTEGER DEFAULT 0,
+                      cheese INTEGER DEFAULT 0,
+                      refresher INTEGER DEFAULT 0
+                  )
             """)
 # Для SQLite проверяем есть ли колонки и добавляем если нет
             cursor.execute("PRAGMA table_info(users)")
@@ -1744,6 +1748,7 @@ class Database:
                         "free_rolls": int(user.get("free_rolls", 0)) if user.get("free_rolls") is not None else 0,
                         "aegis": int(user.get("aegis", 0) or 0),
                         "cheese": int(user.get("cheese", 0) or 0),
+                        "refresher": int(user.get("refresher", 0) or 0),
                     }
                     if username is not None and username != result.get('username'):
                         old_username = result.get('username')
@@ -1805,6 +1810,7 @@ class Database:
                             "free_rolls": int(u.get("free_rolls", 0)) if u.get("free_rolls") is not None else 0,
                             "aegis": int(u.get("aegis", 0) or 0),
                             "cheese": int(u.get("cheese", 0) or 0),
+                            "refresher": int(u.get("refresher", 0) or 0),
                         }
                         if username is not None and username != result.get('username'):
                             old_username = result.get('username')
@@ -2413,6 +2419,7 @@ def get_user(telegram_id, username=None):
         cached_user.setdefault('free_rolls', 0)
         cached_user.setdefault('aegis', 0)
         cached_user.setdefault('cheese', 0)
+        cached_user.setdefault('refresher', 0)
         # If the cached week_start_date differs from the current week,
         # the cached week_games/week_wins are stale — force a DB re-read.
         cached_week_start = cached_user.get('week_start_date')
@@ -2448,6 +2455,7 @@ def get_user(telegram_id, username=None):
         user.setdefault('free_rolls', 0)
         user.setdefault('aegis', 0)
         user.setdefault('cheese', 0)
+        user.setdefault('refresher', 0)
         user_cache.set(tid, user, skip_dirty=True)
         return user
 
@@ -3029,9 +3037,9 @@ def get_free_rolls(telegram_id: int) -> int:
     return int(user.get("free_rolls", 0) or 0)
 
 
-# Предметы Рошана: 'aegis' и 'cheese'. Каждый существует в единственном
+# Предметы Рошана: 'aegis', 'cheese' и 'refresher'. Каждый существует в единственном
 # экземпляре, поэтому хранятся как флаг 0/1, а не счётчик.
-ITEM_COLUMNS = frozenset(['aegis', 'cheese'])
+ITEM_COLUMNS = frozenset(['aegis', 'cheese', 'refresher'])
 
 
 def has_item(telegram_id: int, item: str) -> bool:

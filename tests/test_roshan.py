@@ -364,20 +364,26 @@ def test_distribute_gives_every_claimer_one_item(tmp_path, db_at):
     awarded = roshan.distribute_items("1_5")
 
     assert len(awarded) == 3, "every claimer gets exactly one item"
-    for uid, item in awarded.items():
-        assert item in ("aegis", "cheese")
+    all_items = {"aegis", "cheese", "refresher"}
+    for uid, items in awarded.items():
+        assert len(items) == 1, "each claimer gets exactly one item"
+        item = items[0]
+        assert item in all_items, f"item must be one of {all_items}"
         assert database.has_item(uid, item) is True
-        other = "cheese" if item == "aegis" else "aegis"
-        assert database.has_item(uid, other) is False
+        # Check that claimer doesn't have the other items
+        for other in all_items - {item}:
+            assert database.has_item(uid, other) is False
 
 
-def test_distribute_skips_claimers_who_already_hold_both(tmp_path, db_at):
+def test_distribute_skips_claimers_who_already_hold_all(tmp_path, db_at):
+    """A claimer who already holds all 3 items gets nothing."""
     path = tmp_path / "full.db"
     db_at(path)
     roshan.ensure_roshan_schema()
     database.Database().register_user(BOT_USER_ID, "rich", "Rich")
     database.grant_item(BOT_USER_ID, "aegis")
     database.grant_item(BOT_USER_ID, "cheese")
+    database.grant_item(BOT_USER_ID, "refresher")
 
     roshan.create_session("1_6", chat_id=1, msg_id=6, killer_id=999,
                           killer_name="killer", reward=8.0)
