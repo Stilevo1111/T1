@@ -266,9 +266,11 @@ def distribute_items(session_id: str) -> dict[int, list[str]]:
       Each claimer can receive at most one item (random selection).
       Killer only gets items if they pressed the button (in claimers list).
 
+    Refresher also grants an immediate free roll (resets cooldown).
+
     Returns a dict mapping telegram_id -> list of item names.
     """
-    from database import grant_item
+    from database import grant_item, add_free_roll
 
     session = load_session(session_id)
     if not session:
@@ -286,6 +288,9 @@ def distribute_items(session_id: str) -> dict[int, list[str]]:
             try:
                 if grant_item(killer_id, item):
                     awarded[killer_id].append(item)
+                    # Refresher grants immediate free roll
+                    if item == REFRESHER:
+                        add_free_roll(killer_id, 1)
             except Exception as e:
                 logger.warning(f"roshan: grant_item failed for killer/{killer_id}/{item}: {e}")
         return awarded
@@ -313,6 +318,9 @@ def distribute_items(session_id: str) -> dict[int, list[str]]:
                         awarded[uid] = []
                     awarded[uid].append(item)
                     recipients_with_items.add(uid)
+                    # Refresher grants immediate free roll
+                    if item == REFRESHER:
+                        add_free_roll(uid, 1)
                     break
             except Exception as e:
                 logger.warning(f"roshan: grant_item failed for {uid}/{item}: {e}")

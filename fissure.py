@@ -53,7 +53,6 @@ from rolls import (
     apply_aegis,
     apply_cheese,
     apply_fissure_protection,
-    apply_refresher,
     calculate_fissure_roll,
     calculate_new_fissure,
     calculate_streak_bonus,
@@ -470,15 +469,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # is_fatal сбрасывается, иначе текст называл бы фатальным нулевой ролл.
         aegis_text = ""
         
-        # 🔄 РЕФРЕШЕР даёт второй шанс при минусе. Срабатывает ДО АЕГИС,
-        # чтобы перебросить ролл; если после рефреша всё равно минус — АЕГИС погасит.
-        refresher_text = ""
-        if roll < 0:
-            consumed_refresher = await asyncio.to_thread(consume_item, user_obj.id, "refresher")
-            if consumed_refresher:
-                roll, _, refresher_text = apply_refresher(roll)
-                logger.info(f"fissure: refresher rerolled for {user_obj.id}")
-        
         if roll < 0:
             consumed = await asyncio.to_thread(consume_item, user_obj.id, "aegis")
             if consumed:
@@ -572,8 +562,6 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if aegis_text:
             parts.append(aegis_text)
-        if refresher_text:
-            parts.append(refresher_text)
         if cheese_text:
             parts.append(cheese_text)
 
