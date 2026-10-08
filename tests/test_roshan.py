@@ -413,12 +413,13 @@ def test_callback_data_fits_telegram_limit():
 def test_every_steal_prompt_states_the_window_and_the_lottery():
     """The flavour rotates, the rules must not.
 
-    A variant that dropped the window or the "random item" part would make
+    A variant that dropped the window or the items part would make
     players lose a fair press to bad wording, so both are asserted per line.
     """
     for text in ROSHAN_STEAL_TEXTS:
         assert "{window}" in text, text
-        assert re.search(r"случайн|лотере|достанется", text), text
+        assert "кражу" in text, text
+        assert "АЕГИС" in text and "СЫР" in text and "РЕФРЕШЕР" in text
 
 
 def test_announcement_names_the_items_and_the_steal_prompt():
