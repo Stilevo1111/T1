@@ -334,9 +334,11 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"fissure: cooldown response sent for user {user_obj.id}")
             return
 
-        # Consume one free_roll if available (bonus from Techies)
+        # Consume one free_roll if available (bonus from Techies/Refresher)
+        used_free_roll = False
         if free_rolls > 0:
             consume_free_roll(user_obj.id)
+            used_free_roll = True
             logger.info(f"fissure: consumed free_roll for user {user_obj.id}, remaining={free_rolls - 1}")
 
         multicast_text = ""
@@ -636,17 +638,16 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ВСЕГДА удаляем сообщение через 30 секунд во всех чатах
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
 
-        # Small delay to ensure message is visible before any further processing
-        await asyncio.sleep(0.1)
-
         # Fissure write is synchronous (psycopg2/sqlite), so keep it off the
         # event loop. This is especially important because the roll handler
         # continues with live tag reconciliation and digest scheduling.
+        # Free rolls (from Refresher/Techies) do NOT update last_fissure timer
+        update_timestamp = last_f if used_free_roll else now
         await asyncio.to_thread(
             update_fissure,
             user_obj.id,
             new_fissure,
-            now,
+            update_timestamp,
             growth,
             last_message_id=result_msg.message_id,
         )
