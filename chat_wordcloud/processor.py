@@ -11,6 +11,7 @@ from chat_wordcloud.config import (
     WORDCLOUD_MIN_WORD_FREQUENCY,
 )
 from chat_wordcloud.curation import (
+    PROFANITY_PLACEHOLDER,
     apply_flood_penalty,
     collapse_inflections,
     extract_phrases,
@@ -37,8 +38,14 @@ BOT_SYSTEM_WORDS = {
 # Combined stopwords: general + bot-specific
 EFFECTIVE_STOP_WORDS = STOP_WORDS | BOT_SYSTEM_WORDS
 
-# Fixed regex: Unicode-aware word boundaries for Cyrillic + Latin
-WORD_RE = re.compile(r"[а-яёa-z0-9_+/]+", re.IGNORECASE)
+# Fixed regex: Unicode-aware word boundaries for Cyrillic + Latin.
+# '*' is included solely so the profanity placeholder from
+# chat_wordcloud.curation.mask_profanity survives tokenisation. Without it the
+# placeholder was stripped here and the masked word vanished from the card
+# entirely, which is exactly what masking is supposed to avoid. Real markdown
+# emphasis never reaches this point: MARKDOWN_RE drops `[text](url)` links and
+# '*bold*' degrades to 'bold' here, so no stray asterisks are left to tokenise.
+WORD_RE = re.compile(r"[а-яёa-z0-9_+/*]+", re.IGNORECASE)
 URL_RE = re.compile(r"https?://\S+|t\.me/\S+")
 MENTION_RE = re.compile(r"@\w+")
 HASHTAG_RE = re.compile(r"#\w+")
@@ -82,8 +89,9 @@ def normalize_text(text: str) -> str:
     text = MARKDOWN_RE.sub(" ", text)
     text = CODE_RE.sub(" ", text)
     text = EMOJI_RE.sub(" ", text)
-    # Keep only word chars (Cyrillic+Latin+digits+_+/), replace rest with space
-    text = re.sub(r"[^\w\s\-+/]", " ", text, flags=re.UNICODE)
+    # Keep only word chars (Cyrillic+Latin+digits+_+/*), replace rest with space.
+    # '*' is kept for the profanity placeholder - see WORD_RE.
+    text = re.sub(r"[^\w\s\-+/*]", " ", text, flags=re.UNICODE)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
@@ -108,6 +116,18 @@ def filter_words(text: str) -> list[str]:
             continue
         if w.startswith("/"):
             continue
+        # Asterisks reach us from two places: markdown emphasis ("**жир**", which
+        # MARKDOWN_RE does not strip - it only handles links) and the profanity
+        # placeholder ("***"). Strip emphasis marks so the word underneath
+        # survives, but keep a token that is nothing but asterisks: that is the
+        # placeholder, and dropping it would put the profane word back on the
+        # card, which is exactly what mask_profanity exists to prevent.
+        if "*" in w:
+            core = w.strip("*")
+            if not core:
+                w = PROFANITY_PLACEHOLDER
+            else:
+                w = core
         if w in EFFECTIVE_STOP_WORDS:
             continue
         if w.isdigit():

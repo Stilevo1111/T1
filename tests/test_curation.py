@@ -90,6 +90,32 @@ def test_masking_preserves_surrounding_words():
     assert mask_profanity("GG, сука! gg") == f"GG, {PROFANITY_PLACEHOLDER}! gg"
 
 
+def test_placeholder_survives_tokenisation():
+    """The mask has to reach the card, not be eaten by the tokenizer.
+
+    WORD_RE admits '*' only so that `***` survives filter_words. A chat's most
+    frequent token is very often a masked swear word, and dropping it would both
+    lose that signal and leave the real word nowhere to hide.
+    """
+    assert filter_words(f"блин {PROFANITY_PLACEHOLDER}") == ["блин", PROFANITY_PLACEHOLDER]
+
+
+def test_markdown_emphasis_does_not_swallow_the_word():
+    """`**жир**` is one emphasised "жир", not a token to be thrown away.
+
+    Asterisks were let into WORD_RE for the placeholder, which also let bold
+    markdown through. Discarding any token containing '*' cost the card the word
+    itself, so "**жир** жир" counted as one "жир" instead of two.
+    """
+    assert filter_words("**жир** жир") == ["жир", "жир"]
+    assert filter_words("*мид* мид") == ["мид", "мид"]
+
+
+def test_lone_asterisks_do_not_become_words():
+    """A stray star must not masquerade as the profanity placeholder."""
+    assert "*" not in filter_words("один * два")
+
+
 # --- Token filtering -------------------------------------------------------
 
 def test_overlong_tokens_are_dropped():
