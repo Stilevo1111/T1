@@ -393,6 +393,54 @@ def test_distribute_skips_claimers_who_already_hold_all(tmp_path, db_at):
     assert awarded == {}, "nothing to hand out, and nothing is consumed"
 
 
+def test_uncontested_drop_gives_the_killer_the_aegis_only(tmp_path, db_at):
+    """Nobody stole, so the killer keeps the Aegis and nothing else.
+
+    The reported bug: the whole loot (Aegis + Cheese + Refresher) landed on
+    the one player who rolled the event, which removed any reason to press the
+    button and let a single roll bank all three artifacts.
+    """
+    path = tmp_path / "uncontested.db"
+    db_at(path)
+    roshan.ensure_roshan_schema()
+    database.Database().register_user(BOT_USER_ID, "killer", "Killer")
+
+    roshan.create_session("1_7", chat_id=1, msg_id=7, killer_id=BOT_USER_ID,
+                          killer_name="killer", reward=8.0)
+
+    awarded = roshan.distribute_items("1_7")
+
+    assert awarded == {BOT_USER_ID: ["aegis"]}
+    assert database.has_item(BOT_USER_ID, "aegis") is True
+    assert database.has_item(BOT_USER_ID, "cheese") is False
+    assert database.has_item(BOT_USER_ID, "refresher") is False
+
+
+def test_killer_does_not_share_the_pool_of_a_stolen_drop(tmp_path, db_at):
+    """A claimer must not lose an item to the killer.
+
+    The killer was appended to the recipient pool even though their own press
+    is rejected by handle_roshan_button, so with two claimers the killer took
+    the third artifact without ever being in the pit.
+    """
+    path = tmp_path / "pool.db"
+    db_at(path)
+    roshan.ensure_roshan_schema()
+    for uid in (BOT_USER_ID, OTHER_USER_ID):
+        database.Database().register_user(uid, f"u{uid}", f"U{uid}")
+
+    roshan.create_session("1_8", chat_id=1, msg_id=8, killer_id=999,
+                          killer_name="killer", reward=8.0)
+    roshan.add_claimer("1_8", BOT_USER_ID)
+    roshan.add_claimer("1_8", OTHER_USER_ID)
+
+    awarded = roshan.distribute_items("1_8")
+
+    assert set(awarded) == {BOT_USER_ID, OTHER_USER_ID}
+    assert len(awarded) == 2, "both claimers get an item, the killer is not in the pool"
+    assert all(len(items) == 1 for items in awarded.values())
+
+
 def test_unknown_session_loads_as_none(tmp_path, db_at):
     path = tmp_path / "missing.db"
     db_at(path)

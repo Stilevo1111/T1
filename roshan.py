@@ -3,7 +3,8 @@
 The event fires on a /fissure roll. The player "kills Roshan", gets a fissure
 reward, and an inline button opens a short window in which every other player
 can try to steal the Aegis. After the window closes, each claimer is randomly
-assigned one of the two items.
+assigned one of the three items; if nobody pressed the button the killer keeps
+the Aegis alone.
 
 Multi-instance safety
 ---------------------
@@ -261,10 +262,11 @@ def distribute_items(session_id: str) -> dict[int, list[str]]:
     """Hand out items based on claimers.
 
     Distribution rules:
-    - If NO claimers: killer gets ALL 3 items (Aegis, Cheese, Refresher).
+    - If NO claimers: the killer keeps only the Aegis.
     - If claimers EXIST: distribute ALL 3 items randomly among claimers.
       Each claimer can receive at most one item (random selection).
-      Killer only gets items if they pressed the button (in claimers list).
+      Killer never gets an item here: the callback refuses their own press,
+      so they can never be in the claimers list.
 
     Refresher also grants an immediate free roll (resets cooldown).
 
@@ -282,24 +284,24 @@ def distribute_items(session_id: str) -> dict[int, list[str]]:
     awarded: dict[int, list[str]] = {}
 
     if not claimers:
-        # No claimers - killer gets all 3 items
-        awarded[killer_id] = []
-        for item in list(ITEM_NAMES):
-            try:
-                if grant_item(killer_id, item):
-                    awarded[killer_id].append(item)
-                    # Refresher grants immediate free roll
-                    if item == REFRESHER:
-                        add_free_roll(killer_id, 1)
-            except Exception as e:
-                logger.warning(f"roshan: grant_item failed for killer/{killer_id}/{item}: {e}")
+        # Nobody pressed the button, so the killer keeps the whole drop - but
+        # only the Aegis. Cheese and Refresher are the reward for actually
+        # taking the risk of the steal window; handing all three to the killer
+        # for free removed every reason to press the button and let one player
+        # bank the full loot on a single roll.
+        try:
+            if grant_item(killer_id, AEGIS):
+                awarded[killer_id] = [AEGIS]
+        except Exception as e:
+            logger.warning(f"roshan: grant_item failed for killer/{killer_id}/{AEGIS}: {e}")
         return awarded
 
-    # Claimers exist - distribute 3 items among claimers
-    # Create a list of potential recipients (claimers + killer if they claimed)
+    # Claimers exist - distribute 3 items among claimers.
+    # The killer is deliberately NOT added to the pool: handle_roshan_button
+    # refuses their own press, so they can never appear in `claimers`, and
+    # appending them here let them collect an item they never went into the
+    # pit for (and, if they were unregistered, silently ate the item).
     potential_recipients = list(claimers)
-    if killer_id not in potential_recipients:
-        potential_recipients.append(killer_id)
 
     items_list = list(ITEM_NAMES)
     random.shuffle(items_list)
