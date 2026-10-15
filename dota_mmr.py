@@ -250,7 +250,7 @@ def _clear_not_found(url: str):
 # ключе они каждый раз качали одно и то же заново. Теперь в кеш
 # лежит максимум уже скачанного, а лимит режется по месту.
 _user_matches_cache = {}
-USER_MATCHES_CACHE_TTL = 21600  # 6 часов (was 30 min — hourly MMR job was invalidating it every run)
+USER_MATCHES_CACHE_TTL = 1800  # 30 минут
 
 
 

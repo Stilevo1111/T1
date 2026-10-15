@@ -917,7 +917,9 @@ def match_url(match_id: int) -> str:
     return f"https://www.dotabuff.com/matches/{match_id}"
 
 
-RANKS_BASE = "https://seredin999.onrender.com/images/ranks"
+# Ранги раздаёт сам бот (aiohttp static /images/ranks/…): внешний хост
+# seredin999.onrender.com отдавал 503, и иконки пропадали из страниц.
+RANKS_BASE = "/images/ranks"
 
 # Ранги Dota 2 по-русски: чем больше номер, тем выше ранг.
 RANK_TIERS = [
@@ -930,7 +932,7 @@ RANK_TIERS = [
 def rank_image(tier) -> str:
     """Иконка ранга — та же, что на странице топа MMR.
 
-    Страницу отдаёт бот, а картинки лежат на сайте, поэтому ссылка абсолютная.
+    Страницу и картинки раздаёт сам бот, поэтому путь относительный.
     """
     try:
         rt = int(tier or 0)
@@ -939,8 +941,13 @@ def rank_image(tier) -> str:
     if rt <= 0:
         return f"{RANKS_BASE}/rank_1_1.webp"
     tier_no, star = rt // 10, rt % 10
-    if star == 0:          # без звёзд показываем с одной
-        star = 1
+    if tier_no == 8:
+        # Бессмертный (8-й тир) — единственная иконка rank_8_5, как в
+        # карточке профиля: rank_8_1..8_4 в assets нет, и ссылка на них
+        # при локальной раздаче давала бы 404.
+        star = 5
+    elif star == 0:
+        star = 1          # без звёзд показываем с одной
     if 1 <= tier_no <= 8 and 1 <= star <= 5:
         return f"{RANKS_BASE}/rank_{tier_no}_{star}.webp"
     return f"{RANKS_BASE}/rank_1_1.webp"
@@ -990,6 +997,16 @@ def mmr_sort_keys(player: dict) -> dict:
     }
 
 
+# Метки не-ролловых событий. Без них на вкладке «Роллы» награда Рошана,
+# удар Зевса и урон Техиса читались как обычные приросты (+8, +0, -55) —
+# отсюда ощущение бреда. Старые записи без event_type считаются роллом.
+_ROLL_EVENT_BADGES = {
+    "roshan": "⚔ Рошан",
+    "zeus": "⚡ Зевс",
+    "techies": "💣 Техис",
+}
+
+
 def render_roll(roll: dict) -> str:
     """Строка истории роллов: кто крутил, на сколько и сколько стало."""
     try:
@@ -1019,6 +1036,10 @@ def render_roll(roll: dict) -> str:
     gain_cls = "g-gain" if growth >= 0 else "g-gain neg"
     # Каскад — цепочка фисса, поэтому выделяем её отдельной меткой.
     chain = (f'<span class="g-rc-x">x{cascade}</span>' if cascade > 1 else "")
+    # Тип события: не-ролловые события (Рошан/Зевс/Техис) помечаем, иначе
+    # их прирост неотличим от обычного ролла.
+    ev_badge = _ROLL_EVENT_BADGES.get(roll.get("event_type") or "roll", "")
+    ev = f'<span class="g-rc-ev">{ev_badge}</span>' if ev_badge else ""
 
     return (
         f'<div class="g-card g-roll" data-name="{_esc(who.lower())}" '
@@ -1031,6 +1052,7 @@ def render_roll(roll: dict) -> str:
         f'<span class="g-nick">{_esc(who)}</span>'
         f'<span class="g-heron">{time_txt}</span></span>'
         f'<span class="{gain_cls}">{sign}{_fmt_num(growth)}</span>'
+        f"{ev}"
         f"{chain}"
         f'<span class="g-fissure">{_fmt_num(fissure)}</span>'
         f"</div></div>"
@@ -1181,6 +1203,8 @@ body{background:#07080c}
  white-space:nowrap;flex-shrink:0;min-width:54px;text-align:right}
 .g-rc-x{font-size:9.5px;font-weight:800;color:#e8b45c;background:rgba(232,180,92,.12);
  border:1px solid rgba(232,180,92,.25);border-radius:4px;padding:1px 5px;flex-shrink:0}
+.g-rc-ev{font-size:9.5px;font-weight:800;color:#9fb0d0;background:rgba(120,140,180,.12);
+ border:1px solid rgba(120,140,180,.3);border-radius:4px;padding:1px 5px;flex-shrink:0}
 
 /* ── Вкладка «Топ рангов»: те же поля, что на странице топа ─────────────── */
 .g-card.g-mmr .g-line{display:grid;
@@ -1471,7 +1495,7 @@ def render_games_page(
         # и по нику он с первого взгляда терял смысл.
         head = sort_bar(
             [("ts", "Последние"), ("name", "Игрок"),
-             ("growth", "Прирост"), ("fissure", "Максимум")],
+             ("growth", "Прирост"), ("fissure", "Фиссура")],
             ".g-card.g-roll",
         )
         body = head + ("".join(render_roll(r) for r in items[:limit * 4]) or (

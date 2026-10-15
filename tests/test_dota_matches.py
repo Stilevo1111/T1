@@ -883,8 +883,9 @@ def test_render_mmr_tab_matches_top_page():
     assert "Место" not in html            # пустая подпись-заглушка убрана
     assert "#" not in html.split("</style>", 1)[-1].split("</head>")[0]
     assert 'data-sort="name"' not in html            # по нику больше не сортируем
-    assert "seredin999.onrender.com/images/ranks/" in html
-    assert "rank_8_1.webp" in html and "rank_3_1.webp" in html
+    assert "/images/ranks/" in html                  # раздаёт сам бот, не внешний хост
+    # rank_tier=80 — Бессмертный, у него единственная локальная иконка rank_8_5.
+    assert "rank_8_5.webp" in html and "rank_3_1.webp" in html
     assert "80%" in html and 'class="g-wr-fill"' in html
     assert "8W/2L" in html and 'class="g-wr-none"' in html
     assert html.index("high") < html.index("low") < html.index("idle")
@@ -1396,6 +1397,70 @@ def test_rolls_have_avatars_and_sorting():
     # Аватары подставляет обработчик: bot_utils их не хранит.
     src = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
     assert "_attach_roll_avatars" in src
+
+
+def test_rank_images_served_from_own_origin():
+    """Картинки рангов раздаёт сам бот, а не лёгкий внешний хост.
+
+    RANKS_BASE раньше указывал на seredin999.onrender.com, который отдаёт 503,
+    и иконки пропадали из страницы. Путь стал относительным — браузер тянет его
+    со своей же страницы, где aiohttp раздаёт /images/ranks/.
+    """
+    from dota_matches import RANKS_BASE, rank_image
+
+    assert RANKS_BASE.startswith("/"), "путь должен быть относительным (свой origin)"
+    assert "onrender.com" not in RANKS_BASE, "внешний мёртвый хост больше не используется"
+    assert rank_image(34).startswith("/images/ranks/rank_")
+    assert rank_image(85).endswith("rank_8_5.webp")   # Титан — только 5-я звезда
+    assert rank_image(0).endswith("rank_1_1.webp")    # фолбэк без ранга
+
+
+def test_non_roll_events_get_a_badge():
+    """Рошан/Зевс/Техис на вкладке «Роллы» помечены, а не выглядят как роллы.
+
+    Раньше event_type не выводился, и награда Рошана (+8), удар Зевса (+0) и
+    урон Техиса (-55) читались как обычные приросты — отсюда «бред».
+    """
+    rolls = [
+        {"ts": 1, "username": "a", "growth": 8.0, "fissure": 250.0,
+         "cascade": 0, "event_type": "roshan"},
+        {"ts": 2, "username": "b", "growth": 0.0, "fissure": 90.0,
+         "cascade": 0, "event_type": "zeus"},
+        {"ts": 3, "username": "c", "growth": -55.0, "fissure": 40.0,
+         "cascade": 0, "event_type": "techies"},
+    ]
+    body = dota_matches.render_games_page(
+        [], tab="rolls", rolls=rolls).split("</style>", 1)[-1]
+
+    assert "⚔ Рошан" in body
+    assert "⚡ Зевс" in body
+    assert "💣 Техис" in body
+    assert body.count('class="g-rc-ev"') == 3
+
+
+def test_plain_roll_and_old_records_carry_no_event_badge():
+    """Обычный ролл, мультикаст и старые записи без event_type — без метки."""
+    rolls = [
+        {"ts": 1, "username": "a", "growth": 7.0, "fissure": 200.0, "cascade": 1},
+        {"ts": 2, "username": "b", "growth": 3.0, "fissure": 150.0,
+         "cascade": 3, "event_type": "multicast"},
+        {"ts": 3, "username": "c", "growth": -4.0, "fissure": 120.0,
+         "cascade": 1, "event_type": "roll"},
+    ]
+    body = dota_matches.render_games_page(
+        [], tab="rolls", rolls=rolls).split("</style>", 1)[-1]
+
+    assert "g-rc-ev" not in body, "обычные роллы не должны получать метку события"
+    assert ">x3<" in body, "каскад мультикаста по-прежнему виден"
+
+
+def test_roll_column_header_calls_the_value_fissure_not_max():
+    """Колонка показывает текущую фиссуру, а не максимум — подпись не врёт."""
+    rolls = [{"ts": 1, "username": "a", "growth": 1.0, "fissure": 10.0, "cascade": 1}]
+    html = dota_matches.render_games_page([], tab="rolls", rolls=rolls)
+    assert 'data-sort="fissure"' in html
+    assert "Фиссура" in html
+    assert "Максимум" not in html
 
 
 def test_ranking_header_has_no_empty_cells():

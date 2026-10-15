@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import atexit
 import datetime
 import io
@@ -1241,6 +1241,18 @@ async def update_all_mmr_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.info("Нет пользователей с привязанным Steam для обновления MMR")
             return
 
+        # Bail out early when OpenDota is known to be down. Without this the job
+        # still fans out one network call per user through the semaphore and
+        # burns egress on 71 guaranteed-failing requests (observed: "0/71 users"
+        # while the breaker was open). Nothing is written on this path anyway.
+        from cache_service import opendota_circuit_breaker
+        if not opendota_circuit_breaker.can_execute():
+            logger.warning(
+                f"MMR job: OpenDota circuit breaker is open, skipping "
+                f"{len(users)} users this run"
+            )
+            return
+
         logger.info(f"Обновление MMR для {len(users)} пользователей (leader)")
         success_count = 0
         rank_up_users = []
@@ -1621,10 +1633,12 @@ from party import party_command
 async def fetch_hero_icon(url, session=None, size=96):
     if not url:
         return None
-    close_session = False
+    # Reuse the shared aiohttp session instead of opening a brand new
+    # ClientSession per icon: every fresh session costs a TLS handshake and
+    # shows up as Service-Initiated egress on Render. The shared session is
+    # long-lived, so it is never closed here.
     if session is None:
-        session = aiohttp.ClientSession()
-        close_session = True
+        session = await get_aiohttp_session()
     try:
         async with session.get(url) as resp:
             if resp.status == 200:
@@ -1650,9 +1664,8 @@ async def fetch_hero_icon(url, session=None, size=96):
                     bio = io.BytesIO(data)
                     bio.name = url.split("/")[-1]
                     return bio
-    finally:
-        if close_session:
-            await session.close()
+    except Exception as e:
+        logger.debug(f"fetch_hero_icon failed for {url}: {e}")
     return None
 
 
@@ -5439,6 +5452,9 @@ async def main():
             web_app.router.add_get('/games', games_page_handler)
             web_app.router.add_get('/matches', games_page_handler)
             web_app.router.add_route('OPTIONS', '/api/{path:.*}', api_options_handler)
+            web_app.router.add_static('/images/ranks/',
+                                      str(Path(__file__).parent / 'images' / 'ranks'),
+                                      show_index=False)
             runner = web.AppRunner(web_app)
             await runner.setup()
             port = int(os.getenv('PORT', 10000))
@@ -5527,6 +5543,9 @@ async def main():
             web_app.router.add_get('/games', games_page_handler)
             web_app.router.add_get('/matches', games_page_handler)
             web_app.router.add_route('OPTIONS', '/api/{path:.*}', api_options_handler)
+            web_app.router.add_static('/images/ranks/',
+                                      str(Path(__file__).parent / 'images' / 'ranks'),
+                                      show_index=False)
 
             async def reset_circuit(request):
                 try:
@@ -5576,10 +5595,10 @@ async def main():
                         session = await get_aiohttp_session()
                         from analytics_dashboard import record_neon_hours
                         record_neon_hours(KEEPALIVE_PING_NEON_HOURS)
+                        # Only /health is pinged: the second GET to the site root
+                        # added egress (Service-Initiated bytes on Render) without
+                        # keeping anything alive that /health does not already.
                         async with session.get(ping_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                            await resp.text()
-                        root_url = webhook_url.rsplit('/webhook', 1)[0] + '/'
-                        async with session.get(root_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                             await resp.text()
                         logger.info("Keep-alive ping sent")
                     except Exception as e:
@@ -5589,7 +5608,10 @@ async def main():
                 """Re-register webhook to recover from Render cold starts and URL mismatches"""
                 while True:
                     try:
-                        await asyncio.sleep(900)
+                        # Once an hour rather than every 15 min: get_webhook_info is
+                        # a live Telegram API call made around the clock, and a
+                        # mismatch that survives an hour is still caught here.
+                        await asyncio.sleep(3600)
                         webhook_info = await app.bot.get_webhook_info()
                         needs_renewal = False
                         if not webhook_info.url:
@@ -5678,7 +5700,3 @@ if __name__ == "__main__":
         logger.debug(f"Could not preload heroes: {e}")
 
     asyncio.run(main())
-
-
-
-

@@ -34,7 +34,6 @@ from chat_wordcloud.config import (
     WORDCLOUD_TOXIC_COLORS,
     WORDCLOUD_WIDTH,
     WORDCLOUD_WORD_PADDING,
-    WORDCLOUD_WORKER_NICE,
 )
 
 logger = logging.getLogger(__name__)

@@ -561,15 +561,20 @@ def update_dota_week_top_cache():
 
     top_users.sort(key=get_sort_key)
 
-    logger.info("===== TOP USERS AFTER SORT =====")
-    for i, u in enumerate(top_users):
-        week_losses = (u.get('week_games') or 0) - (u.get('week_wins') or 0)
-        logger.info(f"  POS{i+1}. {u.get('steam_nickname')}: {u.get('week_wins')}W/{week_losses}L, WR={u.get('winrate')}%")
-    logger.info("===== END SORT =====")
+    # Per-player breakdown stays on DEBUG: at INFO it emitted one log line per
+    # user on every run, which flooded the log stream (each line is egress on
+    # Render). Enable DEBUG locally when the ordering needs inspection.
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("===== TOP USERS AFTER SORT =====")
+        for i, u in enumerate(top_users):
+            week_losses = (u.get('week_games') or 0) - (u.get('week_wins') or 0)
+            logger.debug(f"  POS{i+1}. {u.get('steam_nickname')}: {u.get('week_wins')}W/{week_losses}L, WR={u.get('winrate')}%")
+        logger.debug("===== END SORT =====")
 
     # Сохраняем в кеш (память + база)
     user_cache.set('dota_week_top', top_users)
-    logger.info(f"update_dota_week_top_cache: cached {len(top_users)} users")
+    top_player = top_users[0].get('steam_nickname') if top_users else None
+    logger.info(f"update_dota_week_top_cache: cached {len(top_users)} users (top={top_player})")
 
 
 def restore_dota_week_top_cache():
