@@ -46,7 +46,7 @@ from database import (
     zeus_strike,
 )
 from digest import invalidate_digest_cache
-from rate_limiter import is_rate_limited
+from rate_limiter import is_rate_limited, rate_limit
 from roshan import handle_roshan_event
 from rolls import (
     MULTICAST_TEXTS,
@@ -261,6 +261,7 @@ def process_multicast_result(roll, cascade_count, MULTICAST_TEXTS):
 # MAIN FISSURE HANDLER (extracted from main.py - behavior 100% preserved)
 # =====================
 
+@rate_limit(tokens=1)
 async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Increase fissure"""
     msg = update.effective_message

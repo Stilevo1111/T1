@@ -22,7 +22,7 @@ import time
 from datetime import datetime, timedelta
 
 from telegram import Update
-from telegram.ext import CommandHandler, ContextTypes, MessageHandler
+from telegram.ext import ApplicationHandlerStop, CommandHandler, ContextTypes, MessageHandler
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,7 @@ async def get_user_by_username_in_chat(
 # ─── Основная логика выдачи кляпа ───────────────────────────────────────────
 
 async def _do_give_gag(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, target_id: int, target_name: str, admin_id: int, admin_name: str
+    update: Update, context: ContextTypes.DEFAULT_TYPE, admin: dict, victim: dict
 ) -> bool:
     """Выдать кляп жертве, списать 10 см фиссуры с админа."""
     admin_id   = admin["telegram_id"]
@@ -332,9 +332,12 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     except Exception:
         logger.debug("Failed to delete gagged message", exc_info=True)
 
+    # The gagged user must not be able to run the command either.
+    raise ApplicationHandlerStop
+
 
 async def _can_admin_bypass(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, target_id: int
+    context: ContextTypes.DEFAULT_TYPE, update: Update, target_id: int | None = None
 ) -> bool:
     """Администраторы могут обходить кляп."""
     try:
@@ -470,8 +473,13 @@ def register_handlers(application) -> None:
     # Команда /mute
     application.add_handler(CommandHandler("mute", mute_command))
 
-    # Фильтр сообщений: удаляет сообщения закляпленных
-    # block=False → не перехватывает обновление, другие хендлеры continue работать
+    # Фильтр сообщений: удаляет сообщения закляпленных.
+    # Регистрируется в отдельной группе (-1), которая обрабатывается ДО
+    # основных хендлеров (группа 0). В одной группе python-telegram-bot
+    # выполняет только первый подошедший хендлер, поэтому фильтр, зареги-
+    # строванный в группе 0 после menu_handler, никогда бы не вызывался.
+    # block=True + ApplicationHandlerStop: сообщение удаляется, а команда
+    # закляпленного пользователя не выполняется.
     application.add_handler(
-        MessageHandler(filters=None, callback=on_message, block=False)
+        MessageHandler(filters=None, callback=on_message, block=True), group=-1
     )

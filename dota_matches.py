@@ -1420,7 +1420,8 @@ def sort_bar(options: list[tuple[str, str]], rows: str) -> str:
         f'<div class="g-sort" data-rows="{rows}">'
         f'<button type="button" class="g-sort-btn" aria-expanded="false">'
         f'{SORT_ICON}'
-        f'<span class="g-sort-t">{_esc(default_label)} ↓</span>'
+        f'<span class="g-sort-t">{_esc(default_label)} '
+        f'{"↑" if default_key == "ts" else "↓"}</span>'
         f'{SORT_CHEVRON}'
         f"</button>"
         f'<div class="g-sort-menu">{menu}</div>'

@@ -17,6 +17,19 @@ logger = logging.getLogger(__name__)
 
 RECENT_ROLLS_KEY = 'recent_fissure_rolls'
 
+# Labels of the reply-keyboard buttons. Kept here so that the anti-spam
+# guard (antispam.py) can tell an actual bot action from ordinary chat
+# without importing the heavy database layer at module level.
+MENU_BUTTON_TEXTS = (
+    "🎲 Ролл Фиссуры",
+    "👤 Профиль",
+    "🏆 Топ Фиссур",
+    "🏆 Топ MMR",
+    "🔎 Аналитика",
+    "🔑 Привязать Аккаунт",
+    "🎮 Поиск пати",
+)
+
 def _load_recent_rolls():
     try:
         data = get_config(RECENT_ROLLS_KEY)
@@ -77,7 +90,14 @@ def get_recent_rolls(limit: int = 50):
     global recent_fissure_rolls
     if len(recent_fissure_rolls) == 0:
         recent_fissure_rolls = _load_recent_rolls()
-    return list(recent_fissure_rolls)[-limit:]
+    # Sort by timestamp instead of relying on the buffer's insertion order;
+    # concurrent bot instances can persist rolls in a different order.
+    rolls = sorted(
+        recent_fissure_rolls,
+        key=lambda roll: roll.get("ts", 0),
+        reverse=True,
+    )
+    return rolls[:limit]
 
 _bot_can_delete_ttl = 3600
 _BOT_CAN_DELETE_CACHE_MAX = 200

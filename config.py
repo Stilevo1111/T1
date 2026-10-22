@@ -32,9 +32,18 @@ class Settings(BaseSettings):
     DB_POOL_MAX_SIZE: int = 10
     DB_POOL_TIMEOUT: int = 30
 
-    # Rate limiting
-    RATE_LIMIT_REQUESTS: int = 20
-    RATE_LIMIT_WINDOW: int = 60
+    # Anti-spam (see antispam.py). The limits are applied per action, so a
+    # user may freely try every button — repeating the SAME action too soon
+    # only gets a friendly "не торопись" instead of a mute.
+    SPAM_ACTION_COOLDOWN: float = 4.0    # default cooldown of a single action
+    SPAM_NUDGE_COOLDOWN: float = 30.0    # how often the nudge may repeat
+    SPAM_SOFT_WINDOW: int = 10           # window of the soft total rate
+    SPAM_SOFT_MAX_ACTIONS: int = 20      # actions per window before the nudge
+    SPAM_SOFT_COOLDOWN: int = 10         # wait shown when the soft rate is hit
+
+    # Telegram API protection — per chat (see rate_limiter.py)
+    TELEGRAM_RATE_LIMIT_PER_SECOND: float = 15.0
+    TELEGRAM_RATE_LIMIT_BURST: int = 25
 
     # Party command settings
     PARTY_MAX_ABOVE: int = 4

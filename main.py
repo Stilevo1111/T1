@@ -16,6 +16,8 @@ from pathlib import Path
 
 import aiohttp
 
+import antispam
+
 # Logging setup
 import structlog
 from aiohttp import web
@@ -1595,6 +1597,7 @@ async def dota_digest_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # alternate_digest_job живёт в digest.py (с лидерской выборкой).
 from bot_utils import (
+    MENU_BUTTON_TEXTS,
     ManualContext,
     _build_analytics_keyboard,
     _build_analytics_table_keyboard,
@@ -4714,15 +4717,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
 
         text = update.message.text.strip()
 
-        menu_buttons = {
-            "🎲 Ролл Фиссуры": "🎲 Ролл Фиссуры",
-            "👤 Профиль": "👤 Профиль",
-            "🏆 Топ Фиссур": "🏆 Топ Фиссур",
-            "🏆 Топ MMR": "🏆 Топ MMR",
-            "🔎 Аналитика": "🔎 Аналитика",
-            "🔑 Привязать Аккаунт": "🔑 Привязать Аккаунт",
-            "🎮 Поиск пати": "🎮 Поиск пати"
-        }
+        # Shared with the anti-spam guard (antispam.py) so both always know
+        # the same set of buttons.
+        menu_buttons = {label: label for label in MENU_BUTTON_TEXTS}
 
         logger.info(f"menu_handler: text='{text}' (len={len(text)}), menu_buttons_keys={list(menu_buttons.keys())}")
 
@@ -5360,6 +5357,22 @@ async def main():
         except Exception as e:
             logger.error(f"Startup morning digest catch-up error: {e}")
 
+        # ── Anti-spam guard (group -2) ───────────────────────────────────────
+        # Installed before every command handler: repeating the same action
+        # too soon is stopped before it reaches the bot logic, so the bot
+        # answers with a friendly "не торопись" instead of replying to every
+        # single press. Different buttons stay free — a newcomer can try
+        # them all. The guard raises ApplicationHandlerStop, which cancels
+        # the rest of the update. See antispam.py.
+        app.add_handler(MessageHandler(filters.ALL, antispam.guard_handler), group=-2)
+        app.add_handler(CallbackQueryHandler(antispam.guard_handler), group=-2)
+
+        # ── Модуль модерации /mute ──────────────────────────────────────────
+        # Регистрируется до остальных хендлеров: фильтр кляпа живёт в группе
+        # -1 и обязан выполняться раньше команд (группа 0). Порядок групп в
+        # python-telegram-bot — порядок их регистрации.
+        register_mute_handlers(app)
+
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("about", about))
         app.add_handler(CallbackQueryHandler(button_callback))
@@ -5387,9 +5400,6 @@ async def main():
         app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.ANY_CHAT_MEMBER))
         app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members_message))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
-
-        # ── Модуль модерации /mute ──────────────────────────────────────────
-        register_mute_handlers(app)
 
         # Add error handler
         async def error_handler(update, context):

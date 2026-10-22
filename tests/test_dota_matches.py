@@ -9,7 +9,19 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import dota_matches
+import bot_utils
 
+def test_get_recent_rolls_returns_newest_entries_first(monkeypatch):
+    rolls = [
+        {"ts": 300, "username": "newest"},
+        {"ts": 100, "username": "oldest"},
+        {"ts": 200, "username": "middle"},
+    ]
+    monkeypatch.setattr(bot_utils, "recent_fissure_rolls", rolls)
+
+    assert [r["username"] for r in bot_utils.get_recent_rolls(2)] == [
+        "newest", "middle"
+    ]
 
 SAMPLE = {
     "match_id": 8123456789,
@@ -1303,7 +1315,7 @@ def test_rolls_tab_sorts_by_recency_first():
 
     assert 'data-ts="1700000300"' in html and 'data-ts="1700000000"' in html
     assert '<button type="button" class="g-sort-b on" data-sort="ts" ' in html
-    assert '<span class="g-sort-t">Последние ↓</span>' in html
+    assert '<span class="g-sort-t">Последние ↑</span>' in html
     # Остальные признаки на месте — их просто выбирают вручную.
     for key in ("name", "growth", "fissure"):
         assert f'data-sort="{key}"' in html

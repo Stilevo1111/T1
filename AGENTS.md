@@ -33,7 +33,8 @@ Telegram-бот «Фиссура» на **Python 3.11** + **python-telegram-bot 
 | `mute.py` | Модерация: `/mute` (кляп за 10 см фиссуры). `register_handlers()` подключается в `main.py` |
 | `events.py` | Простой in-memory `EventBus` (слабая связанность, используется ограниченно) |
 | `cache.py` | `RedisCache` с fallback на in-memory |
-| `rate_limiter.py` | Защита от Telegram API rate-limit: `rate_limit` декоратор, `is_rate_limited`, `set_rate_limited` |
+| `rate_limiter.py` | Защита от Telegram API rate-limit: `rate_limit` декоратор (лимит **на чат**), `is_rate_limited`, `set_rate_limited` |
+| `antispam.py` | **Антиспам по действию**: кулдаун на каждое конкретное действие (команда/кнопка), мягкий «не торопись» вместо мута, новичку можно нажать все кнопки подряд. `guard_handler` ставится в группу `-2` — перекрывает все хендлеры |
 | `analytics_dashboard.py` | Учёт ресурсов (OpenDota токены, Neon часы) |
 | `container.py` | DI-контейнер (dependency_injector): `Container`, `UserRepository`. Примечание: НЕ используется активно в `main.py` |
 | `demo_rolls.py` | Вспомогательный скрипт для демонстрации текстов роллов (не часть бота) |
@@ -73,7 +74,8 @@ Telegram-бот «Фиссура» на **Python 3.11** + **python-telegram-bot 
 1. **Лидерство на Render (multi-instance).** Тяжёлые задания (`update_all_mmr_job`, weekly-задания) защищены `claim_or_check_mmr_leader()` / `claim_or_check_weekly_leader()` через `set_config` в БД. Не убирай эти проверки — иначе дубли на нескольких инстансах.
 2. **Кэширование.** Данные пользователя кэшируются в `database.user_cache` / `top_cache`. После массовых апдейтов вызывай `flush_users_cache()` и инвалидируй кэш.
 3. **Таймауты внешних API.** Все вызовы OpenDota обёрнуты в `aiohttp.ClientTimeout`. Не убирай таймауты — было зависание `/profile`.
-4. **Rate-limit Telegram.** Публичные хендлеры обычно помечены `@rate_limit(tokens=1)`. `set_rate_limited` вызывается при 429.
+4. **Rate-limit Telegram.** Публичные хендлеры обычно помечены `@rate_limit(tokens=1)` (лимит на чат). `set_rate_limited` вызывается при 429.
+4a. **Антиспам** — `antispam.guard_handler` зарегистрирован в группе `-2` (раньше всех команд) и поднимает `ApplicationHandlerStop`. Лимит действует **на конкретное действие** (кулдаун команды/кнопки), а не на пользователя: повтор того же действия слишком быстро → вежливое «⏳ Не торопись!» и действие пропускается, но любые другие кнопки работают свободно (новичок может посмотреть все). Мута/эскалации нет. Настройки — `config.Settings` (`SPAM_*`). НЕ убирай регистрацию гарда в `main.py` и НЕ переноси её в группу `0`: в одной группе PTB выполняет только первый подошедший хендлер, и гард перестанет работать.
 5. **Генерация картинок** — Pillow, синхронная тяжёлая работа запускается через `asyncio.to_thread(...)`.
 6. **Баннеры/картинки** — пути через `constants.get_banner_path(name)`, файлы в `assets/`, `images/`.
 7. **Не изменяй тексты и визуал** без явной просьбы — многие модули помечены «извлечено из main.py без изменения поведения».
