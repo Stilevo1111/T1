@@ -1,5 +1,6 @@
 ﻿"""Telegram handler for /story command."""
 import asyncio
+import datetime as _dt
 import logging
 from collections import Counter
 from datetime import datetime
@@ -32,6 +33,10 @@ from chat_wordcloud.curation import (
 from chat_wordcloud.generator import generate_wordcloud_image
 from chat_wordcloud.hud import generate_hud_wordcloud
 from chat_wordcloud.processor import curate_words, log_top_words
+from chat_wordcloud.redis_stats import (
+    get_top_words_from_redis,
+    increment_message_words,
+)
 from database import get_chat_messages_in_range
 from rate_limiter import rate_limit
 
@@ -87,14 +92,55 @@ async def _generate_wordcloud_in_thread(
 async def _collect_monthly_words(chat_id: int, bot_user_id: int | None):
     """Build the card data for the current calendar month.
 
-    Loads this month and the previous one, curates both with the same pipeline
-    and returns the ranked words plus what rose and faded between them. Any
-    failure degrades to an empty comparison rather than breaking the command.
+    Fast path: read pre-aggregated word counters from Redis (populated on every
+    incoming message via :func:`increment_message_words`). This avoids scanning
+    up to 10 000 ``chat_messages`` rows per /story call.
+
+    Falls back to the original database scan if Redis is unavailable or has no
+    data for the chat/month.
     """
-    now = datetime.now()
+    now = _dt.datetime.now()
     start, end = month_bounds(now)
     prev_start, prev_end = previous_month_bounds(now)
 
+    # --- Redis fast path -------------------------------------------------
+    try:
+        current_counter = await asyncio.to_thread(
+            get_top_words_from_redis, chat_id, start, end, WORDCLOUD_MAX_WORDS
+        )
+        previous_counter = await asyncio.to_thread(
+            get_top_words_from_redis, chat_id, prev_start, prev_end, WORDCLOUD_MAX_WORDS
+        )
+    except Exception as exc:
+        logger.warning(f"redis word stats unavailable, falling back to DB: {exc}")
+        current_counter = Counter()
+        previous_counter = Counter()
+
+    if current_counter:
+        top_words = sorted(
+            current_counter.items(), key=lambda x: x[1], reverse=True
+        )[: WORDCLOUD_MAX_WORDS]
+
+        rising, fading = [], []
+        try:
+            rising, fading = diff_periods(
+                current_counter,
+                previous_counter,
+                current_days=(end - start).days,
+                previous_days=(prev_end - prev_start).days,
+            )
+        except Exception as exc:
+            logger.warning(f"monthly comparison unavailable: {exc}", exc_info=True)
+
+        stats = {
+            "total_messages": 0,
+            "user_messages": sum(current_counter.values()),
+            "bot_messages": 0,
+            "authors": 0,
+        }
+        return top_words, stats, rising, fading
+
+    # --- Database fallback -----------------------------------------------
     current, current_stats = await asyncio.to_thread(
         get_chat_messages_in_range,
         chat_id, start, end, WORDCLOUD_MESSAGE_LIMIT, bot_user_id,

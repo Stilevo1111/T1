@@ -779,6 +779,19 @@ _PG_ENSURE_COLUMNS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS cheese INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS refresher INTEGER DEFAULT 0",
     "UPDATE users SET in_chat = TRUE WHERE in_chat IS NULL OR in_chat = FALSE",
+    # Word-cloud stats table: created on fresh installs via init_db; ensure it
+    # exists on already-deployed databases too.
+    """
+    CREATE TABLE IF NOT EXISTS chat_word_stats (
+        chat_id BIGINT NOT NULL,
+        word TEXT NOT NULL,
+        month_start DATE NOT NULL,
+        count INTEGER DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (chat_id, word, month_start)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_chat_word_stats_chat_month ON chat_word_stats(chat_id, month_start)",
 )
 
 
@@ -806,6 +819,19 @@ def _ensure_sqlite_columns(cursor):
         cursor.execute("ALTER TABLE users ADD COLUMN cheese INTEGER DEFAULT 0")
     if 'refresher' not in columns:
         cursor.execute("ALTER TABLE users ADD COLUMN refresher INTEGER DEFAULT 0")
+
+    # Word-cloud stats table: create on existing databases that already ran init_db.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chat_word_stats (
+            chat_id INTEGER NOT NULL,
+            word TEXT NOT NULL,
+            month_start DATE NOT NULL,
+            count INTEGER DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (chat_id, word, month_start)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_word_stats_chat_month ON chat_word_stats(chat_id, month_start)")
 
 
 def _reset_persistent_pg_conn(reason: str = ""):
@@ -903,7 +929,7 @@ def _create_new_connection(db_type):
             db_path = DATABASE_URL[10:]
         elif DATABASE_URL and DATABASE_URL.startswith("sqlite://"):
             db_path = DATABASE_URL[9:]
-        conn = sqlite3.connect(db_path, timeout=10)
+        conn = sqlite3.connect(db_path, timeout=10, check_same_thread=False)
         logger.debug("SQLite connected")
         return conn
 
@@ -1182,6 +1208,17 @@ def init_db():
                 )
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_chat_id ON chat_messages(chat_id, created_at DESC)")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS chat_word_stats (
+                    chat_id BIGINT NOT NULL,
+                    word TEXT NOT NULL,
+                    month_start DATE NOT NULL,
+                    count INTEGER DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (chat_id, word, month_start)
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_word_stats_chat_month ON chat_word_stats(chat_id, month_start)")
         else:
             # Для SQLite создаём таблицу
             cursor.execute("""
@@ -1357,6 +1394,17 @@ avatar TEXT,
                 )
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_chat_id ON chat_messages(chat_id, created_at DESC)")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS chat_word_stats (
+                    chat_id INTEGER NOT NULL,
+                    word TEXT NOT NULL,
+                    month_start DATE NOT NULL,
+                    count INTEGER DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (chat_id, word, month_start)
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_word_stats_chat_month ON chat_word_stats(chat_id, month_start)")
 
         _save_schema_version(cursor, is_pg)
         conn.commit()
@@ -3768,9 +3816,12 @@ def _derive_mmr_rank_tier(rank_tier: int | None, mmr: int | None) -> int:
     """Return stored rank, or derive it from MMR with one shared rule."""
     if rank_tier:
         return int(rank_tier)
+    mmr = int(mmr or 0)
+    if mmr < 1000:
+        return 0
     try:
         from dota_mmr import mmr_to_rank_tier
-        return int(mmr_to_rank_tier(int(mmr or 0)))
+        return int(mmr_to_rank_tier(mmr))
     except Exception:
         return 0
 
@@ -3947,7 +3998,7 @@ def get_dota_mmr_top(limit=50):
                 result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
                         "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
                         "week_games": u[6], "week_wins": u[7],
-                        "rank_tier": u[8] if u[8] else (u[3] // 73 if u[3] else 0), "wins": u[9], "losses": u[10], "week_current_streak": u[11],
+                        "rank_tier": _derive_mmr_rank_tier(u[8], u[3]), "wins": u[9], "losses": u[10], "week_current_streak": u[11],
                 "avatar": u[12], "fissure": float(u[13]) if u[13] else 0.0} for u in users]
 
                 if result:
@@ -3981,7 +4032,7 @@ def get_dota_mmr_top(limit=50):
                 result = [{"telegram_id": u[0], "username": u[1], "steam_nickname": u[2],
                         "mmr": u[3], "dota_total_games": u[4], "dota_wins": u[5],
                         "week_games": u[6], "week_wins": u[7],
-                        "rank_tier": u[8] if u[8] else (u[3] // 73 if u[3] else 0), "wins": u[9], "losses": u[10], "week_current_streak": u[11],
+                        "rank_tier": _derive_mmr_rank_tier(u[8], u[3]), "wins": u[9], "losses": u[10], "week_current_streak": u[11],
                 "avatar": u[12], "fissure": float(u[13]) if u[13] else 0.0} for u in users]
 
                 if result:
@@ -4097,10 +4148,9 @@ def get_dota_week_top(limit=10, force_refresh=False):
                 if rank_tier is None or rank_tier == 0:
                     mmr = user.get('mmr', 0) or 0
                     try:
-                        from dota_mmr import mmr_to_rank_tier
-                        rank_tier = mmr_to_rank_tier(mmr)
+                        rank_tier = _derive_mmr_rank_tier(None, mmr)
                     except Exception:
-                        rank_tier = mmr // 73
+                        rank_tier = 0
 
                 top_users.append({
                     'telegram_id': telegram_id,
@@ -4247,7 +4297,7 @@ SELECT telegram_id, username, first_name, steam_nickname, mmr,
                     'mmr': u[4],
                     'week_games': u[5],
                     'week_wins': u[6],
-                    'rank_tier': u[7] if u[7] else (u[4] // 73 if u[4] else 0),
+                    'rank_tier': _derive_mmr_rank_tier(u[7], u[4]),
                     'steam_id': u[8],
                     'avatar': u[9],
                     'winrate': u[10],

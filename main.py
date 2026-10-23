@@ -1407,6 +1407,17 @@ async def update_all_mmr_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Ошибка в update_all_mmr_job: {e}")
 
 
+async def _sync_word_stats_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Синхронизирует счётчики слов из Redis в PostgreSQL для /story."""
+    try:
+        from chat_wordcloud.redis_stats import sync_redis_to_postgres
+        n = await sync_redis_to_postgres()
+        if n:
+            logger.info(f"word stats synced to postgres: {n} rows")
+    except Exception as e:
+        logger.debug(f"word stats sync job skipped: {e}")
+
+
 async def refresh_digest_message(bot):
     """Обновляет данные fissure-дайджеста в памяти (для типа=0).
     Фактическое редактирование сообщения выполняет alternate_digest_job в digest.py."""
@@ -4634,6 +4645,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
         text = update.message.text.strip()
         logger.info(f"menu_handler: text='{text}' (len={len(text)})")
 
+        # Increment per-word counters for the /story word cloud (Redis, O(1)).
+        try:
+            from chat_wordcloud.redis_stats import increment_message_words
+            await increment_message_words(update.effective_chat.id, text)
+        except Exception:
+            logger.debug("word-cloud redis increment skipped", exc_info=True)
+
         # Increment message count only in digest chat
         try:
             from database import get_config
@@ -5225,6 +5243,13 @@ async def main():
             verify_chat_membership_job,
             interval=datetime.timedelta(hours=6),
             first=datetime.timedelta(hours=2),   # первый запуск через 2 часа после старта
+        )
+
+        # Синхронизация счётчиков слов из Redis в PostgreSQL (для /story).
+        job_queue.run_repeating(
+            _sync_word_stats_job,
+            interval=datetime.timedelta(minutes=30),
+            first=datetime.timedelta(minutes=10),
         )
 
         job_queue.run_repeating(

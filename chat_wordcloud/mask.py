@@ -58,6 +58,9 @@ def _create_fallback_dota_mask(width: int, height: int) -> np.ndarray:
 
 def create_dota_mask() -> np.ndarray | None:
     path = WORDCLOUD_MASK_PATH
+    if path is None:
+        return _create_fallback_dota_mask(WORDCLOUD_WIDTH, WORDCLOUD_HEIGHT)
+    path = Path(path)
     if path.exists():
         img = _load_mask_image(path)
         mask = _alpha_to_binary_mask(img)

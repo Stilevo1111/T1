@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import aiohttp
+import httpx
 import requests
 from PIL import Image
 
@@ -689,7 +690,7 @@ def _compose_heroes_strip_background(canvas_width: int, canvas_height: int):
                 data = bg_path.read_bytes()
             else:
                 try:
-                    resp = requests.get(str(bg_path), timeout=12)
+                    resp = httpx.get(str(bg_path), timeout=12)
                     if resp.status_code == 200 and resp.content:
                         data = resp.content
                         try:
@@ -1179,14 +1180,14 @@ def rank_to_mmr(rank_tier: int) -> int:
     star = rank_tier % 10
 
     _MMR_TABLE = {
-        1: [0, 0, 0, 0, 0, 150, 300, 460, 610, 760],
-        2: [0, 0, 0, 0, 0, 920, 1080, 1230, 1400, 1570],
-        3: [0, 0, 0, 0, 0, 1700, 1850, 2000, 2150, 2300],
-        4: [0, 0, 0, 0, 0, 2450, 2610, 2770, 2930, 3090],
-        5: [0, 0, 0, 0, 0, 3230, 3390, 3540, 3700, 3860],
-        6: [0, 0, 0, 0, 0, 4000, 4150, 4300, 4460, 4620],
-        7: [0, 0, 0, 0, 0, 4820, 5020, 5220, 5420, 5620],
-        8: [0, 0, 0, 0, 0, 5620, 5620, 5620, 5620, 5620],
+        1: [0, 150, 300, 460, 610, 760, 0, 0, 0, 0],
+        2: [0, 920, 1080, 1230, 1400, 1570, 0, 0, 0, 0],
+        3: [0, 1700, 1850, 2000, 2150, 2300, 0, 0, 0, 0],
+        4: [0, 2450, 2610, 2770, 2930, 3090, 0, 0, 0, 0],
+        5: [0, 3230, 3390, 3540, 3700, 3860, 0, 0, 0, 0],
+        6: [0, 4000, 4150, 4300, 4460, 4620, 0, 0, 0, 0],
+        7: [0, 4820, 5020, 5220, 5420, 5620, 0, 0, 0, 0],
+        8: [0, 5620, 5620, 5620, 5620, 5620, 0, 0, 0, 0],
     }
 
     row = _MMR_TABLE.get(tier)
@@ -2343,7 +2344,7 @@ def generate_start_card(
                 if os.path.isfile(avatar_url):
                     avatar = Image.open(avatar_url).convert("RGBA")
                 else:
-                    resp = requests.get(
+                    resp = httpx.get(
                         avatar_url,
                         timeout=10,
                         headers={"User-Agent": "fissure-bot/1.0"},
@@ -2510,7 +2511,7 @@ def generate_top_card(
                 if os.path.isfile(avatar_url):
                     avatar = Image.open(avatar_url).convert("RGBA")
                 else:
-                    resp = requests.get(avatar_url, timeout=10, headers={"User-Agent": "fissure-bot/1.0"})
+                    resp = httpx.get(avatar_url, timeout=10, headers={"User-Agent": "fissure-bot/1.0"})
                     if resp.status_code == 200 and resp.content:
                         avatar = Image.open(io.BytesIO(resp.content)).convert("RGBA")
                     else:
@@ -3029,9 +3030,9 @@ def _profile_load_avatar(avatar_url, size: int):
             elif avatar_url.startswith(("http://", "https://")):
                 content = None
                 try:
-                    import requests
+                    import httpx
 
-                    resp = requests.get(avatar_url, timeout=8,
+                    resp = httpx.get(avatar_url, timeout=8,
                                         headers={"User-Agent": "fissure-bot/1.0"})
                     if resp.status_code == 200 and resp.content:
                         content = resp.content
@@ -3569,7 +3570,7 @@ def generate_profile_card(
                 if os.path.isfile(avatar_url):
                     avatar = Image.open(avatar_url).convert("RGBA")
                 else:
-                    resp = requests.get(
+                    resp = httpx.get(
                         avatar_url,
                         timeout=10,
                         headers={"User-Agent": "fissure-bot/1.0"},
