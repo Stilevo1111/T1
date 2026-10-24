@@ -587,7 +587,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Шапка: старая для обычных, новая для мультикаста
         if cascade_count > 1:
             # Баннер для мультикаста
-            roll_banner_url = get_banner_path("roll_fatal")
+            roll_banner_url = get_banner_path("multicast")
         else:
             roll_banner_url = get_banner_path("roll_normal")
 

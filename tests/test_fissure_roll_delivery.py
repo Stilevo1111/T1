@@ -246,7 +246,7 @@ def test_multicast_roll_delivers_banner_with_full_caption(monkeypatch):
 
     assert len(bot.photos) == 1
     photo = bot.photos[0]
-    assert photo["photo"] == "roll_fatal.webp"
+    assert photo["photo"] == "multicast.webp"
 
     caption = photo["caption"]
     assert "МУЛЬТИКАСТ×4" in caption
