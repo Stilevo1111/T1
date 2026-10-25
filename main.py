@@ -5232,12 +5232,8 @@ async def main():
 
 # morning_digest_job удалён
 
-        # Обновление MMR каждые 6 часов (адаптивно при большом количестве игроков)
-        job_queue.run_repeating(
-            update_all_mmr_job,
-            interval=datetime.timedelta(hours=2),
-            first=datetime.datetime.now() + datetime.timedelta(minutes=10)
-        )
+        # Обновление MMR больше не запускается по таймеру — обновляется только по команде /refreshmmr
+        # (активность в чате ≠ игра в Dota, обновлять MMR всех пользователей по расписанию бессмысленно)
 
         # Дайджест (Fissure + Dota): раз в 10 минут (актуально + экономия Render)
         job_queue.run_repeating(
