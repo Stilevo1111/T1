@@ -237,9 +237,9 @@ def set_last_bot_message(chat_id, user_id, msg_id):
 def schedule_delete(bot, chat_id, msg_id, delay, job_queue=None):
     """Schedule message deletion after delay seconds"""
     if job_queue:
-        def _safe_delete(ctx):
+        async def _safe_delete(ctx):
             try:
-                return bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                await bot.delete_message(chat_id=chat_id, message_id=msg_id)
             except Exception as e:
                 if "Message to delete not found" not in str(e):
                     logger.debug(f"Could not delete scheduled message: {e}")
