@@ -5161,28 +5161,6 @@ async def main():
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).request(request).build()
         job_queue.set_application(app)
 
-        # ✅ Периодическое обновление всех тегов (каждые 30 минут)
-        async def periodic_tag_refresh(context):
-            """Independently refresh Fissure and MMR tags in their own chats."""
-            from tags import refresh_fissure_top_tags, refresh_mmr_top_tags
-
-            results = await asyncio.gather(
-                refresh_fissure_top_tags(context.bot, notify=False),
-                refresh_mmr_top_tags(context.bot),
-                return_exceptions=True,
-            )
-            for family, result in zip(("fissure", "mmr"), results, strict=True):
-                if isinstance(result, Exception):
-                    logger.warning(f"periodic_tag_refresh {family} failed: {result}")
-                else:
-                    logger.info(f"periodic_tag_refresh {family} completed")
-
-        job_queue.run_repeating(
-            periodic_tag_refresh,
-            interval=datetime.timedelta(minutes=30),
-            first=datetime.timedelta(minutes=5),
-        )
-
         # ✅ Утреннее приветствие 09:00 MSK
         job_queue.run_daily(
             morning_greeting_job,
