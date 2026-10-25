@@ -644,7 +644,7 @@ def get_pg_connection():
                     parsed = urlparse.urlparse(DATABASE_URL)
                     dsn = _pg_dsn()
                     _pg_pool = pool.ThreadedConnectionPool(
-                        minconn=1,
+                        minconn=0,
                         maxconn=15,
                         dsn=dsn
                     )
@@ -683,7 +683,7 @@ def get_pg_connection():
                     from psycopg2 import pool
                     parsed = urlparse.urlparse(DATABASE_URL)
                     dsn = _pg_dsn()
-                    _pg_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=15, dsn=dsn)
+                    _pg_pool = pool.ThreadedConnectionPool(minconn=0, maxconn=15, dsn=dsn)
                 except Exception as e:
                     logger.warning(f"Failed to recreate psycopg2 pool: {e}")
                     _pg_pool = None

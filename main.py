@@ -410,18 +410,6 @@ async def decrease_inactive_job(context):
 @rate_limit(tokens=1)
 async def morning_greeting_job(context):
     """✅ Утреннее приветствие 09:00 MSK - 1 раз в чат"""
-    from datetime import datetime as dt
-
-    from database import get_config
-
-    MSK = timezone(timedelta(hours=3))
-    today_str = dt.now(MSK).strftime("%Y-%m-%d")
-
-    last_greeting = await asyncio.to_thread(get_config, 'daily_greeting_sent')
-    if last_greeting == today_str:
-        logger.info("Утреннее приветствие уже отправлено сегодня")
-        return
-
     greeting_text = random.choice(MORNING_GREETINGS)
 
     try:
@@ -440,8 +428,6 @@ async def morning_greeting_job(context):
             ]
         ])
         await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=keyboard, parse_mode="HTML")
-
-        await asyncio.to_thread(set_config, 'daily_greeting_sent', today_str)
         logger.info(f"Утреннее приветствие отправлено в чат {digest_chat_id}")
 
     except Exception as e:
@@ -451,18 +437,6 @@ async def morning_greeting_job(context):
 @rate_limit(tokens=1)
 async def night_greeting_job(context):
     """✅ Вечернее приветствие 23:00 MSK - 1 раз в чат"""
-    from datetime import datetime as dt
-
-    from database import get_config
-
-    MSK = timezone(timedelta(hours=3))
-    today_str = dt.now(MSK).strftime("%Y-%m-%d")
-
-    last_greeting = await asyncio.to_thread(get_config, 'night_greeting_sent')
-    if last_greeting == today_str:
-        logger.info("Вечернее приветствие уже отправлено сегодня")
-        return
-
     greeting_text = random.choice(EVENING_GREETINGS)
 
     try:
@@ -481,8 +455,6 @@ async def night_greeting_job(context):
             ]
         ])
         await bot.send_message(chat_id=digest_chat_id, text=greeting_text, reply_markup=keyboard, parse_mode="HTML")
-
-        await asyncio.to_thread(set_config, 'night_greeting_sent', today_str)
         logger.info(f"Вечернее приветствие отправлено в чат {digest_chat_id}")
 
     except Exception as e:
