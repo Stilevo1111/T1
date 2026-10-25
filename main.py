@@ -5630,7 +5630,7 @@ async def main():
     finally:
         try:
             from database import close_aiohttp_session, close_pg_pool, flush_users_cache
-            flushed = flush_users_cache()
+            flushed = await flush_users_cache()
             logger.info(f"Shutdown: flushed {flushed} users to DB")
             # Sync word stats from Redis to PostgreSQL on shutdown
             try:
@@ -5653,7 +5653,15 @@ if __name__ == "__main__":
     def _emergency_flush():
         try:
             from database import flush_users_cache
-            dirty = flush_users_cache()
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                dirty = loop.run_until_complete(flush_users_cache())
+            except RuntimeError:
+                dirty = asyncio.run(flush_users_cache())
             logger.warning(f"atexit: emergency flush completed ({dirty} users)")
         except Exception as e:
             logger.warning(f"Emergency flush failed: {e}")

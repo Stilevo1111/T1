@@ -358,8 +358,8 @@ class UserStateManager:
             self._user_cache.delete(key)
         self._top_cache.invalidate_top_cache()
 
-    def flush_dirty(self) -> int:
-        return flush_users_cache()
+    async def flush_dirty(self) -> int:
+        return await flush_users_cache()
 
     def get_all_users(self):
         return self._user_cache.get_all_users()
