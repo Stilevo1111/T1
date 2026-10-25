@@ -432,7 +432,6 @@ async def handle_roshan_event(
     keyboard = build_roshan_keyboard(session_id)
 
     banner = get_banner_path("roshan")
-    logger.info(f"roshan: banner path={banner}, exists={banner.exists() if banner else False}")
     msg = None
     if banner and banner.exists():
         try:
@@ -443,8 +442,6 @@ async def handle_roshan_event(
         except Exception as e:
             logger.warning(f"roshan: photo send failed, falling back to text: {e}")
     if msg is None:
-        if banner and not banner.exists():
-            logger.warning(f"roshan: banner file not found at {banner}, sending text only")
         msg = await bot.send_message(
             chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode="HTML",
         )
@@ -574,7 +571,13 @@ async def resolve_session(bot, session_id: str) -> None:
 
     if not edited:
         try:
-            await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+            banner = get_banner_path("roshan")
+            if banner and banner.exists():
+                await bot.send_photo(
+                    chat_id=chat_id, photo=str(banner), caption=text, parse_mode="HTML",
+                )
+            else:
+                await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
         except Exception as e:
             logger.error(f"roshan: could not send result message: {e}", exc_info=True)
 
