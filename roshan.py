@@ -432,6 +432,7 @@ async def handle_roshan_event(
     keyboard = build_roshan_keyboard(session_id)
 
     banner = get_banner_path("roshan")
+    logger.info(f"roshan: banner path={banner}, exists={banner.exists() if banner else False}")
     msg = None
     if banner and banner.exists():
         try:
