@@ -1390,6 +1390,22 @@ async def _sync_word_stats_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.debug(f"word stats sync job skipped: {e}")
 
 
+async def combined_maintenance_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Объединённая задача обслуживания: flush cache + MMR + дайджест за один wake-up Neon."""
+    try:
+        await flush_users_cache_job(context)
+    except Exception as e:
+        logger.error(f"combined_maintenance: flush failed: {e}")
+    try:
+        await update_all_mmr_job(context)
+    except Exception as e:
+        logger.error(f"combined_maintenance: mmr failed: {e}")
+    try:
+        await alternate_digest_job(context)
+    except Exception as e:
+        logger.error(f"combined_maintenance: digest failed: {e}")
+
+
 async def refresh_digest_message(bot):
     """Обновляет данные fissure-дайджеста в памяти (для типа=0).
     Фактическое редактирование сообщения выполняет alternate_digest_job в digest.py."""
@@ -5191,37 +5207,17 @@ async def main():
         # Раз в 6 часов проверяем порцию (100) самых "старых" пользователей
         job_queue.run_repeating(
             verify_chat_membership_job,
-            interval=datetime.timedelta(hours=6),
+            interval=datetime.timedelta(hours=12),
             first=datetime.timedelta(hours=2),   # первый запуск через 2 часа после старта
         )
 
-        # Синхронизация счётчиков слов из Redis в PostgreSQL (для /story).
-        job_queue.run_repeating(
-            _sync_word_stats_job,
-            interval=datetime.timedelta(minutes=30),
-            first=datetime.timedelta(minutes=10),
-        )
 
         job_queue.run_repeating(
-            flush_users_cache_job,
+            combined_maintenance_job,
             interval=datetime.timedelta(hours=2),
             first=datetime.timedelta(minutes=15),
         )
 
-        async def validate_user_registry_job(context):
-            try:
-                from database import validate_user_registry
-                invalid_count = await asyncio.to_thread(validate_user_registry)
-                if invalid_count:
-                    logger.warning(f"validate_user_registry_job: found {invalid_count} users with invalid telegram_id (read-only audit, no data modified)")
-            except Exception as e:
-                logger.error(f"validate_user_registry_job: {e}")
-
-        job_queue.run_repeating(
-            validate_user_registry_job,
-            interval=datetime.timedelta(hours=12),
-            first=datetime.timedelta(hours=1),
-        )
 
         # Periodic cleanup of stale _USER_START_COOLDOWN entries (prevents memory leak)
         job_queue.run_repeating(
@@ -5231,21 +5227,6 @@ async def main():
         )
 
 # morning_digest_job удалён
-
-        # Обновление MMR всех пользователей по таймеру — человек мог сыграть в Dota
-        # и мы должны узнать об этом через API, даже если он не писала в чат
-        job_queue.run_repeating(
-            update_all_mmr_job,
-            interval=datetime.timedelta(hours=2),
-            first=datetime.datetime.now() + datetime.timedelta(minutes=10)
-        )
-
-        # Дайджест (Fissure + Dota): раз в 10 минут (актуально + экономия Render)
-        job_queue.run_repeating(
-            alternate_digest_job,
-            interval=datetime.timedelta(minutes=30),
-            first=datetime.datetime.now() + datetime.timedelta(seconds=10)
-        )
 
         # Топ MMR обновляется в update_all_mmr_job после обновления всех игроков
 
@@ -5579,8 +5560,6 @@ async def main():
                     try:
                         await asyncio.sleep(800)
                         session = await get_aiohttp_session()
-                        from analytics_dashboard import record_neon_hours
-                        record_neon_hours(KEEPALIVE_PING_NEON_HOURS)
                         # Only /health is pinged: the second GET to the site root
                         # added egress (Service-Initiated bytes on Render) without
                         # keeping anything alive that /health does not already.
@@ -5653,6 +5632,14 @@ async def main():
             from database import close_aiohttp_session, close_pg_pool, flush_users_cache
             flushed = flush_users_cache()
             logger.info(f"Shutdown: flushed {flushed} users to DB")
+            # Sync word stats from Redis to PostgreSQL on shutdown
+            try:
+                from chat_wordcloud.redis_stats import sync_redis_to_postgres
+                n = await sync_redis_to_postgres()
+                if n:
+                    logger.info(f"Shutdown: synced {n} word stats to DB")
+            except Exception as ws_err:
+                logger.warning(f"Shutdown word stats sync failed: {ws_err}")
             # Close aiohttp session to prevent "Unclosed connection" error
             await close_aiohttp_session()
             logger.info("Shutdown: aiohttp session closed")
