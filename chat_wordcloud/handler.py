@@ -105,11 +105,11 @@ async def _collect_monthly_words(chat_id: int, bot_user_id: int | None):
 
     # --- Redis fast path -------------------------------------------------
     try:
-        current_counter = await asyncio.to_thread(
-            get_top_words_from_redis, chat_id, start, end, WORDCLOUD_MAX_WORDS
+        current_counter = await get_top_words_from_redis(
+            chat_id, start, end, WORDCLOUD_MAX_WORDS
         )
-        previous_counter = await asyncio.to_thread(
-            get_top_words_from_redis, chat_id, prev_start, prev_end, WORDCLOUD_MAX_WORDS
+        previous_counter = await get_top_words_from_redis(
+            chat_id, prev_start, prev_end, WORDCLOUD_MAX_WORDS
         )
     except Exception as exc:
         logger.warning(f"redis word stats unavailable, falling back to DB: {exc}")
