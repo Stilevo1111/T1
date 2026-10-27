@@ -4189,12 +4189,18 @@ def get_dota_week_top(limit=10, force_refresh=False):
 
 
 def get_dota_week_top_from_db(limit=10, force_refresh=False):
-    """Получение топа игроков Dota 2 за неделю напрямую из БД с кешем 30 минут"""
+    """Получение топа игроков Dota 2 за неделю напрямую из БД с кешем 30 минут.
+
+    Кэшируется один раз на полный список (до _FULL_TOP_LIMIT записей),
+    чтобы все вызовы (topmmr, get_dota_week_rank, дайджест) возвращали срез
+    из одного кэша и не делали лишних round-trip'ов к БД.
+    """
     import time
 
     _TTL = 1800  # 30 минут
+    _FULL_TOP_LIMIT = 10000  # Кэшируем полный список, возвращаем срез [:limit]
 
-    cache_key = f'_dota_week_top_db_{limit}'
+    cache_key = '_dota_week_top_db_full'
     if not hasattr(get_dota_week_top_from_db, '_cache') or not isinstance(get_dota_week_top_from_db._cache, dict):
         get_dota_week_top_from_db._cache = {}
     if not hasattr(get_dota_week_top_from_db, '_lock'):
@@ -4206,10 +4212,10 @@ def get_dota_week_top_from_db(limit=10, force_refresh=False):
             logger.info(f"get_dota_week_top_from_db: returning cached top ({len(cached_data)} users)")
             return cached_data[:limit]
 
-        result = _get_dota_week_top_query(limit)
+        result = _get_dota_week_top_query(_FULL_TOP_LIMIT)
 
         get_dota_week_top_from_db._cache[cache_key] = (result, time.time())
-        return result
+        return result[:limit]
 
 
 def _get_dota_week_top_query(limit):
@@ -4314,9 +4320,13 @@ SELECT telegram_id, username, first_name, steam_nickname, mmr,
 
 
 def get_dota_week_rank(telegram_id):
-    """Получить позицию игрока в недельном топе Dota 2"""
+    """Получить позицию игрока в недельном топе Dota 2.
+
+    Использует кэш get_dota_week_top_from_db (30 мин), чтобы не делать
+    отдельный round-trip к БД на каждый /topmmr invocation.
+    """
     try:
-        all_users = _get_dota_week_top_query(1000)
+        all_users = get_dota_week_top_from_db(1000)
         if not all_users:
             return None
 
