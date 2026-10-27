@@ -5176,6 +5176,10 @@ async def main():
         )
         app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).request(request).build()
         job_queue.set_application(app)
+        # Register the JobQueue with bot_utils so scheduled message deletions
+        # can be cancelled when the same (chat_id, msg_id) slot is reused.
+        from bot_utils import set_job_queue
+        set_job_queue(job_queue)
 
         # ✅ Утреннее приветствие 09:00 MSK
         job_queue.run_daily(

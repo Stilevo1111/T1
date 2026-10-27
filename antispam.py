@@ -46,7 +46,7 @@ __all__ = [
 # ── Defaults (overridable through config.Settings) ──────────────────────────
 DEFAULTS = {
     "action_cooldown": 4.0,        # default cooldown of a single action
-    "nudge_cooldown": 30.0,        # how often the "не торопись" message may repeat
+    "nudge_cooldown": 15.0,        # how often the "не торопись" message may repeat
     "soft_window_seconds": 10.0,   # window of the soft total rate
     "soft_max_actions": 20,        # actions per window before the nudge
     "soft_cooldown": 10.0,         # wait shown when the soft rate is hit
@@ -78,6 +78,18 @@ CALLBACK_LABELS: dict[str, str] = {
     "stats": "👤 Профиль",
     "top": "🏆 Топ Фиссур",
     "topmmr": "🏆 Топ MMR",
+}
+
+# Callbacks that must never be throttled - onboarding, greetings, tutorial.
+# A brand-new user should be able to click every button once without a nudge.
+EXEMPT_CALLBACKS: set[str] = {
+    "greeting_good",
+    "greeting_night",
+    "greeting_morning",
+    "first_roll",
+    "tutorial_next",
+    "tutorial_skip",
+    "welcome",
 }
 
 
@@ -318,6 +330,10 @@ def extract_action(update) -> Action | None:
     callback_query = getattr(update, "callback_query", None)
     if callback_query is not None:
         data = getattr(callback_query, "data", None) or ""
+        if data in EXEMPT_CALLBACKS:
+            # Onboarding / tutorial callbacks must never be throttled so a
+            # brand-new user can click every button once without a nudge.
+            return None
         label = CALLBACK_LABELS.get(data, data or "кнопку")
         return Action(key=f"cb:{data}", label=label)
 

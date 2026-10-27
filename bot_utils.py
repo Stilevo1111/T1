@@ -6,6 +6,7 @@ Extracted from main.py without any behavior changes.
 import asyncio
 import html
 import logging
+import threading
 import time
 from collections import deque
 
@@ -16,6 +17,13 @@ from database import get_config, set_config
 logger = logging.getLogger(__name__)
 
 RECENT_ROLLS_KEY = 'recent_fissure_rolls'
+
+# Registry of pending scheduled deletions: (chat_id, msg_id) -> job_id.
+# Lets schedule_delete cancel a stale job when the same slot is reused,
+# and lets set_last_bot_message cancel the previous message's timer.
+_pending_delete_jobs: dict[tuple, str] = {}
+_pending_delete_lock = threading.Lock()
+_job_queue = None  # Set by set_job_queue() at startup so cancel_pending_delete works.
 
 # Labels of the reply-keyboard buttons. Kept here so that the anti-spam
 # guard (antispam.py) can tell an actual bot action from ordinary chat
@@ -228,31 +236,88 @@ async def delete_last_bot_message(bot, chat_id, user_id):
 
 
 def set_last_bot_message(chat_id, user_id, msg_id):
-    """Set last bot message for user in chat"""
+    """Set last bot message for user in chat.
+
+    Cancels any previously scheduled deletion for the *old* message id so a
+    rapid sequence of bot messages never leaves a stale job that tries to
+    delete an already-removed message (Telegram 400 Bad Request).
+    """
     from database import set_config
     key = f"last_bot_msg_{chat_id}_{user_id}"
+    old = get_config(key)
+    if old:
+        cancel_pending_delete(chat_id, int(old))
     set_config(key, str(msg_id))
 
 
 def schedule_delete(bot, chat_id, msg_id, delay, job_queue=None):
-    """Schedule message deletion after delay seconds"""
-    if job_queue:
-        async def _safe_delete(ctx):
+    """Schedule message deletion after delay seconds.
+
+    Cancels any previously scheduled deletion for the same (chat_id, msg_id)
+    so a rapid sequence of bot messages never leaves stale jobs that try to
+    delete an already-removed message (Telegram 400 Bad Request).
+    """
+    key = (chat_id, int(msg_id))
+    with _pending_delete_lock:
+        prev = _pending_delete_jobs.pop(key, None)
+        if prev is not None and job_queue is not None:
             try:
-                await bot.delete_message(chat_id=chat_id, message_id=msg_id)
-            except Exception as e:
-                if "Message to delete not found" not in str(e):
-                    logger.debug(f"Could not delete scheduled message: {e}")
-        job_queue.run_once(_safe_delete, delay)
+                job_queue.get_job(prev)
+                job_queue.delete_job(prev)
+            except Exception:
+                pass
+
+    async def _safe_delete(ctx):
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=int(msg_id))
+        except Exception as e:
+            msg = str(e)
+            # Telegram returns 400 when the message is already gone or the bot
+            # lacks delete permission — both are expected, not errors.
+            if "Message to delete not found" in msg:
+                return
+            if "400" in msg or "Bad Request" in msg:
+                return
+            logger.debug(f"Could not delete scheduled message: {e}")
+
+    if job_queue:
+        job = job_queue.run_once(_safe_delete, delay)
+        with _pending_delete_lock:
+            _pending_delete_jobs[key] = job.id
     else:
         async def _delete():
             await asyncio.sleep(delay)
             try:
-                await bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                await bot.delete_message(chat_id=chat_id, message_id=int(msg_id))
             except Exception as e:
-                if "Message to delete not found" not in str(e):
-                    logger.debug(f"Could not delete scheduled message: {e}")
+                msg = str(e)
+                if "Message to delete not found" in msg or "400" in msg or "Bad Request" in msg:
+                    return
+                logger.debug(f"Could not delete scheduled message: {e}")
         asyncio.create_task(_delete())
+
+
+def cancel_pending_delete(chat_id, msg_id, job_queue=None):
+    """Cancel a previously scheduled deletion for (chat_id, msg_id)."""
+    key = (chat_id, int(msg_id))
+    with _pending_delete_lock:
+        job_id = _pending_delete_jobs.pop(key, None)
+    if job_id is None:
+        return
+    if job_queue is None:
+        job_queue = _job_queue
+    if job_queue is None:
+        return
+    try:
+        job_queue.delete_job(job_id)
+    except Exception:
+        pass
+
+
+def set_job_queue(job_queue):
+    """Register the active JobQueue so scheduled deletions can be cancelled."""
+    global _job_queue
+    _job_queue = job_queue
 
 
 def add_bot_message(chat_id, user_id, msg_id):
