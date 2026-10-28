@@ -300,7 +300,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"user data: {_safe_user}")
 
         # Check cooldown (skip if free_rolls available — bonus from Techies)
-        free_rolls = get_free_rolls(user_obj.id)
+        free_rolls = await asyncio.to_thread(get_free_rolls, user_obj.id)
         last_f = user.get("last_fissure") or 0
         cooldown_diff = now - last_f
         if cooldown_diff < COOLDOWN and free_rolls <= 0:
@@ -338,7 +338,7 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Consume one free_roll if available (bonus from Techies/Refresher)
         used_free_roll = False
         if free_rolls > 0:
-            consume_free_roll(user_obj.id)
+            await asyncio.to_thread(consume_free_roll, user_obj.id)
             used_free_roll = True
             logger.info(f"fissure: consumed free_roll for user {user_obj.id}, remaining={free_rolls - 1}")
 
