@@ -604,14 +604,14 @@ async def _refresh_mmr_top_tags(bot, chat_id: int) -> None:
     for telegram_id, tag_type in desired_mmr.items():
         if await _is_admin(telegram_id):
             _persist_profile_award(telegram_id, tag_type)
-    old_mmr_holders = {
+    old_mmr_holders = [
         str(get_config(key) or '')
         for key in (
             'current_mmr_top1_telegram_id',
             'current_mmr_top2_telegram_id',
             'current_mmr_top3_telegram_id',
         )
-    }
+    ]
     set_config('current_mmr_top1_telegram_id', str(new_top1) if new_top1 else "")
     set_config('current_mmr_top2_telegram_id', str(new_top2) if new_top2 else "")
     set_config('current_mmr_top3_telegram_id', str(new_top3) if new_top3 else "")
