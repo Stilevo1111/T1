@@ -3930,6 +3930,7 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 logger.debug(f"Could not process digest chat: {e}")
 
             # Add the current user's position (always show it at the bottom)
+            user_steam_id = user.get('steam_id') if user else None
             if user and user_week_games > 0:
                 user_wr = round((user_week_wins / user_week_games) * 100) if user_week_games > 0 else 0
                 user_rank_tier = user.get('rank_tier', 0)
@@ -3938,15 +3939,21 @@ async def topmmr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     if user_mmr and user_mmr > 0:
                         user_rank_tier = mmr_to_rank_tier(user_mmr)
                 user_rank_str = rank_to_string(user_rank_tier)
-                user_display = clickable_name(user_username, user.get('telegram_id'), user.get('steam_id'))
+                user_display = clickable_name(user_username, user.get('telegram_id'), user_steam_id)
                 top_text += f"\n{get_emoji_num(user_pos)} <b>{user_display}</b> - {user_rank_str}\n"
                 top_text += f" └ {user_week_wins}W • {user_week_losses}L • {user_wr}%"
             elif user and user_week_games == 0:
                 user_rank_str = rank_to_string(user.get('rank_tier', 0))
-                user_display = clickable_name(user_username, user.get('telegram_id'), user.get('steam_id'))
+                user_display = clickable_name(user_username, user.get('telegram_id'), user_steam_id)
                 user_pos_emoji = get_emoji_num(user_pos) if user_pos else "0️⃣"
                 top_text += f"\n{user_pos_emoji} <b>{user_display}</b> - {user_rank_str}\n"
-                top_text += "└ Нет игр за неделю"
+                if not user_steam_id:
+                    # Пользователь не привязал Steam — мы не можем знать его
+                    # статистику, даже если он есть в топе MMR. Показываем
+                    # понятное сообщение вместо "Нет игр за неделю".
+                    top_text += "└ 🔑 Аккаунт не привязан"
+                else:
+                    top_text += "└ Нет игр за неделю"
 
             # Ссылку на сайт из подписи убрали: в Mini App она всё равно
             # открыла бы встроенный браузер, поэтому кнопку приложения
