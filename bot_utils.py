@@ -260,25 +260,11 @@ def schedule_delete(bot, chat_id, msg_id, delay, job_queue=None):
     key = (chat_id, int(msg_id))
     with _pending_delete_lock:
         prev = _pending_delete_jobs.pop(key, None)
-        if prev is not None and job_queue is not None:
-            try:
-                job_queue.get_job(prev)
-                job_queue.delete_job(prev)
-            except Exception:
-                pass
+        if prev is not None:
+            _cancel_prev(prev, job_queue)
 
     async def _safe_delete(ctx):
-        try:
-            await bot.delete_message(chat_id=chat_id, message_id=int(msg_id))
-        except Exception as e:
-            msg = str(e)
-            # Telegram returns 400 when the message is already gone or the bot
-            # lacks delete permission — both are expected, not errors.
-            if "Message to delete not found" in msg:
-                return
-            if "400" in msg or "Bad Request" in msg:
-                return
-            logger.debug(f"Could not delete scheduled message: {e}")
+        await _delete_with_retry(bot, chat_id, int(msg_id))
 
     if job_queue:
         job = job_queue.run_once(_safe_delete, delay)
@@ -287,31 +273,59 @@ def schedule_delete(bot, chat_id, msg_id, delay, job_queue=None):
     else:
         async def _delete():
             await asyncio.sleep(delay)
-            try:
-                await bot.delete_message(chat_id=chat_id, message_id=int(msg_id))
-            except Exception as e:
-                msg = str(e)
-                if "Message to delete not found" in msg or "400" in msg or "Bad Request" in msg:
-                    return
-                logger.debug(f"Could not delete scheduled message: {e}")
-        asyncio.create_task(_delete())
+            await _delete_with_retry(bot, chat_id, int(msg_id))
+        task = asyncio.create_task(_delete())
+        with _pending_delete_lock:
+            _pending_delete_jobs[key] = task
+
+
+def _cancel_prev(prev, job_queue):
+    """Cancel a previously scheduled deletion, whether it is a JobQueue job
+    or an asyncio task."""
+    if isinstance(prev, str):
+        # JobQueue job id
+        jq = job_queue if job_queue is not None else _job_queue
+        if jq is None:
+            return
+        try:
+            jq.delete_job(prev)
+        except Exception:
+            pass
+    elif asyncio.isfuture(prev) or hasattr(prev, "cancel"):
+        try:
+            prev.cancel()
+        except Exception:
+            pass
+
+
+async def _delete_with_retry(bot, chat_id, msg_id):
+    """Delete a message, retrying on transient Telegram errors (429, 5xx)."""
+    for attempt in range(3):
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=msg_id)
+            return
+        except Exception as e:
+            msg = str(e)
+            if "Message to delete not found" in msg:
+                return
+            if "400" in msg or "Bad Request" in msg:
+                return
+            if "429" in msg or "5" in msg[:3] or "Retry" in msg:
+                if attempt < 2:
+                    await asyncio.sleep(2 * (attempt + 1))
+                    continue
+            logger.debug(f"Could not delete scheduled message: {e}")
+            return
 
 
 def cancel_pending_delete(chat_id, msg_id, job_queue=None):
     """Cancel a previously scheduled deletion for (chat_id, msg_id)."""
     key = (chat_id, int(msg_id))
     with _pending_delete_lock:
-        job_id = _pending_delete_jobs.pop(key, None)
-    if job_id is None:
+        prev = _pending_delete_jobs.pop(key, None)
+    if prev is None:
         return
-    if job_queue is None:
-        job_queue = _job_queue
-    if job_queue is None:
-        return
-    try:
-        job_queue.delete_job(job_id)
-    except Exception:
-        pass
+    _cancel_prev(prev, job_queue)
 
 
 def set_job_queue(job_queue):

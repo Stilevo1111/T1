@@ -84,6 +84,7 @@ CALLBACK_LABELS: dict[str, str] = {
 # A brand-new user should be able to click every button once without a nudge.
 EXEMPT_CALLBACKS: set[str] = {
     "greeting_good",
+    "greeting_bad",
     "greeting_night",
     "greeting_morning",
     "first_roll",
