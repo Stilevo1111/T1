@@ -3,6 +3,7 @@ import atexit
 import datetime
 import io
 import json
+import os
 import re
 import time
 
@@ -15,39 +16,17 @@ STEAM_PROFILE_RE = re.compile(r'steamcommunity\.com/(?:profiles|id)/([^\s/?#]+)'
 DOTABUFF_RE = re.compile(r'(?:ru\.)?dotabuff\.com/players/(\d+)')
 OPENDOTA_RE = re.compile(r'opendota\.com/players/(\d+)')
 
-# Ожидание привязки Steam только для инициатора: (chat_id, user_id) -> timestamp
-try:
-    PENDING_STEAM_LINK
-except NameError:
-    PENDING_STEAM_LINK = {}
 
-try:
-    STEAM_ID64_RE
-except NameError:
-    STEAM_ID64_RE = re.compile(r'\b(7656119\d{10})\b')
-try:
-    STEAM_PROFILE_RE
-except NameError:
-    STEAM_PROFILE_RE = re.compile(r'steamcommunity\.com/(?:profiles|id)/([^\s/?#]+)')
-try:
-    DOTABUFF_RE
-except NameError:
-    DOTABUFF_RE = re.compile(r'(?:ru\.)?dotabuff\.com/players/(\d+)')
-try:
-    OPENDOTA_RE
-except NameError:
-    OPENDOTA_RE = re.compile(r'opendota\.com/players/(\d+)')
+
+import aiohttp
+
 import random
-import re
 import signal
-import time
 import traceback
 import urllib.parse as urlparse
 from collections import OrderedDict
 from datetime import timedelta, timezone
 from pathlib import Path
-
-import aiohttp
 
 import antispam
 
