@@ -5649,14 +5649,14 @@ async def main():
             from database import close_aiohttp_session, close_pg_pool, flush_users_cache
             flushed = await flush_users_cache()
             logger.info(f"Shutdown: flushed {flushed} users to DB")
-            # Sync word stats from Redis to PostgreSQL on shutdown
+            # Sync word stats from memory to PostgreSQL on shutdown
             try:
-                from chat_wordcloud.redis_stats import sync_redis_to_postgres
-                n = await sync_redis_to_postgres()
+                from chat_wordcloud.redis_stats import flush_memory_to_postgres
+                n = await flush_memory_to_postgres()
                 if n:
-                    logger.info(f"Shutdown: synced {n} word stats to DB")
+                    logger.info(f"Shutdown: flushed {n} word stats to DB")
             except Exception as ws_err:
-                logger.warning(f"Shutdown word stats sync failed: {ws_err}")
+                logger.warning(f"Shutdown word stats flush failed: {ws_err}")
             # Close aiohttp session to prevent "Unclosed connection" error
             await close_aiohttp_session()
             logger.info("Shutdown: aiohttp session closed")
@@ -5680,6 +5680,18 @@ if __name__ == "__main__":
             except RuntimeError:
                 dirty = asyncio.run(flush_users_cache())
             logger.warning(f"atexit: emergency flush completed ({dirty} users)")
+            # Flush word stats from memory to PostgreSQL
+            try:
+                from chat_wordcloud.redis_stats import flush_memory_to_postgres
+                try:
+                    if 'loop' in locals() and loop and not loop.is_closed():
+                        loop.run_until_complete(flush_memory_to_postgres())
+                    else:
+                        asyncio.run(flush_memory_to_postgres())
+                except Exception:
+                    pass
+            except Exception:
+                pass
         except Exception as e:
             logger.warning(f"Emergency flush failed: {e}")
 
