@@ -408,27 +408,16 @@ def test_profile_does_not_assign_fissure_tags():
     assert "F1/F2/F3 are reconciled exclusively" in profile_source
 
 
-def test_periodic_tag_refresh_is_independent(monkeypatch):
+def test_periodic_tag_refresh_was_removed(monkeypatch):
+    """Теги обновляются только на ролле фиссуры — таймер удалён.
+
+    Коммит 92037cc убрал periodic_tag_refresh из main.py, чтобы не будить
+    Neon по расписанию. Этот тест гарантирует, что таймер не вернётся.
+    """
     import main
 
-    async def fake_fissure(*args, **kwargs):
-        raise RuntimeError("fissure failed")
-
-    async def fake_mmr(*args, **kwargs):
-        calls.append("mmr")
-
-    calls = []
     content = Path(main.__file__).read_text(encoding="utf-8")
-    start = content.index("async def periodic_tag_refresh")
-    end = content.index("job_queue.run_repeating", start)
-    namespace = {"asyncio": main.asyncio, "logger": main.logger}
-    exec(content[start:end], namespace)
-    main.periodic_tag_refresh = namespace["periodic_tag_refresh"]
-    monkeypatch.setattr("tags.refresh_fissure_top_tags", fake_fissure)
-    monkeypatch.setattr("tags.refresh_mmr_top_tags", fake_mmr)
-    from types import SimpleNamespace
-    main.asyncio.run(main.periodic_tag_refresh(SimpleNamespace(bot=object())))
-    assert calls == ["mmr"]
+    assert "periodic_tag_refresh" not in content
 
 
 def test_mmr_tags_use_weekly_top_source(monkeypatch):

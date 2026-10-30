@@ -584,6 +584,11 @@ class _DeadMessageBot:
     async def send_message(self, **kwargs):
         self.sent.append(kwargs)
 
+    async def send_photo(self, **kwargs):
+        # resolve_session сначала пробует баннер (images/banners/roshan.webp
+        # существует в репо), поэтому мок обязан уметь и фото.
+        self.sent.append({"text": kwargs.get("caption", "")})
+
 
 def test_result_is_sent_as_a_new_message_when_the_drop_is_gone(monkeypatch):
     """The result is not lost just because the original message vanished."""

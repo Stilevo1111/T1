@@ -545,6 +545,7 @@ async def resolve_session(bot, session_id: str) -> None:
 
     chat_id = int(session["chat_id"])
     msg_id = session.get("msg_id")
+
     edited = False
     if msg_id:
         try:
@@ -569,6 +570,21 @@ async def resolve_session(bot, session_id: str) -> None:
                     f"roshan: could not edit result message {msg_id}, "
                     f"sending a new one instead: {e}"
                 )
+
+    # Итог раздачи предметов дублируем в веб-ленту роллов: каждая строка —
+    # отдельный победитель, чтобы на сайте было видно, кому что досталось.
+    try:
+        from bot_utils import record_recent_fissure_roll
+        for uid, items in awarded.items():
+            items_label = " ".join(ITEM_LABELS.get(i, i) for i in items)
+            # Прирост 0: предмет не меняет фиссуру сразу, только следующий ролл.
+            record_recent_fissure_roll(
+                uid, winner_names.get(uid, f"игрок {uid}"), 0.0,
+                0.0, cascade=0, event_type="roshan_items",
+                items=items_label or None,
+            )
+    except Exception as e:
+        logger.debug(f"roshan: could not record items to web feed: {e}")
 
     if not edited:
         try:

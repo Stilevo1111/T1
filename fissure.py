@@ -517,9 +517,16 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_fissure = calculate_new_fissure(base_fissure, roll)
         growth = new_fissure - old_fissure
 
-        # Record for website live feed (in-memory only, zero DB cost)
+        # Record for website live feed (in-memory only, zero DB cost).
+        # Сработавшие предметы (АЕГИС/СЫР) добавляются в ленту, чтобы на сайте
+        # было видно, у кого они сгорели.
         event = "multicast" if cascade_count > 1 else "roll"
-        record_recent_fissure_roll(user_obj.id, username, growth, new_fissure, cascade_count, event_type=event)
+        used_items = ""
+        if aegis_text:
+            used_items = "💎 АЕГИС"
+        if cheese_text:
+            used_items = (used_items + " 🧀 СЫР").strip()
+        record_recent_fissure_roll(user_obj.id, username, growth, new_fissure, cascade_count, event_type=event, items=used_items or None)
 
         logger.info(f"User {user_obj.id} used fissure. New cooldown: {now}")
 

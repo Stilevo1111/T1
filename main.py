@@ -5181,7 +5181,13 @@ async def main():
             connect_timeout=30.0,
             pool_timeout=30.0
         )
-        app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).request(request).build()
+        # concurrent_updates: process handlers concurrently instead of one-by-one.
+        # Without it PTB runs updates sequentially from a single queue, so a user
+        # whose fissure roll is still running (DB calls, banners, sending photos)
+        # blocks every other user's press until the first handler fully finishes.
+        # With it, each update runs in its own task; per-user spam protection
+        # (antispam.py / _user_fissure_processing) still guards against abuse.
+        app = ApplicationBuilder().token(TOKEN).job_queue(job_queue).request(request).concurrent_updates(256).build()
         job_queue.set_application(app)
         # Register the JobQueue with bot_utils so scheduled message deletions
         # can be cancelled when the same (chat_id, msg_id) slot is reused.

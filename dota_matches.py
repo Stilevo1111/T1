@@ -1006,6 +1006,9 @@ _ROLL_EVENT_BADGES = {
     "techies": "💣 Техис",
 }
 
+# Метка события, при которой в записи придёт список предметов (aegis/cheese).
+_ITEMS_EVENT_TYPES = {"roll", "multicast", "roshan_items"}
+
 
 def render_roll(roll: dict) -> str:
     """Строка истории роллов: кто крутил, на сколько и сколько стало."""
@@ -1041,6 +1044,15 @@ def render_roll(roll: dict) -> str:
     ev_badge = _ROLL_EVENT_BADGES.get(roll.get("event_type") or "roll", "")
     ev = f'<span class="g-rc-ev">{ev_badge}</span>' if ev_badge else ""
 
+    # Сработавшие предметы (АЕГИС/СЫР) и раздача Рошана показываем отдельной
+    # меткой: без неё на сайте нельзя было понять, у кого предмет сгорел и
+    # кому достался сворованный.
+    items_txt = (roll.get("items") or "").strip()
+    if items_txt and roll.get("event_type") in _ITEMS_EVENT_TYPES:
+        items = f'<span class="g-rc-it">{_esc(items_txt)}</span>'
+    else:
+        items = ""
+
     return (
         f'<div class="g-card g-roll" data-name="{_esc(who.lower())}" '
         # Время целым: %g печатал бы 1.7e+09, а по нему ещё и сортировать.
@@ -1052,6 +1064,7 @@ def render_roll(roll: dict) -> str:
         f'<span class="g-nick">{_esc(who)}</span>'
         f'<span class="g-heron">{time_txt}</span></span>'
         f'<span class="{gain_cls}">{sign}{_fmt_num(growth)}</span>'
+        f"{items}"
         f"{ev}"
         f"{chain}"
         f'<span class="g-fissure">{_fmt_num(fissure)}</span>'
@@ -1205,6 +1218,8 @@ body{background:#07080c}
  border:1px solid rgba(232,180,92,.25);border-radius:4px;padding:1px 5px;flex-shrink:0}
 .g-rc-ev{font-size:9.5px;font-weight:800;color:#9fb0d0;background:rgba(120,140,180,.12);
  border:1px solid rgba(120,140,180,.3);border-radius:4px;padding:1px 5px;flex-shrink:0}
+.g-rc-it{font-size:9.5px;font-weight:800;color:#7fd18a;background:rgba(127,209,138,.12);
+ border:1px solid rgba(127,209,138,.3);border-radius:4px;padding:1px 5px;flex-shrink:0}
 
 /* ── Вкладка «Топ рангов»: те же поля, что на странице топа ─────────────── */
 .g-card.g-mmr .g-line{display:grid;

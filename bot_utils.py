@@ -77,10 +77,15 @@ def format_time(seconds: float) -> str:
         parts.append(f"{minutes}м")
     return " ".join(parts) if parts else f"{secs}с"
 
-def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_fissure: float, cascade: int = 1, event_type: str = "roll"):
-    """Append one fissure roll event to the ring buffer and save to DB."""
+def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_fissure: float, cascade: int = 1, event_type: str = "roll", items: str | None = None):
+    """Append one fissure roll event to the ring buffer and save to DB.
 
-    recent_fissure_rolls.append({
+    `items` — необязательная строка с предметами, сработавшими в этом событии
+    (например "💎 АЕГИС" или "🧀 СЫР"), чтобы веб-лента показывала, кому и
+    что досталось.
+    """
+
+    entry = {
         "ts": time.time(),
         "user_id": user_id,
         "username": (username or "unknown")[:25],
@@ -88,7 +93,10 @@ def record_recent_fissure_roll(user_id: int, username: str, growth: float, new_f
         "fissure": round(new_fissure, 1),
         "cascade": cascade,
         "event_type": event_type
-    })
+    }
+    if items:
+        entry["items"] = items
+    recent_fissure_rolls.append(entry)
 
     _save_recent_rolls(recent_fissure_rolls)
 
