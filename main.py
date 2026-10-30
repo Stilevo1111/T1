@@ -6,6 +6,15 @@ import json
 import os
 
 # Ожидание привязки Steam только для инициатора: (chat_id, user_id) -> timestamp
+PENDING_STEAM_LINK = {}
+
+# Регексы для распознавания Steam/Dotabuff/OpenDota
+STEAM_ID64_RE = re.compile(r'\b(7656119\d{10})\b')
+STEAM_PROFILE_RE = re.compile(r'steamcommunity\.com/(?:profiles|id)/([^\s/?#]+)')
+DOTABUFF_RE = re.compile(r'(?:ru\.)?dotabuff\.com/players/(\d+)')
+OPENDOTA_RE = re.compile(r'opendota\.com/players/(\d+)')
+
+# Ожидание привязки Steam только для инициатора: (chat_id, user_id) -> timestamp
 try:
     PENDING_STEAM_LINK
 except NameError:
