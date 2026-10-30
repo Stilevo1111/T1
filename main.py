@@ -628,7 +628,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
                     logger.info(f"Analytics: got chart_data with {len(matches)} matches, image={chart_image is not None}")
 
-                    import os
                     os.makedirs("charts", exist_ok=True)
 
                     context.user_data['analytics_stats'] = stats
@@ -2103,37 +2102,69 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # Link button handler (callback from menu)
     if data == "link":
-        await callback_query.answer()
-        chat_id = callback_query.message.chat_id if callback_query.message else None
-        if not chat_id:
-            chat_id = update.effective_chat.id
-
-        from bot_utils import delete_last_bot_message
         try:
-            await delete_last_bot_message(context.bot, chat_id, callback_query.from_user.id)
+            await callback_query.answer()
+        except Exception:
+            pass
+        chat_id_cb = callback_query.message.chat_id if callback_query.message else None
+        if not chat_id_cb:
+            chat_id_cb = update.effective_chat.id
+
+        # Ставим флаг только для этого юзера в этом чате
+        try:
+            key_link_cb = (chat_id_cb, callback_query.from_user.id)
+            PENDING_STEAM_LINK[key_link_cb] = time.time()
+        except Exception:
+            pass
+
+        try:
+            from bot_utils import delete_last_bot_message
+            await delete_last_bot_message(context.bot, chat_id_cb, callback_query.from_user.id)
         except Exception as e:
             logger.debug(f"Could not delete last bot message: {e}")
 
         link_banner_url = get_banner_path("link")
         link_text = ("🦞 <b>Привязать Аккаунт Dota 2</b>\n\n"
-            "Добавить в друзья → Ваш ID → копировать →\n"
-            "<code>/link 347614947</code>\n\n"
-            "Или ссылку на dotabuff →\n"
-            "<code>/link https://ru.dotabuff.com/players/347614699</code>\n\n"
-            "⚠️ в игре:\n"
-            "Настройки → расширенные → сообщество → общедоступная история матчей (вкл)")
+            "Кидай <b>просто</b> ссылку на Steam/Dotabuff/OpenDota или SteamID64 прямо в этот чат.\n\n"
+            "Примеры:\n"
+            "<code>76561198012345678</code>\n"
+            "<code>https://steamcommunity.com/profiles/76561198012345678</code>\n"
+            "<code>https://ru.dotabuff.com/players/123456789</code>\n\n"
+            "<i>Действует 3 минуты. Привяжет только этот аккаунт.</i>")
 
-        result_msg = await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=link_banner_url,
-            caption=link_text,
-        parse_mode='HTML',
-            reply_markup=main_menu()
-        )
-        set_last_bot_message(chat_id, callback_query.from_user.id, result_msg.message_id)
-        add_bot_message(chat_id, callback_query.from_user.id, result_msg.message_id)
-        schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
-        update_last_message_id(callback_query.from_user.id, result_msg.message_id)
+        try:
+            result_msg = await context.bot.send_photo(
+                chat_id=chat_id_cb,
+                photo=link_banner_url,
+                caption=link_text,
+                parse_mode='HTML',
+                reply_markup=main_menu()
+            )
+            try:
+                set_last_bot_message(chat_id_cb, callback_query.from_user.id, result_msg.message_id)
+                add_bot_message(chat_id_cb, callback_query.from_user.id, result_msg.message_id)
+                schedule_delete(context.bot, chat_id_cb, result_msg.message_id, 30, context.job_queue)
+                update_last_message_id(callback_query.from_user.id, result_msg.message_id)
+            except Exception:
+                pass
+        except Exception as e:
+            logger.error(f"Error sending link instruction: {e}")
+            try:
+                msg = await context.bot.send_message(
+                    chat_id=chat_id_cb,
+                    text=link_text,
+                    parse_mode="HTML",
+                    reply_markup=main_menu()
+                )
+                try:
+                    add_bot_message(chat_id_cb, callback_query.from_user.id, msg.message_id)
+                    set_last_bot_message(chat_id_cb, callback_query.from_user.id, msg.message_id)
+                    schedule_delete(context.bot, chat_id_cb, msg.message_id, 30, context.job_queue)
+                    update_last_message_id(callback_query.from_user.id, msg.message_id)
+                except Exception:
+                    pass
+            except Exception:
+                pass
         return
 
     # Techies "roll again" button — user guessed the mine, offer another fissure roll.
@@ -4638,7 +4669,105 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, allow
             return
 
         text = update.message.text.strip()
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
         logger.info(f"menu_handler: text='{text}' (len={len(text)})")
+
+        # Проверка: ожидаем привязку ТОЛЬКО от этого юзера в этом чате
+        key_pending = (chat_id, user_id)
+        pending_ts = PENDING_STEAM_LINK.get(key_pending)
+        if pending_ts and not text.startswith('/'):
+            if time.time() - pending_ts < 180:
+                is_steam_like = bool(
+                    STEAM_ID64_RE.search(text) or
+                    STEAM_PROFILE_RE.search(text) or
+                    DOTABUFF_RE.search(text) or
+                    OPENDOTA_RE.search(text)
+                )
+                if not is_steam_like and re.fullmatch(r'\d{9,17}', text):
+                    is_steam_like = True
+
+                if is_steam_like:
+                    try:
+                        del PENDING_STEAM_LINK[key_pending]
+                    except KeyError:
+                        pass
+
+                    try:
+                        if await bot_can_delete(context.bot, chat_id):
+                            await update.message.delete()
+                    except Exception:
+                        pass
+
+                    try:
+                        await delete_last_bot_message(context.bot, chat_id, user_id)
+                    except Exception:
+                        pass
+
+                    loading_msg = None
+                    try:
+                        loading_msg = await show_loading(context.bot, chat_id, "Привязываю аккаунт Dota 2…")
+                    except Exception:
+                        pass
+
+                    try:
+                        from dota_mmr import register_steam
+                        result = await asyncio.to_thread(register_steam, user_id, text)
+
+                        try:
+                            if loading_msg:
+                                await stop_loading(loading_msg)
+                                mid = loading_msg.message_id
+                                loading_msg = None
+                                try:
+                                    await context.bot.delete_message(chat_id, mid)
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+
+                        try:
+                            await delete_last_bot_message(context.bot, chat_id, user_id)
+                        except Exception:
+                            pass
+
+                        result_msg = await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=result.get('message', 'Готово'),
+                            parse_mode='HTML' if result.get('success') else None,
+                            reply_markup=main_menu()
+                        )
+                        try:
+                            add_bot_message(chat_id, user_id, result_msg.message_id)
+                            set_last_bot_message(chat_id, user_id, result_msg.message_id)
+                            schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
+                            update_last_message_id(user_id, result_msg.message_id)
+                        except Exception:
+                            pass
+
+                        if result.get('success') and not result.get('private_profile'):
+                            try:
+                                from dota_mmr import update_user_mmr
+                                asyncio.create_task(asyncio.to_thread(update_user_mmr, user_id))
+                            except Exception:
+                                pass
+                            try:
+                                from weekly_analytics import generate_weekly_analytics
+                                asyncio.create_task(generate_weekly_analytics(user_id))
+                            except Exception:
+                                pass
+                    except Exception as e:
+                        logger.error(f"direct steam link bind error: {e}", exc_info=True)
+                        try:
+                            await context.bot.send_message(chat_id=chat_id, text="❌ Ошибка привязки", reply_markup=main_menu())
+                        except Exception:
+                            pass
+                    return
+            else:
+                try:
+                    del PENDING_STEAM_LINK[key_pending]
+                except KeyError:
+                    pass
 
         # Increment per-word counters for the /story word cloud (Redis, O(1)).
         try:
