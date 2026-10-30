@@ -4,6 +4,29 @@ import datetime
 import io
 import json
 import os
+
+# Ожидание привязки Steam только для инициатора: (chat_id, user_id) -> timestamp
+try:
+    PENDING_STEAM_LINK
+except NameError:
+    PENDING_STEAM_LINK = {}
+
+try:
+    STEAM_ID64_RE
+except NameError:
+    STEAM_ID64_RE = re.compile(r'\b(7656119\d{10})\b')
+try:
+    STEAM_PROFILE_RE
+except NameError:
+    STEAM_PROFILE_RE = re.compile(r'steamcommunity\.com/(?:profiles|id)/([^\s/?#]+)')
+try:
+    DOTABUFF_RE
+except NameError:
+    DOTABUFF_RE = re.compile(r'(?:ru\.)?dotabuff\.com/players/(\d+)')
+try:
+    OPENDOTA_RE
+except NameError:
+    OPENDOTA_RE = re.compile(r'opendota\.com/players/(\d+)')
 import random
 import re
 import signal
