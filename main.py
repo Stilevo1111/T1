@@ -3,7 +3,8 @@ import atexit
 import datetime
 import io
 import json
-import os
+import re
+import time
 
 # Ожидание привязки Steam только для инициатора: (chat_id, user_id) -> timestamp
 PENDING_STEAM_LINK = {}
