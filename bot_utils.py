@@ -311,12 +311,15 @@ async def _delete_with_retry(bot, chat_id, msg_id):
     for attempt in range(3):
         try:
             await bot.delete_message(chat_id=chat_id, message_id=msg_id)
+            logger.debug(f"Deleted message chat_id={chat_id} msg_id={msg_id}")
             return
         except Exception as e:
             msg = str(e)
             if "Message to delete not found" in msg:
+                logger.debug(f"Message already deleted chat_id={chat_id} msg_id={msg_id}")
                 return
             if "400" in msg or "Bad Request" in msg:
+                logger.warning(f"Cannot delete message chat_id={chat_id} msg_id={msg_id}: {msg}")
                 return
             if "429" in msg or "5" in msg[:3] or "Retry" in msg:
                 if attempt < 2:

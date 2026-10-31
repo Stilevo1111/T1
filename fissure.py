@@ -642,7 +642,10 @@ async def fissure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         add_bot_message(chat_id, user_obj.id, result_msg.message_id)
 
         logger.info(f"Result message sent successfully: message_id={result_msg.message_id}")
-        set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
+        try:
+            set_last_bot_message(chat_id, user_obj.id, result_msg.message_id)
+        except Exception as e:
+            logger.debug(f"set_last_bot_message failed: {e}")
         # ВСЕГДА удаляем сообщение через 30 секунд во всех чатах
         schedule_delete(context.bot, chat_id, result_msg.message_id, 30, context.job_queue)
 
