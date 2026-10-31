@@ -116,6 +116,31 @@ async def _collect_monthly_words(chat_id: int, bot_user_id: int | None):
         current_counter = Counter()
         previous_counter = Counter()
 
+    # Если данных всего одно слово — всё равно показываем его
+    if current_counter and len(current_counter) == 1:
+        top_words = sorted(
+            current_counter.items(), key=lambda x: x[1], reverse=True
+        )[: WORDCLOUD_MAX_WORDS]
+
+        rising, fading = [], []
+        try:
+            rising, fading = diff_periods(
+                current_counter,
+                previous_counter,
+                current_days=(end - start).days,
+                previous_days=(prev_end - prev_start).days,
+            )
+        except Exception as exc:
+            logger.warning(f"monthly comparison unavailable: {exc}", exc_info=True)
+
+        stats = {
+            "total_messages": 0,
+            "user_messages": sum(current_counter.values()),
+            "bot_messages": 0,
+            "authors": 1,
+        }
+        return top_words, stats, rising, fading
+
     if current_counter:
         top_words = sorted(
             current_counter.items(), key=lambda x: x[1], reverse=True
@@ -203,6 +228,14 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if cached is not None:
             logger.info(f"story cache hit chat_id={chat_id} month={month_key}")
             top_words, rising = cached
+            # If cached data is empty (no words), notify the user
+            if not top_words:
+                msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="Недостаточно данных для создания истории чата.",
+                )
+                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
+                return
             messages_loaded = None
             stats = {}
             unique_words = 0
@@ -220,10 +253,12 @@ async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             )
 
             if not top_words:
-                await context.bot.send_message(
+                # Send a short notification to the user, then remove it automatically
+                msg = await context.bot.send_message(
                     chat_id=chat_id,
                     text="Недостаточно данных для создания истории чата.",
                 )
+                schedule_delete(context.bot, chat_id, msg.message_id, 30, context.job_queue)
                 return
 
             unique_words = len(top_words)
