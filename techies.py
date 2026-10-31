@@ -109,7 +109,7 @@ def _pop_session(chat_id: int, user_id: int) -> dict | None:
     return _active_techies_sessions.pop(_session_key(chat_id, user_id), None)
 
 
-async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str, image_path=None, reply_markup=None) -> None:
+async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str, image_path=None, reply_markup=None) -> int | None:
     if image_path is None:
         image_path = TECHIES_BASE_URL
     media = InputMediaPhoto(
@@ -125,7 +125,7 @@ async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str, image_
             media=media,
             reply_markup=reply_markup,
         )
-        return
+        return msg_id
     except Exception as e:
         logger.error(f"techies edit_message_media failed: {e}")
 
@@ -137,20 +137,22 @@ async def _send_techies_result(bot, chat_id: int, msg_id: int, text: str, image_
             reply_markup=reply_markup,
             parse_mode="HTML",
         )
-        return
+        return msg_id
     except Exception as e:
         logger.error(f"techies edit_message_caption failed: {e}")
 
     try:
-        await bot.send_photo(
+        sent = await bot.send_photo(
             chat_id=chat_id,
             photo=str(image_path),
             caption=text,
             reply_markup=reply_markup,
             parse_mode="HTML",
         )
+        return sent.message_id
     except Exception as e:
         logger.error(f"techies send_photo failed: {e}")
+        return None
 
 
 async def _apply_techies_explosion(
@@ -184,8 +186,9 @@ async def _apply_techies_explosion(
         text += f"💣 Мина {i} - {mine} см\n"
     text += f"\n📏 {current_fissure:.1f} см → {new_fissure:.1f} см"
 
-    await _send_techies_result(bot, session["chat_id"], session["msg_id"], text, image_path=TECHIES_EXPLOSION_URL)
-    schedule_delete(bot, session["chat_id"], session["msg_id"], 30, None)
+    result_msg_id = await _send_techies_result(bot, session["chat_id"], session["msg_id"], text, image_path=TECHIES_EXPLOSION_URL)
+    delete_id = result_msg_id if result_msg_id else session["msg_id"]
+    schedule_delete(bot, session["chat_id"], delete_id, 30, None)
 
 
 async def _techies_timeout_worker(bot, session_key: str, record_roll=None) -> None:
@@ -402,5 +405,6 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
             InlineKeyboardButton("🎲 Ещё один ролл!", callback_data=f"techies_again_{user_id}", api_kwargs={"style": "success"})
         ]])
 
-    await _send_techies_result(context.bot, query.message.chat_id, query.message.message_id, text, image_path=image_path, reply_markup=reply_markup)
-    schedule_delete(context.bot, query.message.chat_id, query.message.message_id, 30, None)
+    result_msg_id = await _send_techies_result(context.bot, query.message.chat_id, query.message.message_id, text, image_path=image_path, reply_markup=reply_markup)
+    delete_id = result_msg_id if result_msg_id else query.message.message_id
+    schedule_delete(context.bot, query.message.chat_id, delete_id, 30, None)
