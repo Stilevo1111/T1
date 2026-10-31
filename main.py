@@ -2201,6 +2201,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         chat_id = callback_query.message.chat_id if callback_query.message else None
         chat_type = callback_query.message.chat.type if callback_query.message else 'private'
 
+        # Удаляем старое сообщение с кнопкой "еще один ролл", чтобы не мусорить чат
+        try:
+            if callback_query.message:
+                await context.bot.delete_message(chat_id, callback_query.message.message_id)
+        except Exception:
+            pass
+
         class _FakeChat_again:
             def __init__(self):
                 self.id = chat_id
