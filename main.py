@@ -881,6 +881,7 @@ async def weekly_mmr_reset_job(context):
                 'current_mmr_top2_telegram_id',
                 'current_mmr_top3_telegram_id',
                 'mmr_week_awards_granted',
+                'mmr_week_top_announced',
             ):
                 set_config(_key, "")
         except Exception as _ge:
@@ -946,12 +947,10 @@ async def announce_weekly_mmr_winner(bot) -> None:
     top_users = await asyncio.to_thread(get_dota_week_top_from_db, 5)
     if not top_users or all(u.get('week_games', 0) == 0 for u in top_users):
         logger.info("announce_weekly_mmr_winner: нет данных для топа MMR (никто не играл)")
-        set_config('mmr_week_top_announced', current_week_start)
         return False
 
     active_users = [u for u in top_users if u.get('week_games', 0) > 0]
     if not active_users:
-        set_config('mmr_week_top_announced', current_week_start)
         return False
 
     winner = active_users[0]

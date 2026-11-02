@@ -197,9 +197,11 @@ async def _techies_timeout_worker(bot, session_key: str, record_roll=None) -> No
     except asyncio.CancelledError:
         return
 
-    session = _active_techies_sessions.pop(session_key, None)
-    if not session:
+    session = _active_techies_sessions.get(session_key)
+    if not session or session.get("processed"):
         return
+    session["processed"] = True
+    _active_techies_sessions.pop(session_key, None)
 
     logger.info(f"techies timeout fired for {session_key}")
     await _apply_techies_explosion(bot, session, record_roll=record_roll)
@@ -225,8 +227,10 @@ def _start_techies_session(
         "display_username": display_username,
         "timeout_task": task,
         "mines": generate_mines(),
+        "processed": False,
     }
     logger.info(f"techies session started: {session_key}, msg_id={msg_id}, explosive={explosive_button}")
+    return _active_techies_sessions[session_key]
 
 
 async def handle_techies_event(
@@ -246,21 +250,30 @@ async def handle_techies_event(
 ) -> None:
     """Обработать запуск мини-игры Техиес (inline-кнопка)."""
     explosive_button = random.choice(["green", "red", "yellow"])
-    start_time = time.time()
     current_fissure = user.get("fissure", 0) or 0
-
-    keyboard = _build_techies_keyboard(user_obj.id, explosive_button, start_time)
     text = _build_mine_text(display_username)
 
+    # Сначала отправляем сообщение без кнопок, чтобы пользователь его точно увидел
     msg = await bot.send_photo(
         chat_id=chat_id,
         photo=str(TECHIES_BASE_URL),
         caption=text,
-        reply_markup=keyboard,
         parse_mode="HTML",
     )
     set_last_bot_message(chat_id, user_obj.id, msg.message_id)
     update_fissure(user_obj.id, current_fissure, now, 0, last_message_id=msg.message_id)
+
+    # Таймер стартуем только после того, как сообщение показано. Кнопки проставляем отдельно.
+    start_time = time.time()
+    keyboard = _build_techies_keyboard(user_obj.id, explosive_button, start_time)
+    try:
+        await bot.edit_message_reply_markup(
+            chat_id=chat_id,
+            message_id=msg.message_id,
+            reply_markup=keyboard,
+        )
+    except Exception as e:
+        logger.debug(f"techies: failed to attach keyboard after send: {e}")
 
     _start_techies_session(
         bot,
@@ -285,19 +298,26 @@ async def techies_command(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
         return
 
     explosive_button = random.choice(["green", "red", "yellow"])
-    start_time = time.time()
     username = user.get("username")
     display_username = make_clickable(username or update.effective_user.first_name or "Гость", user_id)
-
-    keyboard = _build_techies_keyboard(user_id, explosive_button, start_time)
     text = _build_mine_text(display_username)
 
     msg = await update.message.reply_photo(
         photo=str(TECHIES_BASE_URL),
         caption=text,
-        reply_markup=keyboard,
         parse_mode="HTML",
     )
+
+    start_time = time.time()
+    keyboard = _build_techies_keyboard(user_id, explosive_button, start_time)
+    try:
+        await context.bot.edit_message_reply_markup(
+            chat_id=update.effective_chat.id,
+            message_id=msg.message_id,
+            reply_markup=keyboard,
+        )
+    except Exception as e:
+        logger.debug(f"techies: failed to attach keyboard after send: {e}")
 
     _start_techies_session(
         context.bot,
@@ -330,12 +350,16 @@ async def handle_techies_button(update: ContextTypes.DEFAULT_TYPE, context: Cont
         await query.answer("🧨 Это не твоя мина, бродяга!", show_alert=True)
         return
 
-    session = _pop_session(query.message.chat_id, user_id)
-    if not session:
-        await query.answer("💥 Мина уже сдетонировала!", show_alert=True)
+    session_key = _session_key(query.message.chat_id, user_id)
+    session = _active_techies_sessions.get(session_key)
+    if not session or session.get("processed"):
+        await query.answer()
         return
 
+    session["processed"] = True
     _cancel_timeout_task(session)
+    session = _active_techies_sessions.pop(session_key, None) or session
+
     await query.answer()
 
     try:
